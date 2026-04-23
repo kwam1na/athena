@@ -6,6 +6,10 @@ import { toast } from "sonner";
 
 import { useAuth } from "@/hooks/useAuth";
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
+import {
+  type NormalizedCommandResult,
+  runCommand,
+} from "@/lib/errors/runCommand";
 import { capitalizeWords, currencyFormatter } from "@/lib/utils";
 import { formatStoredAmount } from "@/lib/pos/displayAmounts";
 import { api } from "~/convex/_generated/api";
@@ -117,12 +121,20 @@ type RecordRegisterSessionDepositArgs = {
   submissionKey: string;
 };
 
+type RegisterSessionDepositPayload = {
+  action?: "duplicate" | "recorded";
+};
+
+type RegisterSessionDepositResult = NormalizedCommandResult<RegisterSessionDepositPayload>;
+
 type RegisterSessionViewContentProps = {
   actorStaffProfileId?: string;
   actorUserId?: string;
   currency: string;
   isLoading: boolean;
-  onRecordDeposit: (args: RecordRegisterSessionDepositArgs) => Promise<void>;
+  onRecordDeposit: (
+    args: RecordRegisterSessionDepositArgs,
+  ) => Promise<RegisterSessionDepositResult>;
   orgUrlSlug?: string;
   registerSessionSnapshot: RegisterSessionSnapshot | null;
   storeId?: string;
@@ -242,6 +254,16 @@ export function RegisterSessionViewContent({
     setSubmissionKey(buildDepositSubmissionKey(registerSession._id));
   }, [registerSession?._id]);
 
+  const applyCommandResult = (result: RegisterSessionDepositResult) => {
+    if (result.kind === "ok") {
+      setErrorMessage("");
+      return true;
+    }
+
+    setErrorMessage(result.error.message);
+    return false;
+  };
+
   async function handleRecordDeposit() {
     if (!registerSession?._id || !storeId) {
       setErrorMessage("A store and register session are required before recording a deposit.");
@@ -259,7 +281,7 @@ export function RegisterSessionViewContent({
     setIsRecordingDeposit(true);
 
     try {
-      await onRecordDeposit({
+      const result = await onRecordDeposit({
         actorStaffProfileId,
         actorUserId,
         amount: parsedAmount,
@@ -269,16 +291,15 @@ export function RegisterSessionViewContent({
         storeId,
         submissionKey,
       });
+
+      if (!applyCommandResult(result)) {
+        return;
+      }
+
       setAmount("");
       setNotes("");
       setReference("");
       setSubmissionKey(buildDepositSubmissionKey(registerSession._id));
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Failed to record the register deposit.",
-      );
     } finally {
       setIsRecordingDeposit(false);
     }
@@ -679,8 +700,8 @@ export function RegisterSessionView() {
   );
 
   async function onRecordDeposit(args: RecordRegisterSessionDepositArgs) {
-    try {
-      const result = await recordRegisterSessionDeposit({
+    const result = await runCommand(() =>
+      recordRegisterSessionDeposit({
         actorStaffProfileId: args.actorStaffProfileId as Id<"staffProfile"> | undefined,
         actorUserId: args.actorUserId as Id<"athenaUser"> | undefined,
         amount: args.amount,
@@ -689,19 +710,18 @@ export function RegisterSessionView() {
         registerSessionId: args.registerSessionId as Id<"registerSession">,
         storeId: args.storeId as Id<"store">,
         submissionKey: args.submissionKey,
-      });
+      }),
+    );
 
+    if (result.kind === "ok") {
       toast.success(
-        result?.action === "duplicate"
+        result.data?.action === "duplicate"
           ? "Deposit already recorded"
           : "Register deposit recorded",
       );
-    } catch (error) {
-      const description =
-        error instanceof Error ? error.message : "Failed to record register deposit.";
-      toast.error("Failed to record register deposit", { description });
-      throw error;
     }
+
+    return result;
   }
 
   if (isLoadingAccess) {

@@ -64,18 +64,30 @@ describe("service ops schema foundations", () => {
   });
 
   it("allows only supported service-case transitions", () => {
-    expect(() =>
+    expect(
       assertValidServiceCaseStatusTransition("intake", "in_progress")
-    ).not.toThrow();
-    expect(() =>
+    ).toEqual({ kind: "ok", data: null });
+    expect(
       assertValidServiceCaseStatusTransition("in_progress", "awaiting_pickup")
-    ).not.toThrow();
-    expect(() =>
+    ).toEqual({ kind: "ok", data: null });
+    expect(
       assertValidServiceCaseStatusTransition("completed", "in_progress")
-    ).toThrow("Invalid service case status transition");
-    expect(() =>
+    ).toEqual({
+      kind: "user_error",
+      error: {
+        code: "validation_failed",
+        message: "Invalid service case status transition.",
+      },
+    });
+    expect(
       assertValidServiceCaseStatusTransition("cancelled", "completed")
-    ).toThrow("Invalid service case status transition");
+    ).toEqual({
+      kind: "user_error",
+      error: {
+        code: "validation_failed",
+        message: "Invalid service case status transition.",
+      },
+    });
   });
 
   it("shapes service cases and line items with persistence-safe defaults", () => {
@@ -96,7 +108,7 @@ describe("service ops schema foundations", () => {
       status: "intake",
     });
 
-    expect(() =>
+    expect(
       buildServiceCaseLineItem({
         description: "Closure repair mesh",
         lineType: "material",
@@ -104,7 +116,13 @@ describe("service ops schema foundations", () => {
         serviceCaseId: "case_1" as Id<"serviceCase">,
         unitPrice: 50,
       })
-    ).toThrow("Line item quantity must be greater than zero");
+    ).toEqual({
+      kind: "user_error",
+      error: {
+        code: "validation_failed",
+        message: "Line item quantity must be greater than zero.",
+      },
+    });
 
     expect(
       buildServiceCaseLineItem({
@@ -115,9 +133,12 @@ describe("service ops schema foundations", () => {
         unitPrice: 150,
       })
     ).toMatchObject({
-      amount: 300,
-      quantity: 2,
-      unitPrice: 150,
+      kind: "ok",
+      data: {
+        amount: 300,
+        quantity: 2,
+        unitPrice: 150,
+      },
     });
   });
 });

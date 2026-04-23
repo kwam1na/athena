@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import View from "../View";
@@ -17,6 +17,10 @@ import {
   SelectValue,
 } from "../ui/select";
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
+import {
+  type NormalizedCommandResult,
+  runCommand,
+} from "@/lib/errors/runCommand";
 import { api } from "~/convex/_generated/api";
 
 type CustomerResult = {
@@ -66,6 +70,8 @@ type CreateServiceCaseArgs = {
   title: string;
 };
 
+type ServiceCaseCommandResult = NormalizedCommandResult<unknown>;
+
 type ServiceCasesViewContentProps = {
   catalogItems: CatalogItem[];
   customerResults: CustomerResult[];
@@ -78,23 +84,25 @@ type ServiceCasesViewContentProps = {
     quantity: number;
     serviceCaseId: string;
     unitPrice: number;
-  }) => Promise<void>;
-  onCreateCase: (args: CreateServiceCaseArgs) => Promise<void>;
+  }) => Promise<ServiceCaseCommandResult>;
+  onCreateCase: (
+    args: CreateServiceCaseArgs
+  ) => Promise<ServiceCaseCommandResult>;
   onRecordInventoryUsage: (args: {
     productSkuId: string;
     quantity: number;
     serviceCaseId: string;
     usageType: "consumed";
-  }) => Promise<void>;
+  }) => Promise<ServiceCaseCommandResult>;
   onRecordPayment: (args: {
     amount: number;
     method: string;
     serviceCaseId: string;
-  }) => Promise<void>;
+  }) => Promise<ServiceCaseCommandResult>;
   onUpdateStatus: (args: {
     serviceCaseId: string;
     status: string;
-  }) => Promise<void>;
+  }) => Promise<ServiceCaseCommandResult>;
   searchQuery: string;
   selectedCaseDetails: ServiceCaseDetails | null;
   selectedCaseId: string | null;
@@ -154,12 +162,30 @@ export function ServiceCasesViewContent({
   const [inventoryForm, setInventoryForm] = useState(initialInventoryForm);
   const [paymentForm, setPaymentForm] = useState(initialPaymentForm);
   const [statusValue, setStatusValue] = useState("in_progress");
-  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [createErrors, setCreateErrors] = useState<string[]>([]);
+  const [detailErrors, setDetailErrors] = useState<string[]>([]);
 
   const selectedCaseSummary = useMemo(
     () => serviceCases.find((serviceCase) => serviceCase._id === selectedCaseId) ?? null,
     [selectedCaseId, serviceCases]
   );
+
+  useEffect(() => {
+    setDetailErrors([]);
+  }, [selectedCaseId]);
+
+  const applyCommandResult = (
+    result: ServiceCaseCommandResult,
+    setErrors: (errors: string[]) => void
+  ) => {
+    if (result.kind === "ok") {
+      setErrors([]);
+      return true;
+    }
+
+    setErrors([result.error.message]);
+    return false;
+  };
 
   if (isLoadingPermissions) {
     return (
@@ -191,29 +217,29 @@ export function ServiceCasesViewContent({
     }
 
     if (errors.length > 0) {
-      setValidationErrors(errors);
+      setCreateErrors(errors);
       return;
     }
 
-    try {
-      await onCreateCase({
-        assignedStaffProfileId: createForm.assignedStaffProfileId,
-        customerProfileId: createForm.selectedCustomerId,
-        quotedAmount: createForm.quotedAmount.trim()
-          ? Number(createForm.quotedAmount)
-          : undefined,
-        serviceCatalogId: createForm.serviceCatalogId || undefined,
-        serviceMode: createForm.serviceMode,
-        title: createForm.title.trim(),
-      });
-      setCreateForm(initialCreateForm);
-      setSearchQuery("");
-      setValidationErrors([]);
-    } catch (error) {
-      toast.error("Failed to create service case", {
-        description: (error as Error).message,
-      });
+    setCreateErrors([]);
+    const result = await onCreateCase({
+      assignedStaffProfileId: createForm.assignedStaffProfileId,
+      customerProfileId: createForm.selectedCustomerId,
+      quotedAmount: createForm.quotedAmount.trim()
+        ? Number(createForm.quotedAmount)
+        : undefined,
+      serviceCatalogId: createForm.serviceCatalogId || undefined,
+      serviceMode: createForm.serviceMode,
+      title: createForm.title.trim(),
+    });
+
+    if (!applyCommandResult(result, setCreateErrors)) {
+      return;
     }
+
+    setCreateForm(initialCreateForm);
+    setSearchQuery("");
+    toast.success("Service case created");
   };
 
   const activeServiceCaseId = selectedCaseDetails?._id ?? selectedCaseId;
@@ -237,10 +263,10 @@ export function ServiceCasesViewContent({
             </p>
           </div>
 
-          {validationErrors.length > 0 ? (
+          {createErrors.length > 0 ? (
             <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               <ul className="list-disc pl-5">
-                {validationErrors.map((error) => (
+                {createErrors.map((error) => (
                   <li key={error}>{error}</li>
                 ))}
               </ul>
@@ -432,6 +458,16 @@ export function ServiceCasesViewContent({
               />
             ) : (
               <>
+                {detailErrors.length > 0 ? (
+                  <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    <ul className="list-disc pl-5">
+                      {detailErrors.map((error) => (
+                        <li key={error}>{error}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+
                 <div>
                   <h3 className="text-base font-medium">
                     {selectedCaseSummary.serviceCatalogName ?? "Service case"}
@@ -487,13 +523,21 @@ export function ServiceCasesViewContent({
                       </Select>
                     </div>
                     <Button
-                      onClick={() =>
-                        onRecordPayment({
+                      onClick={async () => {
+                        setDetailErrors([]);
+                        const result = await onRecordPayment({
                           amount: Number(paymentForm.amount),
                           method: paymentForm.method,
                           serviceCaseId: activeServiceCaseId,
-                        })
-                      }
+                        });
+
+                        if (!applyCommandResult(result, setDetailErrors)) {
+                          return;
+                        }
+
+                        setPaymentForm(initialPaymentForm);
+                        toast.success("Payment recorded");
+                      }}
                       type="button"
                       variant="outline"
                     >
@@ -523,12 +567,19 @@ export function ServiceCasesViewContent({
                       </Select>
                     </div>
                     <Button
-                      onClick={() =>
-                        onUpdateStatus({
+                      onClick={async () => {
+                        setDetailErrors([]);
+                        const result = await onUpdateStatus({
                           serviceCaseId: activeServiceCaseId,
                           status: statusValue,
-                        })
-                      }
+                        });
+
+                        if (!applyCommandResult(result, setDetailErrors)) {
+                          return;
+                        }
+
+                        toast.success("Service case updated");
+                      }}
                       type="button"
                       variant="outline"
                     >
@@ -582,15 +633,23 @@ export function ServiceCasesViewContent({
                       </div>
                     </div>
                     <Button
-                      onClick={() =>
-                        onAddLineItem({
+                      onClick={async () => {
+                        setDetailErrors([]);
+                        const result = await onAddLineItem({
                           description: lineItemForm.description,
                           lineType: lineItemForm.lineType,
                           quantity: Number(lineItemForm.quantity),
                           serviceCaseId: activeServiceCaseId,
                           unitPrice: Number(lineItemForm.unitPrice),
-                        })
-                      }
+                        });
+
+                        if (!applyCommandResult(result, setDetailErrors)) {
+                          return;
+                        }
+
+                        setLineItemForm(initialLineItemForm);
+                        toast.success("Line item added");
+                      }}
                       type="button"
                       variant="outline"
                     >
@@ -628,14 +687,22 @@ export function ServiceCasesViewContent({
                       />
                     </div>
                     <Button
-                      onClick={() =>
-                        onRecordInventoryUsage({
+                      onClick={async () => {
+                        setDetailErrors([]);
+                        const result = await onRecordInventoryUsage({
                           productSkuId: inventoryForm.productSkuId,
                           quantity: Number(inventoryForm.quantity),
                           serviceCaseId: activeServiceCaseId,
                           usageType: "consumed",
-                        })
-                      }
+                        });
+
+                        if (!applyCommandResult(result, setDetailErrors)) {
+                          return;
+                        }
+
+                        setInventoryForm(initialInventoryForm);
+                        toast.success("Material usage recorded");
+                      }}
                       type="button"
                       variant="outline"
                     >
@@ -712,10 +779,10 @@ export function ServiceCasesView() {
     api.serviceOps.serviceCases.updateServiceCaseStatus
   );
 
-  const withSaveState = async (action: () => Promise<void>) => {
+  const withSaveState = async <T,>(action: () => Promise<T>) => {
     setIsSaving(true);
     try {
-      await action();
+      return await action();
     } finally {
       setIsSaving(false);
     }
@@ -765,57 +832,67 @@ export function ServiceCasesView() {
       isLoadingPermissions={false}
       isSaving={isSaving}
       onAddLineItem={(args) =>
-        withSaveState(async () => {
-          await addServiceCaseLineItem({
-            ...args,
-            serviceCaseId: args.serviceCaseId as any,
-          });
-          toast.success("Line item added");
-        })
+        withSaveState(() =>
+          runCommand(() =>
+            addServiceCaseLineItem({
+              ...args,
+              serviceCaseId: args.serviceCaseId as any,
+            })
+          )
+        )
       }
       onCreateCase={(args) =>
         withSaveState(async () => {
-          const createdCase = await createWalkInServiceCase({
-            ...args,
-            assignedStaffProfileId: args.assignedStaffProfileId as any,
-            customerProfileId: args.customerProfileId as any,
-            serviceCatalogId: args.serviceCatalogId
-              ? (args.serviceCatalogId as any)
-              : undefined,
-            storeId: activeStore._id,
-          });
-          setSelectedCaseId((createdCase as any)?._id ?? null);
-          toast.success("Service case created");
+          const result = await runCommand(() =>
+            createWalkInServiceCase({
+              ...args,
+              assignedStaffProfileId: args.assignedStaffProfileId as any,
+              customerProfileId: args.customerProfileId as any,
+              serviceCatalogId: args.serviceCatalogId
+                ? (args.serviceCatalogId as any)
+                : undefined,
+              storeId: activeStore._id,
+            })
+          );
+
+          if (result.kind === "ok") {
+            setSelectedCaseId((result.data as any)?._id ?? null);
+          }
+
+          return result;
         })
       }
       onRecordInventoryUsage={(args) =>
-        withSaveState(async () => {
-          await recordServiceInventoryUsage({
-            ...args,
-            productSkuId: args.productSkuId as any,
-            serviceCaseId: args.serviceCaseId as any,
-          });
-          toast.success("Material usage recorded");
-        })
+        withSaveState(() =>
+          runCommand(() =>
+            recordServiceInventoryUsage({
+              ...args,
+              productSkuId: args.productSkuId as any,
+              serviceCaseId: args.serviceCaseId as any,
+            })
+          )
+        )
       }
       onRecordPayment={(args) =>
-        withSaveState(async () => {
-          await recordServicePayment({
-            ...args,
-            serviceCaseId: args.serviceCaseId as any,
-          });
-          toast.success("Payment recorded");
-        })
+        withSaveState(() =>
+          runCommand(() =>
+            recordServicePayment({
+              ...args,
+              serviceCaseId: args.serviceCaseId as any,
+            })
+          )
+        )
       }
       onUpdateStatus={(args) =>
-        withSaveState(async () => {
-          await updateServiceCaseStatus({
-            ...args,
-            serviceCaseId: args.serviceCaseId as any,
-            status: args.status as any,
-          });
-          toast.success("Service case updated");
-        })
+        withSaveState(() =>
+          runCommand(() =>
+            updateServiceCaseStatus({
+              ...args,
+              serviceCaseId: args.serviceCaseId as any,
+              status: args.status as any,
+            })
+          )
+        )
       }
       searchQuery={searchQuery}
       selectedCaseDetails={selectedCaseDetails ?? null}

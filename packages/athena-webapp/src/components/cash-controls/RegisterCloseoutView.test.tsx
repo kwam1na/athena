@@ -1,6 +1,11 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  GENERIC_UNEXPECTED_ERROR_MESSAGE,
+  ok,
+  userError,
+} from "~/shared/commandResult";
 import { RegisterCloseoutViewContent } from "./RegisterCloseoutView";
 
 vi.mock("@tanstack/react-router", () => ({
@@ -22,8 +27,16 @@ vi.mock("@tanstack/react-router", () => ({
 const baseProps = {
   currency: "USD",
   isLoading: false,
-  onReviewCloseout: vi.fn().mockResolvedValue(undefined),
-  onSubmitCloseout: vi.fn().mockResolvedValue(undefined),
+  onReviewCloseout: vi.fn().mockResolvedValue(
+    ok({
+      action: "approved",
+    }),
+  ),
+  onSubmitCloseout: vi.fn().mockResolvedValue(
+    ok({
+      action: "closed",
+    }),
+  ),
   registerSessions: [] as {
     _id: string;
     approvalRequest: null | {
@@ -133,7 +146,11 @@ describe("RegisterCloseoutViewContent", () => {
 
   it("submits counted cash and notes for a register session", async () => {
     const user = userEvent.setup();
-    const onSubmitCloseout = vi.fn().mockResolvedValue(undefined);
+    const onSubmitCloseout = vi.fn().mockResolvedValue(
+      ok({
+        action: "closed",
+      }),
+    );
 
     render(
       <RegisterCloseoutViewContent
@@ -168,7 +185,11 @@ describe("RegisterCloseoutViewContent", () => {
 
   it("sends manager approval decisions with optional notes", async () => {
     const user = userEvent.setup();
-    const onReviewCloseout = vi.fn().mockResolvedValue(undefined);
+    const onReviewCloseout = vi.fn().mockResolvedValue(
+      ok({
+        action: "approved",
+      }),
+    );
 
     render(
       <RegisterCloseoutViewContent
@@ -212,5 +233,88 @@ describe("RegisterCloseoutViewContent", () => {
       decisionNotes: "Variance reviewed against till count.",
       registerSessionId: "session-review",
     });
+  });
+
+  it("shows safe inline copy when closeout submission returns a user error", async () => {
+    const user = userEvent.setup();
+    const onSubmitCloseout = vi.fn().mockResolvedValue(
+      userError({
+        code: "precondition_failed",
+        message: "Register session is already closed.",
+      }),
+    );
+
+    render(
+      <RegisterCloseoutViewContent
+        {...baseProps}
+        onSubmitCloseout={onSubmitCloseout}
+        registerSessions={[
+          {
+            _id: "session-open",
+            approvalRequest: null,
+            closeoutReview: null,
+            expectedCash: 120,
+            openedAt: new Date("2026-04-21T10:00:00.000Z").getTime(),
+            openedByStaffName: "Ama Mensah",
+            registerNumber: "Register 2",
+            status: "open",
+          },
+        ]}
+      />
+    );
+
+    await user.type(screen.getByLabelText("Counted cash for Register 2"), "145");
+    await user.click(screen.getByRole("button", { name: "Submit closeout" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Register session is already closed.",
+    );
+  });
+
+  it("shows generic inline copy when closeout review fails unexpectedly", async () => {
+    const user = userEvent.setup();
+    const onReviewCloseout = vi.fn().mockResolvedValue({
+      kind: "unexpected_error",
+      error: {
+        title: "Something went wrong",
+        message: GENERIC_UNEXPECTED_ERROR_MESSAGE,
+      },
+    });
+
+    render(
+      <RegisterCloseoutViewContent
+        {...baseProps}
+        onReviewCloseout={onReviewCloseout}
+        registerSessions={[
+          {
+            _id: "session-review",
+            approvalRequest: {
+              _id: "approval-1",
+              createdAt: new Date("2026-04-21T12:00:00.000Z").getTime(),
+              reason: "Variance of -20 exceeded the closeout approval threshold.",
+              requestedByStaffName: "Mary Aidoo",
+              status: "pending",
+            },
+            closeoutReview: {
+              hasVariance: true,
+              reason: "Variance of -20 exceeded the closeout approval threshold.",
+              requiresApproval: true,
+              variance: -20,
+            },
+            countedCash: 180,
+            expectedCash: 200,
+            openedAt: new Date("2026-04-21T08:30:00.000Z").getTime(),
+            registerNumber: "Register 4",
+            status: "closing",
+          },
+        ]}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "Approve variance" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      GENERIC_UNEXPECTED_ERROR_MESSAGE,
+    );
   });
 });

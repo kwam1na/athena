@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { GENERIC_UNEXPECTED_ERROR_MESSAGE, userError } from "~/shared/commandResult";
 import { ServiceCasesViewContent } from "./ServiceCasesView";
 
 const baseProps = {
@@ -20,11 +21,11 @@ const baseProps = {
   hasFullAdminAccess: true,
   isLoadingPermissions: false,
   isSaving: false,
-  onAddLineItem: vi.fn().mockResolvedValue(undefined),
-  onCreateCase: vi.fn().mockResolvedValue(undefined),
-  onRecordInventoryUsage: vi.fn().mockResolvedValue(undefined),
-  onRecordPayment: vi.fn().mockResolvedValue(undefined),
-  onUpdateStatus: vi.fn().mockResolvedValue(undefined),
+  onAddLineItem: vi.fn().mockResolvedValue({ kind: "ok", data: null }),
+  onCreateCase: vi.fn().mockResolvedValue({ kind: "ok", data: null }),
+  onRecordInventoryUsage: vi.fn().mockResolvedValue({ kind: "ok", data: null }),
+  onRecordPayment: vi.fn().mockResolvedValue({ kind: "ok", data: null }),
+  onUpdateStatus: vi.fn().mockResolvedValue({ kind: "ok", data: null }),
   searchQuery: "",
   selectedCaseDetails: {
     _id: "case-1",
@@ -76,7 +77,7 @@ describe("ServiceCasesViewContent", () => {
 
   it("validates required walk-in case fields before creating", async () => {
     const user = userEvent.setup();
-    const onCreateCase = vi.fn().mockResolvedValue(undefined);
+    const onCreateCase = vi.fn().mockResolvedValue({ kind: "ok", data: null });
 
     render(<ServiceCasesViewContent {...baseProps} onCreateCase={onCreateCase} />);
 
@@ -90,7 +91,7 @@ describe("ServiceCasesViewContent", () => {
 
   it("creates walk-in service cases from selected customers and catalog items", async () => {
     const user = userEvent.setup();
-    const onCreateCase = vi.fn().mockResolvedValue(undefined);
+    const onCreateCase = vi.fn().mockResolvedValue({ kind: "ok", data: null });
 
     render(<ServiceCasesViewContent {...baseProps} onCreateCase={onCreateCase} />);
 
@@ -115,10 +116,10 @@ describe("ServiceCasesViewContent", () => {
 
   it("renders case details and dispatches payment, inventory, line-item, and status actions", async () => {
     const user = userEvent.setup();
-    const onAddLineItem = vi.fn().mockResolvedValue(undefined);
-    const onRecordInventoryUsage = vi.fn().mockResolvedValue(undefined);
-    const onRecordPayment = vi.fn().mockResolvedValue(undefined);
-    const onUpdateStatus = vi.fn().mockResolvedValue(undefined);
+    const onAddLineItem = vi.fn().mockResolvedValue({ kind: "ok", data: null });
+    const onRecordInventoryUsage = vi.fn().mockResolvedValue({ kind: "ok", data: null });
+    const onRecordPayment = vi.fn().mockResolvedValue({ kind: "ok", data: null });
+    const onUpdateStatus = vi.fn().mockResolvedValue({ kind: "ok", data: null });
 
     render(
       <ServiceCasesViewContent
@@ -169,5 +170,152 @@ describe("ServiceCasesViewContent", () => {
       serviceCaseId: "case-1",
       status: "awaiting_pickup",
     });
+  });
+
+  it("renders safe user_error copy inline for create failures and clears stale errors before retry", async () => {
+    const user = userEvent.setup();
+    const onCreateCase = vi
+      .fn()
+      .mockResolvedValueOnce(
+        userError({
+          code: "precondition_failed",
+          message: "Assigned staff member is not available for this store.",
+        }),
+      )
+      .mockResolvedValueOnce({ kind: "ok", data: null });
+
+    render(<ServiceCasesViewContent {...baseProps} onCreateCase={onCreateCase} />);
+
+    await user.click(screen.getByRole("button", { name: /use customer/i }));
+    await user.type(screen.getByLabelText(/service title/i), "Closure Repair");
+    await chooseSelectOption(user, /assigned staff/i, /adjoa tetteh/i);
+    await user.click(screen.getByRole("button", { name: /create service case/i }));
+
+    expect(
+      await screen.findByText("Assigned staff member is not available for this store."),
+    ).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText(/service title/i));
+    await user.type(screen.getByLabelText(/service title/i), "Revamp");
+    await user.click(screen.getByRole("button", { name: /create service case/i }));
+
+    await waitFor(() => expect(onCreateCase).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(
+        screen.queryByText("Assigned staff member is not available for this store."),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
+  it("renders generic fallback copy inline for unexpected create failures", async () => {
+    const user = userEvent.setup();
+    const onCreateCase = vi.fn().mockResolvedValue({
+      kind: "unexpected_error",
+      error: {
+        title: "Something went wrong",
+        message: GENERIC_UNEXPECTED_ERROR_MESSAGE,
+      },
+    });
+
+    render(<ServiceCasesViewContent {...baseProps} onCreateCase={onCreateCase} />);
+
+    await user.click(screen.getByRole("button", { name: /use customer/i }));
+    await user.type(screen.getByLabelText(/service title/i), "Closure Repair");
+    await chooseSelectOption(user, /assigned staff/i, /adjoa tetteh/i);
+    await user.click(screen.getByRole("button", { name: /create service case/i }));
+
+    expect(await screen.findByText(GENERIC_UNEXPECTED_ERROR_MESSAGE)).toBeInTheDocument();
+  });
+
+  it("renders safe inline copy for status update failures", async () => {
+    const user = userEvent.setup();
+    const onUpdateStatus = vi.fn().mockResolvedValue(
+      userError({
+        code: "precondition_failed",
+        message: "Refund service payments before cancelling the case.",
+      }),
+    );
+
+    render(<ServiceCasesViewContent {...baseProps} onUpdateStatus={onUpdateStatus} />);
+
+    await chooseSelectOption(user, /case status/i, /cancelled/i);
+    await user.click(screen.getByRole("button", { name: /update status/i }));
+
+    expect(
+      await screen.findByText("Refund service payments before cancelling the case."),
+    ).toBeInTheDocument();
+  });
+
+  it("clears detail errors when switching to a different case", async () => {
+    const user = userEvent.setup();
+    const onUpdateStatus = vi.fn().mockResolvedValueOnce(
+      userError({
+        code: "precondition_failed",
+        message: "Refund service payments before cancelling the case.",
+      }),
+    );
+
+    const { rerender } = render(
+      <ServiceCasesViewContent
+        {...baseProps}
+        onUpdateStatus={onUpdateStatus}
+        serviceCases={[
+          ...baseProps.serviceCases,
+          {
+            _id: "case-2",
+            balanceDueAmount: 0,
+            customerName: "Kojo Mensimah",
+            paymentStatus: "paid",
+            pendingApprovalCount: 0,
+            serviceCatalogName: "Revamp",
+            staffName: "Adjoa Tetteh",
+            status: "awaiting_pickup",
+          },
+        ]}
+      />,
+    );
+
+    await chooseSelectOption(user, /case status/i, /cancelled/i);
+    await user.click(screen.getByRole("button", { name: /update status/i }));
+
+    expect(
+      await screen.findByText("Refund service payments before cancelling the case."),
+    ).toBeInTheDocument();
+
+    rerender(
+      <ServiceCasesViewContent
+        {...baseProps}
+        onUpdateStatus={onUpdateStatus}
+        selectedCaseDetails={{
+          _id: "case-2",
+          balanceDueAmount: 0,
+          lineItems: [],
+          paymentAllocations: [],
+          paymentStatus: "paid",
+          pendingApprovals: [],
+          status: "awaiting_pickup",
+        }}
+        selectedCaseId="case-2"
+        serviceCases={[
+          ...baseProps.serviceCases,
+          {
+            _id: "case-2",
+            balanceDueAmount: 0,
+            customerName: "Kojo Mensimah",
+            paymentStatus: "paid",
+            pendingApprovalCount: 0,
+            serviceCatalogName: "Revamp",
+            staffName: "Adjoa Tetteh",
+            status: "awaiting_pickup",
+          },
+        ]}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.queryByText("Refund service payments before cancelling the case."),
+      ).not.toBeInTheDocument(),
+    );
   });
 });
