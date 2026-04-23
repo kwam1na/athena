@@ -8,6 +8,7 @@ import { createOperationalWorkItemWithCtx } from "./operationalWorkItems";
 import { recordOperationalEventWithCtx } from "./operationalEvents";
 import { recordPaymentAllocationWithCtx } from "./paymentAllocations";
 import { createServiceCaseWithCtx } from "../serviceOps/serviceCases";
+import { ok, userError } from "../../shared/commandResult";
 import { validateServiceIntakeInput } from "../../shared/serviceIntake";
 
 export { validateServiceIntakeInput } from "../../shared/serviceIntake";
@@ -52,10 +53,13 @@ async function resolveServiceIntakeCustomerProfile(
     );
 
     if (!existingProfile || existingProfile.storeId !== args.storeId) {
-      throw new Error("Selected customer could not be found for this store.");
+      return userError({
+        code: "not_found",
+        message: "Selected customer could not be found for this store.",
+      });
     }
 
-    return existingProfile;
+    return ok(existingProfile);
   }
 
   const normalizedEmail = normalizeLookupValue(args.customerEmail);
@@ -88,12 +92,15 @@ async function resolveServiceIntakeCustomerProfile(
       phoneNumber: existingProfile.phoneNumber ?? normalizedPhoneNumber,
     });
 
-    return ctx.db.get("customerProfile", existingProfile._id);
+    return ok(await ctx.db.get("customerProfile", existingProfile._id));
   }
 
   const fullName = trimOptional(args.customerFullName);
   if (!fullName) {
-    throw new Error("A customer name is required.");
+    return userError({
+      code: "validation_failed",
+      message: "A customer name is required when no customer is linked.",
+    });
   }
 
   const { firstName, lastName } = splitFullName(fullName);
@@ -110,7 +117,7 @@ async function resolveServiceIntakeCustomerProfile(
     storeId: args.storeId,
   });
 
-  return ctx.db.get("customerProfile", customerProfileId);
+  return ok(await ctx.db.get("customerProfile", customerProfileId));
 }
 
 export const searchCustomers = query({
@@ -214,12 +221,18 @@ export const createServiceIntake = mutation({
     });
 
     if (validationErrors.length > 0) {
-      throw new Error(validationErrors.join(" "));
+      return userError({
+        code: "validation_failed",
+        message: validationErrors.join(" "),
+      });
     }
 
     const store = await ctx.db.get("store", args.storeId);
     if (!store) {
-      throw new Error("Store not found.");
+      return userError({
+        code: "not_found",
+        message: "Store not found.",
+      });
     }
 
     const assignedStaffProfile = await ctx.db.get(
@@ -232,7 +245,10 @@ export const createServiceIntake = mutation({
       assignedStaffProfile.storeId !== args.storeId ||
       assignedStaffProfile.status !== "active"
     ) {
-      throw new Error("Assigned staff member is not available for this store.");
+      return userError({
+        code: "precondition_failed",
+        message: "Assigned staff member is not available for this store.",
+      });
     }
 
     const createdByStaffProfile = args.createdByUserId
@@ -244,7 +260,7 @@ export const createServiceIntake = mutation({
           .first()
       : null;
 
-    const customerProfile = await resolveServiceIntakeCustomerProfile(ctx, {
+    const customerProfileResult = await resolveServiceIntakeCustomerProfile(ctx, {
       customerEmail: args.customerEmail,
       customerFullName: args.customerFullName,
       customerNotes: args.customerNotes,
@@ -253,6 +269,12 @@ export const createServiceIntake = mutation({
       organizationId: store.organizationId,
       storeId: args.storeId,
     });
+
+    if (customerProfileResult.kind === "user_error") {
+      return customerProfileResult;
+    }
+
+    const customerProfile = customerProfileResult.data;
 
     if (!customerProfile) {
       throw new Error("Unable to create or load the selected customer.");
@@ -393,11 +415,11 @@ export const createServiceIntake = mutation({
       workItemId: workItem._id,
     });
 
-    return {
+    return ok({
       approvalRequestId: approvalRequest?._id,
       customerProfileId: customerProfile._id,
       serviceCaseId: serviceCase._id,
       workItemId: workItem._id,
-    };
+    });
   },
 });
