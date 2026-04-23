@@ -5,10 +5,11 @@ import { useExpenseStore } from "../stores/expenseStore";
 import { Product } from "../components/pos/types";
 import { Id } from "../../convex/_generated/dataModel";
 import { validateProduct, validateQuantity } from "../lib/pos/validation";
+import { presentCommandToast } from "../lib/errors/presentCommandToast";
+import { runCommand } from "../lib/errors/runCommand";
 import { logger } from "../lib/logger";
 import { useSessionManagementExpense } from "./useSessionManagementExpense";
 import {
-  handlePOSOperation,
   POS_MESSAGES,
   showValidationError,
   showNoActiveSessionError,
@@ -137,58 +138,58 @@ export const useExpenseOperations = () => {
           throw new Error("Staff profile missing");
         }
 
-        const { success, data } = await handlePOSOperation(
-          () =>
-            addOrUpdateItemMutation({
-              sessionId: sessionId as Id<"expenseSession">,
-              staffProfileId: currentStaffProfileId,
-              productId: product.productId!,
-              productSkuId: product.skuId!,
-              productSku: product.sku || "",
-              barcode: product.barcode || undefined,
-              productName: product.name,
-              price: product.price,
-              quantity: newQuantity,
-              image: product.image || undefined,
-              size: product.size || undefined,
-              length: product.length || undefined,
-            }),
-          {
-            showSuccessToast: false,
-            onSuccess: (data) => {
-              if (existingItem) {
-                store.updateCartQuantity(
-                  existingItem.id as Id<"expenseSessionItem">,
-                  newQuantity
-                );
-              } else {
-                store.addToCart({
-                  id: data.itemId as Id<"expenseSessionItem">,
-                  name: product.name,
-                  barcode: product.barcode || "",
-                  sku: product.sku || "",
-                  price: product.price,
-                  quantity: 1,
-                  image: product.image || undefined,
-                  size: product.size || undefined,
-                  length: product.length,
-                  color: product.color,
-                  productId: product.productId!,
-                  skuId: product.skuId!,
-                });
-              }
-              store.setSessionExpiresAt(data.expiresAt);
-            },
-          }
+        const result = await runCommand(() =>
+          addOrUpdateItemMutation({
+            sessionId: sessionId as Id<"expenseSession">,
+            staffProfileId: currentStaffProfileId,
+            productId: product.productId!,
+            productSkuId: product.skuId!,
+            productSku: product.sku || "",
+            barcode: product.barcode || undefined,
+            productName: product.name,
+            price: product.price,
+            quantity: newQuantity,
+            image: product.image || undefined,
+            size: product.size || undefined,
+            length: product.length || undefined,
+          }),
         );
 
-        if (success && data) {
+        if (result.kind !== "ok") {
+          presentCommandToast(result);
+          return;
+        }
+
+        if (existingItem) {
+          store.updateCartQuantity(
+            existingItem.id as Id<"expenseSessionItem">,
+            newQuantity,
+          );
+        } else {
+          store.addToCart({
+            id: result.data.itemId as Id<"expenseSessionItem">,
+            name: product.name,
+            barcode: product.barcode || "",
+            sku: product.sku || "",
+            price: product.price,
+            quantity: 1,
+            image: product.image || undefined,
+            size: product.size || undefined,
+            length: product.length,
+            color: product.color,
+            productId: product.productId!,
+            skuId: product.skuId!,
+          });
+        }
+        store.setSessionExpiresAt(result.data.expiresAt);
+
+        {
           logger.info("[Expense] Product added to cart successfully", {
             productName: product.name,
-            itemId: data.itemId,
+            itemId: result.data.itemId,
             quantity: newQuantity,
             wasUpdate: isUpdate,
-            sessionExpiresAt: data.expiresAt,
+            sessionExpiresAt: result.data.expiresAt,
           });
         }
       } catch (error) {
@@ -295,26 +296,27 @@ export const useExpenseOperations = () => {
         return;
       }
 
-      const { success, data } = await handlePOSOperation(
-        () =>
-          removeItemMutation({
-            sessionId: sessionId as Id<"expenseSession">,
-            staffProfileId: currentStaffProfileId,
-            itemId,
-          }),
-        {
-          onSuccess: (data) => {
-            store.removeFromCart(itemId);
-            store.setSessionExpiresAt(data.expiresAt);
-          },
-        }
+      const result = await runCommand(() =>
+        removeItemMutation({
+          sessionId: sessionId as Id<"expenseSession">,
+          staffProfileId: currentStaffProfileId,
+          itemId,
+        }),
       );
 
-      if (success) {
+      if (result.kind !== "ok") {
+        presentCommandToast(result);
+        return;
+      }
+
+      store.removeFromCart(itemId);
+      store.setSessionExpiresAt(result.data.expiresAt);
+
+      {
         logger.info("[Expense] Item removed successfully", {
           itemName: item.name,
           itemId,
-          sessionExpiresAt: data?.expiresAt,
+          sessionExpiresAt: result.data.expiresAt,
         });
       }
     },
@@ -380,36 +382,36 @@ export const useExpenseOperations = () => {
         return;
       }
 
-      const { success, data } = await handlePOSOperation(
-        () =>
-          addOrUpdateItemMutation({
-            sessionId: sessionId as Id<"expenseSession">,
-            staffProfileId: currentStaffProfileId,
-            productId: item.productId!,
-            productSkuId: item.skuId!,
-            productSku: item.sku || "",
-            barcode: item.barcode || undefined,
-            productName: item.name,
-            price: item.price,
-            quantity,
-            image: item.image || undefined,
-            size: item.size || undefined,
-            length: item.length || undefined,
-          }),
-        {
-          showSuccessToast: false,
-          onSuccess: (data) => {
-            store.updateCartQuantity(itemId, quantity);
-            store.setSessionExpiresAt(data.expiresAt);
-          },
-        }
+      const result = await runCommand(() =>
+        addOrUpdateItemMutation({
+          sessionId: sessionId as Id<"expenseSession">,
+          staffProfileId: currentStaffProfileId,
+          productId: item.productId!,
+          productSkuId: item.skuId!,
+          productSku: item.sku || "",
+          barcode: item.barcode || undefined,
+          productName: item.name,
+          price: item.price,
+          quantity,
+          image: item.image || undefined,
+          size: item.size || undefined,
+          length: item.length || undefined,
+        }),
       );
 
-      if (success) {
+      if (result.kind !== "ok") {
+        presentCommandToast(result);
+        return;
+      }
+
+      store.updateCartQuantity(itemId, quantity);
+      store.setSessionExpiresAt(result.data.expiresAt);
+
+      {
         logger.info("[Expense] Quantity updated successfully", {
           itemName: item.name,
           quantity,
-          sessionExpiresAt: data?.expiresAt,
+          sessionExpiresAt: result.data.expiresAt,
         });
       }
     },
