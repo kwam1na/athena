@@ -49,17 +49,43 @@ Behavior scenarios:
 
 Use this when register-session, deposit, closeout, dashboard, operations-queue approval, or cash-controls route wiring changes. This is the confirmation slice for drawers opened from POS showing up in the dashboard and register-session detail views. Start `bunx convex dev` from `packages/athena-webapp` before validation when generated client refs or new Convex function exports changed.
 
-## Staff foundation and subsystem credential edits
+## Service operations intake, catalog, appointments, and cases
 
-Touched surfaces: `convex/operations/staffCredentials.ts`, `convex/operations/staffProfiles.ts`, `convex/schema.ts`, `convex/inventory/posSessions.ts`, `convex/pos/application/queries/getRegisterState.ts`, `convex/pos/infrastructure/repositories/cashierRepository.ts`, `src/components/staff/StaffManagement.tsx`, `src/components/expense/ExpenseCompletion.tsx`, `src/components/expense/ExpenseView.tsx`, `src/components/pos/CashierAuthDialog.tsx`, `src/lib/pos/application/results.ts`, `src/hooks/useExpenseSessions.ts`, `src/hooks/useSessionManagementExpense.ts`, `src/lib/pos/presentation/register/useRegisterViewModel.ts`, `src/stores/expenseStore.ts`, `types.ts`
+Touched surfaces: `convex/serviceOps`, `convex/operations/serviceIntake.ts`, `src/components/services`, `src/components/operations/OperationsQueueView.tsx`, `src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services`
 
 Run:
 
-- `bun run --filter '@athena/webapp' test -- convex/operations/staffCredentials.test.ts convex/inventory/sessionQueryIndexes.test.ts convex/pos/application/sessionCommands.test.ts convex/pos/application/completeTransaction.test.ts convex/pos/application/getTransactions.test.ts convex/pos/infrastructure/repositories/sessionRepository.test.ts convex/pos/application/getRegisterState.test.ts convex/inventory/posSessions.trace.test.ts convex/pos/application/posSessionTracing.test.ts src/lib/pos/infrastructure/convex/sessionGateway.test.ts src/lib/pos/infrastructure/convex/registerGateway.test.ts src/components/pos/CashierAuthDialog.test.tsx src/components/pos/register/POSRegisterView.test.tsx src/lib/pos/presentation/register/useRegisterViewModel.test.ts src/components/pos/transactions/TransactionView.test.tsx`
+- `bun run --filter '@athena/webapp' test -- convex/serviceOps/serviceCases.test.ts convex/serviceOps/catalogAppointments.test.ts convex/serviceOps/moduleWiring.test.ts convex/operations/serviceIntake.test.ts src/components/services/ServiceIntakeView.test.tsx src/components/services/ServiceIntakeView.auth.test.tsx src/components/services/ServiceAppointmentsView.test.tsx src/components/services/ServiceCasesView.test.tsx src/components/services/ServiceCatalogView.test.tsx src/components/operations/OperationsQueueView.test.tsx`
+- `bun run --filter '@athena/webapp' audit:convex`
+- `bun run --filter '@athena/webapp' lint:convex:changed`
 - `bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json`
 - `bun run --filter '@athena/webapp' build`
 
-Use this when store staff identity, subsystem credential auth, or POS/expense actor attribution changes. It validates the staff credential rules plus the register, transaction, expense, and cashier-auth failure flows that now share `staffProfileId` instead of the deleted cashier model.
+Use this when service intake, catalog management, appointment scheduling, service-case execution, or manager-queue service handoffs change. It validates the command-result service flows plus the operator-facing intake, appointments, active-cases, catalog, and queue surfaces together before broader package validation.
+
+## Auth, staff, and store-configuration edits
+
+Touched surfaces: `convex/inventory/auth.ts`, `convex/inventory/stores.ts`, `convex/operations/staffCredentials.ts`, `convex/operations/staffProfiles.ts`, `convex/schema.ts`, `convex/inventory/posSessions.ts`, `convex/pos/application/queries/getRegisterState.ts`, `convex/pos/infrastructure/repositories/cashierRepository.ts`, `src/routes/login/_layout.tsx`, `src/components/staff/StaffManagement.tsx`, `src/components/store-configuration`, `src/components/pos/CashierAuthDialog.tsx`, `src/lib/pos/application/results.ts`, `src/lib/pos/presentation/register/useRegisterViewModel.ts`
+
+Run:
+
+- `bun run --filter '@athena/webapp' test -- src/routes/login/_layout.test.tsx convex/operations/staffCredentials.test.ts convex/operations/staffProfiles.test.ts convex/inventory/sessionQueryIndexes.test.ts convex/pos/application/sessionCommands.test.ts convex/pos/application/completeTransaction.test.ts convex/pos/application/getTransactions.test.ts convex/pos/infrastructure/repositories/sessionRepository.test.ts convex/pos/application/getRegisterState.test.ts convex/inventory/posSessions.trace.test.ts convex/pos/application/posSessionTracing.test.ts src/lib/pos/infrastructure/convex/sessionGateway.test.ts src/lib/pos/infrastructure/convex/registerGateway.test.ts src/components/pos/CashierAuthDialog.test.tsx src/components/pos/register/POSRegisterView.test.tsx src/lib/pos/presentation/register/useRegisterViewModel.test.ts src/components/pos/transactions/TransactionView.test.tsx src/components/staff/StaffManagement.test.tsx src/components/store-configuration/hooks/useStoreConfigUpdate.test.tsx src/components/store-configuration/components/FulfillmentView.test.tsx src/components/store-configuration/components/MaintenanceView.test.tsx src/components/store-configuration/components/MtnMomoView.test.tsx`
+- `bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json`
+- `bun run --filter '@athena/webapp' build`
+
+Use this when login auth sync, store staff identity, admin store-configuration mutations, or cashier-auth command handling changes. It validates the retryable auth-sync path, the staff credential rules, the staff-management surface, the shared store-configuration hook plus fulfillment/maintenance/MTN MoMo regressions, and the register and cashier-auth flows that now share `staffProfileId` instead of the deleted cashier model.
+
+## Expense-session and cart flow edits
+
+Touched surfaces: `convex/inventory/expenseSessions.ts`, `convex/inventory/expenseSessionItems.ts`, `convex/inventory/expenseTransactions.ts`, `src/hooks/useExpenseSessions.ts`, `src/hooks/useExpenseOperations.ts`, `src/hooks/useSessionManagementExpense.ts`, `src/components/expense/ExpenseView.tsx`, `src/components/expense/ExpenseCompletion.tsx`, `src/stores/expenseStore.ts`, `types.ts`
+
+Run:
+
+- `bun run --filter '@athena/webapp' test -- convex/inventory/expenseSessions.test.ts convex/inventory/sessionQueryIndexes.test.ts src/hooks/useExpenseSessions.test.ts`
+- `bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json`
+- `bun run --filter '@athena/webapp' build`
+
+Use this when expense-session lifecycle, expense cart items, expense transaction finalization, or expense session hooks change. It validates the command-result expense session mutations plus the browser-facing session and cart hooks that now collapse expected failures to safe user-facing copy.
 
 ## Workflow trace foundation, POS drawer gate, and trace-link edits
 
