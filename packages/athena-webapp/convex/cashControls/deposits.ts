@@ -6,12 +6,47 @@ import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { recordPaymentAllocationWithCtx } from "../operations/paymentAllocations";
 import { recordRegisterSessionDepositWithCtx } from "../operations/registerSessions";
 import { recordRegisterSessionTraceBestEffort } from "../operations/registerSessionTracing";
+import { ok, userError, type CommandResult } from "../../shared/commandResult";
 
 const CASH_DEPOSIT_ALLOCATION_TYPE = "cash_deposit";
 const CASH_DEPOSIT_SUBJECT_TYPE = "register_cash_deposit";
 const RECENT_DEPOSIT_LIMIT = 10;
 const SESSION_LIMIT = 100;
 const TIMELINE_LIMIT = 200;
+
+const userErrorValidator = v.object({
+  code: v.union(
+    v.literal("validation_failed"),
+    v.literal("authentication_failed"),
+    v.literal("authorization_failed"),
+    v.literal("not_found"),
+    v.literal("conflict"),
+    v.literal("precondition_failed"),
+    v.literal("rate_limited"),
+    v.literal("unavailable"),
+  ),
+  title: v.optional(v.string()),
+  message: v.string(),
+  fields: v.optional(v.record(v.string(), v.array(v.string()))),
+  retryable: v.optional(v.boolean()),
+  traceId: v.optional(v.string()),
+  metadata: v.optional(v.record(v.string(), v.any())),
+});
+
+const registerSessionDepositResultValidator = v.union(
+  v.object({
+    kind: v.literal("ok"),
+    data: v.object({
+      action: v.union(v.literal("duplicate"), v.literal("recorded")),
+      deposit: v.union(v.null(), v.any()),
+      registerSession: v.union(v.null(), v.any()),
+    }),
+  }),
+  v.object({
+    kind: v.literal("user_error"),
+    error: userErrorValidator,
+  }),
+);
 
 type StaffNameMap = Map<Id<"staffProfile">, string>;
 
@@ -48,6 +83,12 @@ type CashControlRegisterSession = Pick<
   | "variance"
   | "workflowTraceId"
 >;
+
+type RecordRegisterSessionDepositResult = {
+  action: "duplicate" | "recorded";
+  deposit: Doc<"paymentAllocation"> | null;
+  registerSession: Doc<"registerSession"> | null;
+};
 
 function trimOptional(value?: string | null) {
   const nextValue = value?.trim();
@@ -458,21 +499,34 @@ export const recordRegisterSessionDeposit = mutation({
     storeId: v.id("store"),
     submissionKey: v.string(),
   },
-  handler: async (ctx, args) => {
+  returns: registerSessionDepositResultValidator,
+  handler: async (
+    ctx,
+    args
+  ): Promise<CommandResult<RecordRegisterSessionDepositResult>> => {
     if (args.amount <= 0) {
-      throw new Error("Deposit amount must be positive.");
+      return userError({
+        code: "validation_failed",
+        message: "Deposit amount must be positive.",
+      });
     }
 
     const submissionKey = trimOptional(args.submissionKey);
 
     if (!submissionKey) {
-      throw new Error("A submission key is required to record a register deposit.");
+      return userError({
+        code: "validation_failed",
+        message: "A submission key is required to record a register deposit.",
+      });
     }
 
     const registerSession = await ctx.db.get("registerSession", args.registerSessionId);
 
     if (!registerSession || registerSession.storeId !== args.storeId) {
-      throw new Error("Register session not found for this store.");
+      return userError({
+        code: "not_found",
+        message: "Register session not found for this store.",
+      });
     }
 
     const targetId = buildRegisterSessionDepositTargetId({
@@ -487,11 +541,18 @@ export const recordRegisterSessionDeposit = mutation({
       .first();
 
     if (existingDeposit && isCashControlDepositAllocation(existingDeposit)) {
-      return {
+      return ok({
         action: "duplicate" as const,
         deposit: existingDeposit,
         registerSession,
-      };
+      });
+    }
+
+    if (registerSession.status !== "open" && registerSession.status !== "active") {
+      return userError({
+        code: "precondition_failed",
+        message: "Register session is not accepting new deposits.",
+      });
     }
 
     const deposit = await recordPaymentAllocationWithCtx(ctx, {
@@ -516,7 +577,10 @@ export const recordRegisterSessionDeposit = mutation({
     });
 
     if (!updatedRegisterSession) {
-      throw new Error("Register session deposit was recorded without a session.");
+      return userError({
+        code: "unavailable",
+        message: "Register session deposit was recorded without a session.",
+      });
     }
 
     await recordOperationalEventWithCtx(ctx, {
@@ -556,10 +620,10 @@ export const recordRegisterSessionDeposit = mutation({
       workflowTraceId: updatedRegisterSession.workflowTraceId,
     });
 
-    return {
+    return ok({
       action: "recorded" as const,
       deposit,
       registerSession: updatedRegisterSession,
-    };
+    });
   },
 });
