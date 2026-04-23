@@ -22,7 +22,14 @@ const baseProps = {
   hasFullAdminAccess: true,
   isLoadingPermissions: false,
   isSubmitting: false,
-  onCreateIntake: vi.fn().mockResolvedValue(undefined),
+  onCreateIntake: vi.fn().mockResolvedValue({
+    kind: "ok",
+    data: {
+      customerProfileId: "customer-7",
+      serviceCaseId: "service-case-1",
+      workItemId: "work-item-1",
+    },
+  }),
   searchQuery: "",
   setSearchQuery: vi.fn(),
   staffOptions: [
@@ -75,7 +82,14 @@ describe("ServiceIntakeViewContent", () => {
 
   it("submits a linked-customer intake with a parsed deposit", async () => {
     const user = userEvent.setup();
-    const onCreateIntake = vi.fn().mockResolvedValue(undefined);
+    const onCreateIntake = vi.fn().mockResolvedValue({
+      kind: "ok",
+      data: {
+        customerProfileId: "customer-7",
+        serviceCaseId: "service-case-1",
+        workItemId: "work-item-1",
+      },
+    });
 
     render(
       <ServiceIntakeViewContent
@@ -133,6 +147,81 @@ describe("ServiceIntakeViewContent", () => {
     });
     expect(toast.success).toHaveBeenCalledWith("Service intake created");
     expect(screen.getByLabelText(/service title/i)).toHaveValue("");
+  });
+
+  it("renders safe user_error copy inline and clears stale validation errors before submit", async () => {
+    const user = userEvent.setup();
+    const onCreateIntake = vi.fn().mockResolvedValue({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: "Assigned staff member is not available for this store.",
+      },
+    });
+
+    render(
+      <ServiceIntakeViewContent
+        {...baseProps}
+        onCreateIntake={onCreateIntake}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /create intake/i }));
+
+    expect(screen.getByText("An assignee is required.")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText(/customer name/i), "Ama Mensah");
+    await user.type(
+      screen.getByLabelText(/service title/i),
+      "Wash and restyle closure wig",
+    );
+    await chooseSelectOption(user, /assigned staff/i, /adjoa tetteh/i);
+
+    await user.click(screen.getByRole("button", { name: /create intake/i }));
+
+    await waitFor(() => expect(onCreateIntake).toHaveBeenCalledTimes(1));
+    expect(
+      screen.getByText("Assigned staff member is not available for this store."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("A customer name is required when no customer is linked."),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("An assignee is required.")).not.toBeInTheDocument();
+    expect(screen.queryByText("A service title is required.")).not.toBeInTheDocument();
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it("renders generic fallback copy inline for unexpected command failures", async () => {
+    const user = userEvent.setup();
+    const onCreateIntake = vi.fn().mockResolvedValue({
+      kind: "unexpected_error",
+      error: {
+        title: "Something went wrong",
+        message: "Please try again.",
+      },
+    });
+
+    render(
+      <ServiceIntakeViewContent
+        {...baseProps}
+        onCreateIntake={onCreateIntake}
+      />,
+    );
+
+    await user.type(screen.getByLabelText(/customer name/i), "Ama Mensah");
+    await user.type(
+      screen.getByLabelText(/service title/i),
+      "Wash and restyle closure wig",
+    );
+    await chooseSelectOption(user, /assigned staff/i, /adjoa tetteh/i);
+
+    await user.click(screen.getByRole("button", { name: /create intake/i }));
+
+    await waitFor(() => expect(onCreateIntake).toHaveBeenCalledTimes(1));
+    expect(screen.getByText("Please try again.")).toBeInTheDocument();
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
   });
 
   it("renders the denied state for non-admin users", () => {
