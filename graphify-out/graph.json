@@ -11879,7 +11879,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_serviceops_catalog_ts",
       "source_file": "packages/athena-webapp/convex/serviceOps/catalog.ts",
-      "source_location": "L8",
+      "source_location": "L9",
       "target": "catalog_buildservicecatalogitem",
       "weight": 1
     },
@@ -19259,7 +19259,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_services_servicecatalogview_test_tsx",
       "source_file": "packages/athena-webapp/src/components/services/ServiceCatalogView.test.tsx",
-      "source_location": "L28",
+      "source_location": "L29",
       "target": "servicecatalogview_test_chooseselectoption",
       "weight": 1
     },
@@ -19271,7 +19271,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_services_servicecatalogview_tsx",
       "source_file": "packages/athena-webapp/src/components/services/ServiceCatalogView.tsx",
-      "source_location": "L149",
+      "source_location": "L158",
       "target": "servicecatalogview_handlechange",
       "weight": 1
     },
@@ -19283,7 +19283,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_services_servicecatalogview_tsx",
       "source_file": "packages/athena-webapp/src/components/services/ServiceCatalogView.tsx",
-      "source_location": "L159",
+      "source_location": "L168",
       "target": "servicecatalogview_handleedit",
       "weight": 1
     },
@@ -19295,7 +19295,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_services_servicecatalogview_tsx",
       "source_file": "packages/athena-webapp/src/components/services/ServiceCatalogView.tsx",
-      "source_location": "L165",
+      "source_location": "L174",
       "target": "servicecatalogview_handlereset",
       "weight": 1
     },
@@ -19307,7 +19307,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_services_servicecatalogview_tsx",
       "source_file": "packages/athena-webapp/src/components/services/ServiceCatalogView.tsx",
-      "source_location": "L171",
+      "source_location": "L180",
       "target": "servicecatalogview_handlesubmit",
       "weight": 1
     },
@@ -19319,7 +19319,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_services_servicecatalogview_tsx",
       "source_file": "packages/athena-webapp/src/components/services/ServiceCatalogView.tsx",
-      "source_location": "L82",
+      "source_location": "L87",
       "target": "servicecatalogview_itemtoformstate",
       "weight": 1
     },
@@ -19331,7 +19331,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_services_servicecatalogview_tsx",
       "source_file": "packages/athena-webapp/src/components/services/ServiceCatalogView.tsx",
-      "source_location": "L96",
+      "source_location": "L101",
       "target": "servicecatalogview_parseservicecatalogform",
       "weight": 1
     },
@@ -19343,7 +19343,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_services_servicecatalogview_tsx",
       "source_file": "packages/athena-webapp/src/components/services/ServiceCatalogView.tsx",
-      "source_location": "L67",
+      "source_location": "L72",
       "target": "servicecatalogview_validateservicecatalogform",
       "weight": 1
     },
@@ -19355,7 +19355,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_services_servicecatalogview_tsx",
       "source_file": "packages/athena-webapp/src/components/services/ServiceCatalogView.tsx",
-      "source_location": "L461",
+      "source_location": "L470",
       "target": "servicecatalogview_withsavestate",
       "weight": 1
     },
@@ -36023,7 +36023,7 @@
       "relation": "calls",
       "source": "servicecatalogview_itemtoformstate",
       "source_file": "packages/athena-webapp/src/components/services/ServiceCatalogView.tsx",
-      "source_location": "L161",
+      "source_location": "L170",
       "target": "servicecatalogview_handleedit",
       "weight": 1
     },
@@ -36035,7 +36035,7 @@
       "relation": "calls",
       "source": "servicecatalogview_handlereset",
       "source_file": "packages/athena-webapp/src/components/services/ServiceCatalogView.tsx",
-      "source_location": "L190",
+      "source_location": "L204",
       "target": "servicecatalogview_handlesubmit",
       "weight": 1
     },
@@ -36047,7 +36047,7 @@
       "relation": "calls",
       "source": "servicecatalogview_parseservicecatalogform",
       "source_file": "packages/athena-webapp/src/components/services/ServiceCatalogView.tsx",
-      "source_location": "L179",
+      "source_location": "L188",
       "target": "servicecatalogview_handlesubmit",
       "weight": 1
     },
@@ -36059,7 +36059,7 @@
       "relation": "calls",
       "source": "servicecatalogview_validateservicecatalogform",
       "source_file": "packages/athena-webapp/src/components/services/ServiceCatalogView.tsx",
-      "source_location": "L172",
+      "source_location": "L181",
       "target": "servicecatalogview_handlesubmit",
       "weight": 1
     },
@@ -58564,7 +58564,7 @@
       "label": "buildServiceCatalogItem()",
       "norm_label": "buildservicecatalogitem()",
       "source_file": "packages/athena-webapp/convex/serviceOps/catalog.ts",
-      "source_location": "L8"
+      "source_location": "L9"
     },
     {
       "community": 403,
@@ -61885,7 +61885,7 @@
       "label": "chooseSelectOption()",
       "norm_label": "chooseselectoption()",
       "source_file": "packages/athena-webapp/src/components/services/ServiceCatalogView.test.tsx",
-      "source_location": "L28"
+      "source_location": "L29"
     },
     {
       "community": 519,
@@ -63748,7 +63748,7 @@
       "label": "handleChange()",
       "norm_label": "handlechange()",
       "source_file": "packages/athena-webapp/src/components/services/ServiceCatalogView.tsx",
-      "source_location": "L149"
+      "source_location": "L158"
     },
     {
       "community": 59,
@@ -63757,7 +63757,7 @@
       "label": "handleEdit()",
       "norm_label": "handleedit()",
       "source_file": "packages/athena-webapp/src/components/services/ServiceCatalogView.tsx",
-      "source_location": "L159"
+      "source_location": "L168"
     },
     {
       "community": 59,
@@ -63766,7 +63766,7 @@
       "label": "handleReset()",
       "norm_label": "handlereset()",
       "source_file": "packages/athena-webapp/src/components/services/ServiceCatalogView.tsx",
-      "source_location": "L165"
+      "source_location": "L174"
     },
     {
       "community": 59,
@@ -63775,7 +63775,7 @@
       "label": "handleSubmit()",
       "norm_label": "handlesubmit()",
       "source_file": "packages/athena-webapp/src/components/services/ServiceCatalogView.tsx",
-      "source_location": "L171"
+      "source_location": "L180"
     },
     {
       "community": 59,
@@ -63784,7 +63784,7 @@
       "label": "itemToFormState()",
       "norm_label": "itemtoformstate()",
       "source_file": "packages/athena-webapp/src/components/services/ServiceCatalogView.tsx",
-      "source_location": "L82"
+      "source_location": "L87"
     },
     {
       "community": 59,
@@ -63793,7 +63793,7 @@
       "label": "parseServiceCatalogForm()",
       "norm_label": "parseservicecatalogform()",
       "source_file": "packages/athena-webapp/src/components/services/ServiceCatalogView.tsx",
-      "source_location": "L96"
+      "source_location": "L101"
     },
     {
       "community": 59,
@@ -63802,7 +63802,7 @@
       "label": "validateServiceCatalogForm()",
       "norm_label": "validateservicecatalogform()",
       "source_file": "packages/athena-webapp/src/components/services/ServiceCatalogView.tsx",
-      "source_location": "L67"
+      "source_location": "L72"
     },
     {
       "community": 59,
@@ -63811,7 +63811,7 @@
       "label": "withSaveState()",
       "norm_label": "withsavestate()",
       "source_file": "packages/athena-webapp/src/components/services/ServiceCatalogView.tsx",
-      "source_location": "L461"
+      "source_location": "L470"
     },
     {
       "community": 590,

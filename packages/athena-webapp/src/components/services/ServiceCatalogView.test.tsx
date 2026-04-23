@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { GENERIC_UNEXPECTED_ERROR_MESSAGE, userError } from "~/shared/commandResult";
 import { ServiceCatalogViewContent } from "./ServiceCatalogView";
 
 const baseProps = {
@@ -20,9 +21,9 @@ const baseProps = {
       status: "active" as const,
     },
   ],
-  onArchive: vi.fn().mockResolvedValue(undefined),
-  onCreate: vi.fn().mockResolvedValue(undefined),
-  onUpdate: vi.fn().mockResolvedValue(undefined),
+  onArchive: vi.fn().mockResolvedValue({ kind: "ok", data: null }),
+  onCreate: vi.fn().mockResolvedValue({ kind: "ok", data: null }),
+  onUpdate: vi.fn().mockResolvedValue({ kind: "ok", data: null }),
 };
 
 async function chooseSelectOption(
@@ -42,7 +43,7 @@ describe("ServiceCatalogViewContent", () => {
 
   it("validates required catalog fields before creating", async () => {
     const user = userEvent.setup();
-    const onCreate = vi.fn().mockResolvedValue(undefined);
+    const onCreate = vi.fn().mockResolvedValue({ kind: "ok", data: null });
 
     render(<ServiceCatalogViewContent {...baseProps} onCreate={onCreate} />);
 
@@ -57,8 +58,8 @@ describe("ServiceCatalogViewContent", () => {
 
   it("creates and archives catalog items", async () => {
     const user = userEvent.setup();
-    const onCreate = vi.fn().mockResolvedValue(undefined);
-    const onArchive = vi.fn().mockResolvedValue(undefined);
+    const onCreate = vi.fn().mockResolvedValue({ kind: "ok", data: null });
+    const onArchive = vi.fn().mockResolvedValue({ kind: "ok", data: null });
 
     render(
       <ServiceCatalogViewContent
@@ -100,7 +101,7 @@ describe("ServiceCatalogViewContent", () => {
 
   it("loads existing items into the form for editing", async () => {
     const user = userEvent.setup();
-    const onUpdate = vi.fn().mockResolvedValue(undefined);
+    const onUpdate = vi.fn().mockResolvedValue({ kind: "ok", data: null });
 
     render(<ServiceCatalogViewContent {...baseProps} onUpdate={onUpdate} />);
 
@@ -120,5 +121,63 @@ describe("ServiceCatalogViewContent", () => {
       name: "Custom Closure Repair",
       serviceCatalogId: "catalog-1",
     });
+  });
+
+  it("renders safe user_error copy inline and clears stale errors before retry", async () => {
+    const user = userEvent.setup();
+    const onCreate = vi
+      .fn()
+      .mockResolvedValueOnce(
+        userError({
+          code: "conflict",
+          message: "A service catalog item with this name already exists.",
+        }),
+      )
+      .mockResolvedValueOnce({ kind: "ok", data: null });
+
+    render(<ServiceCatalogViewContent {...baseProps} onCreate={onCreate} />);
+
+    await user.clear(screen.getByLabelText(/service name/i));
+    await user.type(screen.getByLabelText(/service name/i), "Closure Repair");
+    await user.clear(screen.getByLabelText(/duration/i));
+    await user.type(screen.getByLabelText(/duration/i), "90");
+
+    await user.click(screen.getByRole("button", { name: /create service/i }));
+
+    expect(
+      await screen.findByText("A service catalog item with this name already exists."),
+    ).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText(/service name/i));
+    await user.type(screen.getByLabelText(/service name/i), "Wash and Restyle");
+    await user.click(screen.getByRole("button", { name: /create service/i }));
+
+    await waitFor(() => expect(onCreate).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(
+        screen.queryByText("A service catalog item with this name already exists."),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
+  it("renders generic fallback copy inline for unexpected failures", async () => {
+    const user = userEvent.setup();
+    const onCreate = vi.fn().mockResolvedValue({
+      kind: "unexpected_error",
+      error: {
+        title: "Something went wrong",
+        message: GENERIC_UNEXPECTED_ERROR_MESSAGE,
+      },
+    });
+
+    render(<ServiceCatalogViewContent {...baseProps} onCreate={onCreate} />);
+
+    await user.clear(screen.getByLabelText(/service name/i));
+    await user.type(screen.getByLabelText(/service name/i), "Wash and Restyle");
+    await user.clear(screen.getByLabelText(/duration/i));
+    await user.type(screen.getByLabelText(/duration/i), "75");
+    await user.click(screen.getByRole("button", { name: /create service/i }));
+
+    expect(await screen.findByText(GENERIC_UNEXPECTED_ERROR_MESSAGE)).toBeInTheDocument();
   });
 });
