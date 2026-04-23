@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { GENERIC_UNEXPECTED_ERROR_MESSAGE, userError } from "~/shared/commandResult";
 import { ServiceAppointmentsViewContent } from "./ServiceAppointmentsView";
 
 const baseProps = {
@@ -31,10 +32,10 @@ const baseProps = {
   hasFullAdminAccess: true,
   isLoadingPermissions: false,
   isSaving: false,
-  onCancelAppointment: vi.fn().mockResolvedValue(undefined),
-  onConvertAppointment: vi.fn().mockResolvedValue(undefined),
-  onCreateAppointment: vi.fn().mockResolvedValue(undefined),
-  onRescheduleAppointment: vi.fn().mockResolvedValue(undefined),
+  onCancelAppointment: vi.fn().mockResolvedValue({ kind: "ok", data: null }),
+  onConvertAppointment: vi.fn().mockResolvedValue({ kind: "ok", data: null }),
+  onCreateAppointment: vi.fn().mockResolvedValue({ kind: "ok", data: null }),
+  onRescheduleAppointment: vi.fn().mockResolvedValue({ kind: "ok", data: null }),
   searchQuery: "",
   setSearchQuery: vi.fn(),
   staffOptions: [
@@ -93,7 +94,7 @@ describe("ServiceAppointmentsViewContent", () => {
 
   it("validates required appointment fields before scheduling", async () => {
     const user = userEvent.setup();
-    const onCreateAppointment = vi.fn().mockResolvedValue(undefined);
+    const onCreateAppointment = vi.fn().mockResolvedValue({ kind: "ok", data: null });
 
     render(
       <ServiceAppointmentsViewContent
@@ -113,7 +114,7 @@ describe("ServiceAppointmentsViewContent", () => {
 
   it("creates appointments from catalog and selected customers", async () => {
     const user = userEvent.setup();
-    const onCreateAppointment = vi.fn().mockResolvedValue(undefined);
+    const onCreateAppointment = vi.fn().mockResolvedValue({ kind: "ok", data: null });
 
     render(
       <ServiceAppointmentsViewContent
@@ -139,9 +140,9 @@ describe("ServiceAppointmentsViewContent", () => {
 
   it("reschedules, cancels, and converts appointments", async () => {
     const user = userEvent.setup();
-    const onCancelAppointment = vi.fn().mockResolvedValue(undefined);
-    const onConvertAppointment = vi.fn().mockResolvedValue(undefined);
-    const onRescheduleAppointment = vi.fn().mockResolvedValue(undefined);
+    const onCancelAppointment = vi.fn().mockResolvedValue({ kind: "ok", data: null });
+    const onConvertAppointment = vi.fn().mockResolvedValue({ kind: "ok", data: null });
+    const onRescheduleAppointment = vi.fn().mockResolvedValue({ kind: "ok", data: null });
 
     render(
       <ServiceAppointmentsViewContent
@@ -170,5 +171,98 @@ describe("ServiceAppointmentsViewContent", () => {
     expect(onConvertAppointment).toHaveBeenCalledWith({
       appointmentId: "appointment-1",
     });
+  });
+
+  it("renders safe user_error copy inline and clears stale errors before retry", async () => {
+    const user = userEvent.setup();
+    const onCreateAppointment = vi
+      .fn()
+      .mockResolvedValueOnce(
+        userError({
+          code: "conflict",
+          message: "Assigned staff member already has an appointment in this slot.",
+        }),
+      )
+      .mockResolvedValueOnce({ kind: "ok", data: null });
+
+    render(
+      <ServiceAppointmentsViewContent
+        {...baseProps}
+        onCreateAppointment={onCreateAppointment}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /use customer/i }));
+    await chooseSelectOption(user, /service catalog/i, /closure repair/i);
+    await chooseSelectOption(user, /assigned staff/i, /adjoa tetteh/i);
+    await chooseDateTime(user, /appointment start/i, "10", "00");
+    await user.click(screen.getByRole("button", { name: /schedule appointment/i }));
+
+    expect(
+      await screen.findByText(
+        "Assigned staff member already has an appointment in this slot.",
+      ),
+    ).toBeInTheDocument();
+
+    await chooseDateTime(user, /appointment start/i, "11", "15");
+    await user.click(screen.getByRole("button", { name: /schedule appointment/i }));
+
+    await waitFor(() => expect(onCreateAppointment).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(
+        screen.queryByText(
+          "Assigned staff member already has an appointment in this slot.",
+        ),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
+  it("renders generic fallback copy inline for unexpected failures", async () => {
+    const user = userEvent.setup();
+    const onCreateAppointment = vi.fn().mockResolvedValue({
+      kind: "unexpected_error",
+      error: {
+        title: "Something went wrong",
+        message: GENERIC_UNEXPECTED_ERROR_MESSAGE,
+      },
+    });
+
+    render(
+      <ServiceAppointmentsViewContent
+        {...baseProps}
+        onCreateAppointment={onCreateAppointment}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /use customer/i }));
+    await chooseSelectOption(user, /service catalog/i, /closure repair/i);
+    await chooseSelectOption(user, /assigned staff/i, /adjoa tetteh/i);
+    await chooseDateTime(user, /appointment start/i, "10", "00");
+    await user.click(screen.getByRole("button", { name: /schedule appointment/i }));
+
+    expect(await screen.findByText(GENERIC_UNEXPECTED_ERROR_MESSAGE)).toBeInTheDocument();
+  });
+
+  it("renders safe inline copy for convert failures", async () => {
+    const user = userEvent.setup();
+    const onConvertAppointment = vi.fn().mockResolvedValue(
+      userError({
+        code: "conflict",
+        message: "Appointment already has a service case.",
+      }),
+    );
+
+    render(
+      <ServiceAppointmentsViewContent
+        {...baseProps}
+        onConvertAppointment={onConvertAppointment}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /convert closure repair/i }));
+
+    expect(
+      await screen.findByText("Appointment already has a service case."),
+    ).toBeInTheDocument();
   });
 });

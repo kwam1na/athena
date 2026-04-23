@@ -69,6 +69,25 @@ describe("service catalog and appointment helpers", () => {
     });
   });
 
+  it("returns a validation_failed user_error for invalid appointment duration", () => {
+    expect(
+      buildServiceAppointment({
+        assignedStaffProfileId: "staff_1" as Id<"staffProfile">,
+        customerProfileId: "customer_1" as Id<"customerProfile">,
+        durationMinutes: 0,
+        serviceCatalogId: "catalog_1" as Id<"serviceCatalog">,
+        startAt: 1_000,
+        storeId: "store_1" as Id<"store">,
+      })
+    ).toEqual({
+      kind: "user_error",
+      error: {
+        code: "validation_failed",
+        message: "Service duration must be greater than zero.",
+      },
+    });
+  });
+
   it("builds appointments with computed end times and default status", () => {
     expect(
       buildServiceAppointment({
@@ -80,8 +99,11 @@ describe("service catalog and appointment helpers", () => {
         storeId: "store_1" as Id<"store">,
       })
     ).toMatchObject({
-      endAt: 5_401_000,
-      status: "scheduled",
+      kind: "ok",
+      data: {
+        endAt: 5_401_000,
+        status: "scheduled",
+      },
     });
   });
 
