@@ -427,6 +427,45 @@ export const HARNESS_APP_REGISTRY = [
           "Use this when expense-session lifecycle, expense cart items, expense transaction finalization, or expense session hooks change. It validates the command-result expense session mutations plus the browser-facing session and cart hooks that now collapse expected failures to safe user-facing copy.",
       },
       {
+        title: "Omnichannel order, refund, review, and customer-history edits",
+        touchedPaths: [
+          "convex/storeFront/onlineOrder.ts",
+          "convex/storeFront/onlineOrderUtilFns.ts",
+          "convex/storeFront/payment.ts",
+          "convex/storeFront/reviews.ts",
+          "convex/storeFront/helpers/returnExchangeOperations.ts",
+          "convex/storeFront/helpers/customerEngagementEvents.ts",
+          "convex/storeFront/customerBehaviorTimeline.ts",
+          "convex/storeFront/customerObservabilityTimelineData.ts",
+          "src/components/orders",
+          "src/components/reviews",
+          "src/components/users/CustomerBehaviorTimeline.tsx",
+          "src/components/users/TimelineEventCard.tsx",
+          "src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders",
+          "src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews",
+        ],
+        commands: [
+          {
+            kind: "raw",
+            command:
+              "bun run --filter '@athena/webapp' test -- convex/storeFront/errorFoundation.test.ts convex/storeFront/orderOperations.test.ts convex/storeFront/returnExchangeOperations.test.ts convex/storeFront/customerBehaviorTimeline.test.ts convex/storeFront/customerObservabilityTimeline.test.ts convex/storeFront/helpers/customerEngagementEvents.test.ts src/components/orders/ReturnExchangeView.test.tsx src/components/users/TimelineEventCard.test.tsx",
+          },
+          { kind: "script", script: "audit:convex" },
+          { kind: "script", script: "lint:convex:changed" },
+          {
+            kind: "raw",
+            command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+          },
+          { kind: "script", script: "build" },
+        ],
+        behaviorScenarios: [
+          "athena-convex-storefront-composition",
+          "athena-convex-storefront-failure-visibility",
+        ],
+        note:
+          "Use this when order updates, refunds, return-exchange execution, review moderation, feedback-request messaging, or customer-history presentation changes. It validates the migrated storefront command-result surfaces plus the operator-facing order, review, and customer-history views before broader package validation. Start `bunx convex dev` from `packages/athena-webapp` before validation when generated client refs or new storefront function exports changed.",
+      },
+      {
         title: "Workflow trace foundation, POS drawer gate, and trace-link edits",
         touchedPaths: [
           "convex/workflowTraces",
@@ -492,6 +531,8 @@ export const HARNESS_APP_REGISTRY = [
         touchedPaths: [
           "shared/commandResult.ts",
           "src/lib/errors",
+          "src/lib/errors/presentUnexpectedErrorToast.ts",
+          "src/lib/errors/presentUnexpectedErrorToast.test.ts",
           "src/components/auth/DefaultCatchBoundary.tsx",
           "src/components/auth/DefaultCatchBoundary.test.tsx",
           "src/routeTree.browser-boundary.test.ts",
@@ -500,7 +541,7 @@ export const HARNESS_APP_REGISTRY = [
           {
             kind: "raw",
             command:
-              "bun run --filter '@athena/webapp' test -- shared/commandResult.test.ts src/lib/errors/runCommand.test.ts src/lib/errors/presentCommandToast.test.ts src/components/auth/DefaultCatchBoundary.test.tsx src/routeTree.browser-boundary.test.ts",
+              "bun run --filter '@athena/webapp' test -- shared/commandResult.test.ts src/lib/errors/runCommand.test.ts src/lib/errors/presentCommandToast.test.ts src/lib/errors/presentUnexpectedErrorToast.test.ts src/components/auth/DefaultCatchBoundary.test.tsx src/routeTree.browser-boundary.test.ts",
           },
           {
             kind: "raw",
@@ -510,6 +551,34 @@ export const HARNESS_APP_REGISTRY = [
         ],
         note:
           "Use this when the shared command-result contract, client command normalizers, generic catch boundary, or browser import boundary changes. Expected failures must stay in browser-safe `user_error` results, thrown faults must collapse to generic fallback copy, and shared modules must not import raw Convex server files into the browser tree.",
+      },
+      {
+        title: "Admin quick-action unexpected-toast fallback edits",
+        touchedPaths: [
+          "src/components/add-product",
+          "src/components/assets",
+          "src/components/join-team",
+          "src/components/organization-members",
+          "src/components/promo-codes",
+          "src/lib/errors/presentUnexpectedErrorToast.ts",
+          "src/lib/errors/presentUnexpectedErrorToast.test.ts",
+          "src/settings/organization",
+          "src/settings/store",
+        ],
+        commands: [
+          {
+            kind: "raw",
+            command:
+              "bun run --filter '@athena/webapp' test -- src/lib/errors/presentUnexpectedErrorToast.test.ts src/components/join-team/index.test.tsx src/components/promo-codes/PromoCodeHeader.test.tsx",
+          },
+          {
+            kind: "raw",
+            command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+          },
+          { kind: "script", script: "build" },
+        ],
+        note:
+          "Use this when admin quick actions still resolve through toast-only UX. Preserve any explicit business-validation copy returned by the surface, but route unexpected failures through the shared generic unexpected-error fallback so raw backend text never reaches the browser.",
       },
       {
         title: "Frontend test harness edits",

@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { action, internalAction } from "../_generated/server";
 import { api, internal } from "../_generated/api";
+import { commandResultValidator } from "../lib/commandResultValidators";
 import { CheckoutSession, OnlineOrder } from "../../types";
 import { orderDetailsSchema } from "../schemas/storeFront";
 import {
@@ -25,6 +26,7 @@ import {
   sendPODOrderEmails,
   sendPaymentVerificationEmails,
 } from "../services/orderEmailService";
+import { ok, userError } from "../../shared/commandResult";
 
 const appUrl = process.env.APP_URL;
 
@@ -506,11 +508,12 @@ export const refundPayment = action({
       }),
     ),
   },
-  returns: v.object({
-    success: v.boolean(),
-    message: v.string(),
-  }),
-  handler: async (ctx, args): Promise<PaymentResult> => {
+  returns: commandResultValidator(
+    v.object({
+      message: v.string(),
+    })
+  ),
+  handler: async (ctx, args) => {
     try {
       // Initiate refund with Paystack
       const refundResponse = await initiateRefund({
@@ -587,17 +590,15 @@ export const refundPayment = action({
         });
       }
 
-      return {
-        success: true,
+      return ok({
         message: refundResponse.message,
-      };
+      });
     } catch (error) {
       console.error("Failed to refund payment", error);
-      return {
-        success: false,
-        message:
-          error instanceof Error ? error.message : "Failed to refund payment",
-      };
+      return userError({
+        code: "unavailable",
+        message: "Failed to refund payment.",
+      });
     }
   },
 });

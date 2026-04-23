@@ -15,6 +15,8 @@ import { useOnlineOrder } from "~/src/contexts/OnlineOrderContext";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { useAuth } from "~/src/hooks/useAuth";
 import { api } from "~/convex/_generated/api";
+import { presentCommandToast } from "~/src/lib/errors/presentCommandToast";
+import { runCommand } from "~/src/lib/errors/runCommand";
 import { currencyFormatter, getRelativeTime } from "~/src/lib/utils";
 
 export type ReturnExchangePayload = {
@@ -374,38 +376,42 @@ export function ReturnExchangeView() {
   const handleSubmit = async (payload: ReturnExchangePayload) => {
     try {
       setIsSubmitting(true);
-      const result = await processReturnExchange({
-        orderId: order._id,
-        operationType: payload.operationType,
-        replacementItems: payload.replacementItems.map((item) => ({
-          productId: item.productId as any,
-          productName: item.productName,
-          productSkuId: item.productSkuId as any,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-        })),
-        restockReturnedItems: payload.restockReturnedItems,
-        returnItemIds: payload.returnItemIds.map((itemId) => itemId as any),
-        signedInAthenaUser: user
-          ? {
-              id: user._id,
-              email: user.email,
-            }
-          : undefined,
-      });
+      const result = await runCommand(() =>
+        processReturnExchange({
+          orderId: order._id,
+          operationType: payload.operationType,
+          replacementItems: payload.replacementItems.map((item) => ({
+            productId: item.productId as any,
+            productName: item.productName,
+            productSkuId: item.productSkuId as any,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+          })),
+          restockReturnedItems: payload.restockReturnedItems,
+          returnItemIds: payload.returnItemIds.map((itemId) => itemId as any),
+          signedInAthenaUser: user
+            ? {
+                id: user._id,
+                email: user.email,
+              }
+            : undefined,
+        }),
+      );
+
+      if (result.kind !== "ok") {
+        presentCommandToast(result);
+        return;
+      }
 
       toast(
-        result.requiresApproval ? "Approval requested" : "Return flow recorded",
+        result.data.requiresApproval
+          ? "Approval requested"
+          : "Return flow recorded",
         {
           icon: <CheckCircledIcon className="w-4 h-4" />,
-          description: result.message,
+          description: result.data.message,
         },
       );
-    } catch (error) {
-      console.error(error);
-      toast("Unable to process return or exchange", {
-        description: (error as Error).message,
-      });
     } finally {
       setIsSubmitting(false);
     }

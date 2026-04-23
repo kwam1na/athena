@@ -19,6 +19,7 @@ import {
   requiresStockAdjustmentApproval,
   resolveStockAdjustmentApprovalDecisionWithCtx,
   resolveStockAdjustmentQuantityDelta,
+  submitStockAdjustmentBatchCommandWithCtx,
   submitStockAdjustmentBatchWithCtx,
   summarizeStockAdjustmentLineItems,
 } from "./adjustments";
@@ -520,6 +521,57 @@ describe("stock ops adjustments", () => {
     ).rejects.toThrow("Sign in again to continue.");
   });
 
+  it("returns a validation user error when stock-adjustment submissions are empty", async () => {
+    const { ctx } = createSubmissionMutationCtx({
+      authUserId: "auth-user-1",
+      membershipRole: "pos_only",
+    });
+
+    await expect(
+      submitStockAdjustmentBatchCommandWithCtx(ctx, {
+        adjustmentType: "manual",
+        lineItems: [],
+        reasonCode: "damage",
+        storeId: "store-1" as Id<"store">,
+        submissionKey: "submission-empty",
+      })
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "validation_failed",
+        message: "Stock adjustment batches require at least one line item.",
+      },
+    });
+  });
+
+  it("returns an authentication user error for unauthenticated stock-adjustment submissions", async () => {
+    const { ctx } = createSubmissionMutationCtx({
+      authUserId: null,
+      membershipRole: "pos_only",
+    });
+
+    await expect(
+      submitStockAdjustmentBatchCommandWithCtx(ctx, {
+        adjustmentType: "manual",
+        lineItems: [
+          {
+            productSkuId: "sku-1" as Id<"productSku">,
+            quantityDelta: -2,
+          },
+        ],
+        reasonCode: "damage",
+        storeId: "store-1" as Id<"store">,
+        submissionKey: "submission-auth",
+      })
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "authentication_failed",
+        message: "Sign in again to continue.",
+      },
+    });
+  });
+
   it("rejects authenticated users without store membership", async () => {
     const { ctx } = createSubmissionMutationCtx({
       authUserId: "auth-user-1",
@@ -542,6 +594,34 @@ describe("stock ops adjustments", () => {
     ).rejects.toThrow(
       "You do not have permission to adjust stock for this store."
     );
+  });
+
+  it("returns an authorization user error when the operator lacks store membership", async () => {
+    const { ctx } = createSubmissionMutationCtx({
+      authUserId: "auth-user-1",
+      membershipRole: null,
+    });
+
+    await expect(
+      submitStockAdjustmentBatchCommandWithCtx(ctx, {
+        adjustmentType: "manual",
+        lineItems: [
+          {
+            productSkuId: "sku-1" as Id<"productSku">,
+            quantityDelta: -2,
+          },
+        ],
+        reasonCode: "damage",
+        storeId: "store-1" as Id<"store">,
+        submissionKey: "submission-authz",
+      })
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "You do not have permission to adjust stock for this store.",
+      },
+    });
   });
 
   it("derives the submitting operator from the authenticated session", async () => {

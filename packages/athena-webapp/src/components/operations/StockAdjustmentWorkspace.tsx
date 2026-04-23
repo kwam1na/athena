@@ -9,6 +9,8 @@ import {
   summarizeStockAdjustmentLineItems,
 } from "~/shared/stockAdjustment";
 import type { Id } from "~/convex/_generated/dataModel";
+import type { NormalizedCommandResult } from "../../lib/errors/runCommand";
+import { presentCommandToast } from "../../lib/errors/presentCommandToast";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { LoadingButton } from "../ui/loading-button";
@@ -43,7 +45,9 @@ export type SubmitStockAdjustmentArgs = {
 type StockAdjustmentWorkspaceContentProps = {
   inventoryItems: InventorySnapshotItem[];
   isSubmitting: boolean;
-  onSubmitBatch: (args: SubmitStockAdjustmentArgs) => Promise<void>;
+  onSubmitBatch: (
+    args: SubmitStockAdjustmentArgs
+  ) => Promise<NormalizedCommandResult<unknown>>;
   storeId?: Id<"store">;
 };
 
@@ -178,33 +182,32 @@ export function StockAdjustmentWorkspaceContent({
       return;
     }
 
-    try {
-      await onSubmitBatch({
-        adjustmentType,
-        lineItems: changedRows.map((row) => row.submittedLineItem!),
-        notes: trimOptional(notes),
-        reasonCode:
-          adjustmentType === "manual" ? reasonCode : CYCLE_COUNT_REASON_CODE,
-        storeId,
-        submissionKey,
-      });
+    const result = await onSubmitBatch({
+      adjustmentType,
+      lineItems: changedRows.map((row) => row.submittedLineItem!),
+      notes: trimOptional(notes),
+      reasonCode:
+        adjustmentType === "manual" ? reasonCode : CYCLE_COUNT_REASON_CODE,
+      storeId,
+      submissionKey,
+    });
 
-      toast.success(
-        approvalRequired
-          ? "Stock batch submitted for review"
-          : adjustmentType === "manual"
-            ? "Stock adjustment applied"
-            : "Cycle count reconciled"
-      );
-      setNotes("");
-      setManualDeltas(buildManualDrafts(inventoryItems));
-      setCycleCounts(buildCycleCountDrafts(inventoryItems));
-      setSubmissionKey(buildStockAdjustmentSubmissionKey(adjustmentType));
-    } catch (error) {
-      toast.error("Failed to submit stock batch", {
-        description: (error as Error).message,
-      });
+    if (result.kind !== "ok") {
+      presentCommandToast(result);
+      return;
     }
+
+    toast.success(
+      approvalRequired
+        ? "Stock batch submitted for review"
+        : adjustmentType === "manual"
+          ? "Stock adjustment applied"
+          : "Cycle count reconciled"
+    );
+    setNotes("");
+    setManualDeltas(buildManualDrafts(inventoryItems));
+    setCycleCounts(buildCycleCountDrafts(inventoryItems));
+    setSubmissionKey(buildStockAdjustmentSubmissionKey(adjustmentType));
   };
 
   return (

@@ -7,10 +7,10 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 - [packages/AGENTS.md](../../packages/AGENTS.md) - package router plus the operational guides for each harnessed package
 
 ## Repo Summary
-- Code files discovered: 1490
-- Graph nodes: 3743
-- Graph edges: 3271
-- Communities: 1405
+- Code files discovered: 1495
+- Graph nodes: 3761
+- Graph edges: 3300
+- Communities: 1410
 
 ## Graph Hotspots
 - `harness-inferential-review.ts` (46 edges, Community 0) - [`scripts/harness-inferential-review.ts`](../../scripts/harness-inferential-review.ts)

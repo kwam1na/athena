@@ -3,6 +3,7 @@ import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { buildApprovalRequest } from "./approvalRequestHelpers";
 import {
+  decideApprovalRequestAsCommandWithCtx,
   decideApprovalRequestAsAuthenticatedUserWithCtx,
   decideApprovalRequestWithCtx,
 } from "./approvalRequests";
@@ -308,6 +309,46 @@ describe("approval request helpers", () => {
     });
   });
 
+  it("returns an authentication user error when the reviewer is not signed in", async () => {
+    const { ctx } = createApprovalRequestMutationCtx({
+      authUserId: null,
+      role: "full_admin",
+    });
+
+    await expect(
+      decideApprovalRequestAsCommandWithCtx(ctx, {
+        approvalRequestId: "approval-1" as Id<"approvalRequest">,
+        decision: "approved",
+      })
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "authentication_failed",
+        message: "Sign in again to continue.",
+      },
+    });
+  });
+
+  it("returns an authorization user error when the reviewer is not a full admin", async () => {
+    const { ctx } = createApprovalRequestMutationCtx({
+      authUserId: "auth-user-1",
+      role: "pos_only",
+    });
+
+    await expect(
+      decideApprovalRequestAsCommandWithCtx(ctx, {
+        approvalRequestId: "approval-1" as Id<"approvalRequest">,
+        decision: "approved",
+      })
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "Only full admins can resolve approval requests.",
+      },
+    });
+  });
+
   it("derives the reviewer from the authenticated session", async () => {
     const { ctx, tables } = createApprovalRequestMutationCtx({
       authUserId: "auth-user-1",
@@ -349,5 +390,30 @@ describe("approval request helpers", () => {
     ).rejects.toThrow(
       "Multiple Athena users match this email. Resolve duplicate accounts before continuing."
     );
+  });
+
+  it("returns a precondition user error when an approval request is already decided", async () => {
+    const { ctx, tables } = createApprovalRequestMutationCtx({
+      authUserId: "auth-user-1",
+      role: "full_admin",
+    });
+
+    tables.approvalRequest.set("approval-1", {
+      ...tables.approvalRequest.get("approval-1"),
+      status: "approved",
+    });
+
+    await expect(
+      decideApprovalRequestAsCommandWithCtx(ctx, {
+        approvalRequestId: "approval-1" as Id<"approvalRequest">,
+        decision: "approved",
+      })
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: "Approval request has already been decided.",
+      },
+    });
   });
 });

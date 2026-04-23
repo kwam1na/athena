@@ -20,6 +20,7 @@ import { Color } from "~/types";
 import { Id } from "~/convex/_generated/dataModel";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { capitalizeWords } from "~/src/lib/utils";
+import { presentUnexpectedErrorToast } from "~/src/lib/errors/presentUnexpectedErrorToast";
 
 export type AttributeManageOption = "color" | "size";
 
@@ -98,9 +99,8 @@ function ColorManager() {
         icon: <CheckCircledIcon className="w-4 h-4" />,
       });
     } catch (e) {
-      toast("Something went wrong", {
+      presentUnexpectedErrorToast("Something went wrong", {
         icon: <Ban className="w-4 h-4" />,
-        description: (e as Error).message,
       });
     } finally {
       setIsUpdateMutationPending(false);
@@ -120,9 +120,8 @@ function ColorManager() {
         icon: <CheckCircledIcon className="w-4 h-4" />,
       });
     } catch (e) {
-      toast("Something went wrong", {
+      presentUnexpectedErrorToast("Something went wrong", {
         icon: <Ban className="w-4 h-4" />,
-        description: (e as Error).message,
       });
     } finally {
       setIsDeleteMutationPending(false);

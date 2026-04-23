@@ -189,6 +189,51 @@
       "behaviorScenarios": []
     },
     {
+      "name": "omnichannel-order-refund-review-and-customer-history-edits",
+      "pathPrefixes": [
+        "packages/athena-webapp/convex/storeFront/onlineOrder.ts",
+        "packages/athena-webapp/convex/storeFront/onlineOrderUtilFns.ts",
+        "packages/athena-webapp/convex/storeFront/payment.ts",
+        "packages/athena-webapp/convex/storeFront/reviews.ts",
+        "packages/athena-webapp/convex/storeFront/helpers/returnExchangeOperations.ts",
+        "packages/athena-webapp/convex/storeFront/helpers/customerEngagementEvents.ts",
+        "packages/athena-webapp/convex/storeFront/customerBehaviorTimeline.ts",
+        "packages/athena-webapp/convex/storeFront/customerObservabilityTimelineData.ts",
+        "packages/athena-webapp/src/components/orders",
+        "packages/athena-webapp/src/components/reviews",
+        "packages/athena-webapp/src/components/users/CustomerBehaviorTimeline.tsx",
+        "packages/athena-webapp/src/components/users/TimelineEventCard.tsx",
+        "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders",
+        "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews"
+      ],
+      "commands": [
+        {
+          "kind": "raw",
+          "command": "bun run --filter '@athena/webapp' test -- convex/storeFront/errorFoundation.test.ts convex/storeFront/orderOperations.test.ts convex/storeFront/returnExchangeOperations.test.ts convex/storeFront/customerBehaviorTimeline.test.ts convex/storeFront/customerObservabilityTimeline.test.ts convex/storeFront/helpers/customerEngagementEvents.test.ts src/components/orders/ReturnExchangeView.test.tsx src/components/users/TimelineEventCard.test.tsx"
+        },
+        {
+          "kind": "script",
+          "script": "audit:convex"
+        },
+        {
+          "kind": "script",
+          "script": "lint:convex:changed"
+        },
+        {
+          "kind": "raw",
+          "command": "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json"
+        },
+        {
+          "kind": "script",
+          "script": "build"
+        }
+      ],
+      "behaviorScenarios": [
+        "athena-convex-storefront-composition",
+        "athena-convex-storefront-failure-visibility"
+      ]
+    },
+    {
       "name": "workflow-trace-foundation-pos-drawer-gate-and-trace-link-edits",
       "pathPrefixes": [
         "packages/athena-webapp/convex/workflowTraces",
@@ -270,6 +315,8 @@
       "pathPrefixes": [
         "packages/athena-webapp/shared/commandResult.ts",
         "packages/athena-webapp/src/lib/errors",
+        "packages/athena-webapp/src/lib/errors/presentUnexpectedErrorToast.ts",
+        "packages/athena-webapp/src/lib/errors/presentUnexpectedErrorToast.test.ts",
         "packages/athena-webapp/src/components/auth/DefaultCatchBoundary.tsx",
         "packages/athena-webapp/src/components/auth/DefaultCatchBoundary.test.tsx",
         "packages/athena-webapp/src/routeTree.browser-boundary.test.ts"
@@ -277,7 +324,36 @@
       "commands": [
         {
           "kind": "raw",
-          "command": "bun run --filter '@athena/webapp' test -- shared/commandResult.test.ts src/lib/errors/runCommand.test.ts src/lib/errors/presentCommandToast.test.ts src/components/auth/DefaultCatchBoundary.test.tsx src/routeTree.browser-boundary.test.ts"
+          "command": "bun run --filter '@athena/webapp' test -- shared/commandResult.test.ts src/lib/errors/runCommand.test.ts src/lib/errors/presentCommandToast.test.ts src/lib/errors/presentUnexpectedErrorToast.test.ts src/components/auth/DefaultCatchBoundary.test.tsx src/routeTree.browser-boundary.test.ts"
+        },
+        {
+          "kind": "raw",
+          "command": "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json"
+        },
+        {
+          "kind": "script",
+          "script": "build"
+        }
+      ],
+      "behaviorScenarios": []
+    },
+    {
+      "name": "admin-quick-action-unexpected-toast-fallback-edits",
+      "pathPrefixes": [
+        "packages/athena-webapp/src/components/add-product",
+        "packages/athena-webapp/src/components/assets",
+        "packages/athena-webapp/src/components/join-team",
+        "packages/athena-webapp/src/components/organization-members",
+        "packages/athena-webapp/src/components/promo-codes",
+        "packages/athena-webapp/src/lib/errors/presentUnexpectedErrorToast.ts",
+        "packages/athena-webapp/src/lib/errors/presentUnexpectedErrorToast.test.ts",
+        "packages/athena-webapp/src/settings/organization",
+        "packages/athena-webapp/src/settings/store"
+      ],
+      "commands": [
+        {
+          "kind": "raw",
+          "command": "bun run --filter '@athena/webapp' test -- src/lib/errors/presentUnexpectedErrorToast.test.ts src/components/join-team/index.test.tsx src/components/promo-codes/PromoCodeHeader.test.tsx"
         },
         {
           "kind": "raw",

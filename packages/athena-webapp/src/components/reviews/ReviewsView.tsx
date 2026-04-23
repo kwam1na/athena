@@ -9,6 +9,8 @@ import { EmptyState } from "../states/empty/empty-state";
 import { toast } from "sonner";
 import { Id } from "../../../convex/_generated/dataModel";
 import { useAuth } from "~/src/hooks/useAuth";
+import { presentCommandToast } from "~/src/lib/errors/presentCommandToast";
+import { runCommand } from "~/src/lib/errors/runCommand";
 
 const Header = () => {
   return (
@@ -45,14 +47,16 @@ export function ReviewsView() {
       return;
     }
 
-    try {
-      await approveReview({ id: reviewId, userId: user._id });
-      toast.success("Review approved successfully");
-    } catch (error) {
-      toast.error("Failed to approve review", {
-        description: (error as Error).message,
-      });
+    const result = await runCommand(() =>
+      approveReview({ id: reviewId, userId: user._id }),
+    );
+
+    if (result.kind !== "ok") {
+      presentCommandToast(result);
+      return;
     }
+
+    toast.success("Review approved successfully");
   };
 
   const handleReject = async (reviewId: Id<"review">) => {
@@ -61,14 +65,16 @@ export function ReviewsView() {
       return;
     }
 
-    try {
-      await rejectReview({ id: reviewId, userId: user._id });
-      toast.success("Review rejected successfully");
-    } catch (error) {
-      toast.error("Failed to reject review", {
-        description: (error as Error).message,
-      });
+    const result = await runCommand(() =>
+      rejectReview({ id: reviewId, userId: user._id }),
+    );
+
+    if (result.kind !== "ok") {
+      presentCommandToast(result);
+      return;
     }
+
+    toast.success("Review rejected successfully");
   };
 
   const handlePublish = async (reviewId: Id<"review">) => {
@@ -77,14 +83,16 @@ export function ReviewsView() {
       return;
     }
 
-    try {
-      await publishReview({ id: reviewId, userId: user._id });
-      toast.success("Review published successfully");
-    } catch (error) {
-      toast.error("Failed to publish review", {
-        description: (error as Error).message,
-      });
+    const result = await runCommand(() =>
+      publishReview({ id: reviewId, userId: user._id }),
+    );
+
+    if (result.kind !== "ok") {
+      presentCommandToast(result);
+      return;
     }
+
+    toast.success("Review published successfully");
   };
 
   const handleUnpublish = async (reviewId: Id<"review">) => {
@@ -93,14 +101,16 @@ export function ReviewsView() {
       return;
     }
 
-    try {
-      await unpublishReview({ id: reviewId, userId: user._id });
-      toast.success("Review unpublished successfully");
-    } catch (error) {
-      toast.error("Failed to unpublish review", {
-        description: (error as Error).message,
-      });
+    const result = await runCommand(() =>
+      unpublishReview({ id: reviewId, userId: user._id }),
+    );
+
+    if (result.kind !== "ok") {
+      presentCommandToast(result);
+      return;
     }
+
+    toast.success("Review unpublished successfully");
   };
 
   if (!reviews) {

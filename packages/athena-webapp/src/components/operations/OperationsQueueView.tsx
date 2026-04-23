@@ -11,6 +11,11 @@ import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSig
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
+import { presentCommandToast } from "@/lib/errors/presentCommandToast";
+import {
+  runCommand,
+  type NormalizedCommandResult,
+} from "@/lib/errors/runCommand";
 import {
   InventorySnapshotItem,
   StockAdjustmentWorkspaceContent,
@@ -52,7 +57,9 @@ type OperationsQueueViewContentProps = {
     approvalRequestId: Id<"approvalRequest">;
     decision: "approved" | "rejected";
   }) => Promise<void>;
-  onSubmitStockBatch: (args: SubmitStockAdjustmentArgs) => Promise<void>;
+  onSubmitStockBatch: (
+    args: SubmitStockAdjustmentArgs
+  ) => Promise<NormalizedCommandResult<unknown>>;
   registerCloseoutSection?: ReactNode;
   storeId?: Id<"store">;
   workItems: QueueWorkItem[];
@@ -285,7 +292,7 @@ export function OperationsQueueView() {
     setIsSubmittingStockBatch(true);
 
     try {
-      await submitStockAdjustmentBatch(args);
+      return await runCommand(() => submitStockAdjustmentBatch(args));
     } finally {
       setIsSubmittingStockBatch(false);
     }
@@ -298,20 +305,23 @@ export function OperationsQueueView() {
     setDecisioningApprovalRequestId(args.approvalRequestId);
 
     try {
-      await decideApprovalRequest({
-        approvalRequestId: args.approvalRequestId,
-        decision: args.decision,
-      });
+      const result = await runCommand(() =>
+        decideApprovalRequest({
+          approvalRequestId: args.approvalRequestId,
+          decision: args.decision,
+        })
+      );
+
+      if (result.kind !== "ok") {
+        presentCommandToast(result);
+        return;
+      }
 
       toast.success(
         args.decision === "approved"
           ? "Stock adjustment approved"
           : "Stock adjustment rejected"
       );
-    } catch (error) {
-      toast.error("Failed to resolve approval request", {
-        description: (error as Error).message,
-      });
     } finally {
       setDecisioningApprovalRequestId(null);
     }

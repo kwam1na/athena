@@ -23,6 +23,7 @@ import PromoCodeForm from "./PromoCodeForm";
 import PromoCodePreview from "./PromoCodePreview";
 import PromoCodeAnalytics from "./analytics/PromoCodeAnalytics";
 import { getStoreConfigV2 } from "~/src/lib/storeConfig";
+import { presentUnexpectedErrorToast } from "~/src/lib/errors/presentUnexpectedErrorToast";
 
 function PromoCodeView() {
   const products = useGetProducts();
@@ -202,9 +203,7 @@ function PromoCodeView() {
         }),
       });
     } catch (e) {
-      toast.error("Failed to add promo code", {
-        description: (e as Error).message,
-      });
+      presentUnexpectedErrorToast("Failed to add promo code");
     } finally {
       setIsAddingPromoCode(false);
     }
@@ -288,9 +287,7 @@ function PromoCodeView() {
         }),
       });
     } catch (e) {
-      toast.error("Failed to update promo code", {
-        description: (e as Error).message,
-      });
+      presentUnexpectedErrorToast("Failed to update promo code");
     } finally {
       setIsUpdatingPromoCode(false);
     }
@@ -340,9 +337,7 @@ function PromoCodeView() {
 
       setIsHomepageDiscountCode(checked);
     } catch (e) {
-      toast.error("Failed to update homepage discount code", {
-        description: (e as Error).message,
-      });
+      presentUnexpectedErrorToast("Failed to update homepage discount code");
     } finally {
       setIsUpdatingStoreConfig(false);
     }
@@ -392,9 +387,9 @@ function PromoCodeView() {
 
       setIsLeaveAReviewDiscountCode(checked);
     } catch (e) {
-      toast.error("Failed to update leave a review discount code", {
-        description: (e as Error).message,
-      });
+      presentUnexpectedErrorToast(
+        "Failed to update leave a review discount code",
+      );
     } finally {
       setIsUpdatingStoreConfig(false);
     }

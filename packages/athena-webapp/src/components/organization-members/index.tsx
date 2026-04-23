@@ -33,6 +33,7 @@ import { inviteColumns } from "./invites-table/components/inviteColumns";
 import { MembersDataTable } from "./members-table/components/data-table";
 import { membersColumns } from "./members-table/components/membersColumns";
 import { StaffManagement } from "../staff";
+import { presentUnexpectedErrorToast } from "~/src/lib/errors/presentUnexpectedErrorToast";
 
 const organizationMemberSchema = z.object({
   email: z.string().email(),
@@ -120,9 +121,7 @@ const MemberForm = ({ onCancelClick }: { onCancelClick: () => void }) => {
 
       onCancelClick();
     } catch (e) {
-      toast.error("Failed to add member", {
-        description: (e as Error).message,
-      });
+      presentUnexpectedErrorToast("Failed to add member");
     } finally {
       setIsAddingMember(false);
     }

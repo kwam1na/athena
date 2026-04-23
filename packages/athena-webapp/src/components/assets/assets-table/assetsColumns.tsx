@@ -10,6 +10,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { LoadingButton } from "../../ui/loading-button";
 import { getStoreConfigV2 } from "~/src/lib/storeConfig";
+import { presentUnexpectedErrorToast } from "~/src/lib/errors/presentUnexpectedErrorToast";
 
 export type Asset = {
   url: string;
@@ -47,9 +48,9 @@ export const assetColumns: ColumnDef<Asset>[] = [
           toast.success("Showroom image updated");
         } catch (error) {
           console.log(error);
-          toast.error("An error occurred while updating the showroom image", {
-            description: (error as Error).message,
-          });
+          presentUnexpectedErrorToast(
+            "An error occurred while updating the showroom image",
+          );
         }
 
         setIsUpdating(false);
@@ -72,11 +73,8 @@ export const assetColumns: ColumnDef<Asset>[] = [
           toast.success("Shop the Look image updated");
         } catch (error) {
           console.log(error);
-          toast.error(
+          presentUnexpectedErrorToast(
             "An error occurred while updating the shop the look image",
-            {
-              description: (error as Error).message,
-            }
           );
         }
 
@@ -101,9 +99,9 @@ export const assetColumns: ColumnDef<Asset>[] = [
           toast.success("Fallback image updated");
         } catch (error) {
           console.log(error);
-          toast.error("An error occurred while updating the fallback image", {
-            description: (error as Error).message,
-          });
+          presentUnexpectedErrorToast(
+            "An error occurred while updating the fallback image",
+          );
         } finally {
           setIsUpdatingFallbackImage(false);
         }

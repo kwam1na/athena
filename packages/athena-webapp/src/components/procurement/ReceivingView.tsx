@@ -8,6 +8,8 @@ import { Label } from "../ui/label";
 import { LoadingButton } from "../ui/loading-button";
 import type { Id } from "~/convex/_generated/dataModel";
 import { api } from "~/convex/_generated/api";
+import { presentCommandToast } from "@/lib/errors/presentCommandToast";
+import { runCommand } from "@/lib/errors/runCommand";
 
 type ReceivingViewLineItem = {
   _id: Id<"purchaseOrderLineItem">;
@@ -111,24 +113,29 @@ export function ReceivingView({
       return;
     }
 
+    setIsSubmitting(true);
+
     try {
-      setIsSubmitting(true);
-      await receivePurchaseOrderBatch({
-        lineItems: batchLineItems,
-        purchaseOrderId,
-        receivedByUserId: undefined,
-        storeId,
-        submissionKey,
-      });
+      const result = await runCommand(() =>
+        receivePurchaseOrderBatch({
+          lineItems: batchLineItems,
+          purchaseOrderId,
+          receivedByUserId: undefined,
+          storeId,
+          submissionKey,
+        })
+      );
+
+      if (result.kind !== "ok") {
+        presentCommandToast(result);
+        return;
+      }
+
       toast.success("Receiving batch recorded");
       setReceivedQuantities(
         buildReceivedQuantitiesAfterSubmission(lineItems, batchLineItems)
       );
       setSubmissionKey(buildSubmissionKey(purchaseOrderId));
-    } catch (error) {
-      toast.error("Failed to record receiving batch", {
-        description: (error as Error).message,
-      });
     } finally {
       setIsSubmitting(false);
     }

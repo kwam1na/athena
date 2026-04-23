@@ -8,8 +8,10 @@ import {
 import { v } from "convex/values";
 import { Id } from "../_generated/dataModel";
 import { api, internal } from "../_generated/api";
+import { commandResultValidator } from "../lib/commandResultValidators";
 import { sendFeedbackRequestEmail } from "../mailersend";
 import { getProductName } from "../utils";
+import { ok, userError } from "../../shared/commandResult";
 
 const entity = "review" as const;
 const MAX_REVIEWS = 500;
@@ -402,20 +404,30 @@ export const approve = mutation({
     id: v.id(entity),
     userId: v.id("athenaUser"),
   },
+  returns: commandResultValidator(v.null()),
   handler: async (
     ctx,
     args: { id: Id<"review">; userId: Id<"athenaUser"> }
   ) => {
     const { id, userId } = args;
 
-    const review = await ctx.db.patch("review", id, {
+    const review = await ctx.db.get("review", id);
+
+    if (!review) {
+      return userError({
+        code: "not_found",
+        message: "Review not found.",
+      });
+    }
+
+    await ctx.db.patch("review", id, {
       isApproved: true,
       approvedAt: new Date().getTime(),
       approvedByAthenaUserId: userId,
       updatedAt: new Date().getTime(),
     });
 
-    return review;
+    return ok(null);
   },
 });
 
@@ -424,20 +436,30 @@ export const reject = mutation({
     id: v.id(entity),
     userId: v.id("athenaUser"),
   },
+  returns: commandResultValidator(v.null()),
   handler: async (
     ctx,
     args: { id: Id<"review">; userId: Id<"athenaUser"> }
   ) => {
     const { id, userId } = args;
 
-    const review = await ctx.db.patch("review", id, {
+    const review = await ctx.db.get("review", id);
+
+    if (!review) {
+      return userError({
+        code: "not_found",
+        message: "Review not found.",
+      });
+    }
+
+    await ctx.db.patch("review", id, {
       isApproved: false,
       approvedAt: new Date().getTime(),
       approvedByAthenaUserId: userId,
       updatedAt: new Date().getTime(),
     });
 
-    return review;
+    return ok(null);
   },
 });
 
@@ -446,20 +468,30 @@ export const publish = mutation({
     id: v.id(entity),
     userId: v.id("athenaUser"),
   },
+  returns: commandResultValidator(v.null()),
   handler: async (
     ctx,
     args: { id: Id<"review">; userId: Id<"athenaUser"> }
   ) => {
     const { id, userId } = args;
 
-    const review = await ctx.db.patch("review", id, {
+    const review = await ctx.db.get("review", id);
+
+    if (!review) {
+      return userError({
+        code: "not_found",
+        message: "Review not found.",
+      });
+    }
+
+    await ctx.db.patch("review", id, {
       isPublished: true,
       publishedAt: new Date().getTime(),
       publishedByAthenaUserId: userId,
       updatedAt: new Date().getTime(),
     });
 
-    return review;
+    return ok(null);
   },
 });
 
@@ -468,20 +500,30 @@ export const unpublish = mutation({
     id: v.id(entity),
     userId: v.id("athenaUser"),
   },
+  returns: commandResultValidator(v.null()),
   handler: async (
     ctx,
     args: { id: Id<"review">; userId: Id<"athenaUser"> }
   ) => {
     const { id, userId } = args;
 
-    const review = await ctx.db.patch("review", id, {
+    const review = await ctx.db.get("review", id);
+
+    if (!review) {
+      return userError({
+        code: "not_found",
+        message: "Review not found.",
+      });
+    }
+
+    await ctx.db.patch("review", id, {
       isPublished: false,
       publishedAt: undefined,
       publishedByAthenaUserId: undefined,
       updatedAt: new Date().getTime(),
     });
 
-    return review;
+    return ok(null);
   },
 });
 
@@ -574,6 +616,7 @@ export const sendFeedbackRequest = action({
       })
     ),
   },
+  returns: commandResultValidator(v.null()),
   handler: async (ctx, args) => {
     // Get the order item
     const orderItem = await ctx.runQuery(internal.storeFront.onlineOrderItem.get, {
@@ -581,14 +624,17 @@ export const sendFeedbackRequest = action({
     });
 
     if (!orderItem) {
-      return { success: false, error: "Order item not found" };
+      return userError({
+        code: "not_found",
+        message: "Order item not found.",
+      });
     }
 
     if (orderItem.feedbackRequested) {
-      return {
-        success: false,
-        error: "Feedback has already been requested for this item",
-      };
+      return userError({
+        code: "precondition_failed",
+        message: "Feedback has already been requested for this item.",
+      });
     }
 
     // Get product SKU details
@@ -597,7 +643,10 @@ export const sendFeedbackRequest = action({
     });
 
     if (!productSku) {
-      return { success: false, error: "Product SKU not found" };
+      return userError({
+        code: "not_found",
+        message: "Product SKU not found.",
+      });
     }
 
     const review_url = `${process.env.STORE_URL}/shop/orders/${args.orderId}/${args.orderItemId}/review`;
@@ -612,7 +661,10 @@ export const sendFeedbackRequest = action({
     });
 
     if (!response.ok) {
-      return { success: false, error: "Failed to send feedback request email" };
+      return userError({
+        code: "unavailable",
+        message: "Failed to send feedback request email.",
+      });
     }
 
     // Mark the order item as having feedback requested
@@ -625,7 +677,7 @@ export const sendFeedbackRequest = action({
       },
     });
 
-    return { success: true };
+    return ok(null);
   },
 });
 
