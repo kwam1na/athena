@@ -5,6 +5,8 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
 import { StaffManagement } from "./StaffManagement";
+import { ok, userError } from "~/shared/commandResult";
+import { toast } from "sonner";
 
 vi.mock("convex/react", () => ({
   useMutation: vi.fn(),
@@ -133,9 +135,9 @@ async function chooseRole(
 describe("StaffManagement", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    createStaffProfile.mockResolvedValue({ _id: "staff-2" });
-    updateStaffProfile.mockResolvedValue({});
-    updateStaffCredential.mockResolvedValue({});
+    createStaffProfile.mockResolvedValue(ok({ _id: "staff-2" }));
+    updateStaffProfile.mockResolvedValue(ok({ _id: "staff-1" }));
+    updateStaffCredential.mockResolvedValue(ok({ _id: "credential-1" }));
   });
 
   it("renders pending PIN roster rows with the set PIN action", () => {
@@ -222,6 +224,43 @@ describe("StaffManagement", () => {
       status: "active",
       storeId: "store-1",
     });
+  });
+
+  it("surfaces staff provisioning command errors from the shared toast path", async () => {
+    createStaffProfile.mockResolvedValue(
+      userError({
+        code: "conflict",
+        message: "Username is already in use for this store.",
+      })
+    );
+    mockConvex({
+      staffProfiles: [],
+      usernameAvailability: { available: true, normalizedUsername: "amens" },
+    });
+    const user = userEvent.setup();
+
+    render(
+      <StaffManagement
+        organizationId={"org-1" as Id<"organization">}
+        storeId={"store-1" as Id<"store">}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /add staff member/i }));
+    await user.type(screen.getByLabelText(/first name/i), "Ama");
+    await user.type(screen.getByLabelText(/last name/i), "Mensah");
+    await chooseRole(user, /cashier/i);
+
+    await waitFor(() =>
+      expect(screen.getByLabelText(/username/i)).toHaveValue("amens"),
+    );
+
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() => expect(createStaffProfile).toHaveBeenCalledTimes(1));
+    expect(toast.error).toHaveBeenCalledWith(
+      "Username is already in use for this store."
+    );
   });
 
   it("edits an existing staff profile from the roster", async () => {

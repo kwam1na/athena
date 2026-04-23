@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Construction, Disc2, EyeIcon } from "lucide-react";
-import { toast } from "sonner";
-import { useMutation } from "convex/react";
-import { api } from "~/convex/_generated/api";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import View from "../../View";
 import { Switch } from "../../ui/switch";
 import { Label } from "../../ui/label";
 import { MaintenanceMessageEditor } from "../../homepage/MaintenanceMessageEditor";
 import { getStoreConfigV2 } from "~/src/lib/storeConfig";
+import { useStoreConfigUpdate } from "../hooks/useStoreConfigUpdate";
 
 export const MaintenanceView = () => {
   const { activeStore } = useGetActiveStore();
@@ -17,86 +15,59 @@ export const MaintenanceView = () => {
     [activeStore?.config],
   );
 
-  const [isUpdatingConfig, setIsUpdatingConfig] = useState(false);
   const [isInMaintenanceMode, setIsInMaintenanceMode] = useState(false);
   const [isInReadOnlyMode, setIsInReadOnlyMode] = useState(false);
 
-  const patchConfig = useMutation(api.inventory.stores.patchConfigV2);
+  const { updateConfig, isUpdating: isUpdatingConfig } = useStoreConfigUpdate();
 
   const saveMaintenanceModeChanges = async (toggled: boolean) => {
-    setIsUpdatingConfig(true);
+    const previousValue = isInMaintenanceMode;
     setIsInMaintenanceMode(toggled);
 
     const updates = {
       inMaintenanceMode: toggled,
     };
 
-    try {
-      await patchConfig({
-        id: activeStore?._id!,
-        patch: {
-          operations: {
-            availability: updates,
-          },
+    await updateConfig({
+      storeId: activeStore?._id!,
+      patch: {
+        operations: {
+          availability: updates,
         },
-      });
-      const message = toggled
+      },
+      successMessage: toggled
         ? "Store set to maintenance mode"
-        : "Store set to live";
-
-      const icon = toggled ? (
-        <Construction className="w-4 h-4" />
-      ) : (
-        <Disc2 className="w-4 h-4" />
-      );
-      toast.message(message, { icon });
-    } catch (error) {
-      console.log(error);
-      toast.error("An error occurred while updating store availability", {
-        description: (error as Error).message,
-        position: "top-right",
-      });
-    }
-
-    setIsUpdatingConfig(false);
+        : "Store set to live",
+      errorMessage: "An error occurred while updating store availability",
+      onError: () => {
+        setIsInMaintenanceMode(previousValue);
+      },
+    });
   };
 
   const saveReadOnlyeModeChanges = async (toggled: boolean) => {
-    setIsUpdatingConfig(true);
+    const previousValue = isInReadOnlyMode;
     setIsInReadOnlyMode(toggled);
 
     const updates = {
       inReadOnlyMode: toggled,
     };
 
-    try {
-      await patchConfig({
-        id: activeStore?._id!,
-        patch: {
-          operations: {
-            visibility: updates,
-          },
+    await updateConfig({
+      storeId: activeStore?._id!,
+      patch: {
+        operations: {
+          visibility: updates,
         },
-      });
-      const message = toggled
+      },
+      successMessage: toggled
         ? "Store set to view-only mode"
-        : "Store set to full access";
-
-      const icon = toggled ? (
-        <EyeIcon className="w-4 h-4" />
-      ) : (
-        <Disc2 className="w-4 h-4" />
-      );
-      toast.message(message, { icon });
-    } catch (error) {
-      console.log(error);
-      toast.error("An error occurred while updating store visibility", {
-        description: (error as Error).message,
-        position: "top-right",
-      });
-    }
-
-    setIsUpdatingConfig(false);
+        : "Store set to full access",
+      errorMessage: "An error occurred while updating store visibility",
+      onError: () => {
+        setIsInReadOnlyMode(previousValue);
+      },
+    });
   };
 
   useEffect(() => {

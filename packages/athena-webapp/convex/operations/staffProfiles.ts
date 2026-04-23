@@ -7,6 +7,8 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "../_generated/server";
+import { ok, userError } from "../../shared/commandResult";
+import { commandResultValidator } from "../lib/commandResultValidators";
 import { normalizePhoneNumber } from "./helpers/linking";
 import {
   createStaffCredentialWithCtx,
@@ -539,7 +541,37 @@ export const createStaffProfile = mutation({
     storeId: v.id("store"),
     username: v.string(),
   },
-  handler: (ctx, args) => createStaffProfileWithCtx(ctx, args),
+  returns: commandResultValidator(v.any()),
+  handler: async (ctx, args) => {
+    try {
+      return ok(await createStaffProfileWithCtx(ctx, args));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+
+      if (
+        message === "Username is already in use for this store." ||
+        message === "A staff profile already links this Athena user in the store."
+      ) {
+        return userError({
+          code: "conflict",
+          message,
+        });
+      }
+
+      if (
+        message === "At least one staff role is required." ||
+        message.startsWith("Staff first name is required.") ||
+        message.startsWith("Staff last name is required.")
+      ) {
+        return userError({
+          code: "validation_failed",
+          message,
+        });
+      }
+
+      throw error;
+    }
+  },
 });
 
 export const updateStaffProfile = mutation({
@@ -562,5 +594,47 @@ export const updateStaffProfile = mutation({
     updatedByUserId: v.optional(v.id("athenaUser")),
     username: v.optional(v.string()),
   },
-  handler: (ctx, args) => updateStaffProfileWithCtx(ctx, args),
+  returns: commandResultValidator(v.any()),
+  handler: async (ctx, args) => {
+    try {
+      return ok(await updateStaffProfileWithCtx(ctx, args));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+
+      if (
+        message === "Staff profile not found." ||
+        message === "Staff credential not found."
+      ) {
+        return userError({
+          code: "not_found",
+          message,
+        });
+      }
+
+      if (
+        message === "Staff profile does not belong to this store." ||
+        message === "Username is already in use for this store." ||
+        message === "A staff profile already links this Athena user in the store."
+      ) {
+        return userError({
+          code: "conflict",
+          message,
+        });
+      }
+
+      if (
+        message === "No staff profile changes were provided." ||
+        message === "At least one staff role is required." ||
+        message.startsWith("Staff first name is required.") ||
+        message.startsWith("Staff last name is required.")
+      ) {
+        return userError({
+          code: "validation_failed",
+          message,
+        });
+      }
+
+      throw error;
+    }
+  },
 });

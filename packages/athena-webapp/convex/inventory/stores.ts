@@ -20,6 +20,8 @@ import {
   removeLegacyRootKeysFromConfig,
   toV2Config,
 } from "./storeConfigV2";
+import { ok, userError } from "../../shared/commandResult";
+import { commandResultValidator } from "../lib/commandResultValidators";
 
 const entity = "store";
 const CONFIG_MIGRATION_PAGE_SIZE = 50;
@@ -250,6 +252,34 @@ export const patchConfigV2 = mutation({
     await ctx.db.patch("store", args.id, { config });
 
     return await ctx.db.get("store", args.id);
+  },
+});
+
+export const patchConfigV2Command = mutation({
+  args: {
+    id: v.id(entity),
+    patch: v.record(v.string(), v.any()),
+    mirrorLegacy: v.optional(v.boolean()),
+  },
+  returns: commandResultValidator(v.any()),
+  handler: async (ctx, args) => {
+    const store = await ctx.db.get("store", args.id);
+    if (!store) {
+      return userError({
+        code: "not_found",
+        message: "Store not found.",
+      });
+    }
+
+    const nextV2Config = patchV2Config(store.config, args.patch);
+    const shouldMirrorLegacy = args.mirrorLegacy !== false;
+    const config = shouldMirrorLegacy
+      ? mirrorLegacyKeys(nextV2Config, store.config)
+      : toV2OnlyConfig(store.config ? { ...store.config, ...nextV2Config } : nextV2Config);
+
+    await ctx.db.patch("store", args.id, { config });
+
+    return ok(await ctx.db.get("store", args.id));
   },
 });
 
