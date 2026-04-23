@@ -22,6 +22,8 @@ import {
   resolveStockAdjustmentQuantityDelta,
   summarizeStockAdjustmentLineItems,
 } from "../../shared/stockAdjustment";
+import { ok, userError, type CommandResult } from "../../shared/commandResult";
+import { commandResultValidator } from "../lib/commandResultValidators";
 
 export {
   CYCLE_COUNT_REASON_CODE,
@@ -524,6 +526,76 @@ export async function submitStockAdjustmentBatchWithCtx(
   return ctx.db.get("stockAdjustmentBatch", stockAdjustmentBatchId);
 }
 
+function mapSubmitStockAdjustmentBatchError(
+  error: unknown
+): CommandResult<never> | null {
+  const message = error instanceof Error ? error.message : "";
+
+  if (message === "Sign in again to continue.") {
+    return userError({
+      code: "authentication_failed",
+      message,
+    });
+  }
+
+  if (message === "You do not have permission to adjust stock for this store.") {
+    return userError({
+      code: "authorization_failed",
+      message,
+    });
+  }
+
+  if (
+    message === "Store not found." ||
+    message === "Selected SKU could not be found for this store." ||
+    message === "Stock adjustment SKU not found for this store."
+  ) {
+    return userError({
+      code: "not_found",
+      message,
+    });
+  }
+
+  if (
+    message === "A stock-adjustment submission key is required." ||
+    message === "Stock adjustment batches require at least one line item." ||
+    message === "Stock adjustment batches cannot include the same SKU twice." ||
+    message === "Manual stock adjustments require a supported reason code." ||
+    message === "Cycle counts must reconcile with the cycle-count reason code." ||
+    message ===
+      "Manual stock adjustments require a whole-unit delta for every selected SKU." ||
+    message ===
+      "Cycle counts require an integer counted quantity for every selected SKU." ||
+    message ===
+      "Stock adjustments must change inventory by at least one unit." ||
+    message === "Stock adjustments cannot reduce inventory below zero."
+  ) {
+    return userError({
+      code: "validation_failed",
+      message,
+    });
+  }
+
+  return null;
+}
+
+export async function submitStockAdjustmentBatchCommandWithCtx(
+  ctx: MutationCtx,
+  args: SubmitStockAdjustmentBatchArgs
+): Promise<CommandResult<any>> {
+  try {
+    return ok(await submitStockAdjustmentBatchWithCtx(ctx, args));
+  } catch (error) {
+    const result = mapSubmitStockAdjustmentBatchError(error);
+
+    if (result) {
+      return result;
+    }
+
+    throw error;
+  }
+}
+
 export const submitStockAdjustmentBatch = mutation({
   args: {
     adjustmentType: v.union(v.literal("manual"), v.literal("cycle_count")),
@@ -539,5 +611,7 @@ export const submitStockAdjustmentBatch = mutation({
     storeId: v.id("store"),
     submissionKey: v.string(),
   },
-  handler: async (ctx, args) => submitStockAdjustmentBatchWithCtx(ctx, args),
+  returns: commandResultValidator(v.any()),
+  handler: async (ctx, args) =>
+    submitStockAdjustmentBatchCommandWithCtx(ctx, args),
 });

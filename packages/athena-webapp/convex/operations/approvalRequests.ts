@@ -7,6 +7,8 @@ import {
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
 import { buildApprovalRequest } from "./approvalRequestHelpers";
+import { ok, userError, type CommandResult } from "../../shared/commandResult";
+import { commandResultValidator } from "../lib/commandResultValidators";
 
 type DecideApprovalRequestArgs = {
   approvalRequestId: Id<"approvalRequest">;
@@ -101,6 +103,75 @@ export async function decideApprovalRequestAsAuthenticatedUserWithCtx(
   });
 }
 
+function mapDecideApprovalRequestError(
+  error: unknown
+): CommandResult<never> | null {
+  const message = error instanceof Error ? error.message : "";
+
+  if (message === "Sign in again to continue.") {
+    return userError({
+      code: "authentication_failed",
+      message,
+    });
+  }
+
+  if (
+    message === "Only full admins can resolve approval requests." ||
+    message === "A full-admin reviewer is required to resolve approval requests."
+  ) {
+    return userError({
+      code: "authorization_failed",
+      message,
+    });
+  }
+
+  if (message === "Approval request not found.") {
+    return userError({
+      code: "not_found",
+      message,
+    });
+  }
+
+  if (
+    message === "Inventory adjustment approval request not found." ||
+    message === "Stock adjustment batch not found for this approval request."
+  ) {
+    return userError({
+      code: "not_found",
+      message,
+    });
+  }
+
+  if (
+    message === "Approval request has already been decided." ||
+    message === "Stock adjustment batch has already been resolved."
+  ) {
+    return userError({
+      code: "precondition_failed",
+      message,
+    });
+  }
+
+  return null;
+}
+
+export async function decideApprovalRequestAsCommandWithCtx(
+  ctx: MutationCtx,
+  args: PublicDecideApprovalRequestArgs
+): Promise<CommandResult<any>> {
+  try {
+    return ok(await decideApprovalRequestAsAuthenticatedUserWithCtx(ctx, args));
+  } catch (error) {
+    const result = mapDecideApprovalRequestError(error);
+
+    if (result) {
+      return result;
+    }
+
+    throw error;
+  }
+}
+
 export const createApprovalRequest = internalMutation({
   args: {
     storeId: v.id("store"),
@@ -136,7 +207,8 @@ const decideApprovalRequestInternalArgs = {
 
 export const decideApprovalRequest = mutation({
   args: decideApprovalRequestArgs,
-  handler: (ctx, args) => decideApprovalRequestAsAuthenticatedUserWithCtx(ctx, args),
+  returns: commandResultValidator(v.any()),
+  handler: (ctx, args) => decideApprovalRequestAsCommandWithCtx(ctx, args),
 });
 
 export const decideApprovalRequestInternal = internalMutation({

@@ -5,6 +5,7 @@ import {
   OperationsQueueViewContent,
 } from "./OperationsQueueView";
 import type { Id } from "~/convex/_generated/dataModel";
+import { ok } from "~/shared/commandResult";
 
 const mockedHooks = vi.hoisted(() => ({
   useAuth: vi.fn(),
@@ -15,6 +16,11 @@ const mockedHooks = vi.hoisted(() => ({
   useMutation: vi.fn(),
   usePermissions: vi.fn(),
   useQuery: vi.fn(),
+}));
+
+const mockedToast = vi.hoisted(() => ({
+  error: vi.fn(),
+  success: vi.fn(),
 }));
 
 vi.mock("convex/react", () => ({
@@ -41,6 +47,10 @@ vi.mock("@/hooks/useGetAuthedUser", () => ({
 
 vi.mock("@/hooks/usePermissions", () => ({
   usePermissions: mockedHooks.usePermissions,
+}));
+
+vi.mock("sonner", () => ({
+  toast: mockedToast,
 }));
 
 vi.mock("../cash-controls/RegisterCloseoutView", () => ({
@@ -90,6 +100,8 @@ describe("OperationsQueueViewContent", () => {
   beforeEach(() => {
     window.scrollTo = vi.fn();
     vi.clearAllMocks();
+    mockedToast.error.mockReset();
+    mockedToast.success.mockReset();
     mockedHooks.useAuth.mockReturnValue({
       user: { _id: "user-1" },
     });
@@ -227,7 +239,9 @@ describe("OperationsQueueViewContent", () => {
     const { default: userEvent } = await import("@testing-library/user-event");
     const user = userEvent.setup();
     const submitStockBatch = vi.fn();
-    const decideApprovalRequest = vi.fn().mockResolvedValue(undefined);
+    const decideApprovalRequest = vi
+      .fn()
+      .mockResolvedValue(ok({ _id: "approval-1" }));
 
     mockedHooks.useMutation.mockReset();
     mockedHooks.useQuery.mockReset();
@@ -258,5 +272,49 @@ describe("OperationsQueueViewContent", () => {
         decision: "approved",
       })
     );
+  });
+
+  it("collapses unexpected approval failures to the shared fallback toast", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    const submitStockBatch = vi.fn();
+    const decideApprovalRequest = vi
+      .fn()
+      .mockRejectedValue(new Error("Leaked backend approval detail"));
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+
+    mockedHooks.useMutation.mockReset();
+    mockedHooks.useQuery.mockReset();
+    mockedHooks.useMutation
+      .mockReturnValueOnce(submitStockBatch)
+      .mockReturnValueOnce(decideApprovalRequest);
+    mockedHooks.useQuery
+      .mockReturnValueOnce({
+        approvalRequests: [
+          {
+            _id: "approval-1",
+            requestType: "inventory_adjustment_review",
+            status: "pending",
+            workItemTitle: "Cycle count review · 1 SKU",
+          },
+        ],
+        workItems: [],
+      })
+      .mockReturnValueOnce(baseProps.inventoryItems);
+
+    render(<OperationsQueueView />);
+
+    await user.click(screen.getByRole("button", { name: /approve batch/i }));
+
+    await waitFor(() =>
+      expect(mockedToast.error).toHaveBeenCalledWith("Please try again.")
+    );
+    expect(mockedToast.error).not.toHaveBeenCalledWith(
+      "Leaked backend approval detail"
+    );
+
+    consoleErrorSpy.mockRestore();
   });
 });
