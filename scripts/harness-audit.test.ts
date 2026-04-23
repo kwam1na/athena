@@ -590,6 +590,16 @@ async function createFixtureRepo() {
     rootDir
   );
   await write(
+    "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/index.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/reviews/index.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
     "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId.tsx",
     "export {};\n",
     rootDir
@@ -648,6 +658,41 @@ async function createFixtureRepo() {
   );
   await write(
     "packages/athena-webapp/src/components/services/ServiceCatalogView.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/components/add-product/ProductView.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/components/assets/index.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/components/join-team/index.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/components/organization-members/index.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/components/orders/OrderView.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/components/promo-codes/PromoCodeHeader.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/components/reviews/ReviewsView.tsx",
     "export {};\n",
     rootDir
   );
@@ -732,6 +777,16 @@ async function createFixtureRepo() {
     "export {};\n",
     rootDir
   );
+  await write(
+    "packages/athena-webapp/src/components/users/CustomerBehaviorTimeline.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/components/users/TimelineEventCard.tsx",
+    "export {};\n",
+    rootDir
+  );
   await write("packages/athena-webapp/src/contexts/AuthContext.tsx", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/lib/session.ts", "export {};\n", rootDir);
   await write(
@@ -741,6 +796,16 @@ async function createFixtureRepo() {
   );
   await write(
     "packages/athena-webapp/src/lib/errors/presentCommandToast.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/lib/errors/presentUnexpectedErrorToast.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/lib/errors/presentUnexpectedErrorToast.test.ts",
     "export {};\n",
     rootDir
   );
@@ -776,6 +841,16 @@ async function createFixtureRepo() {
     rootDir
   );
   await write("packages/athena-webapp/src/settings/store.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/src/settings/store/StoreSettingsView.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/settings/organization/components/OrganizationSettingsView.tsx",
+    "export {};\n",
+    rootDir
+  );
   await write("packages/athena-webapp/src/stores/appStore.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/utils/format.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/vitest.config.ts", "export default {};\n", rootDir);
@@ -892,6 +967,46 @@ async function createFixtureRepo() {
   );
   await write("packages/athena-webapp/convex/stockOps/access.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/convex/storeFront/cart.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/convex/storeFront/onlineOrder.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/storeFront/onlineOrderUtilFns.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/storeFront/payment.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/storeFront/reviews.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/storeFront/customerBehaviorTimeline.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/storeFront/customerObservabilityTimelineData.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/storeFront/helpers/returnExchangeOperations.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/storeFront/helpers/customerEngagementEvents.ts",
+    "export {};\n",
+    rootDir
+  );
   await write(
     "packages/athena-webapp/scripts/convex-audit.sh",
     "#!/usr/bin/env bash\nexit 0\n",
