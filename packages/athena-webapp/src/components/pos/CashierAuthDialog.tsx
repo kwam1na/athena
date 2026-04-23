@@ -16,6 +16,12 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "../ui/input-otp";
 import { LoadingButton } from "../ui/loading-button";
 import { toast } from "sonner";
 import { hashPin } from "~/src/lib/security/pinHash";
+import {
+  GENERIC_UNEXPECTED_ERROR_MESSAGE,
+  GENERIC_UNEXPECTED_ERROR_TITLE,
+} from "~/shared/commandResult";
+import { presentCommandToast } from "~/src/lib/errors/presentCommandToast";
+import { runCommand } from "~/src/lib/errors/runCommand";
 import { PinInput } from "./PinInput";
 
 interface CashierAuthDialogProps {
@@ -63,6 +69,16 @@ export const CashierAuthDialog = ({
     }
   }, [pin, state]);
 
+  const showUnexpectedAuthFailure = () => {
+    presentCommandToast({
+      kind: "unexpected_error",
+      error: {
+        title: GENERIC_UNEXPECTED_ERROR_TITLE,
+        message: GENERIC_UNEXPECTED_ERROR_MESSAGE,
+      },
+    });
+  };
+
   const handleSubmit = async () => {
     if (!username.trim()) {
       toast.error("Please enter your username");
@@ -79,13 +95,23 @@ export const CashierAuthDialog = ({
       // Hash the PIN client-side before calling the mutation
       const hashed = await hashPin(pin);
 
-      const result = await authenticateStaffCredentialForTerminal({
-        allowedRoles: ["cashier", "manager"],
-        username: username.trim(),
-        pinHash: hashed,
-        storeId,
-        terminalId,
-      });
+      const authenticationResult = await runCommand(() =>
+        authenticateStaffCredentialForTerminal({
+          allowedRoles: ["cashier", "manager"],
+          username: username.trim(),
+          pinHash: hashed,
+          storeId,
+          terminalId,
+        }),
+      );
+
+      if (authenticationResult.kind !== "ok") {
+        presentCommandToast(authenticationResult);
+        setPin("");
+        return;
+      }
+
+      const result = authenticationResult.data;
 
       if (result.staffProfileId) {
         const staffDisplayName =
@@ -119,8 +145,8 @@ export const CashierAuthDialog = ({
         setPin("");
       }
     } catch (error) {
-      toast.error((error as Error).message || "Authentication failed");
       console.error(error);
+      showUnexpectedAuthFailure();
       setPin("");
     } finally {
       setIsAuthenticating(false);

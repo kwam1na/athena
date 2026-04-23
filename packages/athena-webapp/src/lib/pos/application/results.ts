@@ -1,3 +1,5 @@
+import { GENERIC_UNEXPECTED_ERROR_MESSAGE } from "~/shared/commandResult";
+
 export type PosUseCaseErrorCode =
   | "cashierMismatch"
   | "inventoryUnavailable"
@@ -74,12 +76,12 @@ export function mapCommandOutcome<TData>(
 }
 
 export function mapThrownError<TData = never>(
-  error: unknown,
+  _error: unknown,
 ): PosUseCaseResult<TData> {
   return {
     ok: false,
     code: "unknown",
-    message: error instanceof Error ? error.message : "Unexpected POS error",
+    message: GENERIC_UNEXPECTED_ERROR_MESSAGE,
   };
 }
 
