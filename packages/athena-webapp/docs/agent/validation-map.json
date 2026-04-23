@@ -92,29 +92,90 @@
       ]
     },
     {
-      "name": "staff-foundation-and-subsystem-credential-edits",
+      "name": "service-operations-intake-catalog-appointments-and-cases",
       "pathPrefixes": [
+        "packages/athena-webapp/convex/serviceOps",
+        "packages/athena-webapp/convex/operations/serviceIntake.ts",
+        "packages/athena-webapp/src/components/services",
+        "packages/athena-webapp/src/components/operations/OperationsQueueView.tsx",
+        "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services"
+      ],
+      "commands": [
+        {
+          "kind": "raw",
+          "command": "bun run --filter '@athena/webapp' test -- convex/serviceOps/serviceCases.test.ts convex/serviceOps/catalogAppointments.test.ts convex/serviceOps/moduleWiring.test.ts convex/operations/serviceIntake.test.ts src/components/services/ServiceIntakeView.test.tsx src/components/services/ServiceIntakeView.auth.test.tsx src/components/services/ServiceAppointmentsView.test.tsx src/components/services/ServiceCasesView.test.tsx src/components/services/ServiceCatalogView.test.tsx src/components/operations/OperationsQueueView.test.tsx"
+        },
+        {
+          "kind": "script",
+          "script": "audit:convex"
+        },
+        {
+          "kind": "script",
+          "script": "lint:convex:changed"
+        },
+        {
+          "kind": "raw",
+          "command": "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json"
+        },
+        {
+          "kind": "script",
+          "script": "build"
+        }
+      ],
+      "behaviorScenarios": []
+    },
+    {
+      "name": "auth-staff-and-store-configuration-edits",
+      "pathPrefixes": [
+        "packages/athena-webapp/convex/inventory/auth.ts",
+        "packages/athena-webapp/convex/inventory/stores.ts",
         "packages/athena-webapp/convex/operations/staffCredentials.ts",
         "packages/athena-webapp/convex/operations/staffProfiles.ts",
         "packages/athena-webapp/convex/schema.ts",
         "packages/athena-webapp/convex/inventory/posSessions.ts",
         "packages/athena-webapp/convex/pos/application/queries/getRegisterState.ts",
         "packages/athena-webapp/convex/pos/infrastructure/repositories/cashierRepository.ts",
+        "packages/athena-webapp/src/routes/login/_layout.tsx",
         "packages/athena-webapp/src/components/staff/StaffManagement.tsx",
-        "packages/athena-webapp/src/components/expense/ExpenseCompletion.tsx",
-        "packages/athena-webapp/src/components/expense/ExpenseView.tsx",
+        "packages/athena-webapp/src/components/store-configuration",
         "packages/athena-webapp/src/components/pos/CashierAuthDialog.tsx",
         "packages/athena-webapp/src/lib/pos/application/results.ts",
+        "packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts"
+      ],
+      "commands": [
+        {
+          "kind": "raw",
+          "command": "bun run --filter '@athena/webapp' test -- src/routes/login/_layout.test.tsx convex/operations/staffCredentials.test.ts convex/operations/staffProfiles.test.ts convex/inventory/sessionQueryIndexes.test.ts convex/pos/application/sessionCommands.test.ts convex/pos/application/completeTransaction.test.ts convex/pos/application/getTransactions.test.ts convex/pos/infrastructure/repositories/sessionRepository.test.ts convex/pos/application/getRegisterState.test.ts convex/inventory/posSessions.trace.test.ts convex/pos/application/posSessionTracing.test.ts src/lib/pos/infrastructure/convex/sessionGateway.test.ts src/lib/pos/infrastructure/convex/registerGateway.test.ts src/components/pos/CashierAuthDialog.test.tsx src/components/pos/register/POSRegisterView.test.tsx src/lib/pos/presentation/register/useRegisterViewModel.test.ts src/components/pos/transactions/TransactionView.test.tsx src/components/staff/StaffManagement.test.tsx src/components/store-configuration/hooks/useStoreConfigUpdate.test.tsx src/components/store-configuration/components/FulfillmentView.test.tsx src/components/store-configuration/components/MaintenanceView.test.tsx src/components/store-configuration/components/MtnMomoView.test.tsx"
+        },
+        {
+          "kind": "raw",
+          "command": "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json"
+        },
+        {
+          "kind": "script",
+          "script": "build"
+        }
+      ],
+      "behaviorScenarios": []
+    },
+    {
+      "name": "expense-session-and-cart-flow-edits",
+      "pathPrefixes": [
+        "packages/athena-webapp/convex/inventory/expenseSessions.ts",
+        "packages/athena-webapp/convex/inventory/expenseSessionItems.ts",
+        "packages/athena-webapp/convex/inventory/expenseTransactions.ts",
         "packages/athena-webapp/src/hooks/useExpenseSessions.ts",
+        "packages/athena-webapp/src/hooks/useExpenseOperations.ts",
         "packages/athena-webapp/src/hooks/useSessionManagementExpense.ts",
-        "packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts",
+        "packages/athena-webapp/src/components/expense/ExpenseView.tsx",
+        "packages/athena-webapp/src/components/expense/ExpenseCompletion.tsx",
         "packages/athena-webapp/src/stores/expenseStore.ts",
         "packages/athena-webapp/types.ts"
       ],
       "commands": [
         {
           "kind": "raw",
-          "command": "bun run --filter '@athena/webapp' test -- convex/operations/staffCredentials.test.ts convex/inventory/sessionQueryIndexes.test.ts convex/pos/application/sessionCommands.test.ts convex/pos/application/completeTransaction.test.ts convex/pos/application/getTransactions.test.ts convex/pos/infrastructure/repositories/sessionRepository.test.ts convex/pos/application/getRegisterState.test.ts convex/inventory/posSessions.trace.test.ts convex/pos/application/posSessionTracing.test.ts src/lib/pos/infrastructure/convex/sessionGateway.test.ts src/lib/pos/infrastructure/convex/registerGateway.test.ts src/components/pos/CashierAuthDialog.test.tsx src/components/pos/register/POSRegisterView.test.tsx src/lib/pos/presentation/register/useRegisterViewModel.test.ts src/components/pos/transactions/TransactionView.test.tsx"
+          "command": "bun run --filter '@athena/webapp' test -- convex/inventory/expenseSessions.test.ts convex/inventory/sessionQueryIndexes.test.ts src/hooks/useExpenseSessions.test.ts"
         },
         {
           "kind": "raw",
