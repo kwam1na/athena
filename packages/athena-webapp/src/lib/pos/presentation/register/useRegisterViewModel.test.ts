@@ -221,37 +221,33 @@ describe("useRegisterViewModel", () => {
 
     mockUseQuery.mockImplementation(() => mockCashier);
     mockStartSession.mockReset();
-    mockStartSession.mockResolvedValue({
-      success: true,
-      data: {
+    mockStartSession.mockResolvedValue(
+      ok({
         sessionId: "session-2" as Id<"posSession">,
         expiresAt: Date.now() + 60_000,
-      },
-    });
+      }),
+    );
     mockAddItem.mockReset();
-    mockAddItem.mockResolvedValue({
-      success: true,
-      data: {
+    mockAddItem.mockResolvedValue(
+      ok({
         itemId: "item-2" as Id<"posSessionItem">,
         expiresAt: Date.now() + 60_000,
-      },
-    });
+      }),
+    );
     mockHoldSession.mockReset();
-    mockHoldSession.mockResolvedValue({
-      success: true,
-      data: {
+    mockHoldSession.mockResolvedValue(
+      ok({
         sessionId: "session-1" as Id<"posSession">,
         expiresAt: Date.now() + 60_000,
-      },
-    });
+      }),
+    );
     mockCompleteTransaction.mockReset();
-    mockCompleteTransaction.mockResolvedValue({
-      success: true,
-      data: {
+    mockCompleteTransaction.mockResolvedValue(
+      ok({
         sessionId: "session-1" as Id<"posSession">,
         transactionNumber: "TXN-0001",
-      },
-    });
+      }),
+    );
     mockOpenDrawer.mockReset();
     mockOpenDrawer.mockResolvedValue(
       ok({
@@ -267,47 +263,44 @@ describe("useRegisterViewModel", () => {
       }),
     );
     mockResumeSession.mockReset();
-    mockResumeSession.mockResolvedValue({
-      success: true,
-      data: {
+    mockResumeSession.mockResolvedValue(
+      ok({
         sessionId: "session-2" as Id<"posSession">,
         expiresAt: Date.now() + 60_000,
-      },
-    });
+      }),
+    );
     mockVoidSession.mockReset();
-    mockVoidSession.mockResolvedValue({
-      success: true,
-      data: {
+    mockVoidSession.mockResolvedValue(
+      ok({
         sessionId: "session-1" as Id<"posSession">,
-      },
-    });
+      }),
+    );
     mockUpdateSession.mockReset();
-    mockUpdateSession.mockResolvedValue({
+    mockUpdateSession.mockResolvedValue(
+      ok({
       sessionId: "session-1" as Id<"posSession">,
       expiresAt: Date.now() + 60_000,
-    });
+      }),
+    );
     mockSyncSessionCheckoutState.mockReset();
-    mockSyncSessionCheckoutState.mockResolvedValue({
-      success: true,
-      data: {
+    mockSyncSessionCheckoutState.mockResolvedValue(
+      ok({
         sessionId: "session-1" as Id<"posSession">,
         expiresAt: Date.now() + 60_000,
-      },
-    });
+      }),
+    );
     mockReleaseSessionInventoryHoldsAndDeleteItems.mockReset();
-    mockReleaseSessionInventoryHoldsAndDeleteItems.mockResolvedValue({
-      success: true,
-      data: {
+    mockReleaseSessionInventoryHoldsAndDeleteItems.mockResolvedValue(
+      ok({
         sessionId: "session-1" as Id<"posSession">,
-      },
-    });
+      }),
+    );
     mockRemoveItem.mockReset();
-    mockRemoveItem.mockResolvedValue({
-      success: true,
-      data: {
+    mockRemoveItem.mockResolvedValue(
+      ok({
         expiresAt: Date.now() + 60_000,
-      },
-    });
+      }),
+    );
     mockNavigateBack.mockReset();
   });
 

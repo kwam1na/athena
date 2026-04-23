@@ -1,6 +1,10 @@
 import { useMutation, useQuery } from "convex/react";
 
 import type { CartItem } from "@/components/pos/types";
+import {
+  type NormalizedCommandResult,
+  runCommand,
+} from "@/lib/errors/runCommand";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import type { POSSession } from "~/types";
@@ -20,6 +24,15 @@ export type PosSessionDetail = POSSession & {
   tax?: number;
   total?: number;
   holdReason?: string;
+};
+
+type SessionCommandPayload = {
+  sessionId?: Id<"posSession">;
+  expiresAt?: number;
+};
+
+type RemoveItemPayload = {
+  expiresAt?: number;
 };
 
 export function useConvexActiveSession(input: {
@@ -88,11 +101,20 @@ export function useConvexSessionActions() {
   const removeItemMutation = useMutation(api.inventory.posSessionItems.removeItem);
 
   return {
-    resumeSession: resumeSessionMutation,
-    voidSession: voidSessionMutation,
-    updateSession: updateSessionMutation,
-    syncSessionCheckoutState: syncSessionCheckoutStateMutation,
-    releaseSessionInventoryHoldsAndDeleteItems: releaseSessionMutation,
-    removeItem: removeItemMutation,
+    resumeSession: (args: Parameters<typeof resumeSessionMutation>[0]) =>
+      runCommand<SessionCommandPayload>(() => resumeSessionMutation(args)),
+    voidSession: (args: Parameters<typeof voidSessionMutation>[0]) =>
+      runCommand<{ sessionId?: Id<"posSession"> }>(() => voidSessionMutation(args)),
+    updateSession: (args: Parameters<typeof updateSessionMutation>[0]) =>
+      runCommand<SessionCommandPayload>(() => updateSessionMutation(args)),
+    syncSessionCheckoutState: (
+      args: Parameters<typeof syncSessionCheckoutStateMutation>[0],
+    ) => runCommand<SessionCommandPayload>(() => syncSessionCheckoutStateMutation(args)),
+    releaseSessionInventoryHoldsAndDeleteItems: (
+      args: Parameters<typeof releaseSessionMutation>[0],
+    ) =>
+      runCommand<{ sessionId?: Id<"posSession"> }>(() => releaseSessionMutation(args)),
+    removeItem: (args: Parameters<typeof removeItemMutation>[0]) =>
+      runCommand<RemoveItemPayload>(() => removeItemMutation(args)),
   };
 }

@@ -378,32 +378,35 @@ export function useRegisterViewModel(): RegisterViewModel {
         return true;
       }
 
-      try {
-        await updateSession({
-          sessionId: session._id as Id<"posSession">,
-          staffProfileId,
-          customerId: customerInfo.customerId,
-          customerInfo: hasCustomerDetails(customerInfo)
-            ? {
-                name: customerInfo.name || undefined,
-                email: customerInfo.email || undefined,
-                phone: customerInfo.phone || undefined,
-              }
-            : undefined,
-          subtotal: activeTotals.subtotal,
-          tax: activeTotals.tax,
-          total: activeTotals.total,
-        });
+      const result = await updateSession({
+        sessionId: session._id as Id<"posSession">,
+        staffProfileId,
+        customerId: customerInfo.customerId,
+        customerInfo: hasCustomerDetails(customerInfo)
+          ? {
+              name: customerInfo.name || undefined,
+              email: customerInfo.email || undefined,
+              phone: customerInfo.phone || undefined,
+            }
+          : undefined,
+        subtotal: activeTotals.subtotal,
+        tax: activeTotals.tax,
+        total: activeTotals.total,
+      });
 
+      if (result.kind === "ok") {
         return true;
-      } catch (error) {
+      }
+
+      if (result.kind === "unexpected_error") {
         logger.error(
           "[POS] Failed to update session metadata",
-          error instanceof Error ? error : new Error(String(error)),
+          new Error(result.error.message),
         );
-        toast.error("Failed to save session details");
-        return false;
       }
+
+      toast.error(result.error.message);
+      return false;
     },
     [
       activeTotals.subtotal,
@@ -421,26 +424,26 @@ export function useRegisterViewModel(): RegisterViewModel {
         return;
       }
 
-      try {
-        await updateSession({
-          sessionId: activeSession._id as Id<"posSession">,
-          staffProfileId,
-          customerId: nextCustomerInfo.customerId,
-          customerInfo: hasCustomerDetails(nextCustomerInfo)
-            ? {
-                name: nextCustomerInfo.name || undefined,
-                email: nextCustomerInfo.email || undefined,
-                phone: nextCustomerInfo.phone || undefined,
-              }
-            : undefined,
-          subtotal: activeTotals.subtotal,
-          tax: activeTotals.tax,
-          total: activeTotals.total,
-        });
-      } catch (error) {
+      const result = await updateSession({
+        sessionId: activeSession._id as Id<"posSession">,
+        staffProfileId,
+        customerId: nextCustomerInfo.customerId,
+        customerInfo: hasCustomerDetails(nextCustomerInfo)
+          ? {
+              name: nextCustomerInfo.name || undefined,
+              email: nextCustomerInfo.email || undefined,
+              phone: nextCustomerInfo.phone || undefined,
+            }
+          : undefined,
+        subtotal: activeTotals.subtotal,
+        tax: activeTotals.tax,
+        total: activeTotals.total,
+      });
+
+      if (result.kind !== "ok") {
         logger.warn("[POS] Failed to sync committed customer details", {
           sessionId: activeSession._id,
-          error: error instanceof Error ? error.message : String(error),
+          error: result.error.message,
         });
       }
     },
@@ -471,22 +474,22 @@ export function useRegisterViewModel(): RegisterViewModel {
         return;
       }
 
-      try {
-        await syncSessionCheckoutState({
-          sessionId: activeSession._id as Id<"posSession">,
-          staffProfileId,
-          checkoutStateVersion: args.checkoutStateVersion,
-          payments: args.nextPayments.map(({ id, ...payment }) => payment),
-          stage: args.stage,
-          paymentMethod: args.paymentMethod,
-          amount: args.amount,
-          previousAmount: args.previousAmount,
-        });
-      } catch (error) {
+      const result = await syncSessionCheckoutState({
+        sessionId: activeSession._id as Id<"posSession">,
+        staffProfileId,
+        checkoutStateVersion: args.checkoutStateVersion,
+        payments: args.nextPayments.map(({ id, ...payment }) => payment),
+        stage: args.stage,
+        paymentMethod: args.paymentMethod,
+        amount: args.amount,
+        previousAmount: args.previousAmount,
+      });
+
+      if (result.kind !== "ok") {
         logger.warn("[POS] Failed to sync checkout state", {
           sessionId: activeSession._id,
           stage: args.stage,
-          error: error instanceof Error ? error.message : String(error),
+          error: result.error.message,
         });
       }
     },
@@ -564,8 +567,8 @@ export function useRegisterViewModel(): RegisterViewModel {
       sessionId: activeSession._id as Id<"posSession">,
     });
 
-    if (!result.success) {
-      toast.error(result.message);
+    if (result.kind !== "ok") {
+      toast.error(result.error.message);
       return false;
     }
 
@@ -601,8 +604,8 @@ export function useRegisterViewModel(): RegisterViewModel {
       terminalId: terminal._id,
     });
 
-    if (!result.success) {
-      toast.error(result.message);
+    if (result.kind !== "ok") {
+      toast.error(result.error.message);
       return;
     }
 
@@ -765,8 +768,8 @@ export function useRegisterViewModel(): RegisterViewModel {
           terminalId: terminal._id,
         });
 
-        if (!result.success) {
-          toast.error(result.message);
+        if (result.kind !== "ok") {
+          toast.error(result.error.message);
           bootstrapInitialized.current = false;
         }
 
@@ -906,8 +909,8 @@ export function useRegisterViewModel(): RegisterViewModel {
         itemId,
       });
 
-      if (!result.success) {
-        toast.error(result.message);
+      if (result.kind !== "ok") {
+        toast.error(result.error.message);
       }
 
       return;
@@ -958,8 +961,8 @@ export function useRegisterViewModel(): RegisterViewModel {
       itemId,
     });
 
-    if (!result.success) {
-      toast.error(result.message);
+    if (result.kind !== "ok") {
+      toast.error(result.error.message);
     }
   }, [activeSession, removeItem, staffProfileId]);
 
@@ -974,8 +977,8 @@ export function useRegisterViewModel(): RegisterViewModel {
       checkoutStateVersion,
     });
 
-    if (!result.success) {
-      toast.error(result.message);
+    if (result.kind !== "ok") {
+      toast.error(result.error.message);
       return;
     }
 
@@ -1358,8 +1361,8 @@ export function useRegisterViewModel(): RegisterViewModel {
           onResumeSession: handleResumeSession,
           onVoidHeldSession: async (sessionId: Id<"posSession">) => {
             const result = await voidSession({ sessionId });
-            if (!result.success) {
-              toast.error(result.message);
+            if (result.kind !== "ok") {
+              toast.error(result.error.message);
               return;
             }
 
