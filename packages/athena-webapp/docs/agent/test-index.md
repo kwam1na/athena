@@ -11,6 +11,7 @@ This index enumerates the current automated test files and ties them back to the
 ## Detected test surfaces
 
 - `convex`
+- `shared`
 - `src`
 
 ## Section `convex`
@@ -78,8 +79,13 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/workflowTraces/queryUsage.test.ts`](../../convex/workflowTraces/queryUsage.test.ts)
 - [`convex/workflowTraces/schemaIndexes.test.ts`](../../convex/workflowTraces/schemaIndexes.test.ts)
 
+## Section `shared`
+
+- [`shared/commandResult.test.ts`](../../shared/commandResult.test.ts)
+
 ## Section `src`
 
+- [`src/components/auth/DefaultCatchBoundary.test.tsx`](../../src/components/auth/DefaultCatchBoundary.test.tsx)
 - [`src/components/auth/Login/InputOTP.test.tsx`](../../src/components/auth/Login/InputOTP.test.tsx)
 - [`src/components/auth/Login/LoginForm.test.tsx`](../../src/components/auth/Login/LoginForm.test.tsx)
 - [`src/components/bulk-operations/BulkOperationsPreview.test.tsx`](../../src/components/bulk-operations/BulkOperationsPreview.test.tsx)
@@ -95,6 +101,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/orders/ReturnExchangeView.test.tsx`](../../src/components/orders/ReturnExchangeView.test.tsx)
 - [`src/components/orders/utils.test.ts`](../../src/components/orders/utils.test.ts)
 - [`src/components/organization-switcher.test.tsx`](../../src/components/organization-switcher.test.tsx)
+- [`src/components/pos/CashierAuthDialog.test.tsx`](../../src/components/pos/CashierAuthDialog.test.tsx)
 - [`src/components/pos/SessionManager.test.tsx`](../../src/components/pos/SessionManager.test.tsx)
 - [`src/components/pos/TotalsDisplay.test.tsx`](../../src/components/pos/TotalsDisplay.test.tsx)
 - [`src/components/pos/register/POSRegisterView.test.tsx`](../../src/components/pos/register/POSRegisterView.test.tsx)
@@ -119,6 +126,8 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/users/TimelineEventCard.test.tsx`](../../src/components/users/TimelineEventCard.test.tsx)
 - [`src/hooks/useAuth.test.tsx`](../../src/hooks/useAuth.test.tsx)
 - [`src/hooks/useBulkOperations.test.ts`](../../src/hooks/useBulkOperations.test.ts)
+- [`src/lib/errors/presentCommandToast.test.ts`](../../src/lib/errors/presentCommandToast.test.ts)
+- [`src/lib/errors/runCommand.test.ts`](../../src/lib/errors/runCommand.test.ts)
 - [`src/lib/imageUtils.test.ts`](../../src/lib/imageUtils.test.ts)
 - [`src/lib/pos/application/bootstrapRegister.test.ts`](../../src/lib/pos/application/bootstrapRegister.test.ts)
 - [`src/lib/pos/displayAmounts.test.ts`](../../src/lib/pos/displayAmounts.test.ts)
