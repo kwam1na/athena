@@ -6,6 +6,7 @@ import { v } from "convex/values";
 import { createOperationalWorkItemWithCtx } from "../operations/operationalWorkItems";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { createServiceCaseWithCtx } from "./serviceCases";
+import { ok, userError, type CommandResult } from "../../shared/commandResult";
 
 const NON_BLOCKING_APPOINTMENT_STATUSES = new Set([
   "cancelled",
@@ -24,19 +25,37 @@ export function buildServiceAppointment(args: {
   serviceCaseId?: Id<"serviceCase">;
   startAt: number;
   storeId: Id<"store">;
-}) {
+}): CommandResult<{
+  assignedStaffProfileId: Id<"staffProfile">;
+  createdAt: number;
+  createdByUserId?: Id<"athenaUser">;
+  customerProfileId: Id<"customerProfile">;
+  durationMinutes: number;
+  endAt: number;
+  notes?: string;
+  organizationId?: Id<"organization">;
+  serviceCatalogId: Id<"serviceCatalog">;
+  serviceCaseId?: Id<"serviceCase">;
+  startAt: number;
+  status: "scheduled";
+  storeId: Id<"store">;
+  updatedAt: number;
+}> {
   if (args.durationMinutes <= 0) {
-    throw new Error("Service duration must be greater than zero");
+    return userError({
+      code: "validation_failed",
+      message: "Service duration must be greater than zero.",
+    });
   }
 
   const now = Date.now();
-  return {
+  return ok({
     ...args,
     createdAt: now,
     endAt: args.startAt + args.durationMinutes * 60_000,
     status: "scheduled" as const,
     updatedAt: now,
-  };
+  });
 }
 
 export function findOverlappingAppointment(
@@ -102,11 +121,17 @@ export const createAppointment = mutation({
     ]);
 
     if (!catalogItem || catalogItem.storeId !== args.storeId) {
-      throw new Error("Service catalog item not found for this store.");
+      return userError({
+        code: "not_found",
+        message: "Service catalog item not found for this store.",
+      });
     }
 
     if (!customerProfile || customerProfile.storeId !== args.storeId) {
-      throw new Error("Customer profile not found for this store.");
+      return userError({
+        code: "not_found",
+        message: "Customer profile not found for this store.",
+      });
     }
 
     if (
@@ -114,14 +139,22 @@ export const createAppointment = mutation({
       staffProfile.storeId !== args.storeId ||
       staffProfile.status !== "active"
     ) {
-      throw new Error("Assigned staff member is not available for this store.");
+      return userError({
+        code: "precondition_failed",
+        message: "Assigned staff member is not available for this store.",
+      });
     }
 
-    const appointment = buildServiceAppointment({
+    const appointmentResult = buildServiceAppointment({
       ...args,
       durationMinutes: catalogItem.durationMinutes,
       organizationId: catalogItem.organizationId,
     });
+    if (appointmentResult.kind === "user_error") {
+      return appointmentResult;
+    }
+
+    const appointment = appointmentResult.data;
 
     const existingAppointments = await ctx.db
       .query("serviceAppointment")
@@ -131,7 +164,10 @@ export const createAppointment = mutation({
       .collect();
 
     if (findOverlappingAppointment(existingAppointments, appointment)) {
-      throw new Error("Assigned staff member already has an appointment in this slot.");
+      return userError({
+        code: "conflict",
+        message: "Assigned staff member already has an appointment in this slot.",
+      });
     }
 
     const appointmentId = await ctx.db.insert("serviceAppointment", appointment);
@@ -147,7 +183,7 @@ export const createAppointment = mutation({
       subjectType: "service_appointment",
     });
 
-    return ctx.db.get("serviceAppointment", appointmentId);
+    return ok(await ctx.db.get("serviceAppointment", appointmentId));
   },
 });
 
@@ -161,19 +197,28 @@ export const rescheduleAppointment = mutation({
     const appointment = await ctx.db.get("serviceAppointment", args.appointmentId);
 
     if (!appointment) {
-      throw new Error("Appointment not found.");
+      return userError({
+        code: "not_found",
+        message: "Appointment not found.",
+      });
     }
 
     if (NON_BLOCKING_APPOINTMENT_STATUSES.has(appointment.status)) {
-      throw new Error("This appointment can no longer be rescheduled.");
+      return userError({
+        code: "precondition_failed",
+        message: "This appointment can no longer be rescheduled.",
+      });
     }
 
     const catalogItem = await ctx.db.get("serviceCatalog", appointment.serviceCatalogId);
     if (!catalogItem) {
-      throw new Error("Service catalog item not found.");
+      return userError({
+        code: "not_found",
+        message: "Service catalog item not found.",
+      });
     }
 
-    const candidateAppointment = buildServiceAppointment({
+    const candidateAppointmentResult = buildServiceAppointment({
       assignedStaffProfileId: appointment.assignedStaffProfileId,
       createdByUserId: appointment.createdByUserId,
       customerProfileId: appointment.customerProfileId,
@@ -185,6 +230,11 @@ export const rescheduleAppointment = mutation({
       startAt: args.startAt,
       storeId: appointment.storeId,
     });
+    if (candidateAppointmentResult.kind === "user_error") {
+      return candidateAppointmentResult;
+    }
+
+    const candidateAppointment = candidateAppointmentResult.data;
 
     const existingAppointments = await ctx.db
       .query("serviceAppointment")
@@ -201,7 +251,10 @@ export const rescheduleAppointment = mutation({
     );
 
     if (overlappingAppointment) {
-      throw new Error("Assigned staff member already has an appointment in this slot.");
+      return userError({
+        code: "conflict",
+        message: "Assigned staff member already has an appointment in this slot.",
+      });
     }
 
     await ctx.db.patch("serviceAppointment", appointment._id, {
@@ -221,7 +274,7 @@ export const rescheduleAppointment = mutation({
       subjectType: "service_appointment",
     });
 
-    return ctx.db.get("serviceAppointment", appointment._id);
+    return ok(await ctx.db.get("serviceAppointment", appointment._id));
   },
 });
 
@@ -234,7 +287,10 @@ export const cancelAppointment = mutation({
     const appointment = await ctx.db.get("serviceAppointment", args.appointmentId);
 
     if (!appointment) {
-      throw new Error("Appointment not found.");
+      return userError({
+        code: "not_found",
+        message: "Appointment not found.",
+      });
     }
 
     await ctx.db.patch("serviceAppointment", appointment._id, {
@@ -253,7 +309,7 @@ export const cancelAppointment = mutation({
       subjectType: "service_appointment",
     });
 
-    return ctx.db.get("serviceAppointment", appointment._id);
+    return ok(await ctx.db.get("serviceAppointment", appointment._id));
   },
 });
 
@@ -266,11 +322,17 @@ export const convertAppointmentToWalkIn = mutation({
     const appointment = await ctx.db.get("serviceAppointment", args.appointmentId);
 
     if (!appointment) {
-      throw new Error("Appointment not found.");
+      return userError({
+        code: "not_found",
+        message: "Appointment not found.",
+      });
     }
 
     if (appointment.serviceCaseId) {
-      throw new Error("Appointment already has a service case.");
+      return userError({
+        code: "conflict",
+        message: "Appointment already has a service case.",
+      });
     }
 
     const [catalogItem, customerProfile, store] = await Promise.all([
@@ -280,15 +342,24 @@ export const convertAppointmentToWalkIn = mutation({
     ]);
 
     if (!catalogItem) {
-      throw new Error("Service catalog item not found.");
+      return userError({
+        code: "not_found",
+        message: "Service catalog item not found.",
+      });
     }
 
     if (!customerProfile) {
-      throw new Error("Customer profile not found.");
+      return userError({
+        code: "not_found",
+        message: "Customer profile not found.",
+      });
     }
 
     if (!store) {
-      throw new Error("Store not found.");
+      return userError({
+        code: "not_found",
+        message: "Store not found.",
+      });
     }
 
     const createdByStaffProfile = args.createdByUserId
@@ -322,7 +393,10 @@ export const convertAppointmentToWalkIn = mutation({
     });
 
     if (!workItem) {
-      throw new Error("Unable to create an operational work item for this appointment.");
+      return userError({
+        code: "unavailable",
+        message: "Unable to create an operational work item for this appointment.",
+      });
     }
 
     const serviceCase = await createServiceCaseWithCtx(ctx, {
@@ -359,10 +433,10 @@ export const convertAppointmentToWalkIn = mutation({
       workItemId: workItem._id,
     });
 
-    return {
+    return ok({
       appointmentId: appointment._id,
       serviceCaseId: serviceCase._id,
       workItemId: workItem._id,
-    };
+    });
   },
 });

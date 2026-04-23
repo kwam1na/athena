@@ -18,6 +18,10 @@ import {
   SelectValue,
 } from "../ui/select";
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
+import {
+  type NormalizedCommandResult,
+  runCommand,
+} from "@/lib/errors/runCommand";
 import { api } from "~/convex/_generated/api";
 
 type CustomerResult = {
@@ -55,6 +59,8 @@ type CreateAppointmentArgs = {
   startAt: number;
 };
 
+type AppointmentCommandResult = NormalizedCommandResult<unknown>;
+
 type ServiceAppointmentsViewContentProps = {
   appointments: AppointmentItem[];
   catalogItems: CatalogItem[];
@@ -62,13 +68,19 @@ type ServiceAppointmentsViewContentProps = {
   hasFullAdminAccess: boolean;
   isLoadingPermissions: boolean;
   isSaving: boolean;
-  onCancelAppointment: (args: { appointmentId: string }) => Promise<void>;
-  onConvertAppointment: (args: { appointmentId: string }) => Promise<void>;
-  onCreateAppointment: (args: CreateAppointmentArgs) => Promise<void>;
+  onCancelAppointment: (
+    args: { appointmentId: string }
+  ) => Promise<AppointmentCommandResult>;
+  onConvertAppointment: (
+    args: { appointmentId: string }
+  ) => Promise<AppointmentCommandResult>;
+  onCreateAppointment: (
+    args: CreateAppointmentArgs
+  ) => Promise<AppointmentCommandResult>;
   onRescheduleAppointment: (args: {
     appointmentId: string;
     startAt: number;
-  }) => Promise<void>;
+  }) => Promise<AppointmentCommandResult>;
   searchQuery: string;
   setSearchQuery: (value: string) => void;
   staffOptions: StaffOption[];
@@ -114,6 +126,16 @@ export function ServiceAppointmentsViewContent({
   const [rescheduleTimes, setRescheduleTimes] = useState<Record<string, string>>({});
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
+  const applyCommandResult = (result: AppointmentCommandResult) => {
+    if (result.kind === "ok") {
+      setValidationErrors([]);
+      return true;
+    }
+
+    setValidationErrors([result.error.message]);
+    return false;
+  };
+
   if (isLoadingPermissions) {
     return (
       <View>
@@ -153,22 +175,22 @@ export function ServiceAppointmentsViewContent({
       return;
     }
 
-    try {
-      await onCreateAppointment({
-        assignedStaffProfileId: form.assignedStaffProfileId,
-        customerProfileId: form.selectedCustomerId,
-        notes: form.notes.trim() || undefined,
-        serviceCatalogId: form.serviceCatalogId,
-        startAt: parsedStartAt!,
-      });
-      setForm(initialFormState);
-      setValidationErrors([]);
-      setSearchQuery("");
-    } catch (error) {
-      toast.error("Failed to schedule appointment", {
-        description: (error as Error).message,
-      });
+    setValidationErrors([]);
+    const result = await onCreateAppointment({
+      assignedStaffProfileId: form.assignedStaffProfileId,
+      customerProfileId: form.selectedCustomerId,
+      notes: form.notes.trim() || undefined,
+      serviceCatalogId: form.serviceCatalogId,
+      startAt: parsedStartAt!,
+    });
+
+    if (!applyCommandResult(result)) {
+      return;
     }
+
+    setForm(initialFormState);
+    setSearchQuery("");
+    toast.success("Appointment scheduled");
   };
 
   return (
@@ -368,20 +390,33 @@ export function ServiceAppointmentsViewContent({
                 <div className="flex flex-wrap gap-2">
                   <Button
                     aria-label={`Reschedule ${appointment.serviceCatalogName ?? "appointment"}`}
-                    onClick={() => {
+                    onClick={async () => {
                       const parsedStartAt = parseDateTimeLocal(
                         rescheduleTimes[appointment._id] ?? ""
                       );
 
                       if (parsedStartAt === null) {
-                        toast.error("Choose a new start time before rescheduling.");
+                        setValidationErrors([
+                          "Choose a new start time before rescheduling.",
+                        ]);
                         return;
                       }
 
-                      onRescheduleAppointment({
+                      setValidationErrors([]);
+                      const result = await onRescheduleAppointment({
                         appointmentId: appointment._id,
                         startAt: parsedStartAt,
                       });
+
+                      if (!applyCommandResult(result)) {
+                        return;
+                      }
+
+                      setRescheduleTimes((current) => ({
+                        ...current,
+                        [appointment._id]: "",
+                      }));
+                      toast.success("Appointment rescheduled");
                     }}
                     size="sm"
                     type="button"
@@ -391,11 +426,18 @@ export function ServiceAppointmentsViewContent({
                   </Button>
                   <Button
                     aria-label={`Cancel ${appointment.serviceCatalogName ?? "appointment"}`}
-                    onClick={() =>
-                      onCancelAppointment({
+                    onClick={async () => {
+                      setValidationErrors([]);
+                      const result = await onCancelAppointment({
                         appointmentId: appointment._id,
-                      })
-                    }
+                      });
+
+                      if (!applyCommandResult(result)) {
+                        return;
+                      }
+
+                      toast.success("Appointment cancelled");
+                    }}
                     size="sm"
                     type="button"
                     variant="outline"
@@ -404,11 +446,18 @@ export function ServiceAppointmentsViewContent({
                   </Button>
                   <Button
                     aria-label={`Convert ${appointment.serviceCatalogName ?? "appointment"}`}
-                    onClick={() =>
-                      onConvertAppointment({
+                    onClick={async () => {
+                      setValidationErrors([]);
+                      const result = await onConvertAppointment({
                         appointmentId: appointment._id,
-                      })
-                    }
+                      });
+
+                      if (!applyCommandResult(result)) {
+                        return;
+                      }
+
+                      toast.success("Appointment converted to walk-in");
+                    }}
                     size="sm"
                     type="button"
                   >
@@ -469,10 +518,10 @@ export function ServiceAppointmentsView() {
     api.serviceOps.appointments.convertAppointmentToWalkIn
   );
 
-  const withSaveState = async (action: () => Promise<void>) => {
+  const withSaveState = async <T,>(action: () => Promise<T>) => {
     setIsSaving(true);
     try {
-      await action();
+      return await action();
     } finally {
       setIsSaving(false);
     }
@@ -520,41 +569,45 @@ export function ServiceAppointmentsView() {
       isLoadingPermissions={false}
       isSaving={isSaving}
       onCancelAppointment={(args) =>
-        withSaveState(async () => {
-          await cancelAppointment({
-            appointmentId: args.appointmentId as any,
-          });
-          toast.success("Appointment cancelled");
-        })
+        withSaveState(() =>
+          runCommand(() =>
+            cancelAppointment({
+              appointmentId: args.appointmentId as any,
+            })
+          )
+        )
       }
       onConvertAppointment={(args) =>
-        withSaveState(async () => {
-          await convertAppointmentToWalkIn({
-            appointmentId: args.appointmentId as any,
-          });
-          toast.success("Appointment converted to walk-in");
-        })
+        withSaveState(() =>
+          runCommand(() =>
+            convertAppointmentToWalkIn({
+              appointmentId: args.appointmentId as any,
+            })
+          )
+        )
       }
       onCreateAppointment={(args) =>
-        withSaveState(async () => {
-          await createAppointment({
-            ...args,
-            assignedStaffProfileId: args.assignedStaffProfileId as any,
-            customerProfileId: args.customerProfileId as any,
-            serviceCatalogId: args.serviceCatalogId as any,
-            storeId: activeStore._id,
-          });
-          toast.success("Appointment scheduled");
-        })
+        withSaveState(() =>
+          runCommand(() =>
+            createAppointment({
+              ...args,
+              assignedStaffProfileId: args.assignedStaffProfileId as any,
+              customerProfileId: args.customerProfileId as any,
+              serviceCatalogId: args.serviceCatalogId as any,
+              storeId: activeStore._id,
+            })
+          )
+        )
       }
       onRescheduleAppointment={(args) =>
-        withSaveState(async () => {
-          await rescheduleAppointment({
-            appointmentId: args.appointmentId as any,
-            startAt: args.startAt,
-          });
-          toast.success("Appointment rescheduled");
-        })
+        withSaveState(() =>
+          runCommand(() =>
+            rescheduleAppointment({
+              appointmentId: args.appointmentId as any,
+              startAt: args.startAt,
+            })
+          )
+        )
       }
       searchQuery={searchQuery}
       setSearchQuery={setSearchQuery}
