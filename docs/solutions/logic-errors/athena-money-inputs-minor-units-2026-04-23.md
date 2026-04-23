@@ -75,7 +75,7 @@ Add a regression audit:
 packages/athena-webapp/src/lib/moneyEntryAudit.test.ts
 ```
 
-That test scans known frontend money-entry save boundaries and forces raw `Number`, `parseFloat`, or `parseInt` money parsing to be reviewed or removed.
+That test scans Athena frontend source files with the TypeScript AST and forces raw `Number`, `parseFloat`, or `parseInt` money parsing to be reviewed or removed when it appears in a money-entry context. The AST pass catches multiline mutation payloads and pure helper wrappers, so a new surface like `price: toNumber(priceInput)` fails even if the helper hides the raw parse elsewhere in the file.
 
 ## Why This Works
 
@@ -88,7 +88,7 @@ The static audit makes the bug class visible during tests instead of depending o
 - Use `parseDisplayAmountInput` for frontend money fields that persist to pesewas/minor units.
 - Use `toDisplayAmount` or `formatStoredAmount` when stored minor units are shown or loaded back into editable inputs.
 - Keep percentage fields raw and branch by `discountType` or `depositType`.
-- Update `moneyEntryAudit.test.ts` whenever adding a new frontend money-entry boundary.
+- Keep `moneyEntryAudit.test.ts` green when adding frontend money-entry code. New money-entry boundaries are scanned automatically; add reviewed exceptions only for display-only formatting, backend-owned conversion boundaries, or legacy surfaces with an explicit reason.
 - Trace money changes end to end: frontend field -> mutation payload -> Convex schema/table -> display/readback path.
 
 Prefer this pattern:
