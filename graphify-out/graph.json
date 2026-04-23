@@ -19331,7 +19331,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_staff_staffmanagement_tsx",
       "source_file": "packages/athena-webapp/src/components/staff/StaffManagement.tsx",
-      "source_location": "L541",
+      "source_location": "L538",
       "target": "staffmanagement_credentialpindialog",
       "weight": 1
     },
@@ -19391,7 +19391,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_staff_staffmanagement_tsx",
       "source_file": "packages/athena-webapp/src/components/staff/StaffManagement.tsx",
-      "source_location": "L733",
+      "source_location": "L730",
       "target": "staffmanagement_handledeactivate",
       "weight": 1
     },
@@ -60166,7 +60166,7 @@
       "label": "CredentialPinDialog()",
       "norm_label": "credentialpindialog()",
       "source_file": "packages/athena-webapp/src/components/staff/StaffManagement.tsx",
-      "source_location": "L541"
+      "source_location": "L538"
     },
     {
       "community": 48,
@@ -60211,7 +60211,7 @@
       "label": "handleDeactivate()",
       "norm_label": "handledeactivate()",
       "source_file": "packages/athena-webapp/src/components/staff/StaffManagement.tsx",
-      "source_location": "L733"
+      "source_location": "L730"
     },
     {
       "community": 48,

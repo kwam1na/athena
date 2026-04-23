@@ -215,9 +215,7 @@ function StaffProvisionForm({
     staff?.primaryRole ?? "",
   );
   const [startDate, setStartDate] = useState(
-    staff?.hiredAt
-      ? new Date(staff.hiredAt).toISOString().slice(0, 10)
-      : "",
+    staff?.hiredAt ? new Date(staff.hiredAt).toISOString().slice(0, 10) : "",
   );
   const [jobTitle, setJobTitle] = useState(staff?.jobTitle ?? "");
   const [phoneNumber, setPhoneNumber] = useState(staff?.phoneNumber ?? "");
@@ -516,7 +514,6 @@ function StaffProvisionForm({
             onChange={(event) => setEmail(event.target.value)}
           />
         </div>
-
       </div>
 
       <div className="flex items-center gap-4">
@@ -856,7 +853,6 @@ export const StaffManagement = ({
                             })
                           }
                         >
-                          <Pencil className="mr-2 h-4 w-4" />
                           Edit
                         </Button>
 
@@ -899,7 +895,10 @@ export const StaffManagement = ({
           />
         </div>
       ) : (
-        <Button variant="ghost" onClick={() => setFormState({ mode: "create" })}>
+        <Button
+          variant="ghost"
+          onClick={() => setFormState({ mode: "create" })}
+        >
           <Plus className="mr-2 h-4 w-4" />
           Add Staff Member
         </Button>
