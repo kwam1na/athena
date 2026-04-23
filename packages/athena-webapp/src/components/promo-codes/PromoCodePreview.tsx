@@ -5,6 +5,7 @@ import { PlusIcon } from "lucide-react";
 import { DiscountType, PromoCodeSpan } from "./types";
 import { Product, ProductSku } from "~/types";
 import { getProductName } from "~/src/lib/productUtils";
+import { promoDiscountDisplayText } from "./promoCodeMoney";
 
 interface PromoCodePreviewProps {
   promoCode: string | null;
@@ -41,7 +42,11 @@ const PromoCodePreview = ({
         for{" "}
         <strong>
           {discountType === "amount"
-            ? currencyFormatter.format(parseFloat(discount))
+            ? promoDiscountDisplayText(
+                Number.parseFloat(discount),
+                discountType,
+                currencyFormatter as Intl.NumberFormat
+              )
             : `${discount}%`}
         </strong>{" "}
         off

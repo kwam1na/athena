@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -144,7 +144,7 @@ describe("RegisterCloseoutViewContent", () => {
     ).toBeInTheDocument();
   });
 
-  it("submits counted cash and notes for a register session", async () => {
+  it("submits display counted cash as minor units with notes for a register session", async () => {
     const user = userEvent.setup();
     const onSubmitCloseout = vi.fn().mockResolvedValue(
       ok({
@@ -171,16 +171,113 @@ describe("RegisterCloseoutViewContent", () => {
       />,
     );
 
-    await user.type(screen.getByLabelText("Counted cash for Register 2"), "145");
+    await user.type(screen.getByLabelText("Counted cash for Register 2"), "145.00");
     await user.type(screen.getByLabelText("Closeout notes for Register 2"), "Drawer balanced at shift end.");
     await user.click(screen.getByRole("button", { name: "Submit closeout" }));
 
     await waitFor(() => expect(onSubmitCloseout).toHaveBeenCalledTimes(1));
     expect(onSubmitCloseout).toHaveBeenCalledWith({
-      countedCash: 145,
+      countedCash: 14500,
       notes: "Drawer balanced at shift end.",
       registerSessionId: "session-open",
     });
+  });
+
+  it("shows stored counted cash in display units inside the editable closeout field", () => {
+    render(
+      <RegisterCloseoutViewContent
+        {...baseProps}
+        registerSessions={[
+          {
+            _id: "session-open",
+            approvalRequest: null,
+            closeoutReview: null,
+            countedCash: 14500,
+            expectedCash: 12000,
+            openedAt: new Date("2026-04-21T10:00:00.000Z").getTime(),
+            openedByStaffName: "Ama Mensah",
+            registerNumber: "Register 2",
+            status: "open",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByLabelText("Counted cash for Register 2")).toHaveValue(145);
+  });
+
+  it("does not submit invalid display counted cash and shows the closeout error", async () => {
+    const user = userEvent.setup();
+    const onSubmitCloseout = vi.fn().mockResolvedValue(
+      ok({
+        action: "closed",
+      }),
+    );
+
+    render(
+      <RegisterCloseoutViewContent
+        {...baseProps}
+        onSubmitCloseout={onSubmitCloseout}
+        registerSessions={[
+          {
+            _id: "session-open",
+            approvalRequest: null,
+            closeoutReview: null,
+            expectedCash: 12000,
+            openedAt: new Date("2026-04-21T10:00:00.000Z").getTime(),
+            openedByStaffName: "Ama Mensah",
+            registerNumber: "Register 2",
+            status: "open",
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Counted cash for Register 2"), {
+      target: { value: "not an amount" },
+    });
+    await user.click(screen.getByRole("button", { name: "Submit closeout" }));
+
+    expect(onSubmitCloseout).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Enter the counted cash before submitting the closeout.",
+    );
+  });
+
+  it("does not submit negative display counted cash and shows the closeout error", async () => {
+    const user = userEvent.setup();
+    const onSubmitCloseout = vi.fn().mockResolvedValue(
+      ok({
+        action: "closed",
+      }),
+    );
+
+    render(
+      <RegisterCloseoutViewContent
+        {...baseProps}
+        onSubmitCloseout={onSubmitCloseout}
+        registerSessions={[
+          {
+            _id: "session-open",
+            approvalRequest: null,
+            closeoutReview: null,
+            expectedCash: 12000,
+            openedAt: new Date("2026-04-21T10:00:00.000Z").getTime(),
+            openedByStaffName: "Ama Mensah",
+            registerNumber: "Register 2",
+            status: "open",
+          },
+        ]}
+      />,
+    );
+
+    await user.type(screen.getByLabelText("Counted cash for Register 2"), "-1");
+    await user.click(screen.getByRole("button", { name: "Submit closeout" }));
+
+    expect(onSubmitCloseout).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Enter the counted cash before submitting the closeout.",
+    );
   });
 
   it("sends manager approval decisions with optional notes", async () => {

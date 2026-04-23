@@ -35,9 +35,16 @@ export const FeesView = () => {
 
   const handleUpdateFees = async () => {
     const updates = {
-      withinAccra: enteredWithinAccraFee ? toPesewas(enteredWithinAccraFee) : undefined,
-      otherRegions: enteredOtherRegionsFee ? toPesewas(enteredOtherRegionsFee) : undefined,
-      international: enteredIntlFee ? toPesewas(enteredIntlFee) : undefined,
+      withinAccra:
+        enteredWithinAccraFee === undefined
+          ? undefined
+          : toPesewas(enteredWithinAccraFee),
+      otherRegions:
+        enteredOtherRegionsFee === undefined
+          ? undefined
+          : toPesewas(enteredOtherRegionsFee),
+      international:
+        enteredIntlFee === undefined ? undefined : toPesewas(enteredIntlFee),
     };
 
     const waiveDeliveryFeesConfig = {
@@ -45,7 +52,10 @@ export const FeesView = () => {
       otherRegions: waiveOtherRegionsFee,
       international: waiveIntlFee,
       all: waiveWithinAccraFee && waiveOtherRegionsFee && waiveIntlFee,
-      minimumOrderAmount: minimumOrderAmount ? toPesewas(minimumOrderAmount) : undefined,
+      minimumOrderAmount:
+        minimumOrderAmount === undefined
+          ? undefined
+          : toPesewas(minimumOrderAmount),
     };
 
     await updateConfig({
@@ -66,13 +76,19 @@ export const FeesView = () => {
     // Convert from pesewas (stored) to GHS (displayed in form)
     const fees = storeConfig.commerce.deliveryFees;
     setEnteredWithinAccraFee(
-      fees?.withinAccra ? toDisplayAmount(fees.withinAccra) : undefined
+      fees?.withinAccra === undefined
+        ? undefined
+        : toDisplayAmount(fees.withinAccra)
     );
     setEnteredOtherRegionsFee(
-      fees?.otherRegions ? toDisplayAmount(fees.otherRegions) : undefined
+      fees?.otherRegions === undefined
+        ? undefined
+        : toDisplayAmount(fees.otherRegions)
     );
     setEnteredIntlFee(
-      fees?.international ? toDisplayAmount(fees.international) : 0
+      fees?.international === undefined
+        ? undefined
+        : toDisplayAmount(fees.international)
     );
 
     const waiveConfig = storeConfig.commerce.waiveDeliveryFees;
@@ -81,9 +97,9 @@ export const FeesView = () => {
       setWaiveOtherRegionsFee(waiveConfig.otherRegions || false);
       setWaiveIntlFee(waiveConfig.international || false);
       setMinimumOrderAmount(
-        waiveConfig.minimumOrderAmount
-          ? toDisplayAmount(waiveConfig.minimumOrderAmount)
-          : undefined
+        waiveConfig.minimumOrderAmount === undefined
+          ? undefined
+          : toDisplayAmount(waiveConfig.minimumOrderAmount)
       );
     } else {
       setWaiveWithinAccraFee(false);
@@ -138,8 +154,12 @@ export const FeesView = () => {
           </div>
           <Input
             type="number"
-            value={enteredWithinAccraFee || undefined}
-            onChange={(e) => setEnteredWithinAccraFee(parseInt(e.target.value))}
+            value={enteredWithinAccraFee ?? ""}
+            onChange={(e) =>
+              setEnteredWithinAccraFee(
+                e.target.value ? Number.parseFloat(e.target.value) : undefined
+              )
+            }
             disabled={waiveWithinAccraFee}
           />
         </div>
@@ -163,9 +183,11 @@ export const FeesView = () => {
           </div>
           <Input
             type="number"
-            value={enteredOtherRegionsFee || undefined}
+            value={enteredOtherRegionsFee ?? ""}
             onChange={(e) =>
-              setEnteredOtherRegionsFee(parseInt(e.target.value))
+              setEnteredOtherRegionsFee(
+                e.target.value ? Number.parseFloat(e.target.value) : undefined
+              )
             }
             disabled={waiveOtherRegionsFee}
           />
@@ -190,8 +212,12 @@ export const FeesView = () => {
           </div>
           <Input
             type="number"
-            value={enteredIntlFee || undefined}
-            onChange={(e) => setEnteredIntlFee(parseInt(e.target.value))}
+            value={enteredIntlFee ?? ""}
+            onChange={(e) =>
+              setEnteredIntlFee(
+                e.target.value ? Number.parseFloat(e.target.value) : undefined
+              )
+            }
             disabled={waiveIntlFee}
           />
         </div>
@@ -232,10 +258,12 @@ export const FeesView = () => {
             id="minimum-order-amount"
             type="number"
             placeholder="Leave empty for unconditional free delivery"
-            value={minimumOrderAmount || ""}
+            value={minimumOrderAmount ?? ""}
             onChange={(e) => {
-              const val = parseInt(e.target.value);
-              setMinimumOrderAmount(isNaN(val) || val <= 0 ? undefined : val);
+              const val = Number.parseFloat(e.target.value);
+              setMinimumOrderAmount(
+                Number.isNaN(val) || val <= 0 ? undefined : val
+              );
             }}
           />
           <p className="text-xs text-muted-foreground">

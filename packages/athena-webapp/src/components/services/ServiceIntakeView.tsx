@@ -11,6 +11,7 @@ import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { type NormalizedCommandResult, runCommand } from "@/lib/errors/runCommand";
 import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
+import { parseDisplayAmountInput } from "~/src/lib/pos/displayAmounts";
 import {
   ServiceIntakeCustomerResult,
   ServiceIntakeForm,
@@ -141,16 +142,15 @@ export function ServiceIntakeViewContent({
 
   const handleSubmit = async () => {
     const parsedDepositAmount = form.depositAmount.trim()
-      ? Number(form.depositAmount)
+      ? parseDisplayAmountInput(form.depositAmount)
       : undefined;
+    const hasInvalidDepositAmount =
+      form.depositAmount.trim() && parsedDepositAmount === undefined;
     const errors = validateServiceIntakeInput({
       assignedStaffProfileId: form.assignedStaffProfileId,
       customerFullName: form.customerFullName,
       customerProfileId: form.selectedCustomerId,
-      depositAmount:
-        parsedDepositAmount !== undefined && Number.isNaN(parsedDepositAmount)
-          ? 0
-          : parsedDepositAmount,
+      depositAmount: hasInvalidDepositAmount ? 0 : parsedDepositAmount,
       depositMethod: form.depositMethod || undefined,
       serviceTitle: form.serviceTitle,
     });

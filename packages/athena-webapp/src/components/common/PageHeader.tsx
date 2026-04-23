@@ -12,6 +12,25 @@ const PageHeader = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
+export const NavigateBackButton = () => {
+  const { o } = useSearch({ strict: false });
+  const navigateBack = useNavigateBack();
+
+  if (!o) {
+    return null;
+  }
+
+  return (
+    <Button
+      onClick={navigateBack}
+      variant="ghost"
+      className="h-8 px-2 lg:px-3 "
+    >
+      <ArrowLeftIcon className="h-4 w-4" />
+    </Button>
+  );
+};
+
 export const SimplePageHeader = ({
   title,
   className,
@@ -19,21 +38,10 @@ export const SimplePageHeader = ({
   title: string;
   className?: string;
 }) => {
-  const { o } = useSearch({ strict: false });
-  const navigateBack = useNavigateBack();
-
   return (
     <PageHeader>
       <div className="flex items-center gap-4">
-        {o && (
-          <Button
-            onClick={navigateBack}
-            variant="ghost"
-            className="h-8 px-2 lg:px-3 "
-          >
-            <ArrowLeftIcon className="h-4 w-4" />
-          </Button>
-        )}
+        <NavigateBackButton />
         <p className={cn("text-sm", className)}>{title}</p>
       </div>
     </PageHeader>

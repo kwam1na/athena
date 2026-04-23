@@ -24,6 +24,8 @@ import {
 } from "@/lib/errors/runCommand";
 import { presentCommandToast } from "@/lib/errors/presentCommandToast";
 import { api } from "~/convex/_generated/api";
+import { toDisplayAmount } from "~/convex/lib/currency";
+import { parseDisplayAmountInput } from "~/src/lib/pos/displayAmounts";
 
 type ServiceCatalogItem = {
   _id: string;
@@ -81,14 +83,32 @@ function validateServiceCatalogForm(form: ServiceCatalogFormState) {
     errors.push("Duration must be greater than zero.");
   }
 
+  if (form.basePrice.trim() && parseDisplayAmountInput(form.basePrice) === undefined) {
+    errors.push("Base price must be a valid amount.");
+  }
+
+  if (
+    form.depositValue.trim() &&
+    form.depositType === "flat" &&
+    parseDisplayAmountInput(form.depositValue) === undefined
+  ) {
+    errors.push("Deposit value must be a valid amount.");
+  }
+
   return errors;
 }
 
 function itemToFormState(item: ServiceCatalogItem): ServiceCatalogFormState {
   return {
-    basePrice: item.basePrice?.toString() ?? "",
+    basePrice:
+      item.basePrice === undefined ? "" : toDisplayAmount(item.basePrice).toString(),
     depositType: item.depositType,
-    depositValue: item.depositValue?.toString() ?? "",
+    depositValue:
+      item.depositValue === undefined
+        ? ""
+        : item.depositType === "flat"
+          ? toDisplayAmount(item.depositValue).toString()
+          : item.depositValue.toString(),
     description: item.description ?? "",
     durationMinutes: item.durationMinutes.toString(),
     name: item.name,
@@ -101,10 +121,19 @@ function itemToFormState(item: ServiceCatalogItem): ServiceCatalogFormState {
 function parseServiceCatalogForm(
   form: ServiceCatalogFormState
 ): CreateServiceCatalogArgs {
+  const basePrice = form.basePrice.trim()
+    ? parseDisplayAmountInput(form.basePrice)
+    : undefined;
+  const depositValue = form.depositValue.trim()
+    ? form.depositType === "percentage"
+      ? Number(form.depositValue)
+      : parseDisplayAmountInput(form.depositValue)
+    : undefined;
+
   return {
-    basePrice: form.basePrice.trim() ? Number(form.basePrice) : undefined,
+    basePrice,
     depositType: form.depositType,
-    depositValue: form.depositValue.trim() ? Number(form.depositValue) : undefined,
+    depositValue,
     description: form.description.trim() || undefined,
     durationMinutes: Number(form.durationMinutes),
     name: form.name.trim(),

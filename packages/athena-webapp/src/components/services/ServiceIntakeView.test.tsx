@@ -112,7 +112,7 @@ describe("ServiceIntakeViewContent", () => {
       "Wash and restyle closure wig",
     );
     await chooseSelectOption(user, /assigned staff/i, /adjoa tetteh/i);
-    await user.type(screen.getByLabelText(/deposit amount/i), "45");
+    await user.type(screen.getByLabelText(/deposit amount/i), "45.25");
     await chooseSelectOption(user, /deposit method/i, /^card$/i);
     await chooseSelectOption(user, /priority/i, /^urgent$/i);
     await chooseSelectOption(user, /channel/i, /phone booking/i);
@@ -135,7 +135,7 @@ describe("ServiceIntakeViewContent", () => {
       customerFullName: "Ama Mensah",
       customerPhoneNumber: "+233200000000",
       customerProfileId: "customer-7",
-      depositAmount: 45,
+      depositAmount: 4525,
       depositMethod: "card",
       intakeChannel: "phone_booking",
       itemDescription:
