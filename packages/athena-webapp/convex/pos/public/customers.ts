@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 
 import { mutation, query } from "../../_generated/server";
+import { commandResultValidator } from "../../lib/commandResultValidators";
 import {
   createCustomer as createCustomerCommand,
   linkToGuest as linkToGuestCommand,
@@ -80,12 +81,14 @@ export const createCustomer = mutation({
     address: v.optional(customerAddressValidator),
     notes: v.optional(v.string()),
   },
-  returns: v.object({
-    _id: v.id("posCustomer"),
-    name: v.string(),
-    email: v.optional(v.string()),
-    phone: v.optional(v.string()),
-  }),
+  returns: commandResultValidator(
+    v.object({
+      _id: v.id("posCustomer"),
+      name: v.string(),
+      email: v.optional(v.string()),
+      phone: v.optional(v.string()),
+    }),
+  ),
   handler: async (ctx, args) => createCustomerCommand(ctx, args),
 });
 
@@ -98,7 +101,7 @@ export const updateCustomer = mutation({
     address: v.optional(customerAddressValidator),
     notes: v.optional(v.string()),
   },
-  returns: v.null(),
+  returns: commandResultValidator(v.null()),
   handler: async (ctx, args) => updateCustomerCommand(ctx, args),
 });
 
@@ -135,7 +138,7 @@ export const linkToStoreFrontUser = mutation({
     posCustomerId: v.id("posCustomer"),
     storeFrontUserId: v.id("storeFrontUser"),
   },
-  returns: v.null(),
+  returns: commandResultValidator(v.null()),
   handler: async (ctx, args) => linkToStoreFrontUserCommand(ctx, args),
 });
 
@@ -144,7 +147,7 @@ export const linkToGuest = mutation({
     posCustomerId: v.id("posCustomer"),
     guestId: v.id("guest"),
   },
-  returns: v.null(),
+  returns: commandResultValidator(v.null()),
   handler: async (ctx, args) => linkToGuestCommand(ctx, args),
 });
 

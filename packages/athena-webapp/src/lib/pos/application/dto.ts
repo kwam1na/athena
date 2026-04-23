@@ -187,44 +187,24 @@ export type PosMutationFailureDto = {
   message: string;
 };
 
-export type PosCreateSessionResultDto =
-  | {
-      success: true;
-      data: {
-        sessionId: Id<"posSession">;
-        expiresAt: number;
-      };
-    }
-  | PosMutationFailureDto;
+export type PosCreateSessionResultDto = CommandResult<{
+  sessionId: Id<"posSession">;
+  expiresAt: number;
+}>;
 
 export type PosStartSessionResultDto = PosCreateSessionResultDto;
 
-export type PosAddItemResultDto =
-  | {
-      success: true;
-      data: {
-        itemId: Id<"posSessionItem">;
-        expiresAt: number;
-      };
-    }
-  | PosMutationFailureDto;
+export type PosAddItemResultDto = CommandResult<{
+  itemId: Id<"posSessionItem">;
+  expiresAt: number;
+}>;
 
-export type PosHoldSessionResultDto =
-  | {
-      success: true;
-      data: {
-        sessionId: Id<"posSession">;
-        expiresAt: number;
-      };
-    }
-  | PosMutationFailureDto;
+export type PosHoldSessionResultDto = CommandResult<{
+  sessionId: Id<"posSession">;
+  expiresAt: number;
+}>;
 
-export type PosCompleteTransactionResultDto =
-  | {
-      success: true;
-      data: {
-        sessionId: Id<"posSession">;
-        transactionNumber: string;
-      };
-    }
-  | PosMutationFailureDto;
+export type PosCompleteTransactionResultDto = CommandResult<{
+  sessionId: Id<"posSession">;
+  transactionNumber: string;
+}>;
