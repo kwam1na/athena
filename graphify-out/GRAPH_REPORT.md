@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 3703 nodes · 3222 edges · 1398 communities detected
+- 3706 nodes · 3228 edges · 1398 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1504,52 +1504,52 @@ Cohesion: 0.22
 Nodes (16): buildDegreeIndex(), buildHotspotLines(), buildPackagePage(), buildRootIndexPage(), collectRepoCodeFiles(), compareHotspots(), countCommunities(), fileExists() (+8 more)
 
 ### Community 17 - "Community 17"
-Cohesion: 0.12
-Nodes (0):
+Cohesion: 0.26
+Nodes (15): assertStaffProfileReadyForCredential(), authenticateStaffCredentialForTerminalWithCtx(), authenticateStaffCredentialWithCtx(), createStaffCredentialWithCtx(), getActiveRolesForStaffProfile(), getCredentialById(), getCredentialByUsername(), getStaffCredentialByStaffProfileIdWithCtx() (+7 more)
 
 ### Community 18 - "Community 18"
 Cohesion: 0.12
-Nodes (1): DataTableViewOptions()
+Nodes (0):
 
 ### Community 19 - "Community 19"
+Cohesion: 0.12
+Nodes (1): DataTableViewOptions()
+
+### Community 20 - "Community 20"
 Cohesion: 0.19
 Nodes (13): compareSnapshots(), fileExists(), formatArtifactList(), formatDetailLines(), formatError(), formatHarnessJanitorReport(), readUtf8OrNull(), runCheckStep() (+5 more)
 
-### Community 20 - "Community 20"
+### Community 21 - "Community 21"
 Cohesion: 0.21
 Nodes (14): buildNumericTrendStats(), buildRegressionWarnings(), buildRuntimeTrendOutput(), buildScenarioTrend(), collectHarnessRuntimeTrends(), formatMs(), formatPercent(), parseHarnessBehaviorReportLines() (+6 more)
 
-### Community 21 - "Community 21"
+### Community 22 - "Community 22"
 Cohesion: 0.16
 Nodes (6): diffGeneratedHarnessDocs(), diffWorkingTreeAddedNonGenerated(), formatBlockerList(), runPrePushReview(), snapshotGeneratedHarnessDocs(), toSortedArray()
 
-### Community 22 - "Community 22"
+### Community 23 - "Community 23"
 Cohesion: 0.27
 Nodes (15): assertValidOnlineOrderStatusTransition(), getOnlineOrderPaymentAmount(), getOnlineOrderPaymentMethodLabel(), getOnlineOrderStatusEventType(), getStoreOrganizationId(), isPaymentOnDeliveryOrder(), recordOnlineOrderCreatedEvent(), recordOnlineOrderFulfillmentMovement() (+7 more)
 
-### Community 23 - "Community 23"
+### Community 24 - "Community 24"
 Cohesion: 0.21
 Nodes (14): CheckoutSessionError, createCheckoutSession(), defaultCheckoutActionMessage(), getActiveCheckoutSession(), getBaseUrl(), getCheckoutActionErrorMessage(), getCheckoutErrorMessageFromPayload(), getCheckoutSession() (+6 more)
 
-### Community 24 - "Community 24"
+### Community 25 - "Community 25"
 Cohesion: 0.23
 Nodes (12): assertRegisterSessionIdentity(), assertRegisterSessionMatchesTransaction(), assertValidRegisterSessionTransition(), buildClosedRegisterSessionPatch(), buildRegisterSession(), buildRegisterSessionCloseoutPatch(), buildRegisterSessionDepositPatch(), buildRegisterSessionTransactionPatch() (+4 more)
 
-### Community 25 - "Community 25"
+### Community 26 - "Community 26"
 Cohesion: 0.13
 Nodes (1): DataTableColumnHeader()
 
-### Community 26 - "Community 26"
+### Community 27 - "Community 27"
 Cohesion: 0.28
 Nodes (12): addGroupedError(), collectLiveSurfaceEntries(), fileExists(), formatGroupedErrors(), hasAnyHarnessDocs(), inferGroupFromError(), loadAuditTarget(), matchesPathPrefix() (+4 more)
 
-### Community 27 - "Community 27"
+### Community 28 - "Community 28"
 Cohesion: 0.15
 Nodes (2): buildCashControlsDashboardSnapshot(), sumDepositsBySession()
-
-### Community 28 - "Community 28"
-Cohesion: 0.33
-Nodes (12): assertStaffProfileReadyForCredential(), authenticateStaffCredentialForTerminalWithCtx(), authenticateStaffCredentialWithCtx(), createStaffCredentialWithCtx(), getActiveRolesForStaffProfile(), getCredentialById(), getCredentialByUsername(), getStaffCredentialByStaffProfileIdWithCtx() (+4 more)
 
 ### Community 29 - "Community 29"
 Cohesion: 0.35
@@ -9086,7 +9086,7 @@ _Questions this graph is uniquely positioned to answer:_
   _Cohesion score 0.11 - nodes in this community are weakly interconnected._
 - **Should `Community 14` be split into smaller, more focused modules?**
   _Cohesion score 0.12 - nodes in this community are weakly interconnected._
-- **Should `Community 17` be split into smaller, more focused modules?**
-  _Cohesion score 0.12 - nodes in this community are weakly interconnected._
 - **Should `Community 18` be split into smaller, more focused modules?**
+  _Cohesion score 0.12 - nodes in this community are weakly interconnected._
+- **Should `Community 19` be split into smaller, more focused modules?**
   _Cohesion score 0.12 - nodes in this community are weakly interconnected._
