@@ -1,5 +1,4 @@
 import { useQuery } from "convex/react";
-import { toast } from "sonner";
 
 import { api } from "~/convex/_generated/api";
 import { Button } from "@/components/ui/button";
@@ -66,7 +65,6 @@ export function ExpenseCompletion({
     if (activeSession) {
       const result = await voidSession();
       if (!result.success) {
-        toast.error(result.error);
         return;
       }
     }
