@@ -491,6 +491,7 @@ export const HARNESS_APP_REGISTRY = [
           "src/main.tsx",
           "src/routeTree.gen.ts",
           "src/routeTree.browser-boundary.test.ts",
+          "vitest.config.ts",
           "vite.config.ts",
         ],
         commands: [

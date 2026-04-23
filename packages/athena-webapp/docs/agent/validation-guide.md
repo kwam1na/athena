@@ -133,7 +133,7 @@ Any change that can affect Convex HTTP wiring, serviceOps schemas and workflows,
 
 ## Route runtime or build-pipeline edits
 
-Touched surfaces: `src/main.tsx`, `src/routeTree.gen.ts`, `src/routeTree.browser-boundary.test.ts`, `vite.config.ts`
+Touched surfaces: `src/main.tsx`, `src/routeTree.gen.ts`, `src/routeTree.browser-boundary.test.ts`, `vitest.config.ts`, `vite.config.ts`
 
 Run:
 

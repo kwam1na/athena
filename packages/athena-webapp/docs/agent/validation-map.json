@@ -278,6 +278,7 @@
         "packages/athena-webapp/src/main.tsx",
         "packages/athena-webapp/src/routeTree.gen.ts",
         "packages/athena-webapp/src/routeTree.browser-boundary.test.ts",
+        "packages/athena-webapp/vitest.config.ts",
         "packages/athena-webapp/vite.config.ts"
       ],
       "commands": [
