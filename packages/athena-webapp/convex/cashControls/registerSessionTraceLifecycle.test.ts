@@ -254,12 +254,33 @@ describe("register session trace lifecycle handlers", () => {
         }),
       }),
     );
+    expect(mocks.recordPaymentAllocationWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        amount: 250_000,
+      }),
+    );
+    expect(mocks.recordRegisterSessionDepositWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        amount: 250_000,
+      }),
+    );
+    expect(mocks.recordOperationalEventWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        message: "Recorded cash deposit of 2500.",
+        metadata: expect.objectContaining({
+          amount: 250_000,
+        }),
+      }),
+    );
     expect(mocks.traceRecord).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         stage: "deposit_recorded",
         occurredAt: 999,
-        amount: 2_500,
+        amount: 250_000,
         session: expect.objectContaining({
           _id: "session-1",
         }),

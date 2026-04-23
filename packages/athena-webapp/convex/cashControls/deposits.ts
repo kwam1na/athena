@@ -6,6 +6,7 @@ import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { recordPaymentAllocationWithCtx } from "../operations/paymentAllocations";
 import { recordRegisterSessionDepositWithCtx } from "../operations/registerSessions";
 import { recordRegisterSessionTraceBestEffort } from "../operations/registerSessionTracing";
+import { toPesewas } from "../lib/currency";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 
 const CASH_DEPOSIT_ALLOCATION_TYPE = "cash_deposit";
@@ -504,12 +505,14 @@ export const recordRegisterSessionDeposit = mutation({
     ctx,
     args
   ): Promise<CommandResult<RecordRegisterSessionDepositResult>> => {
-    if (args.amount <= 0) {
+    if (!Number.isFinite(args.amount) || args.amount <= 0) {
       return userError({
         code: "validation_failed",
         message: "Deposit amount must be positive.",
       });
     }
+
+    const storedAmount = toPesewas(args.amount);
 
     const submissionKey = trimOptional(args.submissionKey);
 
@@ -559,7 +562,7 @@ export const recordRegisterSessionDeposit = mutation({
       actorStaffProfileId: args.actorStaffProfileId,
       actorUserId: args.actorUserId,
       allocationType: CASH_DEPOSIT_ALLOCATION_TYPE,
-      amount: args.amount,
+      amount: storedAmount,
       collectedInStore: true,
       direction: "out",
       externalReference: trimOptional(args.reference),
@@ -572,7 +575,7 @@ export const recordRegisterSessionDeposit = mutation({
       targetType: CASH_DEPOSIT_SUBJECT_TYPE,
     });
     const updatedRegisterSession = await recordRegisterSessionDepositWithCtx(ctx, {
-      amount: args.amount,
+      amount: storedAmount,
       registerSessionId: args.registerSessionId,
     });
 
@@ -589,7 +592,7 @@ export const recordRegisterSessionDeposit = mutation({
       eventType: "register_session_cash_deposit_recorded",
       message: `Recorded cash deposit of ${args.amount}.`,
       metadata: {
-        amount: args.amount,
+        amount: storedAmount,
         reference: trimOptional(args.reference),
         submissionKey,
       },
@@ -608,7 +611,7 @@ export const recordRegisterSessionDeposit = mutation({
       stage: "deposit_recorded",
       session: updatedRegisterSession,
       occurredAt,
-      amount: args.amount,
+      amount: storedAmount,
       actorStaffProfileId: args.actorStaffProfileId,
       actorUserId: args.actorUserId,
     });
