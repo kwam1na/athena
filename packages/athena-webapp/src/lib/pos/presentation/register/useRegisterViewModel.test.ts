@@ -3,9 +3,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { act, renderHook } from "@testing-library/react";
+import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Id } from "~/convex/_generated/dataModel";
+import { ok, userError } from "~/shared/commandResult";
 
 const mockUseQuery = vi.fn();
 const mockStartSession = vi.fn();
@@ -251,17 +253,19 @@ describe("useRegisterViewModel", () => {
       },
     });
     mockOpenDrawer.mockReset();
-    mockOpenDrawer.mockResolvedValue({
-      _id: "drawer-2" as Id<"registerSession">,
-      status: "open",
-      terminalId: "terminal-1" as Id<"posTerminal">,
-      registerNumber: "1",
-      openingFloat: 5_000,
-      expectedCash: 5_000,
-      openedAt: Date.now(),
-      notes: "Opening float ready",
-      workflowTraceId: "register_session:drawer-2",
-    });
+    mockOpenDrawer.mockResolvedValue(
+      ok({
+        _id: "drawer-2" as Id<"registerSession">,
+        status: "open",
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        registerNumber: "1",
+        openingFloat: 5_000,
+        expectedCash: 5_000,
+        openedAt: Date.now(),
+        notes: "Opening float ready",
+        workflowTraceId: "register_session:drawer-2",
+      }),
+    );
     mockResumeSession.mockReset();
     mockResumeSession.mockResolvedValue({
       success: true,
@@ -453,8 +457,11 @@ describe("useRegisterViewModel", () => {
       resumableSession: null,
     };
     mockActiveSession = null;
-    mockOpenDrawer.mockRejectedValueOnce(
-      new Error("A register session is already open for this terminal."),
+    mockOpenDrawer.mockResolvedValueOnce(
+      userError({
+        code: "conflict",
+        message: "A register session is already open for this terminal.",
+      }),
     );
 
     const { useRegisterViewModel } = await import("./useRegisterViewModel");
@@ -476,6 +483,7 @@ describe("useRegisterViewModel", () => {
     expect(result.current.drawerGate?.errorMessage).toBe(
       "A register session is already open for this terminal.",
     );
+    expect(toast.error).not.toHaveBeenCalled();
     expect(mockStartSession).not.toHaveBeenCalled();
   });
 

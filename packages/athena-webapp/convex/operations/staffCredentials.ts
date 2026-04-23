@@ -5,11 +5,12 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "../_generated/server";
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import {
   operationalRoleValidator,
   type OperationalRole,
 } from "./staffRoles";
+import { ok, userError, type CommandResult } from "../../shared/commandResult";
 
 export const STAFF_CREDENTIAL_STATUS = v.union(
   v.literal("pending"),
@@ -27,6 +28,16 @@ type StaffCredentialReaderCtx =
   | Pick<QueryCtx, "db">
   | Pick<MutationCtx, "db">;
 
+type StaffCredentialAuthenticationData = {
+  activeRoles: OperationalRole[];
+  credentialId: Id<"staffCredential">;
+  staffProfile: Doc<"staffProfile">;
+  staffProfileId: Id<"staffProfile">;
+};
+
+type StaffCredentialAuthenticationResult =
+  CommandResult<StaffCredentialAuthenticationData>;
+
 function normalizeUsername(username: string) {
   return username.trim().toLowerCase();
 }
@@ -39,6 +50,31 @@ function requireNonEmptyUsername(username: string) {
   }
 
   return normalizedUsername;
+}
+
+function invalidStaffCredentialsResult(): StaffCredentialAuthenticationResult {
+  return userError({
+    code: "authentication_failed",
+    message: "Invalid staff credentials.",
+  });
+}
+
+function staffAuthorizationFailedResult(
+  message: string
+): StaffCredentialAuthenticationResult {
+  return userError({
+    code: "authorization_failed",
+    message,
+  });
+}
+
+function staffPreconditionFailedResult(
+  message: string
+): StaffCredentialAuthenticationResult {
+  return userError({
+    code: "precondition_failed",
+    message,
+  });
 }
 
 export async function getStaffCredentialByStaffProfileIdWithCtx(
@@ -372,8 +408,13 @@ export async function authenticateStaffCredentialWithCtx(
     storeId: Id<"store">;
     username: string;
   }
-) {
-  const normalizedUsername = requireNonEmptyUsername(args.username);
+): Promise<StaffCredentialAuthenticationResult> {
+  const normalizedUsername = normalizeUsername(args.username);
+
+  if (!normalizedUsername) {
+    return invalidStaffCredentialsResult();
+  }
+
   const matchingCredentials = await ctx.db
     .query("staffCredential")
     .withIndex("by_storeId_username", (q) =>
@@ -386,7 +427,7 @@ export async function authenticateStaffCredentialWithCtx(
   );
 
   if (!activeCredential) {
-    throw new Error("Invalid staff credentials.");
+    return invalidStaffCredentialsResult();
   }
 
   if (matchingCredentials.length > 1) {
@@ -394,7 +435,7 @@ export async function authenticateStaffCredentialWithCtx(
   }
 
   if (!activeCredential.pinHash || activeCredential.pinHash !== args.pinHash) {
-    throw new Error("Invalid staff credentials.");
+    return invalidStaffCredentialsResult();
   }
 
   const staffProfile = await ctx.db.get(
@@ -411,7 +452,7 @@ export async function authenticateStaffCredentialWithCtx(
   }
 
   if (staffProfile.status !== "active") {
-    throw new Error("Staff profile is not active.");
+    return staffAuthorizationFailedResult("Staff profile is not active.");
   }
 
   const activeRoles = await getActiveRolesForStaffProfile(ctx, {
@@ -421,7 +462,9 @@ export async function authenticateStaffCredentialWithCtx(
   });
 
   if (activeRoles.length === 0) {
-    throw new Error("Staff profile has no active role assignments.");
+    return staffAuthorizationFailedResult(
+      "Staff profile has no active role assignments."
+    );
   }
 
   const authorizedRoles =
@@ -430,19 +473,21 @@ export async function authenticateStaffCredentialWithCtx(
       : activeRoles;
 
   if (authorizedRoles.length === 0) {
-    throw new Error("Staff profile is not authorized for this subsystem.");
+    return staffAuthorizationFailedResult(
+      "Staff profile is not authorized for this subsystem."
+    );
   }
 
   await ctx.db.patch("staffCredential", activeCredential._id, {
     lastAuthenticatedAt: Date.now(),
   });
 
-  return {
+  return ok({
     activeRoles: authorizedRoles.map((role) => role.role),
     credentialId: activeCredential._id,
     staffProfile,
     staffProfileId: activeCredential.staffProfileId,
-  };
+  });
 }
 
 export async function authenticateStaffCredentialForTerminalWithCtx(
@@ -454,14 +499,19 @@ export async function authenticateStaffCredentialForTerminalWithCtx(
     terminalId: Id<"posTerminal">;
     username: string;
   }
-) {
+): Promise<StaffCredentialAuthenticationResult> {
   const authentication = await authenticateStaffCredentialWithCtx(ctx, args);
+
+  if (authentication.kind === "user_error") {
+    return authentication;
+  }
+
   // A staff member can only have a small number of live sessions, so reading them in full is safe.
   // eslint-disable-next-line @convex-dev/no-collect-in-query
   const activeSessions = await ctx.db
     .query("posSession")
     .withIndex("by_staffProfileId", (q) =>
-      q.eq("staffProfileId", authentication.staffProfileId)
+      q.eq("staffProfileId", authentication.data.staffProfileId)
     )
     .collect();
   const now = Date.now();
@@ -473,7 +523,9 @@ export async function authenticateStaffCredentialForTerminalWithCtx(
   );
 
   if (activeSessionsOnOtherTerminals.length > 0) {
-    throw new Error("This staff member has an active session on another terminal.");
+    return staffPreconditionFailedResult(
+      "This staff member has an active session on another terminal."
+    );
   }
 
   return authentication;

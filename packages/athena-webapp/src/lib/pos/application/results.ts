@@ -1,4 +1,8 @@
+import type { CommandResult, UserErrorCode } from "~/shared/commandResult";
+import { GENERIC_UNEXPECTED_ERROR_MESSAGE } from "~/shared/commandResult";
+
 export type PosUseCaseErrorCode =
+  | UserErrorCode
   | "cashierMismatch"
   | "inventoryUnavailable"
   | "notFound"
@@ -73,13 +77,30 @@ export function mapCommandOutcome<TData>(
   };
 }
 
+export function mapCommandResult<TData>(
+  result: CommandResult<TData>,
+): PosUseCaseResult<TData> {
+  if (result.kind === "ok") {
+    return {
+      ok: true,
+      data: result.data,
+    };
+  }
+
+  return {
+    ok: false,
+    code: result.error.code,
+    message: result.error.message,
+  };
+}
+
 export function mapThrownError<TData = never>(
-  error: unknown,
+  _error: unknown,
 ): PosUseCaseResult<TData> {
   return {
     ok: false,
     code: "unknown",
-    message: error instanceof Error ? error.message : "Unexpected POS error",
+    message: GENERIC_UNEXPECTED_ERROR_MESSAGE,
   };
 }
 

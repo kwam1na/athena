@@ -8,6 +8,7 @@ import type {
   PosHoldSessionInput,
   PosHoldSessionResultDto,
   PosOpenDrawerInput,
+  PosOpenDrawerResultDto,
   PosStartSessionInput,
   PosStartSessionResultDto,
 } from "@/lib/pos/application/dto";
@@ -37,7 +38,7 @@ export function useConvexCommandGateway(): PosCommandGateway {
         holdReason: input.reason,
       });
     },
-    openDrawer(input: PosOpenDrawerInput) {
+    openDrawer(input: PosOpenDrawerInput): Promise<PosOpenDrawerResultDto> {
       return openDrawerMutation(input);
     },
     completeTransaction(

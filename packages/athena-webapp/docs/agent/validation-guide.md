@@ -51,15 +51,15 @@ Use this when register-session, deposit, closeout, dashboard, operations-queue a
 
 ## Staff foundation and subsystem credential edits
 
-Touched surfaces: `convex/operations/staffCredentials.ts`, `convex/operations/staffProfiles.ts`, `convex/schema.ts`, `convex/inventory/posSessions.ts`, `convex/pos/application/queries/getRegisterState.ts`, `convex/pos/infrastructure/repositories/cashierRepository.ts`, `src/components/staff/StaffManagement.tsx`, `src/components/expense/ExpenseCompletion.tsx`, `src/components/expense/ExpenseView.tsx`, `src/components/pos/CashierAuthDialog.tsx`, `src/hooks/useExpenseSessions.ts`, `src/hooks/useSessionManagementExpense.ts`, `src/lib/pos/presentation/register/useRegisterViewModel.ts`, `src/stores/expenseStore.ts`, `types.ts`
+Touched surfaces: `convex/operations/staffCredentials.ts`, `convex/operations/staffProfiles.ts`, `convex/schema.ts`, `convex/inventory/posSessions.ts`, `convex/pos/application/queries/getRegisterState.ts`, `convex/pos/infrastructure/repositories/cashierRepository.ts`, `src/components/staff/StaffManagement.tsx`, `src/components/expense/ExpenseCompletion.tsx`, `src/components/expense/ExpenseView.tsx`, `src/components/pos/CashierAuthDialog.tsx`, `src/lib/pos/application/results.ts`, `src/hooks/useExpenseSessions.ts`, `src/hooks/useSessionManagementExpense.ts`, `src/lib/pos/presentation/register/useRegisterViewModel.ts`, `src/stores/expenseStore.ts`, `types.ts`
 
 Run:
 
-- `bun run --filter '@athena/webapp' test -- convex/operations/staffCredentials.test.ts convex/inventory/sessionQueryIndexes.test.ts convex/pos/application/sessionCommands.test.ts convex/pos/application/completeTransaction.test.ts convex/pos/application/getTransactions.test.ts convex/pos/infrastructure/repositories/sessionRepository.test.ts convex/pos/application/getRegisterState.test.ts convex/inventory/posSessions.trace.test.ts convex/pos/application/posSessionTracing.test.ts src/lib/pos/infrastructure/convex/sessionGateway.test.ts src/lib/pos/infrastructure/convex/registerGateway.test.ts src/components/pos/register/POSRegisterView.test.tsx src/lib/pos/presentation/register/useRegisterViewModel.test.ts src/components/pos/transactions/TransactionView.test.tsx`
+- `bun run --filter '@athena/webapp' test -- convex/operations/staffCredentials.test.ts convex/inventory/sessionQueryIndexes.test.ts convex/pos/application/sessionCommands.test.ts convex/pos/application/completeTransaction.test.ts convex/pos/application/getTransactions.test.ts convex/pos/infrastructure/repositories/sessionRepository.test.ts convex/pos/application/getRegisterState.test.ts convex/inventory/posSessions.trace.test.ts convex/pos/application/posSessionTracing.test.ts src/lib/pos/infrastructure/convex/sessionGateway.test.ts src/lib/pos/infrastructure/convex/registerGateway.test.ts src/components/pos/CashierAuthDialog.test.tsx src/components/pos/register/POSRegisterView.test.tsx src/lib/pos/presentation/register/useRegisterViewModel.test.ts src/components/pos/transactions/TransactionView.test.tsx`
 - `bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json`
 - `bun run --filter '@athena/webapp' build`
 
-Use this when store staff identity, subsystem credential auth, or POS/expense actor attribution changes. It validates the staff credential rules plus the register, transaction, and expense flows that now share `staffProfileId` instead of the deleted cashier model.
+Use this when store staff identity, subsystem credential auth, or POS/expense actor attribution changes. It validates the staff credential rules plus the register, transaction, expense, and cashier-auth failure flows that now share `staffProfileId` instead of the deleted cashier model.
 
 ## Workflow trace foundation, POS drawer gate, and trace-link edits
 
@@ -92,6 +92,18 @@ Run:
 
 Reach for the package suite first, then typecheck when helpers or shared state can affect many call sites.
 
+## Client/server error foundation edits
+
+Touched surfaces: `shared/commandResult.ts`, `src/lib/errors`, `src/components/auth/DefaultCatchBoundary.tsx`, `src/components/auth/DefaultCatchBoundary.test.tsx`, `src/routeTree.browser-boundary.test.ts`
+
+Run:
+
+- `bun run --filter '@athena/webapp' test -- shared/commandResult.test.ts src/lib/errors/runCommand.test.ts src/lib/errors/presentCommandToast.test.ts src/components/auth/DefaultCatchBoundary.test.tsx src/routeTree.browser-boundary.test.ts`
+- `bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json`
+- `bun run --filter '@athena/webapp' build`
+
+Use this when the shared command-result contract, client command normalizers, generic catch boundary, or browser import boundary changes. Expected failures must stay in browser-safe `user_error` results, thrown faults must collapse to generic fallback copy, and shared modules must not import raw Convex server files into the browser tree.
+
 ## Frontend test harness edits
 
 Touched surfaces: `src/test`, `src/tests`, `vitest.setup.ts`
@@ -121,7 +133,7 @@ Any change that can affect Convex HTTP wiring, serviceOps schemas and workflows,
 
 ## Route runtime or build-pipeline edits
 
-Touched surfaces: `src/main.tsx`, `src/routeTree.gen.ts`, `src/routeTree.browser-boundary.test.ts`, `vite.config.ts`
+Touched surfaces: `src/main.tsx`, `src/routeTree.gen.ts`, `src/routeTree.browser-boundary.test.ts`, `vitest.config.ts`, `vite.config.ts`
 
 Run:
 

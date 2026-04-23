@@ -8,6 +8,7 @@ import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
 import { useAuth } from "@/hooks/useAuth";
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
+import { type NormalizedCommandResult, runCommand } from "@/lib/errors/runCommand";
 import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
 import {
@@ -40,7 +41,9 @@ type ServiceIntakeViewContentProps = {
   hasFullAdminAccess: boolean;
   isLoadingPermissions: boolean;
   isSubmitting: boolean;
-  onCreateIntake: (args: CreateServiceIntakeArgs) => Promise<void>;
+  onCreateIntake: (
+    args: CreateServiceIntakeArgs
+  ) => Promise<NormalizedCommandResult<CreateServiceIntakeResult>>;
   searchQuery: string;
   setSearchQuery: (value: string) => void;
   staffOptions: ServiceIntakeStaffOption[] | undefined;
@@ -64,6 +67,13 @@ type CreateServiceIntakeArgs = {
   priority: "normal" | "high" | "urgent";
   serviceTitle: string;
   storeId: Id<"store">;
+};
+
+type CreateServiceIntakeResult = {
+  approvalRequestId?: Id<"approvalRequest">;
+  customerProfileId: Id<"customerProfile">;
+  serviceCaseId: Id<"serviceCase">;
+  workItemId: Id<"operationalWorkItem">;
 };
 
 export function ServiceIntakeViewContent({
@@ -150,37 +160,38 @@ export function ServiceIntakeViewContent({
       return;
     }
 
-    try {
-      await onCreateIntake({
-        assignedStaffProfileId:
-          form.assignedStaffProfileId as Id<"staffProfile">,
-        createdByUserId: userId,
-        customerEmail: form.customerEmail || undefined,
-        customerFullName: form.customerFullName || undefined,
-        customerNotes: form.customerNotes || undefined,
-        customerPhoneNumber: form.customerPhoneNumber || undefined,
-        customerProfileId:
-          (form.selectedCustomerId as Id<"customerProfile"> | undefined) ??
-          undefined,
-        depositAmount: parsedDepositAmount,
-        depositMethod:
-          (form.depositMethod as "cash" | "card" | "mobile_money") || undefined,
-        intakeChannel: form.intakeChannel,
-        itemDescription: form.itemDescription || undefined,
-        notes: form.notes || undefined,
-        priority: form.priority,
-        serviceTitle: form.serviceTitle.trim(),
-        storeId,
-      });
-      setForm(initialFormState);
-      setSearchQuery("");
-      setValidationErrors([]);
-      toast.success("Service intake created");
-    } catch (error) {
-      toast.error("Failed to create service intake", {
-        description: (error as Error).message,
-      });
+    setValidationErrors([]);
+
+    const result = await onCreateIntake({
+      assignedStaffProfileId: form.assignedStaffProfileId as Id<"staffProfile">,
+      createdByUserId: userId,
+      customerEmail: form.customerEmail || undefined,
+      customerFullName: form.customerFullName || undefined,
+      customerNotes: form.customerNotes || undefined,
+      customerPhoneNumber: form.customerPhoneNumber || undefined,
+      customerProfileId:
+        (form.selectedCustomerId as Id<"customerProfile"> | undefined) ??
+        undefined,
+      depositAmount: parsedDepositAmount,
+      depositMethod:
+        (form.depositMethod as "cash" | "card" | "mobile_money") || undefined,
+      intakeChannel: form.intakeChannel,
+      itemDescription: form.itemDescription || undefined,
+      notes: form.notes || undefined,
+      priority: form.priority,
+      serviceTitle: form.serviceTitle.trim(),
+      storeId,
+    });
+
+    if (result.kind !== "ok") {
+      setValidationErrors([result.error.message]);
+      return;
     }
+
+    setForm(initialFormState);
+    setSearchQuery("");
+    setValidationErrors([]);
+    toast.success("Service intake created");
   };
 
   return (
@@ -243,7 +254,7 @@ export function ServiceIntakeView() {
   const handleCreateIntake = async (args: CreateServiceIntakeArgs) => {
     setIsSubmitting(true);
     try {
-      await createServiceIntake(args);
+      return await runCommand(() => createServiceIntake(args));
     } finally {
       setIsSubmitting(false);
     }

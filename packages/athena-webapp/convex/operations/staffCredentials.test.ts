@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import {
+  authenticateStaffCredential,
+  authenticateStaffCredentialForTerminal,
   authenticateStaffCredentialWithCtx,
   authenticateStaffCredentialForTerminalWithCtx,
   createStaffCredentialWithCtx,
@@ -92,6 +94,10 @@ function createStaffCredentialsMutationCtx(seed?: {
   } as unknown as MutationCtx;
 
   return { ctx, tables };
+}
+
+function getHandler(definition: unknown) {
+  return (definition as { _handler: Function })._handler;
 }
 
 describe("staff credential operations", () => {
@@ -227,7 +233,28 @@ describe("staff credential operations", () => {
         username: "frontdesk",
         pinHash: "hash-1",
       })
-    ).rejects.toThrow("Invalid staff credentials.");
+    ).resolves.toEqual({
+      kind: "user_error",
+      error: {
+        code: "authentication_failed",
+        message: "Invalid staff credentials.",
+      },
+    });
+
+    await expect(
+      getHandler(authenticateStaffCredential)(ctx, {
+        allowedRoles: ["cashier"],
+        storeId: "store_1" as Id<"store">,
+        username: "frontdesk",
+        pinHash: "hash-1",
+      })
+    ).resolves.toEqual({
+      kind: "user_error",
+      error: {
+        code: "authentication_failed",
+        message: "Invalid staff credentials.",
+      },
+    });
 
     const activated = await updateStaffCredentialWithCtx(ctx, {
       organizationId: "org_1" as Id<"organization">,
@@ -248,9 +275,12 @@ describe("staff credential operations", () => {
         username: "frontdesk",
         pinHash: "hash-1",
       })
-    ).resolves.toMatchObject({
-      activeRoles: ["cashier"],
-      staffProfileId: "staff_profile_1",
+    ).resolves.toEqual({
+      kind: "ok",
+      data: expect.objectContaining({
+        activeRoles: ["cashier"],
+        staffProfileId: "staff_profile_1",
+      }),
     });
   });
 
@@ -526,21 +556,27 @@ describe("staff credential operations", () => {
       pinHash: "hash-1",
     });
 
-    expect(result).toMatchObject({
-      credentialId: "credential-1",
-      staffProfileId: "staff_profile_1",
-      staffProfile: {
-        _id: "staff_profile_1",
-        status: "active",
+    expect(result).toEqual({
+      kind: "ok",
+      data: {
+        credentialId: "credential-1",
+        staffProfileId: "staff_profile_1",
+        staffProfile: {
+          _id: "staff_profile_1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Ari Mensah",
+        },
+        activeRoles: ["cashier"],
       },
-      activeRoles: ["cashier"],
     });
     expect(tables.staffCredential.get("credential-1")?.lastAuthenticatedAt).toEqual(
       expect.any(Number)
     );
   });
 
-  it("rejects terminal sign-in when the staff member is active on another terminal", async () => {
+  it("returns a precondition_failed result when the staff member is active on another terminal", async () => {
     const now = Date.now();
     const { ctx } = createStaffCredentialsMutationCtx({
       credentials: [
@@ -594,12 +630,48 @@ describe("staff credential operations", () => {
         terminalId: "terminal-1" as Id<"posTerminal">,
         username: "frontdesk",
       })
-    ).rejects.toThrow(
-      "This staff member has an active session on another terminal."
-    );
+    ).resolves.toEqual({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: "This staff member has an active session on another terminal.",
+      },
+    });
+
+    await expect(
+      getHandler(authenticateStaffCredentialForTerminal)(ctx, {
+        allowedRoles: ["cashier"],
+        pinHash: "hash-1",
+        storeId: "store_1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        username: "frontdesk",
+      })
+    ).resolves.toEqual({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: "This staff member has an active session on another terminal.",
+      },
+    });
+
+    await expect(
+      authenticateStaffCredentialForTerminalWithCtx(ctx, {
+        allowedRoles: ["cashier"],
+        pinHash: "hash-1",
+        storeId: "store_1" as Id<"store">,
+        terminalId: "terminal-2" as Id<"posTerminal">,
+        username: "frontdesk",
+      })
+    ).resolves.toEqual({
+      kind: "ok",
+      data: expect.objectContaining({
+        staffProfileId: "staff_profile_1",
+        activeRoles: ["cashier"],
+      }),
+    });
   });
 
-  it("rejects authentication when the staff profile or roles are inactive", async () => {
+  it("returns an authorization_failed result when the staff profile is inactive", async () => {
     const { ctx } = createStaffCredentialsMutationCtx({
       credentials: [
         {
@@ -642,10 +714,16 @@ describe("staff credential operations", () => {
         username: "frontdesk",
         pinHash: "hash-1",
       })
-    ).rejects.toThrow("Staff profile is not active.");
+    ).resolves.toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "Staff profile is not active.",
+      },
+    });
   });
 
-  it("rejects authentication when none of the active roles are allowed", async () => {
+  it("returns an authorization_failed result when none of the active roles are allowed", async () => {
     const { ctx } = createStaffCredentialsMutationCtx({
       credentials: [
         {
@@ -688,6 +766,84 @@ describe("staff credential operations", () => {
         username: "frontdesk",
         pinHash: "hash-1",
       })
-    ).rejects.toThrow("Staff profile is not authorized for this subsystem.");
+    ).resolves.toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "Staff profile is not authorized for this subsystem.",
+      },
+    });
+  });
+
+  it("still throws when multiple active credentials match the same username", async () => {
+    const { ctx } = createStaffCredentialsMutationCtx({
+      credentials: [
+        {
+          _id: "credential-1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          username: "frontdesk",
+          pinHash: "hash-1",
+          status: "active",
+        },
+        {
+          _id: "credential-2",
+          staffProfileId: "staff_profile_2",
+          organizationId: "org_1",
+          storeId: "store_1",
+          username: "frontdesk",
+          pinHash: "hash-1",
+          status: "active",
+        },
+      ],
+      profiles: [
+        {
+          _id: "staff_profile_1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Ari Mensah",
+        },
+        {
+          _id: "staff_profile_2",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Mansa Osei",
+        },
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "cashier",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+        {
+          _id: "role_2",
+          staffProfileId: "staff_profile_2",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "cashier",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 2,
+        },
+      ],
+    });
+
+    await expect(
+      authenticateStaffCredentialWithCtx(ctx, {
+        allowedRoles: ["cashier"],
+        storeId: "store_1" as Id<"store">,
+        username: "frontdesk",
+        pinHash: "hash-1",
+      })
+    ).rejects.toThrow("Multiple staff credentials match this username.");
   });
 });

@@ -681,6 +681,21 @@ async function createFixtureRepo() {
     "export {};\n",
     rootDir
   );
+  await write(
+    "packages/athena-webapp/src/components/auth/DefaultCatchBoundary.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/components/auth/DefaultCatchBoundary.test.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/routeTree.browser-boundary.test.ts",
+    "export {};\n",
+    rootDir
+  );
   await write("packages/athena-webapp/src/hooks/useAuth.ts", "export {};\n", rootDir);
   await write(
     "packages/athena-webapp/src/hooks/useExpenseSessions.ts",
@@ -695,11 +710,31 @@ async function createFixtureRepo() {
   await write("packages/athena-webapp/src/contexts/AuthContext.tsx", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/lib/session.ts", "export {};\n", rootDir);
   await write(
+    "packages/athena-webapp/src/lib/errors/runCommand.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/lib/errors/presentCommandToast.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/lib/pos/application/results.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
     "packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts",
     "export {};\n",
     rootDir
   );
   await write("packages/athena-webapp/src/stores/expenseStore.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/shared/commandResult.ts",
+    "export {};\n",
+    rootDir
+  );
   await write(
     "packages/athena-webapp/shared/serviceIntake.ts",
     "export {};\n",
@@ -718,6 +753,7 @@ async function createFixtureRepo() {
   await write("packages/athena-webapp/src/settings/store.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/stores/appStore.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/utils/format.ts", "export {};\n", rootDir);
+  await write("packages/athena-webapp/vitest.config.ts", "export default {};\n", rootDir);
   await write("packages/athena-webapp/src/tests/app.test.tsx", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/test/setup.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/convex/http.ts", "export {};\n", rootDir);

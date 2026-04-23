@@ -711,7 +711,6 @@ export function useRegisterViewModel(): RegisterViewModel {
 
     if (!result.ok) {
       setDrawerErrorMessage(result.message);
-      toast.error(result.message);
       return;
     }
 
