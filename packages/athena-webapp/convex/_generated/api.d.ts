@@ -94,6 +94,7 @@ import type * as inventory_stores from "../inventory/stores.js";
 import type * as inventory_subcategories from "../inventory/subcategories.js";
 import type * as inventory_utils from "../inventory/utils.js";
 import type * as lib_athenaUserAuth from "../lib/athenaUserAuth.js";
+import type * as lib_commandResultValidators from "../lib/commandResultValidators.js";
 import type * as lib_currency from "../lib/currency.js";
 import type * as llm_callLlmProvider from "../llm/callLlmProvider.js";
 import type * as llm_providers_anthropic from "../llm/providers/anthropic.js";
@@ -375,6 +376,7 @@ declare const fullApi: ApiFromModules<{
   "inventory/subcategories": typeof inventory_subcategories;
   "inventory/utils": typeof inventory_utils;
   "lib/athenaUserAuth": typeof lib_athenaUserAuth;
+  "lib/commandResultValidators": typeof lib_commandResultValidators;
   "lib/currency": typeof lib_currency;
   "llm/callLlmProvider": typeof llm_callLlmProvider;
   "llm/providers/anthropic": typeof llm_providers_anthropic;
