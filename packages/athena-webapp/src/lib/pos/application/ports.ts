@@ -9,6 +9,7 @@ import type {
   PosHoldSessionInput,
   PosHoldSessionResultDto,
   PosOpenDrawerInput,
+  PosOpenDrawerResultDto,
   PosProductIdLookupInput,
   PosProductSearchInput,
   PosRegisterStateDto,
@@ -44,7 +45,7 @@ export interface PosCommandGateway {
   startSession(input: PosStartSessionInput): Promise<PosStartSessionResultDto>;
   addItem(input: PosAddItemInput): Promise<PosAddItemResultDto>;
   holdSession(input: PosHoldSessionInput): Promise<PosHoldSessionResultDto>;
-  openDrawer(input: PosOpenDrawerInput): Promise<PosCashDrawerDto | null>;
+  openDrawer(input: PosOpenDrawerInput): Promise<PosOpenDrawerResultDto>;
   completeTransaction(
     input: PosCompleteTransactionInput,
   ): Promise<PosCompleteTransactionResultDto>;

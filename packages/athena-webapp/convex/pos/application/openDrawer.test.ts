@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Id } from "../../_generated/dataModel";
 import type { MutationCtx } from "../../_generated/server";
+import { ok, userError } from "../../../shared/commandResult";
 import { openDrawer } from "./commands/register";
 
 const authMocks = vi.hoisted(() => ({
@@ -65,19 +66,21 @@ describe("openDrawer", () => {
         notes: "Opening float ready",
       }),
     );
-    expect(result).toEqual({
-      _id: "drawer-1" as Id<"registerSession">,
-      expectedCash: 7500,
-      openedAt: 1710000000000,
-      openingFloat: 5000,
-      registerNumber: "A1",
-      status: "open",
-      terminalId: "terminal-1" as Id<"posTerminal">,
-      workflowTraceId: "register_session:a1",
-    });
+    expect(result).toEqual(
+      ok({
+        _id: "drawer-1" as Id<"registerSession">,
+        expectedCash: 7500,
+        openedAt: 1710000000000,
+        openingFloat: 5000,
+        registerNumber: "A1",
+        status: "open",
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        workflowTraceId: "register_session:a1",
+      }),
+    );
   });
 
-  it("fails clearly when the store does not exist", async () => {
+  it("returns a not_found user_error when the store does not exist", async () => {
     authMocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
       _id: "user-1" as Id<"athenaUser">,
     });
@@ -92,12 +95,17 @@ describe("openDrawer", () => {
         storeId: "store-1" as Id<"store">,
         openingFloat: 5000,
       }),
-    ).rejects.toThrow("Store not found.");
+    ).resolves.toEqual(
+      userError({
+        code: "not_found",
+        message: "Store not found.",
+      }),
+    );
 
     expect(ctx.runMutation).not.toHaveBeenCalled();
   });
 
-  it("surfaces duplicate-drawer rejections from the cash-controls opener", async () => {
+  it("returns a conflict user_error for duplicate-drawer rejections", async () => {
     authMocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
       _id: "user-1" as Id<"athenaUser">,
     });
@@ -120,6 +128,11 @@ describe("openDrawer", () => {
         terminalId: "terminal-1" as Id<"posTerminal">,
         openingFloat: 5000,
       }),
-    ).rejects.toThrow("A register session is already open for this terminal.");
+    ).resolves.toEqual(
+      userError({
+        code: "conflict",
+        message: "A register session is already open for this terminal.",
+      }),
+    );
   });
 });

@@ -21,6 +21,36 @@ const registerSessionSummaryValidator = v.object({
   workflowTraceId: v.optional(v.string()),
 });
 
+const userErrorValidator = v.object({
+  code: v.union(
+    v.literal("validation_failed"),
+    v.literal("authentication_failed"),
+    v.literal("authorization_failed"),
+    v.literal("not_found"),
+    v.literal("conflict"),
+    v.literal("precondition_failed"),
+    v.literal("rate_limited"),
+    v.literal("unavailable"),
+  ),
+  title: v.optional(v.string()),
+  message: v.string(),
+  fields: v.optional(v.record(v.string(), v.array(v.string()))),
+  retryable: v.optional(v.boolean()),
+  traceId: v.optional(v.string()),
+  metadata: v.optional(v.record(v.string(), v.any())),
+});
+
+const registerSessionCommandResultValidator = v.union(
+  v.object({
+    kind: v.literal("ok"),
+    data: v.union(v.null(), registerSessionSummaryValidator),
+  }),
+  v.object({
+    kind: v.literal("user_error"),
+    error: userErrorValidator,
+  }),
+);
+
 export const getState = query({
   args: {
     storeId: v.id("store"),
@@ -39,6 +69,6 @@ export const openDrawer = mutation({
     openingFloat: v.number(),
     notes: v.optional(v.string()),
   },
-  returns: v.union(v.null(), registerSessionSummaryValidator),
+  returns: registerSessionCommandResultValidator,
   handler: async (ctx, args) => openDrawerCommand(ctx, args),
 });

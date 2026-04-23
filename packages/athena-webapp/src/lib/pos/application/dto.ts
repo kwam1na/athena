@@ -1,5 +1,6 @@
 import type { PosPaymentMethod, PosRegisterPhase } from "@/lib/pos/domain";
 import type { Id } from "~/convex/_generated/dataModel";
+import type { CommandResult } from "~/shared/commandResult";
 
 export interface PosTerminalDto {
   _id: string;
@@ -140,6 +141,8 @@ export interface PosOpenDrawerInput {
   openingFloat: number;
   notes?: string;
 }
+
+export type PosOpenDrawerResultDto = CommandResult<PosCashDrawerDto | null>;
 
 export interface PosAddItemInput {
   sessionId: Id<"posSession">;
