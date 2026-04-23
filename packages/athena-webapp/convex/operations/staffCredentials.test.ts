@@ -96,6 +96,10 @@ function createStaffCredentialsMutationCtx(seed?: {
   return { ctx, tables };
 }
 
+function getHandler(definition: unknown) {
+  return (definition as { _handler: Function })._handler;
+}
+
 describe("staff credential operations", () => {
   it("reports store-scoped username availability", async () => {
     const { ctx } = createStaffCredentialsMutationCtx({
@@ -238,7 +242,7 @@ describe("staff credential operations", () => {
     });
 
     await expect(
-      authenticateStaffCredential._handler(ctx, {
+      getHandler(authenticateStaffCredential)(ctx, {
         allowedRoles: ["cashier"],
         storeId: "store_1" as Id<"store">,
         username: "frontdesk",
@@ -635,7 +639,7 @@ describe("staff credential operations", () => {
     });
 
     await expect(
-      authenticateStaffCredentialForTerminal._handler(ctx, {
+      getHandler(authenticateStaffCredentialForTerminal)(ctx, {
         allowedRoles: ["cashier"],
         pinHash: "hash-1",
         storeId: "store_1" as Id<"store">,
