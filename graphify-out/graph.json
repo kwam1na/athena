@@ -1511,7 +1511,7 @@
       "relation": "calls",
       "source": "deposits_sumdepositsbysession",
       "source_file": "packages/athena-webapp/convex/cashControls/deposits.ts",
-      "source_location": "L204",
+      "source_location": "L205",
       "target": "deposits_buildcashcontrolsdashboardsnapshot",
       "weight": 1
     },
@@ -6839,7 +6839,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_cashcontrols_deposits_ts",
       "source_file": "packages/athena-webapp/convex/cashControls/deposits.ts",
-      "source_location": "L198",
+      "source_location": "L199",
       "target": "deposits_buildcashcontrolsdashboardsnapshot",
       "weight": 1
     },
@@ -6851,7 +6851,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_cashcontrols_deposits_ts",
       "source_file": "packages/athena-webapp/convex/cashControls/deposits.ts",
-      "source_location": "L163",
+      "source_location": "L164",
       "target": "deposits_buildregistersessiondeposittargetid",
       "weight": 1
     },
@@ -6863,7 +6863,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_cashcontrols_deposits_ts",
       "source_file": "packages/athena-webapp/convex/cashControls/deposits.ts",
-      "source_location": "L170",
+      "source_location": "L171",
       "target": "deposits_buildregistersessionsummary",
       "weight": 1
     },
@@ -6875,7 +6875,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_cashcontrols_deposits_ts",
       "source_file": "packages/athena-webapp/convex/cashControls/deposits.ts",
-      "source_location": "L328",
+      "source_location": "L329",
       "target": "deposits_collectstaffprofileids",
       "weight": 1
     },
@@ -6887,7 +6887,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_cashcontrols_deposits_ts",
       "source_file": "packages/athena-webapp/convex/cashControls/deposits.ts",
-      "source_location": "L120",
+      "source_location": "L121",
       "target": "deposits_iscashcontroldepositallocation",
       "weight": 1
     },
@@ -6899,7 +6899,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_cashcontrols_deposits_ts",
       "source_file": "packages/athena-webapp/convex/cashControls/deposits.ts",
-      "source_location": "L259",
+      "source_location": "L260",
       "target": "deposits_listregistersessionsfordashboard",
       "weight": 1
     },
@@ -6911,7 +6911,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_cashcontrols_deposits_ts",
       "source_file": "packages/athena-webapp/convex/cashControls/deposits.ts",
-      "source_location": "L315",
+      "source_location": "L316",
       "target": "deposits_listregistersessiontimeline",
       "weight": 1
     },
@@ -6923,7 +6923,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_cashcontrols_deposits_ts",
       "source_file": "packages/athena-webapp/convex/cashControls/deposits.ts",
-      "source_location": "L301",
+      "source_location": "L302",
       "target": "deposits_listsessiondeposits",
       "weight": 1
     },
@@ -6935,7 +6935,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_cashcontrols_deposits_ts",
       "source_file": "packages/athena-webapp/convex/cashControls/deposits.ts",
-      "source_location": "L130",
+      "source_location": "L131",
       "target": "deposits_liststaffnames",
       "weight": 1
     },
@@ -6947,7 +6947,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_cashcontrols_deposits_ts",
       "source_file": "packages/athena-webapp/convex/cashControls/deposits.ts",
-      "source_location": "L287",
+      "source_location": "L288",
       "target": "deposits_liststoredeposits",
       "weight": 1
     },
@@ -6959,7 +6959,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_cashcontrols_deposits_ts",
       "source_file": "packages/athena-webapp/convex/cashControls/deposits.ts",
-      "source_location": "L98",
+      "source_location": "L99",
       "target": "deposits_persistregistersessionworkflowtraceidbesteffort",
       "weight": 1
     },
@@ -6971,7 +6971,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_cashcontrols_deposits_ts",
       "source_file": "packages/athena-webapp/convex/cashControls/deposits.ts",
-      "source_location": "L146",
+      "source_location": "L147",
       "target": "deposits_sumdepositsbysession",
       "weight": 1
     },
@@ -6983,7 +6983,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_cashcontrols_deposits_ts",
       "source_file": "packages/athena-webapp/convex/cashControls/deposits.ts",
-      "source_location": "L93",
+      "source_location": "L94",
       "target": "deposits_trimoptional",
       "weight": 1
     },
@@ -54427,7 +54427,7 @@
       "label": "buildCashControlsDashboardSnapshot()",
       "norm_label": "buildcashcontrolsdashboardsnapshot()",
       "source_file": "packages/athena-webapp/convex/cashControls/deposits.ts",
-      "source_location": "L198"
+      "source_location": "L199"
     },
     {
       "community": 28,
@@ -54436,7 +54436,7 @@
       "label": "buildRegisterSessionDepositTargetId()",
       "norm_label": "buildregistersessiondeposittargetid()",
       "source_file": "packages/athena-webapp/convex/cashControls/deposits.ts",
-      "source_location": "L163"
+      "source_location": "L164"
     },
     {
       "community": 28,
@@ -54445,7 +54445,7 @@
       "label": "buildRegisterSessionSummary()",
       "norm_label": "buildregistersessionsummary()",
       "source_file": "packages/athena-webapp/convex/cashControls/deposits.ts",
-      "source_location": "L170"
+      "source_location": "L171"
     },
     {
       "community": 28,
@@ -54454,7 +54454,7 @@
       "label": "collectStaffProfileIds()",
       "norm_label": "collectstaffprofileids()",
       "source_file": "packages/athena-webapp/convex/cashControls/deposits.ts",
-      "source_location": "L328"
+      "source_location": "L329"
     },
     {
       "community": 28,
@@ -54463,7 +54463,7 @@
       "label": "isCashControlDepositAllocation()",
       "norm_label": "iscashcontroldepositallocation()",
       "source_file": "packages/athena-webapp/convex/cashControls/deposits.ts",
-      "source_location": "L120"
+      "source_location": "L121"
     },
     {
       "community": 28,
@@ -54472,7 +54472,7 @@
       "label": "listRegisterSessionsForDashboard()",
       "norm_label": "listregistersessionsfordashboard()",
       "source_file": "packages/athena-webapp/convex/cashControls/deposits.ts",
-      "source_location": "L259"
+      "source_location": "L260"
     },
     {
       "community": 28,
@@ -54481,7 +54481,7 @@
       "label": "listRegisterSessionTimeline()",
       "norm_label": "listregistersessiontimeline()",
       "source_file": "packages/athena-webapp/convex/cashControls/deposits.ts",
-      "source_location": "L315"
+      "source_location": "L316"
     },
     {
       "community": 28,
@@ -54490,7 +54490,7 @@
       "label": "listSessionDeposits()",
       "norm_label": "listsessiondeposits()",
       "source_file": "packages/athena-webapp/convex/cashControls/deposits.ts",
-      "source_location": "L301"
+      "source_location": "L302"
     },
     {
       "community": 28,
@@ -54499,7 +54499,7 @@
       "label": "listStaffNames()",
       "norm_label": "liststaffnames()",
       "source_file": "packages/athena-webapp/convex/cashControls/deposits.ts",
-      "source_location": "L130"
+      "source_location": "L131"
     },
     {
       "community": 28,
@@ -54508,7 +54508,7 @@
       "label": "listStoreDeposits()",
       "norm_label": "liststoredeposits()",
       "source_file": "packages/athena-webapp/convex/cashControls/deposits.ts",
-      "source_location": "L287"
+      "source_location": "L288"
     },
     {
       "community": 28,
@@ -54517,7 +54517,7 @@
       "label": "persistRegisterSessionWorkflowTraceIdBestEffort()",
       "norm_label": "persistregistersessionworkflowtraceidbesteffort()",
       "source_file": "packages/athena-webapp/convex/cashControls/deposits.ts",
-      "source_location": "L98"
+      "source_location": "L99"
     },
     {
       "community": 28,
@@ -54526,7 +54526,7 @@
       "label": "sumDepositsBySession()",
       "norm_label": "sumdepositsbysession()",
       "source_file": "packages/athena-webapp/convex/cashControls/deposits.ts",
-      "source_location": "L146"
+      "source_location": "L147"
     },
     {
       "community": 28,
@@ -54535,7 +54535,7 @@
       "label": "trimOptional()",
       "norm_label": "trimoptional()",
       "source_file": "packages/athena-webapp/convex/cashControls/deposits.ts",
-      "source_location": "L93"
+      "source_location": "L94"
     },
     {
       "community": 28,
