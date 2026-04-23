@@ -1,11 +1,15 @@
 import {
-  ErrorComponent,
   ErrorComponentProps,
   Link,
   rootRouteId,
   useMatch,
   useRouter,
 } from "@tanstack/react-router";
+
+import {
+  GENERIC_UNEXPECTED_ERROR_MESSAGE,
+  GENERIC_UNEXPECTED_ERROR_TITLE,
+} from "~/shared/commandResult";
 
 export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
   const router = useRouter();
@@ -18,7 +22,15 @@ export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
 
   return (
     <div className="min-w-0 flex-1 p-4 flex flex-col items-center justify-center gap-6">
-      <ErrorComponent error={error} />
+      <div className="max-w-md space-y-3 text-center">
+        <h1 className="text-2xl font-bold">
+          {GENERIC_UNEXPECTED_ERROR_TITLE}
+        </h1>
+        <p className="text-sm text-gray-300">
+          {GENERIC_UNEXPECTED_ERROR_MESSAGE} If the problem keeps happening, go
+          back and retry the action.
+        </p>
+      </div>
       <div className="flex gap-2 items-center flex-wrap">
         <button
           onClick={() => {

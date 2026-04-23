@@ -8,13 +8,21 @@ export default defineConfig({
     globals: true,
     mockReset: true,
     clearMocks: true,
-    include: ["src/**/*.test.{ts,tsx}", "convex/**/*.test.{ts,tsx}"],
+    include: [
+      "src/**/*.test.{ts,tsx}",
+      "convex/**/*.test.{ts,tsx}",
+      "shared/**/*.test.{ts,tsx}",
+    ],
     coverage: {
       provider: "v8",
       reportsDirectory: "./coverage",
       reporter: ["text-summary", "json-summary", "html", "lcov"],
       all: true,
-      include: ["src/**/*.{ts,tsx}", "convex/**/*.{ts,tsx}"],
+      include: [
+        "src/**/*.{ts,tsx}",
+        "convex/**/*.{ts,tsx}",
+        "shared/**/*.{ts,tsx}",
+      ],
       exclude: [
         "node_modules/",
         "dist/",
@@ -22,6 +30,7 @@ export default defineConfig({
         "**/*.config.*",
         "**/coverage/**",
         "src/**/*.test.{ts,tsx}",
+        "shared/**/*.test.{ts,tsx}",
         "src/test/**",
         "src/routeTree.gen.ts",
         "src/assets/**",
