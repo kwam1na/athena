@@ -7,8 +7,8 @@ import {
 } from "./appointments";
 
 describe("service catalog and appointment helpers", () => {
-  it("normalizes catalog items and enforces duration and deposit rules", () => {
-    expect(() =>
+  it("normalizes catalog items and returns user_error data for expected validation failures", () => {
+    expect(
       buildServiceCatalogItem({
         depositType: "flat",
         depositValue: 100,
@@ -19,9 +19,15 @@ describe("service catalog and appointment helpers", () => {
         serviceMode: "repair",
         storeId: "store_1" as Id<"store">,
       })
-    ).toThrow("Service duration must be greater than zero");
+    ).toEqual({
+      kind: "user_error",
+      error: {
+        code: "validation_failed",
+        message: "Service duration must be greater than zero.",
+      },
+    });
 
-    expect(() =>
+    expect(
       buildServiceCatalogItem({
         basePrice: 450,
         depositType: "percentage",
@@ -33,7 +39,13 @@ describe("service catalog and appointment helpers", () => {
         serviceMode: "repair",
         storeId: "store_1" as Id<"store">,
       })
-    ).toThrow("Percentage deposit must be between 1 and 100");
+    ).toEqual({
+      kind: "user_error",
+      error: {
+        code: "validation_failed",
+        message: "Percentage deposit must be between 1 and 100.",
+      },
+    });
 
     expect(
       buildServiceCatalogItem({
@@ -48,9 +60,12 @@ describe("service catalog and appointment helpers", () => {
         storeId: "store_1" as Id<"store">,
       })
     ).toMatchObject({
-      durationMinutes: 90,
-      slug: "closure-repair",
-      status: "active",
+      kind: "ok",
+      data: {
+        durationMinutes: 90,
+        slug: "closure-repair",
+        status: "active",
+      },
     });
   });
 

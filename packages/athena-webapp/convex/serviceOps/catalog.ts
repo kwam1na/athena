@@ -1,9 +1,10 @@
 /* eslint-disable @convex-dev/no-collect-in-query -- V26-276 ships store-scoped service catalog management before pagination; truncating the indexed catalog reads would hide valid services from staff and admins. */
 
 import { mutation, query } from "../_generated/server";
-import { Id } from "../_generated/dataModel";
+import type { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { toSlug } from "../utils";
+import { ok, userError, type CommandResult } from "../../shared/commandResult";
 
 export function buildServiceCatalogItem(args: {
   basePrice?: number;
@@ -17,9 +18,28 @@ export function buildServiceCatalogItem(args: {
   requiresManagerApproval: boolean;
   serviceMode: "same_day" | "consultation" | "repair" | "revamp";
   storeId: Id<"store">;
-}) {
+}): CommandResult<{
+  basePrice?: number;
+  createdAt: number;
+  depositType: "none" | "flat" | "percentage";
+  depositValue?: number;
+  description?: string;
+  durationMinutes: number;
+  name: string;
+  organizationId?: Id<"organization">;
+  pricingModel: "fixed" | "starting_at" | "quote_after_consultation";
+  requiresManagerApproval: boolean;
+  serviceMode: "same_day" | "consultation" | "repair" | "revamp";
+  slug: string;
+  status: "active";
+  storeId: Id<"store">;
+  updatedAt: number;
+}> {
   if (args.durationMinutes <= 0) {
-    throw new Error("Service duration must be greater than zero");
+    return userError({
+      code: "validation_failed",
+      message: "Service duration must be greater than zero.",
+    });
   }
 
   if (args.depositType === "percentage") {
@@ -28,33 +48,45 @@ export function buildServiceCatalogItem(args: {
       args.depositValue < 1 ||
       args.depositValue > 100
     ) {
-      throw new Error("Percentage deposit must be between 1 and 100");
+      return userError({
+        code: "validation_failed",
+        message: "Percentage deposit must be between 1 and 100.",
+      });
     }
   }
 
   if (args.depositType === "flat") {
     if (args.depositValue === undefined || args.depositValue <= 0) {
-      throw new Error("Flat deposit must be greater than zero");
+      return userError({
+        code: "validation_failed",
+        message: "Flat deposit must be greater than zero.",
+      });
     }
   }
 
   if (args.depositType === "none" && args.depositValue !== undefined) {
-    throw new Error("Deposit value is only allowed when a deposit type is set");
+    return userError({
+      code: "validation_failed",
+      message: "Deposit value is only allowed when a deposit type is set.",
+    });
   }
 
   if (args.pricingModel === "fixed" && (args.basePrice ?? 0) <= 0) {
-    throw new Error("Fixed-price services require a base price");
+    return userError({
+      code: "validation_failed",
+      message: "Fixed-price services require a base price.",
+    });
   }
 
   const now = Date.now();
 
-  return {
+  return ok({
     ...args,
     createdAt: now,
     slug: toSlug(args.name),
     status: "active" as const,
     updatedAt: now,
-  };
+  });
 }
 
 export const listServiceCatalogItems = query({
@@ -106,7 +138,12 @@ export const createServiceCatalogItem = mutation({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
-    const catalogItem = buildServiceCatalogItem(args);
+    const catalogItemResult = buildServiceCatalogItem(args);
+    if (catalogItemResult.kind === "user_error") {
+      return catalogItemResult;
+    }
+
+    const catalogItem = catalogItemResult.data;
     const existingCatalogItem = await ctx.db
       .query("serviceCatalog")
       .withIndex("by_storeId_slug", (q) =>
@@ -115,11 +152,14 @@ export const createServiceCatalogItem = mutation({
       .first();
 
     if (existingCatalogItem) {
-      throw new Error("A service catalog item with this name already exists.");
+      return userError({
+        code: "conflict",
+        message: "A service catalog item with this name already exists.",
+      });
     }
 
     const catalogItemId = await ctx.db.insert("serviceCatalog", catalogItem);
-    return ctx.db.get("serviceCatalog", catalogItemId);
+    return ok(await ctx.db.get("serviceCatalog", catalogItemId));
   },
 });
 
@@ -158,10 +198,13 @@ export const updateServiceCatalogItem = mutation({
     );
 
     if (!existingCatalogItem) {
-      throw new Error("Service catalog item not found.");
+      return userError({
+        code: "not_found",
+        message: "Service catalog item not found.",
+      });
     }
 
-    const nextCatalogItem = buildServiceCatalogItem({
+    const nextCatalogItemResult = buildServiceCatalogItem({
       basePrice:
         args.basePrice === undefined ? existingCatalogItem.basePrice : args.basePrice,
       depositType: args.depositType ?? existingCatalogItem.depositType,
@@ -183,6 +226,11 @@ export const updateServiceCatalogItem = mutation({
       serviceMode: args.serviceMode ?? existingCatalogItem.serviceMode,
       storeId: existingCatalogItem.storeId,
     });
+    if (nextCatalogItemResult.kind === "user_error") {
+      return nextCatalogItemResult;
+    }
+
+    const nextCatalogItem = nextCatalogItemResult.data;
 
     const conflictingCatalogItem = await ctx.db
       .query("serviceCatalog")
@@ -195,7 +243,10 @@ export const updateServiceCatalogItem = mutation({
       conflictingCatalogItem &&
       conflictingCatalogItem._id !== existingCatalogItem._id
     ) {
-      throw new Error("A service catalog item with this name already exists.");
+      return userError({
+        code: "conflict",
+        message: "A service catalog item with this name already exists.",
+      });
     }
 
     await ctx.db.patch("serviceCatalog", args.serviceCatalogId, {
@@ -204,7 +255,7 @@ export const updateServiceCatalogItem = mutation({
       status: existingCatalogItem.status,
     });
 
-    return ctx.db.get("serviceCatalog", args.serviceCatalogId);
+    return ok(await ctx.db.get("serviceCatalog", args.serviceCatalogId));
   },
 });
 
@@ -219,7 +270,10 @@ export const archiveServiceCatalogItem = mutation({
     );
 
     if (!existingCatalogItem) {
-      throw new Error("Service catalog item not found.");
+      return userError({
+        code: "not_found",
+        message: "Service catalog item not found.",
+      });
     }
 
     await ctx.db.patch("serviceCatalog", args.serviceCatalogId, {
@@ -227,6 +281,6 @@ export const archiveServiceCatalogItem = mutation({
       updatedAt: Date.now(),
     });
 
-    return ctx.db.get("serviceCatalog", args.serviceCatalogId);
+    return ok(await ctx.db.get("serviceCatalog", args.serviceCatalogId));
   },
 });

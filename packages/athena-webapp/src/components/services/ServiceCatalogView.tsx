@@ -18,6 +18,11 @@ import {
 } from "../ui/select";
 import { Textarea } from "../ui/textarea";
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
+import {
+  type NormalizedCommandResult,
+  runCommand,
+} from "@/lib/errors/runCommand";
+import { presentCommandToast } from "@/lib/errors/presentCommandToast";
 import { api } from "~/convex/_generated/api";
 
 type ServiceCatalogItem = {
@@ -115,8 +120,12 @@ type ServiceCatalogViewContentProps = {
   isSaving: boolean;
   items: ServiceCatalogItem[];
   onArchive: (serviceCatalogId: string) => Promise<void>;
-  onCreate: (args: CreateServiceCatalogArgs) => Promise<void>;
-  onUpdate: (args: UpdateServiceCatalogArgs) => Promise<void>;
+  onCreate: (
+    args: CreateServiceCatalogArgs
+  ) => Promise<NormalizedCommandResult<ServiceCatalogItem | null>>;
+  onUpdate: (
+    args: UpdateServiceCatalogArgs
+  ) => Promise<NormalizedCommandResult<ServiceCatalogItem | null>>;
 };
 
 export function ServiceCatalogViewContent({
@@ -177,22 +186,22 @@ export function ServiceCatalogViewContent({
     }
 
     const parsedForm = parseServiceCatalogForm(form);
+    setValidationErrors([]);
 
-    try {
-      if (editingId) {
-        await onUpdate({
+    const result = editingId
+      ? await onUpdate({
           ...parsedForm,
           serviceCatalogId: editingId,
-        });
-      } else {
-        await onCreate(parsedForm);
-      }
-      handleReset();
-    } catch (error) {
-      toast.error("Failed to save service catalog item", {
-        description: (error as Error).message,
-      });
+        })
+      : await onCreate(parsedForm);
+
+    if (result.kind !== "ok") {
+      setValidationErrors([result.error.message]);
+      return;
     }
+
+    toast.success(editingId ? "Service updated" : "Service created");
+    handleReset();
   };
 
   return (
@@ -458,10 +467,10 @@ export function ServiceCatalogView() {
     api.serviceOps.catalog.archiveServiceCatalogItem
   );
 
-  const withSaveState = async (action: () => Promise<void>) => {
+  const withSaveState = async <T,>(action: () => Promise<T>) => {
     setIsSaving(true);
     try {
-      await action();
+      return await action();
     } finally {
       setIsSaving(false);
     }
@@ -508,27 +517,37 @@ export function ServiceCatalogView() {
       items={items ?? []}
       onArchive={(serviceCatalogId) =>
         withSaveState(async () => {
-          await archiveServiceCatalogItem({ serviceCatalogId: serviceCatalogId as any });
+          const result = await runCommand(() =>
+            archiveServiceCatalogItem({ serviceCatalogId: serviceCatalogId as any })
+          );
+
+          if (result.kind !== "ok") {
+            presentCommandToast(result);
+            return;
+          }
+
           toast.success("Service archived");
         })
       }
       onCreate={(args) =>
-        withSaveState(async () => {
-          await createServiceCatalogItem({
-            ...args,
-            storeId: activeStore._id,
-          });
-          toast.success("Service created");
-        })
+        withSaveState(() =>
+          runCommand(() =>
+            createServiceCatalogItem({
+              ...args,
+              storeId: activeStore._id,
+            })
+          )
+        )
       }
       onUpdate={(args) =>
-        withSaveState(async () => {
-          await updateServiceCatalogItem({
-            ...args,
-            serviceCatalogId: args.serviceCatalogId as any,
-          });
-          toast.success("Service updated");
-        })
+        withSaveState(() =>
+          runCommand(() =>
+            updateServiceCatalogItem({
+              ...args,
+              serviceCatalogId: args.serviceCatalogId as any,
+            })
+          )
+        )
       }
     />
   );
