@@ -412,10 +412,15 @@ export const convertAppointmentToWalkIn = mutation({
       serviceMode: catalogItem.serviceMode,
       storeId: appointment.storeId,
     });
+    if (serviceCase.kind === "user_error") {
+      return serviceCase;
+    }
+
+    const createdServiceCase = serviceCase.data;
 
     await ctx.db.patch("serviceAppointment", appointment._id, {
       convertedAt: Date.now(),
-      serviceCaseId: serviceCase._id,
+      serviceCaseId: createdServiceCase._id,
       status: "converted_to_walk_in",
       updatedAt: Date.now(),
     });
@@ -435,7 +440,7 @@ export const convertAppointmentToWalkIn = mutation({
 
     return ok({
       appointmentId: appointment._id,
-      serviceCaseId: serviceCase._id,
+      serviceCaseId: createdServiceCase._id,
       workItemId: workItem._id,
     });
   },

@@ -17,6 +17,7 @@ import {
   recordPaymentAllocationWithCtx,
   summarizePaymentAllocations,
 } from "../operations/paymentAllocations";
+import { ok, userError, type CommandResult } from "../../shared/commandResult";
 
 export const SERVICE_CASE_STATUSES = [
   "intake",
@@ -194,7 +195,10 @@ async function getServiceCaseContext(
   const serviceCase = await ctx.db.get("serviceCase", serviceCaseId);
 
   if (!serviceCase) {
-    throw new Error("Service case not found.");
+    return userError({
+      code: "not_found",
+      message: "Service case not found.",
+    });
   }
 
   const [workItem, store] = await Promise.all([
@@ -203,23 +207,34 @@ async function getServiceCaseContext(
   ]);
 
   if (!workItem) {
-    throw new Error("Operational work item not found for service case.");
+    return userError({
+      code: "not_found",
+      message: "Operational work item not found for service case.",
+    });
   }
 
   if (!store) {
-    throw new Error("Store not found.");
+    return userError({
+      code: "not_found",
+      message: "Store not found.",
+    });
   }
 
-  return { serviceCase, store, workItem };
+  return ok({ serviceCase, store, workItem });
 }
 
 export function assertValidServiceCaseStatusTransition(
   currentStatus: ServiceCaseStatus,
   nextStatus: ServiceCaseStatus
-) {
+): CommandResult<null> {
   if (!SERVICE_CASE_STATUS_TRANSITIONS[currentStatus].includes(nextStatus)) {
-    throw new Error("Invalid service case status transition");
+    return userError({
+      code: "validation_failed",
+      message: "Invalid service case status transition.",
+    });
   }
+
+  return ok(null);
 }
 
 export function buildServiceCase(args: {
@@ -256,20 +271,34 @@ export function buildServiceCaseLineItem(args: {
   quantity: number;
   serviceCaseId: Id<"serviceCase">;
   unitPrice: number;
-}) {
+}): CommandResult<{
+  amount: number;
+  createdAt: number;
+  description: string;
+  lineType: ServiceCaseLineType;
+  quantity: number;
+  serviceCaseId: Id<"serviceCase">;
+  unitPrice: number;
+}> {
   if (args.quantity <= 0) {
-    throw new Error("Line item quantity must be greater than zero");
+    return userError({
+      code: "validation_failed",
+      message: "Line item quantity must be greater than zero.",
+    });
   }
 
   if (args.unitPrice < 0) {
-    throw new Error("Line item unit price cannot be negative");
+    return userError({
+      code: "validation_failed",
+      message: "Line item unit price cannot be negative.",
+    });
   }
 
-  return {
+  return ok({
     ...args,
     amount: args.quantity * args.unitPrice,
     createdAt: Date.now(),
-  };
+  });
 }
 
 export async function createServiceCaseWithCtx(
@@ -284,14 +313,17 @@ export async function createServiceCaseWithCtx(
     .first();
 
   if (existingServiceCase) {
-    return existingServiceCase;
+    return ok(existingServiceCase);
   }
 
   const serviceCaseId = await ctx.db.insert("serviceCase", buildServiceCase(args));
   const serviceCase = await ctx.db.get("serviceCase", serviceCaseId);
 
   if (!serviceCase) {
-    throw new Error("Unable to create the service case.");
+    return userError({
+      code: "unavailable",
+      message: "Unable to create the service case.",
+    });
   }
 
   const workItem = await ctx.db.get("operationalWorkItem", args.operationalWorkItemId);
@@ -318,7 +350,7 @@ export async function createServiceCaseWithCtx(
     workItemId: args.operationalWorkItemId,
   });
 
-  return serviceCase;
+  return ok(serviceCase);
 }
 
 export const createServiceCase = mutation({
@@ -342,12 +374,18 @@ export const createServiceCase = mutation({
   handler: async (ctx, args) => {
     const store = await ctx.db.get("store", args.storeId);
     if (!store) {
-      throw new Error("Store not found.");
+      return userError({
+        code: "not_found",
+        message: "Store not found.",
+      });
     }
 
     const workItem = await ctx.db.get("operationalWorkItem", args.operationalWorkItemId);
     if (!workItem || workItem.storeId !== args.storeId) {
-      throw new Error("Operational work item not found for this store.");
+      return userError({
+        code: "not_found",
+        message: "Operational work item not found for this store.",
+      });
     }
 
     return createServiceCaseWithCtx(ctx, {
@@ -464,11 +502,20 @@ export const addServiceCaseLineItem = mutation({
     unitPrice: v.number(),
   },
   handler: async (ctx, args) => {
-    const { serviceCase, workItem } = await getServiceCaseContext(ctx, args.serviceCaseId);
+    const serviceCaseContext = await getServiceCaseContext(ctx, args.serviceCaseId);
+    if (serviceCaseContext.kind === "user_error") {
+      return serviceCaseContext;
+    }
+
+    const { serviceCase, workItem } = serviceCaseContext.data;
+    const lineItemResult = buildServiceCaseLineItem(args);
+    if (lineItemResult.kind === "user_error") {
+      return lineItemResult;
+    }
 
     const lineItemId = await ctx.db.insert(
       "serviceCaseLineItem",
-      buildServiceCaseLineItem(args)
+      lineItemResult.data
     );
 
     const nextServiceCase = await syncServiceCaseFinancialsWithCtx(ctx, serviceCase);
@@ -483,10 +530,10 @@ export const addServiceCaseLineItem = mutation({
       workItemId: workItem._id,
     });
 
-    return {
+    return ok({
       lineItem: await ctx.db.get("serviceCaseLineItem", lineItemId),
       serviceCase: nextServiceCase,
-    };
+    });
   },
 });
 
@@ -504,10 +551,18 @@ export const recordServiceInventoryUsage = mutation({
   },
   handler: async (ctx, args) => {
     if (args.quantity <= 0) {
-      throw new Error("Inventory usage quantity must be greater than zero.");
+      return userError({
+        code: "validation_failed",
+        message: "Inventory usage quantity must be greater than zero.",
+      });
     }
 
-    const { serviceCase, workItem } = await getServiceCaseContext(ctx, args.serviceCaseId);
+    const serviceCaseContext = await getServiceCaseContext(ctx, args.serviceCaseId);
+    if (serviceCaseContext.kind === "user_error") {
+      return serviceCaseContext;
+    }
+
+    const { serviceCase, workItem } = serviceCaseContext.data;
     const usageType = args.usageType ?? "consumed";
     const usageId = await ctx.db.insert("serviceInventoryUsage", {
       createdAt: Date.now(),
@@ -564,7 +619,7 @@ export const recordServiceInventoryUsage = mutation({
       workItemId: workItem._id,
     });
 
-    return ctx.db.get("serviceInventoryUsage", usageId);
+    return ok(await ctx.db.get("serviceInventoryUsage", usageId));
   },
 });
 
@@ -581,7 +636,12 @@ export const recordServicePayment = mutation({
     serviceCaseId: v.id("serviceCase"),
   },
   handler: async (ctx, args) => {
-    const { serviceCase, workItem } = await getServiceCaseContext(ctx, args.serviceCaseId);
+    const serviceCaseContext = await getServiceCaseContext(ctx, args.serviceCaseId);
+    if (serviceCaseContext.kind === "user_error") {
+      return serviceCaseContext;
+    }
+
+    const { serviceCase, workItem } = serviceCaseContext.data;
     const collectedInStore = args.collectedInStore ?? true;
     const resolvedRegisterSessionId = collectedInStore
       ? await resolveRegisterSessionForInStoreCollectionWithCtx(ctx, {
@@ -626,7 +686,7 @@ export const recordServicePayment = mutation({
       workItemId: workItem._id,
     });
 
-    return nextServiceCase;
+    return ok(nextServiceCase);
   },
 });
 
@@ -645,9 +705,20 @@ export const updateServiceCaseStatus = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    const { serviceCase, workItem } = await getServiceCaseContext(ctx, args.serviceCaseId);
+    const serviceCaseContext = await getServiceCaseContext(ctx, args.serviceCaseId);
+    if (serviceCaseContext.kind === "user_error") {
+      return serviceCaseContext;
+    }
 
-    assertValidServiceCaseStatusTransition(serviceCase.status, args.status);
+    const { serviceCase, workItem } = serviceCaseContext.data;
+
+    const statusTransitionResult = assertValidServiceCaseStatusTransition(
+      serviceCase.status,
+      args.status
+    );
+    if (statusTransitionResult.kind === "user_error") {
+      return statusTransitionResult;
+    }
 
     const [currentServiceCase, pendingApprovals, paymentAllocations] = await Promise.all([
       syncServiceCaseFinancialsWithCtx(ctx, serviceCase),
@@ -658,15 +729,24 @@ export const updateServiceCaseStatus = mutation({
     const paymentSummary = summarizePaymentAllocations(paymentAllocations);
 
     if ((currentServiceCase?.balanceDueAmount ?? 0) > 0 && args.status === "completed") {
-      throw new Error("Cannot complete a service case with an outstanding balance.");
+      return userError({
+        code: "precondition_failed",
+        message: "Cannot complete a service case with an outstanding balance.",
+      });
     }
 
     if (args.status === "completed" && pendingApprovals.length > 0) {
-      throw new Error("Resolve pending approvals before completing the service case.");
+      return userError({
+        code: "precondition_failed",
+        message: "Resolve pending approvals before completing the service case.",
+      });
     }
 
     if (args.status === "cancelled" && paymentSummary.netAmount > 0) {
-      throw new Error("Refund service payments before cancelling the case.");
+      return userError({
+        code: "precondition_failed",
+        message: "Refund service payments before cancelling the case.",
+      });
     }
 
     await ctx.db.patch("serviceCase", serviceCase._id, {
@@ -700,7 +780,7 @@ export const updateServiceCaseStatus = mutation({
       workItemId: workItem._id,
     });
 
-    return ctx.db.get("serviceCase", serviceCase._id);
+    return ok(await ctx.db.get("serviceCase", serviceCase._id));
   },
 });
 
@@ -725,7 +805,10 @@ export const createWalkInServiceCase = mutation({
     const store = await ctx.db.get("store", args.storeId);
 
     if (!store) {
-      throw new Error("Store not found.");
+      return userError({
+        code: "not_found",
+        message: "Store not found.",
+      });
     }
 
     const createdByStaffProfile = args.createdByUserId
@@ -752,7 +835,10 @@ export const createWalkInServiceCase = mutation({
     });
 
     if (!workItem) {
-      throw new Error("Unable to create the service work item.");
+      return userError({
+        code: "unavailable",
+        message: "Unable to create the service work item.",
+      });
     }
 
     return createServiceCaseWithCtx(ctx, {
