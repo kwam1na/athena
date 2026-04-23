@@ -326,6 +326,11 @@ export const createServiceIntake = mutation({
       serviceMode: "same_day",
       storeId: args.storeId,
     });
+    if (serviceCase.kind === "user_error") {
+      return serviceCase;
+    }
+
+    const createdServiceCase = serviceCase.data;
 
     const approvalRequest = hasDeposit
       ? await (async () => {
@@ -345,7 +350,7 @@ export const createServiceIntake = mutation({
               requestedByStaffProfileId: createdByStaffProfile?._id,
               requestedByUserId: args.createdByUserId,
               storeId: args.storeId,
-              subjectId: serviceCase._id,
+              subjectId: createdServiceCase._id,
               subjectType: "service_case",
               workItemId: workItem._id,
             })
@@ -368,7 +373,7 @@ export const createServiceIntake = mutation({
       organizationId: store.organizationId,
       quantityDelta: 1,
       reasonCode: "service_item_checkin",
-      sourceId: serviceCase._id,
+      sourceId: createdServiceCase._id,
       sourceType: "service_case",
       storeId: args.storeId,
       workItemId: workItem._id,
@@ -387,7 +392,7 @@ export const createServiceIntake = mutation({
             organizationId: store.organizationId,
             registerSessionId: resolvedRegisterSessionId,
             storeId: args.storeId,
-            targetId: serviceCase._id,
+            targetId: createdServiceCase._id,
             targetType: "service_case",
             workItemId: workItem._id,
           })
@@ -409,7 +414,7 @@ export const createServiceIntake = mutation({
       paymentAllocationId: paymentAllocation?._id,
       registerSessionId: resolvedRegisterSessionId,
       storeId: args.storeId,
-      subjectId: serviceCase._id,
+      subjectId: createdServiceCase._id,
       subjectLabel: workItem.title,
       subjectType: "service_case",
       workItemId: workItem._id,
@@ -418,7 +423,7 @@ export const createServiceIntake = mutation({
     return ok({
       approvalRequestId: approvalRequest?._id,
       customerProfileId: customerProfile._id,
-      serviceCaseId: serviceCase._id,
+      serviceCaseId: createdServiceCase._id,
       workItemId: workItem._id,
     });
   },
