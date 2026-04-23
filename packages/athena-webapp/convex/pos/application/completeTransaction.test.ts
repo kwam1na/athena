@@ -65,7 +65,7 @@ beforeEach(() => {
 describe("buildCompleteTransactionResult", () => {
   it("returns ok with transaction data when completion succeeds", () => {
     const result = buildCompleteTransactionResult({
-      transactionId: "txn-1",
+      transactionId: "txn-1" as Id<"posTransaction">,
       transactionNumber: "POS-TXN-001",
       paymentAllocated: true,
     });
@@ -79,7 +79,7 @@ describe("buildCompleteTransactionResult", () => {
 
   it("does not fail completion when no payment allocations are recorded", () => {
     const result = buildCompleteTransactionResult({
-      transactionId: "txn-1",
+      transactionId: "txn-1" as Id<"posTransaction">,
       transactionNumber: "POS-TXN-001",
       paymentAllocated: false,
     });
@@ -464,8 +464,10 @@ describe("completeTransaction trace ordering", () => {
       }),
     ).resolves.toEqual(
       expect.objectContaining({
-        success: true,
-        transactionId: "txn-1",
+        kind: "ok",
+        data: expect.objectContaining({
+          transactionId: "txn-1",
+        }),
       }),
     );
 
@@ -522,7 +524,15 @@ describe("completeTransaction trace ordering", () => {
         sessionId: "session-1" as Id<"posSession">,
         payments: [{ method: "cash", amount: 10, timestamp: 1 }],
       }),
-    ).rejects.toThrow("Open the cash drawer before completing this sale.");
+    ).resolves.toEqual(
+      expect.objectContaining({
+        kind: "user_error",
+        error: expect.objectContaining({
+          code: "precondition_failed",
+          message: "Open the cash drawer before completing this sale.",
+        }),
+      }),
+    );
   });
 
   it("does not fail direct sale completion when workflowTraceId persistence fails", async () => {
@@ -575,8 +585,10 @@ describe("completeTransaction trace ordering", () => {
       }),
     ).resolves.toEqual(
       expect.objectContaining({
-        success: true,
-        transactionId: "txn-1",
+        kind: "ok",
+        data: expect.objectContaining({
+          transactionId: "txn-1",
+        }),
       }),
     );
   });

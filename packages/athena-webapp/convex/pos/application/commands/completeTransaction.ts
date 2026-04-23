@@ -30,6 +30,7 @@ import {
   buildPosSaleTraceSeed,
   type PosSaleTraceSeed,
 } from "../../../workflowTraces/adapters/posSale";
+import { ok, userError, type CommandResult } from "../../../../shared/commandResult";
 
 type PosPaymentInput = {
   method: string;
@@ -48,7 +49,7 @@ type DirectTransactionItemInput = {
 };
 
 export function buildCompleteTransactionResult(input: {
-  transactionId: string | null;
+  transactionId: Id<"posTransaction"> | null;
   transactionNumber: string | null;
   paymentAllocated: boolean;
 }) {
@@ -248,12 +249,15 @@ async function resolveSessionRegisterSessionId(
     session: NonNullable<Awaited<ReturnType<typeof getPosSessionById>>>;
     providedRegisterSessionId?: Id<"registerSession">;
   },
-) {
+): Promise<CommandResult<Id<"registerSession">>> {
   const resolvedRegisterSessionId =
     args.session.registerSessionId ?? args.providedRegisterSessionId;
 
   if (!resolvedRegisterSessionId) {
-    throw new Error("Open the cash drawer before completing this sale.");
+    return userError({
+      code: "precondition_failed",
+      message: "Open the cash drawer before completing this sale.",
+    });
   }
 
   if (
@@ -261,7 +265,10 @@ async function resolveSessionRegisterSessionId(
     args.providedRegisterSessionId &&
     args.session.registerSessionId !== args.providedRegisterSessionId
   ) {
-    throw new Error("Open the cash drawer before completing this sale.");
+    return userError({
+      code: "precondition_failed",
+      message: "Open the cash drawer before completing this sale.",
+    });
   }
 
   const registerSession = await getRegisterSessionById(ctx, resolvedRegisterSessionId);
@@ -275,13 +282,16 @@ async function resolveSessionRegisterSessionId(
       terminalId: args.session.terminalId,
     })
   ) {
-    throw new Error("Open the cash drawer before completing this sale.");
+    return userError({
+      code: "precondition_failed",
+      message: "Open the cash drawer before completing this sale.",
+    });
   }
 
-  return resolvedRegisterSessionId;
+  return ok(resolvedRegisterSessionId);
 }
 
-async function recordRegisterSessionSale(
+export async function recordRegisterSessionSale(
   ctx: MutationCtx,
   args: {
     changeGiven?: number;
@@ -381,7 +391,13 @@ export async function completeTransaction(
     staffProfileId?: Id<"staffProfile">;
     registerSessionId?: Id<"registerSession">;
   },
-) {
+): Promise<
+  CommandResult<{
+    transactionId: Id<"posTransaction">;
+    transactionNumber: string;
+    transactionItems: Array<Id<"posTransactionItem">>;
+  }>
+> {
   const skuQuantityMap = new Map<Id<"productSku">, number>();
 
   for (const item of args.items) {
@@ -391,35 +407,35 @@ export async function completeTransaction(
   for (const [skuId, totalQuantity] of skuQuantityMap) {
     const sku = await getProductSkuById(ctx, skuId);
     if (!sku) {
-      return {
-        success: false,
-        error: `Product SKU ${skuId} not found`,
-      };
+      return userError({
+        code: "not_found",
+        message: `Product SKU ${skuId} not found.`,
+      });
     }
 
     if (sku.quantityAvailable < totalQuantity) {
       const itemName =
         args.items.find((item) => item.skuId === skuId)?.name || "Unknown Product";
-      return {
-        success: false,
-        error: `Insufficient inventory for ${capitalizeWords(itemName)} (${sku.sku}). Available: ${sku.quantityAvailable}, Total Requested: ${totalQuantity}`,
-      };
+      return userError({
+        code: "conflict",
+        message: `Insufficient inventory for ${capitalizeWords(itemName)} (${sku.sku}). Available: ${sku.quantityAvailable}, Total Requested: ${totalQuantity}`,
+      });
     }
   }
 
   if (args.payments.length === 0) {
-    return {
-      success: false,
-      error: "At least one payment is required",
-    };
+    return userError({
+      code: "validation_failed",
+      message: "At least one payment is required.",
+    });
   }
 
   const totalPaid = calculateTotalPaid(args.payments);
   if (totalPaid < args.total) {
-    return {
-      success: false,
-      error: `Insufficient payment. Total: ${args.total.toFixed(2)}, Paid: ${totalPaid.toFixed(2)}`,
-    };
+    return userError({
+      code: "validation_failed",
+      message: `Insufficient payment. Total: ${args.total.toFixed(2)}, Paid: ${totalPaid.toFixed(2)}`,
+    });
   }
 
   const changeGiven = totalPaid > args.total ? totalPaid - args.total : undefined;
@@ -499,10 +515,7 @@ export async function completeTransaction(
   });
 
   if (completionResult.status !== "ok") {
-    return {
-      success: false,
-      error: completionResult.message,
-    };
+    throw new Error(completionResult.message);
   }
 
   if (args.customerId) {
@@ -517,10 +530,7 @@ export async function completeTransaction(
     args.items.map(async (item) => {
       const sku = await getProductSkuById(ctx, item.skuId);
       if (!sku) {
-        return {
-          success: false,
-          error: `SKU ${item.skuId} not found during transaction processing`,
-        };
+        throw new Error(`SKU ${item.skuId} not found during transaction processing`);
       }
 
       const image = item.image ?? sku.images?.[0];
@@ -558,12 +568,11 @@ export async function completeTransaction(
     transactionId,
   });
 
-  return {
-    success: true,
+  return ok({
     transactionId: completionResult.data.transactionId,
     transactionNumber: completionResult.data.transactionNumber,
     transactionItems,
-  };
+  });
 }
 
 export async function voidTransaction(
@@ -641,23 +650,39 @@ export async function createTransactionFromSessionHandler(
     sessionId: Id<"posSession">;
     payments: PosPaymentInput[];
     registerSessionId?: Id<"registerSession">;
+    recordRegisterSale?: boolean;
     notes?: string;
   },
-) {
+): Promise<
+  CommandResult<{
+    transactionId: Id<"posTransaction">;
+    transactionNumber: string;
+    transactionItems: Array<Id<"posTransactionItem">>;
+  }>
+> {
   const session = await getPosSessionById(ctx, args.sessionId);
   if (!session) {
-    throw new Error("Session not found");
+    return userError({
+      code: "not_found",
+      message: "Session not found.",
+    });
   }
 
   const items = await listSessionItems(ctx, args.sessionId);
   if (items.length === 0) {
-    throw new Error("Cannot complete session with no items");
+    return userError({
+      code: "precondition_failed",
+      message: "Cannot complete session with no items.",
+    });
   }
 
   const resolvedRegisterSessionId = await resolveSessionRegisterSessionId(ctx, {
     session,
     providedRegisterSessionId: args.registerSessionId,
   });
+  if (resolvedRegisterSessionId.kind === "user_error") {
+    return resolvedRegisterSessionId;
+  }
 
   const skuQuantityMap = new Map<Id<"productSku">, number>();
   for (const item of items) {
@@ -670,19 +695,26 @@ export async function createTransactionFromSessionHandler(
   for (const [skuId, totalQuantity] of skuQuantityMap) {
     const sku = await getProductSkuById(ctx, skuId);
     if (!sku) {
-      throw new Error(`Product SKU ${skuId} not found`);
+      return userError({
+        code: "not_found",
+        message: `Product SKU ${skuId} not found.`,
+      });
     }
 
     if (sku.inventoryCount < totalQuantity) {
       const item = items.find((sessionItem) => sessionItem.productSkuId === skuId);
-      throw new Error(
-        `Insufficient inventory for ${capitalizeWords(item?.productName || "Unknown Product")} (${sku.sku}). In Stock: ${sku.inventoryCount}, Needed: ${totalQuantity}`,
-      );
+      return userError({
+        code: "conflict",
+        message: `Insufficient inventory for ${capitalizeWords(item?.productName || "Unknown Product")} (${sku.sku}). In Stock: ${sku.inventoryCount}, Needed: ${totalQuantity}`,
+      });
     }
   }
 
   if (args.payments.length === 0) {
-    throw new Error("At least one payment is required");
+    return userError({
+      code: "validation_failed",
+      message: "At least one payment is required.",
+    });
   }
 
   const totalPaid = calculateTotalPaid(args.payments);
@@ -691,9 +723,10 @@ export async function createTransactionFromSessionHandler(
   const total = session.total || 0;
 
   if (totalPaid < total) {
-    throw new Error(
-      `Insufficient payment. Total: ${total.toFixed(2)}, Paid: ${totalPaid.toFixed(2)}`,
-    );
+    return userError({
+      code: "validation_failed",
+      message: `Insufficient payment. Total: ${total.toFixed(2)}, Paid: ${totalPaid.toFixed(2)}`,
+    });
   }
 
   const changeGiven = totalPaid > total ? totalPaid - total : undefined;
@@ -706,7 +739,7 @@ export async function createTransactionFromSessionHandler(
     transactionNumber,
     storeId: session.storeId,
     sessionId: args.sessionId,
-    registerSessionId: resolvedRegisterSessionId,
+    registerSessionId: resolvedRegisterSessionId.data,
     customerId: session.customerId,
     staffProfileId: session.staffProfileId,
     registerNumber: session.registerNumber,
@@ -731,7 +764,7 @@ export async function createTransactionFromSessionHandler(
     startedAt: traceStartedAt,
     transactionNumber,
     posTransactionId: transactionId,
-    registerSessionId: resolvedRegisterSessionId,
+    registerSessionId: resolvedRegisterSessionId.data,
     staffProfileId: session.staffProfileId,
     terminalId: session.terminalId,
     customerId: session.customerId,
@@ -748,14 +781,16 @@ export async function createTransactionFromSessionHandler(
     transactionId,
   });
 
-  await recordRegisterSessionSale(ctx, {
-    changeGiven,
-    payments: args.payments,
-    registerSessionId: resolvedRegisterSessionId,
-    registerNumber: session.registerNumber,
-    storeId: session.storeId,
-    terminalId: session.terminalId,
-  });
+  if (args.recordRegisterSale !== false) {
+    await recordRegisterSessionSale(ctx, {
+      changeGiven,
+      payments: args.payments,
+      registerSessionId: resolvedRegisterSessionId.data,
+      registerNumber: session.registerNumber,
+      storeId: session.storeId,
+      terminalId: session.terminalId,
+    });
+  }
 
   const completionResult = buildCompleteTransactionResult({
     transactionId,
@@ -765,7 +800,7 @@ export async function createTransactionFromSessionHandler(
       organizationId: store?.organizationId,
       payments: args.payments,
       posTransactionId: transactionId,
-      registerSessionId: resolvedRegisterSessionId,
+      registerSessionId: resolvedRegisterSessionId.data,
       storeId: session.storeId,
       transactionNumber,
     }),
@@ -816,7 +851,7 @@ export async function createTransactionFromSessionHandler(
 
   await patchPosSession(ctx, args.sessionId, {
     transactionId,
-    registerSessionId: resolvedRegisterSessionId,
+    registerSessionId: resolvedRegisterSessionId.data,
   });
 
   const finalizedTrace = await recordPosSaleTraceBestEffort(ctx, {
@@ -831,10 +866,9 @@ export async function createTransactionFromSessionHandler(
     transactionId,
   });
 
-  return {
-    success: true,
+  return ok({
     transactionId: completionResult.data.transactionId,
     transactionNumber: completionResult.data.transactionNumber,
     transactionItems,
-  };
+  });
 }

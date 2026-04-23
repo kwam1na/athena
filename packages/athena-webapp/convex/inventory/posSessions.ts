@@ -16,19 +16,15 @@ import {
   validateSessionActive,
   validateSessionModifiable,
 } from "./helpers/sessionValidation";
-import {
-  sessionOperationResultValidator,
-  sessionResultValidator,
-  error,
-  createSessionResultValidator,
-} from "./helpers/resultTypes";
 import { calculateSessionExpiration } from "./helpers/sessionExpiration";
 import {
   runHoldSessionCommand,
   runResumeSessionCommand,
   runStartSessionCommand,
 } from "../pos/application/commands/sessionCommands";
-import { createTransactionFromSessionHandler } from "./pos";
+import { createTransactionFromSessionHandler, recordRegisterSessionSale } from "./pos";
+import { commandResultValidator } from "../lib/commandResultValidators";
+import { ok, userError } from "../../shared/commandResult";
 import {
   createPosSessionTraceRecorder,
   type PosSessionTraceStage,
@@ -39,6 +35,61 @@ const MAX_SESSION_ITEMS = 200;
 const SESSION_QUERY_CANDIDATE_LIMIT = 200;
 const ACTIVE_SESSION_CANDIDATE_LIMIT = 100;
 const SESSION_CLEANUP_BATCH_SIZE = 100;
+
+const sessionOperationDataValidator = v.object({
+  sessionId: v.id("posSession"),
+  expiresAt: v.number(),
+});
+
+const sessionIdOnlyValidator = v.object({
+  sessionId: v.id("posSession"),
+});
+
+const completeSessionDataValidator = v.object({
+  sessionId: v.id("posSession"),
+  transactionNumber: v.string(),
+});
+
+function userErrorFromSessionCommandFailure(
+  result: { status: string; message: string },
+) {
+  switch (result.status) {
+    case "notFound":
+      return userError({
+        code: "not_found",
+        message: result.message,
+      });
+    case "inventoryUnavailable":
+      return userError({
+        code: "conflict",
+        message: result.message,
+      });
+    case "validationFailed":
+      return userError({
+        code: "validation_failed",
+        message: result.message,
+      });
+    default:
+      return userError({
+        code: "precondition_failed",
+        message: result.message,
+      });
+  }
+}
+
+function userErrorFromValidationMessage(message: string) {
+  if (message.toLowerCase().includes("not found")) {
+    return userError({
+      code: "not_found",
+      message,
+    });
+  }
+
+  return userError({
+    code: "precondition_failed",
+    message,
+  });
+}
 
 async function loadPosSessionItems(ctx: QueryCtx, sessionId: Id<"posSession">) {
   const cartItemsRaw = await ctx.db
@@ -374,18 +425,15 @@ export const createSession = mutation({
     registerNumber: v.optional(v.string()),
     registerSessionId: v.optional(v.id("registerSession")),
   },
-  returns: createSessionResultValidator,
+  returns: commandResultValidator(sessionOperationDataValidator),
   handler: async (ctx, args) => {
     const result = await runStartSessionCommand(ctx, args);
 
     if (result.status === "ok") {
-      return {
-        success: true as const,
-        data: result.data,
-      };
+      return ok(result.data);
     }
 
-    return error(result.message);
+    return userErrorFromSessionCommandFailure(result);
   },
 });
 
@@ -407,7 +455,7 @@ export const updateSession = mutation({
     tax: v.optional(v.number()),
     total: v.optional(v.number()),
   },
-  returns: sessionOperationResultValidator,
+  returns: commandResultValidator(sessionOperationDataValidator),
   handler: async (ctx, args) => {
     const { sessionId, ...updates } = args;
     const now = Date.now();
@@ -421,6 +469,25 @@ export const updateSession = mutation({
         }
       : null;
 
+    const isStaleCompletedSession =
+      currentSession?.status === "completed" || currentSession?.status === "void";
+    const isExpiredSession = Boolean(
+      currentSession?.expiresAt && currentSession.expiresAt < now,
+    );
+
+    // Metadata persistence is best-effort in the register UI, so treat stale
+    // completed/voided/expired sessions as an idempotent no-op instead of
+    // surfacing a new hard failure during sign-out or navigation races.
+    if (
+      currentSession?.staffProfileId === args.staffProfileId &&
+      (isStaleCompletedSession || isExpiredSession)
+    ) {
+      return ok({
+        sessionId,
+        expiresAt: currentSession.expiresAt,
+      });
+    }
+
     // Validate session can be modified (not completed or void)
     const validation = await validateSessionModifiable(
       ctx.db,
@@ -428,14 +495,9 @@ export const updateSession = mutation({
       args.staffProfileId
     );
     if (!validation.success) {
-      // For completed/void sessions, return current state without update
-      console.warn(
-        `Attempted to update ${currentSession?.status} session ${sessionId}. Ignoring update.`
+      return userErrorFromValidationMessage(
+        validation.message || "Cannot update this session.",
       );
-      return {
-        sessionId,
-        expiresAt: currentSession?.expiresAt || now,
-      };
     }
 
     // Extend session expiration time
@@ -467,7 +529,7 @@ export const updateSession = mutation({
       }
     }
 
-    return { sessionId, expiresAt };
+    return ok({ sessionId, expiresAt });
   },
 });
 
@@ -478,18 +540,15 @@ export const holdSession = mutation({
     staffProfileId: v.id("staffProfile"),
     holdReason: v.optional(v.string()),
   },
-  returns: sessionResultValidator,
+  returns: commandResultValidator(sessionOperationDataValidator),
   handler: async (ctx, args) => {
     const result = await runHoldSessionCommand(ctx, args);
 
     if (result.status === "ok") {
-      return {
-        success: true as const,
-        data: result.data,
-      };
+      return ok(result.data);
     }
 
-    return error(result.message);
+    return userErrorFromSessionCommandFailure(result);
   },
 });
 
@@ -500,18 +559,15 @@ export const resumeSession = mutation({
     staffProfileId: v.id("staffProfile"),
     terminalId: v.id("posTerminal"),
   },
-  returns: sessionResultValidator,
+  returns: commandResultValidator(sessionOperationDataValidator),
   handler: async (ctx, args) => {
     const result = await runResumeSessionCommand(ctx, args);
 
     if (result.status === "ok") {
-      return {
-        success: true as const,
-        data: result.data,
-      };
+      return ok(result.data);
     }
 
-    return error(result.message);
+    return userErrorFromSessionCommandFailure(result);
   },
 });
 
@@ -532,37 +588,52 @@ export const completeSession = mutation({
     tax: v.number(),
     total: v.number(),
   },
-  returns: v.union(
-    v.object({
-      success: v.literal(true),
-      data: v.object({
-        sessionId: v.id("posSession"),
-        transactionNumber: v.string(),
-      }),
-    }),
-    v.object({
-      success: v.literal(false),
-      message: v.string(),
-    })
-  ),
+  returns: commandResultValidator(completeSessionDataValidator),
   handler: async (ctx, args) => {
     const session = await ctx.db.get("posSession", args.sessionId);
     if (!session) {
-      return error("Session not found");
+      return userError({
+        code: "not_found",
+        message: "Session not found.",
+      });
     }
 
     // Check if session has expired before completing
     const now = Date.now();
     if (session.expiresAt && session.expiresAt < now) {
-      return error("This session has expired. Start a new one to proceed.");
+      return userError({
+        code: "precondition_failed",
+        message: "This session has expired. Start a new one to proceed.",
+      });
     }
 
     if (session.status !== "active") {
-      return error("Can only complete active sessions");
+      return userError({
+        code: "precondition_failed",
+        message: "Can only complete active sessions.",
+      });
     }
 
-    // Mark session as completed and lock in final transaction totals
-    // This ensures audit integrity by capturing exact values at completion time
+    const transactionResult = await createTransactionFromSessionHandler(ctx, {
+      sessionId: args.sessionId,
+      payments: args.payments,
+      recordRegisterSale: false,
+      notes: args.notes,
+    });
+
+    if (transactionResult.kind === "user_error") {
+      return transactionResult;
+    }
+
+    const { transactionId, transactionNumber } = transactionResult.data;
+    const sessionTransactionId = transactionId as Id<"posTransaction">;
+    const registerSessionId = session.registerSessionId;
+    const totalPaid = args.payments.reduce((sum, payment) => sum + payment.amount, 0);
+
+    if (!registerSessionId) {
+      throw new Error("Session lost its drawer binding during completion.");
+    }
+
     await recordSessionLifecycleTraceBestEffort(ctx, {
       stage: "checkoutSubmitted",
       session: {
@@ -584,19 +655,19 @@ export const completeSession = mutation({
       updatedAt: now,
       notes: args.notes,
       payments: args.payments,
-      // Save final transaction totals for audit trail
       subtotal: args.subtotal,
       tax: args.tax,
       total: args.total,
     });
 
-    const { transactionId, transactionNumber } =
-      await createTransactionFromSessionHandler(ctx, {
-      sessionId: args.sessionId,
+    await recordRegisterSessionSale(ctx, {
       payments: args.payments,
-      notes: args.notes,
+      changeGiven: totalPaid > args.total ? totalPaid - args.total : undefined,
+      registerSessionId,
+      registerNumber: session.registerNumber,
+      storeId: session.storeId,
+      terminalId: session.terminalId,
     });
-    const sessionTransactionId = transactionId as Id<"posTransaction">;
 
     await recordSessionLifecycleTraceBestEffort(ctx, {
       stage: "completed",
@@ -617,13 +688,10 @@ export const completeSession = mutation({
     });
 
     // Return the session ID since the transaction will be created asynchronously
-    return {
-      success: true as const,
-      data: {
-        sessionId: args.sessionId,
-        transactionNumber,
-      },
-    };
+    return ok({
+      sessionId: args.sessionId,
+      transactionNumber,
+    });
   },
 });
 
@@ -633,25 +701,17 @@ export const voidSession = mutation({
     sessionId: v.id("posSession"),
     voidReason: v.optional(v.string()),
   },
-  returns: v.union(
-    v.object({
-      success: v.literal(true),
-      data: v.object({
-        sessionId: v.id("posSession"),
-      }),
-    }),
-    v.object({
-      success: v.literal(false),
-      message: v.string(),
-    })
-  ),
+  returns: commandResultValidator(sessionIdOnlyValidator),
   handler: async (ctx, args) => {
     const now = Date.now();
 
     // Get the session
     const session = await ctx.db.get("posSession", args.sessionId);
     if (!session) {
-      return error("Session not found");
+      return userError({
+        code: "not_found",
+        message: "Session not found.",
+      });
     }
 
     // Query all items for this session
@@ -699,7 +759,7 @@ export const voidSession = mutation({
       voidReason: args.voidReason,
     });
 
-    return { success: true as const, data: { sessionId: args.sessionId } };
+    return ok({ sessionId: args.sessionId });
   },
 });
 
@@ -708,31 +768,20 @@ export const releaseSessionInventoryHoldsAndDeleteItems = mutation({
     sessionId: v.id("posSession"),
     checkoutStateVersion: v.number(),
   },
-  returns: v.union(
-    v.object({
-      success: v.literal(true),
-      data: v.object({
-        sessionId: v.id("posSession"),
-      }),
-    }),
-    v.object({
-      success: v.literal(false),
-      message: v.string(),
-    })
-  ),
+  returns: commandResultValidator(sessionIdOnlyValidator),
   handler: async (ctx, args) => {
     const now = Date.now();
     // Get the session
     const session = await ctx.db.get("posSession", args.sessionId);
     if (!session) {
-      return error("Session not found");
+      return userError({
+        code: "not_found",
+        message: "Session not found.",
+      });
     }
 
     if (args.checkoutStateVersion <= (session.checkoutStateVersion ?? 0)) {
-      return {
-        success: true as const,
-        data: { sessionId: args.sessionId },
-      };
+      return ok({ sessionId: args.sessionId });
     }
 
     // Query all items for this session
@@ -787,7 +836,7 @@ export const releaseSessionInventoryHoldsAndDeleteItems = mutation({
       });
     }
 
-    return { success: true as const, data: { sessionId: args.sessionId } };
+    return ok({ sessionId: args.sessionId });
   },
 });
 
@@ -813,7 +862,7 @@ export const syncSessionCheckoutState = mutation({
     amount: v.optional(v.number()),
     previousAmount: v.optional(v.number()),
   },
-  returns: sessionResultValidator,
+  returns: commandResultValidator(sessionOperationDataValidator),
   handler: async (ctx, args) => {
     const validation = await validateSessionActive(
       ctx.db,
@@ -822,23 +871,25 @@ export const syncSessionCheckoutState = mutation({
     );
 
     if (!validation.success) {
-      return error(validation.message || "Session is not active.");
+      return userErrorFromValidationMessage(
+        validation.message || "Session is not active.",
+      );
     }
 
     const session = await ctx.db.get("posSession", args.sessionId);
     if (!session) {
-      return error("Session not found");
+      return userError({
+        code: "not_found",
+        message: "Session not found.",
+      });
     }
 
     const currentCheckoutStateVersion = session.checkoutStateVersion ?? 0;
     if (args.checkoutStateVersion <= currentCheckoutStateVersion) {
-      return {
-        success: true as const,
-        data: {
-          sessionId: args.sessionId,
-          expiresAt: session.expiresAt,
-        },
-      };
+      return ok({
+        sessionId: args.sessionId,
+        expiresAt: session.expiresAt,
+      });
     }
 
     const now = Date.now();
@@ -866,13 +917,10 @@ export const syncSessionCheckoutState = mutation({
       paymentCount: args.payments.length,
     });
 
-    return {
-      success: true as const,
-      data: {
-        sessionId: args.sessionId,
-        expiresAt,
-      },
-    };
+    return ok({
+      sessionId: args.sessionId,
+      expiresAt,
+    });
   },
 });
 

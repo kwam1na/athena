@@ -1,13 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ok } from "../../shared/commandResult";
 
 const mocks = vi.hoisted(() => ({
   createTransactionFromSessionHandler: vi.fn(),
+  recordRegisterSessionSale: vi.fn(),
   releaseInventoryHoldsBatch: vi.fn(),
   traceRecord: vi.fn(),
 }));
 
 vi.mock("./pos", () => ({
   createTransactionFromSessionHandler: mocks.createTransactionFromSessionHandler,
+  recordRegisterSessionSale: mocks.recordRegisterSessionSale,
 }));
 
 vi.mock("./helpers/inventoryHolds", () => ({
@@ -42,6 +45,7 @@ type SessionRecord = {
   expiresAt: number;
   staffProfileId?: string;
   customerId?: string;
+  registerSessionId?: string;
   customerInfo?: {
     name?: string;
     email?: string;
@@ -212,6 +216,7 @@ describe("pos session lifecycle trace handlers", () => {
       sessions: [
         buildSession({
           _id: "session-1",
+          registerSessionId: "drawer-1",
           subtotal: 100,
           tax: 15,
           total: 115,
@@ -219,11 +224,13 @@ describe("pos session lifecycle trace handlers", () => {
       ],
     });
 
-    mocks.createTransactionFromSessionHandler.mockResolvedValue({
-      success: true,
-      transactionId: "txn-1",
-      transactionNumber: "POS-1001",
-    });
+    mocks.createTransactionFromSessionHandler.mockResolvedValue(
+      ok({
+        transactionId: "txn-1",
+        transactionNumber: "POS-1001",
+        transactionItems: ["txn-item-1"],
+      }),
+    );
 
     const result = await getHandler(completeSession)(ctx as never, {
       sessionId: "session-1",
@@ -235,12 +242,19 @@ describe("pos session lifecycle trace handlers", () => {
     });
 
     expect(result).toEqual({
-      success: true,
+      kind: "ok",
       data: {
         sessionId: "session-1",
         transactionNumber: "POS-1001",
       },
     });
+    expect(mocks.createTransactionFromSessionHandler).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        sessionId: "session-1",
+        recordRegisterSale: false,
+      }),
+    );
     expect(mocks.traceRecord).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
@@ -289,7 +303,7 @@ describe("pos session lifecycle trace handlers", () => {
     });
 
     expect(result).toEqual({
-      success: true,
+      kind: "ok",
       data: {
         sessionId: "session-2",
       },
@@ -335,8 +349,11 @@ describe("pos session lifecycle trace handlers", () => {
     });
 
     expect(result).toEqual({
-      sessionId: "session-customer",
-      expiresAt: expect.any(Number),
+      kind: "ok",
+      data: {
+        sessionId: "session-customer",
+        expiresAt: expect.any(Number),
+      },
     });
     expect(mocks.traceRecord).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -379,8 +396,11 @@ describe("pos session lifecycle trace handlers", () => {
     });
 
     expect(result).toEqual({
-      sessionId: "session-customer-cleared",
-      expiresAt: expect.any(Number),
+      kind: "ok",
+      data: {
+        sessionId: "session-customer-cleared",
+        expiresAt: expect.any(Number),
+      },
     });
     expect(mocks.traceRecord).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -393,6 +413,43 @@ describe("pos session lifecycle trace handlers", () => {
         }),
       }),
     );
+  });
+
+  it("treats stale completed sessions as a no-op metadata update", async () => {
+    const ctx = createMutationCtx({
+      sessions: [
+        buildSession({
+          _id: "session-completed",
+          status: "completed",
+        }),
+      ],
+    });
+
+    const result = await getHandler(updateSession)(ctx as never, {
+      sessionId: "session-completed",
+      staffProfileId: "cashier-1",
+      customerId: "customer-1",
+      customerInfo: {
+        name: "Ama Serwa",
+      },
+      subtotal: 100,
+      tax: 15,
+      total: 115,
+    });
+
+    expect(result).toEqual({
+      kind: "ok",
+      data: {
+        sessionId: "session-completed",
+        expiresAt: 4_102_444_800_000,
+      },
+    });
+    expect(ctx.db.patch).not.toHaveBeenCalledWith(
+      "posSession",
+      "session-completed",
+      expect.anything(),
+    );
+    expect(mocks.traceRecord).not.toHaveBeenCalled();
   });
 
   it("records a cart-cleared milestone and clears pending payments", async () => {
@@ -429,7 +486,7 @@ describe("pos session lifecycle trace handlers", () => {
     );
 
     expect(result).toEqual({
-      success: true,
+      kind: "ok",
       data: {
         sessionId: "session-clear",
       },
@@ -537,7 +594,7 @@ describe("pos session lifecycle trace handlers", () => {
     );
 
     expect(result).toEqual({
-      success: true,
+      kind: "ok",
       data: {
         sessionId: "session-stale-clear",
       },
@@ -575,7 +632,7 @@ describe("pos session lifecycle trace handlers", () => {
     });
 
     expect(paymentResult).toEqual({
-      success: true,
+      kind: "ok",
       data: {
         sessionId: "session-checkout",
         expiresAt: expect.any(Number),
@@ -737,7 +794,7 @@ describe("pos session lifecycle trace handlers", () => {
     });
 
     expect(result).toEqual({
-      success: true,
+      kind: "ok",
       data: {
         sessionId: "session-trace-failure",
         expiresAt: expect.any(Number),

@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 
 import { mutation, query } from "../../_generated/server";
+import { commandResultValidator } from "../../lib/commandResultValidators";
 import {
   completeTransaction as completeTransactionCommand,
   createTransactionFromSessionHandler,
@@ -61,6 +62,13 @@ export const completeTransaction = mutation({
     staffProfileId: v.optional(v.id("staffProfile")),
     registerSessionId: v.optional(v.id("registerSession")),
   },
+  returns: commandResultValidator(
+    v.object({
+      transactionId: v.id("posTransaction"),
+      transactionNumber: v.string(),
+      transactionItems: v.array(v.id("posTransactionItem")),
+    }),
+  ),
   handler: async (ctx, args) => completeTransactionCommand(ctx, args),
 });
 
@@ -179,6 +187,13 @@ export const createTransactionFromSession = mutation({
     registerSessionId: v.optional(v.id("registerSession")),
     notes: v.optional(v.string()),
   },
+  returns: commandResultValidator(
+    v.object({
+      transactionId: v.id("posTransaction"),
+      transactionNumber: v.string(),
+      transactionItems: v.array(v.id("posTransactionItem")),
+    }),
+  ),
   handler: async (ctx, args) => createTransactionFromSessionHandler(ctx, args),
 });
 

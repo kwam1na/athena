@@ -1,5 +1,6 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
+import { ok, userError, type CommandResult } from "../../../../shared/commandResult";
 
 import {
   createPosCustomer,
@@ -24,7 +25,14 @@ export async function createCustomer(
     address?: Doc<"posCustomer">["address"];
     notes?: string;
   },
-) {
+): Promise<
+  CommandResult<{
+    _id: Id<"posCustomer">;
+    name: string;
+    email?: string;
+    phone?: string;
+  }>
+> {
   if (args.email) {
     const existingByEmail = await findCustomerByEmail(ctx, {
       storeId: args.storeId,
@@ -32,7 +40,10 @@ export async function createCustomer(
     });
 
     if (existingByEmail) {
-      throw new Error("Customer with this email already exists");
+      return userError({
+        code: "conflict",
+        message: "Customer with this email already exists.",
+      });
     }
   }
 
@@ -43,7 +54,10 @@ export async function createCustomer(
     });
 
     if (existingByPhone) {
-      throw new Error("Customer with this phone number already exists");
+      return userError({
+        code: "conflict",
+        message: "Customer with this phone number already exists.",
+      });
     }
   }
 
@@ -61,12 +75,12 @@ export async function createCustomer(
   });
   const customer = await getPosCustomerById(ctx, customerId);
 
-  return {
+  return ok({
     _id: customer!._id,
     name: customer!.name,
     email: customer!.email,
     phone: customer!.phone,
-  };
+  });
 }
 
 export async function updateCustomer(
@@ -79,7 +93,15 @@ export async function updateCustomer(
     address?: Doc<"posCustomer">["address"];
     notes?: string;
   },
-) {
+): Promise<CommandResult<null>> {
+  const customer = await getPosCustomerById(ctx, args.customerId);
+  if (!customer) {
+    return userError({
+      code: "not_found",
+      message: "Customer not found.",
+    });
+  }
+
   const updates: Partial<Doc<"posCustomer">> = {};
 
   if (args.name) updates.name = args.name;
@@ -89,7 +111,7 @@ export async function updateCustomer(
   if (args.notes) updates.notes = args.notes;
 
   await patchPosCustomer(ctx, args.customerId, updates);
-  return null;
+  return ok(null);
 }
 
 export async function updateCustomerStats(
@@ -114,12 +136,15 @@ export async function linkToStoreFrontUser(
     posCustomerId: Id<"posCustomer">;
     storeFrontUserId: Id<"storeFrontUser">;
   },
-) {
+): Promise<CommandResult<null>> {
   const posCustomer = await getPosCustomerById(ctx, args.posCustomerId);
   const storeFrontUser = await getStoreFrontUserById(ctx, args.storeFrontUserId);
 
   if (!posCustomer || !storeFrontUser) {
-    throw new Error("Customer or storefront user not found");
+    return userError({
+      code: "not_found",
+      message: "Customer or storefront user not found.",
+    });
   }
 
   const existingLink = await findPosCustomerByStoreFrontUser(
@@ -127,9 +152,10 @@ export async function linkToStoreFrontUser(
     args.storeFrontUserId,
   );
   if (existingLink && existingLink._id !== args.posCustomerId) {
-    throw new Error(
-      "This storefront user is already linked to another POS customer",
-    );
+    return userError({
+      code: "conflict",
+      message: "This storefront user is already linked to another POS customer.",
+    });
   }
 
   await patchPosCustomer(ctx, args.posCustomerId, {
@@ -144,7 +170,7 @@ export async function linkToStoreFrontUser(
     fallbackStoreId: posCustomer.storeId,
   });
 
-  return null;
+  return ok(null);
 }
 
 export async function linkToGuest(
@@ -153,12 +179,15 @@ export async function linkToGuest(
     posCustomerId: Id<"posCustomer">;
     guestId: Id<"guest">;
   },
-) {
+): Promise<CommandResult<null>> {
   const posCustomer = await getPosCustomerById(ctx, args.posCustomerId);
   const guest = await getGuestById(ctx, args.guestId);
 
   if (!posCustomer || !guest) {
-    throw new Error("Customer or guest not found");
+    return userError({
+      code: "not_found",
+      message: "Customer or guest not found.",
+    });
   }
 
   await patchPosCustomer(ctx, args.posCustomerId, {
@@ -173,5 +202,5 @@ export async function linkToGuest(
     fallbackStoreId: posCustomer.storeId,
   });
 
-  return null;
+  return ok(null);
 }
