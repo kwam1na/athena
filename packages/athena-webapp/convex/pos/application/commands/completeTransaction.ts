@@ -291,7 +291,7 @@ async function resolveSessionRegisterSessionId(
   return ok(resolvedRegisterSessionId);
 }
 
-async function recordRegisterSessionSale(
+export async function recordRegisterSessionSale(
   ctx: MutationCtx,
   args: {
     changeGiven?: number;
@@ -650,6 +650,7 @@ export async function createTransactionFromSessionHandler(
     sessionId: Id<"posSession">;
     payments: PosPaymentInput[];
     registerSessionId?: Id<"registerSession">;
+    recordRegisterSale?: boolean;
     notes?: string;
   },
 ): Promise<
@@ -780,14 +781,16 @@ export async function createTransactionFromSessionHandler(
     transactionId,
   });
 
-  await recordRegisterSessionSale(ctx, {
-    changeGiven,
-    payments: args.payments,
-    registerSessionId: resolvedRegisterSessionId.data,
-    registerNumber: session.registerNumber,
-    storeId: session.storeId,
-    terminalId: session.terminalId,
-  });
+  if (args.recordRegisterSale !== false) {
+    await recordRegisterSessionSale(ctx, {
+      changeGiven,
+      payments: args.payments,
+      registerSessionId: resolvedRegisterSessionId.data,
+      registerNumber: session.registerNumber,
+      storeId: session.storeId,
+      terminalId: session.terminalId,
+    });
+  }
 
   const completionResult = buildCompleteTransactionResult({
     transactionId,

@@ -14,4 +14,7 @@ export {
   getRecentTransactionsWithCustomers,
   getTodaySummary,
 } from "../pos/public/transactions";
-export { createTransactionFromSessionHandler } from "../pos/application/commands/completeTransaction";
+export {
+  createTransactionFromSessionHandler,
+  recordRegisterSessionSale,
+} from "../pos/application/commands/completeTransaction";

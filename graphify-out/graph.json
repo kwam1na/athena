@@ -1007,7 +1007,7 @@
       "relation": "calls",
       "source": "completetransaction_buildcompletetransactionresult",
       "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
-      "source_location": "L792",
+      "source_location": "L795",
       "target": "completetransaction_createtransactionfromsessionhandler",
       "weight": 1
     },
@@ -1019,7 +1019,7 @@
       "relation": "calls",
       "source": "completetransaction_calculatetotalpaid",
       "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
-      "source_location": "L719",
+      "source_location": "L720",
       "target": "completetransaction_createtransactionfromsessionhandler",
       "weight": 1
     },
@@ -1031,7 +1031,7 @@
       "relation": "calls",
       "source": "completetransaction_persistworkflowtraceidbesteffort",
       "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
-      "source_location": "L778",
+      "source_location": "L779",
       "target": "completetransaction_createtransactionfromsessionhandler",
       "weight": 1
     },
@@ -1043,7 +1043,7 @@
       "relation": "calls",
       "source": "completetransaction_recordpossaletracebesteffort",
       "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
-      "source_location": "L772",
+      "source_location": "L773",
       "target": "completetransaction_createtransactionfromsessionhandler",
       "weight": 1
     },
@@ -1055,7 +1055,7 @@
       "relation": "calls",
       "source": "completetransaction_recordregistersessionsale",
       "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
-      "source_location": "L783",
+      "source_location": "L785",
       "target": "completetransaction_createtransactionfromsessionhandler",
       "weight": 1
     },
@@ -1067,7 +1067,7 @@
       "relation": "calls",
       "source": "completetransaction_resolvesessionregistersessionid",
       "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
-      "source_location": "L678",
+      "source_location": "L679",
       "target": "completetransaction_createtransactionfromsessionhandler",
       "weight": 1
     },
@@ -7751,7 +7751,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_inventory_possessions_trace_test_ts",
       "source_file": "packages/athena-webapp/convex/inventory/posSessions.trace.test.ts",
-      "source_location": "L181",
+      "source_location": "L185",
       "target": "possessions_trace_test_buildsession",
       "weight": 1
     },
@@ -7763,7 +7763,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_inventory_possessions_trace_test_ts",
       "source_file": "packages/athena-webapp/convex/inventory/posSessions.trace.test.ts",
-      "source_location": "L77",
+      "source_location": "L81",
       "target": "possessions_trace_test_createmutationctx",
       "weight": 1
     },
@@ -7775,7 +7775,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_inventory_possessions_trace_test_ts",
       "source_file": "packages/athena-webapp/convex/inventory/posSessions.trace.test.ts",
-      "source_location": "L197",
+      "source_location": "L201",
       "target": "possessions_trace_test_gethandler",
       "weight": 1
     },
@@ -48835,7 +48835,7 @@
       "label": "buildSession()",
       "norm_label": "buildsession()",
       "source_file": "packages/athena-webapp/convex/inventory/posSessions.trace.test.ts",
-      "source_location": "L181"
+      "source_location": "L185"
     },
     {
       "community": 181,
@@ -48844,7 +48844,7 @@
       "label": "createMutationCtx()",
       "norm_label": "createmutationctx()",
       "source_file": "packages/athena-webapp/convex/inventory/posSessions.trace.test.ts",
-      "source_location": "L77"
+      "source_location": "L81"
     },
     {
       "community": 181,
@@ -48853,7 +48853,7 @@
       "label": "getHandler()",
       "norm_label": "gethandler()",
       "source_file": "packages/athena-webapp/convex/inventory/posSessions.trace.test.ts",
-      "source_location": "L197"
+      "source_location": "L201"
     },
     {
       "community": 182,

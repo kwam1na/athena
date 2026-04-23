@@ -22,7 +22,7 @@ import {
   runResumeSessionCommand,
   runStartSessionCommand,
 } from "../pos/application/commands/sessionCommands";
-import { createTransactionFromSessionHandler } from "./pos";
+import { createTransactionFromSessionHandler, recordRegisterSessionSale } from "./pos";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { ok, userError } from "../../shared/commandResult";
 import {
@@ -469,6 +469,25 @@ export const updateSession = mutation({
         }
       : null;
 
+    const isStaleCompletedSession =
+      currentSession?.status === "completed" || currentSession?.status === "void";
+    const isExpiredSession = Boolean(
+      currentSession?.expiresAt && currentSession.expiresAt < now,
+    );
+
+    // Metadata persistence is best-effort in the register UI, so treat stale
+    // completed/voided/expired sessions as an idempotent no-op instead of
+    // surfacing a new hard failure during sign-out or navigation races.
+    if (
+      currentSession?.staffProfileId === args.staffProfileId &&
+      (isStaleCompletedSession || isExpiredSession)
+    ) {
+      return ok({
+        sessionId,
+        expiresAt: currentSession.expiresAt,
+      });
+    }
+
     // Validate session can be modified (not completed or void)
     const validation = await validateSessionModifiable(
       ctx.db,
@@ -598,6 +617,7 @@ export const completeSession = mutation({
     const transactionResult = await createTransactionFromSessionHandler(ctx, {
       sessionId: args.sessionId,
       payments: args.payments,
+      recordRegisterSale: false,
       notes: args.notes,
     });
 
@@ -607,6 +627,12 @@ export const completeSession = mutation({
 
     const { transactionId, transactionNumber } = transactionResult.data;
     const sessionTransactionId = transactionId as Id<"posTransaction">;
+    const registerSessionId = session.registerSessionId;
+    const totalPaid = args.payments.reduce((sum, payment) => sum + payment.amount, 0);
+
+    if (!registerSessionId) {
+      throw new Error("Session lost its drawer binding during completion.");
+    }
 
     await recordSessionLifecycleTraceBestEffort(ctx, {
       stage: "checkoutSubmitted",
@@ -632,6 +658,15 @@ export const completeSession = mutation({
       subtotal: args.subtotal,
       tax: args.tax,
       total: args.total,
+    });
+
+    await recordRegisterSessionSale(ctx, {
+      payments: args.payments,
+      changeGiven: totalPaid > args.total ? totalPaid - args.total : undefined,
+      registerSessionId,
+      registerNumber: session.registerNumber,
+      storeId: session.storeId,
+      terminalId: session.terminalId,
     });
 
     await recordSessionLifecycleTraceBestEffort(ctx, {
