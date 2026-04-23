@@ -3,10 +3,15 @@ import { useState } from "react";
 import { toast } from "sonner";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useAuth } from "@/hooks/useAuth";
+import {
+  type NormalizedCommandResult,
+  runCommand,
+} from "@/lib/errors/runCommand";
 import { capitalizeWords, currencyFormatter } from "@/lib/utils";
 import { formatStoredAmount } from "@/lib/pos/displayAmounts";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
+import { userError } from "~/shared/commandResult";
 import { EmptyState } from "../states/empty/empty-state";
 import { WorkflowTraceRouteLink } from "../traces/WorkflowTraceRouteLink";
 import { Button } from "../ui/button";
@@ -50,11 +55,22 @@ type RegisterCloseoutReviewArgs = {
   registerSessionId: string;
 };
 
+type RegisterCloseoutCommandPayload = {
+  action?: "approval_required" | "closed" | "approved" | "rejected";
+};
+
+type RegisterCloseoutCommandResult =
+  NormalizedCommandResult<RegisterCloseoutCommandPayload>;
+
 type RegisterCloseoutViewContentProps = {
   currency: string;
   isLoading: boolean;
-  onReviewCloseout: (args: RegisterCloseoutReviewArgs) => Promise<void>;
-  onSubmitCloseout: (args: RegisterCloseoutSubmitArgs) => Promise<void>;
+  onReviewCloseout: (
+    args: RegisterCloseoutReviewArgs,
+  ) => Promise<RegisterCloseoutCommandResult>;
+  onSubmitCloseout: (
+    args: RegisterCloseoutSubmitArgs,
+  ) => Promise<RegisterCloseoutCommandResult>;
   registerSessions: RegisterCloseoutSession[];
 };
 
@@ -105,6 +121,22 @@ export function RegisterCloseoutViewContent({
 
   const formatter = currencyFormatter(currency || "USD");
 
+  const applyCommandResult = (
+    registerSessionId: string,
+    result: RegisterCloseoutCommandResult,
+  ) => {
+    if (result.kind === "ok") {
+      setErrors((current) => ({ ...current, [registerSessionId]: "" }));
+      return true;
+    }
+
+    setErrors((current) => ({
+      ...current,
+      [registerSessionId]: result.error.message,
+    }));
+    return false;
+  };
+
   async function handleSubmitCloseout(registerSession: RegisterCloseoutSession) {
     const countedCashValue =
       countedCashValues[registerSession._id] ??
@@ -125,7 +157,7 @@ export function RegisterCloseoutViewContent({
     setPendingActions((current) => ({ ...current, [registerSession._id]: "submit" }));
 
     try {
-      await onSubmitCloseout({
+      const result = await onSubmitCloseout({
         countedCash,
         notes: trimOptional(
           sessionNotes[registerSession._id] ?? registerSession.notes ?? "",
@@ -133,16 +165,12 @@ export function RegisterCloseoutViewContent({
         registerSessionId: registerSession._id,
       });
 
+      if (!applyCommandResult(registerSession._id, result)) {
+        return;
+      }
+
       setCountedCashValues((current) => ({ ...current, [registerSession._id]: "" }));
       setSessionNotes((current) => ({ ...current, [registerSession._id]: "" }));
-    } catch (error) {
-      setErrors((current) => ({
-        ...current,
-        [registerSession._id]:
-          error instanceof Error
-            ? error.message
-            : "Failed to submit the register closeout.",
-      }));
     } finally {
       setPendingActions((current) => {
         const nextState = { ...current };
@@ -160,21 +188,17 @@ export function RegisterCloseoutViewContent({
     setPendingActions((current) => ({ ...current, [registerSession._id]: decision }));
 
     try {
-      await onReviewCloseout({
+      const result = await onReviewCloseout({
         decision,
         decisionNotes: trimOptional(managerNotes[registerSession._id]),
         registerSessionId: registerSession._id,
       });
 
+      if (!applyCommandResult(registerSession._id, result)) {
+        return;
+      }
+
       setManagerNotes((current) => ({ ...current, [registerSession._id]: "" }));
-    } catch (error) {
-      setErrors((current) => ({
-        ...current,
-        [registerSession._id]:
-          error instanceof Error
-            ? error.message
-            : "Failed to review the register closeout.",
-      }));
     } finally {
       setPendingActions((current) => {
         const nextState = { ...current };
@@ -428,56 +452,60 @@ export function RegisterCloseoutView() {
 
   async function onSubmitCloseout(args: RegisterCloseoutSubmitArgs) {
     if (!activeStore?._id || !user?._id) {
-      throw new Error("You must be logged in to submit a register closeout.");
+      return userError({
+        code: "authentication_failed",
+        message: "You must be logged in to submit a register closeout.",
+      });
     }
 
-    try {
-      const result = await submitRegisterSessionCloseout({
+    const result = await runCommand(() =>
+      submitRegisterSessionCloseout({
         actorUserId: user._id,
         countedCash: args.countedCash,
         notes: args.notes,
         registerSessionId: args.registerSessionId as Id<"registerSession">,
         storeId: activeStore._id,
-      });
+      }),
+    );
 
+    if (result.kind === "ok") {
       toast.success(
-        result?.action === "approval_required"
+        result.data?.action === "approval_required"
           ? "Closeout submitted for manager review"
           : "Register session closed",
       );
-    } catch (error) {
-      const description =
-        error instanceof Error ? error.message : "Failed to submit register closeout.";
-      toast.error("Failed to submit register closeout", { description });
-      throw error;
     }
+
+    return result;
   }
 
   async function onReviewCloseout(args: RegisterCloseoutReviewArgs) {
     if (!activeStore?._id || !user?._id) {
-      throw new Error("You must be logged in to review a register closeout.");
+      return userError({
+        code: "authentication_failed",
+        message: "You must be logged in to review a register closeout.",
+      });
     }
 
-    try {
-      await reviewRegisterSessionCloseout({
+    const result = await runCommand(() =>
+      reviewRegisterSessionCloseout({
         decision: args.decision,
         decisionNotes: args.decisionNotes,
         registerSessionId: args.registerSessionId as Id<"registerSession">,
         reviewedByUserId: user._id,
         storeId: activeStore._id,
-      });
+      }),
+    );
 
+    if (result.kind === "ok") {
       toast.success(
         args.decision === "approved"
           ? "Register closeout approved"
           : "Register closeout rejected",
       );
-    } catch (error) {
-      const description =
-        error instanceof Error ? error.message : "Failed to review register closeout.";
-      toast.error("Failed to review register closeout", { description });
-      throw error;
     }
+
+    return result;
   }
 
   return (

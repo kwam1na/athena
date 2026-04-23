@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 3722 nodes · 3248 edges · 1400 communities detected
+- 3724 nodes · 3253 edges · 1400 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1586,48 +1586,48 @@ Cohesion: 0.24
 Nodes (5): hasCustomerSnapshotValue(), normalizeCustomerSnapshot(), persistSessionWorkflowTraceIdBestEffort(), recordSessionLifecycleTraceBestEffort(), resolveCustomerTraceStage()
 
 ### Community 37 - "Community 37"
-Cohesion: 0.36
-Nodes (9): applyStockAdjustmentBatchWithCtx(), assertDistinctStockAdjustmentLineItems(), buildResolvedStockAdjustmentStatus(), buildStockAdjustmentDecisionEventType(), buildStockAdjustmentSourceId(), buildStockAdjustmentTitle(), resolveStockAdjustmentApprovalDecisionWithCtx(), submitStockAdjustmentBatchWithCtx() (+1 more)
-
-### Community 38 - "Community 38"
-Cohesion: 0.33
-Nodes (2): OrdersTableToolbarProvider(), useOrdersTableToolbar()
-
-### Community 39 - "Community 39"
-Cohesion: 0.18
-Nodes (0):
-
-### Community 40 - "Community 40"
 Cohesion: 0.29
 Nodes (7): formatDeliveryAddress(), getAmountPaidForOrder(), getDiscountValue(), getOrderAmount(), getOrderState(), getPickupActionState(), getPotentialPoints()
 
+### Community 38 - "Community 38"
+Cohesion: 0.36
+Nodes (9): applyStockAdjustmentBatchWithCtx(), assertDistinctStockAdjustmentLineItems(), buildResolvedStockAdjustmentStatus(), buildStockAdjustmentDecisionEventType(), buildStockAdjustmentSourceId(), buildStockAdjustmentTitle(), resolveStockAdjustmentApprovalDecisionWithCtx(), submitStockAdjustmentBatchWithCtx() (+1 more)
+
+### Community 39 - "Community 39"
+Cohesion: 0.33
+Nodes (2): OrdersTableToolbarProvider(), useOrdersTableToolbar()
+
+### Community 40 - "Community 40"
+Cohesion: 0.29
+Nodes (6): applyCommandResult(), handleReviewCloseout(), handleSubmitCloseout(), onReviewCloseout(), onSubmitCloseout(), trimOptional()
+
 ### Community 41 - "Community 41"
+Cohesion: 0.24
+Nodes (4): applyCommandResult(), buildDepositSubmissionKey(), handleRecordDeposit(), trimOptional()
+
+### Community 42 - "Community 42"
 Cohesion: 0.18
 Nodes (0):
 
-### Community 42 - "Community 42"
+### Community 43 - "Community 43"
+Cohesion: 0.18
+Nodes (0):
+
+### Community 44 - "Community 44"
 Cohesion: 0.31
 Nodes (6): expenseItemSuccess(), expenseSessionSuccess(), itemSuccess(), operationSuccess(), sessionSuccess(), success()
 
-### Community 43 - "Community 43"
+### Community 45 - "Community 45"
 Cohesion: 0.22
 Nodes (2): isValidEmail(), validateCustomerInfo()
 
-### Community 44 - "Community 44"
+### Community 46 - "Community 46"
 Cohesion: 0.22
 Nodes (2): listProductSkusByProductId(), readAllQueryResults()
 
-### Community 45 - "Community 45"
+### Community 47 - "Community 47"
 Cohesion: 0.2
 Nodes (0):
-
-### Community 46 - "Community 46"
-Cohesion: 0.29
-Nodes (5): handleReviewCloseout(), handleSubmitCloseout(), onReviewCloseout(), onSubmitCloseout(), trimOptional()
-
-### Community 47 - "Community 47"
-Cohesion: 0.24
-Nodes (3): buildDepositSubmissionKey(), handleRecordDeposit(), trimOptional()
 
 ### Community 48 - "Community 48"
 Cohesion: 0.29
@@ -1806,16 +1806,16 @@ Cohesion: 0.29
 Nodes (0):
 
 ### Community 92 - "Community 92"
+Cohesion: 0.33
+Nodes (2): getProductName(), sortProduct()
+
+### Community 93 - "Community 93"
 Cohesion: 0.29
 Nodes (0):
 
-### Community 93 - "Community 93"
+### Community 94 - "Community 94"
 Cohesion: 0.52
 Nodes (6): addItemToSavedBag(), getActiveSavedBag(), getBaseUrl(), removeItemFromSavedBag(), updateSavedBagItem(), updateSavedBagOwner()
-
-### Community 94 - "Community 94"
-Cohesion: 0.33
-Nodes (2): getProductName(), sortProduct()
 
 ### Community 95 - "Community 95"
 Cohesion: 0.52
@@ -1886,16 +1886,16 @@ Cohesion: 0.33
 Nodes (0):
 
 ### Community 112 - "Community 112"
-Cohesion: 0.33
-Nodes (0):
+Cohesion: 0.47
+Nodes (3): onDrop(), removeImage(), unmarkForDeletion()
 
 ### Community 113 - "Community 113"
-Cohesion: 0.4
-Nodes (2): useBulkOperations(), validateOperationValue()
-
-### Community 114 - "Community 114"
 Cohesion: 0.33
 Nodes (0):
+
+### Community 114 - "Community 114"
+Cohesion: 0.4
+Nodes (2): useBulkOperations(), validateOperationValue()
 
 ### Community 115 - "Community 115"
 Cohesion: 0.33
@@ -1906,52 +1906,52 @@ Cohesion: 0.33
 Nodes (0):
 
 ### Community 117 - "Community 117"
+Cohesion: 0.33
+Nodes (0):
+
+### Community 118 - "Community 118"
 Cohesion: 0.53
 Nodes (4): calculatePosChange(), calculatePosRemainingDue(), calculatePosTotalPaid(), roundPosAmount()
 
-### Community 118 - "Community 118"
+### Community 119 - "Community 119"
 Cohesion: 0.33
 Nodes (0):
-
-### Community 119 - "Community 119"
-Cohesion: 0.4
-Nodes (2): hasCustomerDetails(), useRegisterViewModel()
 
 ### Community 120 - "Community 120"
-Cohesion: 0.33
-Nodes (0):
+Cohesion: 0.4
+Nodes (2): hasCustomerDetails(), useRegisterViewModel()
 
 ### Community 121 - "Community 121"
 Cohesion: 0.33
 Nodes (0):
 
 ### Community 122 - "Community 122"
-Cohesion: 0.4
-Nodes (2): onSubmit(), saveStoreChanges()
+Cohesion: 0.33
+Nodes (0):
 
 ### Community 123 - "Community 123"
 Cohesion: 0.4
 Nodes (2): onSubmit(), saveStoreChanges()
 
 ### Community 124 - "Community 124"
-Cohesion: 0.33
-Nodes (0):
+Cohesion: 0.4
+Nodes (2): onSubmit(), saveStoreChanges()
 
 ### Community 125 - "Community 125"
-Cohesion: 0.47
-Nodes (3): getBaseUrl(), getPromoCodes(), redeemPromoCode()
-
-### Community 126 - "Community 126"
 Cohesion: 0.33
 Nodes (0):
+
+### Community 126 - "Community 126"
+Cohesion: 0.47
+Nodes (3): getBaseUrl(), getPromoCodes(), redeemPromoCode()
 
 ### Community 127 - "Community 127"
 Cohesion: 0.33
 Nodes (0):
 
 ### Community 128 - "Community 128"
-Cohesion: 0.47
-Nodes (3): onDrop(), removeImage(), unmarkForDeletion()
+Cohesion: 0.33
+Nodes (0):
 
 ### Community 129 - "Community 129"
 Cohesion: 0.53
@@ -2023,19 +2023,19 @@ Nodes (0):
 
 ### Community 146 - "Community 146"
 Cohesion: 0.4
-Nodes (1): Header()
+Nodes (0):
 
 ### Community 147 - "Community 147"
 Cohesion: 0.4
 Nodes (0):
 
 ### Community 148 - "Community 148"
-Cohesion: 0.4
-Nodes (0):
-
-### Community 149 - "Community 149"
 Cohesion: 0.5
 Nodes (2): handleFileSelect(), validateFile()
+
+### Community 149 - "Community 149"
+Cohesion: 0.4
+Nodes (0):
 
 ### Community 150 - "Community 150"
 Cohesion: 0.4
@@ -2047,7 +2047,7 @@ Nodes (0):
 
 ### Community 152 - "Community 152"
 Cohesion: 0.4
-Nodes (0):
+Nodes (1): Header()
 
 ### Community 153 - "Community 153"
 Cohesion: 0.4
