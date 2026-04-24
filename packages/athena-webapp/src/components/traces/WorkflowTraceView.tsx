@@ -79,9 +79,6 @@ export function WorkflowTraceHeader({
         <div className="flex items-center gap-2">
           <NavigateBackButton />
           <div className="space-y-1">
-            <h1 className="text-xl font-semibold tracking-tight">
-              {header.title}
-            </h1>
             <div className="flex items-center gap-2">
               {header.summary && <p className="text-sm">{header.summary}</p>}
               <Badge variant="outline" className={getStatusTone(header.status)}>
