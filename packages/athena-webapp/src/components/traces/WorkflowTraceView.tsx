@@ -1,4 +1,5 @@
 import { useQuery } from "convex/react";
+import { Circle } from "lucide-react";
 import type { Id } from "~/convex/_generated/dataModel";
 
 import View from "../View";
@@ -7,7 +8,7 @@ import { FadeIn } from "../common/FadeIn";
 import { Badge } from "../ui/badge";
 import { NotFoundView } from "../states/not-found/NotFoundView";
 import { api } from "~/convex/_generated/api";
-import { capitalizeWords } from "~/src/lib/utils";
+import { capitalizeWords, getRelativeTime } from "~/src/lib/utils";
 
 export type WorkflowTraceHeaderModel = {
   health: string;
@@ -39,13 +40,6 @@ export type WorkflowTraceViewModel = {
 
 function formatTraceLabel(value: string) {
   return capitalizeWords(value.replaceAll("_", " ").replaceAll("-", " "));
-}
-
-function formatTimestamp(timestamp: number) {
-  return new Date(timestamp).toLocaleString("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
 }
 
 function getStatusTone(status: string) {
@@ -121,48 +115,28 @@ export function WorkflowTraceTimeline({
   });
 
   return (
-    <section className="space-y-4 p-4 sm:p-6">
-      <div className="space-y-1">
+    <section className="space-y-6 p-4 sm:p-6">
+      <div>
         <p className="text-sm font-medium">Timeline</p>
-        <p className="text-sm text-muted-foreground">
-          Ordered workflow events for this trace.
-        </p>
       </div>
 
-      <ol className="space-y-3">
+      <ol className="space-y-8">
         {orderedEvents.map((event) => (
           <li
             key={`${event.traceId}-${event.sequence}-${event.step}`}
-            className="rounded-xl border border-border/70 bg-background/80 p-4 shadow-sm"
+            className="flex items-center"
           >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="space-y-2">
-                <p className="text-sm font-medium">
-                  {formatTraceLabel(event.step)}
+            <div className="space-y-2">
+              <div className="flex items-center">
+                <Circle className="h-2 w-2 mt-1 mr-2 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">
+                  {event.message || formatTraceLabel(event.step)}
                 </p>
-                <div className="flex flex-wrap gap-2">
-                  <Badge
-                    variant="outline"
-                    className={getStatusTone(event.status)}
-                  >
-                    {formatTraceLabel(event.status)}
-                  </Badge>
-                  <Badge variant="outline">
-                    {formatTraceLabel(event.kind)}
-                  </Badge>
-                </div>
               </div>
-
-              <p className="text-xs text-muted-foreground">
-                {formatTimestamp(event.occurredAt)}
+              <p className="text-xs ml-4 text-muted-foreground">
+                {`${getRelativeTime(event.occurredAt)} · ${formatTraceLabel(event.status)} · ${formatTraceLabel(event.kind)}`}
               </p>
             </div>
-
-            {event.message ? (
-              <p className="mt-3 text-sm text-muted-foreground">
-                {event.message}
-              </p>
-            ) : null}
           </li>
         ))}
       </ol>
