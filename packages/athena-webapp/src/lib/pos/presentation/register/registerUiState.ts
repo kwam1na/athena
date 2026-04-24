@@ -125,6 +125,7 @@ export interface RegisterCashierCardState {
 }
 
 export interface RegisterDrawerGateState {
+  mode: "initialSetup" | "recovery";
   registerLabel: string;
   registerNumber: string;
   currency: string;
@@ -135,6 +136,7 @@ export interface RegisterDrawerGateState {
   onOpeningFloatChange: (value: string) => void;
   onNotesChange: (value: string) => void;
   onSubmit: () => Promise<void>;
+  onSignOut: () => Promise<void>;
 }
 
 export interface RegisterAuthDialogState {

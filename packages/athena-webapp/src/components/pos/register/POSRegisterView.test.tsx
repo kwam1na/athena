@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -6,6 +7,16 @@ const mockUseRegisterViewModel = vi.fn();
 
 vi.mock("@/lib/pos/presentation/register/useRegisterViewModel", () => ({
   useRegisterViewModel: () => mockUseRegisterViewModel(),
+}));
+
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({
+    children,
+    to,
+  }: {
+    children: ReactNode;
+    to: string;
+  }) => <a href={to}>{children}</a>,
 }));
 
 vi.mock("@/components/View", () => ({
@@ -65,10 +76,6 @@ vi.mock("./RegisterCustomerPanel", () => ({
 
 vi.mock("./RegisterCheckoutPanel", () => ({
   RegisterCheckoutPanel: () => <div>register-checkout-panel</div>,
-}));
-
-vi.mock("./RegisterDrawerGate", () => ({
-  RegisterDrawerGate: () => <div>register-drawer-gate</div>,
 }));
 
 describe("POSRegisterView", () => {
@@ -156,7 +163,18 @@ describe("POSRegisterView", () => {
         isTransactionCompleted: false,
       },
       drawerGate: {
+        mode: "initialSetup",
+        registerLabel: "Front Counter",
+        registerNumber: "1",
+        currency: "GHS",
         openingFloat: "50.00",
+        notes: "",
+        errorMessage: null,
+        isSubmitting: false,
+        onOpeningFloatChange: vi.fn(),
+        onNotesChange: vi.fn(),
+        onSubmit: vi.fn(),
+        onSignOut: vi.fn(),
       },
       sessionPanel: null,
       cashierCard: null,
@@ -169,10 +187,79 @@ describe("POSRegisterView", () => {
     const { POSRegisterView } = await import("./POSRegisterView");
     render(<POSRegisterView />);
 
-    expect(screen.getByText("register-drawer-gate")).toBeInTheDocument();
+    expect(screen.getByText("Open drawer before selling")).toBeInTheDocument();
     expect(screen.queryByText("product-entry")).not.toBeInTheDocument();
     expect(screen.queryByText("cart-items")).not.toBeInTheDocument();
     expect(screen.queryByText("register-checkout-panel")).not.toBeInTheDocument();
     expect(screen.queryByText("register-action-bar")).not.toBeInTheDocument();
+  });
+
+  it("renders recovery copy, inline errors, and escape actions while hiding sale controls", async () => {
+    const onSignOut = vi.fn();
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: true,
+      },
+      registerInfo: {
+        customerName: "Ama Serwa",
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {},
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      drawerGate: {
+        mode: "recovery",
+        registerLabel: "Front Counter",
+        registerNumber: "1",
+        currency: "GHS",
+        openingFloat: "50.00",
+        notes: "",
+        errorMessage: "A register session is already open for this terminal.",
+        isSubmitting: false,
+        onOpeningFloatChange: vi.fn(),
+        onNotesChange: vi.fn(),
+        onSubmit: vi.fn(),
+        onSignOut,
+      },
+      sessionPanel: {},
+      cashierCard: {},
+      authDialog: {
+        open: false,
+      },
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(
+      screen.getByText("Sale paused until a drawer is open"),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/cart, customer, and payment draft/i)).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "A register session is already open for this terminal.",
+    );
+    expect(screen.queryByText("product-entry")).not.toBeInTheDocument();
+    expect(screen.queryByText("cart-items")).not.toBeInTheDocument();
+    expect(screen.queryByText("register-checkout-panel")).not.toBeInTheDocument();
+    expect(screen.queryByText("register-action-bar")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /cash controls/i }),
+    ).toHaveAttribute(
+      "href",
+      "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers",
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: /sign out/i }));
+
+    expect(onSignOut).toHaveBeenCalled();
   });
 });

@@ -72,6 +72,14 @@ type SessionItemRecord = {
   quantity: number;
 };
 
+type RegisterSessionRecord = {
+  _id: string;
+  storeId: string;
+  terminalId?: string;
+  registerNumber?: string;
+  status: "open" | "active" | "closing" | "closed";
+};
+
 type QueryBuilderFilters = {
   status?: string;
   expiresBefore?: number;
@@ -81,19 +89,36 @@ type QueryBuilderFilters = {
 function createMutationCtx(seed?: {
   sessions?: SessionRecord[];
   items?: SessionItemRecord[];
+  registerSessions?: RegisterSessionRecord[];
 }) {
   const sessions = [...(seed?.sessions ?? [])];
   const items = [...(seed?.items ?? [])];
+  const registerSessions = [
+    ...(seed?.registerSessions ?? []),
+    {
+      _id: "drawer-1",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      registerNumber: "1",
+      status: "open",
+    } satisfies RegisterSessionRecord,
+  ];
 
   const db = {
     get: vi.fn(async (tableNameOrId: string, maybeId?: string) => {
       const tableName = maybeId ? tableNameOrId : "posSession";
       const id = maybeId ?? tableNameOrId;
-      if (tableName !== "posSession") {
-        return null;
+      if (tableName === "posSession") {
+        return sessions.find((session) => session._id === id) ?? null;
       }
 
-      return sessions.find((session) => session._id === id) ?? null;
+      if (tableName === "registerSession") {
+        return (
+          registerSessions.find((session) => session._id === id) ?? null
+        );
+      }
+
+      return null;
     }),
     patch: vi.fn(
       async (tableName: string, id: string, patch: Record<string, unknown>) => {
@@ -194,6 +219,7 @@ function buildSession(overrides: Partial<SessionRecord>): SessionRecord {
     expiresAt: 4_102_444_800_000,
     staffProfileId: "cashier-1",
     registerNumber: "1",
+    registerSessionId: "drawer-1",
     ...overrides,
   };
 }
@@ -481,6 +507,7 @@ describe("pos session lifecycle trace handlers", () => {
       ctx as never,
       {
         sessionId: "session-clear",
+        staffProfileId: "cashier-1",
         checkoutStateVersion: 4,
       },
     );
@@ -512,6 +539,140 @@ describe("pos session lifecycle trace handlers", () => {
     );
   });
 
+  it("refuses to clear the cart when the session has no drawer binding", async () => {
+    const ctx = createMutationCtx({
+      sessions: [
+        buildSession({
+          _id: "session-clear-no-drawer",
+          registerSessionId: undefined,
+          checkoutStateVersion: 2,
+        }),
+      ],
+      items: [
+        {
+          _id: "item-1",
+          sessionId: "session-clear-no-drawer",
+          productSkuId: "sku-1",
+          quantity: 1,
+        },
+      ],
+    });
+
+    const result = await getHandler(releaseSessionInventoryHoldsAndDeleteItems)(
+      ctx as never,
+      {
+        sessionId: "session-clear-no-drawer",
+        staffProfileId: "cashier-1",
+        checkoutStateVersion: 4,
+      },
+    );
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: expect.objectContaining({
+        code: "validation_failed",
+        message: "Open the cash drawer before modifying this sale.",
+      }),
+    });
+    expect(mocks.releaseInventoryHoldsBatch).not.toHaveBeenCalled();
+    expect(ctx.db.delete).not.toHaveBeenCalled();
+  });
+
+  it("refuses to clear the cart when the bound drawer is closed", async () => {
+    const ctx = createMutationCtx({
+      sessions: [
+        buildSession({
+          _id: "session-clear-closed-drawer",
+          checkoutStateVersion: 2,
+        }),
+      ],
+      registerSessions: [
+        {
+          _id: "drawer-1",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          registerNumber: "1",
+          status: "closed",
+        },
+      ],
+      items: [
+        {
+          _id: "item-1",
+          sessionId: "session-clear-closed-drawer",
+          productSkuId: "sku-1",
+          quantity: 1,
+        },
+      ],
+    });
+
+    const result = await getHandler(releaseSessionInventoryHoldsAndDeleteItems)(
+      ctx as never,
+      {
+        sessionId: "session-clear-closed-drawer",
+        staffProfileId: "cashier-1",
+        checkoutStateVersion: 4,
+      },
+    );
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: expect.objectContaining({
+        code: "validation_failed",
+        message: "Open the cash drawer before modifying this sale.",
+      }),
+    });
+    expect(mocks.releaseInventoryHoldsBatch).not.toHaveBeenCalled();
+    expect(ctx.db.delete).not.toHaveBeenCalled();
+  });
+
+  it("refuses to clear the cart when the bound drawer identity is mismatched", async () => {
+    const ctx = createMutationCtx({
+      sessions: [
+        buildSession({
+          _id: "session-clear-mismatched-drawer",
+          registerSessionId: "drawer-9",
+          checkoutStateVersion: 2,
+        }),
+      ],
+      registerSessions: [
+        {
+          _id: "drawer-9",
+          storeId: "store-1",
+          terminalId: "terminal-9",
+          registerNumber: "9",
+          status: "open",
+        },
+      ],
+      items: [
+        {
+          _id: "item-1",
+          sessionId: "session-clear-mismatched-drawer",
+          productSkuId: "sku-1",
+          quantity: 1,
+        },
+      ],
+    });
+
+    const result = await getHandler(releaseSessionInventoryHoldsAndDeleteItems)(
+      ctx as never,
+      {
+        sessionId: "session-clear-mismatched-drawer",
+        staffProfileId: "cashier-1",
+        checkoutStateVersion: 4,
+      },
+    );
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: expect.objectContaining({
+        code: "validation_failed",
+        message: "Open the cash drawer before modifying this sale.",
+      }),
+    });
+    expect(mocks.releaseInventoryHoldsBatch).not.toHaveBeenCalled();
+    expect(ctx.db.delete).not.toHaveBeenCalled();
+  });
+
   it("keeps cleared carts fenced off from older payment-sync writes", async () => {
     const ctx = createMutationCtx({
       sessions: [
@@ -535,6 +696,7 @@ describe("pos session lifecycle trace handlers", () => {
 
     await getHandler(releaseSessionInventoryHoldsAndDeleteItems)(ctx as never, {
       sessionId: "session-clear-ordering",
+      staffProfileId: "cashier-1",
       checkoutStateVersion: 4,
     });
 
@@ -589,6 +751,7 @@ describe("pos session lifecycle trace handlers", () => {
       ctx as never,
       {
         sessionId: "session-stale-clear",
+        staffProfileId: "cashier-1",
         checkoutStateVersion: 4,
       },
     );
@@ -645,6 +808,40 @@ describe("pos session lifecycle trace handlers", () => {
         amount: 115,
         paymentCount: 1,
       }),
+    );
+  });
+
+  it("refuses to sync checkout payments when the session has no drawer binding", async () => {
+    const ctx = createMutationCtx({
+      sessions: [
+        buildSession({
+          _id: "session-checkout-no-drawer",
+          registerSessionId: undefined,
+        }),
+      ],
+    });
+
+    const result = await getHandler(syncSessionCheckoutState)(ctx as never, {
+      sessionId: "session-checkout-no-drawer",
+      staffProfileId: "cashier-1",
+      checkoutStateVersion: 1,
+      payments: [{ method: "cash", amount: 120, timestamp: 1_000 }],
+      stage: "paymentAdded",
+      paymentMethod: "cash",
+      amount: 120,
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: expect.objectContaining({
+        code: "validation_failed",
+        message: "Open the cash drawer before modifying this sale.",
+      }),
+    });
+    expect(ctx.db.patch).not.toHaveBeenCalledWith(
+      "posSession",
+      "session-checkout-no-drawer",
+      expect.anything(),
     );
   });
 

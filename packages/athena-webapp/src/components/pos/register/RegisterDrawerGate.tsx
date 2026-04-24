@@ -1,9 +1,12 @@
 import type { FormEvent } from "react";
+import { ArrowRightIcon, LogOutIcon } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { RegisterDrawerGateState } from "@/lib/pos/presentation/register/registerUiState";
+import { getOrigin } from "~/src/lib/navigationUtils";
 
 export function RegisterDrawerGate({
   drawerGate,
@@ -14,20 +17,22 @@ export function RegisterDrawerGate({
     event.preventDefault();
     void drawerGate.onSubmit();
   };
+  const isRecovery = drawerGate.mode === "recovery";
 
   return (
-    <div className="mx-auto max-w-2xl rounded-3xl border border-stone-200 bg-white p-8 shadow-sm">
+    <div className="mx-auto max-w-2xl rounded-lg border border-stone-200 bg-white p-8 shadow-sm">
       <div className="space-y-3">
         <p className="text-sm font-medium uppercase tracking-[0.2em] text-stone-500">
-          Drawer setup
+          {isRecovery ? "Drawer recovery" : "Drawer setup"}
         </p>
         <div className="space-y-1">
           <h2 className="text-2xl font-semibold text-stone-900">
-            Open drawer before selling
+            {isRecovery ? "Sale paused until a drawer is open" : "Open drawer before selling"}
           </h2>
           <p className="text-sm text-stone-600">
-            {drawerGate.registerLabel} must have an active cash drawer before POS
-            can start or resume a live session.
+            {isRecovery
+              ? `${drawerGate.registerLabel} needs an active cash drawer before this sale can continue. The cart, customer, and payment draft will be preserved after drawer setup.`
+              : `${drawerGate.registerLabel} must have an active cash drawer before POS can start or resume a live session.`}
           </p>
           <p className="text-sm text-stone-500">
             Register {drawerGate.registerNumber}
@@ -71,13 +76,44 @@ export function RegisterDrawerGate({
           </p>
         ) : null}
 
-        <Button
-          className="w-full sm:w-auto"
-          disabled={drawerGate.isSubmitting}
-          type="submit"
-        >
-          {drawerGate.isSubmitting ? "Opening drawer..." : "Open drawer"}
-        </Button>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <Button
+            className="w-full sm:w-auto"
+            disabled={drawerGate.isSubmitting}
+            type="submit"
+          >
+            {drawerGate.isSubmitting ? "Opening drawer..." : "Open drawer"}
+          </Button>
+
+          <Button
+            className="w-full sm:w-auto"
+            disabled={drawerGate.isSubmitting}
+            onClick={() => void drawerGate.onSignOut()}
+            type="button"
+            variant="outline"
+          >
+            <LogOutIcon className="mr-2 h-4 w-4" />
+            Sign out
+          </Button>
+
+          <Button asChild className="w-full sm:w-auto" type="button" variant="ghost">
+            <Link
+              className="inline-flex items-center justify-center"
+              params={(params) => ({
+                ...params,
+                orgUrlSlug: params.orgUrlSlug!,
+                storeUrlSlug: params.storeUrlSlug!,
+              })}
+              search={{
+                o: getOrigin(),
+              }}
+              to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers"
+            >
+              Cash controls
+              <ArrowRightIcon className="ml-2 h-4 w-4" />
+            </Link>
+          </Button>
+        </div>
       </form>
     </div>
   );

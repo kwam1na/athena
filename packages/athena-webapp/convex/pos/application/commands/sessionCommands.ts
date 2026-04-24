@@ -55,6 +55,12 @@ export interface ResumeSessionArgs {
   terminalId: Id<"posTerminal">;
 }
 
+export interface BindSessionToRegisterSessionArgs {
+  sessionId: Id<"posSession">;
+  staffProfileId: Id<"staffProfile">;
+  registerSessionId: Id<"registerSession">;
+}
+
 export interface UpsertSessionItemArgs {
   sessionId: Id<"posSession">;
   productId: Id<"product">;
@@ -97,6 +103,14 @@ export interface PosSessionCommandService {
   >;
   resumeSession(
     args: ResumeSessionArgs,
+  ): Promise<
+    PosSessionCommandOutcome<{
+      sessionId: Id<"posSession">;
+      expiresAt: number;
+    }>
+  >;
+  bindSessionToRegisterSession(
+    args: BindSessionToRegisterSessionArgs,
   ): Promise<
     PosSessionCommandOutcome<{
       sessionId: Id<"posSession">;
@@ -391,12 +405,71 @@ export function createPosSessionCommandService(
       return success({ sessionId: args.sessionId, expiresAt });
     },
 
+    async bindSessionToRegisterSession(args) {
+      const now = dependencies.now();
+      const session = await dependencies.repository.getSessionById(args.sessionId);
+      const validation = validateActiveSession(session, args.staffProfileId, now);
+      if (validation.status !== "ok") {
+        return validation;
+      }
+
+      const registerSessionBinding = await resolveRegisterSessionBinding(
+        dependencies,
+        {
+          storeId: validation.data.storeId,
+          terminalId: validation.data.terminalId,
+          registerNumber: validation.data.registerNumber,
+          preferredRegisterSessionId: args.registerSessionId,
+          failureMessage: "Open the cash drawer before recovering this sale.",
+        },
+      );
+      if (registerSessionBinding.status !== "ok") {
+        return registerSessionBinding;
+      }
+
+      if (
+        validation.data.registerSessionId &&
+        validation.data.registerSessionId ===
+          registerSessionBinding.data.registerSessionId
+      ) {
+        return success({
+          sessionId: args.sessionId,
+          expiresAt: validation.data.expiresAt,
+        });
+      }
+
+      if (validation.data.registerSessionId) {
+        return failure(
+          "validationFailed",
+          "This sale is already assigned to a different cash drawer.",
+        );
+      }
+
+      const expiresAt = dependencies.calculateExpiration(now);
+      await dependencies.repository.patchSession(args.sessionId, {
+        registerSessionId: registerSessionBinding.data.registerSessionId,
+        updatedAt: now,
+        expiresAt,
+      });
+
+      return success({ sessionId: args.sessionId, expiresAt });
+    },
+
     async upsertSessionItem(args) {
       const now = dependencies.now();
       const session = await dependencies.repository.getSessionById(args.sessionId);
       const validation = validateActiveSession(session, args.staffProfileId, now);
       if (validation.status !== "ok") {
         return validation;
+      }
+
+      const drawerValidation = await validateActiveSessionRegisterBinding(
+        dependencies,
+        validation.data,
+        "Open the cash drawer before modifying this sale.",
+      );
+      if (drawerValidation.status !== "ok") {
+        return drawerValidation;
       }
 
       const existingItem = await dependencies.repository.findSessionItemBySku({
@@ -491,6 +564,15 @@ export function createPosSessionCommandService(
         return validation;
       }
 
+      const drawerValidation = await validateActiveSessionRegisterBinding(
+        dependencies,
+        validation.data,
+        "Open the cash drawer before modifying this sale.",
+      );
+      if (drawerValidation.status !== "ok") {
+        return drawerValidation;
+      }
+
       const item = await dependencies.repository.getSessionItemById(args.itemId);
       if (!item) {
         return failure("notFound", "Item not found in cart");
@@ -542,6 +624,13 @@ export function runResumeSessionCommand(
   args: ResumeSessionArgs,
 ) {
   return createDefaultSessionCommandService(ctx).resumeSession(args);
+}
+
+export function runBindSessionToRegisterSessionCommand(
+  ctx: MutationCtx,
+  args: BindSessionToRegisterSessionArgs,
+) {
+  return createDefaultSessionCommandService(ctx).bindSessionToRegisterSession(args);
 }
 
 export function runUpsertSessionItemCommand(
@@ -684,6 +773,24 @@ async function resolveRegisterSessionBinding(
 
   return success({
     registerSessionId: registerSession._id,
+  });
+}
+
+async function validateActiveSessionRegisterBinding(
+  dependencies: SessionCommandDependencies,
+  session: Doc<"posSession">,
+  failureMessage: string,
+): Promise<PosSessionCommandOutcome<{ registerSessionId: Id<"registerSession"> }>> {
+  if (!session.registerSessionId) {
+    return failure("validationFailed", failureMessage);
+  }
+
+  return resolveRegisterSessionBinding(dependencies, {
+    storeId: session.storeId,
+    terminalId: session.terminalId,
+    registerNumber: session.registerNumber,
+    preferredRegisterSessionId: session.registerSessionId,
+    failureMessage,
   });
 }
 
