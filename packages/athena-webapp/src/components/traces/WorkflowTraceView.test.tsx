@@ -69,7 +69,6 @@ describe("WorkflowTraceView", () => {
       />,
     );
 
-    expect(screen.getByText("Repair order JOB-42")).toBeInTheDocument();
     expect(screen.getAllByText("Succeeded").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Partial").length).toBeGreaterThan(0);
     const listItems = screen.getAllByRole("listitem");

@@ -21083,7 +21083,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_traces_workflowtraceview_tsx",
       "source_file": "packages/athena-webapp/src/components/traces/WorkflowTraceView.tsx",
-      "source_location": "L113",
+      "source_location": "L110",
       "target": "workflowtraceview_workflowtracetimeline",
       "weight": 1
     },
@@ -21095,7 +21095,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_traces_workflowtraceview_tsx",
       "source_file": "packages/athena-webapp/src/components/traces/WorkflowTraceView.tsx",
-      "source_location": "L176",
+      "source_location": "L173",
       "target": "workflowtraceview_workflowtraceview",
       "weight": 1
     },
@@ -73222,7 +73222,7 @@
       "label": "WorkflowTraceTimeline()",
       "norm_label": "workflowtracetimeline()",
       "source_file": "packages/athena-webapp/src/components/traces/WorkflowTraceView.tsx",
-      "source_location": "L113"
+      "source_location": "L110"
     },
     {
       "community": 91,
@@ -73231,7 +73231,7 @@
       "label": "WorkflowTraceView()",
       "norm_label": "workflowtraceview()",
       "source_file": "packages/athena-webapp/src/components/traces/WorkflowTraceView.tsx",
-      "source_location": "L176"
+      "source_location": "L173"
     },
     {
       "community": 910,
