@@ -54,6 +54,7 @@ export interface PosRegisterSessionDto {
   terminalId?: string;
   staffProfileId?: string;
   registerNumber?: string;
+  registerSessionId?: string;
   expiresAt?: number;
   updatedAt?: number;
   heldAt?: number;
@@ -167,6 +168,12 @@ export interface PosHoldSessionInput {
   reason?: string;
 }
 
+export interface PosBindSessionToRegisterSessionInput {
+  sessionId: Id<"posSession">;
+  staffProfileId: Id<"staffProfile">;
+  registerSessionId: Id<"registerSession">;
+}
+
 export interface PosPaymentDto {
   method: PosPaymentMethod | string;
   amount: number;
@@ -200,6 +207,11 @@ export type PosAddItemResultDto = CommandResult<{
 }>;
 
 export type PosHoldSessionResultDto = CommandResult<{
+  sessionId: Id<"posSession">;
+  expiresAt: number;
+}>;
+
+export type PosBindSessionToRegisterSessionResultDto = CommandResult<{
   sessionId: Id<"posSession">;
   expiresAt: number;
 }>;

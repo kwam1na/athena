@@ -535,6 +535,114 @@ describe("completeTransaction trace ordering", () => {
     );
   });
 
+  it("fails safely when a session sale is bound to a closed drawer", async () => {
+    vi.mocked(getPosSessionById).mockResolvedValue({
+      _id: "session-1",
+      storeId: "store-1",
+      customerId: undefined,
+      staffProfileId: "staff-1",
+      registerNumber: "1",
+      registerSessionId: "register-1",
+      subtotal: 10,
+      tax: 0,
+      total: 10,
+      terminalId: "terminal-1",
+      customerInfo: undefined,
+    } as never);
+    vi.mocked(getRegisterSessionById).mockResolvedValue({
+      _id: "register-1",
+      storeId: "store-1",
+      status: "closed",
+      terminalId: "terminal-1",
+      registerNumber: "1",
+    } as never);
+    vi.mocked(listSessionItems).mockResolvedValue([
+      {
+        _id: "session-item-1",
+        sessionId: "session-1",
+        storeId: "store-1",
+        productId: "product-1",
+        productSkuId: "sku-1",
+        productSku: "SKU-1",
+        productName: "Sneaker",
+        price: 10,
+        quantity: 1,
+        image: undefined,
+      },
+    ] as never);
+
+    await expect(
+      createTransactionFromSessionHandler({} as never, {
+        sessionId: "session-1" as Id<"posSession">,
+        payments: [{ method: "cash", amount: 10, timestamp: 1 }],
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        kind: "user_error",
+        error: expect.objectContaining({
+          code: "precondition_failed",
+          message: "Open the cash drawer before completing this sale.",
+        }),
+      }),
+    );
+
+    expect(createPosTransaction).not.toHaveBeenCalled();
+  });
+
+  it("fails safely when a session sale is bound to a mismatched drawer", async () => {
+    vi.mocked(getPosSessionById).mockResolvedValue({
+      _id: "session-1",
+      storeId: "store-1",
+      customerId: undefined,
+      staffProfileId: "staff-1",
+      registerNumber: "1",
+      registerSessionId: "register-1",
+      subtotal: 10,
+      tax: 0,
+      total: 10,
+      terminalId: "terminal-1",
+      customerInfo: undefined,
+    } as never);
+    vi.mocked(getRegisterSessionById).mockResolvedValue({
+      _id: "register-1",
+      storeId: "store-1",
+      status: "open",
+      terminalId: "terminal-9",
+      registerNumber: "9",
+    } as never);
+    vi.mocked(listSessionItems).mockResolvedValue([
+      {
+        _id: "session-item-1",
+        sessionId: "session-1",
+        storeId: "store-1",
+        productId: "product-1",
+        productSkuId: "sku-1",
+        productSku: "SKU-1",
+        productName: "Sneaker",
+        price: 10,
+        quantity: 1,
+        image: undefined,
+      },
+    ] as never);
+
+    await expect(
+      createTransactionFromSessionHandler({} as never, {
+        sessionId: "session-1" as Id<"posSession">,
+        payments: [{ method: "cash", amount: 10, timestamp: 1 }],
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        kind: "user_error",
+        error: expect.objectContaining({
+          code: "precondition_failed",
+          message: "Open the cash drawer before completing this sale.",
+        }),
+      }),
+    );
+
+    expect(createPosTransaction).not.toHaveBeenCalled();
+  });
+
   it("does not fail direct sale completion when workflowTraceId persistence fails", async () => {
     vi.mocked(getStoreById).mockResolvedValue({
       _id: "store-1",

@@ -90,6 +90,9 @@ export function useConvexHeldSessions(input: {
 
 export function useConvexSessionActions() {
   const resumeSessionMutation = useMutation(api.inventory.posSessions.resumeSession);
+  const bindSessionToRegisterSessionMutation = useMutation(
+    api.inventory.posSessions.bindSessionToRegisterSession,
+  );
   const voidSessionMutation = useMutation(api.inventory.posSessions.voidSession);
   const updateSessionMutation = useMutation(api.inventory.posSessions.updateSession);
   const syncSessionCheckoutStateMutation = useMutation(
@@ -103,6 +106,12 @@ export function useConvexSessionActions() {
   return {
     resumeSession: (args: Parameters<typeof resumeSessionMutation>[0]) =>
       runCommand<SessionCommandPayload>(() => resumeSessionMutation(args)),
+    bindSessionToRegisterSession: (
+      args: Parameters<typeof bindSessionToRegisterSessionMutation>[0],
+    ) =>
+      runCommand<SessionCommandPayload>(() =>
+        bindSessionToRegisterSessionMutation(args),
+      ),
     voidSession: (args: Parameters<typeof voidSessionMutation>[0]) =>
       runCommand<{ sessionId?: Id<"posSession"> }>(() => voidSessionMutation(args)),
     updateSession: (args: Parameters<typeof updateSessionMutation>[0]) =>

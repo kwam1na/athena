@@ -365,6 +365,180 @@ describe("createPosSessionCommandService", () => {
     expect(repository.sessions).toHaveLength(0);
   });
 
+  it("binds an active same-terminal session to an open drawer without holding or clearing it", async () => {
+    const commandService = await loadCommandService();
+    const repository = createFakeRepository({
+      registerSessions: [
+        buildRegisterSession({
+          _id: "drawer-2",
+          storeId: "store-1",
+          status: "open",
+          terminalId: "terminal-1",
+          registerNumber: "1",
+        }),
+      ],
+      sessions: [
+        buildSession({
+          _id: "session-1",
+          sessionNumber: "SES-001",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          staffProfileId: "cashier-1",
+          status: "active",
+          expiresAt: 8_000,
+          updatedAt: 500,
+          registerNumber: "1",
+        }),
+      ],
+      items: [
+        buildItem({
+          _id: "item-1",
+          sessionId: "session-1",
+          storeId: "store-1",
+          productId: "product-1",
+          productSkuId: "sku-1",
+          productSku: "SKU-1",
+          productName: "Sneaker",
+          price: 120,
+          quantity: 2,
+        }),
+      ],
+    });
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).bindSessionToRegisterSession({
+      sessionId: "session-1",
+      staffProfileId: "cashier-1",
+      registerSessionId: "drawer-2",
+    });
+
+    expect(result).toEqual({
+      status: "ok",
+      data: {
+        sessionId: "session-1",
+        expiresAt: 61_000,
+      },
+    });
+    expect(repository.getSession("session-1")).toEqual(
+      expect.objectContaining({
+        status: "active",
+        registerSessionId: "drawer-2",
+        updatedAt: 1_000,
+        expiresAt: 61_000,
+      }),
+    );
+    expect(repository.items).toHaveLength(1);
+  });
+
+  it("treats binding an active session to the same drawer as idempotent", async () => {
+    const commandService = await loadCommandService();
+    const repository = createFakeRepository({
+      registerSessions: [
+        buildRegisterSession({
+          _id: "drawer-2",
+          storeId: "store-1",
+          status: "open",
+          terminalId: "terminal-1",
+          registerNumber: "1",
+        }),
+      ],
+      sessions: [
+        buildSession({
+          _id: "session-1",
+          sessionNumber: "SES-001",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          staffProfileId: "cashier-1",
+          status: "active",
+          expiresAt: 8_000,
+          updatedAt: 500,
+          registerNumber: "1",
+          registerSessionId: "drawer-2",
+        }),
+      ],
+    });
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).bindSessionToRegisterSession({
+      sessionId: "session-1",
+      staffProfileId: "cashier-1",
+      registerSessionId: "drawer-2",
+    });
+
+    expect(result).toEqual({
+      status: "ok",
+      data: {
+        sessionId: "session-1",
+        expiresAt: 8_000,
+      },
+    });
+    expect(repository.getSession("session-1")).toEqual(
+      expect.objectContaining({
+        registerSessionId: "drawer-2",
+        updatedAt: 500,
+        expiresAt: 8_000,
+      }),
+    );
+  });
+
+  it("rejects recovery binding when the drawer identity does not match the session", async () => {
+    const commandService = await loadCommandService();
+    const repository = createFakeRepository({
+      registerSessions: [
+        buildRegisterSession({
+          _id: "drawer-2",
+          storeId: "store-1",
+          status: "open",
+          terminalId: "terminal-9",
+          registerNumber: "9",
+        }),
+      ],
+      sessions: [
+        buildSession({
+          _id: "session-1",
+          sessionNumber: "SES-001",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          staffProfileId: "cashier-1",
+          status: "active",
+          expiresAt: 8_000,
+          updatedAt: 500,
+          registerNumber: "1",
+        }),
+      ],
+    });
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).bindSessionToRegisterSession({
+      sessionId: "session-1",
+      staffProfileId: "cashier-1",
+      registerSessionId: "drawer-2",
+    });
+
+    expect(result).toEqual({
+      status: "validationFailed",
+      message: "Open the cash drawer before recovering this sale.",
+    });
+    expect(repository.getSession("session-1")).not.toHaveProperty(
+      "registerSessionId",
+    );
+  });
+
   it("refuses to resume an expired held session", async () => {
     const commandService = await loadCommandService();
     const repository = createFakeRepository({
@@ -411,8 +585,19 @@ describe("createPosSessionCommandService", () => {
           terminalId: "terminal-1",
           staffProfileId: "cashier-1",
           status: "active",
+          registerNumber: "1",
+          registerSessionId: "drawer-1",
           expiresAt: 8_000,
           updatedAt: 500,
+        }),
+      ],
+      registerSessions: [
+        buildRegisterSession({
+          _id: "drawer-1",
+          storeId: "store-1",
+          status: "open",
+          terminalId: "terminal-1",
+          registerNumber: "1",
         }),
       ],
     });
@@ -482,8 +667,19 @@ describe("createPosSessionCommandService", () => {
           terminalId: "terminal-1",
           staffProfileId: "cashier-1",
           status: "active",
+          registerNumber: "1",
+          registerSessionId: "drawer-1",
           expiresAt: 8_000,
           updatedAt: 500,
+        }),
+      ],
+      registerSessions: [
+        buildRegisterSession({
+          _id: "drawer-1",
+          storeId: "store-1",
+          status: "open",
+          terminalId: "terminal-1",
+          registerNumber: "1",
         }),
       ],
       items: [
@@ -557,6 +753,179 @@ describe("createPosSessionCommandService", () => {
     ]);
   });
 
+  it("refuses to add a cart line when the active session has no drawer binding", async () => {
+    const commandService = await loadCommandService();
+    const repository = createFakeRepository({
+      sessions: [
+        buildSession({
+          _id: "session-10",
+          sessionNumber: "SES-010",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          staffProfileId: "cashier-1",
+          status: "active",
+          registerNumber: "1",
+          expiresAt: 8_000,
+          updatedAt: 500,
+        }),
+      ],
+    });
+    const inventoryCalls: InventoryCall[] = [];
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        inventoryCalls,
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).upsertSessionItem({
+      sessionId: "session-10",
+      staffProfileId: "cashier-1",
+      productId: "product-1",
+      productSkuId: "sku-1",
+      productSku: "SKU-1",
+      productName: "Sneaker",
+      price: 120,
+      quantity: 2,
+    });
+
+    expect(result).toEqual({
+      status: "validationFailed",
+      message: "Open the cash drawer before modifying this sale.",
+    });
+    expect(inventoryCalls).toEqual([]);
+    expect(repository.items).toEqual([]);
+  });
+
+  it("refuses to add a cart line when the bound drawer is closed", async () => {
+    const commandService = await loadCommandService();
+    const repository = createFakeRepository({
+      sessions: [
+        buildSession({
+          _id: "session-11",
+          sessionNumber: "SES-011",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          staffProfileId: "cashier-1",
+          status: "active",
+          registerNumber: "1",
+          registerSessionId: "drawer-1",
+          expiresAt: 8_000,
+          updatedAt: 500,
+        }),
+      ],
+      registerSessions: [
+        buildRegisterSession({
+          _id: "drawer-1",
+          storeId: "store-1",
+          status: "closed",
+          terminalId: "terminal-1",
+          registerNumber: "1",
+        }),
+      ],
+    });
+    const inventoryCalls: InventoryCall[] = [];
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        inventoryCalls,
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).upsertSessionItem({
+      sessionId: "session-11",
+      staffProfileId: "cashier-1",
+      productId: "product-1",
+      productSkuId: "sku-1",
+      productSku: "SKU-1",
+      productName: "Sneaker",
+      price: 120,
+      quantity: 2,
+    });
+
+    expect(result).toEqual({
+      status: "validationFailed",
+      message: "Open the cash drawer before modifying this sale.",
+    });
+    expect(inventoryCalls).toEqual([]);
+    expect(repository.items).toEqual([]);
+  });
+
+  it("refuses to update a cart line when the bound drawer identity is mismatched", async () => {
+    const commandService = await loadCommandService();
+    const repository = createFakeRepository({
+      sessions: [
+        buildSession({
+          _id: "session-12",
+          sessionNumber: "SES-012",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          staffProfileId: "cashier-1",
+          status: "active",
+          registerNumber: "1",
+          registerSessionId: "drawer-9",
+          expiresAt: 8_000,
+          updatedAt: 500,
+        }),
+      ],
+      registerSessions: [
+        buildRegisterSession({
+          _id: "drawer-9",
+          storeId: "store-1",
+          status: "open",
+          terminalId: "terminal-9",
+          registerNumber: "9",
+        }),
+      ],
+      items: [
+        buildItem({
+          _id: "item-12",
+          sessionId: "session-12",
+          storeId: "store-1",
+          productId: "product-1",
+          productSkuId: "sku-1",
+          productSku: "SKU-1",
+          productName: "Sneaker",
+          price: 120,
+          quantity: 2,
+        }),
+      ],
+    });
+    const inventoryCalls: InventoryCall[] = [];
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        inventoryCalls,
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).upsertSessionItem({
+      sessionId: "session-12",
+      staffProfileId: "cashier-1",
+      productId: "product-1",
+      productSkuId: "sku-1",
+      productSku: "SKU-1",
+      productName: "Sneaker",
+      price: 125,
+      quantity: 5,
+    });
+
+    expect(result).toEqual({
+      status: "validationFailed",
+      message: "Open the cash drawer before modifying this sale.",
+    });
+    expect(inventoryCalls).toEqual([]);
+    expect(repository.getItem("item-12")).toEqual(
+      expect.objectContaining({
+        quantity: 2,
+        price: 120,
+      }),
+    );
+  });
+
   it("releases the held quantity when removing a cart line", async () => {
     const commandService = await loadCommandService();
     const repository = createFakeRepository({
@@ -568,8 +937,19 @@ describe("createPosSessionCommandService", () => {
           terminalId: "terminal-1",
           staffProfileId: "cashier-1",
           status: "active",
+          registerNumber: "1",
+          registerSessionId: "drawer-1",
           expiresAt: 8_000,
           updatedAt: 500,
+        }),
+      ],
+      registerSessions: [
+        buildRegisterSession({
+          _id: "drawer-1",
+          storeId: "store-1",
+          status: "open",
+          terminalId: "terminal-1",
+          registerNumber: "1",
         }),
       ],
       items: [
@@ -626,6 +1006,185 @@ describe("createPosSessionCommandService", () => {
         previousQuantity: undefined,
       },
     ]);
+  });
+
+  it("refuses to remove a cart line when the active session has no drawer binding", async () => {
+    const commandService = await loadCommandService();
+    const repository = createFakeRepository({
+      sessions: [
+        buildSession({
+          _id: "session-13",
+          sessionNumber: "SES-013",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          staffProfileId: "cashier-1",
+          status: "active",
+          registerNumber: "1",
+          expiresAt: 8_000,
+          updatedAt: 500,
+        }),
+      ],
+      items: [
+        buildItem({
+          _id: "item-13",
+          sessionId: "session-13",
+          storeId: "store-1",
+          productId: "product-1",
+          productSkuId: "sku-1",
+          productSku: "SKU-1",
+          productName: "Sneaker",
+          price: 120,
+          quantity: 3,
+        }),
+      ],
+    });
+    const inventoryCalls: InventoryCall[] = [];
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        inventoryCalls,
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).removeSessionItem({
+      sessionId: "session-13",
+      staffProfileId: "cashier-1",
+      itemId: "item-13",
+    });
+
+    expect(result).toEqual({
+      status: "validationFailed",
+      message: "Open the cash drawer before modifying this sale.",
+    });
+    expect(inventoryCalls).toEqual([]);
+    expect(repository.getItem("item-13")).not.toBeNull();
+  });
+
+  it("refuses to remove a cart line when the bound drawer is closed", async () => {
+    const commandService = await loadCommandService();
+    const repository = createFakeRepository({
+      sessions: [
+        buildSession({
+          _id: "session-14",
+          sessionNumber: "SES-014",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          staffProfileId: "cashier-1",
+          status: "active",
+          registerNumber: "1",
+          registerSessionId: "drawer-1",
+          expiresAt: 8_000,
+          updatedAt: 500,
+        }),
+      ],
+      registerSessions: [
+        buildRegisterSession({
+          _id: "drawer-1",
+          storeId: "store-1",
+          status: "closed",
+          terminalId: "terminal-1",
+          registerNumber: "1",
+        }),
+      ],
+      items: [
+        buildItem({
+          _id: "item-14",
+          sessionId: "session-14",
+          storeId: "store-1",
+          productId: "product-1",
+          productSkuId: "sku-1",
+          productSku: "SKU-1",
+          productName: "Sneaker",
+          price: 120,
+          quantity: 3,
+        }),
+      ],
+    });
+    const inventoryCalls: InventoryCall[] = [];
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        inventoryCalls,
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).removeSessionItem({
+      sessionId: "session-14",
+      staffProfileId: "cashier-1",
+      itemId: "item-14",
+    });
+
+    expect(result).toEqual({
+      status: "validationFailed",
+      message: "Open the cash drawer before modifying this sale.",
+    });
+    expect(inventoryCalls).toEqual([]);
+    expect(repository.getItem("item-14")).not.toBeNull();
+  });
+
+  it("refuses to remove a cart line when the bound drawer identity is mismatched", async () => {
+    const commandService = await loadCommandService();
+    const repository = createFakeRepository({
+      sessions: [
+        buildSession({
+          _id: "session-15",
+          sessionNumber: "SES-015",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          staffProfileId: "cashier-1",
+          status: "active",
+          registerNumber: "1",
+          registerSessionId: "drawer-9",
+          expiresAt: 8_000,
+          updatedAt: 500,
+        }),
+      ],
+      registerSessions: [
+        buildRegisterSession({
+          _id: "drawer-9",
+          storeId: "store-1",
+          status: "open",
+          terminalId: "terminal-9",
+          registerNumber: "9",
+        }),
+      ],
+      items: [
+        buildItem({
+          _id: "item-15",
+          sessionId: "session-15",
+          storeId: "store-1",
+          productId: "product-1",
+          productSkuId: "sku-1",
+          productSku: "SKU-1",
+          productName: "Sneaker",
+          price: 120,
+          quantity: 3,
+        }),
+      ],
+    });
+    const inventoryCalls: InventoryCall[] = [];
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        inventoryCalls,
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).removeSessionItem({
+      sessionId: "session-15",
+      staffProfileId: "cashier-1",
+      itemId: "item-15",
+    });
+
+    expect(result).toEqual({
+      status: "validationFailed",
+      message: "Open the cash drawer before modifying this sale.",
+    });
+    expect(inventoryCalls).toEqual([]);
+    expect(repository.getItem("item-15")).not.toBeNull();
   });
 });
 
@@ -906,6 +1465,11 @@ function createCommandService(
     sessionId: string;
     staffProfileId: string;
     terminalId: string;
+  }) => Promise<unknown>;
+  bindSessionToRegisterSession: (args: {
+    sessionId: string;
+    staffProfileId: string;
+    registerSessionId: string;
   }) => Promise<unknown>;
   upsertSessionItem: (args: {
     sessionId: string;
