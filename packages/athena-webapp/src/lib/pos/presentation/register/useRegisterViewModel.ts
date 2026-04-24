@@ -37,6 +37,7 @@ import { parseDisplayAmountInput } from "@/lib/pos/displayAmounts";
 import { logger } from "@/lib/logger";
 import { useConvexCommandGateway } from "@/lib/pos/infrastructure/convex/commandGateway";
 import { useConvexRegisterState } from "@/lib/pos/infrastructure/convex/registerGateway";
+import { isPosUsableRegisterSessionStatus } from "~/shared/registerSessionStatus";
 import {
   useConvexActiveSession,
   useConvexHeldSessions,
@@ -144,12 +145,17 @@ export function useRegisterViewModel(): RegisterViewModel {
     staffProfileId,
     registerNumber: registerNumberOverride,
   });
+  const usableActiveRegisterSession =
+    registerState?.activeRegisterSession &&
+    isPosUsableRegisterSessionStatus(registerState.activeRegisterSession.status)
+      ? registerState.activeRegisterSession
+      : null;
   const activeRegisterNumber =
     activeSession?.registerNumber ??
-    registerState?.activeRegisterSession?.registerNumber ??
+    usableActiveRegisterSession?.registerNumber ??
     registerState?.activeSession?.registerNumber ??
     registerState?.resumableSession?.registerNumber;
-  const activeRegisterSessionId = registerState?.activeRegisterSession?._id as
+  const activeRegisterSessionId = usableActiveRegisterSession?._id as
     | Id<"registerSession">
     | undefined;
   const registerNumber =
@@ -208,11 +214,11 @@ export function useRegisterViewModel(): RegisterViewModel {
     bootstrapState &&
       (bootstrapState.phase === "readyToStart" ||
         bootstrapState.phase === "resumable") &&
-      !bootstrapState.activeRegisterSession,
+      !usableActiveRegisterSession,
   );
   const hasMissingDrawerRecoveryState = Boolean(
     bootstrapState &&
-      !bootstrapState.activeRegisterSession &&
+      !usableActiveRegisterSession &&
       (bootstrapState.phase === "active" ||
         bootstrapState.phase === "resumable" ||
         hasActivePosSession),
@@ -870,9 +876,7 @@ export function useRegisterViewModel(): RegisterViewModel {
           terminalId: terminal._id,
           staffProfileId,
           registerNumber: registerNumberOverride,
-          registerSessionId: bootstrapState.activeRegisterSession?._id as
-            | Id<"registerSession">
-            | undefined,
+          registerSessionId: activeRegisterSessionId,
         },
       });
 
@@ -883,6 +887,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     })();
   }, [
     activeStore?._id,
+    activeRegisterSessionId,
     bootstrapState,
     staffProfileId,
     isTransactionCompleted,

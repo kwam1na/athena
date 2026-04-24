@@ -365,6 +365,41 @@ describe("createPosSessionCommandService", () => {
     expect(repository.sessions).toHaveLength(0);
   });
 
+  it("refuses to start a retail session with an explicitly closing drawer", async () => {
+    const commandService = await loadCommandService();
+    const repository = createFakeRepository({
+      registerSessions: [
+        buildRegisterSession({
+          _id: "drawer-1",
+          storeId: "store-1",
+          status: "closing",
+          terminalId: "terminal-1",
+          registerNumber: "1",
+        }),
+      ],
+    });
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).startSession({
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      staffProfileId: "cashier-1",
+      registerNumber: "1",
+      registerSessionId: "drawer-1",
+    });
+
+    expect(result).toEqual({
+      status: "validationFailed",
+      message: "Open the cash drawer before starting a sale.",
+    });
+    expect(repository.sessions).toHaveLength(0);
+  });
+
   it("binds an active same-terminal session to an open drawer without holding or clearing it", async () => {
     const commandService = await loadCommandService();
     const repository = createFakeRepository({

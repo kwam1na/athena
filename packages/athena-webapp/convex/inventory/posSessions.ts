@@ -26,6 +26,7 @@ import {
 import { createTransactionFromSessionHandler, recordRegisterSessionSale } from "./pos";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { ok, userError } from "../../shared/commandResult";
+import { isPosUsableRegisterSessionStatus } from "../../shared/registerSessionStatus";
 import {
   createPosSessionTraceRecorder,
   type PosSessionTraceStage,
@@ -98,7 +99,7 @@ function normalizeRegisterNumber(registerNumber?: string | null) {
 }
 
 function isUsableRegisterSession(registerSession: { status: string }) {
-  return registerSession.status === "open" || registerSession.status === "active";
+  return isPosUsableRegisterSessionStatus(registerSession.status);
 }
 
 function registerSessionMatchesIdentity(

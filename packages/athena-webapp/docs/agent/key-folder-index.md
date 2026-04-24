@@ -14,7 +14,7 @@ This key-folder index highlights the main directories agents are likely to need 
 - [`src/hooks`](../../src/hooks) — React hooks that fan out auth, shell, and feature state. Currently 40 file(s); key children: use-image-upload.ts, use-mobile.tsx, use-navigate-back.ts, use-navigation-keyboard-shortcuts.ts, use-pagination-persistence.ts.
 - [`src/contexts`](../../src/contexts) — Context providers for app-wide state and wiring. Currently 5 file(s); key children: OnlineOrderContext.tsx, PermissionsContext.tsx, ProductContext.tsx, ThemeContext.tsx, UserContext.tsx.
 - [`src/lib`](../../src/lib) — Shared frontend helpers, schemas, and package utilities. Currently 74 file(s); key children: aws.ts, behaviorUtils.ts, browserFingerprint.ts, constants.ts, countries.ts.
-- [`shared`](../../shared) — Browser-safe helpers shared with Convex-backed workflows. Currently 6 file(s); key children: auth.ts, commandResult.test.ts, commandResult.ts, serviceIntake.ts, stockAdjustment.ts.
+- [`shared`](../../shared) — Browser-safe helpers shared with Convex-backed workflows. Currently 8 file(s); key children: auth.ts, commandResult.test.ts, commandResult.ts, registerSessionStatus.test.ts, registerSessionStatus.ts.
 - [`src/utils`](../../src/utils) — Cross-cutting browser helpers and lower-level utilities. Currently 3 file(s); key children: formatNumber.ts, index.ts, versionChecker.ts.
 
 ## Backend and test surfaces

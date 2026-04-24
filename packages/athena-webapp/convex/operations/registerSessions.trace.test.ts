@@ -8,7 +8,11 @@ vi.mock("./registerSessionTracing", () => ({
   recordRegisterSessionTraceBestEffort: mocks.traceRecord,
 }));
 
-import { openRegisterSession, recordRegisterSessionTransaction } from "./registerSessions";
+import {
+  getOpenRegisterSession,
+  openRegisterSession,
+  recordRegisterSessionTransaction,
+} from "./registerSessions";
 
 type RegisterSessionRecord = {
   _id: string;
@@ -75,7 +79,9 @@ function createMutationCtx(seed?: { sessions?: RegisterSessionRecord[] }) {
       Object.assign(session, patch);
     }),
     query: vi.fn((table: string) => ({
-      withIndex(indexName: string) {
+      withIndex(indexName: string, buildQuery?: (q: {
+        eq: (field: string, value: string) => unknown;
+      }) => unknown) {
         if (table !== "registerSession") {
           throw new Error(`Unsupported query table ${table}`);
         }
@@ -87,10 +93,27 @@ function createMutationCtx(seed?: { sessions?: RegisterSessionRecord[] }) {
           throw new Error(`Unsupported registerSession index ${indexName}`);
         }
 
+        const filters = new Map<string, string>();
+        const queryBuilder = {
+          eq(field: string, value: string) {
+            filters.set(field, value);
+            return queryBuilder;
+          },
+        };
+        buildQuery?.(queryBuilder);
+
         return {
           order() {
             return {
-              first: async () => null,
+              first: async () =>
+                [...sessions]
+                  .reverse()
+                  .find((session) =>
+                    [...filters].every(
+                      ([field, value]) =>
+                        session[field as keyof RegisterSessionRecord] === value,
+                    ),
+                  ) ?? null,
             };
           },
         };
@@ -173,6 +196,63 @@ describe("register session workflow trace handlers", () => {
     expect(ctx.db.patch).not.toHaveBeenCalledWith("registerSession", "session-1", {
       workflowTraceId: "register_session:session-1",
     });
+  });
+
+  it("returns an open register session for POS active drawer lookup", async () => {
+    const ctx = createMutationCtx({
+      sessions: [
+        buildRegisterSession({
+          _id: "session-1",
+          status: "open",
+        }),
+      ],
+    });
+
+    const session = await getHandler(getOpenRegisterSession)(ctx as never, {
+      storeId: "store-1",
+      registerNumber: "A1",
+    });
+
+    expect(session).toEqual(expect.objectContaining({ _id: "session-1" }));
+  });
+
+  it("does not return a closing register session for POS active drawer lookup", async () => {
+    const ctx = createMutationCtx({
+      sessions: [
+        buildRegisterSession({
+          _id: "session-1",
+          status: "closing",
+        }),
+      ],
+    });
+
+    const session = await getHandler(getOpenRegisterSession)(ctx as never, {
+      storeId: "store-1",
+      registerNumber: "A1",
+    });
+
+    expect(session).toBeNull();
+  });
+
+  it("still blocks opening a duplicate drawer while the latest session is closing", async () => {
+    const ctx = createMutationCtx({
+      sessions: [
+        buildRegisterSession({
+          _id: "session-1",
+          status: "closing",
+        }),
+      ],
+    });
+
+    await expect(
+      getHandler(openRegisterSession)(ctx as never, {
+        storeId: "store-1",
+        organizationId: "org-1",
+        terminalId: "terminal-1",
+        registerNumber: "A1",
+        openingFloat: 5_000,
+      }),
+    ).rejects.toThrow("A register session is already open for this register.");
   });
 
   it("records a sale adjustment trace when register-session cash changes", async () => {

@@ -1,16 +1,23 @@
 import { internalMutation, internalQuery, MutationCtx } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
+import {
+  isPosUsableRegisterSessionStatus,
+  isRegisterSessionConflictBlockingStatus,
+  type RegisterSessionStatus,
+} from "../../shared/registerSessionStatus";
 import { recordRegisterSessionTraceBestEffort } from "./registerSessionTracing";
 
-const REGISTER_SESSION_TRANSITIONS = {
-  active: new Set(["closing"]),
-  closed: new Set<string>(),
-  closing: new Set(["closed"]),
-  open: new Set(["active", "closing"]),
-} as const;
+const registerSessionStatusSet = (
+  ...statuses: RegisterSessionStatus[]
+): ReadonlySet<RegisterSessionStatus> => new Set(statuses);
 
-type RegisterSessionStatus = keyof typeof REGISTER_SESSION_TRANSITIONS;
+const REGISTER_SESSION_TRANSITIONS = {
+  active: registerSessionStatusSet("closing"),
+  closed: registerSessionStatusSet(),
+  closing: registerSessionStatusSet("closed"),
+  open: registerSessionStatusSet("active", "closing"),
+} satisfies Record<RegisterSessionStatus, ReadonlySet<RegisterSessionStatus>>;
 type RegisterSessionIdentity = {
   registerNumber?: string | null;
   terminalId?: Id<"posTerminal">;
@@ -290,7 +297,10 @@ async function findConflictingRegisterSession(
       .order("desc")
       .first();
 
-    if (latestByRegister && latestByRegister.status !== "closed") {
+    if (
+      latestByRegister &&
+      isRegisterSessionConflictBlockingStatus(latestByRegister.status)
+    ) {
       throw new Error("A register session is already open for this register.");
     }
   }
@@ -305,7 +315,10 @@ async function findConflictingRegisterSession(
     .order("desc")
     .first();
 
-  if (latestByTerminal && latestByTerminal.status !== "closed") {
+  if (
+    latestByTerminal &&
+    isRegisterSessionConflictBlockingStatus(latestByTerminal.status)
+  ) {
     throw new Error("A register session is already open for this terminal.");
   }
 }
@@ -374,7 +387,8 @@ export const getOpenRegisterSession = internalQuery({
         .order("desc")
         .first();
 
-      return latestByRegister && latestByRegister.status !== "closed"
+      return latestByRegister &&
+        isPosUsableRegisterSessionStatus(latestByRegister.status)
         ? latestByRegister
         : null;
     }
@@ -389,7 +403,8 @@ export const getOpenRegisterSession = internalQuery({
       .order("desc")
       .first();
 
-    return latestByTerminal && latestByTerminal.status !== "closed"
+    return latestByTerminal &&
+      isPosUsableRegisterSessionStatus(latestByTerminal.status)
       ? latestByTerminal
       : null;
   },

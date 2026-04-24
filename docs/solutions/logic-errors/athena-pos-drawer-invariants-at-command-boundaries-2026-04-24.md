@@ -54,7 +54,7 @@ The drawer validator should require:
 - A persisted `posSession.registerSessionId`.
 - A matching `registerSession` row.
 - The same store.
-- An open or active drawer status.
+- A POS-usable drawer status from the shared register-session policy.
 - Matching terminal and/or register number identity.
 
 For recovery, bind the preserved session to the newly opened drawer before allowing sale mutation. Do not create a replacement POS session, because that can drop cart, customer, or payment draft state.
@@ -62,10 +62,11 @@ For recovery, bind the preserved session to the newly opened drawer before allow
 ## Prevention
 
 - Treat UI gates as ergonomics, not authorization or invariant enforcement.
+- Define drawer status semantics once. POS sale mutation may use only `open` or `active`; duplicate drawer checks and cash-control closeout views may still need to include `closing`.
 - Add command-level tests for missing, closed, and mismatched drawer bindings whenever a POS mutation assumes an open drawer.
 - Reuse the same identity/status validation for start, resume, bind, item mutation, item removal, cart clear, payment sync, and completion flows.
 - Keep recovery flows idempotent: if the session is already bound to the same drawer, return success without mutating unrelated sale state.
 
 ## Related Issues
 
-- Linear: V26-373, V26-374, V26-375, V26-376, V26-377, V26-378.
+- Linear: V26-373, V26-374, V26-375, V26-376, V26-377, V26-378, V26-379.

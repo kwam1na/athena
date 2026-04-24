@@ -386,6 +386,38 @@ describe("useRegisterViewModel", () => {
     expect(mockStartSession).not.toHaveBeenCalled();
   });
 
+  it("holds bootstrap on a closing drawer and exposes the drawer gate", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
+      activeRegisterSession: {
+        _id: "drawer-1",
+        status: "closing",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        openingFloat: 5_000,
+        expectedCash: 5_000,
+        openedAt: Date.now(),
+      },
+      activeSession: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
+    });
+
+    expect(result.current.drawerGate).not.toBeNull();
+    expect(result.current.drawerGate?.mode).toBe("initialSetup");
+    expect(result.current.productEntry.disabled).toBe(true);
+    expect(mockStartSession).not.toHaveBeenCalled();
+  });
+
   it("gates an active POS session without a register assignment while preserving the sale", async () => {
     mockRegisterState = {
       phase: "active",
@@ -414,6 +446,38 @@ describe("useRegisterViewModel", () => {
     expect(result.current.customerPanel.customerInfo.name).toBe("Ama Serwa");
     expect(mockStartSession).not.toHaveBeenCalled();
     expect(mockResumeSession).not.toHaveBeenCalled();
+  });
+
+  it("gates an active POS session assigned to a closing drawer", async () => {
+    mockRegisterState = {
+      phase: "active",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
+      activeRegisterSession: {
+        _id: "drawer-1",
+        status: "closing",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        openingFloat: 5_000,
+        expectedCash: 5_000,
+        openedAt: Date.now(),
+      },
+      activeSession: { _id: "session-1", sessionNumber: "POS-0001" },
+      resumableSession: null,
+    };
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
+    });
+
+    expect(result.current.drawerGate).not.toBeNull();
+    expect(result.current.drawerGate?.mode).toBe("recovery");
+    expect(result.current.productEntry.disabled).toBe(true);
+    expect(mockStartSession).not.toHaveBeenCalled();
+    expect(mockBindSessionToRegisterSession).not.toHaveBeenCalled();
   });
 
   it("gates an active POS session assigned to a different open drawer", async () => {
