@@ -410,6 +410,45 @@ export const getOpenRegisterSession = internalQuery({
   },
 });
 
+export const getRegisterSessionForRegisterState = internalQuery({
+  args: {
+    storeId: v.id("store"),
+    registerNumber: v.optional(v.string()),
+    terminalId: v.optional(v.id("posTerminal")),
+  },
+  handler: async (ctx, args) => {
+    if (args.registerNumber) {
+      const latestByRegister = await ctx.db
+        .query("registerSession")
+        .withIndex("by_storeId_registerNumber", (q) =>
+          q.eq("storeId", args.storeId).eq("registerNumber", args.registerNumber!)
+        )
+        .order("desc")
+        .first();
+
+      return latestByRegister &&
+        isRegisterSessionConflictBlockingStatus(latestByRegister.status)
+        ? latestByRegister
+        : null;
+    }
+
+    if (!args.terminalId) {
+      return null;
+    }
+
+    const latestByTerminal = await ctx.db
+      .query("registerSession")
+      .withIndex("by_terminalId", (q) => q.eq("terminalId", args.terminalId!))
+      .order("desc")
+      .first();
+
+    return latestByTerminal &&
+      isRegisterSessionConflictBlockingStatus(latestByTerminal.status)
+      ? latestByTerminal
+      : null;
+  },
+});
+
 export const recordRegisterSessionTransaction = internalMutation({
   args: {
     registerSessionId: v.id("registerSession"),

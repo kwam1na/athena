@@ -10,6 +10,7 @@ vi.mock("./registerSessionTracing", () => ({
 
 import {
   getOpenRegisterSession,
+  getRegisterSessionForRegisterState,
   openRegisterSession,
   recordRegisterSessionTransaction,
 } from "./registerSessions";
@@ -230,6 +231,50 @@ describe("register session workflow trace handlers", () => {
       storeId: "store-1",
       registerNumber: "A1",
     });
+
+    expect(session).toBeNull();
+  });
+
+  it("returns a closing register session for POS register-state gate display", async () => {
+    const ctx = createMutationCtx({
+      sessions: [
+        buildRegisterSession({
+          _id: "session-1",
+          status: "closing",
+        }),
+      ],
+    });
+
+    const session = await getHandler(getRegisterSessionForRegisterState)(
+      ctx as never,
+      {
+        storeId: "store-1",
+        registerNumber: "A1",
+      },
+    );
+
+    expect(session).toEqual(
+      expect.objectContaining({ _id: "session-1", status: "closing" }),
+    );
+  });
+
+  it("does not return a closed register session for POS register-state gate display", async () => {
+    const ctx = createMutationCtx({
+      sessions: [
+        buildRegisterSession({
+          _id: "session-1",
+          status: "closed",
+        }),
+      ],
+    });
+
+    const session = await getHandler(getRegisterSessionForRegisterState)(
+      ctx as never,
+      {
+        storeId: "store-1",
+        registerNumber: "A1",
+      },
+    );
 
     expect(session).toBeNull();
   });

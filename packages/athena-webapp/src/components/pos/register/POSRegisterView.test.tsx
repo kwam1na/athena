@@ -262,4 +262,65 @@ describe("POSRegisterView", () => {
 
     expect(onSignOut).toHaveBeenCalled();
   });
+
+  it("renders closeout-blocked copy without drawer-opening controls", async () => {
+    const onSignOut = vi.fn();
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: false,
+      },
+      registerInfo: {
+        customerName: undefined,
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {},
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      drawerGate: {
+        mode: "closeoutBlocked",
+        isRecovery: false,
+        registerLabel: "Front Counter",
+        registerNumber: "1",
+        errorMessage: null,
+        onSignOut,
+      },
+      sessionPanel: null,
+      cashierCard: null,
+      authDialog: {
+        open: false,
+      },
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(screen.getByText("Finish drawer closeout before selling")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Front Counter is already in closeout/i),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /cash controls/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /sign out/i })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/opening float/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/notes/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /open drawer/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("product-entry")).not.toBeInTheDocument();
+    expect(screen.queryByText("cart-items")).not.toBeInTheDocument();
+    expect(screen.queryByText("register-checkout-panel")).not.toBeInTheDocument();
+    expect(screen.queryByText("register-action-bar")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /sign out/i }));
+
+    expect(onSignOut).toHaveBeenCalled();
+  });
 });

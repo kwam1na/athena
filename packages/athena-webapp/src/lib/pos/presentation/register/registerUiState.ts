@@ -125,17 +125,18 @@ export interface RegisterCashierCardState {
 }
 
 export interface RegisterDrawerGateState {
-  mode: "initialSetup" | "recovery";
+  mode: "initialSetup" | "recovery" | "closeoutBlocked";
+  isRecovery?: boolean;
   registerLabel: string;
   registerNumber: string;
-  currency: string;
-  openingFloat: string;
-  notes: string;
+  currency?: string;
+  openingFloat?: string;
+  notes?: string;
   errorMessage: string | null;
-  isSubmitting: boolean;
-  onOpeningFloatChange: (value: string) => void;
-  onNotesChange: (value: string) => void;
-  onSubmit: () => Promise<void>;
+  isSubmitting?: boolean;
+  onOpeningFloatChange?: (value: string) => void;
+  onNotesChange?: (value: string) => void;
+  onSubmit?: () => Promise<void>;
   onSignOut: () => Promise<void>;
 }
 
