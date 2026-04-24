@@ -1,8 +1,12 @@
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import type { RecordPaymentAllocationArgs } from "../operations/paymentAllocations";
+import {
+  isPosUsableRegisterSessionStatus,
+  POS_USABLE_REGISTER_SESSION_STATUSES,
+  type RegisterSessionStatus,
+} from "../../shared/registerSessionStatus";
 
-type RegisterSessionStatus = "open" | "active" | "closing" | "closed";
 type RegisterSessionAttributionCandidate = {
   _id: Id<"registerSession">;
   openedByStaffProfileId?: Id<"staffProfile">;
@@ -14,12 +18,6 @@ type InStorePayment = {
   method: string;
   timestamp: number;
 };
-
-const ACTIVE_REGISTER_SESSION_STATUSES = ["open", "active"] as const;
-
-function isActiveRegisterSessionStatus(status: RegisterSessionStatus) {
-  return status === "open" || status === "active";
-}
 
 export function normalizeInStorePayments(args: {
   changeGiven?: number;
@@ -91,7 +89,7 @@ export function selectRegisterSessionForAttribution(args: {
   }
 
   const activeSessions = args.sessions.filter((session) =>
-    isActiveRegisterSessionStatus(session.status)
+    isPosUsableRegisterSessionStatus(session.status)
   );
 
   if (args.actorStaffProfileId) {
@@ -133,7 +131,7 @@ export async function resolveRegisterSessionForInStoreCollectionWithCtx(
       throw new Error("Register session not found for this store.");
     }
 
-    if (!isActiveRegisterSessionStatus(registerSession.status)) {
+    if (!isPosUsableRegisterSessionStatus(registerSession.status)) {
       throw new Error("Register session is not accepting new collections.");
     }
 
@@ -142,7 +140,7 @@ export async function resolveRegisterSessionForInStoreCollectionWithCtx(
 
   const sessions = (
     await Promise.all(
-      ACTIVE_REGISTER_SESSION_STATUSES.map((status) =>
+      POS_USABLE_REGISTER_SESSION_STATUSES.map((status) =>
         // eslint-disable-next-line @convex-dev/no-collect-in-query -- Store-scoped open/active session attribution needs the complete candidate set to avoid guessing across drawers.
         ctx.db
           .query("registerSession")

@@ -31,6 +31,7 @@ import {
   type PosSaleTraceSeed,
 } from "../../../workflowTraces/adapters/posSale";
 import { ok, userError, type CommandResult } from "../../../../shared/commandResult";
+import { isPosUsableRegisterSessionStatus } from "../../../../shared/registerSessionStatus";
 
 type PosPaymentInput = {
   method: string;
@@ -113,7 +114,7 @@ function registerSessionMatchesIdentity(
 }
 
 function isUsableRegisterSession(registerSession: { status: string }) {
-  return registerSession.status === "open" || registerSession.status === "active";
+  return isPosUsableRegisterSessionStatus(registerSession.status);
 }
 
 async function safeTraceWrite(

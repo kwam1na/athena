@@ -8,6 +8,7 @@ import { recordRegisterSessionDepositWithCtx } from "../operations/registerSessi
 import { recordRegisterSessionTraceBestEffort } from "../operations/registerSessionTracing";
 import { toPesewas } from "../lib/currency";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
+import { isPosUsableRegisterSessionStatus } from "../../shared/registerSessionStatus";
 
 const CASH_DEPOSIT_ALLOCATION_TYPE = "cash_deposit";
 const CASH_DEPOSIT_SUBJECT_TYPE = "register_cash_deposit";
@@ -223,7 +224,7 @@ export function buildCashControlsDashboardSnapshot(args: {
 
   return {
     openSessions: sessionSummaries.filter((registerSession) =>
-      registerSession.status === "open" || registerSession.status === "active"
+      isPosUsableRegisterSessionStatus(registerSession.status)
     ),
     pendingCloseouts: sessionSummaries.filter(
       (registerSession) => registerSession.status === "closing"
@@ -551,7 +552,7 @@ export const recordRegisterSessionDeposit = mutation({
       });
     }
 
-    if (registerSession.status !== "open" && registerSession.status !== "active") {
+    if (!isPosUsableRegisterSessionStatus(registerSession.status)) {
       return userError({
         code: "precondition_failed",
         message: "Register session is not accepting new deposits.",

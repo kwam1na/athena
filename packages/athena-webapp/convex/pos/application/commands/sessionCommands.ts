@@ -16,6 +16,7 @@ import {
   type PosSessionTraceStage,
   type PosSessionTraceableSession,
 } from "./posSessionTracing";
+import { isPosUsableRegisterSessionStatus } from "../../../../shared/registerSessionStatus";
 
 type CommandFailureStatus =
   | "cashierMismatch"
@@ -708,7 +709,7 @@ function normalizeRegisterNumber(registerNumber?: string | null) {
 function isActiveRegisterSession(
   registerSession: Pick<Doc<"registerSession">, "status">,
 ) {
-  return registerSession.status === "open" || registerSession.status === "active";
+  return isPosUsableRegisterSessionStatus(registerSession.status);
 }
 
 function registerSessionMatchesIdentity(
