@@ -127,6 +127,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   const syncedSessionId = useRef<string | null>(null);
   const paymentsRef = useRef<Payment[]>([]);
   const checkoutStateVersionRef = useRef(0);
+  const drawerBindingRequestRef = useRef<string | null>(null);
 
   const registerState = useConvexRegisterState({
     storeId: activeStore?._id,
@@ -176,6 +177,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   } = useConvexCommandGateway();
   const {
     resumeSession,
+    bindSessionToRegisterSession,
     voidSession,
     updateSession,
     syncSessionCheckoutState,
@@ -190,15 +192,44 @@ export function useRegisterViewModel(): RegisterViewModel {
   );
   const hasActiveCustomerDetails = hasCustomerDetails(customerInfo);
   const hasActiveCartDraft = activeCartItems.length > 0;
+  const hasActivePosSession = Boolean(activeSession?._id);
+  const activeSessionNeedsRegisterBinding = Boolean(
+    activeSession?._id && !activeSession.registerSessionId,
+  );
+  const activeSessionHasMismatchedRegisterBinding = Boolean(
+    activeSession?._id &&
+      activeSession.registerSessionId &&
+      activeRegisterSessionId &&
+      activeSession.registerSessionId !== activeRegisterSessionId,
+  );
+  const activeSessionHasBlockedRegisterBinding =
+    activeSessionNeedsRegisterBinding || activeSessionHasMismatchedRegisterBinding;
+  const hasMissingDrawerStartupState = Boolean(
+    bootstrapState &&
+      (bootstrapState.phase === "readyToStart" ||
+        bootstrapState.phase === "resumable") &&
+      !bootstrapState.activeRegisterSession,
+  );
+  const hasMissingDrawerRecoveryState = Boolean(
+    bootstrapState &&
+      !bootstrapState.activeRegisterSession &&
+      (bootstrapState.phase === "active" ||
+        bootstrapState.phase === "resumable" ||
+        hasActivePosSession),
+  );
   const requiresDrawerGate = Boolean(
     activeStore?._id &&
       terminal?._id &&
       staffProfileId &&
       bootstrapState &&
-      (bootstrapState.phase === "readyToStart" ||
-        bootstrapState.phase === "resumable") &&
-      !bootstrapState.activeRegisterSession,
+      (hasMissingDrawerStartupState ||
+        hasMissingDrawerRecoveryState ||
+        activeSessionHasBlockedRegisterBinding),
   );
+  const drawerGateMode: "initialSetup" | "recovery" =
+    hasMissingDrawerRecoveryState || activeSessionHasBlockedRegisterBinding
+      ? "recovery"
+      : "initialSetup";
   const setPaymentState = useCallback((nextPayments: Payment[]) => {
     paymentsRef.current = nextPayments;
     setPayments(nextPayments);
@@ -474,6 +505,14 @@ export function useRegisterViewModel(): RegisterViewModel {
         return;
       }
 
+      if (activeSessionHasBlockedRegisterBinding) {
+        logger.warn("[POS] Skipped checkout sync while drawer recovery is required", {
+          sessionId: activeSession._id,
+          stage: args.stage,
+        });
+        return;
+      }
+
       const result = await syncSessionCheckoutState({
         sessionId: activeSession._id as Id<"posSession">,
         staffProfileId,
@@ -493,7 +532,12 @@ export function useRegisterViewModel(): RegisterViewModel {
         });
       }
     },
-    [activeSession?._id, staffProfileId, syncSessionCheckoutState],
+    [
+      activeSession?._id,
+      activeSessionHasBlockedRegisterBinding,
+      staffProfileId,
+      syncSessionCheckoutState,
+    ],
   );
 
   useEffect(() => {
@@ -732,6 +776,47 @@ export function useRegisterViewModel(): RegisterViewModel {
 
   useEffect(() => {
     if (
+      !activeSession?._id ||
+      activeSession.registerSessionId ||
+      !activeRegisterSessionId ||
+      !staffProfileId
+    ) {
+      return;
+    }
+
+    const requestKey = `${activeSession._id}:${activeRegisterSessionId}`;
+    if (drawerBindingRequestRef.current === requestKey) {
+      return;
+    }
+
+    drawerBindingRequestRef.current = requestKey;
+
+    void (async () => {
+      const result = await bindSessionToRegisterSession({
+        sessionId: activeSession._id as Id<"posSession">,
+        staffProfileId,
+        registerSessionId: activeRegisterSessionId,
+      });
+
+      if (result.kind !== "ok") {
+        drawerBindingRequestRef.current = null;
+        setDrawerErrorMessage(result.error.message);
+        return;
+      }
+
+      requestBootstrap();
+    })();
+  }, [
+    activeRegisterSessionId,
+    activeSession?._id,
+    activeSession?.registerSessionId,
+    bindSessionToRegisterSession,
+    requestBootstrap,
+    staffProfileId,
+  ]);
+
+  useEffect(() => {
+    if (
       !activeStore?._id ||
       !terminal?._id ||
       !staffProfileId ||
@@ -851,6 +936,11 @@ export function useRegisterViewModel(): RegisterViewModel {
       return;
     }
 
+    if (activeSessionHasBlockedRegisterBinding) {
+      toast.error("Open the cash drawer before adding products");
+      return;
+    }
+
     const sessionId = await ensureSessionId();
     if (!sessionId) {
       return;
@@ -887,13 +977,24 @@ export function useRegisterViewModel(): RegisterViewModel {
     }
 
     setProductSearchQuery("");
-  }, [activeCartItems, addItemCommand, ensureSessionId, staffProfileId]);
+  }, [
+    activeCartItems,
+    activeSessionHasBlockedRegisterBinding,
+    addItemCommand,
+    ensureSessionId,
+    staffProfileId,
+  ]);
 
   const handleUpdateQuantity = useCallback(async (
     itemId: Id<"posSessionItem">,
     quantity: number,
   ) => {
     if (!activeSession || !staffProfileId) {
+      return;
+    }
+
+    if (activeSessionHasBlockedRegisterBinding) {
+      toast.error("Open the cash drawer before modifying this sale");
       return;
     }
 
@@ -946,12 +1047,23 @@ export function useRegisterViewModel(): RegisterViewModel {
     if (!result.ok) {
       toast.error(result.message);
     }
-  }, [activeSession, addItemCommand, removeItem, staffProfileId]);
+  }, [
+    activeSession,
+    activeSessionHasBlockedRegisterBinding,
+    addItemCommand,
+    removeItem,
+    staffProfileId,
+  ]);
 
   const handleRemoveItem = useCallback(async (
     itemId: Id<"posSessionItem">,
   ) => {
     if (!activeSession || !staffProfileId) {
+      return;
+    }
+
+    if (activeSessionHasBlockedRegisterBinding) {
+      toast.error("Open the cash drawer before modifying this sale");
       return;
     }
 
@@ -964,16 +1076,27 @@ export function useRegisterViewModel(): RegisterViewModel {
     if (result.kind !== "ok") {
       toast.error(result.error.message);
     }
-  }, [activeSession, removeItem, staffProfileId]);
+  }, [
+    activeSession,
+    activeSessionHasBlockedRegisterBinding,
+    removeItem,
+    staffProfileId,
+  ]);
 
   const handleClearCart = useCallback(async () => {
-    if (!activeSession) {
+    if (!activeSession || !staffProfileId) {
+      return;
+    }
+
+    if (activeSessionHasBlockedRegisterBinding) {
+      toast.error("Open the cash drawer before modifying this sale");
       return;
     }
 
     const checkoutStateVersion = allocateCheckoutStateVersion();
     const result = await releaseSessionInventoryHoldsAndDeleteItems({
       sessionId: activeSession._id as Id<"posSession">,
+      staffProfileId,
       checkoutStateVersion,
     });
 
@@ -986,9 +1109,11 @@ export function useRegisterViewModel(): RegisterViewModel {
     toast.success("Cart cleared");
   }, [
     activeSession,
+    activeSessionHasBlockedRegisterBinding,
     allocateCheckoutStateVersion,
     releaseSessionInventoryHoldsAndDeleteItems,
     setPaymentState,
+    staffProfileId,
   ]);
 
   useEffect(() => {
@@ -1383,12 +1508,17 @@ export function useRegisterViewModel(): RegisterViewModel {
   const drawerGate =
     activeStore?._id && terminal?._id && staffProfileId && requiresDrawerGate
       ? {
+          mode: drawerGateMode,
           registerLabel: terminal.displayName,
           registerNumber,
           currency: activeStore.currency,
           openingFloat: drawerOpeningFloat,
           notes: drawerNotes,
-          errorMessage: drawerErrorMessage,
+          errorMessage:
+            drawerErrorMessage ??
+            (activeSessionHasMismatchedRegisterBinding
+              ? "This sale is assigned to a different cash drawer."
+              : null),
           isSubmitting: isOpeningDrawer,
           onOpeningFloatChange: (value: string) => {
             setDrawerOpeningFloat(value);
@@ -1399,6 +1529,7 @@ export function useRegisterViewModel(): RegisterViewModel {
             setDrawerErrorMessage(null);
           },
           onSubmit: handleOpenDrawer,
+          onSignOut: handleCashierSignOut,
         }
       : null;
 
@@ -1429,6 +1560,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         !terminal ||
         !staffProfileId ||
         requiresDrawerGate ||
+        activeSessionHasBlockedRegisterBinding ||
         isOpeningDrawer,
       showProductLookup: showProductEntry,
       setShowProductLookup: setShowProductEntry,

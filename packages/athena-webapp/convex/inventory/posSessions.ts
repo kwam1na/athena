@@ -18,6 +18,7 @@ import {
 } from "./helpers/sessionValidation";
 import { calculateSessionExpiration } from "./helpers/sessionExpiration";
 import {
+  runBindSessionToRegisterSessionCommand,
   runHoldSessionCommand,
   runResumeSessionCommand,
   runStartSessionCommand,
@@ -89,6 +90,82 @@ function userErrorFromValidationMessage(message: string) {
     code: "precondition_failed",
     message,
   });
+}
+
+function normalizeRegisterNumber(registerNumber?: string | null) {
+  const trimmedRegisterNumber = registerNumber?.trim();
+  return trimmedRegisterNumber ? trimmedRegisterNumber : undefined;
+}
+
+function isUsableRegisterSession(registerSession: { status: string }) {
+  return registerSession.status === "open" || registerSession.status === "active";
+}
+
+function registerSessionMatchesIdentity(
+  registerSession: { registerNumber?: string; terminalId?: Id<"posTerminal"> },
+  identity: {
+    terminalId?: Id<"posTerminal">;
+    registerNumber?: string;
+  },
+) {
+  const normalizedRegisterNumber = normalizeRegisterNumber(identity.registerNumber);
+  const normalizedSessionRegisterNumber = normalizeRegisterNumber(
+    registerSession.registerNumber,
+  );
+
+  let hasSharedIdentity = false;
+
+  if (normalizedRegisterNumber && normalizedSessionRegisterNumber) {
+    hasSharedIdentity = true;
+    if (normalizedRegisterNumber !== normalizedSessionRegisterNumber) {
+      return false;
+    }
+  }
+
+  if (identity.terminalId && registerSession.terminalId) {
+    hasSharedIdentity = true;
+    if (identity.terminalId !== registerSession.terminalId) {
+      return false;
+    }
+  }
+
+  return hasSharedIdentity;
+}
+
+async function validateSessionDrawerBinding(
+  ctx: MutationCtx,
+  session: {
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+    registerNumber?: string;
+    registerSessionId?: Id<"registerSession">;
+  },
+) {
+  if (!session.registerSessionId) {
+    return userError({
+      code: "validation_failed",
+      message: "Open the cash drawer before modifying this sale.",
+    });
+  }
+
+  const registerSession = await ctx.db.get(
+    "registerSession",
+    session.registerSessionId,
+  );
+
+  if (
+    !registerSession ||
+    registerSession.storeId !== session.storeId ||
+    !isUsableRegisterSession(registerSession) ||
+    !registerSessionMatchesIdentity(registerSession, session)
+  ) {
+    return userError({
+      code: "validation_failed",
+      message: "Open the cash drawer before modifying this sale.",
+    });
+  }
+
+  return null;
 }
 
 async function loadPosSessionItems(ctx: QueryCtx, sessionId: Id<"posSession">) {
@@ -437,6 +514,24 @@ export const createSession = mutation({
   },
 });
 
+export const bindSessionToRegisterSession = mutation({
+  args: {
+    sessionId: v.id("posSession"),
+    staffProfileId: v.id("staffProfile"),
+    registerSessionId: v.id("registerSession"),
+  },
+  returns: commandResultValidator(sessionOperationDataValidator),
+  handler: async (ctx, args) => {
+    const result = await runBindSessionToRegisterSessionCommand(ctx, args);
+
+    if (result.status === "ok") {
+      return ok(result.data);
+    }
+
+    return userErrorFromSessionCommandFailure(result);
+  },
+});
+
 // Update session metadata (customer info, totals)
 // Note: Cart items are now managed via posSessionItems mutations
 export const updateSession = mutation({
@@ -766,6 +861,7 @@ export const voidSession = mutation({
 export const releaseSessionInventoryHoldsAndDeleteItems = mutation({
   args: {
     sessionId: v.id("posSession"),
+    staffProfileId: v.id("staffProfile"),
     checkoutStateVersion: v.number(),
   },
   returns: commandResultValidator(sessionIdOnlyValidator),
@@ -782,6 +878,23 @@ export const releaseSessionInventoryHoldsAndDeleteItems = mutation({
 
     if (args.checkoutStateVersion <= (session.checkoutStateVersion ?? 0)) {
       return ok({ sessionId: args.sessionId });
+    }
+
+    const validation = await validateSessionActive(
+      ctx.db,
+      args.sessionId,
+      args.staffProfileId
+    );
+
+    if (!validation.success) {
+      return userErrorFromValidationMessage(
+        validation.message || "Session is not active.",
+      );
+    }
+
+    const drawerValidation = await validateSessionDrawerBinding(ctx, session);
+    if (drawerValidation) {
+      return drawerValidation;
     }
 
     // Query all items for this session
@@ -890,6 +1003,11 @@ export const syncSessionCheckoutState = mutation({
         sessionId: args.sessionId,
         expiresAt: session.expiresAt,
       });
+    }
+
+    const drawerValidation = await validateSessionDrawerBinding(ctx, session);
+    if (drawerValidation) {
+      return drawerValidation;
     }
 
     const now = Date.now();
