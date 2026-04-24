@@ -1,4 +1,5 @@
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
+import { cn } from "~/src/lib/utils";
 
 interface TotalsDisplayItem {
   label: string;
@@ -9,11 +10,17 @@ interface TotalsDisplayItem {
 
 interface TotalsDisplayProps {
   items: TotalsDisplayItem[];
+  density?: "comfortable" | "compact";
 }
 
-export const TotalsDisplay = ({ items }: TotalsDisplayProps) => {
+export const TotalsDisplay = ({
+  items,
+  density = "comfortable",
+}: TotalsDisplayProps) => {
+  const isCompact = density === "compact";
+
   return (
-    <div className="space-y-8">
+    <div className={cn(isCompact ? "space-y-3" : "space-y-8")}>
       {items.map((item, index) => (
         <div
           key={index}
@@ -23,15 +30,30 @@ export const TotalsDisplay = ({ items }: TotalsDisplayProps) => {
               : "flex justify-between"
           }
         >
-          <span className={item.highlight ? "text-xl" : "text-lg"}>
+          <span
+            className={cn(
+              item.highlight
+                ? isCompact
+                  ? "text-md"
+                  : "text-xl"
+                : isCompact
+                  ? "text-md text-muted-foreground"
+                  : "text-xl",
+            )}
+          >
             {item.label}
           </span>
           <span
-            className={
+            className={cn(
+              "font-semibold",
               item.highlight
-                ? "text-4xl font-semibold"
-                : "text-3xl font-semibold"
-            }
+                ? isCompact
+                  ? "text-2xl"
+                  : "text-2xl"
+                : isCompact
+                  ? "text-xl text-muted-foreground"
+                  : "text-xl",
+            )}
           >
             {formatStoredAmount(item.formatter, item.value)}
           </span>

@@ -1018,6 +1018,11 @@ async function createFixtureRepo() {
     rootDir
   );
   await write(
+    "packages/athena-webapp/scripts/convexPaginationAntiPatternCheck.py",
+    "print('ok')\n",
+    rootDir
+  );
+  await write(
     "packages/athena-webapp/convex/schemas/observability/workflowTrace.ts",
     "export {};\n",
     rootDir

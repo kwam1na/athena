@@ -365,6 +365,40 @@ describe("createPosSessionCommandService", () => {
     expect(repository.sessions).toHaveLength(0);
   });
 
+  it("does not bind to an open drawer for a different terminal", async () => {
+    const commandService = await loadCommandService();
+    const repository = createFakeRepository({
+      registerSessions: [
+        buildRegisterSession({
+          _id: "drawer-1",
+          storeId: "store-1",
+          status: "open",
+          terminalId: "terminal-2",
+          registerNumber: "1",
+        }),
+      ],
+    });
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).startSession({
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      staffProfileId: "cashier-1",
+      registerNumber: "1",
+    });
+
+    expect(result).toEqual({
+      status: "validationFailed",
+      message: "Open the cash drawer before starting a sale.",
+    });
+    expect(repository.sessions).toHaveLength(0);
+  });
+
   it("refuses to start a retail session with an explicitly closing drawer", async () => {
     const commandService = await loadCommandService();
     const repository = createFakeRepository({
@@ -1375,21 +1409,10 @@ function createFakeRepository(seed?: {
     },
     async getOpenRegisterSessionForIdentity(args: {
       storeId: string;
-      terminalId?: string;
+      terminalId: string;
       registerNumber?: string;
     }) {
-      if (args.registerNumber) {
-        return (
-          [...repository.registerSessions]
-            .reverse()
-            .find(
-              (session) =>
-                session.storeId === args.storeId &&
-                session.registerNumber === args.registerNumber &&
-                session.status !== "closed",
-            ) ?? null
-        );
-      }
+      const usableOpenStatuses = new Set(["open", "active"]);
 
       if (!args.terminalId) {
         return null;
@@ -1400,7 +1423,9 @@ function createFakeRepository(seed?: {
           .reverse()
           .find(
             (session) =>
-              session.terminalId === args.terminalId && session.status !== "closed",
+              session.storeId === args.storeId &&
+              session.terminalId === args.terminalId &&
+              usableOpenStatuses.has(session.status),
           ) ?? null
       );
     },

@@ -196,7 +196,8 @@ const schema = defineSchema({
     .index("by_linkedStoreFrontUserId", ["linkedStoreFrontUserId"]),
   posTerminal: defineTable(posTerminalSchema)
     .index("by_storeId", ["storeId"])
-    .index("by_storeId_and_fingerprintHash", ["storeId", "fingerprintHash"]),
+    .index("by_storeId_and_fingerprintHash", ["storeId", "fingerprintHash"])
+    .index("by_storeId_registerNumber", ["storeId", "registerNumber"]),
   posTransaction: defineTable(posTransactionSchema)
     .index("by_storeId", ["storeId"])
     .index("by_staffProfileId", ["staffProfileId"])
@@ -215,6 +216,7 @@ const schema = defineSchema({
     .index("by_staffProfileId", ["staffProfileId"])
     .index("by_staffProfileId_and_status", ["staffProfileId", "status"])
     .index("by_registerSessionId", ["registerSessionId"])
+    .index("by_expiresAt", ["expiresAt"])
     .index("by_status_and_expiresAt", ["status", "expiresAt"])
     .index("by_storeId_and_status", ["storeId", "status"])
     .index("by_storeId_terminalId", ["storeId", "terminalId"])
@@ -233,6 +235,7 @@ const schema = defineSchema({
     .index("by_status", ["status"])
     .index("by_staffProfileId", ["staffProfileId"])
     .index("by_staffProfileId_and_status", ["staffProfileId", "status"])
+    .index("by_expiresAt", ["expiresAt"])
     .index("by_status_and_expiresAt", ["status", "expiresAt"])
     .index("by_storeId_and_status", ["storeId", "status"])
     .index("by_storeId_terminalId", ["storeId", "terminalId"])

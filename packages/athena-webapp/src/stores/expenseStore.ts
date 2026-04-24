@@ -136,7 +136,7 @@ const initialState = {
     productSearchQuery: "",
     barcodeInput: "",
     isScanning: false,
-    registerNumber: "1",
+    registerNumber: "",
     notes: "",
   },
   cashier: {

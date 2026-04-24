@@ -17,6 +17,7 @@ export type PosCommandOutcome<T> =
 export interface PosTerminalSummary {
   _id: string;
   displayName: string;
+  registerNumber?: string;
   status?: string;
   registeredAt?: number;
 }

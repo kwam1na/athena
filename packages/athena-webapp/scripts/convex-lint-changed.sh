@@ -52,3 +52,8 @@ printf ' - %s\n' "${changed_files[@]}"
 
 cd "$ROOT_DIR"
 eslint "${changed_files[@]}"
+
+python3 \
+  scripts/convexPaginationAntiPatternCheck.py \
+  "$ROOT_DIR" \
+  "${changed_files[@]}"

@@ -37,6 +37,7 @@ const MAX_SESSION_ITEMS = 200;
 const SESSION_QUERY_CANDIDATE_LIMIT = 200;
 const ACTIVE_SESSION_CANDIDATE_LIMIT = 100;
 const SESSION_CLEANUP_BATCH_SIZE = 100;
+const POS_SESSION_RELEASE_STATUSES = new Set(["active", "void", "held"]);
 
 const sessionOperationDataValidator = v.object({
   sessionId: v.id("posSession"),
@@ -93,11 +94,6 @@ function userErrorFromValidationMessage(message: string) {
   });
 }
 
-function normalizeRegisterNumber(registerNumber?: string | null) {
-  const trimmedRegisterNumber = registerNumber?.trim();
-  return trimmedRegisterNumber ? trimmedRegisterNumber : undefined;
-}
-
 function isUsableRegisterSession(registerSession: { status: string }) {
   return isPosUsableRegisterSessionStatus(registerSession.status);
 }
@@ -109,28 +105,23 @@ function registerSessionMatchesIdentity(
     registerNumber?: string;
   },
 ) {
-  const normalizedRegisterNumber = normalizeRegisterNumber(identity.registerNumber);
-  const normalizedSessionRegisterNumber = normalizeRegisterNumber(
-    registerSession.registerNumber,
-  );
-
-  let hasSharedIdentity = false;
-
-  if (normalizedRegisterNumber && normalizedSessionRegisterNumber) {
-    hasSharedIdentity = true;
-    if (normalizedRegisterNumber !== normalizedSessionRegisterNumber) {
-      return false;
-    }
+  if (!identity.terminalId || !registerSession.terminalId) {
+    return false;
   }
 
-  if (identity.terminalId && registerSession.terminalId) {
-    hasSharedIdentity = true;
-    if (identity.terminalId !== registerSession.terminalId) {
-      return false;
-    }
+  if (identity.terminalId !== registerSession.terminalId) {
+    return false;
   }
 
-  return hasSharedIdentity;
+  if (identity.registerNumber) {
+    if (!registerSession.registerNumber) {
+      return false;
+    }
+
+    return identity.registerNumber === registerSession.registerNumber;
+  }
+
+  return true;
 }
 
 async function validateSessionDrawerBinding(
@@ -193,7 +184,6 @@ async function loadPosSessionItems(ctx: QueryCtx, sessionId: Id<"posSession">) {
 
 async function listPosSessionsByStatusBefore(
   ctx: MutationCtx,
-  status: "active" | "void" | "held",
   expiresBefore: number
 ) {
   const sessions = [];
@@ -202,12 +192,14 @@ async function listPosSessionsByStatusBefore(
   while (true) {
     const page = await ctx.db
       .query("posSession")
-      .withIndex("by_status_and_expiresAt", (q) =>
-        q.eq("status", status).lt("expiresAt", expiresBefore)
-      )
+      .withIndex("by_expiresAt", (q) => q.lt("expiresAt", expiresBefore))
       .paginate({ cursor, numItems: SESSION_CLEANUP_BATCH_SIZE });
 
-    sessions.push(...page.page);
+    sessions.push(
+      ...page.page.filter((session) =>
+        POS_SESSION_RELEASE_STATUSES.has(session.status),
+      ),
+    );
     if (page.isDone) {
       break;
     }
@@ -1095,7 +1087,7 @@ export const getActiveSession = query({
 
     if (args.registerNumber) {
       filteredSessions = filteredSessions.filter(
-        (s) => s.terminalId === args.terminalId
+        (s) => s.registerNumber === args.registerNumber
       );
     }
 
@@ -1128,19 +1120,8 @@ export const releasePosSessionItems = internalMutation({
   handler: async (ctx) => {
     const now = Date.now();
 
-    // Find all active and void sessions that have expired
-    const [expiredActiveSessions, expiredVoidSessions, expiredHeldSessions] =
-      await Promise.all([
-        listPosSessionsByStatusBefore(ctx, "active", now),
-        listPosSessionsByStatusBefore(ctx, "void", now),
-        listPosSessionsByStatusBefore(ctx, "held", now),
-      ]);
-
-    const expiredSessions = [
-      ...expiredActiveSessions,
-      ...expiredVoidSessions,
-      ...expiredHeldSessions,
-    ];
+    // Find expired active/void/held sessions
+    const expiredSessions = await listPosSessionsByStatusBefore(ctx, now);
 
     if (expiredSessions.length === 0) {
       console.log("[POS] No expired sessions found");

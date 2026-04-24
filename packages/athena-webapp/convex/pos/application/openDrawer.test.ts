@@ -39,6 +39,13 @@ describe("openDrawer", () => {
         terminalId: "terminal-1" as Id<"posTerminal">,
         workflowTraceId: "register_session:a1",
       }),
+      db: {
+        get: vi.fn().mockResolvedValue({
+          _id: "terminal-1" as Id<"posTerminal">,
+          storeId: "store-1" as Id<"store">,
+          registerNumber: "A1",
+        }),
+      },
     } as unknown as MutationCtx;
 
     const result = await openDrawer(ctx, {
@@ -80,6 +87,64 @@ describe("openDrawer", () => {
     );
   });
 
+  it("uses the terminal register number when no register number is provided", async () => {
+    authMocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
+      _id: "user-1" as Id<"athenaUser">,
+    });
+
+    const ctx = {
+      runQuery: vi.fn().mockResolvedValue({
+        _id: "store-1" as Id<"store">,
+        organizationId: "org-1" as Id<"organization">,
+      }),
+      runMutation: vi.fn().mockResolvedValue({
+        _id: "drawer-2" as Id<"registerSession">,
+        expectedCash: 5000,
+        openedAt: 1710000000000,
+        openingFloat: 5000,
+        registerNumber: "B2",
+        status: "open",
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        workflowTraceId: "register_session:b2",
+      }),
+      db: {
+        get: vi.fn().mockResolvedValue({
+          _id: "terminal-1" as Id<"posTerminal">,
+          storeId: "store-1" as Id<"store">,
+          registerNumber: "B2",
+        }),
+      },
+    } as unknown as MutationCtx;
+
+    const result = await openDrawer(ctx, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+      openingFloat: 5000,
+      notes: "Terminal based register number",
+    });
+
+    expect(ctx.runMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        storeId: "store-1",
+        organizationId: "org-1",
+        registerNumber: "B2",
+      }),
+    );
+    expect(result).toEqual(
+      ok({
+        _id: "drawer-2" as Id<"registerSession">,
+        expectedCash: 5000,
+        openedAt: 1710000000000,
+        openingFloat: 5000,
+        registerNumber: "B2",
+        status: "open",
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        workflowTraceId: "register_session:b2",
+      }),
+    );
+  });
+
   it("returns a not_found user_error when the store does not exist", async () => {
     authMocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
       _id: "user-1" as Id<"athenaUser">,
@@ -87,12 +152,14 @@ describe("openDrawer", () => {
 
     const ctx = {
       runQuery: vi.fn().mockResolvedValue(null),
+      db: { get: vi.fn() },
       runMutation: vi.fn(),
     } as unknown as MutationCtx;
 
     await expect(
       openDrawer(ctx, {
         storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
         openingFloat: 5000,
       }),
     ).resolves.toEqual(
@@ -115,6 +182,13 @@ describe("openDrawer", () => {
         _id: "store-1" as Id<"store">,
         organizationId: "org-1" as Id<"organization">,
       }),
+      db: {
+        get: vi.fn().mockResolvedValue({
+          _id: "terminal-1" as Id<"posTerminal">,
+          storeId: "store-1" as Id<"store">,
+          registerNumber: "A1",
+        }),
+      },
       runMutation: vi
         .fn()
         .mockRejectedValue(
@@ -132,6 +206,107 @@ describe("openDrawer", () => {
       userError({
         code: "conflict",
         message: "A register session is already open for this terminal.",
+      }),
+    );
+  });
+
+  it("returns a conflict user_error for duplicate register-number rejections", async () => {
+    authMocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
+      _id: "user-1" as Id<"athenaUser">,
+    });
+
+    const ctx = {
+      runQuery: vi.fn().mockResolvedValue({
+        _id: "store-1" as Id<"store">,
+        organizationId: "org-1" as Id<"organization">,
+      }),
+      db: {
+        get: vi.fn().mockResolvedValue({
+          _id: "terminal-1" as Id<"posTerminal">,
+          storeId: "store-1" as Id<"store">,
+          registerNumber: "A1",
+        }),
+      },
+      runMutation: vi
+        .fn()
+        .mockRejectedValue(
+          new Error("A register session is already open for this register number."),
+        ),
+    } as unknown as MutationCtx;
+
+    await expect(
+      openDrawer(ctx, {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        registerNumber: "A1",
+        openingFloat: 5000,
+      }),
+    ).resolves.toEqual(
+      userError({
+        code: "conflict",
+        message: "A register session is already open for this register number.",
+      }),
+    );
+  });
+
+  it("returns a validation_failed user_error when terminal registerNumber differs", async () => {
+    const ctx = {
+      runQuery: vi.fn().mockResolvedValue({
+        _id: "store-1" as Id<"store">,
+        organizationId: "org-1" as Id<"organization">,
+      }),
+      db: {
+        get: vi.fn().mockResolvedValue({
+          _id: "terminal-1" as Id<"posTerminal">,
+          storeId: "store-1" as Id<"store">,
+          registerNumber: "B1",
+        }),
+      },
+      runMutation: vi.fn(),
+    } as unknown as MutationCtx;
+
+    await expect(
+      openDrawer(ctx, {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        registerNumber: "A1",
+        openingFloat: 5000,
+      }),
+    ).resolves.toEqual(
+      userError({
+        code: "validation_failed",
+        message: "The terminal is configured with a different register number.",
+      }),
+    );
+  });
+
+  it("returns a validation_failed user_error when terminal is missing a register number", async () => {
+    const ctx = {
+      runQuery: vi.fn().mockResolvedValue({
+        _id: "store-1" as Id<"store">,
+        organizationId: "org-1" as Id<"organization">,
+      }),
+      db: {
+        get: vi.fn().mockResolvedValue({
+          _id: "terminal-1" as Id<"posTerminal">,
+          storeId: "store-1" as Id<"store">,
+          registerNumber: undefined,
+        }),
+      },
+      runMutation: vi.fn(),
+    } as unknown as MutationCtx;
+
+    await expect(
+      openDrawer(ctx, {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        registerNumber: "A1",
+        openingFloat: 5000,
+      }),
+    ).resolves.toEqual(
+      userError({
+        code: "validation_failed",
+        message: "This terminal is not configured with a register number.",
       }),
     );
   });

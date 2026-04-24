@@ -128,5 +128,13 @@ function matchesRegisterIdentity(
     return false;
   }
 
+  if (identity.registerNumber) {
+    if (!session.registerNumber) {
+      return false;
+    }
+
+    return identity.registerNumber === session.registerNumber;
+  }
+
   return true;
 }

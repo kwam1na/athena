@@ -64,7 +64,7 @@ export const getState = query({
 export const openDrawer = mutation({
   args: {
     storeId: v.id("store"),
-    terminalId: v.optional(v.id("posTerminal")),
+    terminalId: v.id("posTerminal"),
     registerNumber: v.optional(v.string()),
     openingFloat: v.number(),
     notes: v.optional(v.string()),

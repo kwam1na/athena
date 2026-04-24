@@ -49,7 +49,7 @@ vi.mock("./session/HeldSessionsList", () => ({
 }));
 
 describe("SessionManager", () => {
-  it("renders the active session trace link when the workflow trace id is present", () => {
+  it("renders the active session controls when a session is present", () => {
     render(
       <SessionManager
         sessionPanel={{
@@ -68,10 +68,12 @@ describe("SessionManager", () => {
       />,
     );
 
-    expect(screen.getByRole("link", { name: "View trace" })).toBeInTheDocument();
+    expect(screen.getByText("SES-001")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /hold/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /void/i })).toBeInTheDocument();
   });
 
-  it("hides the active session trace link when trace metadata is absent", () => {
+  it("does not render trace navigation when trace metadata is absent", () => {
     render(
       <SessionManager
         sessionPanel={{

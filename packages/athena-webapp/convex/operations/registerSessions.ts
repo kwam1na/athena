@@ -20,7 +20,7 @@ const REGISTER_SESSION_TRANSITIONS = {
 } satisfies Record<RegisterSessionStatus, ReadonlySet<RegisterSessionStatus>>;
 type RegisterSessionIdentity = {
   registerNumber?: string | null;
-  terminalId?: Id<"posTerminal">;
+  terminalId?: Id<"posTerminal"> | null;
 };
 type RegisterSessionCashAdjustmentKind = "sale" | "void";
 
@@ -61,8 +61,8 @@ function normalizeRegisterSessionIdentity<T extends RegisterSessionIdentity>(arg
 export function assertRegisterSessionIdentity<T extends RegisterSessionIdentity>(args: T) {
   const normalizedArgs = normalizeRegisterSessionIdentity(args);
 
-  if (!normalizedArgs.registerNumber && !normalizedArgs.terminalId) {
-    throw new Error("Register sessions require a register number or terminal.");
+  if (!normalizedArgs.terminalId) {
+    throw new Error("Register sessions require a terminal.");
   }
 
   return normalizedArgs;
@@ -75,31 +75,17 @@ export function assertRegisterSessionMatchesTransaction(
   const normalizedSession = normalizeRegisterSessionIdentity(session);
   const normalizedTransaction = normalizeRegisterSessionIdentity(transactionIdentity);
 
-  if (!normalizedTransaction.registerNumber && !normalizedTransaction.terminalId) {
+  if (!normalizedTransaction.terminalId) {
     throw new Error(
-      "Register session transactions must include a register number or terminal."
+      "Register session transactions must include a terminal."
     );
   }
 
-  let hasSharedIdentity = false;
-
-  if (normalizedSession.registerNumber && normalizedTransaction.registerNumber) {
-    hasSharedIdentity = true;
-
-    if (normalizedSession.registerNumber !== normalizedTransaction.registerNumber) {
-      throw new Error("Register session does not match the transaction identity.");
-    }
+  if (!normalizedSession.terminalId) {
+    throw new Error("Register session does not match the transaction identity.");
   }
 
-  if (normalizedSession.terminalId && normalizedTransaction.terminalId) {
-    hasSharedIdentity = true;
-
-    if (normalizedSession.terminalId !== normalizedTransaction.terminalId) {
-      throw new Error("Register session does not match the transaction identity.");
-    }
-  }
-
-  if (!hasSharedIdentity) {
+  if (normalizedSession.terminalId !== normalizedTransaction.terminalId) {
     throw new Error("Register session does not match the transaction identity.");
   }
 }
@@ -284,34 +270,13 @@ async function findConflictingRegisterSession(
   ctx: MutationCtx,
   args: {
     storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
     registerNumber?: string;
-    terminalId?: Id<"posTerminal">;
   }
 ) {
-  if (args.registerNumber) {
-    const latestByRegister = await ctx.db
-      .query("registerSession")
-      .withIndex("by_storeId_registerNumber", (q) =>
-        q.eq("storeId", args.storeId).eq("registerNumber", args.registerNumber!)
-      )
-      .order("desc")
-      .first();
-
-    if (
-      latestByRegister &&
-      isRegisterSessionConflictBlockingStatus(latestByRegister.status)
-    ) {
-      throw new Error("A register session is already open for this register.");
-    }
-  }
-
-  if (!args.terminalId) {
-    return;
-  }
-
   const latestByTerminal = await ctx.db
     .query("registerSession")
-    .withIndex("by_terminalId", (q) => q.eq("terminalId", args.terminalId!))
+    .withIndex("by_terminalId", (q) => q.eq("terminalId", args.terminalId))
     .order("desc")
     .first();
 
@@ -321,13 +286,34 @@ async function findConflictingRegisterSession(
   ) {
     throw new Error("A register session is already open for this terminal.");
   }
+
+  if (!args.registerNumber) {
+    return;
+  }
+
+  const latestByRegisterNumber = await ctx.db
+    .query("registerSession")
+    .withIndex("by_storeId_registerNumber", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("registerNumber", args.registerNumber as string)
+    )
+    .order("desc")
+    .first();
+
+  if (
+    latestByRegisterNumber &&
+    isRegisterSessionConflictBlockingStatus(latestByRegisterNumber.status)
+  ) {
+    throw new Error("A register session is already open for this register number.");
+  }
 }
 
 export const openRegisterSession = internalMutation({
   args: {
     storeId: v.id("store"),
     organizationId: v.optional(v.id("organization")),
-    terminalId: v.optional(v.id("posTerminal")),
+    terminalId: v.id("posTerminal"),
     registerNumber: v.optional(v.string()),
     openedByUserId: v.optional(v.id("athenaUser")),
     openedByStaffProfileId: v.optional(v.id("staffProfile")),
@@ -378,35 +364,44 @@ export const getOpenRegisterSession = internalQuery({
     terminalId: v.optional(v.id("posTerminal")),
   },
   handler: async (ctx, args) => {
-    if (args.registerNumber) {
-      const latestByRegister = await ctx.db
-        .query("registerSession")
-        .withIndex("by_storeId_registerNumber", (q) =>
-          q.eq("storeId", args.storeId).eq("registerNumber", args.registerNumber!)
-        )
-        .order("desc")
-        .first();
-
-      return latestByRegister &&
-        isPosUsableRegisterSessionStatus(latestByRegister.status)
-        ? latestByRegister
-        : null;
-    }
-
+    const registerNumber = trimOptional(args.registerNumber);
     if (!args.terminalId) {
       return null;
     }
 
     const latestByTerminal = await ctx.db
       .query("registerSession")
-      .withIndex("by_terminalId", (q) => q.eq("terminalId", args.terminalId!))
+      .withIndex("by_terminalId", (q) => q.eq("terminalId", args.terminalId))
       .order("desc")
       .first();
 
-    return latestByTerminal &&
-      isPosUsableRegisterSessionStatus(latestByTerminal.status)
-      ? latestByTerminal
-      : null;
+    if (!latestByTerminal || !isPosUsableRegisterSessionStatus(latestByTerminal.status)) {
+      if (!registerNumber) {
+        return null;
+      }
+    } else {
+      return latestByTerminal;
+    }
+
+    const latestByRegisterNumber = await ctx.db
+      .query("registerSession")
+      .withIndex("by_storeId_registerNumber", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("registerNumber", registerNumber),
+      )
+      .order("desc")
+      .first();
+
+    if (
+      latestByRegisterNumber &&
+      latestByRegisterNumber.terminalId === args.terminalId &&
+      isPosUsableRegisterSessionStatus(latestByRegisterNumber.status)
+    ) {
+      return latestByRegisterNumber;
+    }
+
+    return null;
   },
 });
 
@@ -417,35 +412,42 @@ export const getRegisterSessionForRegisterState = internalQuery({
     terminalId: v.optional(v.id("posTerminal")),
   },
   handler: async (ctx, args) => {
-    if (args.registerNumber) {
-      const latestByRegister = await ctx.db
-        .query("registerSession")
-        .withIndex("by_storeId_registerNumber", (q) =>
-          q.eq("storeId", args.storeId).eq("registerNumber", args.registerNumber!)
-        )
-        .order("desc")
-        .first();
-
-      return latestByRegister &&
-        isRegisterSessionConflictBlockingStatus(latestByRegister.status)
-        ? latestByRegister
-        : null;
-    }
-
+    const registerNumber = trimOptional(args.registerNumber);
     if (!args.terminalId) {
       return null;
     }
 
+    if (registerNumber) {
+      const latestByRegisterNumber = await ctx.db
+        .query("registerSession")
+        .withIndex("by_storeId_registerNumber", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("registerNumber", registerNumber),
+        )
+        .order("desc")
+        .first();
+
+      if (
+        latestByRegisterNumber &&
+        isPosUsableRegisterSessionStatus(latestByRegisterNumber.status) &&
+        latestByRegisterNumber.terminalId === args.terminalId
+      ) {
+        return latestByRegisterNumber;
+      }
+    }
+
     const latestByTerminal = await ctx.db
       .query("registerSession")
-      .withIndex("by_terminalId", (q) => q.eq("terminalId", args.terminalId!))
+      .withIndex("by_terminalId", (q) => q.eq("terminalId", args.terminalId))
       .order("desc")
       .first();
 
-    return latestByTerminal &&
-      isRegisterSessionConflictBlockingStatus(latestByTerminal.status)
-      ? latestByTerminal
-      : null;
+    if (!latestByTerminal || !isRegisterSessionConflictBlockingStatus(latestByTerminal.status)) {
+      return null;
+    }
+
+    return latestByTerminal;
   },
 });
 
@@ -463,7 +465,7 @@ export const recordRegisterSessionTransaction = internalMutation({
     ),
     changeGiven: v.optional(v.number()),
     registerNumber: v.optional(v.string()),
-    terminalId: v.optional(v.id("posTerminal")),
+    terminalId: v.id("posTerminal"),
   },
   handler: async (ctx, args) => {
     const session = await ctx.db.get("registerSession", args.registerSessionId);

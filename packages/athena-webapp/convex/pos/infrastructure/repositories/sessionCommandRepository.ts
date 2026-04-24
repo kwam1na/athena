@@ -23,7 +23,7 @@ export interface SessionCommandRepository {
   ): Promise<Doc<"registerSession"> | null>;
   getOpenRegisterSessionForIdentity(args: {
     storeId: Id<"store">;
-    terminalId?: Id<"posTerminal">;
+    terminalId: Id<"posTerminal">;
     registerNumber?: string;
   }): Promise<Doc<"registerSession"> | null>;
   listSessionItems(

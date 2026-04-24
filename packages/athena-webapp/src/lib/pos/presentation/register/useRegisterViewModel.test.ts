@@ -29,6 +29,7 @@ let mockTerminal:
   | {
       _id: Id<"posTerminal">;
       displayName: string;
+      registerNumber?: string;
     }
   | null
   | undefined;
@@ -171,6 +172,7 @@ describe("useRegisterViewModel", () => {
     mockTerminal = {
       _id: "terminal-1" as Id<"posTerminal">,
       displayName: "Front Counter",
+      registerNumber: "1",
     };
     mockRegisterState = {
       phase: "active",

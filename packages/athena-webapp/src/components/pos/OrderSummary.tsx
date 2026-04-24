@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { render } from "@react-email/components";
 import {
+  ArrowRight,
   Banknote,
   Check,
   CreditCard,
@@ -12,7 +13,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  calculatePosChange,
   calculatePosRemainingDue,
   calculatePosTotalPaid,
 } from "@/lib/pos/domain";
@@ -26,7 +26,6 @@ import { currencyFormatter } from "~/convex/utils";
 
 import { PaymentView, type SelectedPaymentMethod } from "./PaymentView";
 import { PaymentsAddedList } from "./PaymentsAddedList";
-import { TotalsDisplay } from "./TotalsDisplay";
 import type { CartItem, Payment } from "./types";
 
 interface OrderSummaryProps {
@@ -67,14 +66,13 @@ interface OrderSummaryProps {
   onClearPayments?: () => void;
   onCompleteTransaction?: () => Promise<boolean>;
   onStartNewTransaction?: () => void;
+  onPaymentFlowChange?: (isActive: boolean) => void;
 }
 
 export function OrderSummary({
   cartItems,
   customerInfo,
   registerNumber,
-  subtotal: propSubtotal,
-  tax: propTax,
   total: propTotal,
   payments = [],
   hasTerminal = true,
@@ -90,6 +88,7 @@ export function OrderSummary({
   onClearPayments,
   onCompleteTransaction,
   onStartNewTransaction,
+  onPaymentFlowChange,
 }: OrderSummaryProps) {
   const { activeStore } = useGetActiveStore();
   const formatter = currencyFormatter(activeStore?.currency || "GHS");
@@ -98,6 +97,7 @@ export function OrderSummary({
     useState<SelectedPaymentMethod | null>(null);
   const [isSelectingPaymentMethod, setIsSelectingPaymentMethod] =
     useState(false);
+  const [isEditingPaymentAmount, setIsEditingPaymentAmount] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
 
   const effectiveCartItems =
@@ -106,27 +106,35 @@ export function OrderSummary({
       : cartItems;
   const effectiveCustomerInfo =
     completedTransactionData?.customerInfo ?? customerInfo;
-  const subtotal = completedTransactionData?.subtotal ?? propSubtotal ?? 0;
-  const tax = completedTransactionData?.tax ?? propTax ?? 0;
   const total = completedTransactionData?.total ?? propTotal ?? 0;
   const totalPaid = calculatePosTotalPaid(payments);
   const remainingDue = calculatePosRemainingDue(totalPaid, total);
-  const changeDue =
-    totalPaid > total ? calculatePosChange(totalPaid, total) : 0;
   const cartItemsCount = effectiveCartItems.reduce(
     (sum, item) => sum + item.quantity,
     0,
   );
-  const cartItemsCountText =
-    cartItemsCount > 1 ? `${cartItemsCount} items` : `${cartItemsCount} item`;
 
   const showPaymentButtons =
     !readOnly &&
     !isTransactionCompleted &&
+    !isEditingPaymentAmount &&
     selectedPaymentMethod === null &&
-    (payments.length === 0 || isSelectingPaymentMethod);
+    (payments.length === 0 || isSelectingPaymentMethod || remainingDue > 0);
   const showPaymentEditor =
     !readOnly && !isTransactionCompleted && !showPaymentButtons;
+  const shouldDockPaymentButtons = payments.length > 0 && showPaymentButtons;
+  const isPaymentFlowActive =
+    !readOnly &&
+    !isTransactionCompleted &&
+    (showPaymentEditor || payments.length > 0);
+
+  useEffect(() => {
+    onPaymentFlowChange?.(isPaymentFlowActive);
+  }, [isPaymentFlowActive, onPaymentFlowChange]);
+
+  useEffect(() => {
+    return () => onPaymentFlowChange?.(false);
+  }, [onPaymentFlowChange]);
 
   const handleCompleteTransaction = async () => {
     if (!onCompleteTransaction) {
@@ -233,8 +241,8 @@ export function OrderSummary({
           }
           receiptNumber={
             readOnly
-              ? receiptNumberOverride ?? completedOrderNumber ?? "Transaction"
-              : completedOrderNumber ?? "Transaction"
+              ? (receiptNumberOverride ?? completedOrderNumber ?? "Transaction")
+              : (completedOrderNumber ?? "Transaction")
           }
           completedDate={completedAtDate.toLocaleDateString()}
           completedTime={completedAtDate.toLocaleTimeString("en-US", {
@@ -269,6 +277,8 @@ export function OrderSummary({
   return (
     <div
       className={cn(
+        "min-h-0",
+        isPaymentFlowActive && "flex flex-1 flex-col",
         isTransactionCompleted && "border rounded-lg",
         !hasTerminal && !readOnly && "opacity-60 transition-all duration-300",
       )}
@@ -282,67 +292,53 @@ export function OrderSummary({
         </CardHeader>
       )}
 
-      <CardHeader className="flex flex-row baseline justify-between">
-        <p className="text-lg font-medium">Summary</p>
-        {cartItemsCount > 0 && (
-          <p className="text-gray-600">{cartItemsCountText}</p>
+      <div
+        className={cn(
+          "flex flex-col gap-5 p-0",
+          isPaymentFlowActive && "min-h-0 flex-1 gap-3",
         )}
-      </CardHeader>
-      <div className="p-6 space-y-40">
-        <div className="space-y-16">
-          <TotalsDisplay
-            items={[
-              { label: "Subtotal", value: subtotal, formatter },
-              ...(tax > 0 ? [{ label: "Tax", value: tax, formatter }] : []),
-              { label: "Total", value: total, formatter, highlight: true },
-            ]}
+      >
+        {showPaymentEditor && payments.length === 0 && (
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Items
+              </p>
+              <p className="mt-2 text-2xl font-semibold leading-none text-gray-950">
+                {cartItemsCount}
+              </p>
+            </div>
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 shadow-sm">
+              <p className="text-xs font-medium uppercase tracking-wide text-primary">
+                Balance due
+              </p>
+              <p className="mt-2 text-2xl font-semibold leading-none text-gray-950">
+                {formatStoredAmount(formatter, remainingDue)}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {payments.length > 0 && (
+          <PaymentsAddedList
+            payments={payments}
+            formatter={formatter}
+            totalAmountDue={total}
+            itemCount={isPaymentFlowActive ? cartItemsCount : undefined}
+            balanceDue={isPaymentFlowActive ? remainingDue : undefined}
+            readOnly={readOnly}
+            isTransactionCompleted={isTransactionCompleted}
+            onUpdatePayment={onUpdatePayment}
+            onRemovePayment={onRemovePayment}
+            onClearPayments={() => {
+              setSelectedPaymentMethod(null);
+              setIsSelectingPaymentMethod(false);
+              onClearPayments?.();
+            }}
+            onEditingPaymentChange={setIsEditingPaymentAmount}
+            variant={selectedPaymentMethod ? "minimized" : "default"}
           />
-
-          {payments.length > 0 && (
-            <TotalsDisplay
-              items={[
-                {
-                  label: "Total Paid",
-                  value: totalPaid,
-                  formatter,
-                  highlight: true,
-                },
-                ...(totalPaid < total
-                  ? [
-                      {
-                        label: "Remaining",
-                        value: remainingDue,
-                        formatter,
-                        highlight: true,
-                      },
-                    ]
-                  : []),
-                ...(changeDue > 0
-                  ? [
-                      {
-                        label: "Change Due",
-                        value: changeDue,
-                        formatter,
-                        highlight: true,
-                      },
-                    ]
-                  : []),
-              ]}
-            />
-          )}
-
-          {payments.length > 0 && (
-            <PaymentsAddedList
-              payments={payments}
-              formatter={formatter}
-              totalAmountDue={total}
-              readOnly={readOnly}
-              isTransactionCompleted={isTransactionCompleted}
-              onUpdatePayment={onUpdatePayment}
-              onRemovePayment={onRemovePayment}
-            />
-          )}
-        </div>
+        )}
 
         {effectiveCustomerInfo &&
           (effectiveCustomerInfo.name || effectiveCustomerInfo.email) && (
@@ -360,69 +356,94 @@ export function OrderSummary({
           )}
 
         {showPaymentButtons && (
-          <div className="space-y-2">
-            <Button
-              onClick={() => {
-                setSelectedPaymentMethod("cash");
-                setIsSelectingPaymentMethod(false);
-              }}
-              disabled={cartItemsCount === 0}
-              className="w-full py-10 bg-primary text-white hover:bg-primary/90 hover:text-white"
-              size="lg"
-              variant="outline"
+          <div
+            className={cn(
+              shouldDockPaymentButtons
+                ? "flex min-h-0 flex-1 flex-col gap-5"
+                : "grid grid-cols-2 gap-3",
+            )}
+          >
+            {!shouldDockPaymentButtons && (
+              <div className="col-span-2 rounded-xl border border-primary/20 bg-primary/5 p-5">
+                <p className="text-xs font-medium uppercase tracking-wide text-primary">
+                  Balance due
+                </p>
+                <p className="mt-2 text-4xl font-semibold leading-none text-gray-950">
+                  {formatStoredAmount(formatter, remainingDue)}
+                </p>
+              </div>
+            )}
+
+            <div
+              className={cn(
+                "grid grid-cols-2 gap-3",
+                shouldDockPaymentButtons && "mt-auto",
+                !shouldDockPaymentButtons && "contents",
+              )}
             >
-              <Banknote className="w-4 h-4 mr-2" />
-              Pay with Cash
-            </Button>
-            <Button
-              onClick={() => {
-                setSelectedPaymentMethod("mobile_money");
-                setIsSelectingPaymentMethod(false);
-              }}
-              disabled={cartItemsCount === 0}
-              variant="outline"
-              className="w-full py-10 bg-yellow-200 hover:bg-yellow-300 text-yellow-900 hover:text-yellow-800"
-              size="lg"
-            >
-              <Smartphone className="w-4 h-4 mr-2" />
-              Pay with Mobile Money
-            </Button>
-            <Button
-              onClick={() => {
-                setSelectedPaymentMethod("card");
-                setIsSelectingPaymentMethod(false);
-              }}
-              disabled={cartItemsCount === 0}
-              variant="outline"
-              className="w-full py-10 bg-rose-200 hover:bg-rose-300 text-rose-900 hover:text-rose-800"
-              size="lg"
-            >
-              <CreditCard className="w-4 h-4 mr-2" />
-              Pay with Card
-            </Button>
+              <Button
+                onClick={() => {
+                  setSelectedPaymentMethod("cash");
+                  setIsSelectingPaymentMethod(false);
+                }}
+                disabled={cartItemsCount === 0}
+                className="flex h-28 flex-col items-start justify-between rounded-xl bg-primary p-4 text-left text-white shadow-md shadow-primary/20 hover:bg-primary/90 hover:text-white"
+                size="lg"
+                variant="outline"
+              >
+                <Banknote className="h-5 w-5" />
+                <span className="text-base font-semibold">Cash</span>
+              </Button>
+              <Button
+                onClick={() => {
+                  setSelectedPaymentMethod("card");
+                  setIsSelectingPaymentMethod(false);
+                }}
+                disabled={cartItemsCount === 0}
+                variant="outline"
+                className="flex h-28 flex-col items-start justify-between rounded-xl border-gray-200 bg-white p-4 text-left text-gray-950 shadow-sm shadow-gray-200/80 hover:bg-gray-50"
+                size="lg"
+              >
+                <CreditCard className="h-5 w-5 text-rose-600" />
+                <span className="text-base font-semibold">Card</span>
+              </Button>
+              <Button
+                onClick={() => {
+                  setSelectedPaymentMethod("mobile_money");
+                  setIsSelectingPaymentMethod(false);
+                }}
+                disabled={cartItemsCount === 0}
+                variant="outline"
+                className="col-span-2 flex h-24 items-center justify-between rounded-xl border-yellow-200 bg-yellow-50 p-4 text-left text-yellow-950 shadow-sm shadow-yellow-200/70 hover:bg-yellow-100 hover:text-yellow-950"
+                size="lg"
+              >
+                <span className="flex items-center gap-3">
+                  <Smartphone className="h-5 w-5" />
+                  <span className="text-base font-semibold">Mobile Money</span>
+                </span>
+                <ArrowRight className="h-5 w-5" />
+              </Button>
+            </div>
           </div>
         )}
 
         {showPaymentEditor && (
-          <PaymentView
-            cartItemCount={cartItemsCount}
-            paymentCount={payments.length}
-            totalPaid={totalPaid}
-            remainingDue={remainingDue}
-            amountDue={total}
-            formatter={formatter}
-            selectedPaymentMethod={selectedPaymentMethod}
-            setSelectedPaymentMethod={setSelectedPaymentMethod}
-            onAddPayment={(method, amount) => onAddPayment?.(method, amount)}
-            onAddAnotherPaymentMethod={() => setIsSelectingPaymentMethod(true)}
-            onClearPayments={() => {
-              setSelectedPaymentMethod(null);
-              setIsSelectingPaymentMethod(false);
-              onClearPayments?.();
-            }}
-            onComplete={handleCompleteTransaction}
-            isCompleting={isCompleting}
-          />
+          <div
+            className={cn(selectedPaymentMethod ? "min-h-0 flex-1" : "mt-auto")}
+          >
+            <PaymentView
+              cartItemCount={cartItemsCount}
+              totalPaid={totalPaid}
+              remainingDue={remainingDue}
+              amountDue={total}
+              formatter={formatter}
+              selectedPaymentMethod={selectedPaymentMethod}
+              setSelectedPaymentMethod={setSelectedPaymentMethod}
+              onAddPayment={(method, amount) => onAddPayment?.(method, amount)}
+              onComplete={handleCompleteTransaction}
+              isCompleting={isCompleting}
+            />
+          </div>
         )}
 
         {(readOnly || isTransactionCompleted) && (

@@ -9,6 +9,13 @@ vi.mock("@/lib/pos/presentation/register/useRegisterViewModel", () => ({
   useRegisterViewModel: () => mockUseRegisterViewModel(),
 }));
 
+vi.mock("@/components/ui/sidebar", () => ({
+  useSidebar: () => ({
+    isMobile: false,
+    setOpen: vi.fn(),
+  }),
+}));
+
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
     children,
@@ -55,6 +62,7 @@ vi.mock("@/components/common/PageHeader", () => ({
 
 vi.mock("@/components/pos/ProductEntry", () => ({
   ProductEntry: () => <div>product-entry</div>,
+  ProductSearchInput: () => <div>product-search-input</div>,
 }));
 
 vi.mock("@/components/pos/CartItems", () => ({
@@ -133,10 +141,10 @@ describe("POSRegisterView", () => {
     const { POSRegisterView } = await import("./POSRegisterView");
     render(<POSRegisterView />);
 
-    expect(screen.getByText("Active Session")).toBeInTheDocument();
     expect(screen.getByText("register-action-bar")).toBeInTheDocument();
     expect(screen.getByText("register-customer-panel")).toBeInTheDocument();
-    expect(screen.getByText("product-entry")).toBeInTheDocument();
+    expect(screen.getByText("product-search-input")).toBeInTheDocument();
+    expect(screen.getByText("Ready for product lookup")).toBeInTheDocument();
     expect(screen.getByText("cart-items")).toBeInTheDocument();
     expect(screen.getByText("register-checkout-panel")).toBeInTheDocument();
     expect(screen.getByText("cashier-auth-dialog")).toBeInTheDocument();

@@ -26,6 +26,7 @@ type TerminalRecord = {
   storeId: Id<"store">;
   fingerprintHash: string;
   displayName: string;
+  registerNumber?: string;
   registeredByUserId: Id<"athenaUser">;
   browserInfo: BrowserInfo;
   registeredAt: number;
@@ -35,29 +36,37 @@ type TerminalRecord = {
 type FingerprintRegistrationCardProps = {
   displayName: string;
   onDisplayNameChange: (value: string) => void;
+  registerNumber: string;
+  onRegisterNumberChange: (value: string) => void;
   canRegister: boolean;
   onRegister: () => void;
   isRegistering: boolean;
   isExistingTerminal: boolean;
+  isRegisterNumberLocked: boolean;
   canUpdateExisting: boolean;
   onUpdateExisting: () => void;
   isUpdatingExisting: boolean;
   fingerprintError: string | null;
   existingTerminalName?: string | null;
+  existingTerminalRegisterNumber?: string | null;
 };
 
 function FingerprintRegistrationCard({
   displayName,
   onDisplayNameChange,
+  registerNumber,
+  onRegisterNumberChange,
   canRegister,
   onRegister,
   isRegistering,
   isExistingTerminal,
+  isRegisterNumberLocked,
   canUpdateExisting,
   onUpdateExisting,
   isUpdatingExisting,
   fingerprintError,
   existingTerminalName,
+  existingTerminalRegisterNumber,
 }: FingerprintRegistrationCardProps) {
   return (
     <View
@@ -76,16 +85,7 @@ function FingerprintRegistrationCard({
                 value={displayName}
                 onChange={(event) => onDisplayNameChange(event.target.value)}
               />
-              {!isExistingTerminal && (
-                <LoadingButton
-                  onClick={onRegister}
-                  isLoading={isRegistering}
-                  disabled={!canRegister}
-                >
-                  Register
-                </LoadingButton>
-              )}
-              {isExistingTerminal && (
+              {isExistingTerminal && isRegisterNumberLocked && (
                 <LoadingButton
                   onClick={onUpdateExisting}
                   isLoading={isUpdatingExisting}
@@ -96,6 +96,31 @@ function FingerprintRegistrationCard({
                 </LoadingButton>
               )}
             </div>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="terminal-register-number">Register number</Label>
+          <div className="flex gap-2">
+            <Input
+              id="terminal-register-number"
+              placeholder="1"
+              className="w-[300px]"
+              value={registerNumber}
+              disabled={isExistingTerminal && isRegisterNumberLocked}
+              onChange={(event) => onRegisterNumberChange(event.target.value)}
+            />
+            {(!isExistingTerminal || !isRegisterNumberLocked) && (
+              <LoadingButton
+                onClick={onRegister}
+                isLoading={isRegistering}
+                disabled={!canRegister || isRegistering}
+                variant={isExistingTerminal ? "outline" : "default"}
+              >
+                {isExistingTerminal
+                  ? "Save terminal settings"
+                  : "Register terminal"}
+              </LoadingButton>
+            )}
           </div>
         </div>
 
@@ -110,6 +135,20 @@ function FingerprintRegistrationCard({
               <span className="font-semibold"> {existingTerminalName}</span>
             </p>
           )}
+
+          {isExistingTerminal &&
+            (existingTerminalRegisterNumber ? (
+              <p className="text-sm text-muted-foreground">
+                Register{" "}
+                <span className="font-semibold">
+                  {existingTerminalRegisterNumber}
+                </span>
+              </p>
+            ) : (
+              <p className="text-sm text-amber-500">
+                Register number is not configured yet.
+              </p>
+            ))}
         </div>
       </div>
     </View>
@@ -122,10 +161,10 @@ export function POSSettingsView() {
   const { user: currentUser } = useAuth();
 
   const registerTerminalMutation = useMutation(
-    api.inventory.posTerminal.registerTerminal
+    api.inventory.posTerminal.registerTerminal,
   );
   const updateTerminalMutation = useMutation(
-    api.inventory.posTerminal.updateTerminal
+    api.inventory.posTerminal.updateTerminal,
   );
 
   const [fingerprintResult, setFingerprintResult] =
@@ -134,6 +173,8 @@ export function POSSettingsView() {
   const [isFingerprintLoading, setIsFingerprintLoading] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [nameTouched, setNameTouched] = useState(false);
+  const [registerNumber, setRegisterNumber] = useState("");
+  const [registerNumberTouched, setRegisterNumberTouched] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [isUpdatingExisting, setIsUpdatingExisting] = useState(false);
   const fingerprintHash = fingerprintResult?.fingerprintHash;
@@ -142,10 +183,11 @@ export function POSSettingsView() {
     api.inventory.posTerminal.getTerminalByFingerprint,
     activeStore?._id && fingerprintHash
       ? { storeId: activeStore._id, fingerprintHash }
-      : "skip"
+      : "skip",
   ) as TerminalRecord | null | undefined;
 
   const existingTerminal = currentTerminal ?? null;
+  const isRegisterNumberLocked = Boolean(existingTerminal?.registerNumber);
 
   useEffect(() => {
     if (nameTouched) {
@@ -157,6 +199,17 @@ export function POSSettingsView() {
     }
     setDisplayName("");
   }, [existingTerminal, nameTouched]);
+
+  useEffect(() => {
+    if (registerNumberTouched) {
+      return;
+    }
+    if (existingTerminal) {
+      setRegisterNumber(existingTerminal.registerNumber ?? "");
+      return;
+    }
+    setRegisterNumber("");
+  }, [existingTerminal, registerNumberTouched]);
 
   useEffect(() => {
     let cancelled = false;
@@ -171,7 +224,7 @@ export function POSSettingsView() {
         const stored = window.localStorage.getItem(FINGERPRINT_STORAGE_KEY);
         if (stored) {
           const parsed = JSON.parse(
-            stored
+            stored,
           ) as Partial<BrowserFingerprintResult>;
           if (
             parsed &&
@@ -198,7 +251,7 @@ export function POSSettingsView() {
           setFingerprintResult(result);
           window.localStorage.setItem(
             FINGERPRINT_STORAGE_KEY,
-            JSON.stringify(result)
+            JSON.stringify(result),
           );
         }
       } catch (error) {
@@ -207,7 +260,7 @@ export function POSSettingsView() {
           setFingerprintError(
             error instanceof Error
               ? error.message
-              : "Unable to generate fingerprint"
+              : "Unable to generate fingerprint",
           );
         }
       } finally {
@@ -226,23 +279,35 @@ export function POSSettingsView() {
 
   const registrationState = useMemo(() => {
     const trimmedDisplayName = displayName.trim();
+    const trimmedRegisterNumber = registerNumber.trim();
     const isExistingTerminal = !!existingTerminal;
+    const isRegisterNumberSet = Boolean(existingTerminal?.registerNumber);
 
     return {
       trimmedDisplayName,
+      trimmedRegisterNumber,
       isExistingTerminal,
       existingTerminalName: existingTerminal?.displayName ?? null,
+      existingTerminalRegisterNumber: existingTerminal?.registerNumber ?? null,
       canRegister:
         !!fingerprintResult &&
         !fingerprintError &&
-        !isExistingTerminal &&
-        !!trimmedDisplayName,
+        !!trimmedDisplayName &&
+        !!trimmedRegisterNumber &&
+        (!isExistingTerminal || !isRegisterNumberSet),
       canUpdateExisting:
         isExistingTerminal &&
+        isRegisterNumberSet &&
         !!trimmedDisplayName &&
         trimmedDisplayName !== existingTerminal?.displayName,
     };
-  }, [displayName, existingTerminal, fingerprintError, fingerprintResult]);
+  }, [
+    displayName,
+    existingTerminal,
+    fingerprintError,
+    fingerprintResult,
+    registerNumber,
+  ]);
 
   const handleRegisterTerminal = async () => {
     if (!activeStore?._id) {
@@ -261,18 +326,33 @@ export function POSSettingsView() {
       toast.error("Display name is required");
       return;
     }
+    if (!registrationState.trimmedRegisterNumber) {
+      toast.error("Register number is required");
+      return;
+    }
 
     setIsRegistering(true);
     try {
-      await registerTerminalMutation({
+      const result = await registerTerminalMutation({
         storeId: activeStore._id,
         fingerprintHash: fingerprintResult.fingerprintHash,
         displayName: registrationState.trimmedDisplayName,
         registeredByUserId: currentUser._id,
+        registerNumber: registrationState.trimmedRegisterNumber,
         browserInfo: fingerprintResult.browserInfo,
       });
-      toast.success("Terminal registered");
+      if (result.kind === "user_error") {
+        toast.error(result.error.message);
+        return;
+      }
+
+      toast.success(
+        existingTerminal
+          ? "Terminal register number configured"
+          : "Terminal registered",
+      );
       setNameTouched(false);
+      setRegisterNumberTouched(false);
     } catch (error) {
       console.error(error);
       toast.error("Unable to register terminal");
@@ -323,15 +403,24 @@ export function POSSettingsView() {
               setNameTouched(true);
               setDisplayName(value);
             }}
+            registerNumber={registerNumber}
+            onRegisterNumberChange={(value) => {
+              setRegisterNumberTouched(true);
+              setRegisterNumber(value);
+            }}
             canRegister={registrationState.canRegister}
             onRegister={handleRegisterTerminal}
             isRegistering={isRegistering}
             isExistingTerminal={registrationState.isExistingTerminal}
+            isRegisterNumberLocked={isRegisterNumberLocked}
             canUpdateExisting={registrationState.canUpdateExisting}
             onUpdateExisting={handleUpdateExistingTerminal}
             isUpdatingExisting={isUpdatingExisting}
             fingerprintError={!isFingerprintLoading ? fingerprintError : null}
             existingTerminalName={registrationState.existingTerminalName}
+            existingTerminalRegisterNumber={
+              registrationState.existingTerminalRegisterNumber
+            }
           />
         </div>
       </FadeIn>

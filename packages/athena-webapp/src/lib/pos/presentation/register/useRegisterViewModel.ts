@@ -13,9 +13,7 @@ import {
   usePOSBarcodeSearch,
   usePOSProductIdSearch,
 } from "@/hooks/usePOSProducts";
-import {
-  bootstrapRegister,
-} from "@/lib/pos/application/useCases/bootstrapRegister";
+import { bootstrapRegister } from "@/lib/pos/application/useCases/bootstrapRegister";
 import { addItem as runAddItem } from "@/lib/pos/application/useCases/addItem";
 import { completeTransaction as runCompleteTransaction } from "@/lib/pos/application/useCases/completeTransaction";
 import { holdSession as runHoldSession } from "@/lib/pos/application/useCases/holdSession";
@@ -56,16 +54,18 @@ import {
   isRegisterSessionActive,
 } from "./selectors";
 
-function hasCustomerDetails(customer: CustomerInfo | undefined | null): boolean {
+function hasCustomerDetails(
+  customer: CustomerInfo | undefined | null,
+): boolean {
   if (!customer) {
     return false;
   }
 
   return Boolean(
     customer.customerId ||
-      customer.name.trim() ||
-      customer.email.trim() ||
-      customer.phone.trim(),
+    customer.name.trim() ||
+    customer.email.trim() ||
+    customer.phone.trim(),
   );
 }
 
@@ -80,6 +80,26 @@ function mapSessionCustomer(customer: PosSessionCustomer): CustomerInfo {
     email: customer.email ?? "",
     phone: customer.phone ?? "",
   };
+}
+
+function combinePaymentsByMethod(payments: Payment[]): Payment[] {
+  return payments.reduce<Payment[]>((combinedPayments, payment) => {
+    const existingPayment = combinedPayments.find(
+      (candidate) => candidate.method === payment.method,
+    );
+
+    if (!existingPayment) {
+      combinedPayments.push(payment);
+      return combinedPayments;
+    }
+
+    existingPayment.amount += payment.amount;
+    existingPayment.timestamp = Math.max(
+      existingPayment.timestamp,
+      payment.timestamp,
+    );
+    return combinedPayments;
+  }, []);
 }
 
 function createPaymentId(): string {
@@ -98,13 +118,11 @@ export function useRegisterViewModel(): RegisterViewModel {
   const { activeStore } = useGetActiveStore();
   const terminal = useGetTerminal();
   const navigateBack = useNavigateBack();
-  const [defaultRegisterNumber] = useState("1");
-  const [registerNumberOverride, setRegisterNumberOverride] = useState<
-    string | undefined
-  >(undefined);
-  const [staffProfileId, setStaffProfileId] = useState<Id<"staffProfile"> | null>(
-    null,
-  );
+  const [staffProfileId, setStaffProfileId] =
+    useState<Id<"staffProfile"> | null>(null);
+  const terminalRegisterNumber = terminal?.registerNumber
+    ? trimOptional(terminal.registerNumber)
+    : undefined;
   const [showCustomerPanel, setShowCustomerPanel] = useState(false);
   const [showProductEntry, setShowProductEntry] = useState(true);
   const [productSearchQuery, setProductSearchQuery] = useState("");
@@ -113,9 +131,9 @@ export function useRegisterViewModel(): RegisterViewModel {
   );
   const [payments, setPayments] = useState<Payment[]>([]);
   const [isTransactionCompleted, setIsTransactionCompleted] = useState(false);
-  const [completedOrderNumber, setCompletedOrderNumber] = useState<string | null>(
-    null,
-  );
+  const [completedOrderNumber, setCompletedOrderNumber] = useState<
+    string | null
+  >(null);
   const [drawerOpeningFloat, setDrawerOpeningFloat] = useState("");
   const [drawerNotes, setDrawerNotes] = useState("");
   const [drawerErrorMessage, setDrawerErrorMessage] = useState<string | null>(
@@ -134,7 +152,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     storeId: activeStore?._id,
     terminalId: terminal?._id ?? null,
     staffProfileId,
-    registerNumber: registerNumberOverride,
+    registerNumber: terminalRegisterNumber,
   });
   const bootstrapState = bootstrapRegister({
     registerState,
@@ -143,7 +161,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     storeId: activeStore?._id,
     terminalId: terminal?._id ?? null,
     staffProfileId,
-    registerNumber: registerNumberOverride,
+    registerNumber: terminalRegisterNumber,
   });
   const usableActiveRegisterSession =
     registerState?.activeRegisterSession &&
@@ -163,8 +181,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   const activeRegisterSessionId = usableActiveRegisterSession?._id as
     | Id<"registerSession">
     | undefined;
-  const registerNumber =
-    activeRegisterNumber ?? registerNumberOverride ?? defaultRegisterNumber;
+  const registerNumber = activeRegisterNumber ?? terminalRegisterNumber ?? "";
   const heldSessions = useConvexHeldSessions({
     storeId: activeStore?._id,
     terminalId: terminal?._id ?? null,
@@ -172,12 +189,6 @@ export function useRegisterViewModel(): RegisterViewModel {
     limit: 10,
   });
   const cashier = registerState?.cashier ?? null;
-
-  useEffect(() => {
-    if (activeRegisterNumber && activeRegisterNumber !== registerNumberOverride) {
-      setRegisterNumberOverride(activeRegisterNumber);
-    }
-  }, [activeRegisterNumber, registerNumberOverride]);
 
   const {
     startSession: startSessionCommand,
@@ -209,54 +220,60 @@ export function useRegisterViewModel(): RegisterViewModel {
   );
   const activeSessionHasMismatchedRegisterBinding = Boolean(
     activeSession?._id &&
-      activeSession.registerSessionId &&
-      activeRegisterSessionId &&
-      activeSession.registerSessionId !== activeRegisterSessionId,
+    activeSession.registerSessionId &&
+    activeRegisterSessionId &&
+    activeSession.registerSessionId !== activeRegisterSessionId,
   );
   const activeSessionHasBlockedRegisterBinding =
-    activeSessionNeedsRegisterBinding || activeSessionHasMismatchedRegisterBinding;
+    activeSessionNeedsRegisterBinding ||
+    activeSessionHasMismatchedRegisterBinding;
   const hasCloseoutBlockedDrawerState = Boolean(
-    bootstrapState && closeoutBlockedRegisterSession && !usableActiveRegisterSession,
+    bootstrapState &&
+    closeoutBlockedRegisterSession &&
+    !usableActiveRegisterSession,
   );
   const hasMissingDrawerStartupState = Boolean(
     bootstrapState &&
-      (bootstrapState.phase === "readyToStart" ||
-        bootstrapState.phase === "resumable") &&
-      !usableActiveRegisterSession,
+    (bootstrapState.phase === "readyToStart" ||
+      bootstrapState.phase === "resumable") &&
+    !usableActiveRegisterSession,
   );
   const hasMissingDrawerRecoveryState = Boolean(
     bootstrapState &&
-      !usableActiveRegisterSession &&
-      (bootstrapState.phase === "active" ||
-        bootstrapState.phase === "resumable" ||
-        hasActivePosSession),
+    !usableActiveRegisterSession &&
+    (bootstrapState.phase === "active" ||
+      bootstrapState.phase === "resumable" ||
+      hasActivePosSession),
   );
   const requiresDrawerGate = Boolean(
     activeStore?._id &&
-      terminal?._id &&
-      staffProfileId &&
-      bootstrapState &&
-      (hasMissingDrawerStartupState ||
-        hasCloseoutBlockedDrawerState ||
-        hasMissingDrawerRecoveryState ||
-        activeSessionHasBlockedRegisterBinding),
+    terminal?._id &&
+    staffProfileId &&
+    bootstrapState &&
+    (hasMissingDrawerStartupState ||
+      hasCloseoutBlockedDrawerState ||
+      hasMissingDrawerRecoveryState ||
+      activeSessionHasBlockedRegisterBinding),
   );
   const closeoutBlockedGateIsRecovery = Boolean(
     hasCloseoutBlockedDrawerState &&
-      (hasMissingDrawerRecoveryState || activeSessionHasBlockedRegisterBinding),
+    (hasMissingDrawerRecoveryState || activeSessionHasBlockedRegisterBinding),
   );
   const drawerGateMode: "initialSetup" | "recovery" | "closeoutBlocked" =
     hasCloseoutBlockedDrawerState
       ? "closeoutBlocked"
       : hasMissingDrawerRecoveryState || activeSessionHasBlockedRegisterBinding
-      ? "recovery"
-      : "initialSetup";
+        ? "recovery"
+        : "initialSetup";
   const setPaymentState = useCallback((nextPayments: Payment[]) => {
     paymentsRef.current = nextPayments;
     setPayments(nextPayments);
   }, []);
   const allocateCheckoutStateVersion = useCallback(() => {
-    const nextVersion = Math.max(checkoutStateVersionRef.current + 1, Date.now());
+    const nextVersion = Math.max(
+      checkoutStateVersionRef.current + 1,
+      Date.now(),
+    );
     checkoutStateVersionRef.current = nextVersion;
     return nextVersion;
   }, []);
@@ -301,9 +318,12 @@ export function useRegisterViewModel(): RegisterViewModel {
   }, [registerState?.activeRegisterSession?._id]);
 
   const handleSessionExpired = useCallback(() => {
-    logger.warn("[POS] Session expired, clearing cashier and local draft state", {
-      sessionId: activeSession?._id,
-    });
+    logger.warn(
+      "[POS] Session expired, clearing cashier and local draft state",
+      {
+        sessionId: activeSession?._id,
+      },
+    );
     requestBootstrap();
     syncedSessionId.current = null;
     resetDraftState();
@@ -316,7 +336,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     activeStore?._id,
     terminal?._id,
     staffProfileId,
-    registerNumberOverride,
+    registerNumber,
   ]);
 
   useEffect(() => {
@@ -340,12 +360,14 @@ export function useRegisterViewModel(): RegisterViewModel {
     checkoutStateVersionRef.current = 0;
     setCustomerInfo(mapSessionCustomer(activeSession?.customer ?? null));
     setPaymentState(
-      (activeSession?.payments ?? []).map((payment) => ({
-        id: createPaymentId(),
-        method: payment.method as PosPaymentMethod,
-        amount: payment.amount,
-        timestamp: payment.timestamp,
-      })),
+      combinePaymentsByMethod(
+        (activeSession?.payments ?? []).map((payment) => ({
+          id: createPaymentId(),
+          method: payment.method as PosPaymentMethod,
+          amount: payment.amount,
+          timestamp: payment.timestamp,
+        })),
+      ),
     );
     setShowCustomerPanel(Boolean(activeSession?.customer));
     setIsTransactionCompleted(false);
@@ -527,10 +549,13 @@ export function useRegisterViewModel(): RegisterViewModel {
       }
 
       if (activeSessionHasBlockedRegisterBinding) {
-        logger.warn("[POS] Skipped checkout sync while drawer recovery is required", {
-          sessionId: activeSession._id,
-          stage: args.stage,
-        });
+        logger.warn(
+          "[POS] Skipped checkout sync while drawer recovery is required",
+          {
+            sessionId: activeSession._id,
+            stage: args.stage,
+          },
+        );
         return;
       }
 
@@ -562,7 +587,11 @@ export function useRegisterViewModel(): RegisterViewModel {
   );
 
   useEffect(() => {
-    if (isTransactionCompleted || activeCartItems.length > 0 || payments.length === 0) {
+    if (
+      isTransactionCompleted ||
+      activeCartItems.length > 0 ||
+      payments.length === 0
+    ) {
       return;
     }
 
@@ -582,45 +611,48 @@ export function useRegisterViewModel(): RegisterViewModel {
     syncCheckoutStateBestEffort,
   ]);
 
-  const holdCurrentSession = useCallback(async (reason?: string) => {
-    if (!activeSession || !staffProfileId) {
-      toast.error("No active session to hold");
-      return false;
-    }
+  const holdCurrentSession = useCallback(
+    async (reason?: string) => {
+      if (!activeSession || !staffProfileId) {
+        toast.error("No active session to hold");
+        return false;
+      }
 
-    const persisted = await persistSessionMetadata(activeSession);
-    if (!persisted) {
-      return false;
-    }
+      const persisted = await persistSessionMetadata(activeSession);
+      if (!persisted) {
+        return false;
+      }
 
-    const result = await runHoldSession({
-      gateway: {
-        holdSession: holdSessionCommand,
-      },
-      command: {
-        sessionId: activeSession._id as Id<"posSession">,
-        staffProfileId,
-        reason,
-      },
-    });
+      const result = await runHoldSession({
+        gateway: {
+          holdSession: holdSessionCommand,
+        },
+        command: {
+          sessionId: activeSession._id as Id<"posSession">,
+          staffProfileId,
+          reason,
+        },
+      });
 
-    if (!result.ok) {
-      toast.error(result.message);
-      return false;
-    }
+      if (!result.ok) {
+        toast.error(result.message);
+        return false;
+      }
 
-    resetDraftState({
-      keepCashier: true,
-    });
-    toast.success("Session held");
-    return true;
-  }, [
-    activeSession,
-    staffProfileId,
-    holdSessionCommand,
-    persistSessionMetadata,
-    resetDraftState,
-  ]);
+      resetDraftState({
+        keepCashier: true,
+      });
+      toast.success("Session held");
+      return true;
+    },
+    [
+      activeSession,
+      staffProfileId,
+      holdSessionCommand,
+      persistSessionMetadata,
+      resetDraftState,
+    ],
+  );
 
   const voidCurrentSession = useCallback(async () => {
     if (!activeSession) {
@@ -644,48 +676,53 @@ export function useRegisterViewModel(): RegisterViewModel {
     return true;
   }, [activeSession, resetDraftState, voidSession]);
 
-  const handleResumeSession = useCallback(async (
-    sessionId: Id<"posSession">,
-  ) => {
-    if (!staffProfileId || !terminal?._id) {
-      toast.error("Sign in at a registered terminal before resuming a session");
-      return;
-    }
-
-    if (activeSession && activeSession._id !== sessionId) {
-      const hasDraftState = activeSession.cartItems.length > 0;
-      const handled = hasDraftState
-        ? await holdCurrentSession("Auto-held before resuming a different session")
-        : true;
-
-      if (!handled) {
+  const handleResumeSession = useCallback(
+    async (sessionId: Id<"posSession">) => {
+      if (!staffProfileId || !terminal?._id) {
+        toast.error(
+          "Sign in at a registered terminal before resuming a session",
+        );
         return;
       }
-    }
 
-    const result = await resumeSession({
-      sessionId,
+      if (activeSession && activeSession._id !== sessionId) {
+        const hasDraftState = activeSession.cartItems.length > 0;
+        const handled = hasDraftState
+          ? await holdCurrentSession(
+              "Auto-held before resuming a different session",
+            )
+          : true;
+
+        if (!handled) {
+          return;
+        }
+      }
+
+      const result = await resumeSession({
+        sessionId,
+        staffProfileId,
+        terminalId: terminal._id,
+      });
+
+      if (result.kind !== "ok") {
+        toast.error(result.error.message);
+        return;
+      }
+
+      setPaymentState([]);
+      setShowCustomerPanel(false);
+      bootstrapInitialized.current = true;
+      toast.success("Session resumed");
+    },
+    [
+      activeSession,
       staffProfileId,
-      terminalId: terminal._id,
-    });
-
-    if (result.kind !== "ok") {
-      toast.error(result.error.message);
-      return;
-    }
-
-    setPaymentState([]);
-    setShowCustomerPanel(false);
-    bootstrapInitialized.current = true;
-    toast.success("Session resumed");
-  }, [
-    activeSession,
-    staffProfileId,
-    holdCurrentSession,
-    resumeSession,
-    setPaymentState,
-    terminal?._id,
-  ]);
+      holdCurrentSession,
+      resumeSession,
+      setPaymentState,
+      terminal?._id,
+    ],
+  );
 
   const handleStartNewSession = useCallback(async () => {
     if (!activeStore?._id || !terminal?._id || !staffProfileId) {
@@ -890,7 +927,7 @@ export function useRegisterViewModel(): RegisterViewModel {
           storeId: activeStore._id,
           terminalId: terminal._id,
           staffProfileId,
-          registerNumber: registerNumberOverride,
+          registerNumber,
           registerSessionId: activeRegisterSessionId,
         },
       });
@@ -906,7 +943,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     bootstrapState,
     staffProfileId,
     isTransactionCompleted,
-    registerNumberOverride,
+    registerNumber,
     requiresDrawerGate,
     resumeSession,
     startSessionCommand,
@@ -945,85 +982,154 @@ export function useRegisterViewModel(): RegisterViewModel {
     extractResult.type === "barcode" ? debouncedValue : "",
   );
 
-  const handleAddProduct = useCallback(async (product: Product) => {
-    if (!staffProfileId) {
-      toast.error("A cashier must sign in before products can be added");
-      return;
-    }
+  const handleAddProduct = useCallback(
+    async (product: Product) => {
+      if (!staffProfileId) {
+        toast.error("A cashier must sign in before products can be added");
+        return;
+      }
 
-    if (!product.productId || !product.skuId) {
-      toast.error("Product is missing SKU details");
-      return;
-    }
+      if (!product.productId || !product.skuId) {
+        toast.error("Product is missing SKU details");
+        return;
+      }
 
-    if (activeSessionHasBlockedRegisterBinding) {
-      toast.error("Open the cash drawer before adding products");
-      return;
-    }
+      if (activeSessionHasBlockedRegisterBinding) {
+        toast.error("Open the cash drawer before adding products");
+        return;
+      }
 
-    const sessionId = await ensureSessionId();
-    if (!sessionId) {
-      return;
-    }
+      const sessionId = await ensureSessionId();
+      if (!sessionId) {
+        return;
+      }
 
-    const existingItem = activeCartItems.find((item) => item.skuId === product.skuId);
-    const nextQuantity = existingItem ? existingItem.quantity + 1 : 1;
+      const existingItem = activeCartItems.find(
+        (item) => item.skuId === product.skuId,
+      );
+      const nextQuantity = existingItem ? existingItem.quantity + 1 : 1;
 
-    const result = await runAddItem({
-      gateway: {
-        addItem: addItemCommand,
-      },
-      command: {
-        sessionId,
-        staffProfileId,
-        productId: product.productId,
-        productSkuId: product.skuId,
-        productSku: product.sku || "",
-        barcode: product.barcode || undefined,
-        productName: product.name,
-        price: product.price,
-        quantity: nextQuantity,
-        image: product.image || undefined,
-        size: product.size || undefined,
-        length: product.length || undefined,
-        color: product.color || undefined,
-        areProcessingFeesAbsorbed: product.areProcessingFeesAbsorbed,
-      },
-    });
+      const result = await runAddItem({
+        gateway: {
+          addItem: addItemCommand,
+        },
+        command: {
+          sessionId,
+          staffProfileId,
+          productId: product.productId,
+          productSkuId: product.skuId,
+          productSku: product.sku || "",
+          barcode: product.barcode || undefined,
+          productName: product.name,
+          price: product.price,
+          quantity: nextQuantity,
+          image: product.image || undefined,
+          size: product.size || undefined,
+          length: product.length || undefined,
+          color: product.color || undefined,
+          areProcessingFeesAbsorbed: product.areProcessingFeesAbsorbed,
+        },
+      });
 
-    if (!result.ok) {
-      toast.error(result.message);
-      return;
-    }
+      if (!result.ok) {
+        toast.error(result.message);
+        return;
+      }
 
-    setProductSearchQuery("");
-  }, [
-    activeCartItems,
-    activeSessionHasBlockedRegisterBinding,
-    addItemCommand,
-    ensureSessionId,
-    staffProfileId,
-  ]);
+      setProductSearchQuery("");
+    },
+    [
+      activeCartItems,
+      activeSessionHasBlockedRegisterBinding,
+      addItemCommand,
+      ensureSessionId,
+      staffProfileId,
+    ],
+  );
 
-  const handleUpdateQuantity = useCallback(async (
-    itemId: Id<"posSessionItem">,
-    quantity: number,
-  ) => {
-    if (!activeSession || !staffProfileId) {
-      return;
-    }
+  const handleUpdateQuantity = useCallback(
+    async (itemId: Id<"posSessionItem">, quantity: number) => {
+      if (!activeSession || !staffProfileId) {
+        return;
+      }
 
-    if (activeSessionHasBlockedRegisterBinding) {
-      toast.error("Open the cash drawer before modifying this sale");
-      return;
-    }
+      if (activeSessionHasBlockedRegisterBinding) {
+        toast.error("Open the cash drawer before modifying this sale");
+        return;
+      }
 
-    const item = activeSession.cartItems.find((candidate) => candidate.id === itemId);
-    if (!item) {
-      return;
-    }
+      const item = activeSession.cartItems.find(
+        (candidate) => candidate.id === itemId,
+      );
+      if (!item) {
+        return;
+      }
 
-    if (quantity <= 0) {
+      if (quantity <= 0) {
+        const result = await removeItem({
+          sessionId: activeSession._id as Id<"posSession">,
+          staffProfileId,
+          itemId,
+        });
+
+        if (result.kind !== "ok") {
+          toast.error(result.error.message);
+        }
+
+        return;
+      }
+
+      if (!item.productId || !item.skuId) {
+        toast.error("Item is missing product details");
+        return;
+      }
+
+      const result = await runAddItem({
+        gateway: {
+          addItem: addItemCommand,
+        },
+        command: {
+          sessionId: activeSession._id as Id<"posSession">,
+          staffProfileId,
+          productId: item.productId,
+          productSkuId: item.skuId,
+          productSku: item.sku || "",
+          barcode: item.barcode || undefined,
+          productName: item.name,
+          price: item.price,
+          quantity,
+          image: item.image || undefined,
+          size: item.size || undefined,
+          length: item.length || undefined,
+          color: item.color || undefined,
+          areProcessingFeesAbsorbed: item.areProcessingFeesAbsorbed,
+        },
+      });
+
+      if (!result.ok) {
+        toast.error(result.message);
+      }
+    },
+    [
+      activeSession,
+      activeSessionHasBlockedRegisterBinding,
+      addItemCommand,
+      removeItem,
+      staffProfileId,
+    ],
+  );
+
+  const handleRemoveItem = useCallback(
+    async (itemId: Id<"posSessionItem">) => {
+      if (!activeSession || !staffProfileId) {
+        return;
+      }
+
+      if (activeSessionHasBlockedRegisterBinding) {
+        toast.error("Open the cash drawer before modifying this sale");
+        return;
+      }
+
       const result = await removeItem({
         sessionId: activeSession._id as Id<"posSession">,
         staffProfileId,
@@ -1033,75 +1139,14 @@ export function useRegisterViewModel(): RegisterViewModel {
       if (result.kind !== "ok") {
         toast.error(result.error.message);
       }
-
-      return;
-    }
-
-    if (!item.productId || !item.skuId) {
-      toast.error("Item is missing product details");
-      return;
-    }
-
-    const result = await runAddItem({
-      gateway: {
-        addItem: addItemCommand,
-      },
-      command: {
-        sessionId: activeSession._id as Id<"posSession">,
-        staffProfileId,
-        productId: item.productId,
-        productSkuId: item.skuId,
-        productSku: item.sku || "",
-        barcode: item.barcode || undefined,
-        productName: item.name,
-        price: item.price,
-        quantity,
-        image: item.image || undefined,
-        size: item.size || undefined,
-        length: item.length || undefined,
-        color: item.color || undefined,
-        areProcessingFeesAbsorbed: item.areProcessingFeesAbsorbed,
-      },
-    });
-
-    if (!result.ok) {
-      toast.error(result.message);
-    }
-  }, [
-    activeSession,
-    activeSessionHasBlockedRegisterBinding,
-    addItemCommand,
-    removeItem,
-    staffProfileId,
-  ]);
-
-  const handleRemoveItem = useCallback(async (
-    itemId: Id<"posSessionItem">,
-  ) => {
-    if (!activeSession || !staffProfileId) {
-      return;
-    }
-
-    if (activeSessionHasBlockedRegisterBinding) {
-      toast.error("Open the cash drawer before modifying this sale");
-      return;
-    }
-
-    const result = await removeItem({
-      sessionId: activeSession._id as Id<"posSession">,
+    },
+    [
+      activeSession,
+      activeSessionHasBlockedRegisterBinding,
+      removeItem,
       staffProfileId,
-      itemId,
-    });
-
-    if (result.kind !== "ok") {
-      toast.error(result.error.message);
-    }
-  }, [
-    activeSession,
-    activeSessionHasBlockedRegisterBinding,
-    removeItem,
-    staffProfileId,
-  ]);
+    ],
+  );
 
   const handleClearCart = useCallback(async () => {
     if (!activeSession || !staffProfileId) {
@@ -1182,48 +1227,51 @@ export function useRegisterViewModel(): RegisterViewModel {
     productIdSearchResults,
   ]);
 
-  const handleBarcodeSubmit = useCallback(async (event: FormEvent) => {
-    event.preventDefault();
-    if (!productSearchQuery.trim()) {
-      return;
-    }
-
-    if (extractResult.type === "productId" && productIdSearchResults) {
-      if (productIdSearchResults.length === 1) {
-        await handleAddProduct(productIdSearchResults[0]);
-      }
-      return;
-    }
-
-    if (extractResult.type === "barcode" && barcodeSearchResult) {
-      const resolvedProduct = Array.isArray(barcodeSearchResult)
-        ? barcodeSearchResult.length === 1
-          ? barcodeSearchResult[0]
-          : null
-        : barcodeSearchResult;
-
-      if (resolvedProduct) {
-        await handleAddProduct(resolvedProduct);
+  const handleBarcodeSubmit = useCallback(
+    async (event: FormEvent) => {
+      event.preventDefault();
+      if (!productSearchQuery.trim()) {
         return;
       }
-    }
 
-    if (extractResult.type === "barcode") {
-      logger.warn("[POS] Barcode not found", {
-        barcode: extractedValue,
-        storeId: activeStore?._id,
-      });
-      toast.error("Barcode not found");
-    }
-  }, [
-    activeStore?._id,
-    barcodeSearchResult,
-    extractResult.type,
-    extractedValue,
-    handleAddProduct,
-    productIdSearchResults,
-    productSearchQuery,
-  ]);
+      if (extractResult.type === "productId" && productIdSearchResults) {
+        if (productIdSearchResults.length === 1) {
+          await handleAddProduct(productIdSearchResults[0]);
+        }
+        return;
+      }
+
+      if (extractResult.type === "barcode" && barcodeSearchResult) {
+        const resolvedProduct = Array.isArray(barcodeSearchResult)
+          ? barcodeSearchResult.length === 1
+            ? barcodeSearchResult[0]
+            : null
+          : barcodeSearchResult;
+
+        if (resolvedProduct) {
+          await handleAddProduct(resolvedProduct);
+          return;
+        }
+      }
+
+      if (extractResult.type === "barcode") {
+        logger.warn("[POS] Barcode not found", {
+          barcode: extractedValue,
+          storeId: activeStore?._id,
+        });
+        toast.error("Barcode not found");
+      }
+    },
+    [
+      activeStore?._id,
+      barcodeSearchResult,
+      extractResult.type,
+      extractedValue,
+      handleAddProduct,
+      productIdSearchResults,
+      productSearchQuery,
+    ],
+  );
 
   useEffect(() => {
     if (!isTransactionCompleted && showProductEntry) {
@@ -1315,7 +1363,7 @@ export function useRegisterViewModel(): RegisterViewModel {
           amount: payment.amount,
           timestamp: payment.timestamp,
         })),
-        notes: `Register: ${registerNumber}`,
+        notes: `Register: ${registerNumber ?? "unconfigured"}`,
         subtotal: activeTotals.subtotal,
         tax: activeTotals.tax,
         total: activeTotals.total,
@@ -1376,7 +1424,10 @@ export function useRegisterViewModel(): RegisterViewModel {
         amount,
         timestamp: Date.now(),
       };
-      const nextPayments = [...currentPayments, nextPayment];
+      const nextPayments = combinePaymentsByMethod([
+        ...currentPayments,
+        nextPayment,
+      ]);
       setPaymentState(nextPayments);
       void syncCheckoutStateBestEffort({
         checkoutStateVersion,
@@ -1386,52 +1437,76 @@ export function useRegisterViewModel(): RegisterViewModel {
         amount,
       });
     },
-    [allocateCheckoutStateVersion, setPaymentState, syncCheckoutStateBestEffort],
+    [
+      allocateCheckoutStateVersion,
+      setPaymentState,
+      syncCheckoutStateBestEffort,
+    ],
   );
 
-  const handleUpdatePayment = useCallback((paymentId: string, amount: number) => {
-    const currentPayments = paymentsRef.current;
-    const checkoutStateVersion = allocateCheckoutStateVersion();
-    const previousPayment = currentPayments.find((payment) => payment.id === paymentId);
-    const nextPayments = currentPayments.map((payment) =>
-      payment.id === paymentId ? { ...payment, amount } : payment,
-    );
+  const handleUpdatePayment = useCallback(
+    (paymentId: string, amount: number) => {
+      const currentPayments = paymentsRef.current;
+      const checkoutStateVersion = allocateCheckoutStateVersion();
+      const previousPayment = currentPayments.find(
+        (payment) => payment.id === paymentId,
+      );
+      const nextPayments = currentPayments.map((payment) =>
+        payment.id === paymentId ? { ...payment, amount } : payment,
+      );
 
-    setPaymentState(nextPayments);
+      setPaymentState(nextPayments);
 
-    if (!previousPayment) {
-      return;
-    }
+      if (!previousPayment) {
+        return;
+      }
 
-    void syncCheckoutStateBestEffort({
-      checkoutStateVersion,
-      nextPayments,
-      stage: "paymentUpdated",
-      paymentMethod: previousPayment.method,
-      amount,
-      previousAmount: previousPayment.amount,
-    });
-  }, [allocateCheckoutStateVersion, setPaymentState, syncCheckoutStateBestEffort]);
+      void syncCheckoutStateBestEffort({
+        checkoutStateVersion,
+        nextPayments,
+        stage: "paymentUpdated",
+        paymentMethod: previousPayment.method,
+        amount,
+        previousAmount: previousPayment.amount,
+      });
+    },
+    [
+      allocateCheckoutStateVersion,
+      setPaymentState,
+      syncCheckoutStateBestEffort,
+    ],
+  );
 
-  const handleRemovePayment = useCallback((paymentId: string) => {
-    const currentPayments = paymentsRef.current;
-    const checkoutStateVersion = allocateCheckoutStateVersion();
-    const removedPayment = currentPayments.find((payment) => payment.id === paymentId);
-    const nextPayments = currentPayments.filter((payment) => payment.id !== paymentId);
-    setPaymentState(nextPayments);
+  const handleRemovePayment = useCallback(
+    (paymentId: string) => {
+      const currentPayments = paymentsRef.current;
+      const checkoutStateVersion = allocateCheckoutStateVersion();
+      const removedPayment = currentPayments.find(
+        (payment) => payment.id === paymentId,
+      );
+      const nextPayments = currentPayments.filter(
+        (payment) => payment.id !== paymentId,
+      );
+      setPaymentState(nextPayments);
 
-    if (!removedPayment) {
-      return;
-    }
+      if (!removedPayment) {
+        return;
+      }
 
-    void syncCheckoutStateBestEffort({
-      checkoutStateVersion,
-      nextPayments,
-      stage: "paymentRemoved",
-      paymentMethod: removedPayment.method,
-      amount: removedPayment.amount,
-    });
-  }, [allocateCheckoutStateVersion, setPaymentState, syncCheckoutStateBestEffort]);
+      void syncCheckoutStateBestEffort({
+        checkoutStateVersion,
+        nextPayments,
+        stage: "paymentRemoved",
+        paymentMethod: removedPayment.method,
+        amount: removedPayment.amount,
+      });
+    },
+    [
+      allocateCheckoutStateVersion,
+      setPaymentState,
+      syncCheckoutStateBestEffort,
+    ],
+  );
 
   const handleClearPayments = useCallback(() => {
     if (paymentsRef.current.length === 0) {
@@ -1445,7 +1520,11 @@ export function useRegisterViewModel(): RegisterViewModel {
       nextPayments: [],
       stage: "paymentsCleared",
     });
-  }, [allocateCheckoutStateVersion, setPaymentState, syncCheckoutStateBestEffort]);
+  }, [
+    allocateCheckoutStateVersion,
+    setPaymentState,
+    syncCheckoutStateBestEffort,
+  ]);
 
   const header = useMemo(
     () =>

@@ -74,43 +74,19 @@ function calculateTotalPaid(payments: PosPaymentInput[]) {
   return payments.reduce((sum, payment) => sum + payment.amount, 0);
 }
 
-function normalizeRegisterNumber(registerNumber?: string | null) {
-  const trimmedRegisterNumber = registerNumber?.trim();
-  return trimmedRegisterNumber ? trimmedRegisterNumber : undefined;
-}
-
 function registerSessionMatchesIdentity(
   registerSession: {
-    registerNumber?: string;
     terminalId?: Id<"posTerminal">;
   },
   identity: {
-    registerNumber?: string;
     terminalId?: Id<"posTerminal">;
   },
 ) {
-  const normalizedRegisterNumber = normalizeRegisterNumber(identity.registerNumber);
-  const normalizedSessionRegisterNumber = normalizeRegisterNumber(
-    registerSession.registerNumber,
-  );
-
-  let hasSharedIdentity = false;
-
-  if (normalizedRegisterNumber && normalizedSessionRegisterNumber) {
-    hasSharedIdentity = true;
-    if (normalizedRegisterNumber !== normalizedSessionRegisterNumber) {
-      return false;
-    }
+  if (!identity.terminalId || !registerSession.terminalId) {
+    return false;
   }
 
-  if (identity.terminalId && registerSession.terminalId) {
-    hasSharedIdentity = true;
-    if (identity.terminalId !== registerSession.terminalId) {
-      return false;
-    }
-  }
-
-  return hasSharedIdentity;
+  return identity.terminalId === registerSession.terminalId;
 }
 
 function isUsableRegisterSession(registerSession: { status: string }) {
@@ -272,14 +248,16 @@ async function resolveSessionRegisterSessionId(
     });
   }
 
-  const registerSession = await getRegisterSessionById(ctx, resolvedRegisterSessionId);
+  const registerSession = await getRegisterSessionById(
+    ctx,
+    resolvedRegisterSessionId,
+  );
 
   if (
     !registerSession ||
     registerSession.storeId !== args.session.storeId ||
     !isUsableRegisterSession(registerSession) ||
     !registerSessionMatchesIdentity(registerSession, {
-      registerNumber: args.session.registerNumber,
       terminalId: args.session.terminalId,
     })
   ) {
@@ -300,7 +278,7 @@ export async function recordRegisterSessionSale(
     registerSessionId: Id<"registerSession">;
     registerNumber?: string;
     storeId: Id<"store">;
-    terminalId?: Id<"posTerminal">;
+    terminalId: Id<"posTerminal">;
   },
 ) {
   await ctx.runMutation(
@@ -325,7 +303,7 @@ async function recordRegisterSessionVoid(
     registerSessionId: Id<"registerSession">;
     registerNumber?: string;
     storeId: Id<"store">;
-    terminalId?: Id<"posTerminal">;
+    terminalId: Id<"posTerminal">;
   },
 ) {
   await ctx.runMutation(
@@ -431,6 +409,13 @@ export async function completeTransaction(
     });
   }
 
+  if (args.registerSessionId && !args.terminalId) {
+    return userError({
+      code: "precondition_failed",
+      message: "Register session transactions must include a terminal.",
+    });
+  }
+
   const totalPaid = calculateTotalPaid(args.payments);
   if (totalPaid < args.total) {
     return userError({
@@ -491,13 +476,22 @@ export async function completeTransaction(
   });
 
   if (args.registerSessionId) {
+    const sessionTerminalId = args.terminalId;
+
+    if (!sessionTerminalId) {
+      return userError({
+        code: "precondition_failed",
+        message: "Register session transactions must include a terminal.",
+      });
+    }
+
     await recordRegisterSessionSale(ctx, {
       changeGiven,
       payments: args.payments,
       registerSessionId: args.registerSessionId,
       registerNumber: args.registerNumber,
       storeId: args.storeId,
-      terminalId: args.terminalId,
+      terminalId: sessionTerminalId,
     });
   }
 
@@ -600,6 +594,13 @@ export async function voidTransaction(
   }
 
   if (transaction.registerSessionId) {
+    if (!transaction.terminalId) {
+      return {
+        success: false,
+        error: "Register session transactions must include a terminal.",
+      };
+    }
+
     await recordRegisterSessionVoid(ctx, {
       changeGiven: transaction.changeGiven,
       payments: transaction.payments,

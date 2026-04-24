@@ -80,6 +80,7 @@ echo "ctx.runMutation calls: $(count_fixed_matches 'ctx.runMutation(')"
 echo "ctx.runAction calls: $(count_fixed_matches 'ctx.runAction(')"
 echo "api.* refs inside Convex: $(count_fixed_matches 'api.')"
 echo "Date.now() occurrences: $(count_fixed_matches 'Date.now(')"
+python3 "$ROOT_DIR/scripts/convexPaginationAntiPatternCheck.py" "$ROOT_DIR"
 echo
 
 echo "Top files by hotspot count"
