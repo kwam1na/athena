@@ -5,6 +5,8 @@ import {
   createWorkflowTraceWithCtx,
   registerWorkflowTraceLookupWithCtx,
 } from "../workflowTraces/core";
+import { toDisplayAmount } from "../lib/currency";
+import { currencyFormatter } from "../utils";
 
 import { recordRegisterSessionTraceBestEffort } from "./registerSessionTracing";
 
@@ -28,6 +30,19 @@ function buildSession() {
   };
 }
 
+function buildCtx(currency = "GHS") {
+  const getStore = vi.fn().mockResolvedValue({ currency });
+
+  return {
+    ctx: { db: { get: getStore } } as never,
+    getStore,
+  };
+}
+
+function formatStoredTraceAmount(currency: string, amount: number) {
+  return currencyFormatter(currency).format(toDisplayAmount(amount));
+}
+
 beforeEach(() => {
   vi.resetAllMocks();
 });
@@ -37,6 +52,116 @@ afterEach(() => {
 });
 
 describe("recordRegisterSessionTraceBestEffort", () => {
+  const moneyMovementCases = [
+    {
+      amount: 12_345,
+      message: `Recorded sale cash movement of ${formatStoredTraceAmount("GHS", 12_345)}.`,
+      stage: "sale_recorded" as const,
+      step: "register_session_sale_recorded",
+    },
+    {
+      amount: 6_789,
+      message: `Recorded void cash adjustment of ${formatStoredTraceAmount("GHS", 6_789)}.`,
+      stage: "void_recorded" as const,
+      step: "register_session_void_recorded",
+    },
+    {
+      amount: 250_000,
+      message: `Recorded cash deposit of ${formatStoredTraceAmount("GHS", 250_000)}.`,
+      stage: "deposit_recorded" as const,
+      step: "register_session_deposit_recorded",
+    },
+  ];
+
+  it.each(moneyMovementCases)(
+    "formats stored minor-unit amounts in the $stage trace message while preserving details.amount",
+    async ({ amount, message, stage, step }) => {
+      vi.mocked(createWorkflowTraceWithCtx).mockResolvedValue(
+        "trace-1" as never,
+      );
+      vi.mocked(registerWorkflowTraceLookupWithCtx).mockResolvedValue(
+        "lookup-1" as never,
+      );
+      vi.mocked(appendWorkflowTraceEventWithCtx).mockResolvedValue(
+        "event-1" as never,
+      );
+      const { ctx } = buildCtx();
+
+      await recordRegisterSessionTraceBestEffort(ctx, {
+        stage,
+        session: buildSession(),
+        amount,
+        occurredAt: 222,
+      });
+
+      expect(appendWorkflowTraceEventWithCtx).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          details: expect.objectContaining({ amount }),
+          message,
+          occurredAt: 222,
+          step,
+        }),
+      );
+    },
+  );
+
+  it("uses a display-zero fallback in cash movement trace messages when amount is missing", async () => {
+    vi.mocked(createWorkflowTraceWithCtx).mockResolvedValue("trace-1" as never);
+    vi.mocked(registerWorkflowTraceLookupWithCtx).mockResolvedValue(
+      "lookup-1" as never,
+    );
+    vi.mocked(appendWorkflowTraceEventWithCtx).mockResolvedValue(
+      "event-1" as never,
+    );
+    const { ctx } = buildCtx();
+
+    await recordRegisterSessionTraceBestEffort(ctx, {
+      stage: "sale_recorded",
+      session: buildSession(),
+      occurredAt: 222,
+    });
+
+    expect(appendWorkflowTraceEventWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        details: expect.not.objectContaining({ amount: expect.anything() }),
+        message: `Recorded sale cash movement of ${currencyFormatter("GHS").format(0)}.`,
+        occurredAt: 222,
+        step: "register_session_sale_recorded",
+      }),
+    );
+  });
+
+  it("uses the register session store currency when formatting trace money", async () => {
+    vi.mocked(createWorkflowTraceWithCtx).mockResolvedValue("trace-1" as never);
+    vi.mocked(registerWorkflowTraceLookupWithCtx).mockResolvedValue(
+      "lookup-1" as never,
+    );
+    vi.mocked(appendWorkflowTraceEventWithCtx).mockResolvedValue(
+      "event-1" as never,
+    );
+    const { ctx, getStore } = buildCtx("USD");
+
+    await recordRegisterSessionTraceBestEffort(ctx, {
+      stage: "sale_recorded",
+      session: buildSession(),
+      amount: 12_345,
+      occurredAt: 222,
+    });
+
+    expect(getStore).toHaveBeenCalledWith("store-1");
+    expect(appendWorkflowTraceEventWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        details: expect.objectContaining({ amount: 12_345 }),
+        message: `Recorded sale cash movement of ${formatStoredTraceAmount("USD", 12_345)}.`,
+        occurredAt: 222,
+        step: "register_session_sale_recorded",
+      }),
+    );
+  });
+
   it("records an opened register-session trace using openedAt for bootstrap ordering", async () => {
     vi.mocked(createWorkflowTraceWithCtx).mockResolvedValue("trace-1" as never);
     vi.mocked(registerWorkflowTraceLookupWithCtx).mockResolvedValue(
@@ -45,8 +170,9 @@ describe("recordRegisterSessionTraceBestEffort", () => {
     vi.mocked(appendWorkflowTraceEventWithCtx).mockResolvedValue(
       "event-1" as never,
     );
+    const { ctx } = buildCtx();
 
-    const result = await recordRegisterSessionTraceBestEffort({} as never, {
+    const result = await recordRegisterSessionTraceBestEffort(ctx, {
       stage: "opened",
       session: buildSession(),
     });
@@ -80,8 +206,9 @@ describe("recordRegisterSessionTraceBestEffort", () => {
     vi.mocked(appendWorkflowTraceEventWithCtx).mockResolvedValue(
       "event-1" as never,
     );
+    const { ctx } = buildCtx();
 
-    await recordRegisterSessionTraceBestEffort({} as never, {
+    await recordRegisterSessionTraceBestEffort(ctx, {
       stage: "approval_pending",
       session: {
         ...buildSession(),
@@ -120,8 +247,9 @@ describe("recordRegisterSessionTraceBestEffort", () => {
     vi.mocked(appendWorkflowTraceEventWithCtx).mockResolvedValue(
       "event-1" as never,
     );
+    const { ctx } = buildCtx();
 
-    await recordRegisterSessionTraceBestEffort({} as never, {
+    await recordRegisterSessionTraceBestEffort(ctx, {
       stage: "deposit_recorded",
       session: buildSession(),
       amount: 2_500,
@@ -146,8 +274,9 @@ describe("recordRegisterSessionTraceBestEffort", () => {
     vi.mocked(appendWorkflowTraceEventWithCtx).mockResolvedValue(
       "event-1" as never,
     );
+    const { ctx } = buildCtx();
 
-    const result = await recordRegisterSessionTraceBestEffort({} as never, {
+    const result = await recordRegisterSessionTraceBestEffort(ctx, {
       stage: "deposit_recorded",
       session: buildSession(),
       amount: 2_500,

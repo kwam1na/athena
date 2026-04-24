@@ -1,8 +1,8 @@
 import { render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "~/convex/_generated/dataModel";
 
-import { WorkflowTraceView } from "./WorkflowTraceView";
+import { WorkflowTraceTimeline, WorkflowTraceView } from "./WorkflowTraceView";
 
 const mockedHooks = vi.hoisted(() => ({
   useQuery: vi.fn(),
@@ -22,6 +22,10 @@ vi.mock("../common/PageHeader", () => ({
 describe("WorkflowTraceView", () => {
   beforeEach(() => {
     window.scrollTo = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("renders the trace title, health and status badges, and ordered timeline messages", () => {
@@ -75,5 +79,55 @@ describe("WorkflowTraceView", () => {
     expect(listItems).toHaveLength(2);
     expect(listItems[0]).toHaveTextContent("Workflow started");
     expect(listItems[1]).toHaveTextContent("Repair order persisted");
+  });
+});
+
+describe("WorkflowTraceTimeline", () => {
+  it("renders events as a simple ActivityView-like bullet timeline", () => {
+    vi.spyOn(Date, "now").mockReturnValue(
+      new Date("2026-04-21T09:25:00.000Z").getTime(),
+    );
+
+    render(
+      <WorkflowTraceTimeline
+        events={[
+          {
+            kind: "milestone",
+            message: "Workflow started",
+            occurredAt: new Date("2026-04-21T09:15:00.000Z").getTime(),
+            sequence: 2,
+            source: "workflow.shared",
+            status: "started",
+            step: "workflow_started",
+            traceId: "repair_order:job-42",
+            workflowType: "repair_order",
+          },
+          {
+            kind: "system_action",
+            message: "Repair order persisted",
+            occurredAt: new Date("2026-04-21T09:20:00.000Z").getTime(),
+            sequence: 4,
+            source: "workflow.shared",
+            status: "succeeded",
+            step: "repair_order_persisted",
+            traceId: "repair_order:job-42",
+            workflowType: "repair_order",
+          },
+        ]}
+      />,
+    );
+
+    const listItems = screen.getAllByRole("listitem");
+    expect(listItems).toHaveLength(2);
+    expect(listItems[0]).toHaveTextContent("Workflow started");
+    expect(listItems[0]).not.toHaveTextContent("Workflow Started");
+    expect(listItems[0]).not.toHaveTextContent("Started");
+    expect(listItems[0]).not.toHaveTextContent("Milestone");
+    expect(listItems[0]).toHaveTextContent("10 minutes ago");
+    expect(listItems[1]).toHaveTextContent("Repair order persisted");
+    expect(listItems[1]).not.toHaveTextContent("Repair Order Persisted");
+    expect(listItems[1]).not.toHaveTextContent("Succeeded");
+    expect(listItems[1]).not.toHaveTextContent("System Action");
+    expect(listItems[1]).toHaveTextContent("5 minutes ago");
   });
 });

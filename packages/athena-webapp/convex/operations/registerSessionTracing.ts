@@ -1,6 +1,8 @@
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 
+import { toDisplayAmount } from "../lib/currency";
+import { currencyFormatter } from "../utils";
 import {
   appendWorkflowTraceEventWithCtx,
   createWorkflowTraceWithCtx,
@@ -91,6 +93,28 @@ function buildActorRefs(args: RegisterSessionTraceArgs) {
   return Object.keys(actorRefs).length > 0 ? actorRefs : undefined;
 }
 
+function displayTraceAmount(
+  amount: number | undefined,
+  currency: string,
+) {
+  return currencyFormatter(currency).format(toDisplayAmount(amount ?? 0));
+}
+
+async function resolveStoreCurrency(
+  ctx: MutationCtx,
+  session: RegisterSessionTraceableSession,
+) {
+  const store = await ctx.db.get(session.storeId).catch((error) => {
+    console.error(
+      "[workflow-trace] register.session.trace.store-currency",
+      error,
+    );
+    return null;
+  });
+
+  return store?.currency ?? "GHS";
+}
+
 function buildTraceRecord(args: {
   traceSeed: RegisterSessionTraceSeed;
   input: RegisterSessionTraceArgs;
@@ -127,6 +151,7 @@ function buildTraceRecord(args: {
 }
 
 function buildTraceEvent(args: {
+  currency: string;
   traceSeed: RegisterSessionTraceSeed;
   input: RegisterSessionTraceArgs;
 }) {
@@ -168,7 +193,7 @@ function buildTraceEvent(args: {
         kind: "system_action" as const,
         step: "register_session_sale_recorded",
         status: "info" as const,
-        message: `Recorded sale cash movement of ${args.input.amount ?? 0}.`,
+        message: `Recorded sale cash movement of ${displayTraceAmount(args.input.amount, args.currency)}.`,
         occurredAt,
         details,
         subjectRefs,
@@ -178,7 +203,7 @@ function buildTraceEvent(args: {
         kind: "system_action" as const,
         step: "register_session_void_recorded",
         status: "info" as const,
-        message: `Recorded void cash adjustment of ${args.input.amount ?? 0}.`,
+        message: `Recorded void cash adjustment of ${displayTraceAmount(args.input.amount, args.currency)}.`,
         occurredAt,
         details,
         subjectRefs,
@@ -188,7 +213,7 @@ function buildTraceEvent(args: {
         kind: "system_action" as const,
         step: "register_session_deposit_recorded",
         status: "info" as const,
-        message: `Recorded cash deposit of ${args.input.amount ?? 0}.`,
+        message: `Recorded cash deposit of ${displayTraceAmount(args.input.amount, args.currency)}.`,
         occurredAt,
         details,
         subjectRefs,
@@ -250,6 +275,7 @@ export async function recordRegisterSessionTraceBestEffort(
   ctx: MutationCtx,
   args: RegisterSessionTraceArgs,
 ) {
+  const currency = await resolveStoreCurrency(ctx, args.session);
   const traceSeed = buildRegisterSessionTraceSeed({
     storeId: args.session.storeId,
     organizationId: args.session.organizationId,
@@ -265,6 +291,7 @@ export async function recordRegisterSessionTraceBestEffort(
     input: args,
   });
   const traceEvent = buildTraceEvent({
+    currency,
     traceSeed,
     input: args,
   });
