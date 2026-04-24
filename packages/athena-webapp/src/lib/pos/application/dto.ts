@@ -5,6 +5,7 @@ import type { CommandResult } from "~/shared/commandResult";
 export interface PosTerminalDto {
   _id: string;
   displayName: string;
+  registerNumber?: string;
   status?: string;
   registeredAt?: number;
 }
@@ -12,6 +13,7 @@ export interface PosTerminalDto {
 export interface PosRegisteredTerminalDto {
   _id: Id<"posTerminal">;
   displayName: string;
+  registerNumber?: string;
   storeId?: Id<"store">;
   fingerprintHash?: string;
   registeredByUserId?: Id<"athenaUser">;
@@ -137,7 +139,7 @@ export interface PosStartSessionInput {
 
 export interface PosOpenDrawerInput {
   storeId: Id<"store">;
-  terminalId?: Id<"posTerminal">;
+  terminalId: Id<"posTerminal">;
   registerNumber?: string;
   openingFloat: number;
   notes?: string;

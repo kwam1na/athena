@@ -4,9 +4,23 @@ import { ArrowLeftIcon } from "lucide-react";
 import { useSearch } from "@tanstack/react-router";
 import { cn } from "~/src/lib/utils";
 
-const PageHeader = ({ children }: { children: React.ReactNode }) => {
+const PageHeader = ({
+  children,
+  width = "contained",
+  className,
+}: {
+  children: React.ReactNode;
+  width?: "contained" | "full";
+  className?: string;
+}) => {
   return (
-    <div className="container mx-auto py-6 px-4 flex gap-2 h-[40px] items-center justify-between">
+    <div
+      className={cn(
+        width === "full" ? "w-full" : "container mx-auto",
+        "py-6 px-4 flex gap-2 h-[40px] items-center justify-between",
+        className,
+      )}
+    >
       {children}
     </div>
   );
@@ -61,18 +75,22 @@ export const ComposedPageHeader = ({
   trailingContent,
   onNavigateBack,
   disableBackButton = false,
+  width = "contained",
+  className,
 }: {
   leadingContent: React.ReactNode;
   trailingContent?: React.ReactNode;
   onNavigateBack?: () => void;
   disableBackButton?: boolean;
+  width?: "contained" | "full";
+  className?: string;
 }) => {
   const { o } = useSearch({ strict: false });
   const navigateBack = useNavigateBack();
 
   return (
-    <PageHeader>
-      <div className="flex items-center gap-4">
+    <PageHeader width={width} className={className}>
+      <div className="flex min-w-0 flex-1 items-center gap-4">
         {o && (
           <Button
             onClick={onNavigateBack ? onNavigateBack : navigateBack}

@@ -9,14 +9,16 @@ import { OrderSummary } from "../OrderSummary";
 interface RegisterCheckoutPanelProps {
   checkout: RegisterCheckoutState;
   cashierCard: RegisterCashierCardState | null;
+  onPaymentFlowChange?: (isActive: boolean) => void;
 }
 
 export function RegisterCheckoutPanel({
   checkout,
   cashierCard,
+  onPaymentFlowChange,
 }: RegisterCheckoutPanelProps) {
   return (
-    <div className="space-y-6">
+    <div className="flex h-full min-h-0 flex-col gap-6">
       <OrderSummary
         cartItems={checkout.cartItems}
         customerInfo={checkout.customerInfo}
@@ -36,13 +38,16 @@ export function RegisterCheckoutPanel({
         onClearPayments={checkout.onClearPayments}
         onCompleteTransaction={checkout.onCompleteTransaction}
         onStartNewTransaction={checkout.onStartNewTransaction}
+        onPaymentFlowChange={onPaymentFlowChange}
       />
 
       {!checkout.isTransactionCompleted && cashierCard && (
-        <CashierView
-          cashierName={cashierCard.cashierName}
-          onSignOut={cashierCard.onSignOut}
-        />
+        <div className="shrink-0">
+          <CashierView
+            cashierName={cashierCard.cashierName}
+            onSignOut={cashierCard.onSignOut}
+          />
+        </div>
       )}
     </div>
   );

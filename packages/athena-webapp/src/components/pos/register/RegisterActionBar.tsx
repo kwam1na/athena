@@ -10,19 +10,25 @@ import { cn } from "~/src/lib/utils";
 
 import { RegisterActions } from "../RegisterActions";
 import { RegisterSessionPanel } from "./RegisterSessionPanel";
+import { FadeIn } from "../../common/FadeIn";
 
 interface RegisterActionBarProps {
+  isSessionActive: boolean;
   registerInfo: RegisterInfoState;
   sessionPanel: RegisterSessionPanelState | null;
 }
 
 export function RegisterActionBar({
+  isSessionActive,
   registerInfo,
   sessionPanel,
 }: RegisterActionBarProps) {
   return (
     <div className="flex items-center gap-4">
-      <RegisterSessionPanel sessionPanel={sessionPanel} />
+      <RegisterSessionPanel
+        isSessionActive={isSessionActive}
+        sessionPanel={sessionPanel}
+      />
 
       <div
         className={cn(
@@ -46,7 +52,7 @@ export function RegisterActionBar({
             search={{
               o: getOrigin(),
             }}
-            className="flex items-center gap-2"
+            className="flex h-10 items-center gap-2 px-3"
           >
             <p className="text-sm font-semibold">Configure</p>
             <ArrowRightIcon className="w-4 h-4" />

@@ -11,7 +11,6 @@ import type { RegisterSessionPanelState } from "@/lib/pos/presentation/register/
 
 import { FadeIn } from "../common/FadeIn";
 import { HeldSessionsList } from "./session/HeldSessionsList";
-import { WorkflowTraceRouteLink } from "../traces/WorkflowTraceRouteLink";
 
 interface SessionManagerProps {
   sessionPanel: RegisterSessionPanelState;
@@ -29,15 +28,6 @@ export function SessionManager({ sessionPanel }: SessionManagerProps) {
         </FadeIn>
       )}
 
-      {sessionPanel.activeSessionTraceId ? (
-        <WorkflowTraceRouteLink
-          traceId={sessionPanel.activeSessionTraceId}
-          className="text-sm font-medium text-primary"
-        >
-          View trace
-        </WorkflowTraceRouteLink>
-      ) : null}
-
       {sessionPanel.hasExpiredSession && (
         <Badge
           variant="outline"
@@ -52,7 +42,7 @@ export function SessionManager({ sessionPanel }: SessionManagerProps) {
         <Button
           variant="outline"
           size="sm"
-          className="flex items-center gap-1"
+          className="flex h-10 items-center gap-2 px-4"
           onClick={() => void sessionPanel.onHoldCurrentSession()}
           disabled={!sessionPanel.canHoldSession}
         >
@@ -65,7 +55,7 @@ export function SessionManager({ sessionPanel }: SessionManagerProps) {
         <Button
           variant="outline"
           size="sm"
-          className="flex items-center gap-1"
+          className="flex h-10 items-center gap-2 px-4"
           onClick={() => void sessionPanel.onVoidCurrentSession()}
         >
           <Ban className="h-4 w-4 text-destructive" />
@@ -79,7 +69,7 @@ export function SessionManager({ sessionPanel }: SessionManagerProps) {
             <Button
               variant="outline"
               size="sm"
-              className="flex items-center gap-1"
+              className="flex h-10 items-center gap-2 px-4"
             >
               <PlayCircle className="h-4 w-4" />
               Resume
@@ -103,7 +93,7 @@ export function SessionManager({ sessionPanel }: SessionManagerProps) {
         size="sm"
         onClick={() => void sessionPanel.onStartNewSession()}
         disabled={sessionPanel.disableNewSession}
-        className="flex items-center gap-1"
+        className="flex h-10 items-center gap-2 px-4"
       >
         <Plus className="h-4 w-4" />
         New

@@ -188,6 +188,21 @@ function createMutationCtx(seed?: {
           };
         }
 
+        if (tableName === "posSession" && indexName === "by_expiresAt") {
+          const page = sessions.filter(
+            (session) =>
+              session.expiresAt < (filters.expiresBefore ?? Number.POSITIVE_INFINITY),
+          );
+
+          return {
+            paginate: async () => ({
+              page,
+              isDone: true,
+              continueCursor: "",
+            }),
+          };
+        }
+
         if (tableName === "posSessionItem" && indexName === "by_sessionId") {
           const page = items.filter((item) => item.sessionId === filters.sessionId);
 
@@ -1050,8 +1065,11 @@ describe("pos session lifecycle trace handlers", () => {
 
     expect(result).toEqual({
       releasedCount: 2,
-      sessionIds: ["session-active", "session-void"],
+      sessionIds: ["session-void", "session-active"],
     });
+    expect(new Set(result.sessionIds)).toEqual(
+      new Set(["session-active", "session-void"]),
+    );
     expect(mocks.traceRecord).toHaveBeenCalledTimes(1);
     expect(mocks.traceRecord).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1065,5 +1083,39 @@ describe("pos session lifecycle trace handlers", () => {
     expect(ctx.sessions.find((session) => session._id === "session-void")?.notes).toBe(
       "Cashier voided this session",
     );
+  });
+
+  it("releases expired held sessions through cron", async () => {
+    const ctx = createMutationCtx({
+      sessions: [
+        buildSession({
+          _id: "session-held",
+          sessionNumber: "SES-HELD",
+          status: "held",
+          expiresAt: 500,
+        }),
+      ],
+      items: [
+        {
+          _id: "item-held",
+          sessionId: "session-held",
+          productSkuId: "sku-1",
+          quantity: 4,
+        },
+      ],
+    });
+
+    const result = await getHandler(releasePosSessionItems)(ctx as never, {});
+
+    expect(result).toEqual({
+      releasedCount: 1,
+      sessionIds: ["session-held"],
+    });
+    expect(ctx.sessions[0]).toMatchObject({
+      _id: "session-held",
+      status: "expired",
+      notes: "Session expired - inventory holds released",
+    });
+    expect(mocks.traceRecord).toHaveBeenCalledTimes(1);
   });
 });

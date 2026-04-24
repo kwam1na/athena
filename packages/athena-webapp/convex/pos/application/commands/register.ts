@@ -10,22 +10,35 @@ import {
   type CommandResult,
 } from "../../../../shared/commandResult";
 
-const OPEN_DRAWER_REGISTER_CONFLICT_MESSAGE =
-  "A register session is already open for this register.";
 const OPEN_DRAWER_TERMINAL_CONFLICT_MESSAGE =
   "A register session is already open for this terminal.";
+const OPEN_DRAWER_REGISTER_NUMBER_CONFLICT_MESSAGE =
+  "A register session is already open for this register number.";
+const OPEN_DRAWER_REGISTER_NUMBER_MISMATCH_MESSAGE =
+  "The terminal is configured with a different register number.";
+const OPEN_DRAWER_MISSING_REGISTER_NUMBER_MESSAGE =
+  "This terminal is not configured with a register number.";
 
 type OpenDrawerResult = CommandResult<PosCashDrawerSummary | null>;
+
+function normalizeRegisterNumber(value?: string): string | undefined {
+  const normalized = value?.trim();
+  return normalized && normalized.length > 0 ? normalized : undefined;
+}
 
 function mapOpenDrawerUserError(error: unknown): OpenDrawerResult | null {
   if (!(error instanceof Error)) {
     return null;
   }
 
-  if (
-    error.message === OPEN_DRAWER_REGISTER_CONFLICT_MESSAGE ||
-    error.message === OPEN_DRAWER_TERMINAL_CONFLICT_MESSAGE
-  ) {
+  if (error.message === OPEN_DRAWER_TERMINAL_CONFLICT_MESSAGE) {
+    return userError({
+      code: "conflict",
+      message: error.message,
+    });
+  }
+
+  if (error.message === OPEN_DRAWER_REGISTER_NUMBER_CONFLICT_MESSAGE) {
     return userError({
       code: "conflict",
       message: error.message,
@@ -39,7 +52,7 @@ export async function openDrawer(
   ctx: MutationCtx,
   args: {
     storeId: Id<"store">;
-    terminalId?: Id<"posTerminal">;
+    terminalId: Id<"posTerminal">;
     registerNumber?: string;
     openingFloat: number;
     notes?: string;
@@ -60,6 +73,38 @@ export async function openDrawer(
     });
   }
 
+  const terminal = await ctx.db.get("posTerminal", args.terminalId);
+  if (!terminal || terminal.storeId !== args.storeId) {
+    return userError({
+      code: "validation_failed",
+      message: "This terminal is not configured for this store.",
+    });
+  }
+
+  const normalizedTerminalRegisterNumber =
+    normalizeRegisterNumber(terminal.registerNumber);
+  const normalizedRequestedRegisterNumber =
+    normalizeRegisterNumber(args.registerNumber);
+
+  if (!normalizedTerminalRegisterNumber) {
+    return userError({
+      code: "validation_failed",
+      message: OPEN_DRAWER_MISSING_REGISTER_NUMBER_MESSAGE,
+    });
+  }
+
+  if (
+    normalizedRequestedRegisterNumber &&
+    normalizedRequestedRegisterNumber !== normalizedTerminalRegisterNumber
+  ) {
+    return userError({
+      code: "validation_failed",
+      message: OPEN_DRAWER_REGISTER_NUMBER_MISMATCH_MESSAGE,
+    });
+  }
+
+  const resolvedRegisterNumber = normalizedTerminalRegisterNumber;
+
   let registerSession: Doc<"registerSession"> | null;
 
   try {
@@ -69,7 +114,7 @@ export async function openDrawer(
         storeId: args.storeId,
         organizationId: store.organizationId,
         terminalId: args.terminalId,
-        registerNumber: args.registerNumber,
+        registerNumber: resolvedRegisterNumber,
         openedByUserId: athenaUser._id,
         openingFloat: args.openingFloat,
         notes: args.notes,

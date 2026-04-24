@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 
 import { mutation, query } from "../../_generated/server";
+import { commandResultValidator } from "../../lib/commandResultValidators";
 import {
   deleteTerminal as deleteTerminalCommand,
   registerTerminal as registerTerminalCommand,
@@ -32,6 +33,7 @@ const terminalReturnValidator = v.object({
   storeId: v.id("store"),
   fingerprintHash: v.string(),
   displayName: v.string(),
+  registerNumber: v.optional(v.string()),
   registeredByUserId: v.id("athenaUser"),
   browserInfo: browserInfoValidator,
   registeredAt: v.number(),
@@ -60,10 +62,11 @@ export const registerTerminal = mutation({
     storeId: v.id("store"),
     fingerprintHash: v.string(),
     displayName: v.string(),
+    registerNumber: v.string(),
     registeredByUserId: v.id("athenaUser"),
     browserInfo: browserInfoValidator,
   },
-  returns: terminalReturnValidator,
+  returns: commandResultValidator(terminalReturnValidator),
   handler: async (ctx, args) => registerTerminalCommand(ctx, args),
 });
 

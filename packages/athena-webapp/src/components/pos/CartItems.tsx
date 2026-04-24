@@ -12,7 +12,7 @@ import {
 import { CartItem } from "./types";
 import { currencyFormatter } from "~/convex/utils";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
-import { capitalizeWords } from "~/src/lib/utils";
+import { capitalizeWords, cn } from "~/src/lib/utils";
 import { Id } from "~/convex/_generated/dataModel";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 
@@ -25,6 +25,7 @@ interface CartItemsProps {
   onRemoveItem?: (id: Id<"posSessionItem"> | Id<"expenseSessionItem">) => void;
   clearCart?: () => void;
   readOnly?: boolean;
+  density?: "comfortable" | "compact";
 }
 
 export function CartItems({
@@ -33,17 +34,29 @@ export function CartItems({
   onRemoveItem,
   clearCart,
   readOnly = false,
+  density = "comfortable",
 }: CartItemsProps) {
   const { activeStore } = useGetActiveStore();
   const formatter = currencyFormatter(activeStore?.currency || "GHS");
+  const isCompact = density === "compact";
 
   // Compute total quantity once
   const totalQuantity = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
-    <div className="flex-1 border rounded-lg bg-gradient-to-br from-gray-50/50 to-gray-100/30 border-gray-200">
+    <div
+      className={cn(
+        "flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-gray-200 bg-gradient-to-br from-gray-50/50 to-gray-100/30",
+        isCompact && "min-h-72 basis-0",
+      )}
+    >
       {totalQuantity > 0 && (
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader
+          className={cn(
+            "flex shrink-0 flex-row items-center justify-between",
+            isCompact && "px-4 py-3",
+          )}
+        >
           <CardTitle className="flex items-center gap-2 text-sm font-medium">
             <ShoppingBasket className="w-4 h-4" />
             Items · {totalQuantity}
@@ -52,18 +65,26 @@ export function CartItems({
             <Button
               variant="outline"
               size="sm"
-              className="p-8 border-none bg-transparent text-red-500 hover:bg-red-50 hover:text-red-500"
+              className={cn(
+                "border-none bg-transparent text-red-500 hover:bg-red-50 hover:text-red-500",
+                isCompact ? "h-10 px-3" : "p-8",
+              )}
               onClick={clearCart}
             >
               <Trash2 className="w-4 h-4" />
-              Clear all
+              {!isCompact && "Clear all"}
             </Button>
           )}
         </CardHeader>
       )}
-      <div className="p-4">
+      <div
+        className={cn(
+          "min-h-0 flex-1 overflow-hidden p-4",
+          isCompact && "flex-1 pt-0",
+        )}
+      >
         {cartItems.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
+          <div className="flex h-full flex-col items-center justify-center py-8 text-center text-muted-foreground">
             <ShoppingBasket className="w-16 h-16 mx-auto mb-4 opacity-50" />
             <div className="space-y-1">
               <p className="text-sm">No items</p>
@@ -71,15 +92,35 @@ export function CartItems({
             </div>
           </div>
         ) : (
-          <div className="space-y-4 overflow-y-auto">
+          <div
+            className={cn(
+              "min-h-0 space-y-3 overflow-y-auto",
+              isCompact && "h-full pr-1",
+            )}
+          >
             {cartItems.map((item) => (
               <div
                 key={item.id}
-                className="grid grid-cols-12 gap-2 p-8 border bg-white rounded-lg items-center"
+                className={cn(
+                  "border bg-white rounded-lg",
+                  isCompact
+                    ? "space-y-3 p-3"
+                    : "grid grid-cols-12 gap-2 p-8 items-center",
+                )}
               >
                 {/* Product Image & Info Combined */}
-                <div className="col-span-5 flex items-center gap-4">
-                  <div className="w-16 h-16 bg-muted rounded flex items-center justify-center flex-shrink-0">
+                <div
+                  className={cn(
+                    "flex items-start gap-4",
+                    !isCompact && "col-span-5",
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "bg-muted rounded flex items-center justify-center flex-shrink-0",
+                      isCompact ? "w-12 h-12" : "w-16 h-16",
+                    )}
+                  >
                     {item.image ? (
                       <img
                         src={item.image}
@@ -93,115 +134,149 @@ export function CartItems({
                     )}
                   </div>
 
-                  <div className="flex-1 min-w-0 space-y-2">
-                    <h4 className="font-medium text-sm leading-tight truncate">
-                      {capitalizeWords(item.name)}
-                    </h4>
+                  <div
+                    className={cn(
+                      "flex min-w-0 flex-1",
+                      isCompact ? "items-start justify-between gap-3" : "block space-y-2",
+                    )}
+                  >
+                    <div className="min-w-0 space-y-2">
+                      <h4 className="font-medium text-sm leading-tight truncate">
+                        {capitalizeWords(item.name)}
+                      </h4>
 
-                    <div className="flex items-center gap-1">
-                      {item.sku && (
-                        <p className="text-xs text-muted-foreground">
-                          {item.sku}
+                      <div className="flex items-center gap-1">
+                        {item.sku && (
+                          <p className="truncate text-xs text-muted-foreground">
+                            {item.sku}
+                          </p>
+                        )}
+                        {item.sku && item.barcode && (
+                          <p className="text-xs text-muted-foreground">•</p>
+                        )}
+                        {item.barcode && (
+                          <p className="truncate text-xs text-muted-foreground">
+                            {item.barcode}
+                          </p>
+                        )}
+                      </div>
+
+                      {(item.size || item.length || item.color) && (
+                        <p className="text-xs text-muted-foreground capitalize">
+                          {item.length && `${item.length}"`}
+                          {item.size && item.length && " • "}
+                          {item.size && `${item.size}`}
+                          {item.color && (item.size || item.length) && " • "}
+                          {item.color && capitalizeWords(item.color)}
                         </p>
                       )}
-                      {item.sku && item.barcode && (
-                        <p className="text-xs text-muted-foreground">•</p>
-                      )}
-                      {item.barcode && (
-                        <p className="text-xs text-muted-foreground">
-                          {item.barcode}
-                        </p>
-                      )}
+
+                      <p className={cn("text-sm font-medium", !isCompact && "pt-2")}>
+                        {formatStoredAmount(formatter, item.price)}
+                      </p>
                     </div>
 
-                    {(item.size || item.length || item.color) && (
-                      <p className="text-xs text-muted-foreground capitalize">
-                        {item.length && `${item.length}"`}
-                        {item.size && item.length && " • "}
-                        {item.size && `${item.size}`}
-                        {item.color && (item.size || item.length) && " • "}
-                        {item.color && capitalizeWords(item.color)}
+                    {isCompact && (
+                      <p className="shrink-0 text-right text-sm font-semibold">
+                        {formatStoredAmount(formatter, item.price * item.quantity)}
                       </p>
                     )}
-
-                    <p className="text-sm font-medium pt-2">
-                      {formatStoredAmount(formatter, item.price)}
-                    </p>
                   </div>
                 </div>
 
-                {/* Quantity Controls */}
-                <div className="col-span-4 flex items-center justify-center">
-                  {readOnly ? (
-                    <span className="text-sm font-medium">{item.quantity}</span>
-                  ) : (
-                    <div className="flex items-center gap-1">
+                <div
+                  className={cn(
+                    "flex items-center",
+                    isCompact
+                      ? "justify-between pt-3"
+                      : "contents",
+                  )}
+                >
+                  {/* Quantity Controls */}
+                  <div
+                    className={cn(
+                      "flex items-center",
+                      isCompact ? "justify-start" : "col-span-4 justify-center",
+                    )}
+                  >
+                    {readOnly ? (
+                      <span className="text-sm font-medium">{item.quantity}</span>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-10 w-10"
+                          onClick={() =>
+                            onUpdateQuantity &&
+                            onUpdateQuantity(
+                              item.id as
+                                | Id<"posSessionItem">
+                                | Id<"expenseSessionItem">,
+                              item.quantity - 1,
+                            )
+                          }
+                        >
+                          <Minus className="w-4 h-4" />
+                        </Button>
+                        <span className="w-10 text-center font-medium text-sm">
+                          {item.quantity}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-10 w-10"
+                          onClick={() =>
+                            onUpdateQuantity &&
+                            onUpdateQuantity(
+                              item.id as
+                                | Id<"posSessionItem">
+                                | Id<"expenseSessionItem">,
+                              item.quantity + 1,
+                            )
+                          }
+                        >
+                          <Plus className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div
+                    className={cn(
+                      "text-right",
+                      isCompact && "hidden",
+                      !isCompact && "col-span-2",
+                    )}
+                  >
+                    <p className="font-semibold text-sm">
+                      {formatStoredAmount(formatter, item.price * item.quantity)}
+                    </p>
+                  </div>
+
+                  {!readOnly && onRemoveItem && (
+                    <div className={cn("flex justify-center", !isCompact && "col-span-1")}>
                       <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 w-8 p-0"
+                        variant="ghost"
+                        size="default"
+                        className={cn(
+                          "text-destructive hover:text-destructive hover:bg-destructive/10",
+                          isCompact ? "h-10 w-10 p-0" : "h-10 w-10 p-8",
+                        )}
                         onClick={() =>
-                          onUpdateQuantity &&
-                          onUpdateQuantity(
+                          onRemoveItem &&
+                          onRemoveItem(
                             item.id as
                               | Id<"posSessionItem">
                               | Id<"expenseSessionItem">,
-                            item.quantity - 1,
                           )
                         }
                       >
-                        <Minus className="w-4 h-4" />
-                      </Button>
-                      <span className="w-10 text-center font-medium text-sm">
-                        {item.quantity}
-                      </span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 w-8 p-0"
-                        onClick={() =>
-                          onUpdateQuantity &&
-                          onUpdateQuantity(
-                            item.id as
-                              | Id<"posSessionItem">
-                              | Id<"expenseSessionItem">,
-                            item.quantity + 1,
-                          )
-                        }
-                      >
-                        <Plus className="w-4 h-4" />
+                        <Trash2 className={cn(isCompact ? "w-4 h-4" : "w-5 h-5")} />
                       </Button>
                     </div>
                   )}
                 </div>
-
-                {/* Total Price */}
-                <div className="col-span-2 text-right">
-                  <p className="font-semibold text-sm">
-                    {formatStoredAmount(formatter, item.price * item.quantity)}
-                  </p>
-                </div>
-
-                {/* Remove Button */}
-                {!readOnly && onRemoveItem && (
-                  <div className="col-span-1 flex justify-center">
-                    <Button
-                      variant="ghost"
-                      size="default"
-                      className="h-9 w-9 p-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={() =>
-                        onRemoveItem &&
-                        onRemoveItem(
-                          item.id as
-                            | Id<"posSessionItem">
-                            | Id<"expenseSessionItem">,
-                        )
-                      }
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </Button>
-                  </div>
-                )}
               </div>
             ))}
           </div>

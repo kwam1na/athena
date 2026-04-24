@@ -24,6 +24,7 @@ const MAX_EXPENSE_SESSION_ITEMS = 200;
 const EXPENSE_SESSION_QUERY_CANDIDATE_LIMIT = 200;
 const ACTIVE_EXPENSE_SESSION_CANDIDATE_LIMIT = 100;
 const EXPENSE_SESSION_CLEANUP_BATCH_SIZE = 100;
+const EXPENSE_SESSION_RELEASE_STATUSES = new Set(["active", "void"]);
 
 const expenseSessionOperationValidator = v.object({
   sessionId: v.id("expenseSession"),
@@ -38,6 +39,9 @@ const completedExpenseSessionValidator = v.object({
   sessionId: v.id("expenseSession"),
   transactionNumber: v.string(),
 });
+
+const EXPENSE_SESSION_REGISTER_NUMBER_REQUIRED_MESSAGE =
+  "A register number is required to create an expense session.";
 
 function expenseSessionError(
   message: string,
@@ -77,6 +81,11 @@ function buildNextExpenseSessionNumber(latestSessionNumber: string | undefined) 
   return `EXP-${String(nextSequence).padStart(3, "0")}`;
 }
 
+function normalizeOptionalRegisterNumber(value?: string) {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : undefined;
+}
+
 async function loadExpenseSessionItems(
   ctx: QueryCtx,
   sessionId: Id<"expenseSession">
@@ -104,7 +113,6 @@ async function loadExpenseSessionItems(
 
 async function listExpenseSessionsByStatusBefore(
   ctx: MutationCtx,
-  status: "active" | "void",
   expiresBefore: number
 ) {
   const sessions = [];
@@ -113,12 +121,14 @@ async function listExpenseSessionsByStatusBefore(
   while (true) {
     const page = await ctx.db
       .query("expenseSession")
-      .withIndex("by_status_and_expiresAt", (q) =>
-        q.eq("status", status).lt("expiresAt", expiresBefore)
-      )
+      .withIndex("by_expiresAt", (q) => q.lt("expiresAt", expiresBefore))
       .paginate({ cursor, numItems: EXPENSE_SESSION_CLEANUP_BATCH_SIZE });
 
-    sessions.push(...page.page);
+    sessions.push(
+      ...page.page.filter((session) =>
+        EXPENSE_SESSION_RELEASE_STATUSES.has(session.status),
+      ),
+    );
     if (page.isDone) {
       break;
     }
@@ -291,7 +301,18 @@ export const createExpenseSession = mutation({
   returns: commandResultValidator(expenseSessionOperationValidator),
   handler: async (ctx, args) => {
     const now = Date.now();
-    const registerNumber = args.registerNumber || "1";
+    let registerNumber = normalizeOptionalRegisterNumber(args.registerNumber);
+    if (!registerNumber) {
+      const terminal = await ctx.db.get("posTerminal", args.terminalId);
+      registerNumber = normalizeOptionalRegisterNumber(terminal?.registerNumber);
+    }
+
+    if (!registerNumber) {
+      return expenseSessionError(
+        EXPENSE_SESSION_REGISTER_NUMBER_REQUIRED_MESSAGE,
+        "precondition_failed",
+      );
+    }
 
     const existingTerminalSessions = await ctx.db
       .query("expenseSession")
@@ -777,12 +798,7 @@ export const releaseExpenseSessionItems = internalMutation({
     const now = Date.now();
 
     // Find all active and void sessions that have expired
-    const [expiredActiveSessions, expiredVoidSessions] = await Promise.all([
-      listExpenseSessionsByStatusBefore(ctx, "active", now),
-      listExpenseSessionsByStatusBefore(ctx, "void", now),
-    ]);
-
-    const expiredSessions = [...expiredActiveSessions, ...expiredVoidSessions];
+    const expiredSessions = await listExpenseSessionsByStatusBefore(ctx, now);
 
     if (expiredSessions.length === 0) {
       console.log("[Expense] No expired sessions found");

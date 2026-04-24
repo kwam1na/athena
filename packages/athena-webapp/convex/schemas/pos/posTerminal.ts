@@ -4,6 +4,7 @@ export const posTerminalSchema = v.object({
   storeId: v.id("store"),
   fingerprintHash: v.string(),
   displayName: v.string(),
+  registerNumber: v.optional(v.string()),
   registeredByUserId: v.id("athenaUser"),
   browserInfo: v.object({
     userAgent: v.string(),

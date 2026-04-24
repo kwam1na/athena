@@ -14,6 +14,7 @@ export function mapTerminalRecord(
     storeId: terminal.storeId,
     fingerprintHash: terminal.fingerprintHash,
     displayName: terminal.displayName,
+    registerNumber: terminal.registerNumber,
     registeredByUserId: terminal.registeredByUserId,
     browserInfo: terminal.browserInfo,
     registeredAt: terminal.registeredAt,
@@ -44,6 +45,7 @@ export async function getTerminalForRegisterState(
   return {
     _id: terminal._id,
     displayName: terminal.displayName,
+    registerNumber: terminal.registerNumber,
     status: terminal.status,
     registeredAt: terminal.registeredAt,
   };
@@ -77,6 +79,21 @@ export async function getTerminalByFingerprint(
     .first();
 
   return terminal ? mapTerminalRecord(terminal) : null;
+}
+
+export async function getTerminalByStoreIdAndRegisterNumber(
+  ctx: QueryCtx,
+  args: {
+    storeId: Id<"store">;
+    registerNumber: string;
+  },
+) {
+  return ctx.db
+    .query("posTerminal")
+    .withIndex("by_storeId_registerNumber", (q) =>
+      q.eq("storeId", args.storeId).eq("registerNumber", args.registerNumber),
+    )
+    .first();
 }
 
 export async function getTerminalById(

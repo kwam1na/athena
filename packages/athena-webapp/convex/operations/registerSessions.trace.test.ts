@@ -211,10 +211,29 @@ describe("register session workflow trace handlers", () => {
 
     const session = await getHandler(getOpenRegisterSession)(ctx as never, {
       storeId: "store-1",
+      terminalId: "terminal-1",
       registerNumber: "A1",
     });
 
     expect(session).toEqual(expect.objectContaining({ _id: "session-1" }));
+  });
+
+  it("does not resolve POS active drawer lookup without terminal identity", async () => {
+    const ctx = createMutationCtx({
+      sessions: [
+        buildRegisterSession({
+          _id: "session-1",
+          status: "open",
+        }),
+      ],
+    });
+
+    const session = await getHandler(getOpenRegisterSession)(ctx as never, {
+      storeId: "store-1",
+      registerNumber: "A1",
+    });
+
+    expect(session).toBeNull();
   });
 
   it("does not return a closing register session for POS active drawer lookup", async () => {
@@ -229,6 +248,27 @@ describe("register session workflow trace handlers", () => {
 
     const session = await getHandler(getOpenRegisterSession)(ctx as never, {
       storeId: "store-1",
+      terminalId: "terminal-1",
+      registerNumber: "A1",
+    });
+
+    expect(session).toBeNull();
+  });
+
+  it("does not return an open register session from a different terminal", async () => {
+    const ctx = createMutationCtx({
+      sessions: [
+        buildRegisterSession({
+          _id: "session-1",
+          status: "open",
+          terminalId: "terminal-2",
+        }),
+      ],
+    });
+
+    const session = await getHandler(getOpenRegisterSession)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
       registerNumber: "A1",
     });
 
@@ -249,6 +289,7 @@ describe("register session workflow trace handlers", () => {
       ctx as never,
       {
         storeId: "store-1",
+        terminalId: "terminal-1",
         registerNumber: "A1",
       },
     );
@@ -272,6 +313,51 @@ describe("register session workflow trace handlers", () => {
       ctx as never,
       {
         storeId: "store-1",
+        terminalId: "terminal-1",
+        registerNumber: "A1",
+      },
+    );
+
+    expect(session).toBeNull();
+  });
+
+  it("does not return POS register-state session without terminal identity", async () => {
+    const ctx = createMutationCtx({
+      sessions: [
+        buildRegisterSession({
+          _id: "session-1",
+          status: "closing",
+        }),
+      ],
+    });
+
+    const session = await getHandler(getRegisterSessionForRegisterState)(
+      ctx as never,
+      {
+        storeId: "store-1",
+        registerNumber: "A1",
+      },
+    );
+
+    expect(session).toBeNull();
+  });
+
+  it("does not return register-state session for a different terminal", async () => {
+    const ctx = createMutationCtx({
+      sessions: [
+        buildRegisterSession({
+          _id: "session-1",
+          status: "closing",
+          terminalId: "terminal-2",
+        }),
+      ],
+    });
+
+    const session = await getHandler(getRegisterSessionForRegisterState)(
+      ctx as never,
+      {
+        storeId: "store-1",
+        terminalId: "terminal-1",
         registerNumber: "A1",
       },
     );
@@ -297,7 +383,52 @@ describe("register session workflow trace handlers", () => {
         registerNumber: "A1",
         openingFloat: 5_000,
       }),
-    ).rejects.toThrow("A register session is already open for this register.");
+    ).rejects.toThrow("A register session is already open for this terminal.");
+  });
+
+  it("blocks opening the same register number on a different terminal", async () => {
+    const ctx = createMutationCtx({
+      sessions: [
+        buildRegisterSession({
+          _id: "session-1",
+          status: "open",
+          terminalId: "terminal-2",
+          registerNumber: "A1",
+        }),
+      ],
+    });
+
+    await expect(
+      getHandler(openRegisterSession)(ctx as never, {
+        storeId: "store-1",
+        organizationId: "org-1",
+        terminalId: "terminal-1",
+        registerNumber: "A1",
+        openingFloat: 5_000,
+      }),
+    ).rejects.toThrow("A register session is already open for this register number.");
+  });
+
+  it("still blocks opening a drawer when terminal identity is missing", async () => {
+    const ctx = createMutationCtx({
+      sessions: [
+        buildRegisterSession({
+          _id: "session-1",
+          status: "open",
+          terminalId: "terminal-2",
+          registerNumber: "A1",
+        }),
+      ],
+    });
+
+    await expect(
+      getHandler(openRegisterSession)(ctx as never, {
+        storeId: "store-1",
+        organizationId: "org-1",
+        registerNumber: "A1",
+        openingFloat: 5_000,
+      }),
+    ).rejects.toThrow("Register sessions require a terminal.");
   });
 
   it("records a sale adjustment trace when register-session cash changes", async () => {

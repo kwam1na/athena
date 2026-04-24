@@ -73,14 +73,14 @@ describe("cash controls register sessions", () => {
     ).toThrow("Register session is already closed.");
   });
 
-  it("requires a register or terminal identity when opening a session", () => {
+  it("requires terminal identity when opening a session", () => {
     expect(() =>
       assertRegisterSessionIdentity({})
-    ).toThrow("Register sessions require a register number or terminal.");
+    ).toThrow("Register sessions require a terminal.");
 
     expect(() =>
       assertRegisterSessionIdentity({ registerNumber: "A1" })
-    ).not.toThrow();
+    ).toThrow("Register sessions require a terminal.");
 
     expect(() =>
       assertRegisterSessionIdentity({
@@ -100,20 +100,14 @@ describe("cash controls register sessions", () => {
     expect(() =>
       assertRegisterSessionMatchesTransaction(registerSession, {})
     ).toThrow(
-      "Register session transactions must include a register number or terminal."
+      "Register session transactions must include a terminal."
     );
 
     expect(() =>
       assertRegisterSessionMatchesTransaction(registerSession, {
-        registerNumber: "B2",
+        terminalId: "terminal-2" as Id<"posTerminal">,
       })
     ).toThrow("Register session does not match the transaction identity.");
-
-    expect(() =>
-      assertRegisterSessionMatchesTransaction(registerSession, {
-        registerNumber: "A1",
-      })
-    ).not.toThrow();
 
     expect(() =>
       assertRegisterSessionMatchesTransaction(registerSession, {

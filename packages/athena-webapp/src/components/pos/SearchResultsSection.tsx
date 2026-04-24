@@ -1,6 +1,7 @@
 import { Search } from "lucide-react";
 import { Product } from "./types";
 import { ProductCard } from "./ProductCard";
+import { cn } from "@/lib/utils";
 
 interface SearchResultsSectionProps {
   isLoading: boolean;
@@ -8,6 +9,7 @@ interface SearchResultsSectionProps {
   onAddProduct: (product: Product) => void;
   formatter: Intl.NumberFormat;
   onClearSearch: () => void;
+  className?: string;
 }
 
 export function SearchResultsSection({
@@ -16,6 +18,7 @@ export function SearchResultsSection({
   onAddProduct,
   formatter,
   onClearSearch,
+  className,
 }: SearchResultsSectionProps) {
   //   if (isLoading) {
   //     return (
@@ -30,8 +33,13 @@ export function SearchResultsSection({
 
   if (products.length === 0) {
     return (
-      <div className="max-h-[586px] overflow-y-auto space-y-1">
-        <div className="text-center py-8 text-gray-500">
+      <div
+        className={cn(
+          "max-h-[586px] space-y-1 overflow-y-auto",
+          className,
+        )}
+      >
+        <div className="flex h-full flex-col items-center justify-center py-8 text-center text-gray-500">
           <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
             <Search className="w-6 h-6 text-gray-400" />
           </div>
@@ -45,7 +53,9 @@ export function SearchResultsSection({
   }
 
   return (
-    <div className="max-h-[586px] overflow-y-auto space-y-1">
+    <div
+      className={cn("max-h-[586px] space-y-1 overflow-y-auto", className)}
+    >
       <div className="space-y-8 py-8">
         {products.map((product: Product) => (
           <ProductCard

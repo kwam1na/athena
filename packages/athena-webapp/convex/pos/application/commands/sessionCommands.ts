@@ -26,6 +26,11 @@ type CommandFailureStatus =
   | "terminalUnavailable"
   | "validationFailed";
 
+function normalizeRegisterNumber(value?: string): string | undefined {
+  const normalized = value?.trim();
+  return normalized && normalized.length > 0 ? normalized : undefined;
+}
+
 export type PosSessionCommandOutcome<TData> =
   | {
       status: "ok";
@@ -86,49 +91,37 @@ export interface RemoveSessionItemArgs {
 }
 
 export interface PosSessionCommandService {
-  startSession(
-    args: StartSessionArgs,
-  ): Promise<
+  startSession(args: StartSessionArgs): Promise<
     PosSessionCommandOutcome<{
       sessionId: Id<"posSession">;
       expiresAt: number;
     }>
   >;
-  holdSession(
-    args: HoldSessionArgs,
-  ): Promise<
+  holdSession(args: HoldSessionArgs): Promise<
     PosSessionCommandOutcome<{
       sessionId: Id<"posSession">;
       expiresAt: number;
     }>
   >;
-  resumeSession(
-    args: ResumeSessionArgs,
-  ): Promise<
+  resumeSession(args: ResumeSessionArgs): Promise<
     PosSessionCommandOutcome<{
       sessionId: Id<"posSession">;
       expiresAt: number;
     }>
   >;
-  bindSessionToRegisterSession(
-    args: BindSessionToRegisterSessionArgs,
-  ): Promise<
+  bindSessionToRegisterSession(args: BindSessionToRegisterSessionArgs): Promise<
     PosSessionCommandOutcome<{
       sessionId: Id<"posSession">;
       expiresAt: number;
     }>
   >;
-  upsertSessionItem(
-    args: UpsertSessionItemArgs,
-  ): Promise<
+  upsertSessionItem(args: UpsertSessionItemArgs): Promise<
     PosSessionCommandOutcome<{
       itemId: Id<"posSessionItem">;
       expiresAt: number;
     }>
   >;
-  removeSessionItem(
-    args: RemoveSessionItemArgs,
-  ): Promise<
+  removeSessionItem(args: RemoveSessionItemArgs): Promise<
     PosSessionCommandOutcome<{
       expiresAt: number;
     }>
@@ -149,7 +142,7 @@ export function createPosSessionCommandService(
   return {
     async startSession(args) {
       const now = dependencies.now();
-      const registerNumber = args.registerNumber || "1";
+      const registerNumber = normalizeRegisterNumber(args.registerNumber);
 
       const existingTerminalSessions =
         await dependencies.repository.listActiveSessionsForTerminal({
@@ -174,7 +167,8 @@ export function createPosSessionCommandService(
 
       const existingSessionOnDifferentTerminal = cashierSessions.find(
         (session) =>
-          session.terminalId !== args.terminalId && !isSessionExpired(session, now),
+          session.terminalId !== args.terminalId &&
+          !isSessionExpired(session, now),
       );
 
       if (existingSessionOnDifferentTerminal) {
@@ -226,7 +220,10 @@ export function createPosSessionCommandService(
         }
 
         if (Object.keys(sessionPatch).length > 0) {
-          await dependencies.repository.patchSession(existingSession._id, sessionPatch);
+          await dependencies.repository.patchSession(
+            existingSession._id,
+            sessionPatch,
+          );
         }
 
         const updatedSession = {
@@ -246,6 +243,13 @@ export function createPosSessionCommandService(
           sessionId: existingSession._id,
           expiresAt: existingSession.expiresAt,
         });
+      }
+
+      if (!registerNumber) {
+        return failure(
+          "validationFailed",
+          "A register number is required to start a new session.",
+        );
       }
 
       const registerSessionBinding = await resolveRegisterSessionBinding(
@@ -305,8 +309,14 @@ export function createPosSessionCommandService(
 
     async holdSession(args) {
       const now = dependencies.now();
-      const session = await dependencies.repository.getSessionById(args.sessionId);
-      const validation = validateModifiableSession(session, args.staffProfileId, now);
+      const session = await dependencies.repository.getSessionById(
+        args.sessionId,
+      );
+      const validation = validateModifiableSession(
+        session,
+        args.staffProfileId,
+        now,
+      );
       if (validation.status !== "ok") {
         return validation;
       }
@@ -339,7 +349,9 @@ export function createPosSessionCommandService(
 
     async resumeSession(args) {
       const now = dependencies.now();
-      const session = await dependencies.repository.getSessionById(args.sessionId);
+      const session = await dependencies.repository.getSessionById(
+        args.sessionId,
+      );
       if (!session) {
         return failure("notFound", "Session not found");
       }
@@ -358,7 +370,8 @@ export function createPosSessionCommandService(
         });
       const activeSessionsOnOtherTerminals = cashierSessions.filter(
         (candidate) =>
-          candidate.terminalId !== args.terminalId && !isSessionExpired(candidate, now),
+          candidate.terminalId !== args.terminalId &&
+          !isSessionExpired(candidate, now),
       );
 
       if (activeSessionsOnOtherTerminals.length > 0) {
@@ -408,8 +421,14 @@ export function createPosSessionCommandService(
 
     async bindSessionToRegisterSession(args) {
       const now = dependencies.now();
-      const session = await dependencies.repository.getSessionById(args.sessionId);
-      const validation = validateActiveSession(session, args.staffProfileId, now);
+      const session = await dependencies.repository.getSessionById(
+        args.sessionId,
+      );
+      const validation = validateActiveSession(
+        session,
+        args.staffProfileId,
+        now,
+      );
       if (validation.status !== "ok") {
         return validation;
       }
@@ -458,8 +477,14 @@ export function createPosSessionCommandService(
 
     async upsertSessionItem(args) {
       const now = dependencies.now();
-      const session = await dependencies.repository.getSessionById(args.sessionId);
-      const validation = validateActiveSession(session, args.staffProfileId, now);
+      const session = await dependencies.repository.getSessionById(
+        args.sessionId,
+      );
+      const validation = validateActiveSession(
+        session,
+        args.staffProfileId,
+        now,
+      );
       if (validation.status !== "ok") {
         return validation;
       }
@@ -559,8 +584,14 @@ export function createPosSessionCommandService(
 
     async removeSessionItem(args) {
       const now = dependencies.now();
-      const session = await dependencies.repository.getSessionById(args.sessionId);
-      const validation = validateModifiableSession(session, args.staffProfileId, now);
+      const session = await dependencies.repository.getSessionById(
+        args.sessionId,
+      );
+      const validation = validateModifiableSession(
+        session,
+        args.staffProfileId,
+        now,
+      );
       if (validation.status !== "ok") {
         return validation;
       }
@@ -574,16 +605,24 @@ export function createPosSessionCommandService(
         return drawerValidation;
       }
 
-      const item = await dependencies.repository.getSessionItemById(args.itemId);
+      const item = await dependencies.repository.getSessionItemById(
+        args.itemId,
+      );
       if (!item) {
         return failure("notFound", "Item not found in cart");
       }
 
       if (item.sessionId !== args.sessionId) {
-        return failure("validationFailed", "Item does not belong to this session");
+        return failure(
+          "validationFailed",
+          "Item does not belong to this session",
+        );
       }
 
-      await dependencies.inventory.releaseHold(item.productSkuId, item.quantity);
+      await dependencies.inventory.releaseHold(
+        item.productSkuId,
+        item.quantity,
+      );
       await dependencies.repository.deleteSessionItem(args.itemId);
 
       const expiresAt = dependencies.calculateExpiration(now);
@@ -613,7 +652,17 @@ export function runStartSessionCommand(
   ctx: MutationCtx,
   args: StartSessionArgs,
 ) {
-  return createDefaultSessionCommandService(ctx).startSession(args);
+  return (async () => {
+    const terminal = await ctx.db.get("posTerminal", args.terminalId);
+    const terminalRegisterNumber = normalizeRegisterNumber(terminal?.registerNumber);
+    const nextRegisterNumber =
+      terminalRegisterNumber ?? normalizeRegisterNumber(args.registerNumber);
+
+    return createDefaultSessionCommandService(ctx).startSession({
+      ...args,
+      registerNumber: nextRegisterNumber,
+    });
+  })();
 }
 
 export function runHoldSessionCommand(ctx: MutationCtx, args: HoldSessionArgs) {
@@ -631,7 +680,9 @@ export function runBindSessionToRegisterSessionCommand(
   ctx: MutationCtx,
   args: BindSessionToRegisterSessionArgs,
 ) {
-  return createDefaultSessionCommandService(ctx).bindSessionToRegisterSession(args);
+  return createDefaultSessionCommandService(ctx).bindSessionToRegisterSession(
+    args,
+  );
 }
 
 export function runUpsertSessionItemCommand(
@@ -686,7 +737,10 @@ async function recordSessionLifecycleBestEffort(
       });
     }
   } catch (error) {
-    console.error(`[workflow-trace] pos.session.lifecycle.${args.stage}`, error);
+    console.error(
+      `[workflow-trace] pos.session.lifecycle.${args.stage}`,
+      error,
+    );
   }
 }
 
@@ -701,11 +755,6 @@ function buildNextSessionNumber(
   return `${prefix}-${String(nextSequence).padStart(3, "0")}`;
 }
 
-function normalizeRegisterNumber(registerNumber?: string | null) {
-  const trimmedRegisterNumber = registerNumber?.trim();
-  return trimmedRegisterNumber ? trimmedRegisterNumber : undefined;
-}
-
 function isActiveRegisterSession(
   registerSession: Pick<Doc<"registerSession">, "status">,
 ) {
@@ -713,34 +762,32 @@ function isActiveRegisterSession(
 }
 
 function registerSessionMatchesIdentity(
-  registerSession: Pick<Doc<"registerSession">, "registerNumber" | "terminalId">,
+  registerSession: Pick<
+    Doc<"registerSession">,
+    "registerNumber" | "terminalId"
+  >,
   identity: {
     terminalId?: Id<"posTerminal">;
     registerNumber?: string;
   },
 ) {
-  const normalizedRegisterNumber = normalizeRegisterNumber(identity.registerNumber);
-  const normalizedSessionRegisterNumber = normalizeRegisterNumber(
-    registerSession.registerNumber,
-  );
-
-  let hasSharedIdentity = false;
-
-  if (normalizedRegisterNumber && normalizedSessionRegisterNumber) {
-    hasSharedIdentity = true;
-    if (normalizedRegisterNumber !== normalizedSessionRegisterNumber) {
-      return false;
-    }
+  if (!identity.terminalId || !registerSession.terminalId) {
+    return false;
   }
 
-  if (identity.terminalId && registerSession.terminalId) {
-    hasSharedIdentity = true;
-    if (identity.terminalId !== registerSession.terminalId) {
-      return false;
-    }
+  if (identity.terminalId !== registerSession.terminalId) {
+    return false;
   }
 
-  return hasSharedIdentity;
+  if (identity.registerNumber) {
+    if (!registerSession.registerNumber) {
+      return false;
+    }
+
+    return identity.registerNumber === registerSession.registerNumber;
+  }
+
+  return true;
 }
 
 async function resolveRegisterSessionBinding(
@@ -752,7 +799,9 @@ async function resolveRegisterSessionBinding(
     preferredRegisterSessionId?: Id<"registerSession">;
     failureMessage: string;
   },
-): Promise<PosSessionCommandOutcome<{ registerSessionId: Id<"registerSession"> }>> {
+): Promise<
+  PosSessionCommandOutcome<{ registerSessionId: Id<"registerSession"> }>
+> {
   const registerSession = args.preferredRegisterSessionId
     ? await dependencies.repository.getRegisterSessionById(
         args.preferredRegisterSessionId,
@@ -781,7 +830,9 @@ async function validateActiveSessionRegisterBinding(
   dependencies: SessionCommandDependencies,
   session: Doc<"posSession">,
   failureMessage: string,
-): Promise<PosSessionCommandOutcome<{ registerSessionId: Id<"registerSession"> }>> {
+): Promise<
+  PosSessionCommandOutcome<{ registerSessionId: Id<"registerSession"> }>
+> {
   if (!session.registerSessionId) {
     return failure("validationFailed", failureMessage);
   }
@@ -795,7 +846,10 @@ async function validateActiveSessionRegisterBinding(
   });
 }
 
-function isSessionExpired(session: Pick<Doc<"posSession">, "expiresAt" | "status">, now: number) {
+function isSessionExpired(
+  session: Pick<Doc<"posSession">, "expiresAt" | "status">,
+  now: number,
+) {
   return session.status === "expired" || session.expiresAt < now;
 }
 

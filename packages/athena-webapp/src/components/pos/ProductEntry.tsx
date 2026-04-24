@@ -14,32 +14,105 @@ import {
 import { useRef, useEffect } from "react";
 import { SearchResultsSection } from "./SearchResultsSection";
 import { useProductSearchResults } from "@/hooks/useProductSearchResults";
+import { cn } from "@/lib/utils";
 
-interface ProductEntryProps {
-  showProductLookup: boolean;
-  setShowProductLookup: (value: boolean) => void;
+interface ProductSearchInputProps {
   productSearchQuery: string;
   setProductSearchQuery: (query: string) => void;
   onBarcodeSubmit: (e: React.FormEvent) => void;
+  disabled?: boolean;
+  className?: string;
+  inputClassName?: string;
+}
+
+interface ProductEntryProps extends ProductSearchInputProps {
+  showProductLookup: boolean;
+  setShowProductLookup: (value: boolean) => void;
   onAddProduct: (product: Product) => void;
   barcodeSearchResult?: Product | Product[] | null;
   productIdSearchResults?: Product[] | null;
-  disabled?: boolean;
+  showSearchInput?: boolean;
+  containerClassName?: string;
+  lookupPanelClassName?: string;
+  resultsClassName?: string;
+}
+
+export function ProductSearchInput({
+  disabled,
+  productSearchQuery,
+  setProductSearchQuery,
+  onBarcodeSubmit,
+  className,
+  inputClassName,
+}: ProductSearchInputProps) {
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!disabled) {
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 100);
+    }
+  }, [disabled]);
+
+  const handleClearSearch = () => {
+    setProductSearchQuery("");
+  };
+
+  return (
+    <div className={cn("relative", className)}>
+      <div className="absolute text-gray-500 z-10 left-4 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
+        <Search className="w-4 h-4" />
+        <ScanBarcode className="w-4 h-4" />
+      </div>
+      <Input
+        ref={searchInputRef}
+        placeholder="Lookup product by name, bar/qr code, sku, or product url..."
+        value={productSearchQuery}
+        disabled={disabled}
+        onChange={(e) => setProductSearchQuery(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && productSearchQuery.trim()) {
+            e.preventDefault();
+            onBarcodeSubmit(e);
+          }
+        }}
+        className={cn(
+          "h-12 pl-20 pr-10 border-gray-200 focus:border-blue-400 rounded-lg text-sm font-medium bg-white/80 backdrop-blur-sm",
+          inputClassName,
+        )}
+        autoFocus
+        autoComplete="off"
+      />
+      {productSearchQuery && (
+        <Button
+          size="icon"
+          variant="ghost"
+          className="absolute right-1.5 top-1/2 h-10 w-10 -translate-y-1/2 transform hover:bg-gray-100"
+          onClick={handleClearSearch}
+        >
+          ×
+        </Button>
+      )}
+    </div>
+  );
 }
 
 export function ProductEntry({
   disabled,
   showProductLookup,
-  setShowProductLookup,
   productSearchQuery,
   setProductSearchQuery,
   onBarcodeSubmit,
   onAddProduct,
   barcodeSearchResult,
   productIdSearchResults,
+  showSearchInput = true,
+  containerClassName,
+  lookupPanelClassName,
+  resultsClassName,
 }: ProductEntryProps) {
   const { activeStore } = useGetActiveStore();
-  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const debouncedProductSearchQuery = useDebounce(
     productSearchQuery,
@@ -51,16 +124,6 @@ export function ProductEntry({
     activeStore?._id,
     debouncedProductSearchQuery
   );
-
-  // Focus the input when component mounts or when showProductLookup changes
-  useEffect(() => {
-    if (showProductLookup && searchInputRef.current && !disabled) {
-      // Use setTimeout to ensure DOM is ready and other focus operations are complete
-      setTimeout(() => {
-        searchInputRef.current?.focus();
-      }, 100);
-    }
-  }, [showProductLookup, disabled]);
 
   // Debounce for "no results" message to allow search query to complete
   const debouncedForNoResults = useDebounce(
@@ -87,58 +150,40 @@ export function ProductEntry({
     setProductSearchQuery("");
   };
 
-  return (
-    <div>
-      <div className="space-y-6">
-        {/* Product Lookup Section */}
-        {showProductLookup && (
-          <div className="space-y-4 border rounded-lg p-5 bg-gradient-to-br from-gray-50/50 to-gray-100/30 border-gray-200">
-            {/* Unified Search Input - handles both product search and barcode scanning */}
-            <div className="relative">
-              <div className="absolute text-gray-500 z-10 left-4 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
-                <Search className="t w-4 h-4" />
-                <ScanBarcode className="w-4 h-4" />
-              </div>
-              <Input
-                ref={searchInputRef}
-                placeholder="Lookup product by name, bar/qr code, sku, or product url..."
-                value={productSearchQuery}
-                disabled={disabled}
-                onChange={(e) => setProductSearchQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  // Auto-submit on Enter for barcodes/URLs
-                  if (e.key === "Enter" && productSearchQuery.trim()) {
-                    e.preventDefault();
-                    onBarcodeSubmit(e);
-                  }
-                }}
-                className="h-12 pl-20 pr-10  border-gray-200 focus:border-blue-400 rounded-lg text-sm font-medium bg-white/80 backdrop-blur-sm"
-                autoFocus
-                autoComplete="off"
-              />
-              {productSearchQuery && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0 hover:bg-gray-100"
-                  onClick={handleClearSearch}
-                >
-                  ×
-                </Button>
-              )}
-            </div>
+  if (!showProductLookup || (!showSearchInput && !productSearchQuery)) {
+    return null;
+  }
 
-            {productSearchQuery && (
-              <SearchResultsSection
-                isLoading={isLoading}
-                products={filteredProducts}
-                onAddProduct={onAddProduct}
-                formatter={formatter}
-                onClearSearch={handleClearSearch}
-              />
-            )}
-          </div>
-        )}
+  return (
+    <div className={containerClassName}>
+      <div className={cn("space-y-6", containerClassName && "h-full")}>
+        {/* Product Lookup Section */}
+        <div
+          className={cn(
+            "space-y-4 rounded-lg border border-gray-200 bg-gradient-to-br from-gray-50/50 to-gray-100/30 p-5",
+            lookupPanelClassName,
+          )}
+        >
+          {showSearchInput && (
+            <ProductSearchInput
+              disabled={disabled}
+              productSearchQuery={productSearchQuery}
+              setProductSearchQuery={setProductSearchQuery}
+              onBarcodeSubmit={onBarcodeSubmit}
+            />
+          )}
+
+          {productSearchQuery && (
+            <SearchResultsSection
+              isLoading={isLoading}
+              products={filteredProducts}
+              onAddProduct={onAddProduct}
+              formatter={formatter}
+              onClearSearch={handleClearSearch}
+              className={resultsClassName}
+            />
+          )}
+        </div>
       </div>
     </div>
   );
