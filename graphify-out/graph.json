@@ -9899,7 +9899,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_operations_registersessiontracing_ts",
       "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
-      "source_location": "L153",
+      "source_location": "L164",
       "target": "registersessiontracing_buildtraceevent",
       "weight": 1
     },
@@ -9911,7 +9911,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_operations_registersessiontracing_ts",
       "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
-      "source_location": "L118",
+      "source_location": "L129",
       "target": "registersessiontracing_buildtracerecord",
       "weight": 1
     },
@@ -9935,7 +9935,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_operations_registersessiontracing_ts",
       "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
-      "source_location": "L274",
+      "source_location": "L285",
       "target": "registersessiontracing_recordregistersessiontracebesteffort",
       "weight": 1
     },
@@ -9959,7 +9959,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_operations_registersessiontracing_ts",
       "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
-      "source_location": "L103",
+      "source_location": "L114",
       "target": "registersessiontracing_resolvestorecurrency",
       "weight": 1
     },
@@ -32351,7 +32351,7 @@
       "relation": "calls",
       "source": "registersessiontracing_displaytraceamount",
       "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
-      "source_location": "L196",
+      "source_location": "L207",
       "target": "registersessiontracing_buildtraceevent",
       "weight": 1
     },
@@ -32363,7 +32363,7 @@
       "relation": "calls",
       "source": "registersessiontracing_resolveoccurredat",
       "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
-      "source_location": "L158",
+      "source_location": "L169",
       "target": "registersessiontracing_buildtraceevent",
       "weight": 1
     },
@@ -32375,7 +32375,7 @@
       "relation": "calls",
       "source": "registersessiontracing_resolveoccurredat",
       "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
-      "source_location": "L123",
+      "source_location": "L134",
       "target": "registersessiontracing_buildtracerecord",
       "weight": 1
     },
@@ -32387,7 +32387,7 @@
       "relation": "calls",
       "source": "registersessiontracing_buildtraceevent",
       "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
-      "source_location": "L293",
+      "source_location": "L304",
       "target": "registersessiontracing_recordregistersessiontracebesteffort",
       "weight": 1
     },
@@ -32399,7 +32399,7 @@
       "relation": "calls",
       "source": "registersessiontracing_buildtracerecord",
       "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
-      "source_location": "L289",
+      "source_location": "L300",
       "target": "registersessiontracing_recordregistersessiontracebesteffort",
       "weight": 1
     },
@@ -32411,7 +32411,7 @@
       "relation": "calls",
       "source": "registersessiontracing_resolvestorecurrency",
       "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
-      "source_location": "L278",
+      "source_location": "L289",
       "target": "registersessiontracing_recordregistersessiontracebesteffort",
       "weight": 1
     },
@@ -32423,7 +32423,7 @@
       "relation": "calls",
       "source": "registersessiontracing_safetracewrite",
       "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
-      "source_location": "L301",
+      "source_location": "L312",
       "target": "registersessiontracing_recordregistersessiontracebesteffort",
       "weight": 1
     },
@@ -64609,7 +64609,7 @@
       "label": "buildTraceEvent()",
       "norm_label": "buildtraceevent()",
       "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
-      "source_location": "L153"
+      "source_location": "L164"
     },
     {
       "community": 54,
@@ -64618,7 +64618,7 @@
       "label": "buildTraceRecord()",
       "norm_label": "buildtracerecord()",
       "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
-      "source_location": "L118"
+      "source_location": "L129"
     },
     {
       "community": 54,
@@ -64636,7 +64636,7 @@
       "label": "recordRegisterSessionTraceBestEffort()",
       "norm_label": "recordregistersessiontracebesteffort()",
       "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
-      "source_location": "L274"
+      "source_location": "L285"
     },
     {
       "community": 54,
@@ -64654,7 +64654,7 @@
       "label": "resolveStoreCurrency()",
       "norm_label": "resolvestorecurrency()",
       "source_file": "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
-      "source_location": "L103"
+      "source_location": "L114"
     },
     {
       "community": 54,

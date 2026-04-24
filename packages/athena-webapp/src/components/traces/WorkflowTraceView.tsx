@@ -134,7 +134,7 @@ export function WorkflowTraceTimeline({
                 </p>
               </div>
               <p className="text-xs ml-4 text-muted-foreground">
-                {getRelativeTime(event.occurredAt)}
+                {`${getRelativeTime(event.occurredAt)} · ${formatTraceLabel(event.status)} · ${formatTraceLabel(event.kind)}`}
               </p>
             </div>
           </li>

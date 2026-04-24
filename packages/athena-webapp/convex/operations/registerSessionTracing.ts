@@ -97,14 +97,25 @@ function displayTraceAmount(
   amount: number | undefined,
   currency: string,
 ) {
-  return currencyFormatter(currency).format(toDisplayAmount(amount ?? 0));
+  const displayAmount = toDisplayAmount(amount ?? 0);
+
+  try {
+    return currencyFormatter(currency).format(displayAmount);
+  } catch (error) {
+    console.error("[workflow-trace] register.session.trace.currency-format", {
+      currency,
+      error,
+    });
+
+    return currencyFormatter("GHS").format(displayAmount);
+  }
 }
 
 async function resolveStoreCurrency(
   ctx: MutationCtx,
   session: RegisterSessionTraceableSession,
 ) {
-  const store = await ctx.db.get(session.storeId).catch((error) => {
+  const store = await ctx.db.get("store", session.storeId).catch((error) => {
     console.error(
       "[workflow-trace] register.session.trace.store-currency",
       error,
@@ -112,7 +123,7 @@ async function resolveStoreCurrency(
     return null;
   });
 
-  return store?.currency ?? "GHS";
+  return store?.currency?.trim() || "GHS";
 }
 
 function buildTraceRecord(args: {

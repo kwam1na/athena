@@ -150,12 +150,40 @@ describe("recordRegisterSessionTraceBestEffort", () => {
       occurredAt: 222,
     });
 
-    expect(getStore).toHaveBeenCalledWith("store-1");
+    expect(getStore).toHaveBeenCalledWith("store", "store-1");
     expect(appendWorkflowTraceEventWithCtx).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         details: expect.objectContaining({ amount: 12_345 }),
         message: `Recorded sale cash movement of ${formatStoredTraceAmount("USD", 12_345)}.`,
+        occurredAt: 222,
+        step: "register_session_sale_recorded",
+      }),
+    );
+  });
+
+  it("falls back to GHS when the store currency is invalid", async () => {
+    vi.mocked(createWorkflowTraceWithCtx).mockResolvedValue("trace-1" as never);
+    vi.mocked(registerWorkflowTraceLookupWithCtx).mockResolvedValue(
+      "lookup-1" as never,
+    );
+    vi.mocked(appendWorkflowTraceEventWithCtx).mockResolvedValue(
+      "event-1" as never,
+    );
+    const { ctx } = buildCtx("not-a-currency");
+
+    await recordRegisterSessionTraceBestEffort(ctx, {
+      stage: "sale_recorded",
+      session: buildSession(),
+      amount: 12_345,
+      occurredAt: 222,
+    });
+
+    expect(appendWorkflowTraceEventWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        details: expect.objectContaining({ amount: 12_345 }),
+        message: `Recorded sale cash movement of ${formatStoredTraceAmount("GHS", 12_345)}.`,
         occurredAt: 222,
         step: "register_session_sale_recorded",
       }),

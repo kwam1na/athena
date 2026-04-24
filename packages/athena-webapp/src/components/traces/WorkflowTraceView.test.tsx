@@ -121,13 +121,13 @@ describe("WorkflowTraceTimeline", () => {
     expect(listItems).toHaveLength(2);
     expect(listItems[0]).toHaveTextContent("Workflow started");
     expect(listItems[0]).not.toHaveTextContent("Workflow Started");
-    expect(listItems[0]).not.toHaveTextContent("Started");
-    expect(listItems[0]).not.toHaveTextContent("Milestone");
     expect(listItems[0]).toHaveTextContent("10 minutes ago");
+    expect(listItems[0]).toHaveTextContent("Started");
+    expect(listItems[0]).toHaveTextContent("Milestone");
     expect(listItems[1]).toHaveTextContent("Repair order persisted");
     expect(listItems[1]).not.toHaveTextContent("Repair Order Persisted");
-    expect(listItems[1]).not.toHaveTextContent("Succeeded");
-    expect(listItems[1]).not.toHaveTextContent("System Action");
     expect(listItems[1]).toHaveTextContent("5 minutes ago");
+    expect(listItems[1]).toHaveTextContent("Succeeded");
+    expect(listItems[1]).toHaveTextContent("System Action");
   });
 });
