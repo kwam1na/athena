@@ -35,7 +35,7 @@ export async function getActiveRegisterSessionForRegisterState(
   identity: RegisterStateIdentity,
 ): Promise<PosCashDrawerSummary | null> {
   const session = await ctx.runQuery(
-    internal.operations.registerSessions.getOpenRegisterSession,
+    internal.operations.registerSessions.getRegisterSessionForRegisterState,
     {
       storeId: identity.storeId,
       terminalId: identity.terminalId,

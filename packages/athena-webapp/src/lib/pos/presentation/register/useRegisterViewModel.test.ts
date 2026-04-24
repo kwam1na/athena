@@ -386,7 +386,7 @@ describe("useRegisterViewModel", () => {
     expect(mockStartSession).not.toHaveBeenCalled();
   });
 
-  it("holds bootstrap on a closing drawer and exposes the drawer gate", async () => {
+  it("holds bootstrap on a closing drawer and exposes the closeout-blocked gate", async () => {
     mockRegisterState = {
       phase: "readyToStart",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
@@ -413,9 +413,12 @@ describe("useRegisterViewModel", () => {
     });
 
     expect(result.current.drawerGate).not.toBeNull();
-    expect(result.current.drawerGate?.mode).toBe("initialSetup");
+    expect(result.current.drawerGate?.mode).toBe("closeoutBlocked");
+    expect(result.current.drawerGate?.registerNumber).toBe("1");
     expect(result.current.productEntry.disabled).toBe(true);
     expect(mockStartSession).not.toHaveBeenCalled();
+    expect(mockOpenDrawer).not.toHaveBeenCalled();
+    expect(result.current.drawerGate).not.toHaveProperty("onSubmit");
   });
 
   it("gates an active POS session without a register assignment while preserving the sale", async () => {
@@ -448,7 +451,7 @@ describe("useRegisterViewModel", () => {
     expect(mockResumeSession).not.toHaveBeenCalled();
   });
 
-  it("gates an active POS session assigned to a closing drawer", async () => {
+  it("gates an active POS session assigned to a closing drawer with closeout guidance", async () => {
     mockRegisterState = {
       phase: "active",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
@@ -474,10 +477,13 @@ describe("useRegisterViewModel", () => {
     });
 
     expect(result.current.drawerGate).not.toBeNull();
-    expect(result.current.drawerGate?.mode).toBe("recovery");
+    expect(result.current.drawerGate?.mode).toBe("closeoutBlocked");
+    expect(result.current.drawerGate?.isRecovery).toBe(true);
     expect(result.current.productEntry.disabled).toBe(true);
     expect(mockStartSession).not.toHaveBeenCalled();
     expect(mockBindSessionToRegisterSession).not.toHaveBeenCalled();
+    expect(mockOpenDrawer).not.toHaveBeenCalled();
+    expect(result.current.drawerGate).not.toHaveProperty("onSubmit");
   });
 
   it("gates an active POS session assigned to a different open drawer", async () => {
@@ -605,12 +611,12 @@ describe("useRegisterViewModel", () => {
     });
 
     act(() => {
-      result.current.drawerGate?.onOpeningFloatChange("50.00");
-      result.current.drawerGate?.onNotesChange("Opening float ready");
+      result.current.drawerGate?.onOpeningFloatChange?.("50.00");
+      result.current.drawerGate?.onNotesChange?.("Opening float ready");
     });
 
     await act(async () => {
-      await result.current.drawerGate?.onSubmit();
+      await result.current.drawerGate?.onSubmit?.();
     });
 
     expect(mockOpenDrawer).toHaveBeenCalledWith({
@@ -675,11 +681,11 @@ describe("useRegisterViewModel", () => {
     });
 
     act(() => {
-      result.current.drawerGate?.onOpeningFloatChange("50.00");
+      result.current.drawerGate?.onOpeningFloatChange?.("50.00");
     });
 
     await act(async () => {
-      await result.current.drawerGate?.onSubmit();
+      await result.current.drawerGate?.onSubmit?.();
     });
 
     mockRegisterState = {
@@ -737,11 +743,11 @@ describe("useRegisterViewModel", () => {
     });
 
     act(() => {
-      result.current.drawerGate?.onOpeningFloatChange("50.00");
+      result.current.drawerGate?.onOpeningFloatChange?.("50.00");
     });
 
     await act(async () => {
-      await result.current.drawerGate?.onSubmit();
+      await result.current.drawerGate?.onSubmit?.();
     });
 
     expect(result.current.drawerGate).not.toBeNull();

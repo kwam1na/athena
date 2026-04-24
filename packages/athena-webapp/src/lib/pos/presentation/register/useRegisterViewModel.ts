@@ -150,9 +150,14 @@ export function useRegisterViewModel(): RegisterViewModel {
     isPosUsableRegisterSessionStatus(registerState.activeRegisterSession.status)
       ? registerState.activeRegisterSession
       : null;
+  const closeoutBlockedRegisterSession =
+    registerState?.activeRegisterSession?.status === "closing"
+      ? registerState.activeRegisterSession
+      : null;
   const activeRegisterNumber =
     activeSession?.registerNumber ??
     usableActiveRegisterSession?.registerNumber ??
+    closeoutBlockedRegisterSession?.registerNumber ??
     registerState?.activeSession?.registerNumber ??
     registerState?.resumableSession?.registerNumber;
   const activeRegisterSessionId = usableActiveRegisterSession?._id as
@@ -210,6 +215,9 @@ export function useRegisterViewModel(): RegisterViewModel {
   );
   const activeSessionHasBlockedRegisterBinding =
     activeSessionNeedsRegisterBinding || activeSessionHasMismatchedRegisterBinding;
+  const hasCloseoutBlockedDrawerState = Boolean(
+    bootstrapState && closeoutBlockedRegisterSession && !usableActiveRegisterSession,
+  );
   const hasMissingDrawerStartupState = Boolean(
     bootstrapState &&
       (bootstrapState.phase === "readyToStart" ||
@@ -229,11 +237,18 @@ export function useRegisterViewModel(): RegisterViewModel {
       staffProfileId &&
       bootstrapState &&
       (hasMissingDrawerStartupState ||
+        hasCloseoutBlockedDrawerState ||
         hasMissingDrawerRecoveryState ||
         activeSessionHasBlockedRegisterBinding),
   );
-  const drawerGateMode: "initialSetup" | "recovery" =
-    hasMissingDrawerRecoveryState || activeSessionHasBlockedRegisterBinding
+  const closeoutBlockedGateIsRecovery = Boolean(
+    hasCloseoutBlockedDrawerState &&
+      (hasMissingDrawerRecoveryState || activeSessionHasBlockedRegisterBinding),
+  );
+  const drawerGateMode: "initialSetup" | "recovery" | "closeoutBlocked" =
+    hasCloseoutBlockedDrawerState
+      ? "closeoutBlocked"
+      : hasMissingDrawerRecoveryState || activeSessionHasBlockedRegisterBinding
       ? "recovery"
       : "initialSetup";
   const setPaymentState = useCallback((nextPayments: Payment[]) => {
@@ -1512,30 +1527,39 @@ export function useRegisterViewModel(): RegisterViewModel {
 
   const drawerGate =
     activeStore?._id && terminal?._id && staffProfileId && requiresDrawerGate
-      ? {
-          mode: drawerGateMode,
-          registerLabel: terminal.displayName,
-          registerNumber,
-          currency: activeStore.currency,
-          openingFloat: drawerOpeningFloat,
-          notes: drawerNotes,
-          errorMessage:
-            drawerErrorMessage ??
-            (activeSessionHasMismatchedRegisterBinding
-              ? "This sale is assigned to a different cash drawer."
-              : null),
-          isSubmitting: isOpeningDrawer,
-          onOpeningFloatChange: (value: string) => {
-            setDrawerOpeningFloat(value);
-            setDrawerErrorMessage(null);
-          },
-          onNotesChange: (value: string) => {
-            setDrawerNotes(value);
-            setDrawerErrorMessage(null);
-          },
-          onSubmit: handleOpenDrawer,
-          onSignOut: handleCashierSignOut,
-        }
+      ? drawerGateMode === "closeoutBlocked"
+        ? {
+            mode: drawerGateMode,
+            isRecovery: closeoutBlockedGateIsRecovery,
+            registerLabel: terminal.displayName,
+            registerNumber,
+            errorMessage: drawerErrorMessage,
+            onSignOut: handleCashierSignOut,
+          }
+        : {
+            mode: drawerGateMode,
+            registerLabel: terminal.displayName,
+            registerNumber,
+            currency: activeStore.currency,
+            openingFloat: drawerOpeningFloat,
+            notes: drawerNotes,
+            errorMessage:
+              drawerErrorMessage ??
+              (activeSessionHasMismatchedRegisterBinding
+                ? "This sale is assigned to a different cash drawer."
+                : null),
+            isSubmitting: isOpeningDrawer,
+            onOpeningFloatChange: (value: string) => {
+              setDrawerOpeningFloat(value);
+              setDrawerErrorMessage(null);
+            },
+            onNotesChange: (value: string) => {
+              setDrawerNotes(value);
+              setDrawerErrorMessage(null);
+            },
+            onSubmit: handleOpenDrawer,
+            onSignOut: handleCashierSignOut,
+          }
       : null;
 
   const authDialog =
