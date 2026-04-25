@@ -12,6 +12,18 @@ import {
   listCompletedTransactionsForCustomer,
 } from "../../infrastructure/repositories/customerRepository";
 
+async function getCustomerProfileIdForPosCustomer(
+  ctx: QueryCtx,
+  customerId: Id<"posCustomer">,
+) {
+  const customerProfile = await ctx.db
+    .query("customerProfile")
+    .withIndex("by_posCustomerId", (q) => q.eq("posCustomerId", customerId))
+    .first();
+
+  return customerProfile?._id;
+}
+
 export async function searchCustomers(
   ctx: QueryCtx,
   args: {
@@ -33,16 +45,22 @@ export async function searchCustomers(
     return nameMatch || emailMatch || phoneMatch;
   });
 
-  return filteredCustomers.slice(0, 10).map((customer) => ({
-    _id: customer._id,
-    _creationTime: customer._creationTime,
-    name: customer.name,
-    email: customer.email,
-    phone: customer.phone,
-    totalSpent: customer.totalSpent || 0,
-    transactionCount: customer.transactionCount || 0,
-    lastTransactionAt: customer.lastTransactionAt,
-  }));
+  return Promise.all(
+    filteredCustomers.slice(0, 10).map(async (customer) => ({
+      _id: customer._id,
+      _creationTime: customer._creationTime,
+      name: customer.name,
+      email: customer.email,
+      phone: customer.phone,
+      totalSpent: customer.totalSpent || 0,
+      transactionCount: customer.transactionCount || 0,
+      lastTransactionAt: customer.lastTransactionAt,
+      customerProfileId: await getCustomerProfileIdForPosCustomer(
+        ctx,
+        customer._id,
+      ),
+    })),
+  );
 }
 
 export async function getCustomerById(

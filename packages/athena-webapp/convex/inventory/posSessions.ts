@@ -289,6 +289,7 @@ async function recordSessionLifecycleTraceBestEffort(
 
 type CustomerSnapshot = {
   customerId?: Id<"posCustomer">;
+  customerProfileId?: Id<"customerProfile">;
   customerInfo?: {
     name?: string;
     email?: string;
@@ -307,6 +308,7 @@ function normalizeCustomerSnapshot(session: CustomerSnapshot) {
 
   return {
     customerId: session.customerId,
+    customerProfileId: session.customerProfileId,
     customerInfo,
   };
 }
@@ -314,6 +316,7 @@ function normalizeCustomerSnapshot(session: CustomerSnapshot) {
 function hasCustomerSnapshotValue(snapshot: ReturnType<typeof normalizeCustomerSnapshot>) {
   return Boolean(
     snapshot.customerId ||
+      snapshot.customerProfileId ||
       snapshot.customerInfo?.name ||
       snapshot.customerInfo?.email ||
       snapshot.customerInfo?.phone,
@@ -334,6 +337,7 @@ function resolveCustomerTraceStage(
 
   const customerUnchanged =
     previous.customerId === next.customerId &&
+    previous.customerProfileId === next.customerProfileId &&
     previous.customerInfo?.name === next.customerInfo?.name &&
     previous.customerInfo?.email === next.customerInfo?.email &&
     previous.customerInfo?.phone === next.customerInfo?.phone;
@@ -446,7 +450,13 @@ export const getStoreSessions = query({
       sessions.map(async (session) => {
         let customer = null;
         if (session.customerId) {
-          customer = await ctx.db.get("posCustomer", session.customerId);
+          const posCustomer = await ctx.db.get("posCustomer", session.customerId);
+          customer = posCustomer
+            ? {
+                ...posCustomer,
+                customerProfileId: session.customerProfileId,
+              }
+            : null;
         }
 
         const cartItems = await loadPosSessionItems(ctx, session._id);
@@ -473,7 +483,13 @@ export const getSessionById = query({
     // Get customer info if linked
     let customer = null;
     if (session.customerId) {
-      customer = await ctx.db.get("posCustomer", session.customerId);
+      const posCustomer = await ctx.db.get("posCustomer", session.customerId);
+      customer = posCustomer
+        ? {
+            ...posCustomer,
+            customerProfileId: session.customerProfileId,
+          }
+        : null;
     }
 
     const cartItems = await loadPosSessionItems(ctx, session._id);
@@ -532,6 +548,7 @@ export const updateSession = mutation({
     sessionId: v.id("posSession"),
     staffProfileId: v.id("staffProfile"),
     customerId: v.optional(v.id("posCustomer")),
+    customerProfileId: v.optional(v.id("customerProfile")),
     customerInfo: v.optional(
       v.object({
         name: v.optional(v.string()),
@@ -1101,7 +1118,13 @@ export const getActiveSession = query({
     // Get customer info if linked
     let customer = null;
     if (activeSession.customerId) {
-      customer = await ctx.db.get("posCustomer", activeSession.customerId);
+      const posCustomer = await ctx.db.get("posCustomer", activeSession.customerId);
+      customer = posCustomer
+        ? {
+            ...posCustomer,
+            customerProfileId: activeSession.customerProfileId,
+          }
+        : null;
     }
 
     const cartItems = await loadPosSessionItems(ctx, activeSession._id);

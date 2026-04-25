@@ -37,6 +37,7 @@ const customerSummaryValidator = v.object({
   totalSpent: v.optional(v.number()),
   transactionCount: v.optional(v.number()),
   lastTransactionAt: v.optional(v.number()),
+  customerProfileId: v.optional(v.id("customerProfile")),
 });
 
 const attributionSummaryValidator = v.union(

@@ -7,6 +7,7 @@ export type {
 
 export interface CustomerInfo {
   customerId?: Id<"posCustomer">; // Added to link to POS customer database
+  customerProfileId?: Id<"customerProfile">;
   name: string;
   email: string;
   phone: string;

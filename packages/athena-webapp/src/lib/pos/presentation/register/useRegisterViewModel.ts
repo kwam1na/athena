@@ -77,6 +77,7 @@ function mapSessionCustomer(customer: PosSessionCustomer): CustomerInfo {
 
   return {
     customerId: customer._id,
+    customerProfileId: customer.customerProfileId,
     name: customer.name,
     email: customer.email ?? "",
     phone: customer.phone ?? "",
@@ -498,6 +499,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         sessionId: session._id as Id<"posSession">,
         staffProfileId,
         customerId: customerInfo.customerId,
+        customerProfileId: customerInfo.customerProfileId,
         customerInfo: hasCustomerDetails(customerInfo)
           ? {
               name: customerInfo.name || undefined,
@@ -544,6 +546,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         sessionId: activeSession._id as Id<"posSession">,
         staffProfileId,
         customerId: nextCustomerInfo.customerId,
+        customerProfileId: nextCustomerInfo.customerProfileId,
         customerInfo: hasCustomerDetails(nextCustomerInfo)
           ? {
               name: nextCustomerInfo.name || undefined,

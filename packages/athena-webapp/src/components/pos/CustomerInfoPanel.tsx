@@ -68,6 +68,7 @@ export function CustomerInfoPanel({
 
     const nextCustomerInfo = {
       customerId: customer._id,
+      customerProfileId: customer.customerProfileId,
       name: customer.name,
       email: customer.email || "",
       phone: customer.phone || "",
@@ -103,6 +104,7 @@ export function CustomerInfoPanel({
 
     const nextCustomerInfo = {
       customerId: result.data._id,
+      customerProfileId: result.data.customerProfileId,
       name: result.data.name,
       email: result.data.email || "",
       phone: result.data.phone || "",
@@ -115,6 +117,7 @@ export function CustomerInfoPanel({
   const handleStartEdit = () => {
     setEditingCustomer({
       customerId: customerInfo.customerId,
+      customerProfileId: customerInfo.customerProfileId,
       name: customerInfo.name,
       email: customerInfo.email,
       phone: customerInfo.phone,
@@ -146,6 +149,7 @@ export function CustomerInfoPanel({
 
     const nextCustomerInfo = {
       customerId: editingCustomer.customerId,
+      customerProfileId: editingCustomer.customerProfileId,
       name: editingCustomer.name.trim(),
       email: editingCustomer.email.trim(),
       phone: editingCustomer.phone.trim(),

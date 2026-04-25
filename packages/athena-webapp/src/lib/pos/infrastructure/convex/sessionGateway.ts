@@ -15,6 +15,7 @@ export type PosSessionCustomer = {
   name: string;
   email?: string;
   phone?: string;
+  customerProfileId?: Id<"customerProfile">;
 } | null;
 
 export type PosSessionDetail = POSSession & {

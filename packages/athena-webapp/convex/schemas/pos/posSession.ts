@@ -18,6 +18,7 @@ export const posSessionSchema = v.object({
 
   // Customer information
   customerId: v.optional(v.id("posCustomer")),
+  customerProfileId: v.optional(v.id("customerProfile")),
   customerInfo: v.optional(
     v.object({
       name: v.optional(v.string()),

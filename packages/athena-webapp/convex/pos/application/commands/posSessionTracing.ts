@@ -38,6 +38,7 @@ export type PosSessionTraceableSession = Pick<
   | "storeId"
   | "staffProfileId"
   | "customerId"
+  | "customerProfileId"
   | "terminalId"
   | "registerNumber"
   | "status"
