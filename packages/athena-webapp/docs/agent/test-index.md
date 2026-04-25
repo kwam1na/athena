@@ -172,3 +172,4 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/tests/pos/inventoryValidationLogic.test.ts`](../../src/tests/pos/inventoryValidationLogic.test.ts)
 - [`src/tests/pos/simple.test.ts`](../../src/tests/pos/simple.test.ts)
 - [`src/tests/pos/usePrint.test.ts`](../../src/tests/pos/usePrint.test.ts)
+
