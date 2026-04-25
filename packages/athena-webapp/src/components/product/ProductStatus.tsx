@@ -12,7 +12,8 @@ export const ProductStatus = ({
   product,
   productVariant,
 }: ProductStatusProps) => {
-  const isVisible = productVariant?.isVisible ?? product.isVisible;
+  const isVisible =
+    product.isVisible !== false && productVariant?.isVisible !== false;
   const inventoryCount = productVariant?.stock ?? product.inventoryCount;
   const quantityAvailable = productVariant?.quantityAvailable ?? inventoryCount;
 
