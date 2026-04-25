@@ -173,22 +173,26 @@ export default function PosReceiptEmail({
 
           <Section style={sectionBorder}>
             <Block>
-              <div style={styles.receiptNumberBlock}>
-                <Text style={{ ...styles.baseTextStyle, ...styles.metaLabel }}>
-                  Receipt
-                </Text>
-                <Text
-                  style={{ ...styles.baseTextStyle, ...styles.receiptNumber }}
-                >
+              <LineItem>
+                <DateTime date={completedDate} time={completedTime} />
+                <Text style={{ ...styles.baseTextStyle, ...styles.receiptId }}>
                   #{receiptNumber}
                 </Text>
-              </div>
-              <Row label="Date" value={completedDate} />
-              <Row label="Time" value={completedTime} />
-              {registerNumber && (
-                <Row label="Register" value={`Register ${registerNumber}`} />
+              </LineItem>
+              {cashierName && (
+                <Text
+                  style={{ ...styles.baseTextStyle, ...styles.cashierName }}
+                >
+                  Cashier: {cashierName}
+                </Text>
               )}
-              {cashierName && <Row label="Cashier" value={cashierName} />}
+              {registerNumber && (
+                <Text
+                  style={{ ...styles.baseTextStyle, ...styles.registerNumber }}
+                >
+                  Register: {registerNumber}
+                </Text>
+              )}
             </Block>
           </Section>
 
@@ -345,6 +349,23 @@ function Row({
   );
 }
 
+function DateTime({ date, time }: { date: string; time: string }) {
+  return (
+    <div style={styles.dateTime}>
+      <Text style={{ ...styles.baseTextStyle, ...styles.transactionDate }}>
+        {date}
+      </Text>
+      <Text style={{ ...styles.baseTextStyle, ...styles.transactionDate }}>
+        {time}
+      </Text>
+    </div>
+  );
+}
+
+function LineItem({ children }: { children: ReactNode }) {
+  return <div style={styles.lineItem}>{children}</div>;
+}
+
 function Block({ children }: { children: ReactNode }) {
   return <div style={styles.block}>{children}</div>;
 }
@@ -412,19 +433,38 @@ const styles: Record<string, CSSProperties> = {
     paddingBottom: "4px",
     textTransform: "uppercase" as const,
   },
-  metaLabel: {
-    fontSize: "10px",
-    fontWeight: 700,
-    letterSpacing: "1.4px",
-    textTransform: "uppercase" as const,
-  },
-  receiptNumberBlock: {
-    marginBottom: "10px",
-  },
-  receiptNumber: {
-    fontSize: "18px",
+  dateTime: {
+    display: "flex",
+    gap: "8px",
     fontWeight: 900,
-    lineHeight: "24px",
+  },
+  lineItem: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: "16px",
+    marginBottom: "8px",
+  },
+  transactionDate: {
+    fontSize: "12px",
+    fontWeight: 800,
+    lineHeight: "18px",
+  },
+  receiptId: {
+    fontSize: "12px",
+    letterSpacing: "1.5px",
+    lineHeight: "18px",
+    textAlign: "right" as const,
+  },
+  cashierName: {
+    fontSize: "12px",
+    lineHeight: "18px",
+    marginTop: "0px",
+  },
+  registerNumber: {
+    fontSize: "11px",
+    lineHeight: "17px",
+    marginTop: "2px",
   },
   row: {
     display: "flex",
