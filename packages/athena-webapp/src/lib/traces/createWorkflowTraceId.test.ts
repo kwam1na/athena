@@ -6,10 +6,10 @@ describe("createWorkflowTraceId", () => {
   it("normalizes workflow type and primary lookup value into a stable trace id", () => {
     expect(
       createWorkflowTraceId({
-        workflowType: "pos_sale",
+        workflowType: "example_flow",
         primaryLookupValue: " POS-123456 ",
       })
-    ).toBe("pos_sale:pos-123456");
+    ).toBe("example_flow:pos-123456");
   });
 
   it("rejects empty workflow types", () => {
@@ -24,7 +24,7 @@ describe("createWorkflowTraceId", () => {
   it("rejects empty lookup values", () => {
     expect(() =>
       createWorkflowTraceId({
-        workflowType: "pos_sale",
+        workflowType: "example_flow",
         primaryLookupValue: "   ",
       })
     ).toThrow("Workflow trace lookup values must not be empty.");

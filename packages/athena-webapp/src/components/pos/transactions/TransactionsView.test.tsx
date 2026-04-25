@@ -43,7 +43,6 @@ vi.mock("../../base/table/data-table", () => ({
   }: {
     data: Array<{
       transactionNumber: string;
-      saleTraceId: string | null;
       sessionTraceId: string | null;
     }>;
   }) => (
@@ -51,9 +50,6 @@ vi.mock("../../base/table/data-table", () => ({
       {data.map((row) => (
         <div key={row.transactionNumber}>
           <span>{row.transactionNumber}</span>
-          {row.saleTraceId ? (
-            <span data-testid={`sale-trace-${row.transactionNumber}`}>trace</span>
-          ) : null}
           {row.sessionTraceId ? (
             <span data-testid={`session-trace-${row.transactionNumber}`}>trace</span>
           ) : null}
@@ -90,7 +86,6 @@ describe("TransactionsView", () => {
         itemCount: 1,
         completedAt: Date.now(),
         hasTrace: true,
-        saleTraceId: "pos_sale:pos-123456",
         sessionTraceId: "pos_session:ses-001",
       },
       {
@@ -103,16 +98,13 @@ describe("TransactionsView", () => {
         itemCount: 1,
         completedAt: Date.now(),
         hasTrace: false,
-        saleTraceId: null,
         sessionTraceId: null,
       },
     ]);
 
     render(<TransactionsView />);
 
-    expect(screen.getByTestId("sale-trace-POS-123456")).toBeInTheDocument();
     expect(screen.getByTestId("session-trace-POS-123456")).toBeInTheDocument();
-    expect(screen.queryByTestId("sale-trace-POS-654321")).not.toBeInTheDocument();
     expect(screen.queryByTestId("session-trace-POS-654321")).not.toBeInTheDocument();
   });
 });

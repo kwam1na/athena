@@ -61,21 +61,6 @@ vi.mock("../CartItems", () => ({
   CartItems: () => <div data-testid="cart-items" />,
 }));
 
-vi.mock("./WorkflowTraceLink", () => ({
-  WorkflowTraceLink: ({
-    transactionNumber,
-    children,
-  }: {
-    transactionNumber: string;
-    children?: React.ReactNode;
-  }) => (
-    <span data-testid="trace-link">
-      {transactionNumber}
-      {children ? `:${children}` : ""}
-    </span>
-  ),
-}));
-
 vi.mock("../../traces/WorkflowTraceRouteLink", () => ({
   WorkflowTraceRouteLink: ({
     traceId,
@@ -92,7 +77,7 @@ vi.mock("../../traces/WorkflowTraceRouteLink", () => ({
 }));
 
 describe("TransactionView", () => {
-  it("renders the workflow trace link when the transaction has a trace", () => {
+  it("renders the session trace link when the transaction has a session trace", () => {
     useParamsMock.mockReturnValue({ transactionId: "txn_1" });
     useGetActiveStoreMock.mockReturnValue({
       activeStore: { currency: "GHS" },
@@ -104,7 +89,6 @@ describe("TransactionView", () => {
       tax: 0,
       total: 1000,
       hasTrace: true,
-      saleTraceId: "pos_sale:pos-123456",
       sessionTraceId: "pos_session:ses-001",
       paymentMethod: "cash",
       payments: [],
@@ -119,9 +103,6 @@ describe("TransactionView", () => {
 
     render(<TransactionView />);
 
-    expect(screen.getByTestId("trace-link")).toHaveTextContent(
-      "POS-123456:Sale trace",
-    );
     expect(screen.getByTestId("session-trace-link")).toHaveTextContent(
       "pos_session:ses-001:Session trace",
     );
@@ -139,7 +120,6 @@ describe("TransactionView", () => {
       tax: 0,
       total: 1000,
       hasTrace: false,
-      saleTraceId: null,
       sessionTraceId: null,
       paymentMethod: "cash",
       payments: [],
@@ -154,7 +134,6 @@ describe("TransactionView", () => {
 
     render(<TransactionView />);
 
-    expect(screen.queryByTestId("trace-link")).not.toBeInTheDocument();
     expect(screen.queryByTestId("session-trace-link")).not.toBeInTheDocument();
   });
 });

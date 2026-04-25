@@ -19,20 +19,19 @@ function parseValidator(validator: unknown): SerializedValidator {
 }
 
 describe("POS public transaction query validators", () => {
-  it("exposes sale and session trace ids for completed transaction lists", () => {
+  it("exposes session trace ids for completed transaction lists", () => {
     const validator = parseValidator(exportReturns(getCompletedTransactions));
 
     expect(validator.type).toBe("array");
     expect(validator.value).toMatchObject({
       type: "object",
       value: {
-        saleTraceId: expect.any(Object),
         sessionTraceId: expect.any(Object),
       },
     });
   });
 
-  it("exposes sale and session trace ids for transaction details", () => {
+  it("exposes session trace ids for transaction details", () => {
     const validator = parseValidator(exportReturns(getTransactionById));
 
     expect(validator.type).toBe("union");
@@ -40,7 +39,6 @@ describe("POS public transaction query validators", () => {
     expect((validator.value as SerializedValidator[])[1]).toMatchObject({
       type: "object",
       value: {
-        saleTraceId: expect.any(Object),
         sessionTraceId: expect.any(Object),
       },
     });

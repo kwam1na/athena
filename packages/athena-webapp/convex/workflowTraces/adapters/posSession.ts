@@ -54,7 +54,7 @@ export function buildPosSessionTraceSeed(args: {
   const displaySessionNumber = args.sessionNumber.trim();
   const traceId = createWorkflowTraceId({
     workflowType: POS_SESSION_WORKFLOW_TYPE,
-    primaryLookupValue: displaySessionNumber,
+    primaryLookupValue: args.posSessionId ?? displaySessionNumber,
   });
   const lookupValue = normalizeWorkflowTraceLookupValue(displaySessionNumber);
   const subjectRefs = Object.fromEntries(

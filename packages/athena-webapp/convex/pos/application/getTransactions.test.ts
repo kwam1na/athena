@@ -60,7 +60,7 @@ describe("getCompletedTransactions", () => {
     ]);
   });
 
-  it("returns the related session trace id when the completed sale came from a traced POS session", async () => {
+  it("returns only the related session trace id when the completed sale came from a traced POS session", async () => {
     vi.mocked(listCompletedTransactions).mockResolvedValue([
       {
         _id: "txn-2" as Id<"posTransaction">,
@@ -89,7 +89,7 @@ describe("getCompletedTransactions", () => {
 
     expect(result).toEqual([
       expect.objectContaining({
-        saleTraceId: "pos_sale:pos-123456",
+        hasTrace: true,
         sessionTraceId: "pos_session:ses-001",
       }),
     ]);
@@ -97,7 +97,7 @@ describe("getCompletedTransactions", () => {
 });
 
 describe("getTransactionById", () => {
-  it("returns hasTrace true when the transaction already carries a persisted workflow trace id", async () => {
+  it("ignores legacy transaction workflow trace ids when no session trace is available", async () => {
     vi.mocked(getPosTransactionById).mockResolvedValue({
       _id: "txn-1" as Id<"posTransaction">,
       storeId: "store-1" as Id<"store">,
@@ -127,7 +127,8 @@ describe("getTransactionById", () => {
     expect(result).toEqual(
       expect.objectContaining({
         transactionNumber: "POS-123456",
-        hasTrace: true,
+        hasTrace: false,
+        sessionTraceId: null,
       }),
     );
   });
@@ -199,7 +200,7 @@ describe("getTransactionById", () => {
 
     expect(result).toEqual(
       expect.objectContaining({
-        saleTraceId: "pos_sale:pos-222222",
+        hasTrace: true,
         sessionTraceId: "pos_session:ses-001",
       }),
     );

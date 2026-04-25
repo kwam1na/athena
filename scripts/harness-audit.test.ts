@@ -612,7 +612,7 @@ async function createFixtureRepo() {
     rootDir
   );
   await write(
-    "packages/athena-webapp/src/components/pos/transactions/WorkflowTraceLink.tsx",
+    "packages/athena-webapp/src/components/pos/transactions/TransactionsView.tsx",
     "export {};\n",
     rootDir
   );

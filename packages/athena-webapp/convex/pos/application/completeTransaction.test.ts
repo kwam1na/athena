@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Id } from "../../_generated/dataModel";
-import { buildPosSaleTraceSeed } from "../../workflowTraces/adapters/posSale";
 import {
   appendWorkflowTraceEventWithCtx,
   createWorkflowTraceWithCtx,
@@ -11,7 +10,6 @@ import {
   completeTransaction,
   createTransactionFromSessionHandler,
   buildCompleteTransactionResult,
-  recordPosSaleTraceBestEffort,
 } from "./commands/completeTransaction";
 import {
   createPosTransaction,
@@ -98,133 +96,8 @@ describe("buildCompleteTransactionResult", () => {
   });
 });
 
-describe("recordPosSaleTraceBestEffort", () => {
-  it("uses the seed startedAt for bootstrap ordering", async () => {
-    const traceSeed = buildPosSaleTraceSeed({
-      storeId: "store-1" as Id<"store">,
-      organizationId: "org-1" as Id<"organization">,
-      startedAt: 111,
-      transactionNumber: "POS-TXN-001",
-      posTransactionId: "txn-1" as Id<"posTransaction">,
-      registerSessionId: "register-1" as Id<"registerSession">,
-      staffProfileId: "staff-1" as Id<"staffProfile">,
-      terminalId: "terminal-1" as Id<"posTerminal">,
-      customerId: "customer-1" as Id<"posCustomer">,
-    });
-
-    vi.mocked(createWorkflowTraceWithCtx).mockResolvedValue("trace-1" as never);
-    vi.mocked(registerWorkflowTraceLookupWithCtx).mockResolvedValue(
-      "lookup-1" as never,
-    );
-    vi.mocked(appendWorkflowTraceEventWithCtx).mockResolvedValue(
-      "event-1" as never,
-    );
-
-    await recordPosSaleTraceBestEffort({} as never, {
-      stage: "bootstrap",
-      traceSeed,
-      transactionId: "txn-1" as Id<"posTransaction">,
-    });
-
-    expect(createWorkflowTraceWithCtx).toHaveBeenCalledTimes(1);
-    expect(createWorkflowTraceWithCtx).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        startedAt: 111,
-        status: "started",
-      }),
-    );
-    expect(appendWorkflowTraceEventWithCtx).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        occurredAt: 111,
-        step: "sale_completion_started",
-      }),
-    );
-  });
-
-  it("writes a finalized trace record after the sale has actually finished", async () => {
-    const traceSeed = buildPosSaleTraceSeed({
-      storeId: "store-1" as Id<"store">,
-      organizationId: "org-1" as Id<"organization">,
-      startedAt: 111,
-      transactionNumber: "POS-TXN-001",
-      posTransactionId: "txn-1" as Id<"posTransaction">,
-      registerSessionId: "register-1" as Id<"registerSession">,
-      staffProfileId: "staff-1" as Id<"staffProfile">,
-      terminalId: "terminal-1" as Id<"posTerminal">,
-      customerId: "customer-1" as Id<"posCustomer">,
-    });
-
-    vi.mocked(createWorkflowTraceWithCtx).mockResolvedValue("trace-1" as never);
-    vi.mocked(registerWorkflowTraceLookupWithCtx).mockResolvedValue(
-      "lookup-1" as never,
-    );
-    vi.mocked(appendWorkflowTraceEventWithCtx).mockResolvedValue(
-      "event-1" as never,
-    );
-
-    const result = await recordPosSaleTraceBestEffort({} as never, {
-      stage: "finalized",
-      traceSeed,
-      transactionId: "txn-1" as Id<"posTransaction">,
-      completedAt: 222,
-    });
-
-    expect(result).toEqual({
-      traceCreated: true,
-      traceId: traceSeed.trace.traceId,
-    });
-    expect(createWorkflowTraceWithCtx).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        startedAt: 111,
-        status: "succeeded",
-        completedAt: 222,
-      }),
-    );
-    expect(appendWorkflowTraceEventWithCtx).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        occurredAt: 222,
-        step: "sale_completion_completed",
-        status: "succeeded",
-      }),
-    );
-  });
-
-  it("reports traceCreated false when the trace row write fails", async () => {
-    const traceSeed = buildPosSaleTraceSeed({
-      storeId: "store-1" as Id<"store">,
-      transactionNumber: "POS-TXN-001",
-      posTransactionId: "txn-1" as Id<"posTransaction">,
-    });
-
-    vi.mocked(createWorkflowTraceWithCtx).mockRejectedValue(
-      new Error("trace unavailable"),
-    );
-    vi.mocked(registerWorkflowTraceLookupWithCtx).mockResolvedValue(
-      "lookup-1" as never,
-    );
-    vi.mocked(appendWorkflowTraceEventWithCtx).mockResolvedValue(
-      "event-1" as never,
-    );
-
-    const result = await recordPosSaleTraceBestEffort({} as never, {
-      stage: "bootstrap",
-      traceSeed,
-      transactionId: "txn-1" as Id<"posTransaction">,
-    });
-
-    expect(result).toEqual({
-      traceCreated: false,
-      traceId: traceSeed.trace.traceId,
-    });
-  });
-});
-
 describe("completeTransaction trace ordering", () => {
-  it("does not write a successful direct-sale trace before customer stats and item work complete", async () => {
+  it("does not write a POS sale trace for direct-sale completion", async () => {
     vi.mocked(getStoreById).mockResolvedValue({
       _id: "store-1",
       organizationId: "org-1",
@@ -277,22 +150,17 @@ describe("completeTransaction trace ordering", () => {
       }),
     ).rejects.toThrow("customer stats unavailable");
 
-    expect(traceEvents).toEqual([
-      "trace:create:started",
-      "trace:lookup",
-      "trace:event:sale_completion_started",
-    ]);
-    expect(traceEvents).not.toContain("trace:create:succeeded");
-    expect(patchPosTransaction).toHaveBeenCalledWith(
+    expect(traceEvents).toEqual([]);
+    expect(patchPosTransaction).not.toHaveBeenCalledWith(
       expect.anything(),
       "txn-1",
       expect.objectContaining({
-        workflowTraceId: expect.stringMatching(/^pos_sale:/),
+        workflowTraceId: expect.any(String),
       }),
     );
   });
 
-  it("does not write a successful session-sale trace before the session is fully patched", async () => {
+  it("does not write a POS sale trace for session-based checkout", async () => {
     const ctx = {
       runMutation: vi.fn().mockResolvedValue(undefined),
     } as never;
@@ -374,17 +242,12 @@ describe("completeTransaction trace ordering", () => {
       }),
     ).rejects.toThrow("session patch unavailable");
 
-    expect(traceEvents).toEqual([
-      "trace:create:started",
-      "trace:lookup",
-      "trace:event:sale_completion_started",
-    ]);
-    expect(traceEvents).not.toContain("trace:create:succeeded");
-    expect(patchPosTransaction).toHaveBeenCalledWith(
+    expect(traceEvents).toEqual([]);
+    expect(patchPosTransaction).not.toHaveBeenCalledWith(
       expect.anything(),
       "txn-1",
       expect.objectContaining({
-        workflowTraceId: expect.stringMatching(/^pos_sale:/),
+        workflowTraceId: expect.any(String),
       }),
     );
   });
@@ -643,7 +506,7 @@ describe("completeTransaction trace ordering", () => {
     expect(createPosTransaction).not.toHaveBeenCalled();
   });
 
-  it("does not fail direct sale completion when workflowTraceId persistence fails", async () => {
+  it("does not persist workflowTraceId during direct sale completion", async () => {
     vi.mocked(getStoreById).mockResolvedValue({
       _id: "store-1",
       organizationId: "org-1",
@@ -699,5 +562,6 @@ describe("completeTransaction trace ordering", () => {
         }),
       }),
     );
+    expect(patchPosTransaction).not.toHaveBeenCalled();
   });
 });
