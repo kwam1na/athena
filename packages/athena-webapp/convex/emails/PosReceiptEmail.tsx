@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import {
   Body,
   Container,
@@ -60,9 +60,9 @@ export interface PosReceiptEmailProps {
 }
 
 const sectionBorder = {
-  //   borderBottom: "1px dashed #cccccc",
-  paddingBottom: "16px",
-  marginBottom: "48px",
+  borderBottom: "1px dashed #111111",
+  paddingBottom: "14px",
+  marginBottom: "16px",
 };
 
 const mockItems: Array<PosReceiptItem> = [
@@ -173,39 +173,47 @@ export default function PosReceiptEmail({
 
           <Section style={sectionBorder}>
             <Block>
-              <LineItem>
-                <DateTime date={completedDate} time={completedTime} />
-                <Text style={{ ...styles.baseTextStyle }}>
+              <div style={styles.receiptNumberBlock}>
+                <Text style={{ ...styles.baseTextStyle, ...styles.metaLabel }}>
+                  Receipt
+                </Text>
+                <Text
+                  style={{ ...styles.baseTextStyle, ...styles.receiptNumber }}
+                >
                   #{receiptNumber}
                 </Text>
-              </LineItem>
-              <Text style={{ ...styles.baseTextStyle, ...styles.cashierName }}>
-                Cashier: {cashierName}
-              </Text>
+              </div>
+              <Row label="Date" value={completedDate} />
+              <Row label="Time" value={completedTime} />
+              {registerNumber && (
+                <Row label="Register" value={`Register ${registerNumber}`} />
+              )}
+              {cashierName && <Row label="Cashier" value={cashierName} />}
             </Block>
           </Section>
 
-          {/* {customerInfo &&
+          {customerInfo &&
             (customerInfo.name || customerInfo.email || customerInfo.phone) && (
               <Section style={sectionBorder}>
-                <Text style={styles.sectionHeading}>Customer Information</Text>
+                <SectionLabel>Customer</SectionLabel>
                 {customerInfo.name && (
-                  <Row label="Name:" value={customerInfo.name} />
+                  <Row label="Name" value={customerInfo.name} />
                 )}
                 {customerInfo.email && (
                   <Row
-                    label="Email:"
+                    label="Email"
                     value={customerInfo.email}
                     valueStyle={styles.emailText}
                   />
                 )}
                 {customerInfo.phone && (
-                  <Row label="Phone:" value={customerInfo.phone} />
+                  <Row label="Phone" value={customerInfo.phone} />
                 )}
               </Section>
-            )} */}
+            )}
 
           <Section style={sectionBorder}>
+            <SectionLabel>Items</SectionLabel>
             {items.map((item, index) => (
               <div key={`${item.name}-${index}`} style={styles.itemBlock}>
                 <div style={styles.itemTopRow}>
@@ -219,39 +227,41 @@ export default function PosReceiptEmail({
                   </Text>
                 </div>
                 <div style={styles.itemMetaRow}>
+                  <Text style={{ ...styles.baseTextStyle, ...styles.itemMeta }}>
+                    {item.quantityLabel}
+                  </Text>
                   {item.skuOrBarcode && (
-                    <Text
-                      style={{ ...styles.baseTextStyle, ...styles.itemName }}
-                    >
+                    <Text style={{ ...styles.baseTextStyle, ...styles.itemMeta }}>
                       {item.skuOrBarcode}
                     </Text>
                   )}
-                  <Text style={{ ...styles.baseTextStyle, ...styles.itemName }}>
-                    {item.quantityLabel}
-                  </Text>
                 </div>
+                {item.attributes && (
+                  <Text
+                    style={{ ...styles.baseTextStyle, ...styles.itemAttribute }}
+                  >
+                    {item.attributes}
+                  </Text>
+                )}
               </div>
             ))}
           </Section>
 
           <Section style={sectionBorder}>
-            <Text style={{ ...styles.baseTextStyle }}>
+            <SectionLabel>Summary</SectionLabel>
+            <Text style={{ ...styles.baseTextStyle, ...styles.itemCount }}>
               {itemsCount} item{itemsCount > 1 ? "s" : ""}
             </Text>
             <Row label="Subtotal" value={subtotal} />
-            {tax && <Row label="Tax:" value={tax} />}
-            {/* <Hr style={styles.summaryDivider} /> */}
+            {tax && <Row label="Tax" value={tax} />}
+            <Hr style={styles.summaryDivider} />
             <Row label="Total" value={total} valueStyle={styles.total} />
           </Section>
 
           <Section style={sectionBorder}>
+            <SectionLabel>Payment</SectionLabel>
             {payments && payments.length > 0 ? (
               <>
-                {/* <Text
-                  style={{ ...styles.baseTextStyle, ...styles.sectionHeading }}
-                >
-                  Payment
-                </Text> */}
                 {payments.map((payment, index) => {
                   const methodLabel =
                     payment.method === "cash"
@@ -274,7 +284,7 @@ export default function PosReceiptEmail({
                 })}
                 {amountPaid && (
                   <Row
-                    label="Amount Paid"
+                    label="Tendered"
                     value={amountPaid}
                     valueStyle={styles.paymentMethod}
                   />
@@ -296,7 +306,7 @@ export default function PosReceiptEmail({
             )}
           </Section>
 
-          <Spacer height={40} />
+          <Spacer height={16} />
 
           <Section>
             <Text style={{ ...styles.baseTextStyle, ...styles.footerLine }}>
@@ -335,25 +345,20 @@ function Row({
   );
 }
 
-function DateTime({ date, time }: { date: string; time: string }) {
-  return (
-    <div style={styles.dateTime}>
-      <Text style={{ ...styles.baseTextStyle }}>{date}</Text>
-      <Text style={{ ...styles.baseTextStyle }}>{time}</Text>
-    </div>
-  );
-}
-
-function LineItem({ children }: { children: React.ReactNode }) {
-  return <div style={styles.lineItem}>{children}</div>;
-}
-
-function Block({ children }: { children: React.ReactNode }) {
+function Block({ children }: { children: ReactNode }) {
   return <div style={styles.block}>{children}</div>;
 }
 
 function Spacer({ height = 16 }: { height?: number }) {
   return <div style={{ height: `${height}px` }} />;
+}
+
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <Text style={{ ...styles.baseTextStyle, ...styles.sectionHeading }}>
+      {children}
+    </Text>
+  );
 }
 
 const styles: Record<string, CSSProperties> = {
@@ -363,121 +368,150 @@ const styles: Record<string, CSSProperties> = {
     color: "#000000",
   },
   container: {
-    border: "1px solid #dddddd",
-    borderRadius: "4px",
-    maxWidth: "360px",
+    border: "1px solid #111111",
+    borderRadius: "0px",
+    maxWidth: "320px",
     margin: "0 auto",
-    padding: "20px",
+    padding: "18px 16px",
   },
   storeName: {
     textAlign: "center",
-    fontWeight: 700,
-    fontSize: "24px",
-    marginBottom: "8px",
+    fontWeight: 900,
+    fontSize: "22px",
+    lineHeight: "26px",
+    marginBottom: "10px",
     textTransform: "uppercase" as const,
   },
   block: {
     display: "flex",
     flexDirection: "column" as const,
-    gap: "2px",
+    gap: "0px",
   },
   baseTextStyle: {
     height: "fit-content",
     margin: "0px",
     fontSize: "12px",
-  },
-  cashierName: {
-    // fontSize: "12px",
-    // fontWeight: 600,
-    // textTransform: "uppercase" as const,
-    marginTop: "0px",
+    lineHeight: "18px",
   },
   contactBlock: {
     textAlign: "center" as const,
-    marginBottom: "32px",
+    marginBottom: "4px",
   },
   contact: {
-    fontSize: "12px",
-    margin: "2px 0",
+    fontSize: "10px",
+    lineHeight: "15px",
+    margin: "1px 0",
     textTransform: "uppercase" as const,
   },
   sectionHeading: {
+    borderBottom: "1px solid #111111",
     fontWeight: 700,
-    fontSize: "14px",
-    marginBottom: "8px",
+    fontSize: "10px",
+    letterSpacing: "1.6px",
+    marginBottom: "10px",
+    paddingBottom: "4px",
     textTransform: "uppercase" as const,
   },
-  dateTime: {
-    display: "flex",
-    // flexDirection: "column" as const,
-    gap: "8px",
-    fontWeight: 600,
+  metaLabel: {
+    fontSize: "10px",
+    fontWeight: 700,
+    letterSpacing: "1.4px",
+    textTransform: "uppercase" as const,
   },
-  lineItem: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    // marginBottom: "4px",
+  receiptNumberBlock: {
+    marginBottom: "10px",
+  },
+  receiptNumber: {
+    fontSize: "18px",
+    fontWeight: 900,
+    lineHeight: "24px",
   },
   row: {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "6px",
+    alignItems: "flex-start",
+    gap: "12px",
+    marginBottom: "5px",
   },
   rowLabel: {
-    fontWeight: 600,
+    color: "#444444",
+    fontWeight: 700,
     marginRight: "8px",
+    textTransform: "uppercase" as const,
   },
   rowValue: {
-    fontWeight: 600,
+    fontWeight: 700,
+    textAlign: "right" as const,
   },
   emailText: {
-    fontSize: "11px",
+    fontSize: "10px",
+    lineHeight: "15px",
   },
   itemBlock: {
-    paddingBottom: "24px",
+    borderBottom: "1px dotted #888888",
+    paddingBottom: "10px",
+    marginBottom: "10px",
   },
   itemTopRow: {
     display: "flex",
     justifyContent: "space-between",
-    fontWeight: 600,
+    gap: "12px",
+    fontWeight: 700,
   },
   itemName: {
-    maxWidth: "220px",
+    fontWeight: 700,
+    maxWidth: "190px",
+    textTransform: "uppercase" as const,
   },
   itemPrice: {
     whiteSpace: "nowrap" as const,
-    // fontSize: "16px",
+    fontWeight: 900,
+    textAlign: "right" as const,
   },
   itemMetaRow: {
     display: "flex",
     justifyContent: "space-between",
-    // color: "#555555",
+    gap: "12px",
     marginTop: "0px",
     paddingTop: "0px",
-    fontWeight: 800,
   },
   itemMeta: {
     color: "#555555",
+    fontSize: "10px",
+    lineHeight: "15px",
+    textTransform: "uppercase" as const,
   },
-  itemDivider: {
-    borderColor: "#eeeeee",
-    // marginTop: "12px",
+  itemAttribute: {
+    color: "#555555",
+    fontSize: "10px",
+    lineHeight: "15px",
+    textTransform: "uppercase" as const,
+  },
+  itemCount: {
+    color: "#444444",
+    fontSize: "10px",
+    fontWeight: 700,
+    letterSpacing: "1px",
+    marginBottom: "8px",
+    textTransform: "uppercase" as const,
   },
   summaryDivider: {
-    borderColor: "#dddddd",
-    margin: "8px 0",
+    borderColor: "#111111",
+    margin: "10px 0",
   },
   total: {
-    fontWeight: 700,
+    fontSize: "16px",
+    fontWeight: 900,
+    lineHeight: "22px",
   },
   paymentMethod: {
-    fontWeight: 700,
+    fontWeight: 900,
   },
   footerLine: {
     textAlign: "center" as const,
-    margin: "6px 0",
+    fontSize: "11px",
+    fontWeight: 700,
+    margin: "4px 0",
   },
   footerLineMuted: {
     textAlign: "center" as const,
