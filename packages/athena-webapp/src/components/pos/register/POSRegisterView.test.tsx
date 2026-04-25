@@ -17,13 +17,9 @@ vi.mock("@/components/ui/sidebar", () => ({
 }));
 
 vi.mock("@tanstack/react-router", () => ({
-  Link: ({
-    children,
-    to,
-  }: {
-    children: ReactNode;
-    to: string;
-  }) => <a href={to}>{children}</a>,
+  Link: ({ children, to }: { children: ReactNode; to: string }) => (
+    <a href={to}>{children}</a>
+  ),
 }));
 
 vi.mock("@/components/View", () => ({
@@ -195,10 +191,12 @@ describe("POSRegisterView", () => {
     const { POSRegisterView } = await import("./POSRegisterView");
     render(<POSRegisterView />);
 
-    expect(screen.getByText("Open drawer before selling")).toBeInTheDocument();
+    expect(screen.getByText("Drawer closed")).toBeInTheDocument();
     expect(screen.queryByText("product-entry")).not.toBeInTheDocument();
     expect(screen.queryByText("cart-items")).not.toBeInTheDocument();
-    expect(screen.queryByText("register-checkout-panel")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("register-checkout-panel"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("register-action-bar")).not.toBeInTheDocument();
   });
 
@@ -230,7 +228,8 @@ describe("POSRegisterView", () => {
         currency: "GHS",
         openingFloat: "50.00",
         notes: "",
-        errorMessage: "A register session is already open for this terminal.",
+        errorMessage:
+          "Drawer already open for this register. Return to the active sale or review it in Cash Controls.",
         isSubmitting: false,
         onOpeningFloatChange: vi.fn(),
         onNotesChange: vi.fn(),
@@ -248,16 +247,18 @@ describe("POSRegisterView", () => {
     const { POSRegisterView } = await import("./POSRegisterView");
     render(<POSRegisterView />);
 
+    expect(screen.getByText("Drawer closed")).toBeInTheDocument();
     expect(
-      screen.getByText("Sale paused until a drawer is open"),
+      screen.getByText(/needs an open drawer before this sale can continue/i),
     ).toBeInTheDocument();
-    expect(screen.getByText(/cart, customer, and payment draft/i)).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "A register session is already open for this terminal.",
+      "Drawer already open for this register. Return to the active sale or review it in Cash Controls.",
     );
     expect(screen.queryByText("product-entry")).not.toBeInTheDocument();
     expect(screen.queryByText("cart-items")).not.toBeInTheDocument();
-    expect(screen.queryByText("register-checkout-panel")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("register-checkout-panel"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("register-action-bar")).not.toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /cash controls/i }),
@@ -311,12 +312,18 @@ describe("POSRegisterView", () => {
     const { POSRegisterView } = await import("./POSRegisterView");
     render(<POSRegisterView />);
 
-    expect(screen.getByText("Finish drawer closeout before selling")).toBeInTheDocument();
+    expect(screen.getByText("Closeout in progress")).toBeInTheDocument();
     expect(
-      screen.getByText(/Front Counter is already in closeout/i),
+      screen.getByText(
+        /Front Counter is already in closeout. Finish it in Cash Controls before selling here again./i,
+      ),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /cash controls/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /sign out/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /cash controls/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /sign out/i }),
+    ).toBeInTheDocument();
     expect(screen.queryByLabelText(/opening float/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/notes/i)).not.toBeInTheDocument();
     expect(
@@ -324,7 +331,9 @@ describe("POSRegisterView", () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByText("product-entry")).not.toBeInTheDocument();
     expect(screen.queryByText("cart-items")).not.toBeInTheDocument();
-    expect(screen.queryByText("register-checkout-panel")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("register-checkout-panel"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("register-action-bar")).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: /sign out/i }));

@@ -57,13 +57,8 @@ vi.mock("./PinInput", () => ({
 }));
 
 vi.mock("../ui/dialog", () => ({
-  Dialog: ({
-    children,
-    open,
-  }: {
-    children: React.ReactNode;
-    open: boolean;
-  }) => (open ? <div>{children}</div> : null),
+  Dialog: ({ children, open }: { children: React.ReactNode; open: boolean }) =>
+    open ? <div>{children}</div> : null,
   DialogContent: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
@@ -73,7 +68,9 @@ vi.mock("../ui/dialog", () => ({
   DialogHeader: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
-  DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
+  DialogTitle: ({ children }: { children: React.ReactNode }) => (
+    <h2>{children}</h2>
+  ),
 }));
 
 const storeId = "store-1" as Id<"store">;
@@ -92,9 +89,9 @@ function renderDialog({
   mocks.useMutation.mockImplementation(() => {
     mutationCallCount += 1;
 
-    return (mutationCallCount % 2 === 1
-      ? authenticateMutation
-      : expireMutation) as never;
+    return (
+      mutationCallCount % 2 === 1 ? authenticateMutation : expireMutation
+    ) as never;
   });
 
   const onAuthenticated = vi.fn();
@@ -129,9 +126,7 @@ async function submitCredentials(
     username?: string;
   } = {},
 ) {
-  await waitFor(() =>
-    expect(screen.getByLabelText(/username/i)).toHaveFocus(),
-  );
+  await waitFor(() => expect(screen.getByLabelText(/username/i)).toHaveFocus());
   await user.type(screen.getByLabelText(/username/i), username);
   await user.type(screen.getByLabelText(/pin/i), pin);
 }
@@ -159,7 +154,9 @@ describe("CashierAuthDialog", () => {
     await submitCredentials(user);
 
     await waitFor(() =>
-      expect(mocks.toastError).toHaveBeenCalledWith("Invalid staff credentials."),
+      expect(mocks.toastError).toHaveBeenCalledWith(
+        "Sign-in details not recognized. Enter the username and PIN again.",
+      ),
     );
     expect(onAuthenticated).not.toHaveBeenCalled();
     expect(mocks.toastError).not.toHaveBeenCalledWith(
@@ -181,7 +178,7 @@ describe("CashierAuthDialog", () => {
 
     await waitFor(() =>
       expect(mocks.toastError).toHaveBeenCalledWith(
-        "This staff member has an active session on another terminal.",
+        "Register sign-in already active at another register. Sign out there before starting here.",
       ),
     );
     expect(onAuthenticated).not.toHaveBeenCalled();
@@ -229,7 +226,9 @@ describe("CashierAuthDialog", () => {
     await submitCredentials(user);
 
     await waitFor(() =>
-      expect(mocks.toastSuccess).toHaveBeenCalledWith("Logged in as Ama Mensah."),
+      expect(mocks.toastSuccess).toHaveBeenCalledWith(
+        "Signed in as Ama Mensah.",
+      ),
     );
     expect(onAuthenticated).toHaveBeenCalledWith(staffProfileId);
     expect(mocks.toastError).not.toHaveBeenCalled();

@@ -31,13 +31,21 @@ vi.mock("@/components/ui/button", () => ({
 }));
 
 vi.mock("@/components/ui/badge", () => ({
-  Badge: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+  Badge: ({ children }: { children?: React.ReactNode }) => (
+    <span>{children}</span>
+  ),
 }));
 
 vi.mock("@/components/ui/popover", () => ({
-  Popover: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-  PopoverTrigger: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-  PopoverContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  Popover: ({ children }: { children?: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  PopoverTrigger: ({ children }: { children?: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  PopoverContent: ({ children }: { children?: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
 vi.mock("../common/FadeIn", () => ({
@@ -70,7 +78,9 @@ describe("SessionManager", () => {
 
     expect(screen.getByText("SES-001")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /hold/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /void/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /clear sale/i }),
+    ).toBeInTheDocument();
   });
 
   it("does not render trace navigation when trace metadata is absent", () => {
@@ -92,6 +102,8 @@ describe("SessionManager", () => {
       />,
     );
 
-    expect(screen.queryByRole("link", { name: "View trace" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "View trace" }),
+    ).not.toBeInTheDocument();
   });
 });

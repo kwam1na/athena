@@ -32,6 +32,7 @@ import {
   POS_SEARCH_DEBOUNCE_MS,
 } from "@/lib/pos/constants";
 import { parseDisplayAmountInput } from "@/lib/pos/displayAmounts";
+import { toOperatorMessage } from "@/lib/errors/operatorMessages";
 import { logger } from "@/lib/logger";
 import { useConvexCommandGateway } from "@/lib/pos/infrastructure/convex/commandGateway";
 import { useConvexRegisterState } from "@/lib/pos/infrastructure/convex/registerGateway";
@@ -114,6 +115,10 @@ function trimOptional(value: string): string | undefined {
   return trimmedValue.length > 0 ? trimmedValue : undefined;
 }
 
+function presentOperatorError(message: string): void {
+  toast.error(toOperatorMessage(message));
+}
+
 export function useRegisterViewModel(): RegisterViewModel {
   const { activeStore } = useGetActiveStore();
   const terminal = useGetTerminal();
@@ -147,6 +152,8 @@ export function useRegisterViewModel(): RegisterViewModel {
   const paymentsRef = useRef<Payment[]>([]);
   const checkoutStateVersionRef = useRef(0);
   const drawerBindingRequestRef = useRef<string | null>(null);
+  const unmountSessionRef = useRef<Id<"posSession"> | null>(null);
+  const unmountSessionCartItemCountRef = useRef(0);
 
   const registerState = useConvexRegisterState({
     storeId: activeStore?._id,
@@ -206,8 +213,14 @@ export function useRegisterViewModel(): RegisterViewModel {
     releaseSessionInventoryHoldsAndDeleteItems,
     removeItem,
   } = useConvexSessionActions();
+  const voidSessionRef = useRef<typeof voidSession>(voidSession);
 
   const activeCartItems = activeSession?.cartItems ?? [];
+  if (activeSession?._id) {
+    unmountSessionRef.current = activeSession._id as Id<"posSession">;
+    unmountSessionCartItemCountRef.current = activeCartItems.length;
+  }
+  voidSessionRef.current = voidSession;
   const activeTotals = useMemo(
     () => calculatePosCartTotals(activeCartItems),
     [activeCartItems],
@@ -317,6 +330,35 @@ export function useRegisterViewModel(): RegisterViewModel {
     setIsOpeningDrawer(false);
   }, [registerState?.activeRegisterSession?._id]);
 
+  useEffect(() => {
+    return () => {
+      const sessionId = unmountSessionRef.current;
+      const hasCartItems = unmountSessionCartItemCountRef.current > 0;
+
+      if (!sessionId || hasCartItems) {
+        return;
+      }
+
+      const sessionVoidOperation = voidSessionRef.current;
+      if (!sessionVoidOperation) {
+        return;
+      }
+
+      void (async () => {
+        const result = await sessionVoidOperation({
+          sessionId,
+        });
+
+        if (result.kind !== "ok") {
+          logger.warn("[POS] Failed to void empty session on unmount", {
+            sessionId,
+            error: result.error.message,
+          });
+        }
+      })();
+    };
+  }, []);
+
   const handleSessionExpired = useCallback(() => {
     logger.warn(
       "[POS] Session expired, clearing cashier and local draft state",
@@ -406,12 +448,12 @@ export function useRegisterViewModel(): RegisterViewModel {
     }
 
     if (!activeRegisterSessionId) {
-      toast.error("Open the drawer before adding products");
+      toast.error("Drawer closed. Open the drawer before adding items.");
       return null;
     }
 
     if (!activeStore?._id || !terminal?._id || !staffProfileId) {
-      toast.error("Sign in at a registered terminal before adding products");
+      toast.error("Register sign-in required. Sign in before adding items.");
       return null;
     }
 
@@ -429,7 +471,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     });
 
     if (!result.ok) {
-      toast.error(result.message);
+      presentOperatorError(result.message);
       return null;
     }
 
@@ -479,7 +521,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         );
       }
 
-      toast.error(result.error.message);
+      presentOperatorError(result.error.message);
       return false;
     },
     [
@@ -614,7 +656,9 @@ export function useRegisterViewModel(): RegisterViewModel {
   const holdCurrentSession = useCallback(
     async (reason?: string) => {
       if (!activeSession || !staffProfileId) {
-        toast.error("No active session to hold");
+        toast.error(
+          "No sale in progress. Start a sale before placing it on hold.",
+        );
         return false;
       }
 
@@ -635,14 +679,14 @@ export function useRegisterViewModel(): RegisterViewModel {
       });
 
       if (!result.ok) {
-        toast.error(result.message);
+        presentOperatorError(result.message);
         return false;
       }
 
       resetDraftState({
         keepCashier: true,
       });
-      toast.success("Session held");
+      toast.success("Sale placed on hold.");
       return true;
     },
     [
@@ -656,7 +700,7 @@ export function useRegisterViewModel(): RegisterViewModel {
 
   const voidCurrentSession = useCallback(async () => {
     if (!activeSession) {
-      toast.error("No active session to void");
+      toast.error("No sale in progress. Start a sale before clearing it.");
       return false;
     }
 
@@ -665,14 +709,14 @@ export function useRegisterViewModel(): RegisterViewModel {
     });
 
     if (result.kind !== "ok") {
-      toast.error(result.error.message);
+      presentOperatorError(result.error.message);
       return false;
     }
 
     resetDraftState({
       keepCashier: true,
     });
-    toast.success("Session voided");
+    toast.success("Sale cleared.");
     return true;
   }, [activeSession, resetDraftState, voidSession]);
 
@@ -680,7 +724,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     async (sessionId: Id<"posSession">) => {
       if (!staffProfileId || !terminal?._id) {
         toast.error(
-          "Sign in at a registered terminal before resuming a session",
+          "Register sign-in required. Sign in before resuming a sale.",
         );
         return;
       }
@@ -705,14 +749,14 @@ export function useRegisterViewModel(): RegisterViewModel {
       });
 
       if (result.kind !== "ok") {
-        toast.error(result.error.message);
+        presentOperatorError(result.error.message);
         return;
       }
 
       setPaymentState([]);
       setShowCustomerPanel(false);
       bootstrapInitialized.current = true;
-      toast.success("Session resumed");
+      toast.success("Sale resumed.");
     },
     [
       activeSession,
@@ -726,12 +770,12 @@ export function useRegisterViewModel(): RegisterViewModel {
 
   const handleStartNewSession = useCallback(async () => {
     if (!activeStore?._id || !terminal?._id || !staffProfileId) {
-      toast.error("Sign in at a registered terminal before starting a session");
+      toast.error("Register sign-in required. Sign in before starting a sale.");
       return;
     }
 
     if (!activeRegisterSessionId) {
-      toast.error("Open the drawer before starting a session");
+      toast.error("Drawer closed. Open the drawer before starting a sale.");
       return;
     }
 
@@ -760,7 +804,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     });
 
     if (!result.ok) {
-      toast.error(result.message);
+      presentOperatorError(result.message);
       return;
     }
 
@@ -768,7 +812,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       keepCashier: true,
     });
     bootstrapInitialized.current = true;
-    toast.success("New session created");
+    toast.success("Sale started.");
   }, [
     activeSession,
     activeRegisterSessionId,
@@ -785,14 +829,16 @@ export function useRegisterViewModel(): RegisterViewModel {
   const handleOpenDrawer = useCallback(async () => {
     if (!activeStore?._id || !terminal?._id || !staffProfileId) {
       setDrawerErrorMessage(
-        "Sign in at a registered terminal before opening the drawer",
+        "Register sign-in required. Sign in before opening the drawer.",
       );
       return;
     }
 
     const parsedOpeningFloat = parseDisplayAmountInput(drawerOpeningFloat);
     if (parsedOpeningFloat === undefined || parsedOpeningFloat <= 0) {
-      setDrawerErrorMessage("Enter a valid opening float");
+      setDrawerErrorMessage(
+        "Opening float required. Enter an amount greater than 0.",
+      );
       return;
     }
 
@@ -815,12 +861,12 @@ export function useRegisterViewModel(): RegisterViewModel {
     setIsOpeningDrawer(false);
 
     if (!result.ok) {
-      setDrawerErrorMessage(result.message);
+      setDrawerErrorMessage(toOperatorMessage(result.message));
       return;
     }
 
     requestBootstrap();
-    toast.success("Drawer opened");
+    toast.success("Drawer open. You can start selling.");
   }, [
     activeStore?._id,
     staffProfileId,
@@ -858,7 +904,7 @@ export function useRegisterViewModel(): RegisterViewModel {
 
       if (result.kind !== "ok") {
         drawerBindingRequestRef.current = null;
-        setDrawerErrorMessage(result.error.message);
+        setDrawerErrorMessage(toOperatorMessage(result.error.message));
         return;
       }
 
@@ -912,7 +958,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         });
 
         if (result.kind !== "ok") {
-          toast.error(result.error.message);
+          presentOperatorError(result.error.message);
           bootstrapInitialized.current = false;
         }
 
@@ -933,7 +979,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       });
 
       if (!result.ok) {
-        toast.error(result.message);
+        presentOperatorError(result.message);
         bootstrapInitialized.current = false;
       }
     })();
@@ -985,17 +1031,17 @@ export function useRegisterViewModel(): RegisterViewModel {
   const handleAddProduct = useCallback(
     async (product: Product) => {
       if (!staffProfileId) {
-        toast.error("A cashier must sign in before products can be added");
+        toast.error("Register sign-in required. Sign in before adding items.");
         return;
       }
 
       if (!product.productId || !product.skuId) {
-        toast.error("Product is missing SKU details");
+        toast.error("Item details unavailable. Try another item.");
         return;
       }
 
       if (activeSessionHasBlockedRegisterBinding) {
-        toast.error("Open the cash drawer before adding products");
+        toast.error("Drawer closed. Open the drawer before adding items.");
         return;
       }
 
@@ -1032,7 +1078,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       });
 
       if (!result.ok) {
-        toast.error(result.message);
+        presentOperatorError(result.message);
         return;
       }
 
@@ -1054,7 +1100,9 @@ export function useRegisterViewModel(): RegisterViewModel {
       }
 
       if (activeSessionHasBlockedRegisterBinding) {
-        toast.error("Open the cash drawer before modifying this sale");
+        toast.error(
+          "Drawer closed. Open the drawer before updating this sale.",
+        );
         return;
       }
 
@@ -1073,14 +1121,14 @@ export function useRegisterViewModel(): RegisterViewModel {
         });
 
         if (result.kind !== "ok") {
-          toast.error(result.error.message);
+          presentOperatorError(result.error.message);
         }
 
         return;
       }
 
       if (!item.productId || !item.skuId) {
-        toast.error("Item is missing product details");
+        toast.error("Item details unavailable. Remove it and add it again.");
         return;
       }
 
@@ -1107,7 +1155,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       });
 
       if (!result.ok) {
-        toast.error(result.message);
+        presentOperatorError(result.message);
       }
     },
     [
@@ -1126,7 +1174,9 @@ export function useRegisterViewModel(): RegisterViewModel {
       }
 
       if (activeSessionHasBlockedRegisterBinding) {
-        toast.error("Open the cash drawer before modifying this sale");
+        toast.error(
+          "Drawer closed. Open the drawer before updating this sale.",
+        );
         return;
       }
 
@@ -1137,7 +1187,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       });
 
       if (result.kind !== "ok") {
-        toast.error(result.error.message);
+        presentOperatorError(result.error.message);
       }
     },
     [
@@ -1154,7 +1204,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     }
 
     if (activeSessionHasBlockedRegisterBinding) {
-      toast.error("Open the cash drawer before modifying this sale");
+      toast.error("Drawer closed. Open the drawer before updating this sale.");
       return;
     }
 
@@ -1166,12 +1216,12 @@ export function useRegisterViewModel(): RegisterViewModel {
     });
 
     if (result.kind !== "ok") {
-      toast.error(result.error.message);
+      presentOperatorError(result.error.message);
       return;
     }
 
     setPaymentState([]);
-    toast.success("Cart cleared");
+    toast.success("Sale cleared.");
   }, [
     activeSession,
     activeSessionHasBlockedRegisterBinding,
@@ -1259,7 +1309,7 @@ export function useRegisterViewModel(): RegisterViewModel {
           barcode: extractedValue,
           storeId: activeStore?._id,
         });
-        toast.error("Barcode not found");
+        toast.error("Barcode not found. Scan again or search by name.");
       }
     },
     [
@@ -1300,7 +1350,7 @@ export function useRegisterViewModel(): RegisterViewModel {
 
       const handled = hasDraftState
         ? await holdCurrentSession("Navigating away from register")
-        : true;
+        : await voidCurrentSession();
 
       if (!handled) {
         return;
@@ -1311,8 +1361,8 @@ export function useRegisterViewModel(): RegisterViewModel {
     navigateBack();
   }, [
     activeSession,
-    customerInfo,
     holdCurrentSession,
+    voidCurrentSession,
     navigateBack,
     resetDraftState,
   ]);
@@ -1341,7 +1391,7 @@ export function useRegisterViewModel(): RegisterViewModel {
 
   const handleCompleteTransaction = useCallback(async () => {
     if (!activeSession) {
-      toast.error("No active session to complete");
+      toast.error("No sale in progress. Start a sale before taking payment.");
       return false;
     }
 
@@ -1371,7 +1421,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     });
 
     if (!result.ok) {
-      toast.error(result.message);
+      presentOperatorError(result.message);
       return false;
     }
 
@@ -1393,7 +1443,9 @@ export function useRegisterViewModel(): RegisterViewModel {
           }
         : undefined,
     });
-    toast.success(`Transaction completed: ${result.data.transactionNumber}`);
+    toast.success(
+      `Sale completed. Transaction ${result.data.transactionNumber} recorded.`,
+    );
     return true;
   }, [
     activeCartItems,
@@ -1586,11 +1638,11 @@ export function useRegisterViewModel(): RegisterViewModel {
           onVoidHeldSession: async (sessionId: Id<"posSession">) => {
             const result = await voidSession({ sessionId });
             if (result.kind !== "ok") {
-              toast.error(result.error.message);
+              presentOperatorError(result.error.message);
               return;
             }
 
-            toast.success("Held session voided");
+            toast.success("Held sale cleared.");
           },
           onStartNewSession: handleStartNewSession,
         }
@@ -1625,7 +1677,7 @@ export function useRegisterViewModel(): RegisterViewModel {
             errorMessage:
               drawerErrorMessage ??
               (activeSessionHasMismatchedRegisterBinding
-                ? "This sale is assigned to a different cash drawer."
+                ? "Sale assigned to a different drawer. Open that drawer before continuing."
                 : null),
             isSubmitting: isOpeningDrawer,
             onOpeningFloatChange: (value: string) => {

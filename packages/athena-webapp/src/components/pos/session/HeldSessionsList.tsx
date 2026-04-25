@@ -24,7 +24,7 @@ export function HeldSessionsList({
   if (sessions.length === 0) {
     return (
       <div className="text-center py-6 text-muted-foreground">
-        No held sessions
+        No held sales
       </div>
     );
   }
@@ -45,7 +45,7 @@ export function HeldSessionsList({
 
   return (
     <div className="space-y-4">
-      <h4 className="font-medium">Held Sessions</h4>
+      <h4 className="font-medium">Held sales</h4>
       <div className="space-y-2 max-h-96 overflow-y-auto">
         {sessions.map((session) => (
           <Card key={session._id} className="p-3">
@@ -104,7 +104,7 @@ export function HeldSessionsList({
                   size="sm"
                   disabled={hasExpired(session.expiresAt)}
                   onClick={() => void onResumeSession(session._id)}
-                  title="Resume session"
+                  title="Resume sale"
                 >
                   <PlayCircle className="h-4 w-4" />
                 </Button>
@@ -112,7 +112,7 @@ export function HeldSessionsList({
                   variant="ghost"
                   size="sm"
                   onClick={() => void onVoidSession(session._id)}
-                  title="Void session"
+                  title="Clear sale"
                 >
                   <Ban className="h-4 w-4 text-destructive" />
                 </Button>

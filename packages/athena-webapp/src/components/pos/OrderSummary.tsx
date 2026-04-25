@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { CardHeader, CardTitle } from "@/components/ui/card";
 import {
   calculatePosRemainingDue,
   calculatePosTotalPaid,
@@ -73,6 +72,8 @@ export function OrderSummary({
   cartItems,
   customerInfo,
   registerNumber,
+  subtotal: propSubtotal,
+  tax: propTax,
   total: propTotal,
   payments = [],
   hasTerminal = true,
@@ -106,6 +107,9 @@ export function OrderSummary({
       : cartItems;
   const effectiveCustomerInfo =
     completedTransactionData?.customerInfo ?? customerInfo;
+  const summarySubtotal =
+    completedTransactionData?.subtotal ?? propSubtotal ?? 0;
+  const summaryTax = completedTransactionData?.tax ?? propTax ?? 0;
   const total = completedTransactionData?.total ?? propTotal ?? 0;
   const totalPaid = calculatePosTotalPaid(payments);
   const remainingDue = calculatePosRemainingDue(totalPaid, total);
@@ -113,6 +117,53 @@ export function OrderSummary({
     (sum, item) => sum + item.quantity,
     0,
   );
+  const completedAtDate = completedTransactionData?.completedAt
+    ? completedTransactionData.completedAt instanceof Date
+      ? completedTransactionData.completedAt
+      : new Date(completedTransactionData.completedAt)
+    : null;
+  const completedDateLabel = completedAtDate
+    ? completedAtDate.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "Pending";
+  const completedTimeLabel = completedAtDate
+    ? completedAtDate.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      })
+    : "Pending";
+  const summaryPaymentMethod =
+    completedTransactionData?.paymentMethod ?? payments[0]?.method ?? "cash";
+  const receiptLabel = readOnly
+    ? (receiptNumberOverride ?? completedOrderNumber ?? "Transaction")
+    : (completedOrderNumber ?? "Transaction");
+  const summaryRows = [
+    { label: "Transaction", value: `#${receiptLabel}` },
+    {
+      label: "Completed",
+      value: `${completedDateLabel} • ${completedTimeLabel}`,
+    },
+    {
+      label: "Payment",
+      value: formatPaymentMethod(summaryPaymentMethod),
+    },
+    {
+      label: "Register",
+      value: registerNumber ? `Register ${registerNumber}` : "Unassigned",
+    },
+    {
+      label: "Cashier",
+      value: cashierName || "Unassigned",
+    },
+    {
+      label: "Items",
+      value: `${cartItemsCount} item${cartItemsCount === 1 ? "" : "s"}`,
+    },
+  ];
 
   const showPaymentButtons =
     !readOnly &&
@@ -274,24 +325,175 @@ export function OrderSummary({
     }
   };
 
+  if (readOnly || isTransactionCompleted) {
+    return (
+      <div
+        className={cn(
+          "grid h-full min-h-0 flex-1 auto-rows-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.9fr)]",
+          !hasTerminal && !readOnly && "opacity-60 transition-all duration-300",
+        )}
+      >
+        <section className="flex h-full min-h-0">
+          <div className="relative flex h-full min-h-[36rem] flex-1 flex-col overflow-hidden rounded-[1.75rem] border border-border/80 bg-[linear-gradient(145deg,hsl(var(--surface-raised))_0%,hsl(var(--surface))_52%,hsl(var(--muted)/0.72)_100%)] p-8 shadow-[var(--shadow-surface)] md:p-10">
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent"
+            />
+
+            <div className="flex flex-1 flex-col">
+              <div className="space-y-10">
+                <div className="inline-flex h-16 w-16 items-center justify-center rounded-[1.4rem] bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] shadow-[0_20px_40px_-24px_hsl(var(--success)/0.75)] animate-[presence-lift_var(--motion-standard)_var(--ease-emphasized)_both]">
+                  <Check className="h-7 w-7" />
+                </div>
+
+                <div className="max-w-2xl space-y-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-muted-foreground">
+                    Sale complete
+                  </p>
+                  <h2 className="text-3xl font-semibold tracking-tight text-foreground md:text-[3rem]">
+                    {readOnly ? "Sale recorded." : "Ready for next sale."}
+                  </h2>
+                </div>
+              </div>
+
+              <div className="mt-auto space-y-5">
+                <div className="grid gap-3 md:grid-cols-3 md:gap-4">
+                  <div className="rounded-[1.35rem] border border-border/70 bg-white/80 p-4 backdrop-blur-sm">
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                      Total
+                    </p>
+                    <p className="mt-3 text-2xl font-semibold text-foreground">
+                      {formatStoredAmount(formatter, total)}
+                    </p>
+                  </div>
+                  <div className="rounded-[1.35rem] border border-border/70 bg-white/70 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                      Customer
+                    </p>
+                    <p className="mt-3 text-sm font-medium text-foreground">
+                      {effectiveCustomerInfo?.name ||
+                        effectiveCustomerInfo?.email ||
+                        "Walk-in customer"}
+                    </p>
+                  </div>
+                  <div className="rounded-[1.35rem] border border-border/70 bg-white/70 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                      Paid with
+                    </p>
+                    <p className="mt-3 text-sm font-medium text-foreground">
+                      {formatPaymentMethod(summaryPaymentMethod)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Button
+                    onClick={handlePrintReceipt}
+                    variant="outline"
+                    className="h-14 rounded-2xl border-[hsl(var(--foreground))] bg-[hsl(var(--foreground))] px-5 text-sm font-semibold text-white shadow-[hsl(var(--foreground))/0.18] hover:border-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--primary-foreground))]"
+                  >
+                    <Printer className="h-4 w-4" />
+                    Print receipt
+                  </Button>
+                  {!readOnly && (
+                    <Button
+                      onClick={handleStartNewTransaction}
+                      variant="outline"
+                      className="h-14 rounded-2xl border-border bg-background px-5 text-sm font-semibold"
+                    >
+                      <Plus className="h-4 w-4" />
+                      New sale
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <aside className="grid h-full min-h-0 gap-5">
+          <section className="flex h-full min-h-0 flex-col rounded-[1.5rem] border border-border/80 bg-white p-5 shadow-[var(--shadow-surface)]">
+            <div className="border-b border-border/70 pb-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                Transaction summary
+              </p>
+            </div>
+
+            <dl className="flex-1 space-y-5 py-6">
+              {summaryRows.map((row) => (
+                <div
+                  key={row.label}
+                  className="flex items-start justify-between gap-4 text-sm"
+                >
+                  <dt className="text-muted-foreground">{row.label}</dt>
+                  <dd className="max-w-[60%] text-right font-medium text-foreground">
+                    {row.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+
+            <div className="mt-auto space-y-3 border-t border-border/70 pt-6">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Subtotal</span>
+                <span className="font-medium text-foreground">
+                  {formatStoredAmount(formatter, summarySubtotal)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Tax</span>
+                <span className="font-medium text-foreground">
+                  {formatStoredAmount(formatter, summaryTax)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between pt-2">
+                <span className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                  Total
+                </span>
+                <span className="text-3xl font-semibold tracking-tight text-foreground">
+                  {formatStoredAmount(formatter, total)}
+                </span>
+              </div>
+            </div>
+          </section>
+
+          {(effectiveCustomerInfo?.name ||
+            effectiveCustomerInfo?.email ||
+            effectiveCustomerInfo?.phone) && (
+            <section className="rounded-[1.5rem] border border-border/80 bg-[hsl(var(--surface))] p-5 shadow-[var(--shadow-surface)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                Customer
+              </p>
+              <div className="mt-4 space-y-1">
+                <p className="text-lg font-semibold text-foreground">
+                  {effectiveCustomerInfo.name || "Guest checkout"}
+                </p>
+                {effectiveCustomerInfo.email && (
+                  <p className="text-sm text-muted-foreground">
+                    {effectiveCustomerInfo.email}
+                  </p>
+                )}
+                {effectiveCustomerInfo.phone && (
+                  <p className="text-sm text-muted-foreground">
+                    {effectiveCustomerInfo.phone}
+                  </p>
+                )}
+              </div>
+            </section>
+          )}
+        </aside>
+      </div>
+    );
+  }
+
   return (
     <div
       className={cn(
         "min-h-0",
         isPaymentFlowActive && "flex flex-1 flex-col",
-        isTransactionCompleted && "border rounded-lg",
         !hasTerminal && !readOnly && "opacity-60 transition-all duration-300",
       )}
     >
-      {isTransactionCompleted && (
-        <CardHeader className="space-y-4 mt-8 mb-16">
-          <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
-            <Check className="w-6 h-6 text-green-600" />
-          </div>
-          <CardTitle className="text-green-600">Transaction complete</CardTitle>
-        </CardHeader>
-      )}
-
       <div
         className={cn(
           "flex flex-col gap-5 p-0",
