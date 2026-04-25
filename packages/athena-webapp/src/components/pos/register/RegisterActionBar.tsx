@@ -13,22 +13,17 @@ import { RegisterSessionPanel } from "./RegisterSessionPanel";
 import { FadeIn } from "../../common/FadeIn";
 
 interface RegisterActionBarProps {
-  isSessionActive: boolean;
   registerInfo: RegisterInfoState;
   sessionPanel: RegisterSessionPanelState | null;
 }
 
 export function RegisterActionBar({
-  isSessionActive,
   registerInfo,
   sessionPanel,
 }: RegisterActionBarProps) {
   return (
     <div className="flex items-center gap-4">
-      <RegisterSessionPanel
-        isSessionActive={isSessionActive}
-        sessionPanel={sessionPanel}
-      />
+      <RegisterSessionPanel sessionPanel={sessionPanel} />
 
       <div
         className={cn(

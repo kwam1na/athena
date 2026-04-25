@@ -59,7 +59,7 @@ export function SessionManager({ sessionPanel }: SessionManagerProps) {
           onClick={() => void sessionPanel.onVoidCurrentSession()}
         >
           <Ban className="h-4 w-4 text-destructive" />
-          Void
+          Clear sale
         </Button>
       )}
 
@@ -72,7 +72,7 @@ export function SessionManager({ sessionPanel }: SessionManagerProps) {
               className="flex h-10 items-center gap-2 px-4"
             >
               <PlayCircle className="h-4 w-4" />
-              Resume
+              Resume sale
               <Badge variant="secondary" className="ml-1">
                 {sessionPanel.heldSessions.length}
               </Badge>
@@ -96,7 +96,7 @@ export function SessionManager({ sessionPanel }: SessionManagerProps) {
         className="flex h-10 items-center gap-2 px-4"
       >
         <Plus className="h-4 w-4" />
-        New
+        New sale
       </Button>
     </div>
   );
