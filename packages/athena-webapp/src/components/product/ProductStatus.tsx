@@ -1,27 +1,45 @@
 import { AlertOctagonIcon, AlertTriangle, EyeOff } from "lucide-react";
 import { Product } from "~/types";
+import { ProductVariant } from "../add-product/ProductStock";
 import { Badge } from "../ui/badge";
 
-export const ProductStatus = ({ product }: { product: Product }) => {
+type ProductStatusProps = {
+  product: Product;
+  productVariant?: ProductVariant;
+};
+
+export const ProductStatus = ({
+  product,
+  productVariant,
+}: ProductStatusProps) => {
+  const isVisible = productVariant?.isVisible ?? product.isVisible;
+  const inventoryCount = productVariant?.stock ?? product.inventoryCount;
+  const quantityAvailable = productVariant?.quantityAvailable ?? inventoryCount;
+
   const getBadgeStyles = () => {
-    if (!product.isVisible) {
+    if (!isVisible) {
       return {
         bg: "bg-zinc-100 text-zinc-700",
         text: "text-zinc-700",
       };
     }
 
-    if (product.inventoryCount === 0)
+    if (inventoryCount === 0 || quantityAvailable === 0) {
       return {
         bg: "bg-red-100 text-red-700",
         text: "text-red-700",
       };
+    }
 
-    if (product.inventoryCount <= 2)
+    if (
+      (inventoryCount !== undefined && inventoryCount <= 2) ||
+      (quantityAvailable !== undefined && quantityAvailable <= 2)
+    ) {
       return {
         bg: "bg-amber-100 text-amber-700",
         text: "text-amber-700",
       };
+    }
 
     return {
       bg: "bg-green-100 text-green-700",
@@ -31,9 +49,9 @@ export const ProductStatus = ({ product }: { product: Product }) => {
 
   const { bg, text } = getBadgeStyles();
 
-  const visibility = product.isVisible ? "Live" : "Hidden";
+  const visibility = isVisible ? "Live" : "Hidden";
 
-  if (!product.isVisible) {
+  if (!isVisible) {
     return (
       <Badge variant="outline" className={`${bg}`}>
         <div className="flex items-center text-xs">
@@ -47,12 +65,12 @@ export const ProductStatus = ({ product }: { product: Product }) => {
   return (
     <Badge variant="outline" className={`${bg}`}>
       <div className="flex items-center text-xs">
-        {product.inventoryCount === 0 ? (
+        {inventoryCount === 0 || quantityAvailable === 0 ? (
           <>
             <AlertTriangle className="w-3.5 h-3.5 mr-2 text-red-700" />
             <p className={text}>Out of stock</p>
           </>
-        ) : product.inventoryCount <= 2 ? (
+        ) : inventoryCount <= 2 || quantityAvailable <= 2 ? (
           <>
             <AlertOctagonIcon className="w-3.5 h-3.5 mr-2 text-amber-700" />
             <p className={text}>Low stock</p>
