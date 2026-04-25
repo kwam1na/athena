@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -79,7 +79,18 @@ vi.mock("./RegisterCustomerPanel", () => ({
 }));
 
 vi.mock("./RegisterCheckoutPanel", () => ({
-  RegisterCheckoutPanel: () => <div>register-checkout-panel</div>,
+  RegisterCheckoutPanel: ({
+    onPaymentFlowChange,
+  }: {
+    onPaymentFlowChange: (active: boolean) => void;
+  }) => (
+    <div>
+      <button onClick={() => onPaymentFlowChange(true)}>
+        activate-payment-flow
+      </button>
+      <div>register-checkout-panel</div>
+    </div>
+  ),
 }));
 
 describe("POSRegisterView", () => {
@@ -144,6 +155,64 @@ describe("POSRegisterView", () => {
     expect(screen.getByText("cart-items")).toBeInTheDocument();
     expect(screen.getByText("register-checkout-panel")).toBeInTheDocument();
     expect(screen.getByText("cashier-auth-dialog")).toBeInTheDocument();
+  });
+
+  it("returns to product entry when a paid sale starts a new product search", async () => {
+    const baseViewModel = {
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: true,
+      },
+      registerInfo: {
+        customerName: "Ama Serwa",
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: false,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: {},
+      cashierCard: {},
+      authDialog: {
+        open: false,
+      },
+      drawerGate: null,
+      onNavigateBack: vi.fn(),
+    };
+    mockUseRegisterViewModel.mockReturnValue(baseViewModel);
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    const { rerender } = render(<POSRegisterView />);
+
+    await userEvent.click(screen.getByText("activate-payment-flow"));
+
+    expect(screen.getByText("cart-items")).toBeInTheDocument();
+    expect(screen.queryByText("product-entry")).not.toBeInTheDocument();
+
+    mockUseRegisterViewModel.mockReturnValue({
+      ...baseViewModel,
+      productEntry: {
+        ...baseViewModel.productEntry,
+        productSearchQuery: "water",
+      },
+    });
+
+    rerender(<POSRegisterView />);
+
+    await waitFor(() => {
+      expect(screen.getByText("product-entry")).toBeInTheDocument();
+    });
   });
 
   it("renders the drawer gate instead of the selling surface while drawer setup is pending", async () => {
