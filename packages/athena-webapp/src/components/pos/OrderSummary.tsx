@@ -66,6 +66,7 @@ interface OrderSummaryProps {
   onCompleteTransaction?: () => Promise<boolean>;
   onStartNewTransaction?: () => void;
   onPaymentFlowChange?: (isActive: boolean) => void;
+  onPaymentEntryStart?: () => void;
 }
 
 export function OrderSummary({
@@ -89,6 +90,7 @@ export function OrderSummary({
   onCompleteTransaction,
   onStartNewTransaction,
   onPaymentFlowChange,
+  onPaymentEntryStart,
 }: OrderSummaryProps) {
   const { activeStore } = useGetActiveStore();
   const formatter = currencyFormatter(activeStore?.currency || "GHS");
@@ -577,6 +579,7 @@ export function OrderSummary({
             >
               <Button
                 onClick={() => {
+                  onPaymentEntryStart?.();
                   setSelectedPaymentMethod("cash");
                   setIsSelectingPaymentMethod(false);
                 }}
@@ -590,6 +593,7 @@ export function OrderSummary({
               </Button>
               <Button
                 onClick={() => {
+                  onPaymentEntryStart?.();
                   setSelectedPaymentMethod("card");
                   setIsSelectingPaymentMethod(false);
                 }}
@@ -603,6 +607,7 @@ export function OrderSummary({
               </Button>
               <Button
                 onClick={() => {
+                  onPaymentEntryStart?.();
                   setSelectedPaymentMethod("mobile_money");
                   setIsSelectingPaymentMethod(false);
                 }}

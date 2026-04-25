@@ -79,7 +79,7 @@ export function CartItems({
       )}
       <div
         className={cn(
-          "min-h-0 flex-1 overflow-hidden p-4",
+          "flex min-h-0 flex-1 flex-col overflow-hidden p-4",
           isCompact && "flex-1 pt-0",
         )}
       >
@@ -94,8 +94,8 @@ export function CartItems({
         ) : (
           <div
             className={cn(
-              "min-h-0 space-y-3 overflow-y-auto",
-              isCompact && "h-full pr-1",
+              "min-h-0 flex-1 space-y-3 overflow-y-auto pr-1",
+              isCompact && "h-full",
             )}
           >
             {cartItems.map((item) => (

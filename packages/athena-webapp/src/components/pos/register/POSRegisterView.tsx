@@ -10,7 +10,7 @@ import { useSidebar } from "@/components/ui/sidebar";
 import View from "@/components/View";
 import { cn } from "~/src/lib/utils";
 import { ScanBarcode, Search } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useRegisterViewModel } from "@/lib/pos/presentation/register/useRegisterViewModel";
 
@@ -120,9 +120,31 @@ export function POSRegisterView() {
     shouldUseFullscreenRegisterShell ? "h-full min-h-0" : "h-auto",
     shouldUseFullscreenRegisterShell && "overflow-hidden",
   );
+  const hasProductSearchIntent =
+    (viewModel.productEntry?.productSearchQuery ?? "").trim().length > 0;
+  const shouldShowPaymentWorkspace =
+    isPaymentInputActive && !hasProductSearchIntent;
   const canSearchProducts =
     !viewModel.checkout.isTransactionCompleted && !viewModel.drawerGate;
   const shouldShowHeaderProductSearch = isSessionActive && canSearchProducts;
+
+  useEffect(() => {
+    if (hasProductSearchIntent && isPaymentInputActive) {
+      setIsPaymentInputActive(false);
+    }
+  }, [hasProductSearchIntent, isPaymentInputActive]);
+
+  const handlePaymentFlowChange = useCallback((isActive: boolean) => {
+    setIsPaymentInputActive(isActive);
+  }, []);
+
+  const handlePaymentEntryStart = useCallback(() => {
+    if (hasProductSearchIntent) {
+      viewModel.productEntry?.setProductSearchQuery?.("");
+    }
+
+    setIsPaymentInputActive(true);
+  }, [hasProductSearchIntent, viewModel.productEntry]);
 
   if (!viewModel.hasActiveStore) {
     return (
@@ -218,7 +240,7 @@ export function POSRegisterView() {
             <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 overflow-hidden lg:grid-cols-[minmax(0,2fr)_minmax(340px,1fr)]">
               {!viewModel.checkout.isTransactionCompleted && (
                 <div className="flex min-h-0 flex-col overflow-hidden pr-1">
-                  {isPaymentInputActive ? (
+                  {shouldShowPaymentWorkspace ? (
                     <CartItems
                       cartItems={viewModel.cart.items}
                       onUpdateQuantity={viewModel.cart.onUpdateQuantity}
@@ -226,7 +248,7 @@ export function POSRegisterView() {
                       clearCart={viewModel.cart.onClearCart}
                       density="comfortable"
                     />
-                  ) : viewModel.productEntry.productSearchQuery ? (
+                  ) : hasProductSearchIntent ? (
                     <div className="min-h-0 flex-1">
                       <ProductEntry
                         disabled={viewModel.productEntry.disabled}
@@ -270,7 +292,7 @@ export function POSRegisterView() {
               >
                 <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
                   {!viewModel.checkout.isTransactionCompleted &&
-                    !isPaymentInputActive && (
+                    !shouldShowPaymentWorkspace && (
                       <CartItems
                         cartItems={viewModel.cart.items}
                         onUpdateQuantity={viewModel.cart.onUpdateQuantity}
@@ -283,7 +305,7 @@ export function POSRegisterView() {
                   <div
                     className={cn(
                       "rounded-lg bg-white p-4",
-                      isPaymentInputActive ||
+                      shouldShowPaymentWorkspace ||
                         viewModel.checkout.isTransactionCompleted
                         ? "flex min-h-0 flex-1 flex-col overflow-hidden"
                         : "shrink-0",
@@ -292,7 +314,8 @@ export function POSRegisterView() {
                     <RegisterCheckoutPanel
                       checkout={viewModel.checkout}
                       cashierCard={viewModel.cashierCard}
-                      onPaymentFlowChange={setIsPaymentInputActive}
+                      onPaymentFlowChange={handlePaymentFlowChange}
+                      onPaymentEntryStart={handlePaymentEntryStart}
                     />
                   </div>
                 </div>
