@@ -6,11 +6,31 @@ export function ProductAttribute({
   product,
   selectedSku,
   setSelectedSku,
+  density = "default",
+  className = "",
 }: {
   product: Product;
   selectedSku: ProductSku;
   setSelectedSku: (sku: ProductSku) => void;
+  density?: "default" | "compact";
+  className?: string;
 }) {
+  const isCompact = density === "compact";
+  const containerClassName = isCompact ? "space-y-7" : "space-y-8";
+  const groupClassName = isCompact ? "space-y-2.5" : "space-y-4";
+  const labelClassName = isCompact
+    ? "text-xs font-medium text-muted-foreground"
+    : "text-sm";
+  const optionsClassName = isCompact
+    ? "flex flex-wrap gap-2"
+    : "flex flex-wrap gap-4";
+  const optionClassName = (isSelected: boolean) =>
+    `${isCompact ? "h-10 min-w-16 px-4 text-sm" : ""} ${
+      isSelected
+        ? "border text-[#EC4683] border-[#EC4683] shadow-md"
+        : "border border-background-muted"
+    } hover:shadow-md hover:border-[#EC4683]`;
+
   const colors: string[] = Array.from(
     new Set(
       product.skus
@@ -91,18 +111,18 @@ export function ProductAttribute({
   };
 
   return (
-    <div className="space-y-8">
+    <div className={`${containerClassName} ${className}`}>
       {Boolean(colors.length) && (
-        <div className="space-y-4">
-          <p className="text-sm">Color</p>
+        <div className={groupClassName}>
+          <p className={labelClassName}>Color</p>
 
-          <div className="flex flex-wrap gap-4">
+          <div className={optionsClassName}>
             {colors.map((color, index) => {
               return (
                 <Button
                   variant={"ghost"}
                   key={index}
-                  className={`${selectedSku?.colorName == color ? "border text-[#EC4683] border-[#EC4683] shadow-md" : "border border-background-muted"} hover:shadow-md hover:border-[#EC4683]`}
+                  className={optionClassName(selectedSku?.colorName == color)}
                   onClick={() => handleClick("color", color)}
                 >
                   {capitalizeWords(color)}
@@ -114,16 +134,16 @@ export function ProductAttribute({
       )}
 
       {Boolean(lengths.length) && (
-        <div className="space-y-4">
-          <p className="text-sm">Length</p>
+        <div className={groupClassName}>
+          <p className={labelClassName}>Length</p>
 
-          <div className="flex flex-wrap gap-4">
+          <div className={optionsClassName}>
             {lengths.map((length, index) => {
               return (
                 <Button
                   variant={"ghost"}
                   key={index}
-                  className={`${selectedSku?.length == length ? "border text-[#EC4683] border-[#EC4683] shadow-md" : "border border-background-muted"} hover:shadow-md hover:border-[#EC4683]`}
+                  className={optionClassName(selectedSku?.length == length)}
                   onClick={() => handleClick("length", length.toString())}
                 >
                   {`${length}"`}
@@ -135,10 +155,10 @@ export function ProductAttribute({
       )}
 
       {selectedSku.productCategory !== "Hair" && Boolean(sizes.length) && (
-        <div className="space-y-4">
-          <p className="text-sm">Size</p>
+        <div className={groupClassName}>
+          <p className={labelClassName}>Size</p>
 
-          <div className="flex flex-wrap gap-4">
+          <div className={optionsClassName}>
             {sizes.map((size, index) => {
               const sizeStr = String(size);
               const isNumeric = typeof size === "number";
@@ -150,7 +170,7 @@ export function ProductAttribute({
                 <Button
                   variant={"ghost"}
                   key={index}
-                  className={`${findSize(selectedSku, sizeStr) ? "border text-[#EC4683] border-[#EC4683] shadow-md" : "border border-background-muted"} hover:shadow-md hover:border-[#EC4683]`}
+                  className={optionClassName(findSize(selectedSku, sizeStr))}
                   onClick={() => handleClick("size", sizeStr)}
                 >
                   {displayText}

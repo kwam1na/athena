@@ -13,6 +13,7 @@ import { OnsaleProduct } from "./OnSaleProduct";
 import { useProductPageLogic } from "@/hooks/useProductPageLogic";
 import { ProductInfo } from "./ProductInfo";
 import { ProductActions } from "./ProductActions";
+import { MobileProductActions } from "./MobileProductActions";
 import { TrustSignals } from "../communication/TrustSignals";
 import { AboutProduct } from "./AboutProduct";
 import { useProductDiscount } from "@/hooks/useProductDiscount";
@@ -102,7 +103,7 @@ export default function ProductPage() {
         <SheetContent>{sheetContent.current}</SheetContent>
 
         {/* Mobile UI: Full-width layout with scrollable content */}
-        <div className="md:hidden min-h-screen pb-40">
+        <div className="md:hidden min-h-screen pb-24">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1, transition: { duration: 0.1 } }}
@@ -140,25 +141,26 @@ export default function ProductPage() {
               />
             </div>
 
+            {selectedSku.productCategory === "Hair" && <OnsaleProduct />}
+
+            <TrustSignals />
+
+            <MobileProductActions
+              product={product}
+              selectedSku={selectedSku}
+              setSelectedSku={setSelectedSku}
+              handleUpdateBag={handleUpdateBag}
+              handleUpdateSavedBag={handleUpdateSavedBag}
+              isUpdatingBag={isUpdatingBag}
+              savedBagItem={savedBagItem}
+              isSoldOut={isSoldOut}
+              addedItemSuccessfully={addedItemSuccessfully}
+            />
+
             <AboutProduct
               productAttributes={product.attributes || {}}
               productSku={selectedSku}
             />
-
-            {selectedSku.productCategory === "Hair" && <OnsaleProduct />}
-
-            <div className="space-y-4">
-              <TrustSignals />
-
-              <ProductActions
-                handleUpdateBag={handleUpdateBag}
-                handleUpdateSavedBag={handleUpdateSavedBag}
-                isUpdatingBag={isUpdatingBag}
-                savedBagItem={savedBagItem}
-                isSoldOut={isSoldOut}
-                addedItemSuccessfully={addedItemSuccessfully}
-              />
-            </div>
 
             <PickupDetails showShippingPolicy={showShippingPolicy} />
 
