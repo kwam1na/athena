@@ -75,14 +75,12 @@ let mockActiveSession:
         amount: number;
         timestamp: number;
       }>;
-      customer:
-        | {
-            _id: Id<"posCustomer">;
-            name: string;
-            email?: string;
-            phone?: string;
-          }
-        | null;
+      customer: {
+        _id: Id<"posCustomer">;
+        name: string;
+        email?: string;
+        phone?: string;
+      } | null;
     }
   | null
   | undefined;
@@ -284,8 +282,8 @@ describe("useRegisterViewModel", () => {
     mockUpdateSession.mockReset();
     mockUpdateSession.mockResolvedValue(
       ok({
-      sessionId: "session-1" as Id<"posSession">,
-      expiresAt: Date.now() + 60_000,
+        sessionId: "session-1" as Id<"posSession">,
+        expiresAt: Date.now() + 60_000,
       }),
     );
     mockSyncSessionCheckoutState.mockReset();
@@ -322,7 +320,9 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
     });
 
     expect(result.current.header.isSessionActive).toBe(true);
@@ -339,7 +339,9 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
     });
 
     await act(async () => {
@@ -378,7 +380,9 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
     });
 
     expect(result.current.drawerGate).not.toBeNull();
@@ -411,7 +415,9 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
     });
 
     expect(result.current.drawerGate).not.toBeNull();
@@ -441,7 +447,9 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
     });
 
     expect(result.current.drawerGate).not.toBeNull();
@@ -475,7 +483,9 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
     });
 
     expect(result.current.drawerGate).not.toBeNull();
@@ -514,13 +524,15 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
     });
 
     expect(result.current.drawerGate).not.toBeNull();
     expect(result.current.drawerGate?.mode).toBe("recovery");
     expect(result.current.drawerGate?.errorMessage).toBe(
-      "This sale is assigned to a different cash drawer.",
+      "Sale assigned to a different drawer. Open that drawer before continuing.",
     );
     expect(result.current.productEntry.disabled).toBe(true);
     expect(mockBindSessionToRegisterSession).not.toHaveBeenCalled();
@@ -550,7 +562,9 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
     });
 
     await act(async () => {
@@ -567,7 +581,7 @@ describe("useRegisterViewModel", () => {
 
     expect(mockAddItem).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalledWith(
-      "Open the cash drawer before adding products",
+      "Drawer closed. Open the drawer before adding items.",
     );
   });
 
@@ -586,7 +600,9 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
     });
 
     expect(result.current.drawerGate).not.toBeNull();
@@ -609,7 +625,9 @@ describe("useRegisterViewModel", () => {
     const { result, rerender } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
     });
 
     act(() => {
@@ -679,7 +697,9 @@ describe("useRegisterViewModel", () => {
     const { result, rerender } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
     });
 
     act(() => {
@@ -741,7 +761,9 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
     });
 
     act(() => {
@@ -754,13 +776,13 @@ describe("useRegisterViewModel", () => {
 
     expect(result.current.drawerGate).not.toBeNull();
     expect(result.current.drawerGate?.errorMessage).toBe(
-      "A register session is already open for this terminal.",
+      "Drawer already open for this register. Return to the active sale or review it in Cash Controls.",
     );
     expect(toast.error).not.toHaveBeenCalled();
     expect(mockStartSession).not.toHaveBeenCalled();
   });
 
-  it("does not void an empty active session when navigating away", async () => {
+  it("voids an empty active session when navigating away/unmounting", async () => {
     mockActiveSession = {
       ...mockActiveSession!,
       cartItems: [],
@@ -768,18 +790,26 @@ describe("useRegisterViewModel", () => {
     };
 
     const { useRegisterViewModel } = await import("./useRegisterViewModel");
-    const { result } = renderHook(() => useRegisterViewModel());
+    const { result, unmount } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
     });
 
     await act(async () => {
       await result.current.onNavigateBack();
     });
 
+    await act(async () => {
+      unmount();
+    });
+
     expect(mockHoldSession).not.toHaveBeenCalled();
-    expect(mockVoidSession).not.toHaveBeenCalled();
+    expect(mockVoidSession).toHaveBeenCalledWith({
+      sessionId: "session-1" as Id<"posSession">,
+    });
     expect(mockNavigateBack).toHaveBeenCalled();
   });
 
@@ -804,7 +834,9 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
     });
 
     await act(async () => {
@@ -837,7 +869,9 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
     });
 
     expect(result.current.sessionPanel?.canHoldSession).toBe(false);
@@ -847,12 +881,18 @@ describe("useRegisterViewModel", () => {
     });
 
     expect(mockHoldSession).not.toHaveBeenCalled();
+    expect(mockVoidSession).toHaveBeenCalledWith({
+      sessionId: "session-1" as Id<"posSession">,
+    });
     expect(mockNavigateBack).toHaveBeenCalled();
   });
 
   it("does not require the legacy register store or orchestration hooks", () => {
     const currentDir = dirname(fileURLToPath(import.meta.url));
-    const source = readFileSync(join(currentDir, "useRegisterViewModel.ts"), "utf8");
+    const source = readFileSync(
+      join(currentDir, "useRegisterViewModel.ts"),
+      "utf8",
+    );
 
     expect(source).not.toContain("usePOSStore");
     expect(source).not.toContain("useCartOperations");
@@ -878,7 +918,9 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
     });
 
     await act(async () => {
@@ -896,7 +938,9 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
     });
 
     act(() => {
@@ -926,7 +970,9 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
     });
 
     act(() => {
@@ -935,10 +981,9 @@ describe("useRegisterViewModel", () => {
     });
 
     expect(result.current.checkout.payments).toHaveLength(2);
-    expect(result.current.checkout.payments.map((payment) => payment.method)).toEqual([
-      "cash",
-      "card",
-    ]);
+    expect(
+      result.current.checkout.payments.map((payment) => payment.method),
+    ).toEqual(["cash", "card"]);
     expect(mockSyncSessionCheckoutState).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
@@ -970,7 +1015,9 @@ describe("useRegisterViewModel", () => {
     const { result, rerender } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
     });
 
     mockActiveSession = {
@@ -997,7 +1044,9 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
     });
 
     act(() => {
@@ -1021,7 +1070,9 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated("staff-1" as Id<"staffProfile">);
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
     });
 
     await act(async () => {

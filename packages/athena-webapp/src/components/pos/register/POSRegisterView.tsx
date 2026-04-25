@@ -19,9 +19,9 @@ import { RegisterCheckoutPanel } from "./RegisterCheckoutPanel";
 import { RegisterCustomerPanel } from "./RegisterCustomerPanel";
 import { RegisterDrawerGate } from "./RegisterDrawerGate";
 
-function useCollapseSidebarForActiveSession(isSessionActive: boolean) {
+function useCollapseSidebarForPosFlow() {
   const { isMobile, open, setOpen } = useSidebar();
-  const collapsedForActiveSessionRef = useRef(false);
+  const collapsedForPosFlowRef = useRef(false);
   const previousSidebarOpenRef = useRef<boolean | null>(null);
   const setOpenRef = useRef(setOpen);
 
@@ -30,23 +30,19 @@ function useCollapseSidebarForActiveSession(isSessionActive: boolean) {
   }, [setOpen]);
 
   useEffect(() => {
-    if (isMobile || collapsedForActiveSessionRef.current) {
-      return;
-    }
-
-    if (!isSessionActive) {
+    if (isMobile || collapsedForPosFlowRef.current) {
       return;
     }
 
     previousSidebarOpenRef.current = open;
     setOpen(false);
-    collapsedForActiveSessionRef.current = true;
-  }, [isMobile, isSessionActive, open, setOpen]);
+    collapsedForPosFlowRef.current = true;
+  }, [isMobile, open, setOpen]);
 
   useEffect(() => {
     return () => {
       if (
-        collapsedForActiveSessionRef.current &&
+        collapsedForPosFlowRef.current &&
         previousSidebarOpenRef.current !== null
       ) {
         setOpenRef.current(previousSidebarOpenRef.current);
@@ -55,9 +51,9 @@ function useCollapseSidebarForActiveSession(isSessionActive: boolean) {
   }, []);
 }
 
-function useLockDocumentScroll(isSessionActive: boolean) {
+function useLockDocumentScroll(shouldLockScroll: boolean) {
   useEffect(() => {
-    if (!isSessionActive) {
+    if (!shouldLockScroll) {
       return;
     }
 
@@ -79,7 +75,7 @@ function useLockDocumentScroll(isSessionActive: boolean) {
       bodyStyle.overflow = previousBodyOverflow;
       bodyStyle.overscrollBehaviorY = previousBodyOverscrollBehaviorY;
     };
-  }, [isSessionActive]);
+  }, [shouldLockScroll]);
 }
 
 function ProductLookupEmptyState() {
@@ -113,14 +109,16 @@ function ProductLookupEmptyState() {
 export function POSRegisterView() {
   const viewModel = useRegisterViewModel();
   const [isPaymentInputActive, setIsPaymentInputActive] = useState(false);
-  useCollapseSidebarForActiveSession(viewModel.header.isSessionActive);
+  useCollapseSidebarForPosFlow();
   const isSessionActive = viewModel.header.isSessionActive;
-  useLockDocumentScroll(isSessionActive);
+  const isAuthDialogOpen = Boolean(viewModel.authDialog?.open);
+  const shouldUseFullscreenRegisterShell = isSessionActive || isAuthDialogOpen;
+  useLockDocumentScroll(shouldUseFullscreenRegisterShell);
   const registerViewWidth = "full";
   const registerContentClassName = cn(
     "w-full px-6 py-5",
-    isSessionActive ? "h-full min-h-0" : "h-auto",
-    isSessionActive && "overflow-hidden",
+    shouldUseFullscreenRegisterShell ? "h-full min-h-0" : "h-auto",
+    shouldUseFullscreenRegisterShell && "overflow-hidden",
   );
   const canSearchProducts =
     !viewModel.checkout.isTransactionCompleted && !viewModel.drawerGate;
@@ -154,15 +152,17 @@ export function POSRegisterView() {
     <View
       width={registerViewWidth}
       className={cn(
-        isSessionActive &&
+        shouldUseFullscreenRegisterShell &&
           "h-[calc(100dvh-2.5rem)] max-h-[calc(100dvh-2.5rem)] overflow-hidden",
       )}
       contentClassName={cn(
-        isSessionActive &&
+        shouldUseFullscreenRegisterShell &&
           "flex h-full max-h-full flex-col overflow-hidden rounded-2xl border border-border/80 bg-white",
       )}
-      headerClassName={cn(isSessionActive && "shrink-0")}
-      mainClassName={cn(isSessionActive && "min-h-0 flex-1 overflow-hidden")}
+      headerClassName={cn(shouldUseFullscreenRegisterShell && "shrink-0")}
+      mainClassName={cn(
+        shouldUseFullscreenRegisterShell && "min-h-0 flex-1 overflow-hidden",
+      )}
       header={
         <ComposedPageHeader
           width={registerViewWidth}
@@ -171,6 +171,11 @@ export function POSRegisterView() {
           leadingContent={
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-8">
               <div className="flex shrink-0 items-center gap-3">
+                {isSessionActive && (
+                  <FadeIn className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-green-600 rounded-full animate-pulse" />
+                  </FadeIn>
+                )}
                 <p className="text-lg font-semibold text-gray-900">
                   {viewModel.header.title}
                 </p>
@@ -193,7 +198,6 @@ export function POSRegisterView() {
           trailingContent={
             canSearchProducts ? (
               <RegisterActionBar
-                isSessionActive={viewModel.header.isSessionActive}
                 registerInfo={viewModel.registerInfo}
                 sessionPanel={viewModel.sessionPanel}
               />
@@ -261,7 +265,7 @@ export function POSRegisterView() {
               <div
                 className={cn(
                   "flex h-full min-h-0 overflow-hidden",
-                  viewModel.checkout.isTransactionCompleted && "lg:col-span-3",
+                  viewModel.checkout.isTransactionCompleted && "lg:col-span-2",
                 )}
               >
                 <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
@@ -279,7 +283,8 @@ export function POSRegisterView() {
                   <div
                     className={cn(
                       "rounded-lg bg-white p-4",
-                      isPaymentInputActive
+                      isPaymentInputActive ||
+                        viewModel.checkout.isTransactionCompleted
                         ? "flex min-h-0 flex-1 flex-col overflow-hidden"
                         : "shrink-0",
                     )}

@@ -5,14 +5,7 @@ import { Id } from "~/convex/_generated/dataModel";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "../ui/dialog";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "../ui/input-otp";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { LoadingButton } from "../ui/loading-button";
 import { toast } from "sonner";
 import { hashPin } from "~/src/lib/security/pinHash";
@@ -46,11 +39,11 @@ export const CashierAuthDialog = ({
   const usernameInputRef = useRef<HTMLInputElement>(null);
 
   const authenticateStaffCredentialForTerminal = useMutation(
-    api.operations.staffCredentials.authenticateStaffCredentialForTerminal
+    api.operations.staffCredentials.authenticateStaffCredentialForTerminal,
   );
 
   const expireAllSessionsForStaff = useMutation(
-    api.inventory.posSessions.expireAllSessionsForStaff
+    api.inventory.posSessions.expireAllSessionsForStaff,
   );
 
   // Auto-focus username field when dialog opens
@@ -81,12 +74,12 @@ export const CashierAuthDialog = ({
 
   const handleSubmit = async () => {
     if (!username.trim()) {
-      toast.error("Please enter your username");
+      toast.error("Username required. Enter a username to continue.");
       return;
     }
 
     if (pin.length !== 6) {
-      toast.error("Please enter your 6-digit PIN");
+      toast.error("PIN required. Enter all 6 digits to continue.");
       return;
     }
 
@@ -121,7 +114,7 @@ export const CashierAuthDialog = ({
             .join(" ");
 
         if (state === "auth") {
-          toast.success(`Logged in as ${staffDisplayName}.`);
+          toast.success(`Signed in as ${staffDisplayName}.`);
           onAuthenticated(result.staffProfileId);
         } else {
           const expireResult = await expireAllSessionsForStaff({
@@ -130,9 +123,9 @@ export const CashierAuthDialog = ({
           });
 
           if (expireResult.success) {
-            toast.success("Signed out of all terminals");
+            toast.success("Signed out from all registers.");
           } else {
-            toast.error("Failed to sign out of all terminals");
+            toast.error("Other register sign-outs not completed. Try again.");
             setPin("");
             return;
           }
@@ -160,12 +153,17 @@ export const CashierAuthDialog = ({
   };
 
   const header =
-    state === "auth" ? "Start session" : "Sign out of all terminals";
+    state === "auth"
+      ? "Start register session"
+      : "Sign out from other registers";
 
   const switchStateButtonText =
-    state === "auth" ? "Sign out of all terminals" : "Start session";
+    state === "auth"
+      ? "Sign out from other registers"
+      : "Start register session";
 
-  const mainButtonText = state === "auth" ? "Sign In" : "Sign Out";
+  const mainButtonText =
+    state === "auth" ? "Sign in" : "Sign out from all registers";
 
   return (
     <Dialog open={open} onOpenChange={onDismiss}>

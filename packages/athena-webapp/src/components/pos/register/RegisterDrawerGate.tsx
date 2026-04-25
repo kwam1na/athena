@@ -53,15 +53,15 @@ export function RegisterDrawerGate({
       <div className="mx-auto max-w-2xl rounded-lg border border-stone-200 bg-white p-8 shadow-sm">
         <div className="space-y-3">
           <p className="text-sm font-medium uppercase tracking-[0.2em] text-stone-500">
-            Drawer closeout
+            Register closeout
           </p>
           <div className="space-y-1">
             <h2 className="text-2xl font-semibold text-stone-900">
-              Finish drawer closeout before selling
+              Closeout in progress
             </h2>
             <p className="text-sm text-stone-600">
-              {drawerGate.registerLabel} is already in closeout. Finish the
-              register closeout in Cash Controls before returning to POS.
+              {drawerGate.registerLabel} is already in closeout. Finish it in
+              Cash Controls before selling here again.
             </p>
             <p className="text-sm text-stone-500">
               Register {drawerGate.registerNumber}
@@ -96,16 +96,16 @@ export function RegisterDrawerGate({
     <div className="mx-auto max-w-2xl rounded-lg border border-stone-200 bg-white p-8 shadow-sm">
       <div className="space-y-3">
         <p className="text-sm font-medium uppercase tracking-[0.2em] text-stone-500">
-          {isRecovery ? "Drawer recovery" : "Drawer setup"}
+          Drawer status
         </p>
         <div className="space-y-1">
           <h2 className="text-2xl font-semibold text-stone-900">
-            {isRecovery ? "Sale paused until a drawer is open" : "Open drawer before selling"}
+            Drawer closed
           </h2>
           <p className="text-sm text-stone-600">
             {isRecovery
-              ? `${drawerGate.registerLabel} needs an active cash drawer before this sale can continue. The cart, customer, and payment draft will be preserved after drawer setup.`
-              : `${drawerGate.registerLabel} must have an active cash drawer before POS can start or resume a live session.`}
+              ? `${drawerGate.registerLabel} needs an open drawer before this sale can continue.`
+              : `${drawerGate.registerLabel} needs an open drawer before you can start selling.`}
           </p>
           <p className="text-sm text-stone-500">
             Register {drawerGate.registerNumber}
@@ -137,7 +137,7 @@ export function RegisterDrawerGate({
           <Textarea
             disabled={drawerGate.isSubmitting}
             onChange={(event) => drawerGate.onNotesChange?.(event.target.value)}
-            placeholder="Add a quick note for this drawer opening"
+            placeholder="Add a note for this drawer opening"
             rows={4}
             value={drawerGate.notes ?? ""}
           />
@@ -155,7 +155,7 @@ export function RegisterDrawerGate({
             disabled={drawerGate.isSubmitting}
             type="submit"
           >
-            {drawerGate.isSubmitting ? "Opening drawer..." : "Open drawer"}
+            {drawerGate.isSubmitting ? "Opening drawer" : "Open drawer"}
           </Button>
 
           <Button
