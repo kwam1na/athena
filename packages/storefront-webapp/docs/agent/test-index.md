@@ -29,6 +29,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/checkout/utils.test.ts`](../../src/components/checkout/utils.test.ts)
 - [`src/components/home/BestSellersSection.test.tsx`](../../src/components/home/BestSellersSection.test.tsx)
 - [`src/components/home/homePageContent.test.ts`](../../src/components/home/homePageContent.test.ts)
+- [`src/components/product-page/MobileProductActions.test.tsx`](../../src/components/product-page/MobileProductActions.test.tsx)
 - [`src/components/product-page/ProductActions.test.tsx`](../../src/components/product-page/ProductActions.test.tsx)
 - [`src/components/shopping-bag/ShoppingBag.test.tsx`](../../src/components/shopping-bag/ShoppingBag.test.tsx)
 - [`src/lib/feeUtils.test.ts`](../../src/lib/feeUtils.test.ts)

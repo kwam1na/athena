@@ -18,8 +18,6 @@ export const AboutProduct = ({
 
   return (
     <div className="space-y-4">
-      <p className="text-sm">Details</p>
-
       <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
         {productSku.size && (
           <div className="flex items-center gap-2">
