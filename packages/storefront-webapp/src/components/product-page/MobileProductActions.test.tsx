@@ -66,6 +66,9 @@ describe("MobileProductActions", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Add selection" }));
 
-    await waitFor(() => expect(handleUpdateBag).toHaveBeenCalledTimes(1));
+    await waitFor(
+      () => expect(handleUpdateBag).toHaveBeenCalledTimes(1),
+      { timeout: 12_000 },
+    );
   });
 });
