@@ -6,7 +6,6 @@ import { DataTableColumnHeader } from "../../base/table/data-table-column-header
 import { getRelativeTime } from "~/src/lib/utils";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import type { Id } from "~/convex/_generated/dataModel";
-import { WorkflowTraceLink } from "./WorkflowTraceLink";
 import { WorkflowTraceRouteLink } from "../../traces/WorkflowTraceRouteLink";
 
 export type CompletedTransactionRow = {
@@ -20,7 +19,6 @@ export type CompletedTransactionRow = {
   itemCount: number;
   completedAt: number;
   hasTrace: boolean;
-  saleTraceId: string | null;
   sessionTraceId: string | null;
 };
 
@@ -63,24 +61,14 @@ export const transactionColumns: ColumnDef<CompletedTransactionRow>[] = [
               {`${count} ${count === 1 ? "item" : "items"}`}
             </span>
           </Link>
-          {row.original.saleTraceId || row.original.sessionTraceId ? (
+          {row.original.sessionTraceId ? (
             <div className="flex flex-wrap items-center gap-3 text-xs">
-              {row.original.saleTraceId ? (
-                <WorkflowTraceLink
-                  transactionNumber={row.original.transactionNumber}
-                  className="text-xs text-muted-foreground hover:text-primary"
-                >
-                  Sale trace
-                </WorkflowTraceLink>
-              ) : null}
-              {row.original.sessionTraceId ? (
-                <WorkflowTraceRouteLink
-                  traceId={row.original.sessionTraceId}
-                  className="text-xs text-muted-foreground hover:text-primary"
-                >
-                  Session trace
-                </WorkflowTraceRouteLink>
-              ) : null}
+              <WorkflowTraceRouteLink
+                traceId={row.original.sessionTraceId}
+                className="text-xs text-muted-foreground hover:text-primary"
+              >
+                Session trace
+              </WorkflowTraceRouteLink>
             </div>
           ) : null}
         </div>

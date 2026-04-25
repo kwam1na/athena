@@ -57,7 +57,6 @@ export function TransactionsView() {
       itemCount: transaction.itemCount,
       completedAt: transaction.completedAt,
       hasTrace: transaction.hasTrace,
-      saleTraceId: transaction.saleTraceId ?? null,
       sessionTraceId: transaction.sessionTraceId ?? null,
     }));
   }, [transactions, formatter]);

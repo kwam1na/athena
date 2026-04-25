@@ -96,7 +96,6 @@ export async function getCompletedTransactions(
         ? await getPosSessionById(ctx, transaction.sessionId)
         : null;
       const items = await listTransactionItems(ctx, transaction._id);
-      const saleTraceId = transaction.workflowTraceId ?? null;
       const sessionTraceId = session?.workflowTraceId ?? null;
 
       return {
@@ -105,8 +104,7 @@ export async function getCompletedTransactions(
         total: transaction.total,
         paymentMethod: transaction.paymentMethod || null,
         completedAt: transaction.completedAt,
-        hasTrace: Boolean(saleTraceId),
-        saleTraceId,
+        hasTrace: Boolean(sessionTraceId),
         sessionTraceId,
         cashierName: cashier
           ? formatCashierName(cashier)
@@ -140,7 +138,6 @@ export async function getTransactionById(
     ? await getPosSessionById(ctx, transaction.sessionId)
     : null;
   const items = await listTransactionItems(ctx, transaction._id);
-  const saleTraceId = transaction.workflowTraceId ?? null;
   const sessionTraceId = session?.workflowTraceId ?? null;
 
   return {
@@ -149,8 +146,7 @@ export async function getTransactionById(
     subtotal: transaction.subtotal ?? 0,
     tax: transaction.tax ?? 0,
     total: transaction.total,
-    hasTrace: Boolean(saleTraceId),
-    saleTraceId,
+    hasTrace: Boolean(sessionTraceId),
     sessionTraceId,
     paymentMethod: transaction.paymentMethod,
     payments: transaction.payments,

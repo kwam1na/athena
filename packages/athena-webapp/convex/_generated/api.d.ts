@@ -277,7 +277,6 @@ import type * as storeFront_userOffers from "../storeFront/userOffers.js";
 import type * as storeFront_users from "../storeFront/users.js";
 import type * as types_payment from "../types/payment.js";
 import type * as utils from "../utils.js";
-import type * as workflowTraces_adapters_posSale from "../workflowTraces/adapters/posSale.js";
 import type * as workflowTraces_adapters_posSession from "../workflowTraces/adapters/posSession.js";
 import type * as workflowTraces_adapters_registerSession from "../workflowTraces/adapters/registerSession.js";
 import type * as workflowTraces_core from "../workflowTraces/core.js";
@@ -560,7 +559,6 @@ declare const fullApi: ApiFromModules<{
   "storeFront/users": typeof storeFront_users;
   "types/payment": typeof types_payment;
   utils: typeof utils;
-  "workflowTraces/adapters/posSale": typeof workflowTraces_adapters_posSale;
   "workflowTraces/adapters/posSession": typeof workflowTraces_adapters_posSession;
   "workflowTraces/adapters/registerSession": typeof workflowTraces_adapters_registerSession;
   "workflowTraces/core": typeof workflowTraces_core;

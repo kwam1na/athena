@@ -3,11 +3,6 @@ import type { Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
 import { capitalizeWords, generateTransactionNumber } from "../../../utils";
 import {
-  appendWorkflowTraceEventWithCtx,
-  createWorkflowTraceWithCtx,
-  registerWorkflowTraceLookupWithCtx,
-} from "../../../workflowTraces/core";
-import {
   recordRetailSalePaymentAllocations,
   recordRetailVoidPaymentAllocations,
 } from "../../infrastructure/integrations/paymentAllocationService";
@@ -26,10 +21,6 @@ import {
   patchPosTransaction,
   patchProductSku,
 } from "../../infrastructure/repositories/transactionRepository";
-import {
-  buildPosSaleTraceSeed,
-  type PosSaleTraceSeed,
-} from "../../../workflowTraces/adapters/posSale";
 import { ok, userError, type CommandResult } from "../../../../shared/commandResult";
 import { isPosUsableRegisterSessionStatus } from "../../../../shared/registerSessionStatus";
 
@@ -91,133 +82,6 @@ function registerSessionMatchesIdentity(
 
 function isUsableRegisterSession(registerSession: { status: string }) {
   return isPosUsableRegisterSessionStatus(registerSession.status);
-}
-
-async function safeTraceWrite(
-  label: string,
-  action: () => Promise<unknown>,
-) {
-  try {
-    await action();
-  } catch (error) {
-    console.error(`[workflow-trace] ${label}`, error);
-  }
-}
-
-function buildPosSaleTraceRecord(args: {
-  stage: "bootstrap" | "finalized";
-  traceSeed: PosSaleTraceSeed;
-  transactionId: Id<"posTransaction">;
-  completedAt?: number;
-}) {
-  if (args.stage === "bootstrap") {
-    return args.traceSeed.trace;
-  }
-
-  return {
-    ...args.traceSeed.trace,
-    status: "succeeded" as const,
-    completedAt: args.completedAt,
-    details: {
-      transactionId: args.transactionId,
-      lookupValue: args.traceSeed.lookup.lookupValue,
-    },
-  };
-}
-
-function buildPosSaleTraceEvent(args: {
-  stage: "bootstrap" | "finalized";
-  traceSeed: PosSaleTraceSeed;
-  transactionId: Id<"posTransaction">;
-  completedAt?: number;
-}) {
-  if (args.stage === "bootstrap") {
-    return {
-      storeId: args.traceSeed.trace.storeId,
-      traceId: args.traceSeed.trace.traceId,
-      workflowType: args.traceSeed.trace.workflowType,
-      kind: "milestone" as const,
-      step: "sale_completion_started",
-      status: "started" as const,
-      message: `Sale completion started for ${args.traceSeed.trace.primaryLookupValue}`,
-      occurredAt: args.traceSeed.trace.startedAt,
-      source: args.traceSeed.eventSource,
-      subjectRefs: args.traceSeed.subjectRefs,
-    };
-  }
-
-  const occurredAt = args.completedAt ?? Date.now();
-  return {
-    storeId: args.traceSeed.trace.storeId,
-    traceId: args.traceSeed.trace.traceId,
-    workflowType: args.traceSeed.trace.workflowType,
-    kind: "milestone" as const,
-    step: "sale_completion_completed",
-    status: "succeeded" as const,
-    message: `Sale completion completed for ${args.traceSeed.trace.primaryLookupValue}`,
-    occurredAt,
-    source: args.traceSeed.eventSource,
-    subjectRefs: args.traceSeed.subjectRefs,
-    details: {
-      stage: args.stage,
-      transactionId: args.transactionId,
-    },
-  };
-}
-
-export async function recordPosSaleTraceBestEffort(
-  ctx: MutationCtx,
-  args: {
-    stage: "bootstrap" | "finalized";
-    traceSeed: PosSaleTraceSeed;
-    transactionId: Id<"posTransaction">;
-    completedAt?: number;
-  },
-) {
-  const traceRecord = buildPosSaleTraceRecord(args);
-  const event = buildPosSaleTraceEvent(args);
-  let traceCreated = false;
-
-  const safeWrite = async (label: string, action: () => Promise<unknown>) => {
-    await safeTraceWrite(label, action);
-  };
-
-  await safeWrite("pos.sale.trace.create", async () => {
-    await createWorkflowTraceWithCtx(ctx, traceRecord);
-    traceCreated = true;
-  });
-
-  await safeWrite("pos.sale.trace.lookup", async () => {
-    await registerWorkflowTraceLookupWithCtx(ctx, args.traceSeed.lookup);
-  });
-
-  await safeWrite("pos.sale.trace.event", async () => {
-    await appendWorkflowTraceEventWithCtx(ctx, event);
-  });
-
-  return {
-    traceCreated,
-    traceId: args.traceSeed.trace.traceId,
-  };
-}
-
-async function persistWorkflowTraceIdBestEffort(
-  ctx: MutationCtx,
-  args: {
-    traceCreated: boolean;
-    traceId: string;
-    transactionId: Id<"posTransaction">;
-  },
-) {
-  if (!args.traceCreated) {
-    return;
-  }
-
-  await safeTraceWrite("pos.sale.trace.transaction-link", async () => {
-    await patchPosTransaction(ctx, args.transactionId, {
-      workflowTraceId: args.traceId,
-    });
-  });
 }
 
 async function resolveSessionRegisterSessionId(
@@ -427,7 +291,6 @@ export async function completeTransaction(
   const changeGiven = totalPaid > args.total ? totalPaid - args.total : undefined;
   const primaryPaymentMethod = args.payments[0]?.method || "cash";
   const transactionNumber = generateTransactionNumber();
-  const traceStartedAt = Date.now();
   const completedAt = Date.now();
 
   const transactionId = await createPosTransaction(ctx, {
@@ -452,28 +315,6 @@ export async function completeTransaction(
     receiptPrinted: false,
   });
   const store = await getStoreById(ctx, args.storeId);
-  const traceSeed = buildPosSaleTraceSeed({
-    storeId: args.storeId,
-    organizationId: store?.organizationId,
-    startedAt: traceStartedAt,
-    transactionNumber,
-    posTransactionId: transactionId,
-    registerSessionId: args.registerSessionId,
-    staffProfileId: args.staffProfileId,
-    terminalId: args.terminalId,
-    customerId: args.customerId,
-  });
-
-  const bootstrapTrace = await recordPosSaleTraceBestEffort(ctx, {
-    stage: "bootstrap",
-    traceSeed,
-    transactionId,
-  });
-
-  await persistWorkflowTraceIdBestEffort(ctx, {
-    ...bootstrapTrace,
-    transactionId,
-  });
 
   if (args.registerSessionId) {
     const sessionTerminalId = args.terminalId;
@@ -550,18 +391,6 @@ export async function completeTransaction(
       return transactionItemId;
     }),
   );
-
-  const finalizedTrace = await recordPosSaleTraceBestEffort(ctx, {
-    stage: "finalized",
-    traceSeed,
-    transactionId,
-    completedAt: Date.now(),
-  });
-
-  await persistWorkflowTraceIdBestEffort(ctx, {
-    ...finalizedTrace,
-    transactionId,
-  });
 
   return ok({
     transactionId: completionResult.data.transactionId,
@@ -734,7 +563,6 @@ export async function createTransactionFromSessionHandler(
   const changeGiven = totalPaid > total ? totalPaid - total : undefined;
   const primaryPaymentMethod = args.payments[0]?.method || "cash";
   const transactionNumber = generateTransactionNumber();
-  const traceStartedAt = Date.now();
   const completedAt = Date.now();
 
   const transactionId = await createPosTransaction(ctx, {
@@ -760,28 +588,6 @@ export async function createTransactionFromSessionHandler(
     notes: args.notes,
   });
   const store = await getStoreById(ctx, session.storeId);
-  const traceSeed = buildPosSaleTraceSeed({
-    storeId: session.storeId,
-    organizationId: store?.organizationId,
-    startedAt: traceStartedAt,
-    transactionNumber,
-    posTransactionId: transactionId,
-    registerSessionId: resolvedRegisterSessionId.data,
-    staffProfileId: session.staffProfileId,
-    terminalId: session.terminalId,
-    customerId: session.customerId,
-  });
-
-  const bootstrapTrace = await recordPosSaleTraceBestEffort(ctx, {
-    stage: "bootstrap",
-    traceSeed,
-    transactionId,
-  });
-
-  await persistWorkflowTraceIdBestEffort(ctx, {
-    ...bootstrapTrace,
-    transactionId,
-  });
 
   if (args.recordRegisterSale !== false) {
     await recordRegisterSessionSale(ctx, {
@@ -854,18 +660,6 @@ export async function createTransactionFromSessionHandler(
   await patchPosSession(ctx, args.sessionId, {
     transactionId,
     registerSessionId: resolvedRegisterSessionId.data,
-  });
-
-  const finalizedTrace = await recordPosSaleTraceBestEffort(ctx, {
-    stage: "finalized",
-    traceSeed,
-    transactionId,
-    completedAt: Date.now(),
-  });
-
-  await persistWorkflowTraceIdBestEffort(ctx, {
-    ...finalizedTrace,
-    transactionId,
   });
 
   return ok({

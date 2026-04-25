@@ -13,21 +13,6 @@ vi.mock("@tanstack/react-router", () => ({
   }) => <a className={className}>{children}</a>,
 }));
 
-vi.mock("./WorkflowTraceLink", () => ({
-  WorkflowTraceLink: ({
-    transactionNumber,
-    children,
-  }: {
-    transactionNumber: string;
-    children?: React.ReactNode;
-  }) => (
-    <span data-testid="trace-link">
-      {transactionNumber}
-      {children ? `:${children}` : ""}
-    </span>
-  ),
-}));
-
 vi.mock("../../traces/WorkflowTraceRouteLink", () => ({
   WorkflowTraceRouteLink: ({
     traceId,
@@ -68,7 +53,7 @@ function renderTransactionCell(row: CompletedTransactionRow) {
 }
 
 describe("transactionColumns", () => {
-  it("renders the workflow trace link when the completed transaction has a trace", () => {
+  it("renders the session trace link when the completed transaction has a session trace", () => {
     renderTransactionCell({
       _id: "txn_1" as CompletedTransactionRow["_id"],
       transactionNumber: "POS-123456",
@@ -80,13 +65,9 @@ describe("transactionColumns", () => {
       itemCount: 2,
       completedAt: 100,
       hasTrace: true,
-      saleTraceId: "pos_sale:pos-123456",
       sessionTraceId: "pos_session:ses-001",
     });
 
-    expect(screen.getByTestId("trace-link")).toHaveTextContent(
-      "POS-123456:Sale trace",
-    );
     expect(screen.getByTestId("session-trace-link")).toHaveTextContent(
       "pos_session:ses-001:Session trace",
     );
@@ -104,11 +85,9 @@ describe("transactionColumns", () => {
       itemCount: 1,
       completedAt: 100,
       hasTrace: false,
-      saleTraceId: null,
       sessionTraceId: null,
     });
 
-    expect(screen.queryByTestId("trace-link")).not.toBeInTheDocument();
     expect(screen.queryByTestId("session-trace-link")).not.toBeInTheDocument();
   });
 });

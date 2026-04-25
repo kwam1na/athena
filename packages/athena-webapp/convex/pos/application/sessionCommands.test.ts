@@ -109,7 +109,7 @@ describe("createPosSessionCommandService", () => {
         registerNumber: "1",
         registerSessionId: "drawer-1",
         expiresAt: 61_000,
-        workflowTraceId: "pos_session:ses-001",
+        workflowTraceId: "pos_session:session-1",
       }),
     );
     expect(traceCalls).toEqual([
@@ -118,7 +118,7 @@ describe("createPosSessionCommandService", () => {
         sessionId: "session-1",
         sessionNumber: "SES-001",
         status: "active",
-        traceId: "pos_session:ses-001",
+        traceId: "pos_session:session-1",
       },
     ]);
   });
@@ -236,7 +236,7 @@ describe("createPosSessionCommandService", () => {
         sessionId: "session-4",
         sessionNumber: "SES-004",
         status: "held",
-        traceId: "pos_session:ses-004",
+        traceId: "pos_session:session-4",
         holdReason: "Auto-held when new session started",
       },
     ]);
@@ -254,7 +254,7 @@ describe("createPosSessionCommandService", () => {
           terminalId: "terminal-1",
           staffProfileId: "cashier-1",
           status: "active",
-          workflowTraceId: "pos_session:ses-002",
+          workflowTraceId: "pos_session:session-2",
           expiresAt: 8_000,
           updatedAt: 500,
         }),
@@ -295,7 +295,7 @@ describe("createPosSessionCommandService", () => {
         sessionId: "session-2",
         sessionNumber: "SES-002",
         status: "held",
-        traceId: "pos_session:ses-002",
+        traceId: "pos_session:session-2",
         holdReason: "Customer stepped away",
       },
     ]);
@@ -717,7 +717,7 @@ describe("createPosSessionCommandService", () => {
         sessionId: "session-5",
         sessionNumber: "SES-005",
         status: "active",
-        traceId: "pos_session:ses-005",
+        traceId: "pos_session:session-5",
         itemName: "Sneaker",
         quantity: 2,
         previousQuantity: undefined,
@@ -814,7 +814,7 @@ describe("createPosSessionCommandService", () => {
         sessionId: "session-6",
         sessionNumber: "SES-006",
         status: "active",
-        traceId: "pos_session:ses-006",
+        traceId: "pos_session:session-6",
         itemName: "Sneaker",
         quantity: 5,
         previousQuantity: 2,
@@ -1069,7 +1069,7 @@ describe("createPosSessionCommandService", () => {
         sessionId: "session-7",
         sessionNumber: "SES-007",
         status: "active",
-        traceId: "pos_session:ses-007",
+        traceId: "pos_session:session-7",
         itemName: "Sneaker",
         quantity: 3,
         previousQuantity: undefined,
@@ -1343,7 +1343,7 @@ function createDependencies(options: {
 
         const traceResult = options.traceResult ?? {
           traceCreated: true,
-          traceId: `pos_session:${input.session.sessionNumber.toLowerCase()}`,
+          traceId: `pos_session:${input.session._id}`,
         };
         traceCall.traceId = traceResult.traceId;
         return traceResult;

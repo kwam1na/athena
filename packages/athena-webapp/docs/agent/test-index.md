@@ -81,7 +81,6 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/storeFront/returnExchangeOperations.test.ts`](../../convex/storeFront/returnExchangeOperations.test.ts)
 - [`convex/storeFront/storefrontObservabilityReport.test.ts`](../../convex/storeFront/storefrontObservabilityReport.test.ts)
 - [`convex/storeFront/timeQueryRefactors.test.ts`](../../convex/storeFront/timeQueryRefactors.test.ts)
-- [`convex/workflowTraces/adapters/posSale.test.ts`](../../convex/workflowTraces/adapters/posSale.test.ts)
 - [`convex/workflowTraces/adapters/posSession.test.ts`](../../convex/workflowTraces/adapters/posSession.test.ts)
 - [`convex/workflowTraces/adapters/registerSession.test.ts`](../../convex/workflowTraces/adapters/registerSession.test.ts)
 - [`convex/workflowTraces/presentation.test.ts`](../../convex/workflowTraces/presentation.test.ts)
@@ -120,7 +119,6 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/pos/session/HeldSessionsList.test.tsx`](../../src/components/pos/session/HeldSessionsList.test.tsx)
 - [`src/components/pos/transactions/TransactionView.test.tsx`](../../src/components/pos/transactions/TransactionView.test.tsx)
 - [`src/components/pos/transactions/TransactionsView.test.tsx`](../../src/components/pos/transactions/TransactionsView.test.tsx)
-- [`src/components/pos/transactions/WorkflowTraceLink.test.tsx`](../../src/components/pos/transactions/WorkflowTraceLink.test.tsx)
 - [`src/components/pos/transactions/transactionColumns.test.tsx`](../../src/components/pos/transactions/transactionColumns.test.tsx)
 - [`src/components/procurement/ProcurementView.test.tsx`](../../src/components/procurement/ProcurementView.test.tsx)
 - [`src/components/procurement/ReceivingView.test.tsx`](../../src/components/procurement/ReceivingView.test.tsx)
@@ -174,4 +172,3 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/tests/pos/inventoryValidationLogic.test.ts`](../../src/tests/pos/inventoryValidationLogic.test.ts)
 - [`src/tests/pos/simple.test.ts`](../../src/tests/pos/simple.test.ts)
 - [`src/tests/pos/usePrint.test.ts`](../../src/tests/pos/usePrint.test.ts)
-
