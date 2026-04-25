@@ -220,7 +220,7 @@ export async function quickAddCatalogItem(
 
   const productId = await ctx.db.insert("product", {
     availability: "live",
-    areProcessingFeesAbsorbed: true,
+    areProcessingFeesAbsorbed: false,
     attributes: {},
     categoryId: category._id,
     createdByUserId: args.createdByUserId,
