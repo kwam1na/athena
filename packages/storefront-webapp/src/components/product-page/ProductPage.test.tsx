@@ -1,64 +1,134 @@
-import type { HTMLAttributes, ReactNode } from "react";
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { type HTMLAttributes, type ReactNode } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import ProductPage from "./ProductPage";
-import { useProductPageLogic } from "@/hooks/useProductPageLogic";
+
+const useProductPageLogicMock = vi.fn();
 
 vi.mock("framer-motion", () => ({
   AnimatePresence: ({ children }: { children: ReactNode }) => children,
   motion: {
-    main: ({ children, ...props }: HTMLAttributes<HTMLElement>) => (
-      <main {...props}>{children}</main>
-    ),
     div: ({ children, ...props }: HTMLAttributes<HTMLDivElement>) => (
       <div {...props}>{children}</div>
     ),
+    main: ({ children, ...props }: HTMLAttributes<HTMLElement>) => (
+      <main {...props}>{children}</main>
+    ),
   },
+}));
+
+vi.mock("@/hooks/useProductPageLogic", () => ({
+  useProductPageLogic: () => useProductPageLogicMock(),
+}));
+
+vi.mock("@/hooks/useTrackAction", () => ({
+  useTrackAction: vi.fn(),
 }));
 
 vi.mock("@/contexts/StoreContext", () => ({
   useStoreContext: () => ({ store: {} }),
 }));
 
-vi.mock("@/hooks/useTrackAction", () => ({
-  useTrackAction: () => ({ track: vi.fn() }),
+vi.mock("../states/not-found/NotFound", () => ({
+  default: () => <div>The page you're looking for does not exist</div>,
 }));
 
-vi.mock("@/hooks/useProductPageLogic", () => ({
-  useProductPageLogic: vi.fn(),
-}));
+const makePageState = (overrides = {}) =>
+  ({
+    productSlug: "product-id",
+    product: { _id: "product-id", skus: [] },
+    error: false,
+    selectedSku: null,
+    setSelectedSku: vi.fn(),
+    isSheetOpen: false,
+    setIsSheetOpen: vi.fn(),
+    sheetContent: { current: null },
+    handleUpdateBag: vi.fn(),
+    handleUpdateSavedBag: vi.fn(),
+    savedBagItem: null,
+    formatter: new Intl.NumberFormat("en-US"),
+    isSoldOut: false,
+    isLowStock: false,
+    isPromoCodeItem: false,
+    addedItemSuccessfully: null,
+    isUpdatingBag: false,
+    bagAction: "add" as const,
+    productDiscount: null,
+    ...overrides,
+  }) as any;
 
-vi.mock("@/lib/storeConfig", () => ({
-  getStoreFallbackImageUrl: () => "https://example.com/fallback.jpg",
-}));
+beforeEach(() => {
+  window.scrollTo = vi.fn();
+  cleanup();
+  useProductPageLogicMock.mockReset();
+});
+
+afterEach(() => {
+  cleanup();
+});
 
 describe("ProductPage", () => {
-  it("renders not found when a product has no visible skus", () => {
-    vi.mocked(useProductPageLogic).mockReturnValue({
-      productSlug: "sample-product",
-      product: {
-        _id: "product-1",
-        skus: [],
-      },
-      error: null,
-      selectedSku: null,
-      setSelectedSku: vi.fn(),
-      isSheetOpen: false,
-      setIsSheetOpen: vi.fn(),
-      sheetContent: { current: null },
-      handleUpdateBag: vi.fn(),
-      handleUpdateSavedBag: vi.fn(),
-      savedBagItem: null,
-      formatter: (value: number) => `${value}`,
-      isSoldOut: false,
-      isLowStock: false,
-      isPromoCodeItem: false,
-      addedItemSuccessfully: false,
-      isUpdatingBag: false,
-      bagAction: "add",
-      productDiscount: null,
-    } as any);
+  it("shows not found for a hidden product", () => {
+    useProductPageLogicMock.mockReturnValue(
+      makePageState({
+        product: {
+          _id: "product-id",
+          isVisible: false,
+          skus: [{ _id: "sku-id", images: [], price: 1000, isVisible: true }],
+        },
+        selectedSku: {
+          _id: "sku-id",
+          sku: "SKU-ID",
+          images: [],
+          price: 1000,
+          isVisible: true,
+        },
+      }),
+    );
+
+    render(<ProductPage />);
+
+    expect(
+      screen.getByText("The page you're looking for does not exist"),
+    ).toBeInTheDocument();
+  });
+
+  it("shows not found when the single visible product SKU is hidden", () => {
+    useProductPageLogicMock.mockReturnValue(
+      makePageState({
+        product: {
+          _id: "product-id",
+          skus: [{ _id: "sku-id", images: [], price: 1000, isVisible: false }],
+        },
+        selectedSku: {
+          _id: "sku-id",
+          sku: "SKU-ID",
+          images: [],
+          price: 1000,
+          isVisible: false,
+        },
+      }),
+    );
+
+    render(<ProductPage />);
+
+    expect(
+      screen.getByText("The page you're looking for does not exist"),
+    ).toBeInTheDocument();
+  });
+
+  it("shows not found when backend returns no visible single SKU", () => {
+    useProductPageLogicMock.mockReturnValue(
+      makePageState({
+        product: {
+          _id: "product-id",
+          isVisible: true,
+          skus: [],
+        },
+        selectedSku: null,
+      }),
+    );
 
     render(<ProductPage />);
 
