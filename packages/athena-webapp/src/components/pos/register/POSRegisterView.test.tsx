@@ -81,13 +81,16 @@ vi.mock("./RegisterCustomerPanel", () => ({
 vi.mock("./RegisterCheckoutPanel", () => ({
   RegisterCheckoutPanel: ({
     onPaymentFlowChange,
+    onPaymentEntryStart,
   }: {
     onPaymentFlowChange: (active: boolean) => void;
+    onPaymentEntryStart: () => void;
   }) => (
     <div>
       <button onClick={() => onPaymentFlowChange(true)}>
         activate-payment-flow
       </button>
+      <button onClick={onPaymentEntryStart}>start-payment-entry</button>
       <div>register-checkout-panel</div>
     </div>
   ),
@@ -158,6 +161,7 @@ describe("POSRegisterView", () => {
   });
 
   it("returns to product entry when a paid sale starts a new product search", async () => {
+    const setProductSearchQuery = vi.fn();
     const baseViewModel = {
       hasActiveStore: true,
       header: {
@@ -173,7 +177,7 @@ describe("POSRegisterView", () => {
       productEntry: {
         disabled: false,
         productSearchQuery: "",
-        setProductSearchQuery: vi.fn(),
+        setProductSearchQuery,
         onBarcodeSubmit: vi.fn(),
       },
       cart: {
@@ -213,6 +217,14 @@ describe("POSRegisterView", () => {
     await waitFor(() => {
       expect(screen.getByText("product-entry")).toBeInTheDocument();
     });
+
+    await userEvent.click(screen.getByText("activate-payment-flow"));
+
+    expect(setProductSearchQuery).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByText("start-payment-entry"));
+
+    expect(setProductSearchQuery).toHaveBeenCalledWith("");
   });
 
   it("renders the drawer gate instead of the selling surface while drawer setup is pending", async () => {

@@ -10,7 +10,7 @@ import { useSidebar } from "@/components/ui/sidebar";
 import View from "@/components/View";
 import { cn } from "~/src/lib/utils";
 import { ScanBarcode, Search } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useRegisterViewModel } from "@/lib/pos/presentation/register/useRegisterViewModel";
 
@@ -133,6 +133,18 @@ export function POSRegisterView() {
       setIsPaymentInputActive(false);
     }
   }, [hasProductSearchIntent, isPaymentInputActive]);
+
+  const handlePaymentFlowChange = useCallback((isActive: boolean) => {
+    setIsPaymentInputActive(isActive);
+  }, []);
+
+  const handlePaymentEntryStart = useCallback(() => {
+    if (hasProductSearchIntent) {
+      viewModel.productEntry?.setProductSearchQuery?.("");
+    }
+
+    setIsPaymentInputActive(true);
+  }, [hasProductSearchIntent, viewModel.productEntry]);
 
   if (!viewModel.hasActiveStore) {
     return (
@@ -302,7 +314,8 @@ export function POSRegisterView() {
                     <RegisterCheckoutPanel
                       checkout={viewModel.checkout}
                       cashierCard={viewModel.cashierCard}
-                      onPaymentFlowChange={setIsPaymentInputActive}
+                      onPaymentFlowChange={handlePaymentFlowChange}
+                      onPaymentEntryStart={handlePaymentEntryStart}
                     />
                   </div>
                 </div>
