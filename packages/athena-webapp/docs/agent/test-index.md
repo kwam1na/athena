@@ -122,6 +122,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/pos/transactions/transactionColumns.test.tsx`](../../src/components/pos/transactions/transactionColumns.test.tsx)
 - [`src/components/procurement/ProcurementView.test.tsx`](../../src/components/procurement/ProcurementView.test.tsx)
 - [`src/components/procurement/ReceivingView.test.tsx`](../../src/components/procurement/ReceivingView.test.tsx)
+- [`src/components/product/ProductStatus.test.tsx`](../../src/components/product/ProductStatus.test.tsx)
 - [`src/components/promo-codes/PromoCodeHeader.test.tsx`](../../src/components/promo-codes/PromoCodeHeader.test.tsx)
 - [`src/components/promo-codes/promoCodeMoney.test.ts`](../../src/components/promo-codes/promoCodeMoney.test.ts)
 - [`src/components/services/ServiceAppointmentsView.test.tsx`](../../src/components/services/ServiceAppointmentsView.test.tsx)

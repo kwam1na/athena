@@ -23,7 +23,6 @@ import { usePermissions } from "~/src/hooks/usePermissions";
 import { FadeIn } from "../common/FadeIn";
 import { Skeleton } from "../ui/skeleton";
 import { useEffect } from "react";
-import { ProductStockStatus } from "./ProductStock";
 import { ProductStatus } from "./ProductStatus";
 
 export function ImagesView() {
@@ -83,13 +82,10 @@ export function ImagesView() {
               <div className="relative">
                 {i == 0 && (
                   <div className="font-medium text-xs absolute top-0 left-0 m-2">
-                    {activeProduct.isVisible ? (
-                      <ProductStockStatus
-                        productVariant={activeProductVariant}
-                      />
-                    ) : (
-                      <ProductStatus product={activeProduct} />
-                    )}
+                    <ProductStatus
+                      product={activeProduct}
+                      productVariant={activeProductVariant}
+                    />
                   </div>
                 )}
                 <img

@@ -81,10 +81,18 @@ export default function ProductPage() {
     setIsSheetOpen(true);
   };
 
+  const isSingleSkuHidden =
+    product?.skus?.length === 1 &&
+    (selectedSku as (typeof selectedSku & { isVisible?: boolean }))?.isVisible ===
+      false;
+
   if (error) return <NotFound />;
-  if (!selectedSku || !product) return <div className="h-screen" />;
+  if (!product) return <div className="h-screen" />;
+  if (product.skus.length === 0) return <NotFound />;
+  if (!selectedSku) return <div className="h-screen" />;
   if (
     product?.isVisible === false ||
+    isSingleSkuHidden ||
     isPromoCodeItem ||
     selectedSku.price === 0 ||
     selectedSku.price === undefined

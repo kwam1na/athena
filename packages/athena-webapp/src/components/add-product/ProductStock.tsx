@@ -835,39 +835,38 @@ function Stock({
 
                 <TableCell>
                   <div className="flex items-center gap-2">
-                    {productVariants.length > 1 && (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => setVisibility(variant.id)}
-                              disabled={
-                                isLastActiveVariant(index) ||
-                                isLastVisibleVariant(index) ||
-                                isSkuReserved(variant.sku)
-                              }
-                            >
-                              {(variant.isVisible == undefined ||
-                                variant.isVisible) && (
-                                <EyeOff className="w-4 h-4" />
-                              )}
-
-                              {variant.isVisible == false && (
-                                <Eye className="w-4 h-4 text-muted-foreground" />
-                              )}
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setVisibility(variant.id)}
+                            disabled={
+                              (productVariants.length > 1 &&
+                                (isLastActiveVariant(index) ||
+                                  isLastVisibleVariant(index))) ||
+                              isSkuReserved(variant.sku)
+                            }
+                          >
                             {(variant.isVisible == undefined ||
-                              variant.isVisible) && <p>Hide</p>}
+                              variant.isVisible) && (
+                              <EyeOff className="w-4 h-4" />
+                            )}
 
-                            {variant.isVisible == false && <p>Make visible</p>}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    )}
+                            {variant.isVisible == false && (
+                              <Eye className="w-4 h-4 text-muted-foreground" />
+                            )}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {(variant.isVisible == undefined ||
+                            variant.isVisible) && <p>Hide</p>}
+
+                          {variant.isVisible == false && <p>Make visible</p>}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
 
                     <TooltipProvider>
                       <Tooltip>
