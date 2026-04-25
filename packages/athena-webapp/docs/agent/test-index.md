@@ -116,6 +116,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/pos/SessionManager.test.tsx`](../../src/components/pos/SessionManager.test.tsx)
 - [`src/components/pos/TotalsDisplay.test.tsx`](../../src/components/pos/TotalsDisplay.test.tsx)
 - [`src/components/pos/register/POSRegisterView.test.tsx`](../../src/components/pos/register/POSRegisterView.test.tsx)
+- [`src/components/pos/register/RegisterCustomerAttribution.test.tsx`](../../src/components/pos/register/RegisterCustomerAttribution.test.tsx)
 - [`src/components/pos/session/HeldSessionsList.test.tsx`](../../src/components/pos/session/HeldSessionsList.test.tsx)
 - [`src/components/pos/transactions/TransactionView.test.tsx`](../../src/components/pos/transactions/TransactionView.test.tsx)
 - [`src/components/pos/transactions/TransactionsView.test.tsx`](../../src/components/pos/transactions/TransactionsView.test.tsx)
