@@ -31,6 +31,7 @@ productRoutes.get("/", async (c) => {
       category: categories,
       subcategory: subcategories,
       isVisible: isVisible,
+      excludeStorefrontHidden: isVisible,
     },
   );
 
@@ -90,6 +91,7 @@ productRoutes.get("/:productId", async (c) => {
     storeId: storeId as Id<"store">,
     filters: {
       isVisible: !!params.isVisible,
+      excludeStorefrontHidden: !!params.isVisible,
     },
   });
 

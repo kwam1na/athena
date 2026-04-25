@@ -129,6 +129,7 @@ import type * as paystack_index from "../paystack/index.js";
 import type * as pos_application_commands_assignCustomer from "../pos/application/commands/assignCustomer.js";
 import type * as pos_application_commands_completeTransaction from "../pos/application/commands/completeTransaction.js";
 import type * as pos_application_commands_posSessionTracing from "../pos/application/commands/posSessionTracing.js";
+import type * as pos_application_commands_quickAddCatalogItem from "../pos/application/commands/quickAddCatalogItem.js";
 import type * as pos_application_commands_register from "../pos/application/commands/register.js";
 import type * as pos_application_commands_sessionCommands from "../pos/application/commands/sessionCommands.js";
 import type * as pos_application_commands_terminals from "../pos/application/commands/terminals.js";
@@ -411,6 +412,7 @@ declare const fullApi: ApiFromModules<{
   "pos/application/commands/assignCustomer": typeof pos_application_commands_assignCustomer;
   "pos/application/commands/completeTransaction": typeof pos_application_commands_completeTransaction;
   "pos/application/commands/posSessionTracing": typeof pos_application_commands_posSessionTracing;
+  "pos/application/commands/quickAddCatalogItem": typeof pos_application_commands_quickAddCatalogItem;
   "pos/application/commands/register": typeof pos_application_commands_register;
   "pos/application/commands/sessionCommands": typeof pos_application_commands_sessionCommands;
   "pos/application/commands/terminals": typeof pos_application_commands_terminals;

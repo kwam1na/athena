@@ -5,6 +5,32 @@ import { action, internalAction } from "../_generated/server";
 import { api } from "../_generated/api";
 import { ValkeyClient } from "../cache";
 
+export function buildAllProductsCacheKey(args: {
+  storeId: string;
+  color?: string[];
+  length?: number[];
+  category?: string[];
+  subcategory?: string[];
+  isVisible?: boolean;
+  excludeStorefrontHidden?: boolean;
+}) {
+  const colorParam = args.color ? `:color:${args.color.join(",")}` : "";
+  const lengthParam = args.length ? `:length:${args.length.join(",")}` : "";
+  const categoryParam = args.category
+    ? `:category:${args.category.join(",")}`
+    : "";
+  const subcategoryParam = args.subcategory
+    ? `:subcategory:${args.subcategory.join(",")}`
+    : "";
+  const isVisibleParam =
+    args.isVisible === undefined ? "" : `:isVisible:${args.isVisible}`;
+  const storefrontHiddenParam = args.excludeStorefrontHidden
+    ? ":excludeStorefrontHidden:true"
+    : "";
+
+  return `all:products:{${args.storeId}}${colorParam}${lengthParam}${categoryParam}${subcategoryParam}${isVisibleParam}${storefrontHiddenParam}`;
+}
+
 export const getAllProducts = internalAction({
   args: {
     storeId: v.id("store"),
@@ -13,20 +39,10 @@ export const getAllProducts = internalAction({
     category: v.optional(v.array(v.string())),
     subcategory: v.optional(v.array(v.string())),
     isVisible: v.optional(v.boolean()),
+    excludeStorefrontHidden: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    // Create a cache key that includes all filter parameters
-    const colorParam = args.color ? `:color:${args.color.join(",")}` : "";
-    const lengthParam = args.length ? `:length:${args.length.join(",")}` : "";
-    const categoryParam = args.category
-      ? `:category:${args.category.join(",")}`
-      : "";
-    const subcategoryParam = args.subcategory
-      ? `:subcategory:${args.subcategory.join(",")}`
-      : "";
-
-    // Use hash tag for slot alignment
-    const cacheKey = `all:products:{${args.storeId}}${colorParam}${lengthParam}${categoryParam}${subcategoryParam}`;
+    const cacheKey = buildAllProductsCacheKey(args);
 
     try {
       const cache = new ValkeyClient();

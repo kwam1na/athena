@@ -5,6 +5,17 @@ import { api } from "../../../../_generated/api";
 import { Id } from "../../../../_generated/dataModel";
 
 const subcategoryRoutes: HonoWithConvex<ActionCtx> = new Hono();
+const STOREFRONT_HIDDEN_SUBCATEGORY_SLUGS = new Set(["uncategorized"]);
+
+export function removeStorefrontHiddenSubcategoryList<
+  T extends { slug?: string },
+>(subcategories: T[]) {
+  return subcategories.filter(
+    (subcategory) =>
+      !subcategory.slug ||
+      !STOREFRONT_HIDDEN_SUBCATEGORY_SLUGS.has(subcategory.slug),
+  );
+}
 
 subcategoryRoutes.post("/", async (c) => {
   const data = await c.req.json();
@@ -28,7 +39,9 @@ subcategoryRoutes.get("/", async (c) => {
     }
   );
 
-  return c.json({ subcategories });
+  return c.json({
+    subcategories: removeStorefrontHiddenSubcategoryList(subcategories),
+  });
 });
 
 subcategoryRoutes.put("/:subcategoryId", async (c) => {

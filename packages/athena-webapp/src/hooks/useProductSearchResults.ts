@@ -5,6 +5,7 @@ interface UseProductSearchResultsParams {
   barcodeSearchResult: Product | Product[] | null | undefined;
   productIdSearchResults: Product[] | null | undefined;
   inputIsUrlOrBarcode: boolean;
+  rawQuery: string;
   debouncedQuery: string;
 }
 
@@ -28,6 +29,7 @@ export function useProductSearchResults({
   barcodeSearchResult,
   productIdSearchResults,
   inputIsUrlOrBarcode,
+  rawQuery,
   debouncedQuery,
 }: UseProductSearchResultsParams): UseProductSearchResultsReturn {
   // Extract barcode results if it's an array
@@ -53,9 +55,10 @@ export function useProductSearchResults({
 
   // Check if currently loading search results
   const isLoading =
-    !inputIsUrlOrBarcode &&
-    searchResults === undefined &&
-    !productIdSearchResults;
+    rawQuery.trim().length > 0 &&
+    (inputIsUrlOrBarcode
+      ? barcodeSearchResult === undefined && productIdSearchResults === undefined
+      : searchResults === undefined && !productIdSearchResults);
 
   // Check if we have any results
   const hasResults = filteredProducts.length > 0;

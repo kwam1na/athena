@@ -73,7 +73,6 @@ export function OrderSummary({
   customerInfo,
   registerNumber,
   subtotal: propSubtotal,
-  tax: propTax,
   total: propTotal,
   payments = [],
   hasTerminal = true,
@@ -109,7 +108,6 @@ export function OrderSummary({
     completedTransactionData?.customerInfo ?? customerInfo;
   const summarySubtotal =
     completedTransactionData?.subtotal ?? propSubtotal ?? 0;
-  const summaryTax = completedTransactionData?.tax ?? propTax ?? 0;
   const total = completedTransactionData?.total ?? propTotal ?? 0;
   const totalPaid = calculatePosTotalPaid(payments);
   const remainingDue = calculatePosRemainingDue(totalPaid, total);
@@ -438,12 +436,6 @@ export function OrderSummary({
                 <span className="text-muted-foreground">Subtotal</span>
                 <span className="font-medium text-foreground">
                   {formatStoredAmount(formatter, summarySubtotal)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Tax</span>
-                <span className="font-medium text-foreground">
-                  {formatStoredAmount(formatter, summaryTax)}
                 </span>
               </div>
               <div className="flex items-center justify-between pt-2">

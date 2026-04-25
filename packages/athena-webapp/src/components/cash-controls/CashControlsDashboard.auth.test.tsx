@@ -36,7 +36,18 @@ vi.mock("@/hooks/useProtectedAdminPageState", () => ({
 }));
 
 vi.mock("../common/PageHeader", () => ({
-  SimplePageHeader: ({ title }: { title: string }) => <div>{title}</div>,
+  ComposedPageHeader: ({
+    leadingContent,
+    trailingContent,
+  }: {
+    leadingContent: React.ReactNode;
+    trailingContent?: React.ReactNode;
+  }) => (
+    <div>
+      <div>{leadingContent}</div>
+      <div>{trailingContent}</div>
+    </div>
+  ),
 }));
 
 const readyProtectedState = {

@@ -21,7 +21,7 @@ function hasOrgNotFoundPayload(data: unknown) {
 export const Route = createFileRoute(
   "/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/"
 )({
-  component: () => <CashControlsDashboard focus="overview" />,
+  component: CashControlsDashboard,
   notFoundComponent: ({ data }) => {
     const { orgUrlSlug, storeUrlSlug } = Route.useParams();
     const org = hasOrgNotFoundPayload(data);

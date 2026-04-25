@@ -11,17 +11,21 @@ import { RegisterCloseoutViewContent } from "./RegisterCloseoutView";
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
     children,
-    params: _params,
+    params,
     to,
     ...props
   }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
     params?: unknown;
     to?: string;
-  }) => (
-    <a href={to ?? "#"} {...props}>
-      {children}
-    </a>
-  ),
+  }) => {
+    void params;
+
+    return (
+      <a href={to ?? "#"} {...props}>
+        {children}
+      </a>
+    );
+  },
 }));
 
 const baseProps = {
@@ -86,7 +90,9 @@ describe("RegisterCloseoutViewContent", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders closeout forms and pending variance review actions", () => {
+  it("renders closeout forms and pending variance review actions", async () => {
+    const user = userEvent.setup();
+
     render(
       <RegisterCloseoutViewContent
         {...baseProps}
@@ -130,18 +136,23 @@ describe("RegisterCloseoutViewContent", () => {
       />,
     );
 
-    expect(screen.getByText("Register closeouts")).toBeInTheDocument();
     expect(screen.getByText("Register 2")).toBeInTheDocument();
     expect(screen.getByText("Register 4")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Approve variance" }))
+        .toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: "Reject variance" })).toBeInTheDocument();
+    expect(screen.getByText("Manager review required")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Variance of .* exceeded the closeout approval threshold\./),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Register 2/i }));
+
     expect(screen.getByLabelText("Counted cash for Register 2")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Submit closeout" })).toBeInTheDocument();
-    expect(screen.getByText("Variance review pending")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Approve variance" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Reject variance" })).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "View trace" }).length).toBeGreaterThan(0);
-    expect(
-      screen.getByText("Variance of -20 exceeded the closeout approval threshold."),
-    ).toBeInTheDocument();
   });
 
   it("submits display counted cash as minor units with notes for a register session", async () => {

@@ -203,26 +203,7 @@ export function AppSidebar() {
                         className="flex items-center"
                       >
                         <Store className="w-4 h-4 mr-2" />
-                        <p className="font-medium">Overview</p>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuSubItem>
-                </SidebarMenuSub>
-
-                <SidebarMenuSub>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuButton disabled={!canAccessOperations()} asChild>
-                      <Link
-                        to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers"
-                        params={(p) => ({
-                          ...p,
-                          orgUrlSlug: activeOrganization?.slug,
-                          storeUrlSlug: activeStore?.slug,
-                        })}
-                        className="flex items-center"
-                      >
-                        <ScanBarcode className="w-4 h-4 mr-2" />
-                        <p className="font-medium">Registers</p>
+                        <p className="font-medium">Cash Controls</p>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuSubItem>
