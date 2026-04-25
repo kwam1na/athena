@@ -4,33 +4,45 @@ import { Badge } from "../ui/badge";
 
 export const ProductStatus = ({ product }: { product: Product }) => {
   const getBadgeStyles = () => {
+    if (!product.isVisible) {
+      return {
+        bg: "bg-zinc-100 text-zinc-700",
+        text: "text-zinc-700",
+      };
+    }
+
     if (product.inventoryCount === 0)
       return {
         bg: "bg-red-100 text-red-700",
         text: "text-red-700",
       };
+
     if (product.inventoryCount <= 2)
       return {
         bg: "bg-amber-100 text-amber-700",
         text: "text-amber-700",
       };
 
-    if (product.isVisible) {
-      return {
-        bg: "bg-green-100 text-green-700",
-        text: "text-green-700",
-      };
-    } else {
-      return {
-        bg: "bg-zinc-100 text-zinc-700",
-        text: "text-zinc-700",
-      };
-    }
+    return {
+      bg: "bg-green-100 text-green-700",
+      text: "text-green-700",
+    };
   };
 
   const { bg, text } = getBadgeStyles();
 
   const visibility = product.isVisible ? "Live" : "Hidden";
+
+  if (!product.isVisible) {
+    return (
+      <Badge variant="outline" className={`${bg}`}>
+        <div className="flex items-center text-xs">
+          <EyeOff className="w-3.5 h-3.5 mr-2 text-zinc-700" />
+          <p className={text}>Hidden</p>
+        </div>
+      </Badge>
+    );
+  }
 
   return (
     <Badge variant="outline" className={`${bg}`}>
@@ -47,13 +59,7 @@ export const ProductStatus = ({ product }: { product: Product }) => {
           </>
         ) : (
           <>
-            {product.isVisible && (
-              <div className={`h-2 w-2 mr-2 rounded bg-green-700`} />
-            )}
-
-            {!product.isVisible && (
-              <EyeOff className="w-3.5 h-3.5 mr-2 text-zinc-700" />
-            )}
+            <div className={`h-2 w-2 mr-2 rounded bg-green-700`} />
             <p className={text}>{visibility}</p>
           </>
         )}
