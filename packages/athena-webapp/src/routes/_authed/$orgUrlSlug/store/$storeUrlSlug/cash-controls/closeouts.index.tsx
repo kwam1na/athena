@@ -1,11 +1,10 @@
-import { Link, createFileRoute, useParams } from "@tanstack/react-router";
+import { createFileRoute, useParams } from "@tanstack/react-router";
 
+import { CashControlsWorkspaceHeader } from "~/src/components/cash-controls/CashControlsWorkspaceHeader";
 import { RegisterCloseoutView } from "~/src/components/cash-controls/RegisterCloseoutView";
 import View from "~/src/components/View";
 import { FadeIn } from "~/src/components/common/FadeIn";
-import { SimplePageHeader } from "~/src/components/common/PageHeader";
 import { NotFoundView } from "~/src/components/states/not-found/NotFoundView";
-import { Button } from "~/src/components/ui/button";
 
 function hasOrgNotFoundPayload(data: unknown) {
   if (!data || typeof data !== "object" || !("data" in data)) {
@@ -32,55 +31,22 @@ function CashControlsCloseoutsRoute() {
 
   return (
     <View
+      hideBorder
+      hideHeaderBottomBorder
       header={
-        <SimplePageHeader
-          className="text-lg font-semibold"
-          title="Register Closeouts"
-        />
+        params?.orgUrlSlug && params.storeUrlSlug ? (
+          <CashControlsWorkspaceHeader
+            activeView="closeouts"
+            description="Count one drawer at a time, review flagged variances, and move the closeout queue forward without losing context."
+            orgUrlSlug={params.orgUrlSlug}
+            storeUrlSlug={params.storeUrlSlug}
+            title="Register closeouts"
+          />
+        ) : null
       }
     >
-      <FadeIn>
-        <div className="container mx-auto space-y-6 p-6">
-          {params?.orgUrlSlug && params.storeUrlSlug ? (
-            <div className="flex flex-wrap gap-2">
-              <Button asChild size="sm" variant="outline">
-                <Link
-                  params={{
-                    orgUrlSlug: params.orgUrlSlug,
-                    storeUrlSlug: params.storeUrlSlug,
-                  }}
-                  to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls"
-                >
-                  Overview
-                </Link>
-              </Button>
-              <Button asChild size="sm" variant="outline">
-                <Link
-                  params={{
-                    orgUrlSlug: params.orgUrlSlug,
-                    storeUrlSlug: params.storeUrlSlug,
-                  }}
-                  to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers"
-                >
-                  Registers
-                </Link>
-              </Button>
-              <Button asChild size="sm">
-                <Link
-                  params={{
-                    orgUrlSlug: params.orgUrlSlug,
-                    storeUrlSlug: params.storeUrlSlug,
-                  }}
-                  to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/closeouts"
-                >
-                  Closeouts
-                </Link>
-              </Button>
-            </div>
-          ) : null}
-
-          <RegisterCloseoutView />
-        </div>
+      <FadeIn className="container mx-auto py-8">
+        <RegisterCloseoutView />
       </FadeIn>
     </View>
   );

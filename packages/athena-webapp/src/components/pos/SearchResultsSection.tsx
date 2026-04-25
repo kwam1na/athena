@@ -1,7 +1,8 @@
-import { Search } from "lucide-react";
+import { Loader2, PackagePlus, Search } from "lucide-react";
 import { Product } from "./types";
 import { ProductCard } from "./ProductCard";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 interface SearchResultsSectionProps {
   isLoading: boolean;
@@ -9,6 +10,8 @@ interface SearchResultsSectionProps {
   onAddProduct: (product: Product) => void;
   formatter: Intl.NumberFormat;
   onClearSearch: () => void;
+  onQuickAddProduct?: () => void;
+  quickAddQuery?: string;
   className?: string;
 }
 
@@ -18,18 +21,20 @@ export function SearchResultsSection({
   onAddProduct,
   formatter,
   onClearSearch,
+  onQuickAddProduct,
+  quickAddQuery,
   className,
 }: SearchResultsSectionProps) {
-  //   if (isLoading) {
-  //     return (
-  //       <div className="max-h-[586px] overflow-y-auto space-y-1">
-  //         <div className="text-center py-8 text-gray-500">
-  //           {/* <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" /> */}
-  //           {/* <p className="text-sm font-medium">Searching products...</p> */}
-  //         </div>
-  //       </div>
-  //     );
-  //   }
+  if (isLoading) {
+    return (
+      <div className={cn("max-h-[586px] space-y-1 overflow-y-auto", className)}>
+        <div className="flex h-full flex-col items-center justify-center py-8 text-center text-gray-500">
+          <Loader2 className="mb-3 h-6 w-6 animate-spin text-gray-400" />
+          <p className="text-sm font-medium">Searching products...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (products.length === 0) {
     return (
@@ -47,6 +52,17 @@ export function SearchResultsSection({
           <p className="text-xs text-gray-400 mt-1">
             Try a different search term or check spelling
           </p>
+          {onQuickAddProduct && quickAddQuery?.trim() && (
+            <Button
+              type="button"
+              size="sm"
+              className="mt-5"
+              onClick={onQuickAddProduct}
+            >
+              <PackagePlus className="mr-2 h-4 w-4" />
+              Quick add product
+            </Button>
+          )}
         </div>
       </div>
     );

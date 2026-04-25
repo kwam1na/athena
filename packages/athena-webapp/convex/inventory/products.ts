@@ -80,6 +80,7 @@ export const getAll = query({
     category: v.optional(v.array(v.string())),
     subcategory: v.optional(v.array(v.string())),
     isVisible: v.optional(v.boolean()),
+    excludeStorefrontHidden: v.optional(v.boolean()),
     filters: v.optional(
       v.object({
         isMissingImages: v.optional(v.boolean()),
@@ -139,8 +140,42 @@ export const getAll = query({
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
       .collect();
 
+    const storefrontHiddenCategoryIds = new Set<Id<"category">>();
+    const storefrontHiddenSubcategoryIds = new Set<Id<"subcategory">>();
+
+    if (args.excludeStorefrontHidden) {
+      const quickAddCategory = await ctx.db
+        .query("category")
+        .withIndex("by_storeId_slug", (q) =>
+          q.eq("storeId", args.storeId).eq("slug", "pos-quick-add")
+        )
+        .first();
+
+      if (quickAddCategory) {
+        storefrontHiddenCategoryIds.add(quickAddCategory._id);
+      }
+
+      const uncategorizedSubcategories = await ctx.db
+        .query("subcategory")
+        .withIndex("by_slug", (q) => q.eq("slug", "uncategorized"))
+        .collect();
+
+      uncategorizedSubcategories
+        .filter((subcategory) => subcategory.storeId === args.storeId)
+        .forEach((subcategory) =>
+          storefrontHiddenSubcategoryIds.add(subcategory._id)
+        );
+    }
+
     // Filter by category/subcategory in memory
     const products = allProducts.filter((product) => {
+      if (
+        storefrontHiddenCategoryIds.has(product.categoryId) ||
+        storefrontHiddenSubcategoryIds.has(product.subcategoryId)
+      ) {
+        return false;
+      }
+
       if (subcategoryId) {
         return product.subcategoryId === subcategoryId;
       }
@@ -409,6 +444,7 @@ export const getByIdOrSlug = query({
     filters: v.optional(
       v.object({
         isVisible: v.boolean(),
+        excludeStorefrontHidden: v.optional(v.boolean()),
       })
     ),
     storeId: v.id("store"),
@@ -473,6 +509,13 @@ export const getByIdOrSlug = query({
 
       categorySlug = productCategory?.slug;
       subcategorySlug = productSubcategory?.slug;
+    }
+
+    if (
+      args.filters?.excludeStorefrontHidden &&
+      (categorySlug === "pos-quick-add" || subcategorySlug === "uncategorized")
+    ) {
+      return null;
     }
 
     const skusWithCategory = skus
@@ -581,8 +624,9 @@ export const createSku = mutation({
     const tempSkuId = await ctx.db.insert("productSku", tempSkuData);
 
     // Generate SKU if not provided
+    const requestedSku = args.sku?.trim();
     const sku =
-      args.sku ||
+      requestedSku ||
       generateSKU({
         storeId: product.storeId,
         productId: product._id,
@@ -730,6 +774,15 @@ export const updateSku = mutation({
       }
     }
 
+    const generatedSku =
+      args.sku !== undefined && args.sku.trim().length === 0
+        ? generateSKU({
+            storeId: currentSku.storeId,
+            productId: currentSku.productId,
+            skuId: currentSku._id,
+          })
+        : undefined;
+
     // Build patch object with only explicitly provided fields (not undefined)
     // This automatically handles all fields without needing to list each one
     const patch = Object.fromEntries(
@@ -737,6 +790,10 @@ export const updateSku = mutation({
         ([key, value]) => key !== "id" && value !== undefined
       )
     );
+
+    if (generatedSku) {
+      patch.sku = generatedSku;
+    }
 
     await ctx.db.patch("productSku", args.id, patch);
 

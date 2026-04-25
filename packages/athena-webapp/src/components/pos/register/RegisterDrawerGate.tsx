@@ -27,7 +27,7 @@ function CashControlsButton({
         search={{
           o: getOrigin(),
         }}
-        to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers"
+        to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls"
       >
         Cash controls
         <ArrowRightIcon className="ml-2 h-4 w-4" />

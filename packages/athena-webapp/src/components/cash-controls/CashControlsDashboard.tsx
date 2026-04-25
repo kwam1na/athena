@@ -1,4 +1,4 @@
-import { Link, useParams } from "@tanstack/react-router";
+import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { motion } from "framer-motion";
 
@@ -8,13 +8,11 @@ import { formatStoredAmount } from "@/lib/pos/displayAmounts";
 import { api } from "~/convex/_generated/api";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
-import { SimplePageHeader } from "../common/PageHeader";
 import { EmptyState } from "../states/empty/empty-state";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { WorkflowTraceRouteLink } from "../traces/WorkflowTraceRouteLink";
 import {
   Table,
   TableBody,
@@ -24,6 +22,7 @@ import {
   TableRow,
 } from "../ui/table";
 import { getOrigin } from "~/src/lib/navigationUtils";
+import { CashControlsWorkspaceHeader } from "./CashControlsWorkspaceHeader";
 
 const containerVariants = {
   hidden: {},
@@ -83,12 +82,9 @@ export type CashControlsDashboardSnapshot = {
   unresolvedVariances: CashControlsDashboardSession[];
 };
 
-type CashControlsDashboardFocus = "overview" | "registers";
-
 type CashControlsDashboardContentProps = {
   currency: string;
   dashboardSnapshot: CashControlsDashboardSnapshot;
-  focus: CashControlsDashboardFocus;
   isLoading: boolean;
   orgUrlSlug: string;
   storeUrlSlug: string;
@@ -128,11 +124,9 @@ function getVarianceTone(variance?: number) {
 
 function SummaryStrip({
   currency,
-  focus,
   snapshot,
 }: {
   currency: string;
-  focus: CashControlsDashboardFocus;
   snapshot: CashControlsDashboardSnapshot;
 }) {
   const expectedCashTotal = snapshot.openSessions.reduce(
@@ -144,50 +138,30 @@ function SummaryStrip({
     0,
   );
 
-  const items =
-    focus === "overview"
-      ? [
-          {
-            label: "Open sessions",
-            value: String(snapshot.openSessions.length),
-          },
-          {
-            label: "Pending closeouts",
-            value: String(snapshot.pendingCloseouts.length),
-          },
-          {
-            label: "Unresolved variances",
-            value: String(snapshot.unresolvedVariances.length),
-          },
-          {
-            label: "Recent deposits",
-            value: String(snapshot.recentDeposits.length),
-          },
-        ]
-      : [
-          {
-            label: "Open sessions",
-            value: String(snapshot.openSessions.length),
-          },
-          {
-            label: "Expected cash",
-            value: formatCurrency(currency, expectedCashTotal),
-          },
-          {
-            label: "Deposited",
-            value: formatCurrency(currency, depositedTotal),
-          },
-          {
-            label: "Recent deposits",
-            value: String(snapshot.recentDeposits.length),
-          },
-        ];
+  const items = [
+    {
+      label: "Open sessions",
+      value: String(snapshot.openSessions.length),
+    },
+    {
+      label: "Expected cash",
+      value: formatCurrency(currency, expectedCashTotal),
+    },
+    {
+      label: "Deposited",
+      value: formatCurrency(currency, depositedTotal),
+    },
+    {
+      label: "Recent deposits",
+      value: String(snapshot.recentDeposits.length),
+    },
+  ];
 
   return (
     <dl className="grid gap-4 sm:grid-cols-2">
       {items.map((item) => (
         <div
-          className="space-y-1 border-b border-stone-200/70 pb-3 last:border-b-0 last:pb-0"
+          className="space-y-1 border-b border-stone-200/70 pb-3 last:border-b-0 last:pb-0 sm:[&:nth-last-child(-n+2)]:border-b-0 sm:[&:nth-last-child(-n+2)]:pb-0"
           key={item.label}
         >
           <dt className="text-[11px] font-medium uppercase tracking-[0.24em] text-amber-800/70">
@@ -199,68 +173,6 @@ function SummaryStrip({
         </div>
       ))}
     </dl>
-  );
-}
-
-function DashboardNav({
-  focus,
-  orgUrlSlug,
-  storeUrlSlug,
-}: {
-  focus: CashControlsDashboardFocus;
-  orgUrlSlug: string;
-  storeUrlSlug: string;
-}) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      <Button
-        asChild
-        className={
-          focus === "overview"
-            ? "bg-stone-950 text-stone-50 hover:bg-stone-950/90"
-            : "border-stone-300 bg-transparent text-stone-700 hover:bg-stone-100"
-        }
-        size="sm"
-        variant="outline"
-      >
-        <Link
-          params={{ orgUrlSlug, storeUrlSlug }}
-          to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls"
-        >
-          Overview
-        </Link>
-      </Button>
-      <Button
-        asChild
-        className={
-          focus === "registers"
-            ? "bg-stone-950 text-stone-50 hover:bg-stone-950/90"
-            : "border-stone-300 bg-transparent text-stone-700 hover:bg-stone-100"
-        }
-        size="sm"
-        variant="outline"
-      >
-        <Link
-          params={{ orgUrlSlug, storeUrlSlug }}
-          to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers"
-        >
-          Registers
-        </Link>
-      </Button>
-      <Button
-        asChild
-        className="border-amber-300/80 bg-amber-50 text-amber-900 hover:bg-amber-100"
-        size="sm"
-        variant="outline"
-      >
-        <Link
-          params={{ orgUrlSlug, storeUrlSlug }}
-          to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/closeouts"
-        >
-          Closeouts
-        </Link>
-      </Button>
-    </div>
   );
 }
 
@@ -285,6 +197,8 @@ function SessionLedger({
   storeUrlSlug: string;
   title: string;
 }) {
+  const navigate = useNavigate();
+
   return (
     <section className="space-y-4">
       <div className="flex items-end justify-between gap-4">
@@ -323,16 +237,42 @@ function SessionLedger({
                 <TableHead className="text-[11px] uppercase tracking-[0.18em] text-stone-500">
                   Variance
                 </TableHead>
-                <TableHead className="text-right text-[11px] uppercase tracking-[0.18em] text-stone-500">
-                  Action
-                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {sessions.map((session) => (
                 <TableRow
-                  className="group border-b border-stone-200/70 hover:bg-[#f8f2e8]"
+                  className="group cursor-pointer border-b border-stone-200/70 hover:bg-[#f8f2e8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-inset"
                   key={session._id}
+                  onClick={() =>
+                    navigate({
+                      params: {
+                        orgUrlSlug,
+                        sessionId: session._id,
+                        storeUrlSlug,
+                      },
+                      search: { o: getOrigin() },
+                      to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+                    })
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" && event.key !== " ") {
+                      return;
+                    }
+
+                    event.preventDefault();
+                    navigate({
+                      params: {
+                        orgUrlSlug,
+                        sessionId: session._id,
+                        storeUrlSlug,
+                      },
+                      search: { o: getOrigin() },
+                      to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+                    });
+                  }}
+                  role="link"
+                  tabIndex={0}
                 >
                   <TableCell>
                     <div className="space-y-1">
@@ -370,42 +310,6 @@ function SessionLedger({
                   >
                     {formatCurrency(currency, session.variance ?? 0)}
                   </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2 opacity-0 transition duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
-                      {session.workflowTraceId ? (
-                        <Button
-                          asChild
-                          className="border-stone-300 bg-white/90 text-stone-800 hover:bg-white"
-                          size="sm"
-                          variant="outline"
-                        >
-                          <WorkflowTraceRouteLink
-                            traceId={session.workflowTraceId}
-                          >
-                            View trace
-                          </WorkflowTraceRouteLink>
-                        </Button>
-                      ) : null}
-                      <Button
-                        asChild
-                        className="border-stone-300 bg-white/90 text-stone-800 hover:bg-white"
-                        size="sm"
-                        variant="outline"
-                      >
-                        <Link
-                          params={{
-                            orgUrlSlug,
-                            sessionId: session._id,
-                            storeUrlSlug,
-                          }}
-                          search={{ o: getOrigin() }}
-                          to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId"
-                        >
-                          View session
-                        </Link>
-                      </Button>
-                    </div>
-                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -434,7 +338,8 @@ function DepositsLedger({
           Recent deposits
         </h2>
         <p className="text-sm text-stone-600">
-          Recorded cash drops grouped by register and ready for follow-up.
+          Recorded bank deposits grouped by register, with a quick path back
+          into deposit entry when another drop needs logging.
         </p>
       </div>
 
@@ -469,7 +374,7 @@ function DepositsLedger({
                   Notes
                 </TableHead>
                 <TableHead className="text-right text-[11px] uppercase tracking-[0.18em] text-stone-500">
-                  Action
+                  Next step
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -493,26 +398,24 @@ function DepositsLedger({
                   <TableCell>{deposit.notes ?? "—"}</TableCell>
                   <TableCell className="text-right">
                     {deposit.registerSessionId ? (
-                      <div className="opacity-0 transition duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
-                        <Button
-                          asChild
-                          className="border-stone-300 bg-white/90 text-stone-800 hover:bg-white"
-                          size="sm"
-                          variant="outline"
+                      <Button
+                        asChild
+                        className="border-stone-300 bg-white/90 text-stone-800 hover:bg-white"
+                        size="sm"
+                        variant="outline"
+                      >
+                        <Link
+                          params={{
+                            orgUrlSlug,
+                            sessionId: deposit.registerSessionId,
+                            storeUrlSlug,
+                          }}
+                          search={{ o: getOrigin() }}
+                          to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId"
                         >
-                          <Link
-                            params={{
-                              orgUrlSlug,
-                              sessionId: deposit.registerSessionId,
-                              storeUrlSlug,
-                            }}
-                            search={{ o: getOrigin() }}
-                            to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId"
-                          >
-                            View session
-                          </Link>
-                        </Button>
-                      </div>
+                          Record bank deposit
+                        </Link>
+                      </Button>
                     ) : (
                       <span className="text-xs text-stone-400">—</span>
                     )}
@@ -530,58 +433,35 @@ function DepositsLedger({
 export function CashControlsDashboardContent({
   currency,
   dashboardSnapshot,
-  focus,
   isLoading,
   orgUrlSlug,
   storeUrlSlug,
 }: CashControlsDashboardContentProps) {
   return (
     <View
+      hideBorder
+      hideHeaderBottomBorder
       header={
-        <SimplePageHeader
-          className="text-lg font-semibold"
-          title="Cash Controls"
+        <CashControlsWorkspaceHeader
+          activeView="cash-controls"
+          description="Track live drawers, review deposited totals, and move into session detail before shifting work into closeouts."
+          orgUrlSlug={orgUrlSlug}
+          storeUrlSlug={storeUrlSlug}
+          title="Cash controls workspace"
         />
       }
     >
-      <FadeIn>
+      <FadeIn className="container mx-auto space-y-6 py-8">
         <motion.div
           animate="visible"
-          className="container mx-auto space-y-6 p-6"
+          className="space-y-6"
           initial="hidden"
           variants={containerVariants}
         >
           <motion.section
-            className="overflow-hidden rounded-[28px] bg-[#f7f1e7] ring-1 ring-stone-200/80"
+            className="overflow-hidden rounded-[28px] bg-white/80 ring-1 ring-stone-200/70"
             variants={sectionVariants}
           >
-            <div className="border-b border-stone-200/80 px-6 py-6 lg:flex lg:items-start lg:justify-between">
-              <div className="max-w-2xl space-y-2">
-                <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-amber-800/75">
-                  Cashroom ledger
-                </p>
-                <div className="space-y-1">
-                  <h1 className="text-3xl font-semibold tracking-[-0.05em] text-stone-950">
-                    {focus === "overview"
-                      ? "Register sessions"
-                      : "Register workspace"}
-                  </h1>
-                  <p className="text-sm text-stone-600">
-                    Open drawers first, manager follow-up second, cash-drop
-                    detail after that.
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-4 lg:mt-0">
-                <DashboardNav
-                  focus={focus}
-                  orgUrlSlug={orgUrlSlug}
-                  storeUrlSlug={storeUrlSlug}
-                />
-              </div>
-            </div>
-
             <div className="grid gap-0 xl:grid-cols-[minmax(0,1.22fr)_320px]">
               <div className="border-b border-stone-200/80 px-6 py-6 xl:border-b-0 xl:border-r">
                 {isLoading ? (
@@ -591,7 +471,7 @@ export function CashControlsDashboardContent({
                 ) : (
                   <SessionLedger
                     currency={currency}
-                    description="Open and active drawers with the current expected cash and deposit position."
+                    description="Live drawers with expected cash, deposited totals, and access to deposit entry."
                     emptyDescription="New register sessions will appear here after the drawer opens."
                     emptyTitle="No open register sessions"
                     orgUrlSlug={orgUrlSlug}
@@ -603,67 +483,18 @@ export function CashControlsDashboardContent({
               </div>
 
               <aside className="px-6 py-6">
-                <div className="space-y-6">
-                  <div className="space-y-3">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.24em] text-stone-500">
-                      Summary
-                    </p>
-                    <SummaryStrip
-                      currency={currency}
-                      focus={focus}
-                      snapshot={dashboardSnapshot}
-                    />
-                  </div>
-
-                  <div className="space-y-2 border-t border-stone-200/70 pt-6">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.24em] text-stone-500">
-                      Scope
-                    </p>
-                    <p className="text-sm text-stone-600">
-                      {focus === "overview"
-                        ? "Use this view to scan the live drawer surface before switching into closeouts."
-                        : "Use this view to move from register totals into the session-level deposit detail."}
-                    </p>
-                  </div>
+                <div className="space-y-3">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.24em] text-stone-500">
+                    Summary
+                  </p>
+                  <SummaryStrip
+                    currency={currency}
+                    snapshot={dashboardSnapshot}
+                  />
                 </div>
               </aside>
             </div>
           </motion.section>
-
-          {focus === "overview" ? (
-            <motion.div
-              className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.92fr)]"
-              variants={sectionVariants}
-            >
-              <div className="rounded-[24px] bg-white/80 px-6 py-6 ring-1 ring-stone-200/70">
-                <SessionLedger
-                  currency={currency}
-                  description="Closing drawers that still need review, manager approval, or a final closeout decision."
-                  emptyDescription="Closeout work will appear here once register counts get submitted."
-                  emptyTitle="No pending closeouts"
-                  orgUrlSlug={orgUrlSlug}
-                  sessions={dashboardSnapshot.pendingCloseouts}
-                  showPendingApproval
-                  storeUrlSlug={storeUrlSlug}
-                  title="Pending closeouts"
-                />
-              </div>
-
-              <div className="rounded-[24px] bg-white/80 px-6 py-6 ring-1 ring-stone-200/70">
-                <SessionLedger
-                  currency={currency}
-                  description="Remaining shortages or overages that still need a manager decision."
-                  emptyDescription="Variances that need follow-up will appear here."
-                  emptyTitle="No unresolved variances"
-                  orgUrlSlug={orgUrlSlug}
-                  sessions={dashboardSnapshot.unresolvedVariances}
-                  showPendingApproval
-                  storeUrlSlug={storeUrlSlug}
-                  title="Unresolved variances"
-                />
-              </div>
-            </motion.div>
-          ) : null}
 
           <motion.section
             className="rounded-[24px] bg-white/80 px-6 py-6 ring-1 ring-stone-200/70"
@@ -682,11 +513,7 @@ export function CashControlsDashboardContent({
   );
 }
 
-export function CashControlsDashboard({
-  focus = "overview",
-}: {
-  focus?: CashControlsDashboardFocus;
-}) {
+export function CashControlsDashboard() {
   const {
     activeStore,
     canQueryProtectedData,
@@ -753,7 +580,6 @@ export function CashControlsDashboard({
           unresolvedVariances: [],
         }
       }
-      focus={focus}
       isLoading={dashboardSnapshot === undefined}
       orgUrlSlug={params.orgUrlSlug}
       storeUrlSlug={params.storeUrlSlug}

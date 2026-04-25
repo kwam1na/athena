@@ -264,7 +264,7 @@ describe("POSRegisterView", () => {
       screen.getByRole("link", { name: /cash controls/i }),
     ).toHaveAttribute(
       "href",
-      "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers",
+      "/$orgUrlSlug/store/$storeUrlSlug/cash-controls",
     );
 
     await userEvent.click(screen.getByRole("button", { name: /sign out/i }));

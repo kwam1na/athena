@@ -16,7 +16,7 @@ import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
-import { SimplePageHeader } from "../common/PageHeader";
+import { ComposedPageHeader } from "../common/PageHeader";
 import { EmptyState } from "../states/empty/empty-state";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
@@ -94,20 +94,10 @@ type RegisterSessionCloseoutReview = {
   variance: number;
 };
 
-type RegisterSessionTimelineEvent = {
-  _id: string;
-  actorStaffName?: string | null;
-  createdAt: number;
-  eventType: string;
-  message?: string | null;
-  reason?: string | null;
-};
-
 export type RegisterSessionSnapshot = {
   closeoutReview: RegisterSessionCloseoutReview | null;
   deposits: RegisterSessionDeposit[];
   registerSession: RegisterSessionDetail;
-  timeline: RegisterSessionTimelineEvent[];
 };
 
 type RecordRegisterSessionDepositArgs = {
@@ -125,7 +115,8 @@ type RegisterSessionDepositPayload = {
   action?: "duplicate" | "recorded";
 };
 
-type RegisterSessionDepositResult = NormalizedCommandResult<RegisterSessionDepositPayload>;
+type RegisterSessionDepositResult =
+  NormalizedCommandResult<RegisterSessionDepositPayload>;
 
 type RegisterSessionViewContentProps = {
   actorStaffProfileId?: string;
@@ -205,20 +196,20 @@ function DetailNav({
           params={{ orgUrlSlug, storeUrlSlug }}
           to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls"
         >
-          Overview
+          Cash Controls
         </Link>
       </Button>
       <Button
         asChild
-        className="border-stone-300 bg-transparent text-stone-700 hover:bg-stone-100"
+        className="border-amber-300/80 bg-amber-50 text-amber-900 hover:bg-amber-100"
         size="sm"
         variant="outline"
       >
         <Link
           params={{ orgUrlSlug, storeUrlSlug }}
-          to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers"
+          to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/closeouts"
         >
-          All registers
+          Closeouts
         </Link>
       </Button>
     </div>
@@ -266,7 +257,9 @@ export function RegisterSessionViewContent({
 
   async function handleRecordDeposit() {
     if (!registerSession?._id || !storeId) {
-      setErrorMessage("A store and register session are required before recording a deposit.");
+      setErrorMessage(
+        "A store and register session are required before recording a deposit.",
+      );
       return;
     }
 
@@ -308,9 +301,27 @@ export function RegisterSessionViewContent({
   return (
     <View
       header={
-        <SimplePageHeader
-          className="text-lg font-semibold"
-          title={registerSession ? formatRegisterName(registerSession.registerNumber) : "Register session"}
+        <ComposedPageHeader
+          leadingContent={null}
+          trailingContent={
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {registerSession?.workflowTraceId ? (
+                <Button
+                  asChild
+                  className="border-stone-300 bg-white/80 text-stone-700 hover:bg-white"
+                  size="sm"
+                  variant="outline"
+                >
+                  <WorkflowTraceRouteLink
+                    traceId={registerSession.workflowTraceId}
+                  >
+                    View trace
+                  </WorkflowTraceRouteLink>
+                </Button>
+              ) : null}
+              <DetailNav orgUrlSlug={orgUrlSlug} storeUrlSlug={storeUrlSlug} />
+            </div>
+          }
         />
       }
     >
@@ -322,7 +333,7 @@ export function RegisterSessionViewContent({
           variants={containerVariants}
         >
           <motion.section
-            className="overflow-hidden rounded-[28px] bg-[#f7f1e7] ring-1 ring-stone-200/80"
+            className="overflow-hidden rounded-[28px] bg-white/80 ring-1 ring-stone-200/70"
             variants={sectionVariants}
           >
             <div className="border-b border-stone-200/80 px-6 py-6 lg:flex lg:items-start lg:justify-between">
@@ -357,24 +368,6 @@ export function RegisterSessionViewContent({
                   </p>
                 )}
               </div>
-
-              <div className="mt-4 lg:mt-0">
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                  {registerSession?.workflowTraceId ? (
-                    <Button
-                      asChild
-                      className="border-stone-300 bg-white/80 text-stone-700 hover:bg-white"
-                      size="sm"
-                      variant="outline"
-                    >
-                      <WorkflowTraceRouteLink traceId={registerSession.workflowTraceId}>
-                        View trace
-                      </WorkflowTraceRouteLink>
-                    </Button>
-                  ) : null}
-                  <DetailNav orgUrlSlug={orgUrlSlug} storeUrlSlug={storeUrlSlug} />
-                </div>
-              </div>
             </div>
 
             {isLoading ? (
@@ -407,7 +400,8 @@ export function RegisterSessionViewContent({
                       <dd className="font-mono text-2xl tracking-[-0.04em] text-stone-950">
                         {formatCurrency(
                           currency,
-                          registerSession.netExpectedCash ?? registerSession.expectedCash,
+                          registerSession.netExpectedCash ??
+                            registerSession.expectedCash,
                         )}
                       </dd>
                     </div>
@@ -416,15 +410,23 @@ export function RegisterSessionViewContent({
                         Total deposited
                       </dt>
                       <dd className="font-mono text-2xl tracking-[-0.04em] text-stone-950">
-                        {formatCurrency(currency, registerSession.totalDeposited)}
+                        {formatCurrency(
+                          currency,
+                          registerSession.totalDeposited,
+                        )}
                       </dd>
                     </div>
                     <div className="space-y-1">
                       <dt className="text-[11px] font-medium uppercase tracking-[0.24em] text-amber-800/75">
                         Variance
                       </dt>
-                      <dd className={`font-mono text-2xl tracking-[-0.04em] ${getVarianceTone(registerSession.variance)}`}>
-                        {formatCurrency(currency, registerSession.variance ?? 0)}
+                      <dd
+                        className={`font-mono text-2xl tracking-[-0.04em] ${getVarianceTone(registerSession.variance)}`}
+                      >
+                        {formatCurrency(
+                          currency,
+                          registerSession.variance ?? 0,
+                        )}
                       </dd>
                     </div>
                   </dl>
@@ -448,11 +450,20 @@ export function RegisterSessionViewContent({
                     </p>
                     {registerSessionSnapshot?.closeoutReview ? (
                       <div className="space-y-3">
-                        <p className={`font-mono text-3xl tracking-[-0.04em] ${getVarianceTone(registerSessionSnapshot.closeoutReview.variance)}`}>
-                          {formatCurrency(currency, registerSessionSnapshot.closeoutReview.variance)}
+                        <p
+                          className={`font-mono text-3xl tracking-[-0.04em] ${getVarianceTone(registerSessionSnapshot.closeoutReview.variance)}`}
+                        >
+                          {formatCurrency(
+                            currency,
+                            registerSessionSnapshot.closeoutReview.variance,
+                          )}
                         </p>
                         <p className="text-sm text-stone-600">
-                          Approval required: {registerSessionSnapshot.closeoutReview.requiresApproval ? "Yes" : "No"}
+                          Approval required:{" "}
+                          {registerSessionSnapshot.closeoutReview
+                            .requiresApproval
+                            ? "Yes"
+                            : "No"}
                         </p>
                         {registerSessionSnapshot.closeoutReview.reason ? (
                           <p className="text-sm text-stone-700">
@@ -485,7 +496,8 @@ export function RegisterSessionViewContent({
                 </p>
               </div>
 
-              {!registerSessionSnapshot ? null : registerSessionSnapshot.deposits.length === 0 ? (
+              {!registerSessionSnapshot ? null : registerSessionSnapshot
+                  .deposits.length === 0 ? (
                 <EmptyState
                   description="Once a safe drop is recorded it will appear here with the staff name and reference."
                   title="No deposits recorded"
@@ -525,7 +537,9 @@ export function RegisterSessionViewContent({
                             {formatTimestamp(deposit.recordedAt)}
                           </TableCell>
                           <TableCell>{deposit.reference ?? "—"}</TableCell>
-                          <TableCell>{deposit.recordedByStaffName ?? "—"}</TableCell>
+                          <TableCell>
+                            {deposit.recordedByStaffName ?? "—"}
+                          </TableCell>
                           <TableCell>{deposit.notes ?? "—"}</TableCell>
                         </TableRow>
                       ))}
@@ -538,56 +552,6 @@ export function RegisterSessionViewContent({
 
           <motion.section
             className="rounded-[24px] bg-white/80 px-6 py-6 ring-1 ring-stone-200/70"
-            variants={sectionVariants}
-          >
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <h2 className="text-2xl font-semibold tracking-[-0.04em] text-stone-950">
-                  Timeline
-                </h2>
-                <p className="text-sm text-stone-600">
-                  Operational events recorded against this drawer during the day.
-                </p>
-              </div>
-
-              {!registerSessionSnapshot ? null : registerSessionSnapshot.timeline.length === 0 ? (
-                <EmptyState
-                  description="Register lifecycle events will appear here as the drawer is used, deposited, and closed."
-                  title="No timeline events yet"
-                />
-              ) : (
-                <div className="space-y-3">
-                  {registerSessionSnapshot.timeline.map((event) => (
-                    <article
-                      className="rounded-[20px] bg-[#fcfaf6] px-5 py-4 ring-1 ring-stone-200/70"
-                      key={event._id}
-                    >
-                      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                        <div className="space-y-1">
-                          <p className="font-medium text-stone-950">
-                            {event.message ??
-                              capitalizeWords(event.eventType.replaceAll("_", " "))}
-                          </p>
-                          <p className="text-sm text-stone-600">
-                            {event.actorStaffName ?? "System event"}
-                          </p>
-                          {event.reason ? (
-                            <p className="text-sm text-stone-600">{event.reason}</p>
-                          ) : null}
-                        </div>
-                        <p className="text-sm text-stone-500">
-                          {formatTimestamp(event.createdAt)}
-                        </p>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              )}
-            </div>
-          </motion.section>
-
-          <motion.section
-            className="rounded-[24px] bg-[#f7f1e7] px-6 py-6 ring-1 ring-amber-200/70"
             variants={sectionVariants}
           >
             <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
@@ -608,7 +572,9 @@ export function RegisterSessionViewContent({
               <div className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-[180px_minmax(0,1fr)]">
                   <label className="block space-y-2">
-                    <span className="text-sm font-medium text-stone-900">Amount</span>
+                    <span className="text-sm font-medium text-stone-900">
+                      Amount
+                    </span>
                     <Input
                       aria-label="Deposit amount"
                       className="border-stone-300 bg-white"
@@ -621,7 +587,9 @@ export function RegisterSessionViewContent({
                   </label>
 
                   <label className="block space-y-2">
-                    <span className="text-sm font-medium text-stone-900">Reference</span>
+                    <span className="text-sm font-medium text-stone-900">
+                      Reference
+                    </span>
                     <Input
                       aria-label="Deposit reference"
                       className="border-stone-300 bg-white"
@@ -633,7 +601,9 @@ export function RegisterSessionViewContent({
                 </div>
 
                 <label className="block space-y-2">
-                  <span className="text-sm font-medium text-stone-900">Notes</span>
+                  <span className="text-sm font-medium text-stone-900">
+                    Notes
+                  </span>
                   <Textarea
                     aria-label="Deposit notes"
                     className="min-h-[110px] border-stone-300 bg-white"
@@ -702,7 +672,9 @@ export function RegisterSessionView() {
   async function onRecordDeposit(args: RecordRegisterSessionDepositArgs) {
     const result = await runCommand(() =>
       recordRegisterSessionDeposit({
-        actorStaffProfileId: args.actorStaffProfileId as Id<"staffProfile"> | undefined,
+        actorStaffProfileId: args.actorStaffProfileId as
+          | Id<"staffProfile">
+          | undefined,
         actorUserId: args.actorUserId as Id<"athenaUser"> | undefined,
         amount: args.amount,
         notes: args.notes,

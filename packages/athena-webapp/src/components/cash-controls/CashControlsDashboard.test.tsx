@@ -1,26 +1,44 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CashControlsDashboardContent } from "./CashControlsDashboard";
 
+const mockNavigate = vi.fn();
+
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
     children,
-    params: _params,
+    params,
     to,
     ...props
   }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
     params?: unknown;
     to?: string;
-  }) => (
-    <a href={to ?? "#"} {...props}>
-      {children}
-    </a>
-  ),
+  }) => {
+    void params;
+
+    return (
+      <a href={to ?? "#"} {...props}>
+        {children}
+      </a>
+    );
+  },
+  useNavigate: () => mockNavigate,
 }));
 
 vi.mock("../common/PageHeader", () => ({
-  SimplePageHeader: ({ title }: { title: string }) => <div>{title}</div>,
+  ComposedPageHeader: ({
+    leadingContent,
+    trailingContent,
+  }: {
+    leadingContent: React.ReactNode;
+    trailingContent?: React.ReactNode;
+  }) => (
+    <div>
+      <div>{leadingContent}</div>
+      <div>{trailingContent}</div>
+    </div>
+  ),
 }));
 
 const baseSnapshot = {
@@ -92,6 +110,7 @@ const baseSnapshot = {
 
 describe("CashControlsDashboardContent", () => {
   beforeEach(() => {
+    mockNavigate.mockReset();
     window.scrollTo = vi.fn();
   });
 
@@ -100,7 +119,6 @@ describe("CashControlsDashboardContent", () => {
       <CashControlsDashboardContent
         currency="USD"
         dashboardSnapshot={baseSnapshot}
-        focus="overview"
         isLoading
         orgUrlSlug="v26"
         storeUrlSlug="east-legon"
@@ -191,25 +209,23 @@ describe("CashControlsDashboardContent", () => {
             },
           ],
         }}
-        focus="overview"
         isLoading={false}
         orgUrlSlug="v26"
         storeUrlSlug="east-legon"
       />,
     );
 
-    expect(screen.getByText("Cash Controls")).toBeInTheDocument();
+    expect(screen.getByText("Cash controls workspace")).toBeInTheDocument();
     expect(screen.getByText("Open sessions")).toBeInTheDocument();
-    expect(screen.getAllByText("Pending closeouts").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Unresolved variances").length).toBeGreaterThan(0);
+    expect(screen.getByText("Expected cash")).toBeInTheDocument();
+    expect(screen.getAllByText("Deposited").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Recent deposits").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Register 1").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Register 3").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Variance review required.").length).toBeGreaterThan(0);
     expect(screen.getByText("Midday safe drop")).toBeInTheDocument();
     expect(screen.getByText("BANK-339")).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "View trace" }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("link", { name: "View session" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: "Cash Controls" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Closeouts" })).toBeInTheDocument();
   });
 
   it("surfaces a drawer opened from POS in the cash-controls ledgers", () => {
@@ -244,7 +260,6 @@ describe("CashControlsDashboardContent", () => {
             },
           ],
         }}
-        focus="overview"
         isLoading={false}
         orgUrlSlug="v26"
         storeUrlSlug="east-legon"
@@ -254,11 +269,9 @@ describe("CashControlsDashboardContent", () => {
     expect(screen.getAllByText("Register 2").length).toBeGreaterThan(0);
     expect(screen.getByText("First safe drop after POS drawer open")).toBeInTheDocument();
     expect(screen.getByText("SAFE-120")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "View trace" })).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "View session" }).length).toBeGreaterThan(0);
   });
 
-  it("renders the register-focused shell without the closeout workspace sections", () => {
+  it("opens the register session route when a session row is clicked", () => {
     render(
       <CashControlsDashboardContent
         currency="USD"
@@ -277,15 +290,22 @@ describe("CashControlsDashboardContent", () => {
             },
           ],
         }}
-        focus="registers"
         isLoading={false}
         orgUrlSlug="v26"
         storeUrlSlug="east-legon"
       />,
     );
 
-    expect(screen.getByText("Register sessions")).toBeInTheDocument();
-    expect(screen.queryByText("Pending closeouts")).not.toBeInTheDocument();
-    expect(screen.queryByText("Unresolved variances")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("link", { name: /register 1/i }));
+
+    expect(mockNavigate).toHaveBeenCalledWith({
+      params: {
+        orgUrlSlug: "v26",
+        sessionId: "session-open",
+        storeUrlSlug: "east-legon",
+      },
+      search: { o: "%2F" },
+      to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+    });
   });
 });

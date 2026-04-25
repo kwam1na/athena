@@ -190,6 +190,7 @@ artifacts/harness-inferential-review/
 artifacts/harness-scorecard/
 artifacts/harness-behavior/trends/
 artifacts/harness-behavior/videos/
+artifacts/*.png
 
 packages/athena-webapp/stats.html
 packages/storefront-webapp/stats.html

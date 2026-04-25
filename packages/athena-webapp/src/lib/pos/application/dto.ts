@@ -129,6 +129,15 @@ export interface PosProductIdLookupInput {
   productId: string;
 }
 
+export interface PosQuickAddCatalogItemInput {
+  storeId: Id<"store">;
+  createdByUserId: Id<"athenaUser">;
+  name: string;
+  lookupCode?: string;
+  price: number;
+  quantityAvailable: number;
+}
+
 export interface PosStartSessionInput {
   storeId: Id<"store">;
   terminalId: Id<"posTerminal">;

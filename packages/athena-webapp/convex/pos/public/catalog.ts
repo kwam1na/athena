@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 
-import { query } from "../../_generated/server";
+import { mutation, query } from "../../_generated/server";
+import { quickAddCatalogItem } from "../application/commands/quickAddCatalogItem";
 import {
   lookupByBarcode,
   searchProducts,
@@ -38,6 +39,23 @@ export const barcodeLookup = query({
     storeId: v.id("store"),
     barcode: v.string(),
   },
-  returns: v.union(v.null(), catalogResultValidator, v.array(catalogResultValidator)),
+  returns: v.union(
+    v.null(),
+    catalogResultValidator,
+    v.array(catalogResultValidator),
+  ),
   handler: async (ctx, args) => lookupByBarcode(ctx, args),
+});
+
+export const quickAddSku = mutation({
+  args: {
+    storeId: v.id("store"),
+    createdByUserId: v.id("athenaUser"),
+    name: v.string(),
+    lookupCode: v.optional(v.string()),
+    price: v.number(),
+    quantityAvailable: v.number(),
+  },
+  returns: catalogResultValidator,
+  handler: async (ctx, args) => quickAddCatalogItem(ctx, args),
 });

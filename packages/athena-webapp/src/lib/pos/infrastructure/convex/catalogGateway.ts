@@ -1,4 +1,4 @@
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 
 import type {
   PosBarcodeLookupInput,
@@ -123,6 +123,10 @@ export function useConvexProductIdLookup(
   }
 
   return mapProductByIdResult(productData as ProductByIdResult);
+}
+
+export function useConvexQuickAddCatalogItem() {
+  return useMutation(api.pos.public.catalog.quickAddSku);
 }
 
 export const convexCatalogReader: PosCatalogReader = {

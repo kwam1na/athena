@@ -1,20 +1,38 @@
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { ScanBarcode, Search } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Loader2, PackagePlus, ScanBarcode, Search } from "lucide-react";
 import { Product } from "./types";
-import { usePOSProductSearch } from "@/hooks/usePOSProducts";
+import {
+  usePOSProductSearch,
+  usePOSQuickAddProductSku,
+} from "@/hooks/usePOSProducts";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { currencyFormatter } from "~/convex/utils";
 import { useDebounce } from "@/hooks/useDebounce";
-import { isUrlOrBarcode } from "@/lib/pos/barcodeUtils";
+import {
+  extractBarcodeFromInput,
+  isUrlOrBarcode,
+} from "@/lib/pos/barcodeUtils";
 import {
   POS_SEARCH_DEBOUNCE_MS,
   POS_QUERY_BUFFER_MS,
 } from "@/lib/pos/constants";
-import { useRef, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SearchResultsSection } from "./SearchResultsSection";
 import { useProductSearchResults } from "@/hooks/useProductSearchResults";
 import { cn } from "@/lib/utils";
+import { parseDisplayAmountInput } from "@/lib/pos/displayAmounts";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
 
 interface ProductSearchInputProps {
   productSearchQuery: string;
@@ -113,6 +131,15 @@ export function ProductEntry({
   resultsClassName,
 }: ProductEntryProps) {
   const { activeStore } = useGetActiveStore();
+  const { user } = useAuth();
+  const quickAddProductSku = usePOSQuickAddProductSku();
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [quickAddName, setQuickAddName] = useState("");
+  const [quickAddLookupCode, setQuickAddLookupCode] = useState("");
+  const [quickAddPrice, setQuickAddPrice] = useState("");
+  const [quickAddQuantity, setQuickAddQuantity] = useState("1");
+  const [quickAddError, setQuickAddError] = useState<string | null>(null);
+  const [isQuickAddSaving, setIsQuickAddSaving] = useState(false);
 
   const debouncedProductSearchQuery = useDebounce(
     productSearchQuery,
@@ -140,14 +167,77 @@ export function ProductEntry({
     barcodeSearchResult,
     productIdSearchResults,
     inputIsUrlOrBarcode,
+    rawQuery: productSearchQuery,
     debouncedQuery: debouncedForNoResults,
   });
+  const isWaitingForStableQuery =
+    productSearchQuery.trim().length > 0 &&
+    productSearchQuery.trim() !== debouncedForNoResults.trim();
 
   const formatter = currencyFormatter(activeStore?.currency || "GHS");
 
   // Handler to clear search after adding product
   const handleClearSearch = () => {
     setProductSearchQuery("");
+  };
+
+  const handleOpenQuickAdd = () => {
+    const rawQuery = productSearchQuery.trim();
+    const extractedQuery = extractBarcodeFromInput(rawQuery).value.trim();
+    const shouldTreatQueryAsLookup =
+      inputIsUrlOrBarcode || !/\s/.test(extractedQuery);
+
+    setQuickAddName(inputIsUrlOrBarcode ? "" : rawQuery);
+    setQuickAddLookupCode(shouldTreatQueryAsLookup ? extractedQuery : "");
+    setQuickAddPrice("");
+    setQuickAddQuantity("1");
+    setQuickAddError(null);
+    setIsQuickAddOpen(true);
+  };
+
+  const handleQuickAddSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (!activeStore?._id || !user?._id) {
+      setQuickAddError("Store sign-in is still loading. Try again in a moment.");
+      return;
+    }
+
+    const parsedPrice = parseDisplayAmountInput(quickAddPrice);
+    if (parsedPrice === undefined || parsedPrice <= 0) {
+      setQuickAddError("Enter a selling price greater than 0.");
+      return;
+    }
+
+    const parsedQuantity = quickAddQuantity.trim() ? +quickAddQuantity : 0;
+    if (!Number.isFinite(parsedQuantity) || parsedQuantity < 0) {
+      setQuickAddError("Enter a valid quantity.");
+      return;
+    }
+
+    setQuickAddError(null);
+    setIsQuickAddSaving(true);
+
+    try {
+      const createdProduct = await quickAddProductSku({
+        storeId: activeStore._id,
+        createdByUserId: user._id,
+        name: quickAddName.trim(),
+        lookupCode: quickAddLookupCode.trim() || undefined,
+        price: parsedPrice,
+        quantityAvailable: Math.trunc(parsedQuantity),
+      });
+
+      await onAddProduct(createdProduct);
+      setIsQuickAddOpen(false);
+      handleClearSearch();
+      toast.success("Product added to catalog.");
+    } catch (error) {
+      console.error("[POS] Quick add product failed", error);
+      setQuickAddError("Could not quick add this product. Try again.");
+    } finally {
+      setIsQuickAddSaving(false);
+    }
   };
 
   if (!showProductLookup || (!showSearchInput && !productSearchQuery)) {
@@ -175,16 +265,108 @@ export function ProductEntry({
 
           {productSearchQuery && (
             <SearchResultsSection
-              isLoading={isLoading}
+              isLoading={isLoading || isWaitingForStableQuery}
               products={filteredProducts}
               onAddProduct={onAddProduct}
               formatter={formatter}
               onClearSearch={handleClearSearch}
+              onQuickAddProduct={handleOpenQuickAdd}
+              quickAddQuery={isWaitingForStableQuery ? "" : productSearchQuery}
               className={resultsClassName}
             />
           )}
         </div>
       </div>
+
+      <Dialog open={isQuickAddOpen} onOpenChange={setIsQuickAddOpen}>
+        <DialogContent className="sm:max-w-md">
+          <form onSubmit={handleQuickAddSubmit} className="space-y-5">
+            <DialogHeader>
+              <DialogTitle>Quick add product</DialogTitle>
+              <DialogDescription>
+                Add the SKU needed for this sale. You can complete catalog
+                details later.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="quick-add-product-name">Product name</Label>
+                <Input
+                  id="quick-add-product-name"
+                  value={quickAddName}
+                  onChange={(event) => setQuickAddName(event.target.value)}
+                  placeholder="Product name"
+                  autoFocus
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="quick-add-lookup-code">SKU or barcode</Label>
+                <Input
+                  id="quick-add-lookup-code"
+                  value={quickAddLookupCode}
+                  onChange={(event) =>
+                    setQuickAddLookupCode(event.target.value)
+                  }
+                  placeholder="SKU or barcode"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="quick-add-price">Selling price</Label>
+                  <Input
+                    id="quick-add-price"
+                    inputMode="decimal"
+                    value={quickAddPrice}
+                    onChange={(event) => setQuickAddPrice(event.target.value)}
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="quick-add-quantity">Available qty</Label>
+                  <Input
+                    id="quick-add-quantity"
+                    inputMode="numeric"
+                    value={quickAddQuantity}
+                    onChange={(event) =>
+                      setQuickAddQuantity(event.target.value)
+                    }
+                    placeholder="1"
+                  />
+                </div>
+              </div>
+
+              {quickAddError && (
+                <div className="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                  {quickAddError}
+                </div>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsQuickAddOpen(false)}
+                disabled={isQuickAddSaving}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isQuickAddSaving}>
+                {isQuickAddSaving ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <PackagePlus className="mr-2 h-4 w-4" />
+                )}
+                Add product
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

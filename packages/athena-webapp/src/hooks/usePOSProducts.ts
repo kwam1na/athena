@@ -1,5 +1,6 @@
 import {
   useConvexBarcodeLookup,
+  useConvexQuickAddCatalogItem,
   useConvexProductIdLookup,
   useConvexProductSearch,
 } from "@/lib/pos/infrastructure/convex/catalogGateway";
@@ -28,3 +29,5 @@ export function usePOSProductIdSearch(
 }
 
 export const usePOSTransactionComplete = () => useConvexDirectTransactionMutation();
+
+export const usePOSQuickAddProductSku = () => useConvexQuickAddCatalogItem();

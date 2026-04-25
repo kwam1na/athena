@@ -67,6 +67,12 @@ const reviewedRawParses: ReviewedRawParse[] = [
     reason:
       "Shared parser implementation: raw parse is contained inside parseDisplayAmountInput.",
   },
+  {
+    file: "src/components/cash-controls/RegisterCloseoutView.tsx",
+    textIncludes: "formatStoredAmount(formatter, Number(rawVariance))",
+    reason:
+      "Display-only formatting for a backend-generated minor-unit variance reason; no persisted money input boundary.",
+  },
 ];
 
 const nonMoneyContextTerms = [
