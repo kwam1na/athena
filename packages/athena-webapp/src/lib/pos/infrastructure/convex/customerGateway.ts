@@ -13,7 +13,9 @@ export function useConvexPosCustomerSearch(
 ) {
   return useQuery(
     api.pos.public.customers.searchCustomers,
-    storeId && searchQuery.trim().length > 0 ? { storeId, searchQuery } : "skip",
+    storeId && searchQuery.trim().length > 0
+      ? { storeId, searchQuery }
+      : "skip",
   );
 }
 
@@ -35,10 +37,19 @@ export function useConvexPosCustomerCreate() {
     notes?: string;
   }): Promise<
     NormalizedCommandResult<{
-      _id: Id<"posCustomer">;
+      _id?: Id<"posCustomer">;
       name: string;
       email?: string;
       phone?: string;
+      customerProfileId?: Id<"customerProfile">;
+      attribution: {
+        kind: "pos_customer" | "storefront_user" | "guest" | "sale_only";
+        posCustomerId?: Id<"posCustomer">;
+        storeFrontUserId?: Id<"storeFrontUser">;
+        guestId?: Id<"guest">;
+        customerProfileId?: Id<"customerProfile">;
+        reusable: boolean;
+      };
     }>
   > => runCommand(() => createCustomer(customerData));
 }

@@ -6,6 +6,9 @@ import {
   createCustomer as createCustomerCommand,
   linkToGuest as linkToGuestCommand,
   linkToStoreFrontUser as linkToStoreFrontUserCommand,
+  resolveGuestMatch as resolveGuestMatchCommand,
+  resolvePosCustomerSelection as resolvePosCustomerSelectionCommand,
+  resolveStoreFrontUserMatch as resolveStoreFrontUserMatchCommand,
   updateCustomer as updateCustomerCommand,
   updateCustomerStats as updateCustomerStatsCommand,
 } from "../application/commands/assignCustomer";
@@ -34,6 +37,42 @@ const customerSummaryValidator = v.object({
   totalSpent: v.optional(v.number()),
   transactionCount: v.optional(v.number()),
   lastTransactionAt: v.optional(v.number()),
+});
+
+const attributionSummaryValidator = v.union(
+  v.object({
+    kind: v.literal("pos_customer"),
+    posCustomerId: v.id("posCustomer"),
+    customerProfileId: v.optional(v.id("customerProfile")),
+    reusable: v.literal(true),
+  }),
+  v.object({
+    kind: v.literal("storefront_user"),
+    posCustomerId: v.id("posCustomer"),
+    storeFrontUserId: v.id("storeFrontUser"),
+    customerProfileId: v.optional(v.id("customerProfile")),
+    reusable: v.literal(true),
+  }),
+  v.object({
+    kind: v.literal("guest"),
+    posCustomerId: v.id("posCustomer"),
+    guestId: v.id("guest"),
+    customerProfileId: v.optional(v.id("customerProfile")),
+    reusable: v.literal(true),
+  }),
+  v.object({
+    kind: v.literal("sale_only"),
+    reusable: v.literal(false),
+  }),
+);
+
+const customerAttributionResultValidator = v.object({
+  _id: v.optional(v.id("posCustomer")),
+  name: v.string(),
+  email: v.optional(v.string()),
+  phone: v.optional(v.string()),
+  customerProfileId: v.optional(v.id("customerProfile")),
+  attribution: attributionSummaryValidator,
 });
 
 export const searchCustomers = query({
@@ -81,14 +120,7 @@ export const createCustomer = mutation({
     address: v.optional(customerAddressValidator),
     notes: v.optional(v.string()),
   },
-  returns: commandResultValidator(
-    v.object({
-      _id: v.id("posCustomer"),
-      name: v.string(),
-      email: v.optional(v.string()),
-      phone: v.optional(v.string()),
-    }),
-  ),
+  returns: commandResultValidator(customerAttributionResultValidator),
   handler: async (ctx, args) => createCustomerCommand(ctx, args),
 });
 
@@ -112,6 +144,14 @@ export const updateCustomerStats = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => updateCustomerStatsCommand(ctx, args),
+});
+
+export const resolvePosCustomerSelection = mutation({
+  args: {
+    customerId: v.id("posCustomer"),
+  },
+  returns: commandResultValidator(customerAttributionResultValidator),
+  handler: async (ctx, args) => resolvePosCustomerSelectionCommand(ctx, args),
 });
 
 export const getCustomerTransactions = query({
@@ -138,7 +178,7 @@ export const linkToStoreFrontUser = mutation({
     posCustomerId: v.id("posCustomer"),
     storeFrontUserId: v.id("storeFrontUser"),
   },
-  returns: commandResultValidator(v.null()),
+  returns: commandResultValidator(customerAttributionResultValidator),
   handler: async (ctx, args) => linkToStoreFrontUserCommand(ctx, args),
 });
 
@@ -147,8 +187,26 @@ export const linkToGuest = mutation({
     posCustomerId: v.id("posCustomer"),
     guestId: v.id("guest"),
   },
-  returns: commandResultValidator(v.null()),
+  returns: commandResultValidator(customerAttributionResultValidator),
   handler: async (ctx, args) => linkToGuestCommand(ctx, args),
+});
+
+export const resolveStoreFrontUserMatch = mutation({
+  args: {
+    storeId: v.id("store"),
+    storeFrontUserId: v.id("storeFrontUser"),
+  },
+  returns: commandResultValidator(customerAttributionResultValidator),
+  handler: async (ctx, args) => resolveStoreFrontUserMatchCommand(ctx, args),
+});
+
+export const resolveGuestMatch = mutation({
+  args: {
+    storeId: v.id("store"),
+    guestId: v.id("guest"),
+  },
+  returns: commandResultValidator(customerAttributionResultValidator),
+  handler: async (ctx, args) => resolveGuestMatchCommand(ctx, args),
 });
 
 export const findByStoreFrontUser = query({

@@ -123,12 +123,15 @@ export async function getStoreFrontUserById(
   return ctx.db.get("storeFrontUser", storeFrontUserId);
 }
 
-export async function getGuestById(ctx: PosCustomerReadCtx, guestId: Id<"guest">) {
+export async function getGuestById(
+  ctx: PosCustomerReadCtx,
+  guestId: Id<"guest">,
+) {
   return ctx.db.get("guest", guestId);
 }
 
 export async function findPosCustomerByStoreFrontUser(
-  ctx: QueryCtx,
+  ctx: PosCustomerReadCtx,
   storeFrontUserId: Id<"storeFrontUser">,
 ) {
   return ctx.db
@@ -136,6 +139,20 @@ export async function findPosCustomerByStoreFrontUser(
     .withIndex("by_linkedStoreFrontUserId", (q) =>
       q.eq("linkedStoreFrontUserId", storeFrontUserId),
     )
+    .first();
+}
+
+export async function findPosCustomerByGuest(
+  ctx: PosCustomerReadCtx,
+  args: {
+    storeId: Id<"store">;
+    guestId: Id<"guest">;
+  },
+) {
+  return ctx.db
+    .query("posCustomer")
+    .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+    .filter((q) => q.eq(q.field("linkedGuestId"), args.guestId))
     .first();
 }
 
@@ -220,5 +237,5 @@ export async function ensureCustomerProfileFromSources(
     fallbackStoreId: Id<"store">;
   },
 ) {
-  await ensureCustomerProfileFromSourcesWithCtx(ctx, args);
+  return ensureCustomerProfileFromSourcesWithCtx(ctx, args);
 }
