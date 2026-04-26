@@ -19595,7 +19595,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_pos_productentry_tsx",
       "source_file": "packages/athena-webapp/src/components/pos/ProductEntry.tsx",
-      "source_location": "L288",
+      "source_location": "L274",
       "target": "productentry_handleclearsearch",
       "weight": 1
     },
@@ -19607,7 +19607,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_pos_productentry_tsx",
       "source_file": "packages/athena-webapp/src/components/pos/ProductEntry.tsx",
-      "source_location": "L292",
+      "source_location": "L278",
       "target": "productentry_handleopenquickadd",
       "weight": 1
     },
@@ -19619,7 +19619,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_pos_productentry_tsx",
       "source_file": "packages/athena-webapp/src/components/pos/ProductEntry.tsx",
-      "source_location": "L306",
+      "source_location": "L292",
       "target": "productentry_handlequickaddsubmit",
       "weight": 1
     },
@@ -32771,7 +32771,7 @@
       "relation": "calls",
       "source": "productentry_handleclearsearch",
       "source_file": "packages/athena-webapp/src/components/pos/ProductEntry.tsx",
-      "source_location": "L353",
+      "source_location": "L339",
       "target": "productentry_handlequickaddsubmit",
       "weight": 1
     },
@@ -54376,7 +54376,7 @@
       "label": "handleClearSearch()",
       "norm_label": "handleclearsearch()",
       "source_file": "packages/athena-webapp/src/components/pos/ProductEntry.tsx",
-      "source_location": "L288"
+      "source_location": "L274"
     },
     {
       "community": 223,
@@ -54385,7 +54385,7 @@
       "label": "handleOpenQuickAdd()",
       "norm_label": "handleopenquickadd()",
       "source_file": "packages/athena-webapp/src/components/pos/ProductEntry.tsx",
-      "source_location": "L292"
+      "source_location": "L278"
     },
     {
       "community": 223,
@@ -54394,7 +54394,7 @@
       "label": "handleQuickAddSubmit()",
       "norm_label": "handlequickaddsubmit()",
       "source_file": "packages/athena-webapp/src/components/pos/ProductEntry.tsx",
-      "source_location": "L306"
+      "source_location": "L292"
     },
     {
       "community": 224,

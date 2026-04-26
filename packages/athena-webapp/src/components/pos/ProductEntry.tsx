@@ -77,21 +77,7 @@ export const ProductSearchInput = forwardRef<
   ref
 ) {
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const setSearchInputRef = useCallback(
-    (input: HTMLInputElement | null) => {
-      searchInputRef.current = input;
-
-      if (typeof ref === "function") {
-        ref(input);
-        return;
-      }
-
-      if (ref) {
-        (ref as { current: HTMLInputElement | null } | null).current = input;
-      }
-    },
-    [ref]
-  );
+  useImperativeHandle(ref, () => searchInputRef.current);
 
   useEffect(() => {
     if (!disabled) {
@@ -112,7 +98,7 @@ export const ProductSearchInput = forwardRef<
         <ScanBarcode className="w-4 h-4" />
       </div>
       <Input
-        ref={setSearchInputRef}
+        ref={searchInputRef}
         placeholder="Lookup product by name, bar/qr code, sku, or product url..."
         value={productSearchQuery}
         disabled={disabled}
