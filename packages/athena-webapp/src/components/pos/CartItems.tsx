@@ -26,6 +26,7 @@ interface CartItemsProps {
   clearCart?: () => void;
   readOnly?: boolean;
   density?: "comfortable" | "compact";
+  className?: string;
 }
 
 export function CartItems({
@@ -35,6 +36,7 @@ export function CartItems({
   clearCart,
   readOnly = false,
   density = "comfortable",
+  className,
 }: CartItemsProps) {
   const { activeStore } = useGetActiveStore();
   const formatter = currencyFormatter(activeStore?.currency || "GHS");
@@ -48,6 +50,7 @@ export function CartItems({
       className={cn(
         "flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-gray-200 bg-gradient-to-br from-gray-50/50 to-gray-100/30",
         isCompact && "min-h-72 basis-0",
+        className,
       )}
     >
       {totalQuantity > 0 && (
@@ -79,7 +82,7 @@ export function CartItems({
       )}
       <div
         className={cn(
-          "flex min-h-0 flex-1 flex-col overflow-hidden p-4",
+          "flex min-h-0 flex-1 flex-col overflow-hidden p-4 pb-6",
           isCompact && "flex-1 pt-0",
         )}
       >
@@ -94,7 +97,7 @@ export function CartItems({
         ) : (
           <div
             className={cn(
-              "min-h-0 flex-1 space-y-3 overflow-y-auto pr-1",
+              "min-h-0 flex-1 space-y-3 overflow-y-auto pr-1 pb-4",
               isCompact && "h-full",
             )}
           >
@@ -115,23 +118,28 @@ export function CartItems({
                     !isCompact && "col-span-5",
                   )}
                 >
-                  <div
-                    className={cn(
-                      "bg-muted rounded flex items-center justify-center flex-shrink-0",
-                      isCompact ? "w-12 h-12" : "w-16 h-16",
-                    )}
-                  >
-                    {item.image ? (
-                      <img
-                        src={item.image}
-                        alt={item.name}
-                        className="w-full h-full object-cover rounded"
-                      />
-                    ) : (
-                      <span className="text-xs text-muted-foreground">
-                        <Package className="w-5 h-5" />
-                      </span>
-                    )}
+                  <div className="relative">
+                    <div
+                      className={cn(
+                        "bg-muted rounded flex items-center justify-center flex-shrink-0",
+                        isCompact ? "w-12 h-12" : "w-16 h-16",
+                      )}
+                    >
+                      {item.image ? (
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="w-full h-full object-cover rounded"
+                        />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">
+                          <Package className="w-5 h-5" />
+                        </span>
+                      )}
+                    </div>
+                    {readOnly && <div className="absolute -top-2 -left-2 bg-muted text-primary-background text-xs w-5 h-5 rounded-full flex items-center justify-center shadow-sm">
+                      {item.quantity}
+                    </div>}
                   </div>
 
                   <div
@@ -207,49 +215,43 @@ export function CartItems({
                       isCompact ? "justify-start" : "col-span-4 justify-center",
                     )}
                   >
-                    {readOnly ? (
-                      <span className="text-sm font-medium">
+                    {!readOnly && <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-10 w-10"
+                        onClick={() =>
+                          onUpdateQuantity &&
+                          onUpdateQuantity(
+                            item.id as
+                            | Id<"posSessionItem">
+                            | Id<"expenseSessionItem">,
+                            item.quantity - 1,
+                          )
+                        }
+                      >
+                        <Minus className="w-4 h-4" />
+                      </Button>
+                      <span className="w-10 text-center font-medium text-sm">
                         {item.quantity}
                       </span>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-10 w-10"
-                          onClick={() =>
-                            onUpdateQuantity &&
-                            onUpdateQuantity(
-                              item.id as
-                                | Id<"posSessionItem">
-                                | Id<"expenseSessionItem">,
-                              item.quantity - 1,
-                            )
-                          }
-                        >
-                          <Minus className="w-4 h-4" />
-                        </Button>
-                        <span className="w-10 text-center font-medium text-sm">
-                          {item.quantity}
-                        </span>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-10 w-10"
-                          onClick={() =>
-                            onUpdateQuantity &&
-                            onUpdateQuantity(
-                              item.id as
-                                | Id<"posSessionItem">
-                                | Id<"expenseSessionItem">,
-                              item.quantity + 1,
-                            )
-                          }
-                        >
-                          <Plus className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    )}
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-10 w-10"
+                        onClick={() =>
+                          onUpdateQuantity &&
+                          onUpdateQuantity(
+                            item.id as
+                            | Id<"posSessionItem">
+                            | Id<"expenseSessionItem">,
+                            item.quantity + 1,
+                          )
+                        }
+                      >
+                        <Plus className="w-4 h-4" />
+                      </Button>
+                    </div>}
                   </div>
 
                   <div
@@ -285,8 +287,8 @@ export function CartItems({
                           onRemoveItem &&
                           onRemoveItem(
                             item.id as
-                              | Id<"posSessionItem">
-                              | Id<"expenseSessionItem">,
+                            | Id<"posSessionItem">
+                            | Id<"expenseSessionItem">,
                           )
                         }
                       >

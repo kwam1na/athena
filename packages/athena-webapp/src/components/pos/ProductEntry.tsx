@@ -329,6 +329,13 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
       return;
     }
 
+    const parsedName = quickAddName.trim();
+
+    if (!parsedName) {
+      setQuickAddError("Enter a valid product name.")
+      return;
+    }
+
     const parsedPrice = parseDisplayAmountInput(quickAddPrice);
     if (parsedPrice === undefined || parsedPrice <= 0) {
       setQuickAddError("Enter a selling price greater than 0.");
@@ -370,14 +377,14 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
       const createdProduct = await quickAddProductSku({
         storeId: activeStore._id,
         createdByUserId: user._id,
-        name: quickAddName.trim(),
+        name: parsedName,
         lookupCode: normalizedQuickAddLookupCode || undefined,
         price: parsedPrice,
         quantityAvailable: roundedQuantity,
         productId: quickAddSourceProduct?.productId,
       });
 
-      await onAddProduct(createdProduct);
+      onAddProduct(createdProduct);
       resetQuickAddForm();
       setIsQuickAddOpen(false);
       handleClearSearch();
@@ -447,7 +454,7 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
               <DialogDescription>
                 {isAddingVariant
                   ? "Add a different variant for this product."
-                  : "Add the SKU needed for this sale. You can complete catalog details later."}
+                  : "Add the details needed for this sale."}
               </DialogDescription>
             </DialogHeader>
 
@@ -464,14 +471,14 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="quick-add-lookup-code">SKU or barcode</Label>
+                <Label htmlFor="quick-add-lookup-code">Barcode</Label>
                 <Input
                   id="quick-add-lookup-code"
                   value={quickAddLookupCode}
                   onChange={(event) =>
                     setQuickAddLookupCode(event.target.value)
                   }
-                  placeholder="SKU or barcode"
+                  placeholder="Optional"
                 />
               </div>
 
