@@ -94,6 +94,39 @@ describe("getCompletedTransactions", () => {
       }),
     ]);
   });
+
+  it("surfaces the canonical customer profile id from the completed transaction", async () => {
+    vi.mocked(listCompletedTransactions).mockResolvedValue([
+      {
+        _id: "txn-3" as Id<"posTransaction">,
+        storeId: "store-1" as Id<"store">,
+        transactionNumber: "POS-333333",
+        total: 1000,
+        paymentMethod: "cash",
+        completedAt: 100,
+        customerId: "customer-1" as Id<"posCustomer">,
+        customerProfileId: "profile-1" as Id<"customerProfile">,
+      },
+    ] as never);
+    vi.mocked(getCashierById).mockResolvedValue(null as never);
+    vi.mocked(getCustomerById).mockResolvedValue({
+      _id: "customer-1" as Id<"posCustomer">,
+      name: "Ama Serwa",
+    } as never);
+    vi.mocked(getPosSessionById).mockResolvedValue(null as never);
+    vi.mocked(listTransactionItems).mockResolvedValue([] as never);
+
+    const result = await getCompletedTransactions({} as never, {
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        customerProfileId: "profile-1",
+        customerName: "Ama Serwa",
+      }),
+    ]);
+  });
 });
 
 describe("getTransactionById", () => {
@@ -202,6 +235,53 @@ describe("getTransactionById", () => {
       expect.objectContaining({
         hasTrace: true,
         sessionTraceId: "pos_session:ses-001",
+      }),
+    );
+  });
+
+  it("returns profile-backed attribution from the completed transaction detail", async () => {
+    vi.mocked(getPosTransactionById).mockResolvedValue({
+      _id: "txn-4" as Id<"posTransaction">,
+      sessionId: "session-1" as Id<"posSession">,
+      storeId: "store-1" as Id<"store">,
+      transactionNumber: "POS-444444",
+      subtotal: 1000,
+      tax: 0,
+      total: 1000,
+      paymentMethod: "cash",
+      payments: [],
+      totalPaid: 1000,
+      status: "completed",
+      completedAt: 100,
+      customerId: "customer-1" as Id<"posCustomer">,
+      customerProfileId: "profile-1" as Id<"customerProfile">,
+      customerInfo: undefined,
+      notes: undefined,
+    } as never);
+    vi.mocked(getCashierById).mockResolvedValue(null as never);
+    vi.mocked(getCustomerById).mockResolvedValue({
+      _id: "customer-1" as Id<"posCustomer">,
+      name: "Ama Serwa",
+      email: "ama@example.com",
+    } as never);
+    vi.mocked(getPosSessionById).mockResolvedValue({
+      _id: "session-1" as Id<"posSession">,
+      workflowTraceId: "pos_session:ses-001",
+    } as never);
+    vi.mocked(listTransactionItems).mockResolvedValue([] as never);
+
+    const result = await getTransactionById({} as never, {
+      transactionId: "txn-4" as Id<"posTransaction">,
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        customer: expect.objectContaining({
+          _id: "customer-1",
+          customerProfileId: "profile-1",
+          name: "Ama Serwa",
+          email: "ama@example.com",
+        }),
       }),
     );
   });

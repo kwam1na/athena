@@ -224,6 +224,7 @@ export async function completeTransaction(
     tax: number;
     total: number;
     customerId?: Id<"posCustomer">;
+    customerProfileId?: Id<"customerProfile">;
     customerInfo?: {
       name?: string;
       email?: string;
@@ -305,6 +306,7 @@ export async function completeTransaction(
     subtotal: args.subtotal,
     tax: args.tax,
     total: args.total,
+    customerProfileId: args.customerProfileId,
     payments: args.payments,
     totalPaid,
     changeGiven,
@@ -577,6 +579,7 @@ export async function createTransactionFromSessionHandler(
     subtotal,
     tax,
     total,
+    customerProfileId: session.customerProfileId,
     payments: args.payments,
     totalPaid,
     changeGiven,

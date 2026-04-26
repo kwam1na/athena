@@ -9,7 +9,7 @@ import {
 import { cn } from "~/src/lib/utils";
 import type { POSCustomerSummary } from "~/types";
 import { Plus, Search, UserRound, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 interface RegisterCustomerAttributionProps {
   customerInfo: CustomerInfo;
@@ -39,6 +39,32 @@ function trimCustomerInfo(customer: CustomerInfo): CustomerInfo {
   };
 }
 
+function buildCustomerCreateInput(searchQuery: string) {
+  const trimmedQuery = searchQuery.trim();
+  const input = {
+    name: trimmedQuery,
+    email: undefined as string | undefined,
+    phone: undefined as string | undefined,
+  };
+
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedQuery)) {
+    return {
+      ...input,
+      email: trimmedQuery,
+    };
+  }
+
+  const digitCount = trimmedQuery.replace(/\D/g, "").length;
+  if (digitCount >= 7 && /^[+\d\s().-]+$/.test(trimmedQuery)) {
+    return {
+      ...input,
+      phone: trimmedQuery,
+    };
+  }
+
+  return input;
+}
+
 function getSecondaryIdentifier(customer: CustomerInfo) {
   return customer.email.trim() || customer.phone.trim();
 }
@@ -63,6 +89,7 @@ export function RegisterCustomerAttribution({
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddingCustomer, setIsAddingCustomer] = useState(false);
   const [inlineError, setInlineError] = useState<string | null>(null);
+  const addOperationVersionRef = useRef(0);
 
   const normalizedCustomer = useMemo(
     () => trimCustomerInfo(customerInfo),
@@ -79,12 +106,24 @@ export function RegisterCustomerAttribution({
     useConvexPosCustomerSearch(activeStore?._id, searchQuery) ?? [];
   const createCustomer = useConvexPosCustomerCreate();
 
+  useEffect(() => {
+    return () => {
+      addOperationVersionRef.current += 1;
+    };
+  }, []);
+
+  const cancelPendingAdd = () => {
+    addOperationVersionRef.current += 1;
+    setIsAddingCustomer(false);
+  };
+
   const commitCustomer = (customer: CustomerInfo) => {
     setCustomerInfo(customer);
     void onCustomerCommitted(customer);
   };
 
   const handleSelectCustomer = (customer: POSCustomerSummary) => {
+    cancelPendingAdd();
     commitCustomer(toCustomerInfo(customer));
     setInlineError(null);
     setSearchQuery("");
@@ -92,6 +131,7 @@ export function RegisterCustomerAttribution({
   };
 
   const handleClearCustomer = () => {
+    cancelPendingAdd();
     commitCustomer(EMPTY_CUSTOMER_INFO);
     setInlineError(null);
     setSearchQuery("");
@@ -105,11 +145,18 @@ export function RegisterCustomerAttribution({
 
     setIsAddingCustomer(true);
     setInlineError(null);
+    const addOperationVersion = addOperationVersionRef.current + 1;
+    addOperationVersionRef.current = addOperationVersion;
+    const customerInput = buildCustomerCreateInput(trimmedSearchQuery);
 
     const result = await createCustomer({
       storeId: activeStore._id,
-      name: trimmedSearchQuery,
+      ...customerInput,
     });
+
+    if (addOperationVersionRef.current !== addOperationVersion) {
+      return;
+    }
 
     setIsAddingCustomer(false);
 
@@ -210,10 +257,11 @@ export function RegisterCustomerAttribution({
               <Input
                 autoFocus
                 value={searchQuery}
-                onChange={(event) => {
-                  setSearchQuery(event.target.value);
-                  setInlineError(null);
-                }}
+	                onChange={(event) => {
+	                  cancelPendingAdd();
+	                  setSearchQuery(event.target.value);
+	                  setInlineError(null);
+	                }}
                 placeholder="Name, phone, or email"
                 className="h-9 pl-9 text-sm"
               />
@@ -237,10 +285,11 @@ export function RegisterCustomerAttribution({
                 variant="ghost"
                 size="icon"
                 className="h-9 w-9"
-                onClick={() => {
-                  setIsExpanded(false);
-                  setInlineError(null);
-                }}
+	                onClick={() => {
+	                  cancelPendingAdd();
+	                  setIsExpanded(false);
+	                  setInlineError(null);
+	                }}
                 aria-label="Close customer lookup"
               >
                 <X className="h-4 w-4" aria-hidden="true" />

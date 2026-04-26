@@ -162,6 +162,15 @@ vi.mock("@/lib/pos/infrastructure/convex/commandGateway", () => ({
   }),
 }));
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve;
+  });
+
+  return { promise, resolve };
+}
+
 describe("useRegisterViewModel", () => {
   beforeEach(() => {
     mockActiveStore = {
@@ -1156,6 +1165,135 @@ describe("useRegisterViewModel", () => {
     expect(result.current.cashierCard?.cashierName).toBe("Ama K.");
     expect(result.current.productEntry.productSearchQuery).toBe("deep wave");
     expect(result.current.checkout.isTransactionCompleted).toBe(false);
+  });
+
+  it("serializes rapid customer attribution commits so the latest operator action persists last", async () => {
+    const firstUpdate = deferred<ReturnType<typeof ok>>();
+    mockUpdateSession
+      .mockReset()
+      .mockImplementationOnce(() => firstUpdate.promise)
+      .mockResolvedValue(
+        ok({
+          sessionId: "session-1" as Id<"posSession">,
+          expiresAt: Date.now() + 60_000,
+        }),
+      );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    let firstCommit!: Promise<void>;
+    let secondCommit!: Promise<void>;
+    await act(async () => {
+      firstCommit = result.current.customerPanel.onCustomerCommitted({
+        customerId: "customer-2" as Id<"posCustomer">,
+        customerProfileId: "profile-2" as Id<"customerProfile">,
+        name: "Efua Mensah",
+        email: "efua@example.com",
+        phone: "555-2222",
+      });
+      secondCommit = result.current.customerPanel.onCustomerCommitted({
+        customerId: "customer-3" as Id<"posCustomer">,
+        customerProfileId: "profile-3" as Id<"customerProfile">,
+        name: "Kofi Boateng",
+        email: "kofi@example.com",
+        phone: "555-3333",
+      });
+      await Promise.resolve();
+    });
+
+    expect(mockUpdateSession).toHaveBeenCalledTimes(1);
+    expect(mockUpdateSession).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        customerId: "customer-2",
+        customerProfileId: "profile-2",
+      }),
+    );
+
+    firstUpdate.resolve(
+      ok({
+        sessionId: "session-1" as Id<"posSession">,
+        expiresAt: Date.now() + 60_000,
+      }),
+    );
+
+    await act(async () => {
+      await Promise.all([firstCommit, secondCommit]);
+    });
+
+    expect(mockUpdateSession).toHaveBeenCalledTimes(2);
+    expect(mockUpdateSession).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        customerId: "customer-3",
+        customerProfileId: "profile-3",
+      }),
+    );
+  });
+
+  it("does not continue queued customer attribution commits after the register view unmounts", async () => {
+    const firstUpdate = deferred<ReturnType<typeof ok>>();
+    mockUpdateSession
+      .mockReset()
+      .mockImplementationOnce(() => firstUpdate.promise)
+      .mockResolvedValue(
+        ok({
+          sessionId: "session-1" as Id<"posSession">,
+          expiresAt: Date.now() + 60_000,
+        }),
+      );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result, unmount } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    let firstCommit!: Promise<void>;
+    let secondCommit!: Promise<void>;
+    await act(async () => {
+      firstCommit = result.current.customerPanel.onCustomerCommitted({
+        customerId: "customer-2" as Id<"posCustomer">,
+        customerProfileId: "profile-2" as Id<"customerProfile">,
+        name: "Efua Mensah",
+        email: "efua@example.com",
+        phone: "555-2222",
+      });
+      secondCommit = result.current.customerPanel.onCustomerCommitted({
+        customerId: "customer-3" as Id<"posCustomer">,
+        customerProfileId: "profile-3" as Id<"customerProfile">,
+        name: "Kofi Boateng",
+        email: "kofi@example.com",
+        phone: "555-3333",
+      });
+      await Promise.resolve();
+    });
+
+    expect(mockUpdateSession).toHaveBeenCalledTimes(1);
+
+    unmount();
+    firstUpdate.resolve(
+      ok({
+        sessionId: "session-1" as Id<"posSession">,
+        expiresAt: Date.now() + 60_000,
+      }),
+    );
+
+    await act(async () => {
+      await Promise.all([firstCommit, secondCommit]);
+    });
+
+    expect(mockUpdateSession).toHaveBeenCalledTimes(1);
   });
 
   it("commits name-only attribution as sale-only customer info without customer ids", async () => {

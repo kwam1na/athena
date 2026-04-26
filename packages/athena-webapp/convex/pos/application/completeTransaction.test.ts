@@ -173,6 +173,7 @@ describe("completeTransaction trace ordering", () => {
       _id: "session-1",
       storeId: "store-1",
       customerId: undefined,
+      customerProfileId: "profile-1",
       staffProfileId: "staff-1",
       registerNumber: "1",
       registerSessionId: "register-1",
@@ -266,6 +267,7 @@ describe("completeTransaction trace ordering", () => {
       _id: "session-1",
       storeId: "store-1",
       customerId: undefined,
+      customerProfileId: "profile-1",
       staffProfileId: "staff-1",
       registerNumber: "1",
       registerSessionId: "register-1",
@@ -338,6 +340,7 @@ describe("completeTransaction trace ordering", () => {
       expect.anything(),
       expect.objectContaining({
         registerSessionId: "register-1",
+        customerProfileId: "profile-1",
       }),
     );
     expect(runMutation).toHaveBeenCalledWith(

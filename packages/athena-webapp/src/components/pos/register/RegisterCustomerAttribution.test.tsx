@@ -49,6 +49,7 @@ function renderAttribution(customerInfo?: Partial<CustomerInfo>) {
     <RegisterCustomerAttribution
       customerInfo={{
         customerId: customerInfo?.customerId,
+        customerProfileId: customerInfo?.customerProfileId,
         name: customerInfo?.name ?? "",
         email: customerInfo?.email ?? "",
         phone: customerInfo?.phone ?? "",
@@ -62,6 +63,15 @@ function renderAttribution(customerInfo?: Partial<CustomerInfo>) {
     setCustomerInfo,
     onCustomerCommitted,
   };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve;
+  });
+
+  return { promise, resolve };
 }
 
 describe("RegisterCustomerAttribution", () => {
@@ -123,6 +133,7 @@ describe("RegisterCustomerAttribution", () => {
 
     const expectedCustomer = {
       customerId: "customer_1",
+      customerProfileId: undefined,
       name: "Ama Serwa",
       email: "ama@example.com",
       phone: "+233 20 000 0000",
@@ -153,12 +164,61 @@ describe("RegisterCustomerAttribution", () => {
 
     const expectedCustomer = {
       customerId: "customer_new",
+      customerProfileId: undefined,
       name: "Kojo Mensah",
       email: "",
       phone: "",
     };
     expect(setCustomerInfo).toHaveBeenCalledWith(expectedCustomer);
     expect(onCustomerCommitted).toHaveBeenCalledWith(expectedCustomer);
+  });
+
+  it("creates reusable attribution when the search input is an email", async () => {
+    const user = userEvent.setup();
+    renderAttribution();
+
+    await user.click(
+      screen.getByRole("button", { name: "Find or add customer" }),
+    );
+    await user.type(
+      screen.getByPlaceholderText("Name, phone, or email"),
+      "kojo@example.com",
+    );
+    await user.click(screen.getByRole("button", { name: 'Add "kojo@example.com"' }));
+
+    await waitFor(() => {
+      expect(mockCreate).toHaveBeenCalledWith({
+        storeId: mockActiveStore._id,
+        name: "kojo@example.com",
+        email: "kojo@example.com",
+        phone: undefined,
+      });
+    });
+  });
+
+  it("creates reusable attribution when the search input is a phone number", async () => {
+    const user = userEvent.setup();
+    renderAttribution();
+
+    await user.click(
+      screen.getByRole("button", { name: "Find or add customer" }),
+    );
+    await user.type(
+      screen.getByPlaceholderText("Name, phone, or email"),
+      "+233 20 000 0000",
+    );
+    await user.click(
+      screen.getByRole("button", { name: 'Add "+233 20 000 0000"' }),
+    );
+
+    await waitFor(() => {
+      expect(mockCreate).toHaveBeenCalledWith({
+        storeId: mockActiveStore._id,
+        name: "+233 20 000 0000",
+        email: undefined,
+        phone: "+233 20 000 0000",
+      });
+    });
   });
 
   it("collapses selected attribution to name and one secondary identifier", async () => {
@@ -183,11 +243,49 @@ describe("RegisterCustomerAttribution", () => {
 
     const emptyCustomer = {
       customerId: undefined,
+      customerProfileId: undefined,
       name: "",
       email: "",
       phone: "",
     };
     expect(setCustomerInfo).toHaveBeenCalledWith(emptyCustomer);
     expect(onCustomerCommitted).toHaveBeenCalledWith(emptyCustomer);
+  });
+
+  it("ignores stale created customer results after the lookup query changes", async () => {
+    const user = userEvent.setup();
+    const addCustomer = deferred<Awaited<ReturnType<typeof mockCreate>>>();
+    mockCreate.mockReturnValue(addCustomer.promise);
+    const { setCustomerInfo, onCustomerCommitted } = renderAttribution();
+
+    await user.click(
+      screen.getByRole("button", { name: "Find or add customer" }),
+    );
+    await user.type(
+      screen.getByPlaceholderText("Name, phone, or email"),
+      "Kojo Mensah",
+    );
+    await user.click(screen.getByRole("button", { name: 'Add "Kojo Mensah"' }));
+    await user.type(screen.getByPlaceholderText("Name, phone, or email"), " Jr");
+
+    addCustomer.resolve({
+      kind: "ok",
+      data: {
+        _id: "customer_stale",
+        name: "Kojo Mensah",
+        email: undefined,
+        phone: undefined,
+        customerProfileId: "profile_stale",
+      },
+    });
+
+    await waitFor(() => {
+      expect(mockCreate).toHaveBeenCalledWith({
+        storeId: mockActiveStore._id,
+        name: "Kojo Mensah",
+      });
+    });
+    expect(setCustomerInfo).not.toHaveBeenCalled();
+    expect(onCustomerCommitted).not.toHaveBeenCalled();
   });
 });

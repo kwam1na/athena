@@ -13,6 +13,7 @@ export const posTransactionSchema = v.object({
   subtotal: v.number(),
   tax: v.number(),
   total: v.number(),
+  customerProfileId: v.optional(v.id("customerProfile")),
   // Multi-payment support
   payments: v.array(
     v.object({

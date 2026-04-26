@@ -97,6 +97,8 @@ export async function getCompletedTransactions(
         : null;
       const items = await listTransactionItems(ctx, transaction._id);
       const sessionTraceId = session?.workflowTraceId ?? null;
+      const customerProfileId =
+        transaction.customerProfileId ?? session?.customerProfileId;
 
       return {
         _id: transaction._id,
@@ -109,6 +111,7 @@ export async function getCompletedTransactions(
         cashierName: cashier
           ? formatCashierName(cashier)
           : null,
+        customerProfileId,
         customerName:
           customer?.name ?? transaction.customerInfo?.name ?? null,
         itemCount: items.reduce((sum, item) => sum + item.quantity, 0),
@@ -139,6 +142,8 @@ export async function getTransactionById(
     : null;
   const items = await listTransactionItems(ctx, transaction._id);
   const sessionTraceId = session?.workflowTraceId ?? null;
+  const customerProfileId =
+    transaction.customerProfileId ?? session?.customerProfileId;
 
   return {
     _id: transaction._id,
@@ -164,6 +169,7 @@ export async function getTransactionById(
     customer: customer
       ? {
           _id: customer._id,
+          customerProfileId,
           name: customer.name ?? undefined,
           email: customer.email ?? undefined,
           phone: customer.phone ?? undefined,
@@ -171,10 +177,16 @@ export async function getTransactionById(
       : transaction.customerInfo
         ? {
             _id: undefined,
+            customerProfileId,
             name: transaction.customerInfo.name,
             email: transaction.customerInfo.email,
             phone: transaction.customerInfo.phone,
           }
+        : customerProfileId
+          ? {
+              _id: undefined,
+              customerProfileId,
+            }
         : null,
     customerInfo: transaction.customerInfo,
     items: items.map((item) => ({
@@ -219,9 +231,12 @@ export async function getRecentTransactionsWithCustomers(
         status: transaction.status,
         completedAt: transaction.completedAt,
         customerId: transaction.customerId,
+        customerProfileId: transaction.customerProfileId,
         customerInfo: transaction.customerInfo,
         customerName: customer?.name || null,
-        hasCustomerLink: Boolean(transaction.customerId),
+        hasCustomerLink: Boolean(
+          transaction.customerId || transaction.customerProfileId,
+        ),
       };
     }),
   );
