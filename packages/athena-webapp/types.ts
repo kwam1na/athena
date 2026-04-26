@@ -47,8 +47,6 @@ export type SavedBagItem = Doc<"savedBagItem"> & {
   length?: number;
 };
 
-export type Customer = Doc<"customer">;
-
 export type Guest = Doc<"guest">;
 
 export type Address = Infer<typeof addressSchema>;

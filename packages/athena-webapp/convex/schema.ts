@@ -27,7 +27,6 @@ import {
   bagSchema,
   savedBagSchema,
   savedBagItemSchema,
-  customerSchema,
   guestSchema,
   checkoutSessionSchema,
   checkoutSessionItemSchema,
@@ -138,7 +137,6 @@ const schema = defineSchema({
   complimentaryProduct: defineTable(complimentaryProductSchema)
     .index("by_storeId", ["storeId"])
     .index("by_collectionId", ["collectionId"]),
-  customer: defineTable(customerSchema),
   customerProfile: defineTable(customerProfileSchema)
     .index("by_storeId", ["storeId"])
     .index("by_storeId_email", ["storeId", "email"])
