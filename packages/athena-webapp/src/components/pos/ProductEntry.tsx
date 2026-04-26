@@ -76,8 +76,11 @@ export const ProductSearchInput = forwardRef<
   },
   ref
 ) {
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  useImperativeHandle(ref, () => searchInputRef.current);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  useImperativeHandle<HTMLInputElement | null, HTMLInputElement | null>(
+    ref,
+    () => searchInputRef.current
+  );
 
   useEffect(() => {
     if (!disabled) {
