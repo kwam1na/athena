@@ -1,11 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ExpenseView } from "~/src/components/expense/ExpenseView";
+import { POSRegisterView } from "~/src/components/pos/POSRegisterView";
 import { NotFoundView } from "~/src/components/states/not-found/NotFoundView";
+import { useExpenseRegisterViewModel } from "@/lib/pos/presentation/expense/useExpenseRegisterViewModel";
+
+function ExpenseRouteComponent() {
+  const viewModel = useExpenseRegisterViewModel();
+
+  return <POSRegisterView workflowMode="expense" viewModel={viewModel} />;
+}
 
 export const Route = createFileRoute(
   "/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense/"
 )({
-  component: ExpenseView,
+  component: ExpenseRouteComponent,
 
   notFoundComponent: ({ data }) => {
     const { orgUrlSlug, storeUrlSlug } = Route.useParams();

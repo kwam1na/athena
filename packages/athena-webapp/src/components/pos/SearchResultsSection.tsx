@@ -57,7 +57,7 @@ export function SearchResultsSection({
               type="button"
               size="sm"
               className="mt-5"
-              onClick={onQuickAddProduct}
+              onClick={() => onQuickAddProduct?.()}
             >
               <PackagePlus className="mr-2 h-4 w-4" />
               Quick add product

@@ -148,7 +148,10 @@ export interface RegisterAuthDialogState {
   onDismiss: () => void;
 }
 
+export type RegisterWorkflowMode = "pos" | "expense";
+
 export interface RegisterViewModel {
+  workflowMode?: RegisterWorkflowMode;
   hasActiveStore: boolean;
   header: RegisterHeaderState;
   registerInfo: RegisterInfoState;
