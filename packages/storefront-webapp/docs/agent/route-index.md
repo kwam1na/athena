@@ -46,4 +46,5 @@ This route index enumerates the current files under `src/routes` so agents can o
 - [`src/routes/shop/checkout/pending.tsx`](../../src/routes/shop/checkout/pending.tsx)
 - [`src/routes/shop/checkout/pod-confirmation.tsx`](../../src/routes/shop/checkout/pod-confirmation.tsx)
 - [`src/routes/shop/checkout/verify.index.tsx`](../../src/routes/shop/checkout/verify.index.tsx)
+- [`src/routes/shop/receipt/$transactionId/index.tsx`](../../src/routes/shop/receipt/$transactionId/index.tsx)
 
