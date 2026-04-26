@@ -358,14 +358,14 @@ export function OrderSummary({
           ))}
         </dl>
 
-        <div className="space-y-4 border-t border-border/70 bg-surface px-5 py-5">
+        <div className="space-y-6 border-t border-border/70 bg-surface px-5 py-5">
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Subtotal</span>
             <span className="font-medium text-foreground">
               {formatStoredAmount(formatter, summarySubtotal)}
             </span>
           </div>
-          <div className="flex items-end justify-between gap-4">
+          <div className="flex items-baseline justify-between gap-4 pb-4">
             <span className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
               Total
             </span>

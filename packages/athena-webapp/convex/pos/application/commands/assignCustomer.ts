@@ -65,7 +65,7 @@ function fullNameFromParts(args: {
     .join(" ")
     .trim();
 
-  return fullName || args.fallbackEmail || "Unknown customer";
+  return fullName || args.fallbackEmail || "Customer";
 }
 
 function posCustomerResult(

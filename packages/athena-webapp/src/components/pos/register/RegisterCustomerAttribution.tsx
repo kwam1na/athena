@@ -185,8 +185,8 @@ export function RegisterCustomerAttribution({
             className={cn(
               "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border bg-white",
               hasCustomer
-                ? "border-emerald-200 text-emerald-700"
-                : "border-border text-muted-foreground",
+                ? "border-emerald-50 text-emerald-700 bg-emerald-50"
+                : "border-none text-muted-foreground",
             )}
           >
             <UserRound className="h-4 w-4" aria-hidden="true" />

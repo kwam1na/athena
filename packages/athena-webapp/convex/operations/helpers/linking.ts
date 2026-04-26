@@ -104,7 +104,7 @@ export function buildFullName(parts: {
     return parts.fallbackEmail.trim();
   }
 
-  return "Unknown customer";
+  return "Customer";
 }
 
 export function buildCustomerProfileDraft(
