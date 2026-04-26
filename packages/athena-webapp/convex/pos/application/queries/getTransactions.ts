@@ -3,7 +3,6 @@ import type { QueryCtx } from "../../../_generated/server";
 
 import {
   getCashierById,
-  getCustomerById,
   getPosSessionById,
   getPosTransactionById,
   listCompletedTransactions,
@@ -50,6 +49,15 @@ function formatCashierName(args: { firstName?: string; lastName?: string; fullNa
     .trim();
 }
 
+async function loadCustomerProfile(
+  ctx: QueryCtx,
+  customerProfileId?: Id<"customerProfile">,
+) {
+  return customerProfileId
+    ? ctx.db.get("customerProfile", customerProfileId)
+    : null;
+}
+
 export async function getTransaction(
   ctx: QueryCtx,
   args: {
@@ -89,14 +97,14 @@ export async function getCompletedTransactions(
       const cashier = transaction.staffProfileId
         ? await getCashierById(ctx, transaction.staffProfileId)
         : null;
-      const customer = transaction.customerId
-        ? await getCustomerById(ctx, transaction.customerId)
-        : null;
       const session = transaction.sessionId
         ? await getPosSessionById(ctx, transaction.sessionId)
         : null;
       const items = await listTransactionItems(ctx, transaction._id);
       const sessionTraceId = session?.workflowTraceId ?? null;
+      const customerProfileId =
+        transaction.customerProfileId ?? session?.customerProfileId;
+      const customerProfile = await loadCustomerProfile(ctx, customerProfileId);
 
       return {
         _id: transaction._id,
@@ -109,8 +117,9 @@ export async function getCompletedTransactions(
         cashierName: cashier
           ? formatCashierName(cashier)
           : null,
+        customerProfileId,
         customerName:
-          customer?.name ?? transaction.customerInfo?.name ?? null,
+          customerProfile?.fullName ?? transaction.customerInfo?.name ?? null,
         itemCount: items.reduce((sum, item) => sum + item.quantity, 0),
       };
     }),
@@ -131,14 +140,14 @@ export async function getTransactionById(
   const cashier = transaction.staffProfileId
     ? await getCashierById(ctx, transaction.staffProfileId)
     : null;
-  const customer = transaction.customerId
-    ? await getCustomerById(ctx, transaction.customerId)
-    : null;
   const session = transaction.sessionId
     ? await getPosSessionById(ctx, transaction.sessionId)
     : null;
   const items = await listTransactionItems(ctx, transaction._id);
   const sessionTraceId = session?.workflowTraceId ?? null;
+  const customerProfileId =
+    transaction.customerProfileId ?? session?.customerProfileId;
+  const customerProfile = await loadCustomerProfile(ctx, customerProfileId);
 
   return {
     _id: transaction._id,
@@ -161,20 +170,25 @@ export async function getTransactionById(
           ...summarizeCashierName(cashier),
         }
       : null,
-    customer: customer
+    customer: customerProfile
       ? {
-          _id: customer._id,
-          name: customer.name ?? undefined,
-          email: customer.email ?? undefined,
-          phone: customer.phone ?? undefined,
+          customerProfileId,
+          name: customerProfile.fullName ?? undefined,
+          email: customerProfile.email ?? undefined,
+          phone: customerProfile.phoneNumber ?? undefined,
         }
       : transaction.customerInfo
         ? {
-            _id: undefined,
+            customerProfileId,
             name: transaction.customerInfo.name,
             email: transaction.customerInfo.email,
             phone: transaction.customerInfo.phone,
           }
+        : customerProfileId
+          ? {
+              _id: undefined,
+              customerProfileId,
+            }
         : null,
     customerInfo: transaction.customerInfo,
     items: items.map((item) => ({
@@ -208,9 +222,10 @@ export async function getRecentTransactionsWithCustomers(
 
   return Promise.all(
     transactions.map(async (transaction) => {
-      const customer = transaction.customerId
-        ? await getCustomerById(ctx, transaction.customerId)
-        : null;
+      const customerProfile = await loadCustomerProfile(
+        ctx,
+        transaction.customerProfileId,
+      );
 
       return {
         _id: transaction._id,
@@ -218,10 +233,11 @@ export async function getRecentTransactionsWithCustomers(
         total: transaction.total,
         status: transaction.status,
         completedAt: transaction.completedAt,
-        customerId: transaction.customerId,
+        customerProfileId: transaction.customerProfileId,
         customerInfo: transaction.customerInfo,
-        customerName: customer?.name || null,
-        hasCustomerLink: Boolean(transaction.customerId),
+        customerName:
+          customerProfile?.fullName ?? transaction.customerInfo?.name ?? null,
+        hasCustomerLink: Boolean(transaction.customerProfileId),
       };
     }),
   );

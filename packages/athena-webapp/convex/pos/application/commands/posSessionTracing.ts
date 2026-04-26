@@ -37,7 +37,7 @@ export type PosSessionTraceableSession = Pick<
   | "sessionNumber"
   | "storeId"
   | "staffProfileId"
-  | "customerId"
+  | "customerProfileId"
   | "terminalId"
   | "registerNumber"
   | "status"
@@ -567,7 +567,6 @@ export function createPosSessionTraceRecorder(
         posSessionId: args.session._id,
         staffProfileId: args.session.staffProfileId,
         terminalId: args.session.terminalId,
-        customerId: args.session.customerId,
         posTransactionId: args.transactionId ?? args.session.transactionId,
       });
 

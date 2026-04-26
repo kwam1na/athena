@@ -103,7 +103,6 @@ function buildSession(
     status: overrides.status ?? "active",
     transactionId: overrides.transactionId,
     terminalId: overrides.terminalId,
-    customerId: overrides.customerId,
     customerInfo: overrides.customerInfo,
     createdAt: overrides.createdAt ?? 0,
     updatedAt: overrides.updatedAt,

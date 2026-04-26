@@ -63,7 +63,7 @@ function hasCustomerDetails(
   }
 
   return Boolean(
-    customer.customerId ||
+    customer.customerProfileId ||
     customer.name.trim() ||
     customer.email.trim() ||
     customer.phone.trim(),
@@ -76,7 +76,7 @@ function mapSessionCustomer(customer: PosSessionCustomer): CustomerInfo {
   }
 
   return {
-    customerId: customer._id,
+    customerProfileId: customer.customerProfileId,
     name: customer.name,
     email: customer.email ?? "",
     phone: customer.phone ?? "",
@@ -151,6 +151,9 @@ export function useRegisterViewModel(): RegisterViewModel {
   const syncedSessionId = useRef<string | null>(null);
   const paymentsRef = useRef<Payment[]>([]);
   const checkoutStateVersionRef = useRef(0);
+  const activeSessionIdRef = useRef<Id<"posSession"> | null>(null);
+  const isMountedRef = useRef(true);
+  const customerCommitQueueRef = useRef<Promise<void>>(Promise.resolve());
   const drawerBindingRequestRef = useRef<string | null>(null);
   const unmountSessionRef = useRef<Id<"posSession"> | null>(null);
   const unmountSessionCartItemCountRef = useRef(0);
@@ -170,6 +173,13 @@ export function useRegisterViewModel(): RegisterViewModel {
     staffProfileId,
     registerNumber: terminalRegisterNumber,
   });
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    activeSessionIdRef.current = activeSession?._id
+      ? (activeSession._id as Id<"posSession">)
+      : null;
+  }, [activeSession?._id]);
   const usableActiveRegisterSession =
     registerState?.activeRegisterSession &&
     isPosUsableRegisterSessionStatus(registerState.activeRegisterSession.status)
@@ -332,6 +342,8 @@ export function useRegisterViewModel(): RegisterViewModel {
 
   useEffect(() => {
     return () => {
+      isMountedRef.current = false;
+      activeSessionIdRef.current = null;
       const sessionId = unmountSessionRef.current;
       const hasCartItems = unmountSessionCartItemCountRef.current > 0;
 
@@ -497,7 +509,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       const result = await updateSession({
         sessionId: session._id as Id<"posSession">,
         staffProfileId,
-        customerId: customerInfo.customerId,
+        customerProfileId: customerInfo.customerProfileId,
         customerInfo: hasCustomerDetails(customerInfo)
           ? {
               name: customerInfo.name || undefined,
@@ -540,28 +552,47 @@ export function useRegisterViewModel(): RegisterViewModel {
         return;
       }
 
-      const result = await updateSession({
-        sessionId: activeSession._id as Id<"posSession">,
-        staffProfileId,
-        customerId: nextCustomerInfo.customerId,
-        customerInfo: hasCustomerDetails(nextCustomerInfo)
-          ? {
-              name: nextCustomerInfo.name || undefined,
-              email: nextCustomerInfo.email || undefined,
-              phone: nextCustomerInfo.phone || undefined,
-            }
-          : undefined,
+      const sessionId = activeSession._id as Id<"posSession">;
+      const totals = {
         subtotal: activeTotals.subtotal,
         tax: activeTotals.tax,
         total: activeTotals.total,
-      });
+      };
 
-      if (result.kind !== "ok") {
-        logger.warn("[POS] Failed to sync committed customer details", {
-          sessionId: activeSession._id,
-          error: result.error.message,
+      const persistCustomerInfo = async () => {
+        if (!isMountedRef.current || activeSessionIdRef.current !== sessionId) {
+          return;
+        }
+
+        const result = await updateSession({
+          sessionId,
+          staffProfileId,
+          customerProfileId: nextCustomerInfo.customerProfileId,
+          customerInfo: hasCustomerDetails(nextCustomerInfo)
+            ? {
+                name: nextCustomerInfo.name || undefined,
+                email: nextCustomerInfo.email || undefined,
+                phone: nextCustomerInfo.phone || undefined,
+              }
+            : undefined,
+          subtotal: totals.subtotal,
+          tax: totals.tax,
+          total: totals.total,
         });
-      }
+
+        if (result.kind !== "ok") {
+          logger.warn("[POS] Failed to sync committed customer details", {
+            sessionId,
+            error: result.error.message,
+          });
+        }
+      };
+
+      customerCommitQueueRef.current = customerCommitQueueRef.current
+        .catch(() => undefined)
+        .then(persistCustomerInfo);
+
+      await customerCommitQueueRef.current;
     },
     [
       activeSession?._id,

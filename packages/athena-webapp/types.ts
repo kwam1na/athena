@@ -1,6 +1,6 @@
 import { Infer } from "convex/values";
 import { addressSchema } from "./convex/schemas/storeFront";
-import { Doc } from "./convex/_generated/dataModel";
+import { Doc, Id } from "./convex/_generated/dataModel";
 
 export type User = Doc<"users">;
 
@@ -46,8 +46,6 @@ export type SavedBagItem = Doc<"savedBagItem"> & {
   size?: string;
   length?: number;
 };
-
-export type Customer = Doc<"customer">;
 
 export type Guest = Doc<"guest">;
 
@@ -333,7 +331,9 @@ export type POSCustomerSummary = Pick<
   | "totalSpent"
   | "transactionCount"
   | "lastTransactionAt"
->;
+> & {
+  customerProfileId?: Id<"customerProfile">;
+};
 
 export type POSTransactionSummary = Pick<
   POSTransaction,

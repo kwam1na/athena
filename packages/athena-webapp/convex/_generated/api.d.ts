@@ -218,7 +218,6 @@ import type * as schemas_storeFront_bag from "../schemas/storeFront/bag.js";
 import type * as schemas_storeFront_bagItem from "../schemas/storeFront/bagItem.js";
 import type * as schemas_storeFront_checkoutSession from "../schemas/storeFront/checkoutSession.js";
 import type * as schemas_storeFront_checkoutSessionItem from "../schemas/storeFront/checkoutSessionItem.js";
-import type * as schemas_storeFront_customer from "../schemas/storeFront/customer.js";
 import type * as schemas_storeFront_guest from "../schemas/storeFront/guest.js";
 import type * as schemas_storeFront_index from "../schemas/storeFront/index.js";
 import type * as schemas_storeFront_offer from "../schemas/storeFront/offer.js";
@@ -500,7 +499,6 @@ declare const fullApi: ApiFromModules<{
   "schemas/storeFront/bagItem": typeof schemas_storeFront_bagItem;
   "schemas/storeFront/checkoutSession": typeof schemas_storeFront_checkoutSession;
   "schemas/storeFront/checkoutSessionItem": typeof schemas_storeFront_checkoutSessionItem;
-  "schemas/storeFront/customer": typeof schemas_storeFront_customer;
   "schemas/storeFront/guest": typeof schemas_storeFront_guest;
   "schemas/storeFront/index": typeof schemas_storeFront_index;
   "schemas/storeFront/offer": typeof schemas_storeFront_offer;
