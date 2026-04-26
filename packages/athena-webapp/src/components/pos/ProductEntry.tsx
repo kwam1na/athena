@@ -63,7 +63,7 @@ interface ProductEntryProps extends ProductSearchInputProps {
 }
 
 export const ProductSearchInput = forwardRef<
-  HTMLInputElement,
+  HTMLInputElement | null,
   ProductSearchInputProps
 >(function ProductSearchInput(
   {
