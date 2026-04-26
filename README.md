@@ -35,7 +35,7 @@ It targets repo-root `scripts/*.test.ts` files only (excluding cloned worktree t
 Use `bun run harness:test -- --dry-run` to print the selected files without executing tests.
 The repo pins Bun via `package.json` (`bun@1.1.29` today), and GitHub Actions reads that same repo-declared version so CI and local harness runs stay aligned.
 
-`pre-commit:generated-artifacts` automatically runs `bun run graphify:rebuild` and stages the tracked graphify outputs before the commit is finalized, so the pushed ref includes the refreshed graph artifacts.
+`pre-commit:generated-artifacts` automatically runs `bun run harness:generate`, stages generated harness docs, runs `bun run graphify:rebuild`, and stages the tracked graphify outputs before the commit is finalized, so the pushed ref includes refreshed generated artifacts.
 `pre-push:review` starts with `bun run graphify:check` before the rest of the local validation suite. If tracked graphify artifacts are stale, the hook runs `bun run graphify:rebuild` once, reruns `bun run graphify:check`, and then stops so you can review and commit the repaired graphify artifacts before pushing again.
 If `harness:self-review` or `harness:review` gets blocked by stale generated harness docs, the hook runs `bun run harness:generate` once, retries the blocked step on the repaired tree, and:
 - Blocks so you can review, commit, and push the repaired generated docs instead of sending a stale ref to CI.

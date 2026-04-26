@@ -793,8 +793,9 @@ describe("repo harness ergonomics", () => {
     const readme = await readFile(path.join(ROOT_DIR, "README.md"), "utf8");
 
     expect(readme).toContain(
-      "`pre-commit:generated-artifacts` automatically runs `bun run graphify:rebuild`"
+      "`pre-commit:generated-artifacts` automatically runs `bun run harness:generate`"
     );
+    expect(readme).toContain("stages generated harness docs");
     expect(readme).toContain(
       "If `harness:self-review` or `harness:review` gets blocked by stale generated harness docs"
     );

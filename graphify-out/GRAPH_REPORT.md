@@ -3101,7 +3101,7 @@ Nodes (0):
 
 ### Community 407 - "Community 407"
 Cohesion: 1.0
-Nodes (2): runPreCommitGeneratedArtifacts(), stageTrackedGraphifyArtifacts()
+Nodes (2): runPreCommitGeneratedArtifacts(), stageGeneratedArtifacts()
 
 ### Community 408 - "Community 408"
 Cohesion: 1.0

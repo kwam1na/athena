@@ -1,5 +1,13 @@
+import { HARNESS_APP_REGISTRY } from "./harness-app-registry";
+import { writeGeneratedHarnessDocs } from "./harness-generate";
 import { TRACKED_GRAPHIFY_ARTIFACTS } from "./graphify-check";
 import { runGraphifyRebuild } from "./graphify-rebuild";
+
+const GENERATED_HARNESS_DOC_ARTIFACTS = [
+  ...new Set(
+    HARNESS_APP_REGISTRY.flatMap((app) => app.harnessDocs.generatedDocs)
+  ),
+].sort((left, right) => left.localeCompare(right));
 
 type SpawnedProcess = {
   exited: Promise<number>;
@@ -9,6 +17,7 @@ type SpawnedProcess = {
 type PreCommitGeneratedArtifactsLogger = Pick<Console, "log">;
 
 type PreCommitGeneratedArtifactsOptions = {
+  runHarnessGenerate?: (rootDir: string) => Promise<void>;
   runGraphifyRebuild?: (rootDir: string) => Promise<void>;
   spawn?: (
     command: string[],
@@ -17,11 +26,13 @@ type PreCommitGeneratedArtifactsOptions = {
   logger?: PreCommitGeneratedArtifactsLogger;
 };
 
-async function stageTrackedGraphifyArtifacts(
+async function stageGeneratedArtifacts(
   rootDir: string,
-  spawn: NonNullable<PreCommitGeneratedArtifactsOptions["spawn"]>
+  spawn: NonNullable<PreCommitGeneratedArtifactsOptions["spawn"]>,
+  artifacts: string[],
+  label: string
 ) {
-  const command = ["git", "add", "--", ...TRACKED_GRAPHIFY_ARTIFACTS];
+  const command = ["git", "add", "--", ...artifacts];
   const proc = spawn(command, {
     cwd: rootDir,
     stdout: "inherit",
@@ -38,7 +49,7 @@ async function stageTrackedGraphifyArtifacts(
     : "";
   throw new Error(
     stderr ||
-      `Failed to stage tracked graphify artifacts (exit ${exitCode}): ${command.join(" ")}`
+      `Failed to stage ${label} (exit ${exitCode}): ${command.join(" ")}`
   );
 }
 
@@ -47,6 +58,8 @@ export async function runPreCommitGeneratedArtifacts(
   options: PreCommitGeneratedArtifactsOptions = {}
 ) {
   const logger = options.logger ?? console;
+  const generateHarnessDocs =
+    options.runHarnessGenerate ?? writeGeneratedHarnessDocs;
   const rebuild = options.runGraphifyRebuild ?? runGraphifyRebuild;
   const spawn =
     options.spawn ??
@@ -55,12 +68,26 @@ export async function runPreCommitGeneratedArtifacts(
         ...spawnOptions,
       }));
 
+  logger.log("[pre-commit] Refreshing generated harness docs...");
+  await generateHarnessDocs(rootDir);
+  await stageGeneratedArtifacts(
+    rootDir,
+    spawn,
+    GENERATED_HARNESS_DOC_ARTIFACTS,
+    "generated harness docs"
+  );
+
   logger.log("[pre-commit] Refreshing tracked graphify artifacts...");
   await rebuild(rootDir);
-  await stageTrackedGraphifyArtifacts(rootDir, spawn);
+  await stageGeneratedArtifacts(
+    rootDir,
+    spawn,
+    TRACKED_GRAPHIFY_ARTIFACTS,
+    "tracked graphify artifacts"
+  );
 }
 
-export { TRACKED_GRAPHIFY_ARTIFACTS };
+export { GENERATED_HARNESS_DOC_ARTIFACTS, TRACKED_GRAPHIFY_ARTIFACTS };
 
 if (import.meta.main) {
   runPreCommitGeneratedArtifacts(process.cwd()).catch((error: unknown) => {
