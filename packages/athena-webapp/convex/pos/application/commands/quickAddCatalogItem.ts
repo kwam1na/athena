@@ -185,6 +185,7 @@ export async function quickAddCatalogItem(
     createdByUserId: Id<"athenaUser">;
     name: string;
     lookupCode?: string;
+    productId?: Id<"product">;
     price: number;
     quantityAvailable: number;
   },
@@ -210,31 +211,44 @@ export async function quickAddCatalogItem(
     }
   }
 
-  const category = await findOrCreateQuickAddCategory(ctx, args.storeId);
-  const subcategory = await findOrCreateQuickAddSubcategory(ctx, {
-    storeId: args.storeId,
-    categoryId: category._id,
-  });
-  const productName = args.name.trim() || lookupCode || "Quick add item";
   const quantityAvailable = Math.max(0, Math.trunc(args.quantityAvailable));
+  let productId = args.productId;
 
-  const productId = await ctx.db.insert("product", {
-    availability: "live",
-    areProcessingFeesAbsorbed: false,
-    attributes: {},
-    categoryId: category._id,
-    createdByUserId: args.createdByUserId,
-    currency: store.currency,
-    description: "",
-    inventoryCount: quantityAvailable,
-    isVisible: false,
-    name: productName,
-    organizationId: store.organizationId,
-    quantityAvailable,
-    slug: toSlug(productName),
-    storeId: args.storeId,
-    subcategoryId: subcategory._id,
-  });
+  if (!productId) {
+    const category = await findOrCreateQuickAddCategory(ctx, args.storeId);
+    const subcategory = await findOrCreateQuickAddSubcategory(ctx, {
+      storeId: args.storeId,
+      categoryId: category._id,
+    });
+    const productName = args.name.trim() || lookupCode || "Quick add item";
+    productId = (await ctx.db.insert("product", {
+      availability: "live",
+      areProcessingFeesAbsorbed: false,
+      attributes: {},
+      categoryId: category._id,
+      createdByUserId: args.createdByUserId,
+      currency: store.currency,
+      description: "",
+      inventoryCount: quantityAvailable,
+      isVisible: false,
+      name: productName,
+      organizationId: store.organizationId,
+      quantityAvailable,
+      slug: toSlug(productName),
+      storeId: args.storeId,
+      subcategoryId: subcategory._id,
+    })) as Id<"product">;
+  }
+
+  const product = await ctx.db.get("product", productId);
+  if (!product || String(product.storeId) !== String(args.storeId)) {
+    throw new Error("Product not found");
+  }
+
+  const productName = product.name;
+  if (productName === undefined) {
+    throw new Error("Product not found");
+  }
 
   const barcode =
     lookupCode && isBarcodeLike(lookupCode) ? lookupCode : undefined;
@@ -264,11 +278,9 @@ export async function quickAddCatalogItem(
   await ctx.db.patch("productSku", skuId, { sku });
 
   const productSku = (await ctx.db.get("productSku", skuId))!;
-  const product = (await ctx.db.get("product", productId))!;
 
   return mapSkuToCatalogResult(ctx, {
     product,
     sku: productSku,
-    categoryName: category.name,
   });
 }

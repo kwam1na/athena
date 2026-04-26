@@ -198,6 +198,7 @@ describe("quickAddCatalogItem", () => {
         {
           _id: "product001",
           categoryId: "category001",
+          storeId: "storezzzz",
           description: "",
           name: "Existing wig",
           areProcessingFeesAbsorbed: false,
@@ -233,6 +234,52 @@ describe("quickAddCatalogItem", () => {
       name: "Existing wig",
       barcode: "998877665544",
       sku: "EXISTING-SKU",
+    });
+  });
+
+  it("adds a new SKU variant to an existing product when productId is provided", async () => {
+    const { ctx, tables } = createQuickAddCtx({
+      ...baseSeed,
+      category: [
+        { _id: "category001", storeId: "storezzzz", slug: "wigs", name: "Wigs" },
+      ],
+      product: [
+        {
+          _id: "product001",
+          categoryId: "category001",
+          storeId: "storezzzz",
+          description: "",
+          name: "Existing wig",
+          areProcessingFeesAbsorbed: false,
+        },
+      ],
+    });
+
+    const result = await quickAddCatalogItem(ctx, {
+      storeId: "storezzzz" as Id<"store">,
+      createdByUserId: "user0001" as Id<"athenaUser">,
+      name: "Should ignore this title",
+      price: 110000,
+      quantityAvailable: 4.2,
+      productId: "product001" as Id<"product">,
+    });
+
+    const sku = Array.from(tables.productSku.values())[0];
+
+    expect(Array.from(tables.product).length).toBe(1);
+    expect(Array.from(tables.productSku).length).toBe(1);
+    expect(sku).toMatchObject({
+      productId: "product001",
+      barcode: undefined,
+      price: 110000,
+      quantityAvailable: 4,
+    });
+    expect(sku?.sku).toMatch(/^[A-Z0-9]+-[A-Z0-9]+-[A-Z0-9]+$/);
+    expect(result).toMatchObject({
+      productId: "product001",
+      name: "Existing wig",
+      barcode: "",
+      inStock: true,
     });
   });
 });
