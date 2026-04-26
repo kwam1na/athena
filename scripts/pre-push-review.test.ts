@@ -356,65 +356,69 @@ describe("pre-push review wiring", () => {
   });
 
   it.each(ATHENA_GENERATED_DOC_PATHS)(
-    "auto-resolves stale Athena generated docs (%s) repaired during harness:self-review",
+    "blocks after repairing stale Athena generated docs (%s) during harness:self-review",
     async (generatedDocPath) => {
       const steps: string[] = [];
       let selfReviewRuns = 0;
       let generatedDocsPending = false;
       const reviewChangedFiles: string[][] = [];
 
-      await prePushReview.runPrePushReview(ROOT_DIR, {
-        getChangedFiles: async () => {
-          steps.push("changed-files:base");
-          return ["packages/athena-webapp/src/main.tsx"];
-        },
-        getChangedFilesForRepairedTree: async () => {
-          steps.push("changed-files:repaired");
-          return [
-            "packages/athena-webapp/src/main.tsx",
-            generatedDocPath,
-          ];
-        },
-        getLocalChangedFiles: async () =>
-          generatedDocsPending ? [generatedDocPath] : [],
-        runGraphifyCheck: async () => {
-          steps.push("graphify:check");
-        },
-        runHarnessSelfReview: async () => {
-          selfReviewRuns += 1;
-          steps.push(`harness:self-review:${selfReviewRuns}`);
-          return {
-            blockers:
-              selfReviewRuns === 1
-                ? ["harness:check failed: generated docs drift"]
-                : [],
-          };
-        },
-        validateHarnessDocs: async () => [
-          `Stale generated harness doc: ${generatedDocPath}`,
-        ],
-        runHarnessGenerate: async () => {
-          generatedDocsPending = true;
-          steps.push("harness:generate");
-        },
-        runArchitectureCheck: async () => {
-          steps.push("architecture:check");
-        },
-        runHarnessReview: async (rootDir, options) => {
-          reviewChangedFiles.push(
-            (await options.getChangedFiles?.(rootDir, options.baseRef)) ?? []
-          );
-          steps.push(`harness:review:${options.baseRef}`);
-        },
-        runHarnessInferentialReview: async () => {
-          steps.push("harness:inferential-review");
-        },
-        logger: {
-          log() {},
-          warn() {},
-          error() {},
-        },
-      } as any);
+      await expect(
+        prePushReview.runPrePushReview(ROOT_DIR, {
+          getChangedFiles: async () => {
+            steps.push("changed-files:base");
+            return ["packages/athena-webapp/src/main.tsx"];
+          },
+          getChangedFilesForRepairedTree: async () => {
+            steps.push("changed-files:repaired");
+            return [
+              "packages/athena-webapp/src/main.tsx",
+              generatedDocPath,
+            ];
+          },
+          getLocalChangedFiles: async () =>
+            generatedDocsPending ? [generatedDocPath] : [],
+          runGraphifyCheck: async () => {
+            steps.push("graphify:check");
+          },
+          runHarnessSelfReview: async () => {
+            selfReviewRuns += 1;
+            steps.push(`harness:self-review:${selfReviewRuns}`);
+            return {
+              blockers:
+                selfReviewRuns === 1
+                  ? ["harness:check failed: generated docs drift"]
+                  : [],
+            };
+          },
+          validateHarnessDocs: async () => [
+            `Stale generated harness doc: ${generatedDocPath}`,
+          ],
+          runHarnessGenerate: async () => {
+            generatedDocsPending = true;
+            steps.push("harness:generate");
+          },
+          runArchitectureCheck: async () => {
+            steps.push("architecture:check");
+          },
+          runHarnessReview: async (rootDir, options) => {
+            reviewChangedFiles.push(
+              (await options.getChangedFiles?.(rootDir, options.baseRef)) ?? []
+            );
+            steps.push(`harness:review:${options.baseRef}`);
+          },
+          runHarnessInferentialReview: async () => {
+            steps.push("harness:inferential-review");
+          },
+          logger: {
+            log() {},
+            warn() {},
+            error() {},
+          },
+        } as any)
+      ).rejects.toThrow(
+        "Generated harness docs were auto-repaired locally. Review and commit the repaired files, then push again."
+      );
 
       expect(steps).toEqual([
         "graphify:check",
@@ -473,13 +477,14 @@ describe("pre-push review wiring", () => {
     expect(steps).toEqual(["graphify:check", "harness:self-review"]);
   });
 
-  it("auto-resolves stale generated docs repaired during harness:review", async () => {
+  it("blocks after repairing stale generated docs during harness:review", async () => {
     const steps: string[] = [];
     let reviewRuns = 0;
     let generatedDocsPending = false;
     const reviewChangedFiles: string[][] = [];
 
-      await prePushReview.runPrePushReview(ROOT_DIR, {
+    await expect(
+      prePushReview.runPrePushReview(ROOT_DIR, {
         getChangedFiles: async () => {
           steps.push("changed-files:base");
           return ["packages/athena-webapp/src/main.tsx"];
@@ -530,7 +535,10 @@ describe("pre-push review wiring", () => {
           warn() {},
           error() {},
         },
-      } as any);
+      } as any)
+    ).rejects.toThrow(
+      "Generated harness docs were auto-repaired locally. Review and commit the repaired files, then push again."
+    );
 
     expect(steps).toEqual([
       "graphify:check",
@@ -789,6 +797,9 @@ describe("repo harness ergonomics", () => {
     );
     expect(readme).toContain(
       "If `harness:self-review` or `harness:review` gets blocked by stale generated harness docs"
+    );
+    expect(readme).toContain(
+      "Blocks so you can review, commit, and push the repaired generated docs instead of sending a stale ref to CI."
     );
     expect(readme).toContain("`pre-push:review` starts with `bun run graphify:check`");
     expect(readme).toContain(
