@@ -192,15 +192,6 @@ describe("POSRegisterView", () => {
       checkout: {
         isTransactionCompleted: false,
       },
-      expenseCompletion: {
-        cartItems: [],
-        totalValue: 1200,
-        notes: "Office supplies",
-        onNotesChange: vi.fn(),
-        onComplete: vi.fn(),
-        isCompleting: false,
-        isCompleted: false,
-      },
       sessionPanel: null,
       cashierCard: null,
       drawerGate: {
@@ -262,15 +253,6 @@ describe("POSRegisterView", () => {
       checkout: {
         isTransactionCompleted: false,
       },
-      expenseCompletion: {
-        cartItems: [],
-        totalValue: 1200,
-        notes: "Office supplies",
-        onNotesChange: vi.fn(),
-        onComplete: vi.fn(),
-        isCompleting: false,
-        isCompleted: false,
-      },
       workflowMode: "expense",
       sessionPanel: null,
       cashierCard: null,
@@ -316,15 +298,6 @@ describe("POSRegisterView", () => {
       },
       checkout: {
         isTransactionCompleted: false,
-      },
-      expenseCompletion: {
-        cartItems: [],
-        totalValue: 1200,
-        notes: "Office supplies",
-        onNotesChange: vi.fn(),
-        onComplete: vi.fn(),
-        isCompleting: false,
-        isCompleted: false,
       },
       sessionPanel: {},
       cashierCard: {},

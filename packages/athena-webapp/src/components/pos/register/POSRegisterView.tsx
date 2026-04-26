@@ -121,7 +121,8 @@ export function POSRegisterView({
   workflowMode,
   viewModel: injectedViewModel,
 }: POSRegisterViewProps) {
-  const viewModel = injectedViewModel ?? useRegisterViewModel();
+  const registerViewModel = useRegisterViewModel();
+  const viewModel = injectedViewModel ?? registerViewModel;
   const effectiveWorkflowMode: RegisterWorkflowMode =
     workflowMode ?? viewModel.workflowMode ?? "pos";
   const isExpenseWorkflow = effectiveWorkflowMode === "expense";
@@ -151,7 +152,7 @@ export function POSRegisterView({
   const shouldShowHeaderProductSearch = isSessionActive && canSearchProducts;
   const shouldRenderSaleSurface = !viewModel.checkout.isTransactionCompleted;
   const shouldRenderCheckoutPanel =
-    isPosWorkflow || Boolean(viewModel.expenseCompletion);
+    isPosWorkflow || !viewModel.checkout.isTransactionCompleted;
 
   useEffect(() => {
     if (hasProductSearchIntent && isPaymentInputActive) {
@@ -383,11 +384,9 @@ export function POSRegisterView({
                           onPaymentEntryStart={handlePaymentEntryStart}
                         />
                       ) : (
-                        viewModel.expenseCompletion && (
-                          <ExpenseCompletionPanel
-                            expenseCompletion={viewModel.expenseCompletion}
-                          />
-                        )
+                        <ExpenseCompletionPanel
+                          checkout={viewModel.checkout}
+                        />
                       )}
                     </div>
                   ) : null}

@@ -1,24 +1,51 @@
-import type { RegisterExpenseCompletionState } from "@/lib/pos/presentation/register/registerUiState";
+import { useMemo, useState } from "react";
+import type { RegisterCheckoutState } from "@/lib/pos/presentation/register/registerUiState";
 import { ExpenseCompletion } from "@/components/expense/ExpenseCompletion";
 
 interface ExpenseCompletionPanelProps {
-  expenseCompletion: RegisterExpenseCompletionState;
+  checkout: RegisterCheckoutState;
 }
 
 export function ExpenseCompletionPanel({
-  expenseCompletion,
+  checkout,
 }: ExpenseCompletionPanelProps) {
+  const [isCompleting, setIsCompleting] = useState(false);
+
+  const completedTransactionData = useMemo(() => {
+    if (!checkout.completedTransactionData) {
+      return undefined;
+    }
+
+    return {
+      completedAt: checkout.completedTransactionData.completedAt,
+      cartItems: checkout.completedTransactionData.cartItems,
+      totalValue: checkout.completedTransactionData.total,
+    };
+  }, [checkout.completedTransactionData]);
+
+  const handleComplete = async () => {
+    if (!checkout.onCompleteTransaction) {
+      return;
+    }
+
+    setIsCompleting(true);
+    try {
+      await checkout.onCompleteTransaction();
+    } finally {
+      setIsCompleting(false);
+    }
+  };
+
   return (
     <ExpenseCompletion
-      cartItems={expenseCompletion.cartItems}
-      totalValue={expenseCompletion.totalValue}
-      notes={expenseCompletion.notes}
-      onNotesChange={expenseCompletion.onNotesChange}
-      onComplete={expenseCompletion.onComplete}
-      isCompleting={expenseCompletion.isCompleting}
-      isCompleted={expenseCompletion.isCompleted}
-      completedTransactionData={expenseCompletion.completedTransactionData}
-      onTransactionStateChange={expenseCompletion.onTransactionStateChange}
+      cartItems={checkout.cartItems}
+      totalValue={checkout.total}
+      notes=""
+      onNotesChange={() => {}}
+      onComplete={handleComplete}
+      isCompleting={isCompleting}
+      isCompleted={checkout.isTransactionCompleted}
+      completedTransactionData={completedTransactionData}
     />
   );
 }

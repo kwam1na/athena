@@ -26,10 +26,7 @@ import { api } from "~/convex/_generated/api";
 import { runCommand } from "@/lib/errors/runCommand";
 import { presentCommandToast } from "@/lib/errors/presentCommandToast";
 import { EMPTY_REGISTER_CUSTOMER_INFO } from "@/lib/pos/presentation/register/registerUiState";
-import type {
-  RegisterViewModel,
-  RegisterExpenseCompletionState,
-} from "@/lib/pos/presentation/register/registerUiState";
+import type { RegisterViewModel } from "@/lib/pos/presentation/register/registerUiState";
 import type { Id } from "~/convex/_generated/dataModel";
 
 function getCashierDisplayName(staffProfile?: {
@@ -485,22 +482,6 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
     },
   };
 
-  const expenseCompletion: RegisterExpenseCompletionState = {
-    cartItems: store.cart.items,
-    totalValue: store.cart.total,
-    notes: store.ui.notes,
-    onNotesChange: store.setNotes,
-    onComplete: handleCompleteExpense,
-    isCompleting: store.transaction.isCompleting,
-    isCompleted: store.transaction.isCompleted,
-    completedTransactionData: store.transaction.completedTransactionData,
-    onTransactionStateChange: (isCompleted: boolean) => {
-      if (!isCompleted) {
-        handleNewSession();
-      }
-    },
-  };
-
   return {
     workflowMode: "expense",
     hasActiveStore: Boolean(activeStore),
@@ -571,7 +552,6 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
       cashierName: getCashierDisplayName(staffProfile ?? undefined),
       onCompleteTransaction: handleCheckoutComplete,
     },
-    expenseCompletion,
     sessionPanel: null,
     cashierCard: {
       cashierName: getCashierDisplayName(staffProfile ?? undefined),

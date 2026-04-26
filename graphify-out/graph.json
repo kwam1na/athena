@@ -19559,7 +19559,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_pos_register_expensecompletionpanel_tsx",
       "source_file": "packages/athena-webapp/src/components/pos/register/ExpenseCompletionPanel.tsx",
-      "source_location": "L8",
+      "source_location": "L9",
       "target": "expensecompletionpanel_expensecompletionpanel",
       "weight": 1
     },
@@ -19571,7 +19571,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_pos_register_posregisterview_tsx",
       "source_file": "packages/athena-webapp/src/components/pos/register/POSRegisterView.tsx",
-      "source_location": "L163",
+      "source_location": "L164",
       "target": "posregisterview_handlecmdk",
       "weight": 1
     },
@@ -24659,7 +24659,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_lib_pos_presentation_expense_useexpenseregisterviewmodel_ts",
       "source_file": "packages/athena-webapp/src/lib/pos/presentation/expense/useExpenseRegisterViewModel.ts",
-      "source_location": "L35",
+      "source_location": "L32",
       "target": "useexpenseregisterviewmodel_getcashierdisplayname",
       "weight": 1
     },
@@ -24671,7 +24671,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_lib_pos_presentation_expense_useexpenseregisterviewmodel_ts",
       "source_file": "packages/athena-webapp/src/lib/pos/presentation/expense/useExpenseRegisterViewModel.ts",
-      "source_location": "L51",
+      "source_location": "L48",
       "target": "useexpenseregisterviewmodel_useexpenseregisterviewmodel",
       "weight": 1
     },
@@ -41375,7 +41375,7 @@
       "relation": "calls",
       "source": "useexpenseregisterviewmodel_getcashierdisplayname",
       "source_file": "packages/athena-webapp/src/lib/pos/presentation/expense/useExpenseRegisterViewModel.ts",
-      "source_location": "L571",
+      "source_location": "L552",
       "target": "useexpenseregisterviewmodel_useexpenseregisterviewmodel",
       "weight": 1
     },
@@ -50989,7 +50989,7 @@
       "label": "handleCmdK()",
       "norm_label": "handlecmdk()",
       "source_file": "packages/athena-webapp/src/components/pos/register/POSRegisterView.tsx",
-      "source_location": "L163"
+      "source_location": "L164"
     },
     {
       "community": 167,
@@ -60286,7 +60286,7 @@
       "label": "getCashierDisplayName()",
       "norm_label": "getcashierdisplayname()",
       "source_file": "packages/athena-webapp/src/lib/pos/presentation/expense/useExpenseRegisterViewModel.ts",
-      "source_location": "L35"
+      "source_location": "L32"
     },
     {
       "community": 355,
@@ -60295,7 +60295,7 @@
       "label": "useExpenseRegisterViewModel()",
       "norm_label": "useexpenseregisterviewmodel()",
       "source_file": "packages/athena-webapp/src/lib/pos/presentation/expense/useExpenseRegisterViewModel.ts",
-      "source_location": "L51"
+      "source_location": "L48"
     },
     {
       "community": 356,
@@ -65974,7 +65974,7 @@
       "label": "ExpenseCompletionPanel()",
       "norm_label": "expensecompletionpanel()",
       "source_file": "packages/athena-webapp/src/components/pos/register/ExpenseCompletionPanel.tsx",
-      "source_location": "L8"
+      "source_location": "L9"
     },
     {
       "community": 522,
