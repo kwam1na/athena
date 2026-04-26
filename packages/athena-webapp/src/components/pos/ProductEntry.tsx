@@ -217,6 +217,8 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
   const [quickAddLookupCode, setQuickAddLookupCode] = useState("");
   const [quickAddPrice, setQuickAddPrice] = useState("");
   const [quickAddQuantity, setQuickAddQuantity] = useState("1");
+  const [quickAddSourceProduct, setQuickAddSourceProduct] =
+    useState<Product | null>(null);
   const [quickAddError, setQuickAddError] = useState<string | null>(null);
   const [isQuickAddSaving, setIsQuickAddSaving] = useState(false);
   const productSearchInputRef = useRef<HTMLInputElement>(null);
@@ -278,18 +280,33 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
     setProductSearchQuery("");
   };
 
-  const handleOpenQuickAdd = () => {
+  const isAddingVariant = Boolean(quickAddSourceProduct?.productId);
+  const handleOpenQuickAdd = (selectedProduct?: Product) => {
     const rawQuery = productSearchQuery.trim();
     const extractedQuery = extractBarcodeFromInput(rawQuery).value.trim();
     const shouldTreatQueryAsLookup =
       inputIsUrlOrBarcode || !/\s/.test(extractedQuery);
 
-    setQuickAddName(inputIsUrlOrBarcode ? "" : rawQuery);
+    setQuickAddName(
+      selectedProduct?.name || (inputIsUrlOrBarcode ? "" : rawQuery),
+    );
     setQuickAddLookupCode(shouldTreatQueryAsLookup ? extractedQuery : "");
     setQuickAddPrice("");
     setQuickAddQuantity("1");
     setQuickAddError(null);
+    setQuickAddSourceProduct(
+      selectedProduct && selectedProduct.productId ? selectedProduct : null,
+    );
     setIsQuickAddOpen(true);
+  };
+
+  const resetQuickAddForm = () => {
+    setQuickAddName("");
+    setQuickAddLookupCode("");
+    setQuickAddPrice("");
+    setQuickAddQuantity("1");
+    setQuickAddError(null);
+    setQuickAddSourceProduct(null);
   };
 
   const handleQuickAddSubmit = async (event: React.FormEvent) => {
@@ -319,8 +336,30 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
     }
 
     const parsedQuantity = quickAddQuantity.trim() ? +quickAddQuantity : 0;
-    if (!Number.isFinite(parsedQuantity) || parsedQuantity < 0) {
-      setQuickAddError("Enter a valid quantity.");
+    if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+      setQuickAddError("Enter a valid quantity greater than 0.");
+      return;
+    }
+    const roundedQuantity = Math.trunc(parsedQuantity);
+    const isReferenceVariantAvailable = Boolean(
+      quickAddSourceProduct && quickAddSourceProduct.quantityAvailable !== undefined,
+    );
+    const isReferencePriceDifferent =
+      quickAddSourceProduct?.price !== undefined &&
+      quickAddSourceProduct.price !== parsedPrice;
+    const isReferenceQuantityDifferent =
+      isReferenceVariantAvailable &&
+      quickAddSourceProduct?.quantityAvailable !== undefined &&
+      Math.trunc(quickAddSourceProduct.quantityAvailable) !== roundedQuantity;
+
+    if (
+      quickAddSourceProduct &&
+      !isReferencePriceDifferent &&
+      !isReferenceQuantityDifferent
+    ) {
+      setQuickAddError(
+        "Add a different price or quantity than the selected variant.",
+      );
       return;
     }
 
@@ -334,10 +373,12 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
         name: quickAddName.trim(),
         lookupCode: normalizedQuickAddLookupCode || undefined,
         price: parsedPrice,
-        quantityAvailable: Math.trunc(parsedQuantity),
+        quantityAvailable: roundedQuantity,
+        productId: quickAddSourceProduct?.productId,
       });
 
       await onAddProduct(createdProduct);
+      resetQuickAddForm();
       setIsQuickAddOpen(false);
       handleClearSearch();
       toast.success("Product added to catalog.");
@@ -388,14 +429,25 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
         </div>
       </div>
 
-      <Dialog open={isQuickAddOpen} onOpenChange={setIsQuickAddOpen}>
+      <Dialog
+        open={isQuickAddOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            resetQuickAddForm();
+          }
+          setIsQuickAddOpen(open);
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <form onSubmit={handleQuickAddSubmit} className="space-y-5">
             <DialogHeader>
-              <DialogTitle>Quick add product</DialogTitle>
+              <DialogTitle>
+                {isAddingVariant ? "Quick add variant" : "Quick add product"}
+              </DialogTitle>
               <DialogDescription>
-                Add the SKU needed for this sale. You can complete catalog
-                details later.
+                {isAddingVariant
+                  ? "Add a different variant for this product."
+                  : "Add the SKU needed for this sale. You can complete catalog details later."}
               </DialogDescription>
             </DialogHeader>
 
@@ -460,7 +512,10 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setIsQuickAddOpen(false)}
+                onClick={() => {
+                  resetQuickAddForm();
+                  setIsQuickAddOpen(false);
+                }}
                 disabled={isQuickAddSaving}
               >
                 Cancel

@@ -53,6 +53,7 @@ export const quickAddSku = mutation({
     createdByUserId: v.id("athenaUser"),
     name: v.string(),
     lookupCode: v.optional(v.string()),
+    productId: v.optional(v.id("product")),
     price: v.number(),
     quantityAvailable: v.number(),
   },
