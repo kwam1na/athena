@@ -38,8 +38,7 @@ The repo pins Bun via `package.json` (`bun@1.1.29` today), and GitHub Actions re
 `pre-commit:generated-artifacts` automatically runs `bun run graphify:rebuild` and stages the tracked graphify outputs before the commit is finalized, so the pushed ref includes the refreshed graph artifacts.
 `pre-push:review` starts with `bun run graphify:check` before the rest of the local validation suite. If tracked graphify artifacts are stale, the hook runs `bun run graphify:rebuild` once, reruns `bun run graphify:check`, and then stops so you can review and commit the repaired graphify artifacts before pushing again.
 If `harness:self-review` or `harness:review` gets blocked by stale generated harness docs, the hook runs `bun run harness:generate` once, retries the blocked step on the repaired tree, and:
-- Auto-resolves when the repair only added regenerated docs as fresh working-tree changes by continuing after the repaired step, while still surfacing a notice for the next change.
-- Otherwise, blocks so you can review and commit the repaired generated docs before pushing again.
+- Blocks so you can review, commit, and push the repaired generated docs instead of sending a stale ref to CI.
 
 List runtime behavior scenarios with `bun run harness:behavior --list`.
 Bundled scenarios include:

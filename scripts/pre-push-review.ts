@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises";
 import { HARNESS_APP_REGISTRY } from "./harness-app-registry";
 import { validateHarnessDocs } from "./harness-check";
 import { TRACKED_GRAPHIFY_ARTIFACTS, runGraphifyCheck } from "./graphify-check";
@@ -10,7 +9,6 @@ import {
   getChangedFilesForHarnessReview,
   runHarnessReview,
 } from "./harness-review";
-import path from "node:path";
 
 const ROOT_DIR = process.cwd();
 const BASE_REF = "origin/main";
@@ -20,13 +18,8 @@ const GENERATED_HARNESS_DOC_PATHS = new Set(
 const TRACKED_GRAPHIFY_ARTIFACT_PATHS = new Set(TRACKED_GRAPHIFY_ARTIFACTS);
 const REPAIRED_DOCS_COMMIT_BLOCKER =
   "Generated harness docs were auto-repaired locally. Review and commit the repaired files, then push again.";
-const REPAIRED_DOCS_AUTO_RESOLVED_NOTICE =
-  "Generated harness docs were auto-repaired locally and are now the only additional working-tree changes.\n" +
-  "Review and commit them as part of your next change; no blocking required."
 const REPAIRED_GRAPHIFY_COMMIT_BLOCKER =
   "Tracked graphify artifacts were auto-repaired locally. Review and commit the repaired files, then push again.";
-
-type FileSnapshots = Map<string, string | null>;
 
 type SpawnedProcess = {
   exited: Promise<number>;
@@ -69,57 +62,6 @@ type PrePushReviewOptions = {
 
 function normalizeRepoPath(repoPath: string) {
   return repoPath.replaceAll("\\", "/");
-}
-
-function toSortedArray(values: Iterable<string>) {
-  return [...new Set([...values].map((value) => value.trim()).filter(Boolean))].sort(
-    (left, right) => left.localeCompare(right)
-  );
-}
-
-async function readGeneratedFileIfExists(filePath: string) {
-  try {
-    return await readFile(filePath, "utf8");
-  } catch {
-    return null;
-  }
-}
-
-async function snapshotGeneratedHarnessDocs(rootDir: string) {
-  const entries = await Promise.all(
-    [...GENERATED_HARNESS_DOC_PATHS].map(async (filePath) => [
-      filePath,
-      await readGeneratedFileIfExists(path.join(rootDir, normalizeRepoPath(filePath)),
-      ),
-    ] as const)
-  );
-
-  return new Map(entries);
-}
-
-function diffGeneratedHarnessDocs(before: FileSnapshots, after: FileSnapshots) {
-  const changed: string[] = [];
-
-  for (const filePath of GENERATED_HARNESS_DOC_PATHS) {
-    if (before.get(filePath) !== after.get(filePath)) {
-      changed.push(filePath);
-    }
-  }
-
-  return changed;
-}
-
-function diffWorkingTreeAddedNonGenerated(
-  before: string[],
-  after: string[]
-) {
-  const beforeSet = new Set(before.map((value) => normalizeRepoPath(value)));
-
-  return toSortedArray(
-    after
-      .map((value) => normalizeRepoPath(value))
-      .filter((value) => !beforeSet.has(value) && !GENERATED_HARNESS_DOC_PATHS.has(value))
-  );
 }
 
 export async function getChangedFilesVsOriginMain(
@@ -283,8 +225,6 @@ export async function runPrePushReview(
   let repairedGraphifyArtifacts = false;
   let repairedGeneratedHarnessDocs = false;
   let usingWorkingTreeChangedFiles = false;
-  let generatedDocSnapshotsBeforeRepair: FileSnapshots | null = null;
-  let localChangedFilesBeforeGeneratedRepair: string[] | null = null;
 
   const loadChangedFiles = () => {
     changedFilesPromise ??= getChangedFiles(rootDir);
@@ -350,13 +290,6 @@ export async function runPrePushReview(
     );
     if (repairableErrors.length === 0) {
       return false;
-    }
-
-    if (!generatedDocSnapshotsBeforeRepair) {
-      generatedDocSnapshotsBeforeRepair = await snapshotGeneratedHarnessDocs(rootDir);
-    }
-    if (!localChangedFilesBeforeGeneratedRepair) {
-      localChangedFilesBeforeGeneratedRepair = await getLocalChangedFiles(rootDir);
     }
 
     logger.log(`[pre-push] Auto-repair: harness:generate (${reason})`);
@@ -465,56 +398,10 @@ export async function runPrePushReview(
   const pendingGeneratedHarnessDocs = await getPendingGeneratedHarnessDocs();
 
   if (pendingGeneratedHarnessDocs.length > 0) {
-    if (repairedGeneratedHarnessDocs) {
-      const afterRepairGeneratedSnapshots = await snapshotGeneratedHarnessDocs(rootDir);
-      const repairedGeneratedDocs = diffGeneratedHarnessDocs(
-        generatedDocSnapshotsBeforeRepair ?? new Map(),
-        afterRepairGeneratedSnapshots
-      );
-      const finalWorkingTreeChanges = await getLocalChangedFiles(rootDir);
-      const nonGeneratedAdditions =
-        localChangedFilesBeforeGeneratedRepair
-          ? diffWorkingTreeAddedNonGenerated(
-              localChangedFilesBeforeGeneratedRepair,
-              finalWorkingTreeChanges
-            )
-          : [];
-      const normalizedLocalChangedBeforeRepair = new Set(
-        (localChangedFilesBeforeGeneratedRepair ?? []).map(normalizeRepoPath)
-      );
-      const generatedDocsAddedByRepair = toSortedArray(
-        finalWorkingTreeChanges
-          .map(normalizeRepoPath)
-          .filter((value) => GENERATED_HARNESS_DOC_PATHS.has(value))
-          .filter(
-            (value) => !normalizedLocalChangedBeforeRepair.has(value)
-          )
-      );
-      const repairedGeneratedDocsCandidates = toSortedArray([
-        ...repairedGeneratedDocs,
-        ...generatedDocsAddedByRepair,
-      ]);
-
-      if (
-        repairedGeneratedDocsCandidates.length > 0 &&
-        pendingGeneratedHarnessDocs.every((entry) =>
-          repairedGeneratedDocsCandidates.includes(entry)
-        ) &&
-        nonGeneratedAdditions.length === 0
-      ) {
-        logger.log(`\n[pre-push] ${REPAIRED_DOCS_AUTO_RESOLVED_NOTICE}`);
-      } else {
-        logger.log(
-          "\n[pre-push] Generated harness docs were repaired and revalidated locally."
-        );
-        throw new Error(REPAIRED_DOCS_COMMIT_BLOCKER);
-      }
-    } else {
-      logger.log(
-        "\n[pre-push] Generated harness docs were repaired and revalidated locally."
-      );
-      throw new Error(REPAIRED_DOCS_COMMIT_BLOCKER);
-    }
+    logger.log(
+      "\n[pre-push] Generated harness docs were repaired and revalidated locally."
+    );
+    throw new Error(REPAIRED_DOCS_COMMIT_BLOCKER);
   }
 
   const pendingGraphifyArtifacts = await getPendingGraphifyArtifacts();
