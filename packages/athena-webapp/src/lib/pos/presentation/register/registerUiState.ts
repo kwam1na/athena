@@ -148,7 +148,27 @@ export interface RegisterAuthDialogState {
   onDismiss: () => void;
 }
 
+export type RegisterWorkflowMode = "pos" | "expense";
+
+export interface RegisterExpenseCompletionState {
+  cartItems: CartItem[];
+  totalValue: number;
+  notes: string;
+  onNotesChange: (notes: string) => void;
+  onComplete: () => Promise<void> | void;
+  isCompleting: boolean;
+  isCompleted: boolean;
+  completedTransactionData?: {
+    completedAt: Date;
+    cartItems: CartItem[];
+    totalValue: number;
+    notes?: string;
+  } | null;
+  onTransactionStateChange?: (isCompleted: boolean) => void;
+}
+
 export interface RegisterViewModel {
+  workflowMode?: RegisterWorkflowMode;
   hasActiveStore: boolean;
   header: RegisterHeaderState;
   registerInfo: RegisterInfoState;
@@ -156,6 +176,7 @@ export interface RegisterViewModel {
   productEntry: RegisterProductEntryState;
   cart: RegisterCartState;
   checkout: RegisterCheckoutState;
+  expenseCompletion?: RegisterExpenseCompletionState;
   sessionPanel: RegisterSessionPanelState | null;
   cashierCard: RegisterCashierCardState | null;
   drawerGate: RegisterDrawerGateState | null;

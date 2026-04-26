@@ -96,6 +96,10 @@ vi.mock("./RegisterCheckoutPanel", () => ({
   ),
 }));
 
+vi.mock("./ExpenseCompletionPanel", () => ({
+  ExpenseCompletionPanel: () => <div>expense-completion-panel</div>,
+}));
+
 describe("POSRegisterView", () => {
   it("renders a lightweight empty state while the active store is unresolved", async () => {
     mockUseRegisterViewModel.mockReturnValue({
@@ -158,6 +162,186 @@ describe("POSRegisterView", () => {
     expect(screen.getByText("cart-items")).toBeInTheDocument();
     expect(screen.getByText("register-checkout-panel")).toBeInTheDocument();
     expect(screen.getByText("cashier-auth-dialog")).toBeInTheDocument();
+  });
+
+  it("renders expense completion UI in expense workflow without POS checkout controls", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "Expense",
+        isSessionActive: true,
+      },
+      registerInfo: {
+        customerName: "Ama Serwa",
+        registerLabel: "Expenses",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: false,
+        showProductLookup: false,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+        onAddProduct: vi.fn(),
+        setShowProductLookup: vi.fn(),
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      expenseCompletion: {
+        cartItems: [],
+        totalValue: 1200,
+        notes: "Office supplies",
+        onNotesChange: vi.fn(),
+        onComplete: vi.fn(),
+        isCompleting: false,
+        isCompleted: false,
+      },
+      sessionPanel: null,
+      cashierCard: null,
+      drawerGate: {
+        mode: "initialSetup",
+        registerLabel: "Expenses",
+        registerNumber: "1",
+        currency: "GHS",
+        openingFloat: "0.00",
+        notes: "",
+        errorMessage: null,
+        isSubmitting: false,
+        onOpeningFloatChange: vi.fn(),
+        onNotesChange: vi.fn(),
+        onSubmit: vi.fn(),
+        onSignOut: vi.fn(),
+      },
+      authDialog: {
+        open: false,
+      },
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView workflowMode="expense" />);
+
+    expect(screen.getByText("expense-completion-panel")).toBeInTheDocument();
+    expect(screen.getByText("cart-items")).toBeInTheDocument();
+    expect(screen.queryByText("register-action-bar")).not.toBeInTheDocument();
+    expect(screen.queryByText("register-customer-panel")).not.toBeInTheDocument();
+    expect(screen.queryByText("register-checkout-panel")).not.toBeInTheDocument();
+    expect(screen.queryByText("Drawer closed")).not.toBeInTheDocument();
+  });
+
+  it("falls back to the injected expense view model workflow when mode prop is omitted", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "Expense",
+        isSessionActive: true,
+      },
+      registerInfo: {
+        customerName: "Ama Serwa",
+        registerLabel: "Expenses",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: false,
+        showProductLookup: false,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+        onAddProduct: vi.fn(),
+        setShowProductLookup: vi.fn(),
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      expenseCompletion: {
+        cartItems: [],
+        totalValue: 1200,
+        notes: "Office supplies",
+        onNotesChange: vi.fn(),
+        onComplete: vi.fn(),
+        isCompleting: false,
+        isCompleted: false,
+      },
+      workflowMode: "expense",
+      sessionPanel: null,
+      cashierCard: null,
+      drawerGate: null,
+      authDialog: {
+        open: false,
+      },
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(screen.getByText("expense-completion-panel")).toBeInTheDocument();
+    expect(screen.queryByText("register-checkout-panel")).not.toBeInTheDocument();
+    expect(screen.queryByText("register-action-bar")).not.toBeInTheDocument();
+  });
+
+  it("keeps POS workflow behavior when expense completion data is present but mode is not set to expense", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: true,
+      },
+      registerInfo: {
+        customerName: "Ama Serwa",
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: false,
+        showProductLookup: false,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+        onAddProduct: vi.fn(),
+        setShowProductLookup: vi.fn(),
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      expenseCompletion: {
+        cartItems: [],
+        totalValue: 1200,
+        notes: "Office supplies",
+        onNotesChange: vi.fn(),
+        onComplete: vi.fn(),
+        isCompleting: false,
+        isCompleted: false,
+      },
+      sessionPanel: {},
+      cashierCard: {},
+      drawerGate: null,
+      authDialog: {
+        open: false,
+      },
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(screen.getByText("register-checkout-panel")).toBeInTheDocument();
+    expect(screen.getByText("register-customer-panel")).toBeInTheDocument();
+    expect(screen.getByText("cart-items")).toBeInTheDocument();
+    expect(screen.queryByText("expense-completion-panel")).not.toBeInTheDocument();
   });
 
   it("returns to product entry when a paid sale starts a new product search", async () => {

@@ -3,8 +3,8 @@ import { FadeIn } from "@/components/common/FadeIn";
 import { CashierAuthDialog } from "@/components/pos/CashierAuthDialog";
 import { CartItems } from "@/components/pos/CartItems";
 import {
-  ProductEntryHandle,
   ProductEntry,
+  ProductEntryHandle,
   ProductSearchInput,
 } from "@/components/pos/ProductEntry";
 import { useSidebar } from "@/components/ui/sidebar";
@@ -13,12 +13,17 @@ import { cn } from "~/src/lib/utils";
 import { ScanBarcode, Search } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import {
+  type RegisterViewModel,
+  type RegisterWorkflowMode,
+} from "@/lib/pos/presentation/register/registerUiState";
 import { useRegisterViewModel } from "@/lib/pos/presentation/register/useRegisterViewModel";
 
 import { RegisterActionBar } from "./RegisterActionBar";
 import { RegisterCheckoutPanel } from "./RegisterCheckoutPanel";
 import { RegisterCustomerPanel } from "./RegisterCustomerPanel";
 import { RegisterDrawerGate } from "./RegisterDrawerGate";
+import { ExpenseCompletionPanel } from "./ExpenseCompletionPanel";
 
 function useCollapseSidebarForPosFlow() {
   const { isMobile, open, setOpen } = useSidebar();
@@ -107,16 +112,30 @@ function ProductLookupEmptyState() {
   );
 }
 
-export function POSRegisterView() {
-  const viewModel = useRegisterViewModel();
+interface POSRegisterViewProps {
+  workflowMode?: RegisterWorkflowMode;
+  viewModel?: RegisterViewModel;
+}
+
+export function POSRegisterView({
+  workflowMode,
+  viewModel: injectedViewModel,
+}: POSRegisterViewProps) {
+  const viewModel = injectedViewModel ?? useRegisterViewModel();
+  const effectiveWorkflowMode: RegisterWorkflowMode =
+    workflowMode ?? viewModel.workflowMode ?? "pos";
+  const isExpenseWorkflow = effectiveWorkflowMode === "expense";
+  const isPosWorkflow = effectiveWorkflowMode === "pos";
   const [isPaymentInputActive, setIsPaymentInputActive] = useState(false);
   const productEntryRef = useRef<ProductEntryHandle>(null);
   const headerProductSearchInputRef = useRef<HTMLInputElement>(null);
+
   useCollapseSidebarForPosFlow();
   const isSessionActive = viewModel.header.isSessionActive;
   const isAuthDialogOpen = Boolean(viewModel.authDialog?.open);
   const shouldUseFullscreenRegisterShell = isSessionActive || isAuthDialogOpen;
   useLockDocumentScroll(shouldUseFullscreenRegisterShell);
+
   const registerViewWidth = "full";
   const registerContentClassName = cn(
     "w-full px-6 py-5",
@@ -126,10 +145,13 @@ export function POSRegisterView() {
   const hasProductSearchIntent =
     (viewModel.productEntry?.productSearchQuery ?? "").trim().length > 0;
   const shouldShowPaymentWorkspace =
-    isPaymentInputActive && !hasProductSearchIntent;
+    isPosWorkflow && isPaymentInputActive && !hasProductSearchIntent;
   const canSearchProducts =
     !viewModel.checkout.isTransactionCompleted && !viewModel.drawerGate;
   const shouldShowHeaderProductSearch = isSessionActive && canSearchProducts;
+  const shouldRenderSaleSurface = !viewModel.checkout.isTransactionCompleted;
+  const shouldRenderCheckoutPanel =
+    isPosWorkflow || Boolean(viewModel.expenseCompletion);
 
   useEffect(() => {
     if (hasProductSearchIntent && isPaymentInputActive) {
@@ -245,23 +267,21 @@ export function POSRegisterView() {
                 </p>
               </div>
 
-              {shouldShowHeaderProductSearch && (
+              {shouldShowHeaderProductSearch ? (
                 <ProductSearchInput
                   ref={headerProductSearchInputRef}
                   disabled={viewModel.productEntry.disabled}
                   productSearchQuery={viewModel.productEntry.productSearchQuery}
-                  setProductSearchQuery={
-                    viewModel.productEntry.setProductSearchQuery
-                  }
+                  setProductSearchQuery={viewModel.productEntry.setProductSearchQuery}
                   onBarcodeSubmit={viewModel.productEntry.onBarcodeSubmit}
                   className="max-w-[800px] flex-1"
                   inputClassName="h-14"
                 />
-              )}
+              ) : null}
             </div>
           }
           trailingContent={
-            canSearchProducts ? (
+            canSearchProducts && isPosWorkflow ? (
               <RegisterActionBar
                 registerInfo={viewModel.registerInfo}
                 sessionPanel={viewModel.sessionPanel}
@@ -272,16 +292,16 @@ export function POSRegisterView() {
       }
     >
       <FadeIn className={registerContentClassName}>
-        {viewModel.drawerGate ? (
+        {isPosWorkflow && viewModel.drawerGate ? (
           <RegisterDrawerGate drawerGate={viewModel.drawerGate} />
         ) : (
           <div className="flex h-full min-h-0 flex-col gap-6 overflow-hidden">
-            {!viewModel.checkout.isTransactionCompleted && (
+            {isPosWorkflow && shouldRenderSaleSurface ? (
               <RegisterCustomerPanel customerPanel={viewModel.customerPanel} />
-            )}
+            ) : null}
 
             <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 overflow-hidden lg:grid-cols-[minmax(0,2fr)_minmax(340px,1fr)]">
-              {!viewModel.checkout.isTransactionCompleted && (
+              {shouldRenderSaleSurface ? (
                 <div className="flex min-h-0 flex-col overflow-hidden pr-1">
                   {shouldShowPaymentWorkspace ? (
                     <CartItems
@@ -326,42 +346,51 @@ export function POSRegisterView() {
                     <ProductLookupEmptyState />
                   )}
                 </div>
-              )}
+              ) : null}
 
               <div
                 className={cn(
                   "flex h-full min-h-0 overflow-hidden",
-                  viewModel.checkout.isTransactionCompleted && "lg:col-span-2",
+                  shouldRenderSaleSurface ? "lg:col-span-1" : "lg:col-span-2",
                 )}
               >
                 <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
-                  {!viewModel.checkout.isTransactionCompleted &&
-                    !shouldShowPaymentWorkspace && (
-                      <CartItems
-                        cartItems={viewModel.cart.items}
-                        onUpdateQuantity={viewModel.cart.onUpdateQuantity}
-                        onRemoveItem={viewModel.cart.onRemoveItem}
-                        clearCart={viewModel.cart.onClearCart}
-                        density="compact"
-                      />
-                    )}
-
-                  <div
-                    className={cn(
-                      "rounded-lg bg-white p-4",
-                      shouldShowPaymentWorkspace ||
-                        viewModel.checkout.isTransactionCompleted
-                        ? "flex min-h-0 flex-1 flex-col overflow-hidden"
-                        : "shrink-0",
-                    )}
-                  >
-                    <RegisterCheckoutPanel
-                      checkout={viewModel.checkout}
-                      cashierCard={viewModel.cashierCard}
-                      onPaymentFlowChange={handlePaymentFlowChange}
-                      onPaymentEntryStart={handlePaymentEntryStart}
+                  {shouldRenderSaleSurface && !shouldShowPaymentWorkspace ? (
+                    <CartItems
+                      cartItems={viewModel.cart.items}
+                      onUpdateQuantity={viewModel.cart.onUpdateQuantity}
+                      onRemoveItem={viewModel.cart.onRemoveItem}
+                      clearCart={viewModel.cart.onClearCart}
+                      density="compact"
                     />
-                  </div>
+                  ) : null}
+
+                  {shouldRenderCheckoutPanel ? (
+                    <div
+                      className={cn(
+                        "rounded-lg bg-white p-4",
+                        shouldShowPaymentWorkspace ||
+                          viewModel.checkout.isTransactionCompleted
+                          ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+                          : "shrink-0",
+                      )}
+                    >
+                      {isPosWorkflow ? (
+                        <RegisterCheckoutPanel
+                          checkout={viewModel.checkout}
+                          cashierCard={viewModel.cashierCard}
+                          onPaymentFlowChange={handlePaymentFlowChange}
+                          onPaymentEntryStart={handlePaymentEntryStart}
+                        />
+                      ) : (
+                        viewModel.expenseCompletion && (
+                          <ExpenseCompletionPanel
+                            expenseCompletion={viewModel.expenseCompletion}
+                          />
+                        )
+                      )}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>
