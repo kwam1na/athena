@@ -1,8 +1,9 @@
-import { Loader2, PackagePlus, Search } from "lucide-react";
+import { PackagePlus, Search } from "lucide-react";
 import { Product } from "./types";
 import { ProductCard } from "./ProductCard";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "../ui/skeleton";
 
 interface SearchResultsSectionProps {
   isLoading: boolean;
@@ -13,6 +14,37 @@ interface SearchResultsSectionProps {
   onQuickAddProduct?: (product?: Product) => void;
   quickAddQuery?: string;
   className?: string;
+}
+
+const SEARCH_RESULTS_LOADING_ROWS = 4;
+
+function SearchResultsLoadingSkeleton() {
+  return (
+    <div className="space-y-8 py-8">
+      {Array.from({ length: SEARCH_RESULTS_LOADING_ROWS }).map((_, index) => (
+        <div
+          key={index}
+          className="flex items-center gap-4 rounded-lg border border-gray-200 bg-white/80 p-3"
+        >
+          <Skeleton className="h-16 w-16 rounded flex-shrink-0 self-center mx-1 mt-4" />
+          <div className="flex-1 min-w-0 space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <Skeleton className="h-5 w-2/5" />
+              <Skeleton className="h-7 w-28" />
+            </div>
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-4 w-24 rounded-full" />
+            </div>
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-4 w-12 rounded-full" />
+              <Skeleton className="h-4 w-12 rounded-full" />
+            </div>
+            <Skeleton className="h-4 w-24" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function SearchResultsSection({
@@ -33,10 +65,8 @@ export function SearchResultsSection({
   if (isLoading) {
     return (
       <div className={cn("max-h-[586px] space-y-1 overflow-y-auto", className)}>
-        <div className="flex h-full flex-col items-center justify-center py-8 text-center text-gray-500">
-          <Loader2 className="mb-3 h-6 w-6 animate-spin text-gray-400" />
-          <p className="text-sm font-medium">Searching products...</p>
-        </div>
+        <span className="sr-only">Searching products…</span>
+        <SearchResultsLoadingSkeleton />
       </div>
     );
   }
