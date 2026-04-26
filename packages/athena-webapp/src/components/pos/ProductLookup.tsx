@@ -8,6 +8,7 @@ import { usePOSProductSearch } from "@/hooks/usePOSProducts";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { currencyFormatter } from "~/convex/utils";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
+import { Skeleton } from "../ui/skeleton";
 
 interface ProductLookupProps {
   isOpen: boolean;
@@ -15,6 +16,42 @@ interface ProductLookupProps {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   onAddProduct: (product: Product) => void;
+}
+
+const PRODUCT_LOOKUP_LOADING_ROWS = 3;
+
+function ProductLookupLoadingSkeleton() {
+  return (
+    <div className="space-y-2">
+      {Array.from({ length: PRODUCT_LOOKUP_LOADING_ROWS }).map((_, index) => (
+        <div
+          key={index}
+          className="flex items-center gap-3 rounded-lg border border-muted/80 bg-white/80 p-3"
+        >
+          <Skeleton className="h-10 w-10 rounded-md flex-shrink-0 self-center" />
+          <div className="flex-1 min-w-0 space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <Skeleton className="h-4 w-3/5" />
+              <Skeleton className="h-4 w-16" />
+            </div>
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-3 w-28 rounded-full" />
+              <Skeleton className="h-3 w-24 rounded-full" />
+            </div>
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-3 w-12 rounded-full" />
+              <Skeleton className="h-3 w-20 rounded-full" />
+            </div>
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-4 w-20" />
+              <Skeleton className="h-4 w-20" />
+            </div>
+          </div>
+          <Skeleton className="h-8 w-16 rounded-md" />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function ProductLookup({
@@ -54,9 +91,9 @@ export function ProductLookup({
             {showResults && (
               <div className="mt-3 max-h-[80%] overflow-y-auto">
                 {isLoading ? (
-                  <div className="text-center py-6 text-muted-foreground">
-                    <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                    <p className="text-sm">Searching products...</p>
+                  <div className="py-2">
+                    <span className="sr-only">Searching products…</span>
+                    <ProductLookupLoadingSkeleton />
                   </div>
                 ) : filteredProducts.length > 0 ? (
                   <div className="space-y-2">
