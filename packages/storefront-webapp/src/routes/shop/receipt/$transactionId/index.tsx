@@ -82,10 +82,6 @@ export const PosReceiptPage = () => {
     minute: "2-digit",
     hour12: true,
   });
-  const customerName =
-    data.customer?.name || data.customerInfo?.name || "Walk-in customer";
-  const customerEmail = data.customer?.email || data.customerInfo?.email;
-  const customerPhone = data.customer?.phone || data.customerInfo?.phone;
   const cashierName = data.cashier
     ? `${data.cashier.firstName || ""} ${data.cashier.lastName || ""}`.trim()
     : "Unassigned";
@@ -219,29 +215,6 @@ export const PosReceiptPage = () => {
           </section>
 
           <div className="line" />
-
-          {(customerEmail || customerPhone) && (
-            <section className="space-y-2">
-              <h2 className="section-title">Customer</h2>
-              <div className="row">
-                <span className="row-label">Name</span>
-                <span className="row-value">{customerName}</span>
-              </div>
-              {customerEmail ? (
-                <div className="row">
-                  <span className="row-label">Email</span>
-                  <span className="row-value">{customerEmail}</span>
-                </div>
-              ) : null}
-              {customerPhone ? (
-                <div className="row">
-                  <span className="row-label">Phone</span>
-                  <span className="row-value">{customerPhone}</span>
-                </div>
-              ) : null}
-              <div className="line" />
-            </section>
-          )}
 
           <section className="space-y-3">
             <h2 className="section-title">Items</h2>

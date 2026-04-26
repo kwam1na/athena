@@ -35,12 +35,12 @@ export function TransactionsView() {
 
   const transactions = useQuery(
     api.inventory.pos.getCompletedTransactions,
-    activeStore?._id ? { storeId: activeStore._id } : "skip"
+    activeStore?._id ? { storeId: activeStore._id } : "skip",
   );
 
   const formatter = useMemo(
     () => (activeStore ? currencyFormatter(activeStore.currency) : null),
-    [activeStore]
+    [activeStore],
   );
 
   const tableData: CompletedTransactionRow[] = useMemo(() => {
@@ -57,7 +57,7 @@ export function TransactionsView() {
       itemCount: transaction.itemCount,
       completedAt: transaction.completedAt,
       hasTrace: transaction.hasTrace,
-      sessionTraceId: transaction.sessionTraceId ?? null,
+      sessionTraceId: null,
     }));
   }, [transactions, formatter]);
 

@@ -34,7 +34,7 @@ export function ProductCard({
       onClick={handleClick}
     >
       {/* Product Image */}
-      <div className="w-16 h-16 bg-gradient-to-br from-gray-100 to-gray-200 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden border-2 border-gray-100">
+      <div className="w-16 h-16 bg-muted rounded flex items-center justify-center flex-shrink-0 overflow-hidden">
         {product.image ? (
           <img
             src={product.image}
@@ -42,7 +42,7 @@ export function ProductCard({
             className="w-full h-full object-cover"
           />
         ) : (
-          <Package className="w-5 h-5 text-gray-400" />
+          <Package className="w-5 h-5 text-muted-foreground" />
         )}
       </div>
 

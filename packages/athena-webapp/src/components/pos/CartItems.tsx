@@ -137,7 +137,9 @@ export function CartItems({
                   <div
                     className={cn(
                       "flex min-w-0 flex-1",
-                      isCompact ? "items-start justify-between gap-3" : "block space-y-2",
+                      isCompact
+                        ? "items-start justify-between gap-3"
+                        : "block space-y-2",
                     )}
                   >
                     <div className="min-w-0 space-y-2">
@@ -171,14 +173,22 @@ export function CartItems({
                         </p>
                       )}
 
-                      <p className={cn("text-sm font-medium", !isCompact && "pt-2")}>
+                      <p
+                        className={cn(
+                          "text-sm font-medium",
+                          !isCompact && "pt-2",
+                        )}
+                      >
                         {formatStoredAmount(formatter, item.price)}
                       </p>
                     </div>
 
                     {isCompact && (
                       <p className="shrink-0 text-right text-sm font-semibold">
-                        {formatStoredAmount(formatter, item.price * item.quantity)}
+                        {formatStoredAmount(
+                          formatter,
+                          item.price * item.quantity,
+                        )}
                       </p>
                     )}
                   </div>
@@ -187,9 +197,7 @@ export function CartItems({
                 <div
                   className={cn(
                     "flex items-center",
-                    isCompact
-                      ? "justify-between pt-3"
-                      : "contents",
+                    isCompact ? "justify-between pt-3" : "contents",
                   )}
                 >
                   {/* Quantity Controls */}
@@ -200,7 +208,9 @@ export function CartItems({
                     )}
                   >
                     {readOnly ? (
-                      <span className="text-sm font-medium">{item.quantity}</span>
+                      <span className="text-sm font-medium">
+                        {item.quantity}
+                      </span>
                     ) : (
                       <div className="flex items-center gap-2">
                         <Button
@@ -250,12 +260,20 @@ export function CartItems({
                     )}
                   >
                     <p className="font-semibold text-sm">
-                      {formatStoredAmount(formatter, item.price * item.quantity)}
+                      {formatStoredAmount(
+                        formatter,
+                        item.price * item.quantity,
+                      )}
                     </p>
                   </div>
 
                   {!readOnly && onRemoveItem && (
-                    <div className={cn("flex justify-center", !isCompact && "col-span-1")}>
+                    <div
+                      className={cn(
+                        "flex justify-center",
+                        !isCompact && "col-span-1",
+                      )}
+                    >
                       <Button
                         variant="ghost"
                         size="default"
@@ -272,7 +290,9 @@ export function CartItems({
                           )
                         }
                       >
-                        <Trash2 className={cn(isCompact ? "w-4 h-4" : "w-5 h-5")} />
+                        <Trash2
+                          className={cn(isCompact ? "w-4 h-4" : "w-5 h-5")}
+                        />
                       </Button>
                     </div>
                   )}

@@ -8,8 +8,8 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 
 ## Repo Summary
 - Code files discovered: 1518
-- Graph nodes: 3903
-- Graph edges: 3462
+- Graph nodes: 3904
+- Graph edges: 3463
 - Communities: 1433
 
 ## Graph Hotspots

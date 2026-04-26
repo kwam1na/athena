@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { render } from "@react-email/components";
 import {
-  ArrowRight,
   Banknote,
   Check,
   CreditCard,
@@ -306,7 +305,6 @@ export function OrderSummary({
           itemsCount={cartItemsCount}
           cashierName={cashierName || "Unassigned"}
           registerNumber={registerNumber || undefined}
-          customerInfo={completedData.customerInfo}
           items={receiptItems}
           subtotal={formatStoredAmount(formatter, completedData.subtotal)}
           tax={
@@ -342,10 +340,6 @@ export function OrderSummary({
               <h2 className="text-xl font-semibold tracking-tight text-foreground">
                 Sale recorded
               </h2>
-              <p className="text-sm text-muted-foreground">
-                {cartItemsCount} item{cartItemsCount === 1 ? "" : "s"} paid by{" "}
-                {formatPaymentMethod(summaryPaymentMethod).toLowerCase()}
-              </p>
             </div>
           </div>
         </div>
@@ -666,7 +660,7 @@ export function OrderSummary({
                 }}
                 disabled={cartItemsCount === 0}
                 variant="outline"
-                className="flex h-28 flex-col items-start justify-between rounded-xl border-gray-200 bg-white p-4 text-left text-gray-950 shadow-sm shadow-gray-200/80 hover:bg-gray-50"
+                className="flex h-28 flex-col items-start justify-between rounded-xl border-gray-200 bg-white p-4 text-left text-gray-950 shadow-sm hover:bg-gray-50"
                 size="lg"
               >
                 <CreditCard className="h-5 w-5 text-rose-600" />
@@ -680,14 +674,13 @@ export function OrderSummary({
                 }}
                 disabled={cartItemsCount === 0}
                 variant="outline"
-                className="col-span-2 flex h-24 items-center justify-between rounded-xl border-yellow-200 bg-yellow-50 p-4 text-left text-yellow-950 shadow-sm shadow-yellow-200/70 hover:bg-yellow-100 hover:text-yellow-950"
+                className="col-span-2 flex h-24 items-center justify-between rounded-xl bg-yellow-200 p-4 text-left text-yellow-950 shadow-sm shadow-yellow-200/70 hover:bg-yellow-100 hover:text-yellow-950"
                 size="lg"
               >
                 <span className="flex items-center gap-3">
                   <Smartphone className="h-5 w-5" />
                   <span className="text-base font-semibold">Mobile Money</span>
                 </span>
-                <ArrowRight className="h-5 w-5" />
               </Button>
             </div>
           </div>

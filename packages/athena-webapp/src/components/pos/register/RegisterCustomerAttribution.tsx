@@ -56,6 +56,7 @@ function buildCustomerCreateInput(searchQuery: string) {
   if (digitCount >= 7 && /^[+\d\s().-]+$/.test(trimmedQuery)) {
     return {
       ...input,
+      name: "",
       phone: trimmedQuery,
     };
   }
@@ -253,11 +254,19 @@ export function RegisterCustomerAttribution({
               <Input
                 autoFocus
                 value={searchQuery}
-	                onChange={(event) => {
-	                  cancelPendingAdd();
-	                  setSearchQuery(event.target.value);
-	                  setInlineError(null);
-	                }}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") {
+                    return;
+                  }
+
+                  event.preventDefault();
+                  void handleAddFromSearch();
+                }}
+                onChange={(event) => {
+                  cancelPendingAdd();
+                  setSearchQuery(event.target.value);
+                  setInlineError(null);
+                }}
                 placeholder="Name, phone, or email"
                 className="h-9 pl-9 text-sm"
               />
@@ -281,11 +290,11 @@ export function RegisterCustomerAttribution({
                 variant="ghost"
                 size="icon"
                 className="h-9 w-9"
-	                onClick={() => {
-	                  cancelPendingAdd();
-	                  setIsExpanded(false);
-	                  setInlineError(null);
-	                }}
+                onClick={() => {
+                  cancelPendingAdd();
+                  setIsExpanded(false);
+                  setInlineError(null);
+                }}
                 aria-label="Close customer lookup"
               >
                 <X className="h-4 w-4" aria-hidden="true" />

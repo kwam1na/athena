@@ -9,12 +9,6 @@ import {
   Text,
 } from "@react-email/components";
 
-export interface PosReceiptCustomerInfo {
-  name?: string;
-  email?: string;
-  phone?: string;
-}
-
 export interface PosReceiptStoreContact {
   street?: string;
   city?: string;
@@ -47,7 +41,6 @@ export interface PosReceiptEmailProps {
   completedTime: string;
   registerNumber?: string;
   cashierName?: string;
-  customerInfo?: PosReceiptCustomerInfo;
   items: Array<PosReceiptItem>;
   itemsCount: number;
   subtotal: string;
@@ -107,7 +100,6 @@ export default function PosReceiptEmail({
   completedTime = "3:27 PM",
   cashierName = "John D.",
   registerNumber,
-  customerInfo,
   items = mockItems,
   itemsCount = 4,
   subtotal = "GHS 2,720",
@@ -195,26 +187,6 @@ export default function PosReceiptEmail({
               )}
             </Block>
           </Section>
-
-          {customerInfo &&
-            (customerInfo.name || customerInfo.email || customerInfo.phone) && (
-              <Section style={sectionBorder}>
-                <SectionLabel>Customer</SectionLabel>
-                {customerInfo.name && (
-                  <Row label="Name" value={customerInfo.name} />
-                )}
-                {customerInfo.email && (
-                  <Row
-                    label="Email"
-                    value={customerInfo.email}
-                    valueStyle={styles.emailText}
-                  />
-                )}
-                {customerInfo.phone && (
-                  <Row label="Phone" value={customerInfo.phone} />
-                )}
-              </Section>
-            )}
 
           <Section style={sectionBorder}>
             <SectionLabel>Items</SectionLabel>
@@ -482,10 +454,6 @@ const styles: Record<string, CSSProperties> = {
   rowValue: {
     fontWeight: 700,
     textAlign: "right" as const,
-  },
-  emailText: {
-    fontSize: "10px",
-    lineHeight: "15px",
   },
   itemBlock: {
     borderBottom: "1px dotted #888888",

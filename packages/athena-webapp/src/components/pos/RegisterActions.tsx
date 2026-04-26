@@ -24,21 +24,12 @@ export function RegisterActions({
         <p
           className={cn(
             "text-sm font-semibold",
-            !hasTerminal && "text-red-500"
+            !hasTerminal && "text-red-500",
           )}
         >
           {registerNumber}
         </p>
       </div>
-      {customerName && (
-        <Badge
-          variant="default"
-          className="flex items-center gap-1 bg-pink-600"
-        >
-          <User className="w-3 h-3" />
-          {customerName}
-        </Badge>
-      )}
     </div>
   );
 }
