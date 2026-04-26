@@ -26,7 +26,14 @@ import {
   POS_SEARCH_DEBOUNCE_MS,
   POS_QUERY_BUFFER_MS,
 } from "@/lib/pos/constants";
-import { useEffect, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useImperativeHandle,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { SearchResultsSection } from "./SearchResultsSection";
 import { useProductSearchResults } from "@/hooks/useProductSearchResults";
 import { cn } from "@/lib/utils";
@@ -55,15 +62,25 @@ interface ProductEntryProps extends ProductSearchInputProps {
   resultsClassName?: string;
 }
 
-export function ProductSearchInput({
-  disabled,
-  productSearchQuery,
-  setProductSearchQuery,
-  onBarcodeSubmit,
-  className,
-  inputClassName,
-}: ProductSearchInputProps) {
-  const searchInputRef = useRef<HTMLInputElement>(null);
+export const ProductSearchInput = forwardRef<
+  HTMLInputElement | null,
+  ProductSearchInputProps
+>(function ProductSearchInput(
+  {
+    disabled,
+    productSearchQuery,
+    setProductSearchQuery,
+    onBarcodeSubmit,
+    className,
+    inputClassName,
+  },
+  ref
+) {
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  useImperativeHandle<HTMLInputElement | null, HTMLInputElement | null>(
+    ref,
+    () => searchInputRef.current
+  );
 
   useEffect(() => {
     if (!disabled) {
@@ -114,22 +131,84 @@ export function ProductSearchInput({
       )}
     </div>
   );
+});
+
+ProductSearchInput.displayName = "ProductSearchInput";
+
+export interface ProductEntryHandle {
+  focusProductSearchInput: () => boolean;
 }
 
-export function ProductEntry({
-  disabled,
-  showProductLookup,
-  productSearchQuery,
-  setProductSearchQuery,
-  onBarcodeSubmit,
-  onAddProduct,
-  barcodeSearchResult,
-  productIdSearchResults,
-  showSearchInput = true,
-  containerClassName,
-  lookupPanelClassName,
-  resultsClassName,
-}: ProductEntryProps) {
+const QUICK_ADD_LOOKUP_CODE_MAX_LENGTH = 64;
+const QUICK_ADD_LOOKUP_CODE_BARCODE = /^\d[\d-]*$/;
+const QUICK_ADD_LOOKUP_CODE_SKU = /^[A-Za-z0-9_-]+$/;
+
+function normalizeQuickAddLookupCode(lookupCode: string): string {
+  const trimmedLookupCode = lookupCode.trim();
+  if (!trimmedLookupCode) {
+    return "";
+  }
+
+  const lookupCodeWithoutSpaces = trimmedLookupCode.replace(/\s+/g, "");
+  if (QUICK_ADD_LOOKUP_CODE_BARCODE.test(lookupCodeWithoutSpaces)) {
+    return lookupCodeWithoutSpaces;
+  }
+
+  return trimmedLookupCode;
+}
+
+function isLikelyBarcode(lookupCode: string): boolean {
+  return QUICK_ADD_LOOKUP_CODE_BARCODE.test(lookupCode);
+}
+
+function isValidSku(lookupCode: string): boolean {
+  return QUICK_ADD_LOOKUP_CODE_SKU.test(lookupCode);
+}
+
+function validateQuickAddLookupCode(lookupCode: string) {
+  const trimmedLookupCode = lookupCode.trim();
+  if (!trimmedLookupCode) {
+    return null;
+  }
+
+  if (trimmedLookupCode.length > QUICK_ADD_LOOKUP_CODE_MAX_LENGTH) {
+    return "Lookup code is too long.";
+  }
+
+  const lookupCodeWithoutSpaces = trimmedLookupCode.replace(/\s+/g, "");
+  if (isLikelyBarcode(lookupCodeWithoutSpaces)) {
+    return null;
+  }
+
+  if (/\s/.test(trimmedLookupCode)) {
+    return "Lookup code cannot contain spaces.";
+  }
+
+  if (!isValidSku(lookupCodeWithoutSpaces)) {
+    return "Lookup code can only contain letters, numbers, hyphens, or underscores.";
+  }
+
+  return null;
+}
+
+export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
+  function ProductEntry(
+    {
+      disabled,
+      showProductLookup,
+      productSearchQuery,
+      setProductSearchQuery,
+      onBarcodeSubmit,
+      onAddProduct,
+      barcodeSearchResult,
+      productIdSearchResults,
+      showSearchInput = true,
+      containerClassName,
+      lookupPanelClassName,
+      resultsClassName,
+    },
+    ref
+  ) {
   const { activeStore } = useGetActiveStore();
   const { user } = useAuth();
   const quickAddProductSku = usePOSQuickAddProductSku();
@@ -140,6 +219,24 @@ export function ProductEntry({
   const [quickAddQuantity, setQuickAddQuantity] = useState("1");
   const [quickAddError, setQuickAddError] = useState<string | null>(null);
   const [isQuickAddSaving, setIsQuickAddSaving] = useState(false);
+  const productSearchInputRef = useRef<HTMLInputElement>(null);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      focusProductSearchInput: () => {
+        if (!productSearchInputRef.current) {
+          return false;
+        }
+
+        productSearchInputRef.current.focus();
+        productSearchInputRef.current.select();
+
+        return true;
+      },
+    }),
+    []
+  );
 
   const debouncedProductSearchQuery = useDebounce(
     productSearchQuery,
@@ -203,6 +300,18 @@ export function ProductEntry({
       return;
     }
 
+    const normalizedQuickAddLookupCode = normalizeQuickAddLookupCode(
+      quickAddLookupCode,
+    );
+    const lookupCodeValidationError = validateQuickAddLookupCode(
+      normalizedQuickAddLookupCode
+    );
+
+    if (lookupCodeValidationError) {
+      setQuickAddError(lookupCodeValidationError);
+      return;
+    }
+
     const parsedPrice = parseDisplayAmountInput(quickAddPrice);
     if (parsedPrice === undefined || parsedPrice <= 0) {
       setQuickAddError("Enter a selling price greater than 0.");
@@ -223,7 +332,7 @@ export function ProductEntry({
         storeId: activeStore._id,
         createdByUserId: user._id,
         name: quickAddName.trim(),
-        lookupCode: quickAddLookupCode.trim() || undefined,
+        lookupCode: normalizedQuickAddLookupCode || undefined,
         price: parsedPrice,
         quantityAvailable: Math.trunc(parsedQuantity),
       });
@@ -256,6 +365,7 @@ export function ProductEntry({
         >
           {showSearchInput && (
             <ProductSearchInput
+              ref={productSearchInputRef}
               disabled={disabled}
               productSearchQuery={productSearchQuery}
               setProductSearchQuery={setProductSearchQuery}
@@ -369,4 +479,6 @@ export function ProductEntry({
       </Dialog>
     </div>
   );
-}
+});
+
+ProductEntry.displayName = "ProductEntry";

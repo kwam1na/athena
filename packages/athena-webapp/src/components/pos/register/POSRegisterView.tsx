@@ -3,6 +3,7 @@ import { FadeIn } from "@/components/common/FadeIn";
 import { CashierAuthDialog } from "@/components/pos/CashierAuthDialog";
 import { CartItems } from "@/components/pos/CartItems";
 import {
+  ProductEntryHandle,
   ProductEntry,
   ProductSearchInput,
 } from "@/components/pos/ProductEntry";
@@ -109,6 +110,8 @@ function ProductLookupEmptyState() {
 export function POSRegisterView() {
   const viewModel = useRegisterViewModel();
   const [isPaymentInputActive, setIsPaymentInputActive] = useState(false);
+  const productEntryRef = useRef<ProductEntryHandle>(null);
+  const headerProductSearchInputRef = useRef<HTMLInputElement>(null);
   useCollapseSidebarForPosFlow();
   const isSessionActive = viewModel.header.isSessionActive;
   const isAuthDialogOpen = Boolean(viewModel.authDialog?.open);
@@ -133,6 +136,45 @@ export function POSRegisterView() {
       setIsPaymentInputActive(false);
     }
   }, [hasProductSearchIntent, isPaymentInputActive]);
+
+  useEffect(() => {
+    const handleCmdK = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "k") {
+        return;
+      }
+
+      const target = event.target as HTMLElement | null;
+      const isTypingTarget =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        target?.isContentEditable === true;
+
+      if (isTypingTarget) {
+        return;
+      }
+
+      event.preventDefault();
+
+      if (!canSearchProducts) {
+        return;
+      }
+
+      const didFocusProductEntryInput =
+        productEntryRef.current?.focusProductSearchInput() ?? false;
+      if (didFocusProductEntryInput) {
+        return;
+      }
+
+      if (shouldShowHeaderProductSearch) {
+        headerProductSearchInputRef.current?.focus();
+        headerProductSearchInputRef.current?.select();
+      }
+    };
+
+    document.addEventListener("keydown", handleCmdK);
+    return () => document.removeEventListener("keydown", handleCmdK);
+  }, [canSearchProducts, shouldShowHeaderProductSearch]);
 
   const handlePaymentFlowChange = useCallback((isActive: boolean) => {
     setIsPaymentInputActive(isActive);
@@ -205,6 +247,7 @@ export function POSRegisterView() {
 
               {shouldShowHeaderProductSearch && (
                 <ProductSearchInput
+                  ref={headerProductSearchInputRef}
                   disabled={viewModel.productEntry.disabled}
                   productSearchQuery={viewModel.productEntry.productSearchQuery}
                   setProductSearchQuery={
@@ -251,6 +294,7 @@ export function POSRegisterView() {
                   ) : hasProductSearchIntent ? (
                     <div className="min-h-0 flex-1">
                       <ProductEntry
+                        ref={productEntryRef}
                         disabled={viewModel.productEntry.disabled}
                         showProductLookup={
                           viewModel.productEntry.showProductLookup

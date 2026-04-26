@@ -3,14 +3,10 @@ import { useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import {
   Banknote,
-  CalendarClock,
-  CheckCircle,
   CheckCircle2,
   CreditCard,
-  Receipt,
   Smartphone,
   User,
-  Wallet,
 } from "lucide-react";
 
 import View from "../../View";
@@ -24,11 +20,12 @@ import { OrderSummary } from "../OrderSummary";
 import { CartItems } from "../CartItems";
 import type { CartItem } from "../types";
 import type { Id } from "~/convex/_generated/dataModel";
-import { Card, CardContent, CardHeader, CardTitle } from "../../ui/card";
-import { EmptyState } from "../../states/empty/empty-state";
+import { CardContent, CardHeader } from "../../ui/card";
 import { currencyFormatter } from "~/convex/utils";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 import { WorkflowTraceRouteLink } from "../../traces/WorkflowTraceRouteLink";
+import { Button } from "../../ui/button";
+import config from "~/src/config";
 
 type RouteParams =
   | {
@@ -115,6 +112,10 @@ export function TransactionView() {
         : Smartphone;
 
   const PaymentIcon = paymentMethodIcon;
+  const storefrontReceiptUrl = `${config.storeFrontUrl.replace(
+    /\/$/,
+    "",
+  )}/shop/receipt/${transactionId}`;
 
   return (
     <View
@@ -126,14 +127,14 @@ export function TransactionView() {
     >
       <FadeIn>
         <div className="container mx-auto p-6 space-y-8">
-          <div className="grid gap-8 lg:grid-cols-[380px,1fr]">
+          <div className="grid gap-8 xl:grid-cols-[380px,minmax(0,1fr)]">
             <div className="space-y-6">
-              <div>
-                <CardHeader className="space-y-3">
+              <section className="overflow-hidden rounded-[1.25rem] border border-border/80 bg-surface-raised shadow-surface">
+                <CardHeader className="space-y-4 pb-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <Badge
                       variant="outline"
-                      className="w-fit text-green-600 flex items-center gap-2"
+                      className="w-fit border-[hsl(var(--success)/0.22)] bg-[hsl(var(--success)/0.08)] text-[hsl(var(--success))] flex items-center gap-2"
                     >
                       <CheckCircle2 className="w-4 h-4" />
                       Completed
@@ -143,18 +144,21 @@ export function TransactionView() {
                     </Badge>
                     {transaction.sessionTraceId ? (
                       <div className="flex flex-wrap items-center gap-3">
-                        <WorkflowTraceRouteLink traceId={transaction.sessionTraceId}>
+                        <WorkflowTraceRouteLink
+                          traceId={transaction.sessionTraceId}
+                        >
                           Session trace
                         </WorkflowTraceRouteLink>
                       </div>
                     ) : null}
                   </div>
-                  {/* <CardTitle className="text-lg">Transaction details</CardTitle> */}
                 </CardHeader>
-                <CardContent className="space-y-4 text-sm">
+                <CardContent className="space-y-4 border-t border-border/70 pt-4 text-sm">
                   {transaction.cashier && (
                     <div className="flex items-center gap-3">
-                      <User className="w-4 h-4 text-muted-foreground" />
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                        <User className="w-4 h-4" />
+                      </div>
                       <div>
                         <p className="font-medium">
                           {`${transaction.cashier.firstName} ${transaction.cashier.lastName.charAt(0)}.`}
@@ -165,7 +169,9 @@ export function TransactionView() {
                   )}
 
                   <div className="flex items-center gap-3">
-                    <PaymentIcon className="w-4 h-4 text-muted-foreground" />
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                      <PaymentIcon className="w-4 h-4" />
+                    </div>
                     <div>
                       <p className="font-medium capitalize">
                         {transaction.paymentMethod?.replace("_", " ") ||
@@ -177,7 +183,7 @@ export function TransactionView() {
                           {formatter.format(transaction.amountPaid)}
                         </p>
                       )} */}
-                      {transaction.changeGiven !== undefined &&
+                  {transaction.changeGiven !== undefined &&
                         transaction.changeGiven > 0 && (
                           <p className="text-xs text-muted-foreground">
                             Change given:{" "}
@@ -188,6 +194,18 @@ export function TransactionView() {
                           </p>
                         )}
                     </div>
+                  </div>
+
+                  <div>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() =>
+                        window.open(storefrontReceiptUrl, "_blank", "noreferrer")
+                      }
+                    >
+                      View receipt
+                    </Button>
                   </div>
 
                   {(transaction.customer || transaction.customerInfo) && (
@@ -227,11 +245,13 @@ export function TransactionView() {
                     </div>
                   )} */}
                 </CardContent>
-              </div>
+              </section>
 
               <OrderSummary
                 cartItems={cartItems}
                 readOnly
+                presentation="rail"
+                registerNumber={transaction.registerNumber}
                 completedOrderNumber={transaction.transactionNumber}
                 completedTransactionData={completedData}
                 cashierName={

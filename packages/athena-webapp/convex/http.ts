@@ -26,6 +26,7 @@ import {
   storefrontRoutes,
   offersRoutes,
   userOffersRoutes,
+  posTransactionRoutes,
 } from "./http/domains/storeFront/routes";
 import { guestRoutes } from "./http/domains/storeFront/routes/guest";
 import { colorRoutes } from "./http/domains/inventory/routes/colors";
@@ -102,5 +103,7 @@ app.route("/rewards", rewardsRoutes);
 app.route("/offers", offersRoutes);
 
 app.route("/user-offers", userOffersRoutes);
+
+app.route("/pos-transactions", posTransactionRoutes);
 
 export default http;

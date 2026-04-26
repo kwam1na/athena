@@ -5,6 +5,7 @@ import {
   getCashierById,
   getPosSessionById,
   getPosTransactionById,
+  getRegisterSessionById,
   listCompletedTransactions,
   listCompletedTransactionsForDay,
   listTransactionItems,
@@ -143,6 +144,15 @@ export async function getTransactionById(
   const session = transaction.sessionId
     ? await getPosSessionById(ctx, transaction.sessionId)
     : null;
+  const registerSessionId =
+    transaction.registerSessionId ?? session?.registerSessionId;
+  const registerSession = registerSessionId
+    ? await getRegisterSessionById(ctx, registerSessionId)
+    : null;
+  const registerNumber =
+    transaction.registerNumber ??
+    session?.registerNumber ??
+    registerSession?.registerNumber;
   const items = await listTransactionItems(ctx, transaction._id);
   const sessionTraceId = session?.workflowTraceId ?? null;
   const customerProfileId =
@@ -157,6 +167,8 @@ export async function getTransactionById(
     total: transaction.total,
     hasTrace: Boolean(sessionTraceId),
     sessionTraceId,
+    registerNumber,
+    registerSessionId,
     paymentMethod: transaction.paymentMethod,
     payments: transaction.payments,
     totalPaid: transaction.totalPaid ?? transaction.total,
