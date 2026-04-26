@@ -68,7 +68,7 @@ vi.mock("@/components/ui/tabs", () => ({
 }));
 
 describe("TransactionsView", () => {
-  it("maps the trace availability flag into the rendered completed-transactions surface", () => {
+  it("does not render session traces on the completed transactions surface", () => {
     useGetActiveStoreMock.mockReturnValue({
       activeStore: {
         _id: "store-1",
@@ -104,7 +104,7 @@ describe("TransactionsView", () => {
 
     render(<TransactionsView />);
 
-    expect(screen.getByTestId("session-trace-POS-123456")).toBeInTheDocument();
+    expect(screen.queryByTestId("session-trace-POS-123456")).not.toBeInTheDocument();
     expect(screen.queryByTestId("session-trace-POS-654321")).not.toBeInTheDocument();
   });
 });
