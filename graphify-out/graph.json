@@ -6155,7 +6155,7 @@
       "relation": "calls",
       "source": "mobileproductactions_handleconfirm",
       "source_file": "packages/storefront-webapp/src/components/product-page/MobileProductActions.tsx",
-      "source_location": "L139",
+      "source_location": "L130",
       "target": "mobileproductactions_handleprimaryaction",
       "weight": 1
     },
@@ -28871,7 +28871,7 @@
       "relation": "contains",
       "source": "packages_storefront_webapp_src_components_product_page_mobileproductactions_tsx",
       "source_file": "packages/storefront-webapp/src/components/product-page/MobileProductActions.tsx",
-      "source_location": "L80",
+      "source_location": "L76",
       "target": "mobileproductactions_collapseonpageclick",
       "weight": 1
     },
@@ -28883,7 +28883,7 @@
       "relation": "contains",
       "source": "packages_storefront_webapp_src_components_product_page_mobileproductactions_tsx",
       "source_file": "packages/storefront-webapp/src/components/product-page/MobileProductActions.tsx",
-      "source_location": "L124",
+      "source_location": "L120",
       "target": "mobileproductactions_handleconfirm",
       "weight": 1
     },
@@ -28895,7 +28895,7 @@
       "relation": "contains",
       "source": "packages_storefront_webapp_src_components_product_page_mobileproductactions_tsx",
       "source_file": "packages/storefront-webapp/src/components/product-page/MobileProductActions.tsx",
-      "source_location": "L133",
+      "source_location": "L129",
       "target": "mobileproductactions_handleprimaryaction",
       "weight": 1
     },
@@ -28907,7 +28907,7 @@
       "relation": "contains",
       "source": "packages_storefront_webapp_src_components_product_page_mobileproductactions_tsx",
       "source_file": "packages/storefront-webapp/src/components/product-page/MobileProductActions.tsx",
-      "source_location": "L142",
+      "source_location": "L133",
       "target": "mobileproductactions_handlesecondaryaction",
       "weight": 1
     },
@@ -28919,7 +28919,7 @@
       "relation": "contains",
       "source": "packages_storefront_webapp_src_components_product_page_mobileproductactions_tsx",
       "source_file": "packages/storefront-webapp/src/components/product-page/MobileProductActions.tsx",
-      "source_location": "L48",
+      "source_location": "L44",
       "target": "mobileproductactions_updateposition",
       "weight": 1
     },
@@ -48042,15 +48042,6 @@
     {
       "community": 1337,
       "file_type": "code",
-      "id": "packages_storefront_webapp_src_components_product_page_mobileproductactions_test_tsx",
-      "label": "MobileProductActions.test.tsx",
-      "norm_label": "mobileproductactions.test.tsx",
-      "source_file": "packages/storefront-webapp/src/components/product-page/MobileProductActions.test.tsx",
-      "source_location": "L1"
-    },
-    {
-      "community": 1338,
-      "file_type": "code",
       "id": "packages_storefront_webapp_src_components_product_page_productactions_test_tsx",
       "label": "ProductActions.test.tsx",
       "norm_label": "productactions.test.tsx",
@@ -48058,12 +48049,21 @@
       "source_location": "L1"
     },
     {
-      "community": 1339,
+      "community": 1338,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_product_page_productinfo_tsx",
       "label": "ProductInfo.tsx",
       "norm_label": "productinfo.tsx",
       "source_file": "packages/storefront-webapp/src/components/product-page/ProductInfo.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 1339,
+      "file_type": "code",
+      "id": "packages_storefront_webapp_src_components_product_page_productreviews_tsx",
+      "label": "ProductReviews.tsx",
+      "norm_label": "productreviews.tsx",
+      "source_file": "packages/storefront-webapp/src/components/product-page/ProductReviews.tsx",
       "source_location": "L1"
     },
     {
@@ -48123,15 +48123,6 @@
     {
       "community": 1340,
       "file_type": "code",
-      "id": "packages_storefront_webapp_src_components_product_page_productreviews_tsx",
-      "label": "ProductReviews.tsx",
-      "norm_label": "productreviews.tsx",
-      "source_file": "packages/storefront-webapp/src/components/product-page/ProductReviews.tsx",
-      "source_location": "L1"
-    },
-    {
-      "community": 1341,
-      "file_type": "code",
       "id": "packages_storefront_webapp_src_components_product_page_productsnavigationbar_tsx",
       "label": "ProductsNavigationBar.tsx",
       "norm_label": "productsnavigationbar.tsx",
@@ -48139,7 +48130,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1342,
+      "community": 1341,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_product_reviews_errormessage_tsx",
       "label": "ErrorMessage.tsx",
@@ -48148,7 +48139,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1343,
+      "community": 1342,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_product_reviews_existingreviewmessage_tsx",
       "label": "ExistingReviewMessage.tsx",
@@ -48157,7 +48148,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1344,
+      "community": 1343,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_product_reviews_reviewform_tsx",
       "label": "ReviewForm.tsx",
@@ -48166,7 +48157,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1345,
+      "community": 1344,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_product_reviews_successmessage_tsx",
       "label": "SuccessMessage.tsx",
@@ -48175,7 +48166,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1346,
+      "community": 1345,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_product_reviews_types_ts",
       "label": "types.ts",
@@ -48184,7 +48175,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1347,
+      "community": 1346,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_saved_items_savedbag_tsx",
       "label": "SavedBag.tsx",
@@ -48193,7 +48184,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1348,
+      "community": 1347,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_saved_items_savedicon_tsx",
       "label": "SavedIcon.tsx",
@@ -48202,12 +48193,21 @@
       "source_location": "L1"
     },
     {
-      "community": 1349,
+      "community": 1348,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_shopping_bag_carticon_tsx",
       "label": "CartIcon.tsx",
       "norm_label": "carticon.tsx",
       "source_file": "packages/storefront-webapp/src/components/shopping-bag/CartIcon.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 1349,
+      "file_type": "code",
+      "id": "packages_storefront_webapp_src_components_shopping_bag_shoppingbag_test_tsx",
+      "label": "ShoppingBag.test.tsx",
+      "norm_label": "shoppingbag.test.tsx",
+      "source_file": "packages/storefront-webapp/src/components/shopping-bag/ShoppingBag.test.tsx",
       "source_location": "L1"
     },
     {
@@ -48217,7 +48217,7 @@
       "label": "collapseOnPageClick()",
       "norm_label": "collapseonpageclick()",
       "source_file": "packages/storefront-webapp/src/components/product-page/MobileProductActions.tsx",
-      "source_location": "L80"
+      "source_location": "L76"
     },
     {
       "community": 135,
@@ -48226,7 +48226,7 @@
       "label": "handleConfirm()",
       "norm_label": "handleconfirm()",
       "source_file": "packages/storefront-webapp/src/components/product-page/MobileProductActions.tsx",
-      "source_location": "L124"
+      "source_location": "L120"
     },
     {
       "community": 135,
@@ -48235,7 +48235,7 @@
       "label": "handlePrimaryAction()",
       "norm_label": "handleprimaryaction()",
       "source_file": "packages/storefront-webapp/src/components/product-page/MobileProductActions.tsx",
-      "source_location": "L133"
+      "source_location": "L129"
     },
     {
       "community": 135,
@@ -48244,7 +48244,7 @@
       "label": "handleSecondaryAction()",
       "norm_label": "handlesecondaryaction()",
       "source_file": "packages/storefront-webapp/src/components/product-page/MobileProductActions.tsx",
-      "source_location": "L142"
+      "source_location": "L133"
     },
     {
       "community": 135,
@@ -48253,7 +48253,7 @@
       "label": "updatePosition()",
       "norm_label": "updateposition()",
       "source_file": "packages/storefront-webapp/src/components/product-page/MobileProductActions.tsx",
-      "source_location": "L48"
+      "source_location": "L44"
     },
     {
       "community": 135,
@@ -48267,15 +48267,6 @@
     {
       "community": 1350,
       "file_type": "code",
-      "id": "packages_storefront_webapp_src_components_shopping_bag_shoppingbag_test_tsx",
-      "label": "ShoppingBag.test.tsx",
-      "norm_label": "shoppingbag.test.tsx",
-      "source_file": "packages/storefront-webapp/src/components/shopping-bag/ShoppingBag.test.tsx",
-      "source_location": "L1"
-    },
-    {
-      "community": 1351,
-      "file_type": "code",
       "id": "packages_storefront_webapp_src_components_states_empty_empty_state_tsx",
       "label": "empty-state.tsx",
       "norm_label": "empty-state.tsx",
@@ -48283,7 +48274,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1352,
+      "community": 1351,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_states_maintenance_maintenance_tsx",
       "label": "Maintenance.tsx",
@@ -48292,7 +48283,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1353,
+      "community": 1352,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_animatedcard_tsx",
       "label": "AnimatedCard.tsx",
@@ -48301,7 +48292,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1354,
+      "community": 1353,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_accordion_tsx",
       "label": "accordion.tsx",
@@ -48310,7 +48301,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1355,
+      "community": 1354,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_alert_tsx",
       "label": "alert.tsx",
@@ -48319,7 +48310,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1356,
+      "community": 1355,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_breadcrumb_tsx",
       "label": "breadcrumb.tsx",
@@ -48328,7 +48319,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1357,
+      "community": 1356,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_button_tsx",
       "label": "button.tsx",
@@ -48337,7 +48328,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1358,
+      "community": 1357,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_card_tsx",
       "label": "card.tsx",
@@ -48346,12 +48337,21 @@
       "source_location": "L1"
     },
     {
-      "community": 1359,
+      "community": 1358,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_checkbox_tsx",
       "label": "checkbox.tsx",
       "norm_label": "checkbox.tsx",
       "source_file": "packages/storefront-webapp/src/components/ui/checkbox.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 1359,
+      "file_type": "code",
+      "id": "packages_storefront_webapp_src_components_ui_command_tsx",
+      "label": "command.tsx",
+      "norm_label": "command.tsx",
+      "source_file": "packages/storefront-webapp/src/components/ui/command.tsx",
       "source_location": "L1"
     },
     {
@@ -48411,15 +48411,6 @@
     {
       "community": 1360,
       "file_type": "code",
-      "id": "packages_storefront_webapp_src_components_ui_command_tsx",
-      "label": "command.tsx",
-      "norm_label": "command.tsx",
-      "source_file": "packages/storefront-webapp/src/components/ui/command.tsx",
-      "source_location": "L1"
-    },
-    {
-      "community": 1361,
-      "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_context_menu_tsx",
       "label": "context-menu.tsx",
       "norm_label": "context-menu.tsx",
@@ -48427,7 +48418,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1362,
+      "community": 1361,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_dialog_tsx",
       "label": "dialog.tsx",
@@ -48436,7 +48427,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1363,
+      "community": 1362,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_dropdown_menu_tsx",
       "label": "dropdown-menu.tsx",
@@ -48445,7 +48436,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1364,
+      "community": 1363,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_form_tsx",
       "label": "form.tsx",
@@ -48454,7 +48445,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1365,
+      "community": 1364,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_icons_tsx",
       "label": "icons.tsx",
@@ -48463,7 +48454,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1366,
+      "community": 1365,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_image_with_fallback_tsx",
       "label": "image-with-fallback.tsx",
@@ -48472,7 +48463,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1367,
+      "community": 1366,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_input_otp_tsx",
       "label": "input-otp.tsx",
@@ -48481,7 +48472,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1368,
+      "community": 1367,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_input_with_end_button_tsx",
       "label": "input-with-end-button.tsx",
@@ -48490,12 +48481,21 @@
       "source_location": "L1"
     },
     {
-      "community": 1369,
+      "community": 1368,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_input_tsx",
       "label": "input.tsx",
       "norm_label": "input.tsx",
       "source_file": "packages/storefront-webapp/src/components/ui/input.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 1369,
+      "file_type": "code",
+      "id": "packages_storefront_webapp_src_components_ui_label_tsx",
+      "label": "label.tsx",
+      "norm_label": "label.tsx",
+      "source_file": "packages/storefront-webapp/src/components/ui/label.tsx",
       "source_location": "L1"
     },
     {
@@ -48555,15 +48555,6 @@
     {
       "community": 1370,
       "file_type": "code",
-      "id": "packages_storefront_webapp_src_components_ui_label_tsx",
-      "label": "label.tsx",
-      "norm_label": "label.tsx",
-      "source_file": "packages/storefront-webapp/src/components/ui/label.tsx",
-      "source_location": "L1"
-    },
-    {
-      "community": 1371,
-      "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_modals_leaveareviewmodalform_tsx",
       "label": "LeaveAReviewModalForm.tsx",
       "norm_label": "leaveareviewmodalform.tsx",
@@ -48571,7 +48562,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1372,
+      "community": 1371,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_modals_action_modal_tsx",
       "label": "action-modal.tsx",
@@ -48580,7 +48571,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1373,
+      "community": 1372,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_modals_animations_welcomebackmodalanimations_ts",
       "label": "welcomeBackModalAnimations.ts",
@@ -48589,7 +48580,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1374,
+      "community": 1373,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_modals_index_ts",
       "label": "index.ts",
@@ -48598,7 +48589,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1375,
+      "community": 1374,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_modals_types_ts",
       "label": "types.ts",
@@ -48607,7 +48598,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1376,
+      "community": 1375,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_navigation_menu_tsx",
       "label": "navigation-menu.tsx",
@@ -48616,7 +48607,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1377,
+      "community": 1376,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_popover_tsx",
       "label": "popover.tsx",
@@ -48625,7 +48616,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1378,
+      "community": 1377,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_radio_group_tsx",
       "label": "radio-group.tsx",
@@ -48634,12 +48625,21 @@
       "source_location": "L1"
     },
     {
-      "community": 1379,
+      "community": 1378,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_scroll_area_tsx",
       "label": "scroll-area.tsx",
       "norm_label": "scroll-area.tsx",
       "source_file": "packages/storefront-webapp/src/components/ui/scroll-area.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 1379,
+      "file_type": "code",
+      "id": "packages_storefront_webapp_src_components_ui_select_tsx",
+      "label": "select.tsx",
+      "norm_label": "select.tsx",
+      "source_file": "packages/storefront-webapp/src/components/ui/select.tsx",
       "source_location": "L1"
     },
     {
@@ -48699,15 +48699,6 @@
     {
       "community": 1380,
       "file_type": "code",
-      "id": "packages_storefront_webapp_src_components_ui_select_tsx",
-      "label": "select.tsx",
-      "norm_label": "select.tsx",
-      "source_file": "packages/storefront-webapp/src/components/ui/select.tsx",
-      "source_location": "L1"
-    },
-    {
-      "community": 1381,
-      "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_separator_tsx",
       "label": "separator.tsx",
       "norm_label": "separator.tsx",
@@ -48715,7 +48706,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1382,
+      "community": 1381,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_sheet_tsx",
       "label": "sheet.tsx",
@@ -48724,7 +48715,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1383,
+      "community": 1382,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_table_tsx",
       "label": "table.tsx",
@@ -48733,7 +48724,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1384,
+      "community": 1383,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_tabs_tsx",
       "label": "tabs.tsx",
@@ -48742,7 +48733,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1385,
+      "community": 1384,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_textarea_tsx",
       "label": "textarea.tsx",
@@ -48751,7 +48742,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1386,
+      "community": 1385,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_toggle_group_tsx",
       "label": "toggle-group.tsx",
@@ -48760,7 +48751,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1387,
+      "community": 1386,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_toggle_tsx",
       "label": "toggle.tsx",
@@ -48769,7 +48760,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1388,
+      "community": 1387,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_tooltip_tsx",
       "label": "tooltip.tsx",
@@ -48778,12 +48769,21 @@
       "source_location": "L1"
     },
     {
-      "community": 1389,
+      "community": 1388,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_config_ts",
       "label": "config.ts",
       "norm_label": "config.ts",
       "source_file": "packages/storefront-webapp/src/config.ts",
+      "source_location": "L1"
+    },
+    {
+      "community": 1389,
+      "file_type": "code",
+      "id": "packages_storefront_webapp_src_hooks_use_store_modal_tsx",
+      "label": "use-store-modal.tsx",
+      "norm_label": "use-store-modal.tsx",
+      "source_file": "packages/storefront-webapp/src/hooks/use-store-modal.tsx",
       "source_location": "L1"
     },
     {
@@ -48843,15 +48843,6 @@
     {
       "community": 1390,
       "file_type": "code",
-      "id": "packages_storefront_webapp_src_hooks_use_store_modal_tsx",
-      "label": "use-store-modal.tsx",
-      "norm_label": "use-store-modal.tsx",
-      "source_file": "packages/storefront-webapp/src/hooks/use-store-modal.tsx",
-      "source_location": "L1"
-    },
-    {
-      "community": 1391,
-      "file_type": "code",
       "id": "packages_storefront_webapp_src_hooks_useorganizationmodal_tsx",
       "label": "useOrganizationModal.tsx",
       "norm_label": "useorganizationmodal.tsx",
@@ -48859,7 +48850,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1392,
+      "community": 1391,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_hooks_usestorefrontobservability_ts",
       "label": "useStorefrontObservability.ts",
@@ -48868,7 +48859,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1393,
+      "community": 1392,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_constants_ts",
       "label": "constants.ts",
@@ -48877,7 +48868,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1394,
+      "community": 1393,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_countries_ts",
       "label": "countries.ts",
@@ -48886,7 +48877,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1395,
+      "community": 1394,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_feeutils_test_ts",
       "label": "feeUtils.test.ts",
@@ -48895,7 +48886,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1396,
+      "community": 1395,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_ghana_ts",
       "label": "ghana.ts",
@@ -48904,7 +48895,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1397,
+      "community": 1396,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_ghanaregions_ts",
       "label": "ghanaRegions.ts",
@@ -48913,7 +48904,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1398,
+      "community": 1397,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_maintenanceutils_test_ts",
       "label": "maintenanceUtils.test.ts",
@@ -48922,12 +48913,21 @@
       "source_location": "L1"
     },
     {
-      "community": 1399,
+      "community": 1398,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_mutations_ts_index_ts",
       "label": "index.ts",
       "norm_label": "index.ts",
       "source_file": "packages/storefront-webapp/src/lib/mutations.ts/index.ts",
+      "source_location": "L1"
+    },
+    {
+      "community": 1399,
+      "file_type": "code",
+      "id": "packages_storefront_webapp_src_lib_queries_store_ts",
+      "label": "store.ts",
+      "norm_label": "store.ts",
+      "source_file": "packages/storefront-webapp/src/lib/queries/store.ts",
       "source_location": "L1"
     },
     {
@@ -49158,15 +49158,6 @@
     {
       "community": 1400,
       "file_type": "code",
-      "id": "packages_storefront_webapp_src_lib_queries_store_ts",
-      "label": "store.ts",
-      "norm_label": "store.ts",
-      "source_file": "packages/storefront-webapp/src/lib/queries/store.ts",
-      "source_location": "L1"
-    },
-    {
-      "community": 1401,
-      "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_schemas_bag_ts",
       "label": "bag.ts",
       "norm_label": "bag.ts",
@@ -49174,7 +49165,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1402,
+      "community": 1401,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_schemas_bagitem_ts",
       "label": "bagItem.ts",
@@ -49183,7 +49174,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1403,
+      "community": 1402,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_schemas_category_ts",
       "label": "category.ts",
@@ -49192,7 +49183,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1404,
+      "community": 1403,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_schemas_organization_ts",
       "label": "organization.ts",
@@ -49201,7 +49192,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1405,
+      "community": 1404,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_schemas_product_ts",
       "label": "product.ts",
@@ -49210,7 +49201,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1406,
+      "community": 1405,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_schemas_store_ts",
       "label": "store.ts",
@@ -49219,7 +49210,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1407,
+      "community": 1406,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_schemas_subcategory_ts",
       "label": "subcategory.ts",
@@ -49228,7 +49219,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1408,
+      "community": 1407,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_schemas_user_ts",
       "label": "user.ts",
@@ -49237,12 +49228,21 @@
       "source_location": "L1"
     },
     {
-      "community": 1409,
+      "community": 1408,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_states_ts",
       "label": "states.ts",
       "norm_label": "states.ts",
       "source_file": "packages/storefront-webapp/src/lib/states.ts",
+      "source_location": "L1"
+    },
+    {
+      "community": 1409,
+      "file_type": "code",
+      "id": "packages_storefront_webapp_src_lib_storefrontfailureobservability_test_ts",
+      "label": "storefrontFailureObservability.test.ts",
+      "norm_label": "storefrontfailureobservability.test.ts",
+      "source_file": "packages/storefront-webapp/src/lib/storefrontFailureObservability.test.ts",
       "source_location": "L1"
     },
     {
@@ -49302,15 +49302,6 @@
     {
       "community": 1410,
       "file_type": "code",
-      "id": "packages_storefront_webapp_src_lib_storefrontfailureobservability_test_ts",
-      "label": "storefrontFailureObservability.test.ts",
-      "norm_label": "storefrontfailureobservability.test.ts",
-      "source_file": "packages/storefront-webapp/src/lib/storefrontFailureObservability.test.ts",
-      "source_location": "L1"
-    },
-    {
-      "community": 1411,
-      "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_storefrontjourneyevents_test_ts",
       "label": "storefrontJourneyEvents.test.ts",
       "norm_label": "storefrontjourneyevents.test.ts",
@@ -49318,7 +49309,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1412,
+      "community": 1411,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_utils_test_ts",
       "label": "utils.test.ts",
@@ -49327,7 +49318,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1413,
+      "community": 1412,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routetree_gen_ts",
       "label": "routeTree.gen.ts",
@@ -49336,7 +49327,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1414,
+      "community": 1413,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_homepageloader_test_ts",
       "label": "-homePageLoader.test.ts",
@@ -49345,7 +49336,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1415,
+      "community": 1414,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_root_tsx",
       "label": "__root.tsx",
@@ -49354,7 +49345,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1416,
+      "community": 1415,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_layout_orderslayout_shop_orders_orderid_orderitemid_review_tsx",
       "label": "$orderItemId.review.tsx",
@@ -49363,7 +49354,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1417,
+      "community": 1416,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_layout_orderslayout_shop_orders_index_tsx",
       "label": "index.tsx",
@@ -49372,7 +49363,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1418,
+      "community": 1417,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_layout_shoplayout_shop_categoryslug_subcategoryslug_tsx",
       "label": "$subcategorySlug.tsx",
@@ -49381,12 +49372,21 @@
       "source_location": "L1"
     },
     {
-      "community": 1419,
+      "community": 1418,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_layout_shoplayout_shop_categoryslug_index_tsx",
       "label": "index.tsx",
       "norm_label": "index.tsx",
       "source_file": "packages/storefront-webapp/src/routes/_layout/_shopLayout/shop/$categorySlug/index.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 1419,
+      "file_type": "code",
+      "id": "packages_storefront_webapp_src_routes_layout_rewards_index_tsx",
+      "label": "rewards.index.tsx",
+      "norm_label": "rewards.index.tsx",
+      "source_file": "packages/storefront-webapp/src/routes/_layout/rewards.index.tsx",
       "source_location": "L1"
     },
     {
@@ -49437,15 +49437,6 @@
     {
       "community": 1420,
       "file_type": "code",
-      "id": "packages_storefront_webapp_src_routes_layout_rewards_index_tsx",
-      "label": "rewards.index.tsx",
-      "norm_label": "rewards.index.tsx",
-      "source_file": "packages/storefront-webapp/src/routes/_layout/rewards.index.tsx",
-      "source_location": "L1"
-    },
-    {
-      "community": 1421,
-      "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_layout_shop_saved_index_tsx",
       "label": "shop.saved.index.tsx",
       "norm_label": "shop.saved.index.tsx",
@@ -49453,7 +49444,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1422,
+      "community": 1421,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_shop_bag_index_tsx",
       "label": "bag.index.tsx",
@@ -49462,7 +49453,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1423,
+      "community": 1422,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_shop_checkout_sessionidslug_complete_tsx",
       "label": "complete.tsx",
@@ -49471,7 +49462,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1424,
+      "community": 1423,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_shop_checkout_sessionidslug_incomplete_tsx",
       "label": "incomplete.tsx",
@@ -49480,7 +49471,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1425,
+      "community": 1424,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_shop_checkout_index_tsx",
       "label": "index.tsx",
@@ -49489,7 +49480,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1426,
+      "community": 1425,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_shop_checkout_pending_tsx",
       "label": "pending.tsx",
@@ -49498,7 +49489,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1427,
+      "community": 1426,
       "file_type": "code",
       "id": "packages_storefront_webapp_tailwind_config_js",
       "label": "tailwind.config.js",
@@ -49507,7 +49498,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1428,
+      "community": 1427,
       "file_type": "code",
       "id": "packages_storefront_webapp_vitest_config_ts",
       "label": "vitest.config.ts",
@@ -49516,12 +49507,21 @@
       "source_location": "L1"
     },
     {
-      "community": 1429,
+      "community": 1428,
       "file_type": "code",
       "id": "packages_storefront_webapp_vitest_setup_ts",
       "label": "vitest.setup.ts",
       "norm_label": "vitest.setup.ts",
       "source_file": "packages/storefront-webapp/vitest.setup.ts",
+      "source_location": "L1"
+    },
+    {
+      "community": 1429,
+      "file_type": "code",
+      "id": "packages_valkey_proxy_server_index_js",
+      "label": "index.js",
+      "norm_label": "index.js",
+      "source_file": "packages/valkey-proxy-server/index.js",
       "source_location": "L1"
     },
     {
@@ -49572,15 +49572,6 @@
     {
       "community": 1430,
       "file_type": "code",
-      "id": "packages_valkey_proxy_server_index_js",
-      "label": "index.js",
-      "norm_label": "index.js",
-      "source_file": "packages/valkey-proxy-server/index.js",
-      "source_location": "L1"
-    },
-    {
-      "community": 1431,
-      "file_type": "code",
       "id": "scripts_harness_app_registry_test_ts",
       "label": "harness-app-registry.test.ts",
       "norm_label": "harness-app-registry.test.ts",
@@ -49588,7 +49579,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1432,
+      "community": 1431,
       "file_type": "code",
       "id": "scripts_harness_behavior_fixtures_valkey_runtime_app_test_ts",
       "label": "valkey-runtime-app.test.ts",
@@ -49597,7 +49588,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1433,
+      "community": 1432,
       "file_type": "code",
       "id": "scripts_harness_behavior_scenarios_test_ts",
       "label": "harness-behavior-scenarios.test.ts",
@@ -49606,7 +49597,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1434,
+      "community": 1433,
       "file_type": "code",
       "id": "scripts_harness_repo_validation_test_ts",
       "label": "harness-repo-validation.test.ts",

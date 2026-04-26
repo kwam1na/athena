@@ -1,9 +1,5 @@
 import { Product, ProductSku, SavedBagItem } from "@athena/webapp";
-import {
-  AlertCircleIcon,
-  HeartIcon,
-  ShoppingBagIcon,
-} from "lucide-react";
+import { AlertCircleIcon, HeartIcon, ShoppingBagIcon } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 
@@ -131,20 +127,10 @@ export function MobileProductActions({
   };
 
   const handlePrimaryAction = async () => {
-    if (!isExpanded) {
-      setIntent("bag");
-      return;
-    }
-
     await handleConfirm();
   };
 
   const handleSecondaryAction = async () => {
-    if (!isExpanded) {
-      setIntent("save");
-      return;
-    }
-
     await handleUpdateSavedBag();
   };
 
@@ -173,9 +159,7 @@ export function MobileProductActions({
         className={`z-40 !mt-0 bg-transparent px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-3 md:hidden ${
           isFooterVisible ? "pointer-events-none" : ""
         } ${
-          isStuck
-            ? "fixed inset-x-0 bottom-0 shadow-none"
-            : "-mx-6 shadow-none"
+          isStuck ? "fixed inset-x-0 bottom-0 shadow-none" : "-mx-6 shadow-none"
         }`}
       >
         <div className="mx-auto max-w-[600px] space-y-4">
@@ -210,12 +194,12 @@ export function MobileProductActions({
                   }}
                 >
                   <div onClick={(event) => event.stopPropagation()}>
-                  <ProductAttribute
-                    product={product}
-                    selectedSku={selectedSku}
-                    setSelectedSku={setSelectedSku}
-                    density="compact"
-                  />
+                    <ProductAttribute
+                      product={product}
+                      selectedSku={selectedSku}
+                      setSelectedSku={setSelectedSku}
+                      density="compact"
+                    />
                   </div>
                 </div>
               </motion.div>
