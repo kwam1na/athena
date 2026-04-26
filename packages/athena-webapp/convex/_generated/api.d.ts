@@ -50,6 +50,7 @@ import type * as http_domains_storeFront_routes_me from "../http/domains/storeFr
 import type * as http_domains_storeFront_routes_offers from "../http/domains/storeFront/routes/offers.js";
 import type * as http_domains_storeFront_routes_onlineOrder from "../http/domains/storeFront/routes/onlineOrder.js";
 import type * as http_domains_storeFront_routes_paystack from "../http/domains/storeFront/routes/paystack.js";
+import type * as http_domains_storeFront_routes_posTransaction from "../http/domains/storeFront/routes/posTransaction.js";
 import type * as http_domains_storeFront_routes_reviews from "../http/domains/storeFront/routes/reviews.js";
 import type * as http_domains_storeFront_routes_rewards from "../http/domains/storeFront/routes/rewards.js";
 import type * as http_domains_storeFront_routes_savedBag from "../http/domains/storeFront/routes/savedBag.js";
@@ -332,6 +333,7 @@ declare const fullApi: ApiFromModules<{
   "http/domains/storeFront/routes/offers": typeof http_domains_storeFront_routes_offers;
   "http/domains/storeFront/routes/onlineOrder": typeof http_domains_storeFront_routes_onlineOrder;
   "http/domains/storeFront/routes/paystack": typeof http_domains_storeFront_routes_paystack;
+  "http/domains/storeFront/routes/posTransaction": typeof http_domains_storeFront_routes_posTransaction;
   "http/domains/storeFront/routes/reviews": typeof http_domains_storeFront_routes_reviews;
   "http/domains/storeFront/routes/rewards": typeof http_domains_storeFront_routes_rewards;
   "http/domains/storeFront/routes/savedBag": typeof http_domains_storeFront_routes_savedBag;

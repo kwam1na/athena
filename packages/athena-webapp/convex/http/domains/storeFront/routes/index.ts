@@ -10,3 +10,4 @@ export * from "./reviews";
 export { rewardsRoutes } from "./rewards";
 export * from "./offers";
 export * from "./userOffers";
+export { posTransactionRoutes } from "./posTransaction";
