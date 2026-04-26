@@ -164,7 +164,7 @@ export interface RegisterViewModel {
 }
 
 export const EMPTY_REGISTER_CUSTOMER_INFO: CustomerInfo = {
-  customerId: undefined,
+  customerProfileId: undefined,
   name: "",
   email: "",
   phone: "",

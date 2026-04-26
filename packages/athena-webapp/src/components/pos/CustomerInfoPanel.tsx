@@ -26,6 +26,7 @@ import { POS_MESSAGES, showValidationError } from "../../lib/pos/toastService";
 import { currencyFormatter } from "~/convex/utils";
 import { POSCustomerSummary } from "~/types";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
+import type { Id } from "~/convex/_generated/dataModel";
 
 interface CustomerInfoPanelProps {
   isOpen: boolean;
@@ -52,6 +53,8 @@ export function CustomerInfoPanel({
     email: "",
     phone: "",
   });
+  const [selectedPosCustomerId, setSelectedPosCustomerId] =
+    useState<Id<"posCustomer"> | null>(null);
 
   const searchResults = useConvexPosCustomerSearch(activeStore?._id, searchQuery);
   const createCustomer = useConvexPosCustomerCreate();
@@ -67,12 +70,13 @@ export function CustomerInfoPanel({
     console.log("🔄 Selecting customer:", customer);
 
     const nextCustomerInfo = {
-      customerId: customer._id,
+      customerProfileId: customer.customerProfileId,
       name: customer.name,
       email: customer.email || "",
       phone: customer.phone || "",
     };
     setCustomerInfo(nextCustomerInfo);
+    setSelectedPosCustomerId(customer._id);
     void onCustomerCommitted(nextCustomerInfo);
     setShowSearch(false);
     setSearchQuery("");
@@ -102,19 +106,20 @@ export function CustomerInfoPanel({
     }
 
     const nextCustomerInfo = {
-      customerId: result.data._id,
+      customerProfileId: result.data.customerProfileId,
       name: result.data.name,
       email: result.data.email || "",
       phone: result.data.phone || "",
     };
     setCustomerInfo(nextCustomerInfo);
+    setSelectedPosCustomerId(result.data._id ?? null);
     void onCustomerCommitted(nextCustomerInfo);
     setShowCreateForm(false);
   };
 
   const handleStartEdit = () => {
     setEditingCustomer({
-      customerId: customerInfo.customerId,
+      customerProfileId: customerInfo.customerProfileId,
       name: customerInfo.name,
       email: customerInfo.email,
       phone: customerInfo.phone,
@@ -123,7 +128,7 @@ export function CustomerInfoPanel({
   };
 
   const handleSaveEdit = async () => {
-    if (!editingCustomer.customerId) {
+    if (!selectedPosCustomerId) {
       showValidationError([POS_MESSAGES.customer.noIdForUpdate]);
       return;
     }
@@ -133,7 +138,7 @@ export function CustomerInfoPanel({
       return;
     }
 
-    const result = await updateCustomer(editingCustomer.customerId, {
+    const result = await updateCustomer(selectedPosCustomerId, {
       name: editingCustomer.name.trim(),
       email: editingCustomer.email.trim() || undefined,
       phone: editingCustomer.phone.trim() || undefined,
@@ -145,7 +150,7 @@ export function CustomerInfoPanel({
     }
 
     const nextCustomerInfo = {
-      customerId: editingCustomer.customerId,
+      customerProfileId: editingCustomer.customerProfileId,
       name: editingCustomer.name.trim(),
       email: editingCustomer.email.trim(),
       phone: editingCustomer.phone.trim(),
@@ -182,13 +187,13 @@ export function CustomerInfoPanel({
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <User className="w-4 h-4" />
               Customer Information
-              {customerInfo.customerId && (
+              {customerInfo.customerProfileId && (
                 <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
                   Linked
                 </span>
               )}
               {/* Edit button for linked customers */}
-              {customerInfo.customerId && !isEditing && !showSearch && (
+              {selectedPosCustomerId && !isEditing && !showSearch && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -467,7 +472,7 @@ export function CustomerInfoPanel({
                     </div>
 
                     {/* Save Customer Button */}
-                    {customerInfo.name.trim() && !customerInfo.customerId && (
+                    {customerInfo.name.trim() && !customerInfo.customerProfileId && (
                       <div className="flex justify-end">
                         <Button
                           variant="outline"

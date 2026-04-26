@@ -11,10 +11,10 @@ import type { POSSession } from "~/types";
 import { mapActiveSessionDto, mapHeldSessionsDto } from "./sessionGateway.mapper";
 
 export type PosSessionCustomer = {
-  _id?: Id<"posCustomer">;
   name: string;
   email?: string;
   phone?: string;
+  customerProfileId?: Id<"customerProfile">;
 } | null;
 
 export type PosSessionDetail = POSSession & {

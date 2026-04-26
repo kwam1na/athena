@@ -34,7 +34,6 @@ export type PosSessionTraceSeed = {
     posSessionId?: Id<"posSession">;
     staffProfileId?: Id<"staffProfile">;
     terminalId?: Id<"posTerminal">;
-    customerId?: Id<"posCustomer">;
     posTransactionId?: Id<"posTransaction">;
   };
   eventSource: "workflow.posSession";
@@ -48,7 +47,6 @@ export function buildPosSessionTraceSeed(args: {
   posSessionId?: Id<"posSession">;
   staffProfileId?: Id<"staffProfile">;
   terminalId?: Id<"posTerminal">;
-  customerId?: Id<"posCustomer">;
   posTransactionId?: Id<"posTransaction">;
 }): PosSessionTraceSeed {
   const displaySessionNumber = args.sessionNumber.trim();
@@ -62,7 +60,6 @@ export function buildPosSessionTraceSeed(args: {
       posSessionId: args.posSessionId,
       staffProfileId: args.staffProfileId,
       terminalId: args.terminalId,
-      customerId: args.customerId,
       posTransactionId: args.posTransactionId,
     }).filter(([, value]) => Boolean(value)),
   ) as PosSessionTraceSeed["subjectRefs"];

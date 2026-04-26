@@ -146,9 +146,8 @@ describe("completeTransaction trace ordering", () => {
         subtotal: 10,
         tax: 0,
         total: 10,
-        customerId: "customer-1" as Id<"posCustomer">,
       }),
-    ).rejects.toThrow("customer stats unavailable");
+    ).resolves.toMatchObject({ kind: "ok" });
 
     expect(traceEvents).toEqual([]);
     expect(patchPosTransaction).not.toHaveBeenCalledWith(
@@ -173,6 +172,7 @@ describe("completeTransaction trace ordering", () => {
       _id: "session-1",
       storeId: "store-1",
       customerId: undefined,
+      customerProfileId: "profile-1",
       staffProfileId: "staff-1",
       registerNumber: "1",
       registerSessionId: "register-1",
@@ -266,6 +266,7 @@ describe("completeTransaction trace ordering", () => {
       _id: "session-1",
       storeId: "store-1",
       customerId: undefined,
+      customerProfileId: "profile-1",
       staffProfileId: "staff-1",
       registerNumber: "1",
       registerSessionId: "register-1",
@@ -338,6 +339,7 @@ describe("completeTransaction trace ordering", () => {
       expect.anything(),
       expect.objectContaining({
         registerSessionId: "register-1",
+        customerProfileId: "profile-1",
       }),
     );
     expect(runMutation).toHaveBeenCalledWith(

@@ -80,6 +80,7 @@ let mockActiveSession:
         name: string;
         email?: string;
         phone?: string;
+        customerProfileId?: Id<"customerProfile">;
       } | null;
     }
   | null
@@ -161,6 +162,15 @@ vi.mock("@/lib/pos/infrastructure/convex/commandGateway", () => ({
   }),
 }));
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve;
+  });
+
+  return { promise, resolve };
+}
+
 describe("useRegisterViewModel", () => {
   beforeEach(() => {
     mockActiveStore = {
@@ -213,6 +223,7 @@ describe("useRegisterViewModel", () => {
         name: "Ama Serwa",
         email: "ama@example.com",
         phone: "555-0100",
+        customerProfileId: "profile-1" as Id<"customerProfile">,
       },
     };
     mockHeldSessions = [];
@@ -1077,7 +1088,7 @@ describe("useRegisterViewModel", () => {
 
     await act(async () => {
       await result.current.customerPanel.onCustomerCommitted({
-        customerId: "customer-2" as Id<"posCustomer">,
+        customerProfileId: "profile-2" as Id<"customerProfile">,
         name: "Efua Mensah",
         email: "efua@example.com",
         phone: "555-2222",
@@ -1088,7 +1099,7 @@ describe("useRegisterViewModel", () => {
       expect.objectContaining({
         sessionId: "session-1",
         staffProfileId: "staff-1",
-        customerId: "customer-2",
+        customerProfileId: "profile-2",
         customerInfo: {
           name: "Efua Mensah",
           email: "efua@example.com",
@@ -1096,5 +1107,322 @@ describe("useRegisterViewModel", () => {
         },
       }),
     );
+  });
+
+  it("commits profile-backed customer attribution through the session update path without resetting sale state", async () => {
+    mockActiveSession = {
+      ...mockActiveSession!,
+      payments: [{ method: "cash", amount: 120, timestamp: 1_000 }],
+    };
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("deep wave");
+    });
+
+    await act(async () => {
+      result.current.customerPanel.setCustomerInfo({
+        customerProfileId: "profile-2" as Id<"customerProfile">,
+        name: "Efua Mensah",
+        email: "efua@example.com",
+        phone: "555-2222",
+      });
+      await result.current.customerPanel.onCustomerCommitted({
+        customerProfileId: "profile-2" as Id<"customerProfile">,
+        name: "Efua Mensah",
+        email: "efua@example.com",
+        phone: "555-2222",
+      });
+    });
+
+    expect(mockUpdateSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "session-1",
+        staffProfileId: "staff-1",
+        customerProfileId: "profile-2",
+        customerInfo: {
+          name: "Efua Mensah",
+          email: "efua@example.com",
+          phone: "555-2222",
+        },
+      }),
+    );
+    expect(result.current.checkout.cartItems).toHaveLength(1);
+    expect(result.current.checkout.payments).toEqual([
+      expect.objectContaining({ method: "cash", amount: 120 }),
+    ]);
+    expect(result.current.cashierCard?.cashierName).toBe("Ama K.");
+    expect(result.current.productEntry.productSearchQuery).toBe("deep wave");
+    expect(result.current.checkout.isTransactionCompleted).toBe(false);
+  });
+
+  it("serializes rapid customer attribution commits so the latest operator action persists last", async () => {
+    const firstUpdate = deferred<ReturnType<typeof ok>>();
+    mockUpdateSession
+      .mockReset()
+      .mockImplementationOnce(() => firstUpdate.promise)
+      .mockResolvedValue(
+        ok({
+          sessionId: "session-1" as Id<"posSession">,
+          expiresAt: Date.now() + 60_000,
+        }),
+      );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    let firstCommit!: Promise<void>;
+    let secondCommit!: Promise<void>;
+    await act(async () => {
+      firstCommit = result.current.customerPanel.onCustomerCommitted({
+        customerProfileId: "profile-2" as Id<"customerProfile">,
+        name: "Efua Mensah",
+        email: "efua@example.com",
+        phone: "555-2222",
+      });
+      secondCommit = result.current.customerPanel.onCustomerCommitted({
+        customerProfileId: "profile-3" as Id<"customerProfile">,
+        name: "Kofi Boateng",
+        email: "kofi@example.com",
+        phone: "555-3333",
+      });
+      await Promise.resolve();
+    });
+
+    expect(mockUpdateSession).toHaveBeenCalledTimes(1);
+    expect(mockUpdateSession).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        customerProfileId: "profile-2",
+      }),
+    );
+
+    firstUpdate.resolve(
+      ok({
+        sessionId: "session-1" as Id<"posSession">,
+        expiresAt: Date.now() + 60_000,
+      }),
+    );
+
+    await act(async () => {
+      await Promise.all([firstCommit, secondCommit]);
+    });
+
+    expect(mockUpdateSession).toHaveBeenCalledTimes(2);
+    expect(mockUpdateSession).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        customerProfileId: "profile-3",
+      }),
+    );
+  });
+
+  it("does not continue queued customer attribution commits after the register view unmounts", async () => {
+    const firstUpdate = deferred<ReturnType<typeof ok>>();
+    mockUpdateSession
+      .mockReset()
+      .mockImplementationOnce(() => firstUpdate.promise)
+      .mockResolvedValue(
+        ok({
+          sessionId: "session-1" as Id<"posSession">,
+          expiresAt: Date.now() + 60_000,
+        }),
+      );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result, unmount } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    let firstCommit!: Promise<void>;
+    let secondCommit!: Promise<void>;
+    await act(async () => {
+      firstCommit = result.current.customerPanel.onCustomerCommitted({
+        customerProfileId: "profile-2" as Id<"customerProfile">,
+        name: "Efua Mensah",
+        email: "efua@example.com",
+        phone: "555-2222",
+      });
+      secondCommit = result.current.customerPanel.onCustomerCommitted({
+        customerProfileId: "profile-3" as Id<"customerProfile">,
+        name: "Kofi Boateng",
+        email: "kofi@example.com",
+        phone: "555-3333",
+      });
+      await Promise.resolve();
+    });
+
+    expect(mockUpdateSession).toHaveBeenCalledTimes(1);
+
+    unmount();
+    firstUpdate.resolve(
+      ok({
+        sessionId: "session-1" as Id<"posSession">,
+        expiresAt: Date.now() + 60_000,
+      }),
+    );
+
+    await act(async () => {
+      await Promise.all([firstCommit, secondCommit]);
+    });
+
+    expect(mockUpdateSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("commits name-only attribution as sale-only customer info without customer ids", async () => {
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    await act(async () => {
+      result.current.customerPanel.setCustomerInfo({
+        name: "Walk In Buyer",
+        email: "",
+        phone: "",
+      });
+      await result.current.customerPanel.onCustomerCommitted({
+        name: "Walk In Buyer",
+        email: "",
+        phone: "",
+      });
+    });
+
+    expect(mockUpdateSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "session-1",
+        staffProfileId: "staff-1",
+        customerProfileId: undefined,
+        customerInfo: {
+          name: "Walk In Buyer",
+          email: undefined,
+          phone: undefined,
+        },
+      }),
+    );
+  });
+
+  it("clears persisted attribution while preserving active sale state", async () => {
+    mockActiveSession = {
+      ...mockActiveSession!,
+      payments: [{ method: "card", amount: 120, timestamp: 1_000 }],
+    };
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("body wave");
+    });
+
+    await act(async () => {
+      result.current.customerPanel.setCustomerInfo({
+        name: "",
+        email: "",
+        phone: "",
+      });
+      await result.current.customerPanel.onCustomerCommitted({
+        name: "",
+        email: "",
+        phone: "",
+      });
+    });
+
+    expect(mockUpdateSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "session-1",
+        staffProfileId: "staff-1",
+        customerProfileId: undefined,
+        customerInfo: undefined,
+      }),
+    );
+    expect(result.current.checkout.cartItems).toHaveLength(1);
+    expect(result.current.checkout.payments).toEqual([
+      expect.objectContaining({ method: "card", amount: 120 }),
+    ]);
+    expect(result.current.cashierCard?.cashierName).toBe("Ama K.");
+    expect(result.current.productEntry.productSearchQuery).toBe("body wave");
+    expect(result.current.drawerGate).toBeNull();
+    expect(result.current.checkout.isTransactionCompleted).toBe(false);
+  });
+
+  it("updates local customer attribution without session mutation when no active session exists", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
+      activeRegisterSession: {
+        _id: "drawer-1",
+        status: "open",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        openingFloat: 5_000,
+        expectedCash: 5_000,
+        openedAt: Date.now(),
+      },
+      activeSession: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    await act(async () => {
+      result.current.customerPanel.setCustomerInfo({
+        customerProfileId: "profile-2" as Id<"customerProfile">,
+        name: "Efua Mensah",
+        email: "efua@example.com",
+        phone: "555-2222",
+      });
+      await result.current.customerPanel.onCustomerCommitted({
+        customerProfileId: "profile-2" as Id<"customerProfile">,
+        name: "Efua Mensah",
+        email: "efua@example.com",
+        phone: "555-2222",
+      });
+    });
+
+    expect(result.current.customerPanel.customerInfo).toEqual({
+      customerProfileId: "profile-2",
+      name: "Efua Mensah",
+      email: "efua@example.com",
+      phone: "555-2222",
+    });
+    expect(mockUpdateSession).not.toHaveBeenCalled();
   });
 });

@@ -6,13 +6,13 @@ export const posTransactionSchema = v.object({
   storeId: v.id("store"),
   sessionId: v.optional(v.id("posSession")), // Link to the session that created this transaction (if created from session)
   registerSessionId: v.optional(v.id("registerSession")),
-  customerId: v.optional(v.id("posCustomer")), // Link to POS customer
   staffProfileId: v.optional(v.id("staffProfile")), // Staff member who processed the transaction
   registerNumber: v.optional(v.string()),
   terminalId: v.optional(v.id("posTerminal")),
   subtotal: v.number(),
   tax: v.number(),
   total: v.number(),
+  customerProfileId: v.optional(v.id("customerProfile")),
   // Multi-payment support
   payments: v.array(
     v.object({

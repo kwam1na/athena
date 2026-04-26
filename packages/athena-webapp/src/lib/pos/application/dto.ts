@@ -198,6 +198,7 @@ export interface PosCompleteTransactionInput {
   subtotal: number;
   tax: number;
   total: number;
+  customerProfileId?: Id<"customerProfile">;
 }
 
 export type PosMutationFailureDto = {
