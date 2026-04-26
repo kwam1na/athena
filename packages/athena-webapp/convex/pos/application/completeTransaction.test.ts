@@ -146,9 +146,8 @@ describe("completeTransaction trace ordering", () => {
         subtotal: 10,
         tax: 0,
         total: 10,
-        customerId: "customer-1" as Id<"posCustomer">,
       }),
-    ).rejects.toThrow("customer stats unavailable");
+    ).resolves.toMatchObject({ kind: "ok" });
 
     expect(traceEvents).toEqual([]);
     expect(patchPosTransaction).not.toHaveBeenCalledWith(

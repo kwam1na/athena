@@ -6,7 +6,6 @@ export type {
 } from "@/lib/pos/domain";
 
 export interface CustomerInfo {
-  customerId?: Id<"posCustomer">; // POS session compatibility id
   customerProfileId?: Id<"customerProfile">;
   name: string;
   email: string;

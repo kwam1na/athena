@@ -6,7 +6,6 @@ import {
   recordRetailSalePaymentAllocations,
   recordRetailVoidPaymentAllocations,
 } from "../../infrastructure/integrations/paymentAllocationService";
-import { updateCustomerStats } from "../../infrastructure/repositories/customerRepository";
 import {
   createPosTransaction,
   createPosTransactionItem,
@@ -223,7 +222,6 @@ export async function completeTransaction(
     subtotal: number;
     tax: number;
     total: number;
-    customerId?: Id<"posCustomer">;
     customerProfileId?: Id<"customerProfile">;
     customerInfo?: {
       name?: string;
@@ -299,7 +297,6 @@ export async function completeTransaction(
     storeId: args.storeId,
     sessionId: undefined,
     registerSessionId: args.registerSessionId,
-    customerId: args.customerId,
     staffProfileId: args.staffProfileId,
     registerNumber: args.registerNumber,
     terminalId: args.terminalId,
@@ -354,14 +351,6 @@ export async function completeTransaction(
 
   if (completionResult.status !== "ok") {
     throw new Error(completionResult.message);
-  }
-
-  if (args.customerId) {
-    await updateCustomerStats(ctx, {
-      customerId: args.customerId,
-      transactionAmount: args.total,
-      updatedAt: completedAt,
-    });
   }
 
   const transactionItems = await Promise.all(
@@ -572,7 +561,6 @@ export async function createTransactionFromSessionHandler(
     storeId: session.storeId,
     sessionId: args.sessionId,
     registerSessionId: resolvedRegisterSessionId.data,
-    customerId: session.customerId,
     staffProfileId: session.staffProfileId,
     registerNumber: session.registerNumber,
     terminalId: session.terminalId,
@@ -619,14 +607,6 @@ export async function createTransactionFromSessionHandler(
 
   if (completionResult.status !== "ok") {
     throw new Error(completionResult.message);
-  }
-
-  if (session.customerId) {
-    await updateCustomerStats(ctx, {
-      customerId: session.customerId,
-      transactionAmount: total,
-      updatedAt: completedAt,
-    });
   }
 
   const transactionItems = await Promise.all(

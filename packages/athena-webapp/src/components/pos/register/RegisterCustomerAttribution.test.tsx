@@ -48,7 +48,6 @@ function renderAttribution(customerInfo?: Partial<CustomerInfo>) {
   render(
     <RegisterCustomerAttribution
       customerInfo={{
-        customerId: customerInfo?.customerId,
         customerProfileId: customerInfo?.customerProfileId,
         name: customerInfo?.name ?? "",
         email: customerInfo?.email ?? "",
@@ -132,7 +131,6 @@ describe("RegisterCustomerAttribution", () => {
     await user.click(screen.getByRole("button", { name: /Ama Serwa/ }));
 
     const expectedCustomer = {
-      customerId: "customer_1",
       customerProfileId: undefined,
       name: "Ama Serwa",
       email: "ama@example.com",
@@ -163,7 +161,6 @@ describe("RegisterCustomerAttribution", () => {
     });
 
     const expectedCustomer = {
-      customerId: "customer_new",
       customerProfileId: undefined,
       name: "Kojo Mensah",
       email: "",
@@ -224,7 +221,7 @@ describe("RegisterCustomerAttribution", () => {
   it("collapses selected attribution to name and one secondary identifier", async () => {
     const user = userEvent.setup();
     const { setCustomerInfo, onCustomerCommitted } = renderAttribution({
-      customerId: "customer_1" as CustomerInfo["customerId"],
+      customerProfileId: "profile_1" as CustomerInfo["customerProfileId"],
       name: "Ama Serwa",
       email: "ama@example.com",
       phone: "+233 20 000 0000",
@@ -242,7 +239,6 @@ describe("RegisterCustomerAttribution", () => {
     await user.click(screen.getByRole("button", { name: "Clear customer" }));
 
     const emptyCustomer = {
-      customerId: undefined,
       customerProfileId: undefined,
       name: "",
       email: "",

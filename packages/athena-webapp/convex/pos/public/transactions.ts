@@ -55,7 +55,6 @@ export const completeTransaction = mutation({
     subtotal: v.number(),
     tax: v.number(),
     total: v.number(),
-    customerId: v.optional(v.id("posCustomer")),
     customerProfileId: v.optional(v.id("customerProfile")),
     customerInfo: v.optional(customerInfoValidator),
     registerNumber: v.optional(v.string()),
@@ -143,7 +142,6 @@ export const getTransactionById = query({
       customer: v.union(
         v.null(),
         v.object({
-          _id: v.optional(v.id("posCustomer")),
           customerProfileId: v.optional(v.id("customerProfile")),
           name: v.optional(v.string()),
           email: v.optional(v.string()),
@@ -210,7 +208,6 @@ export const getRecentTransactionsWithCustomers = query({
       total: v.number(),
       status: v.string(),
       completedAt: v.number(),
-      customerId: v.optional(v.id("posCustomer")),
       customerProfileId: v.optional(v.id("customerProfile")),
       customerInfo: v.optional(customerInfoValidator),
       customerName: v.union(v.string(), v.null()),

@@ -1088,7 +1088,7 @@ describe("useRegisterViewModel", () => {
 
     await act(async () => {
       await result.current.customerPanel.onCustomerCommitted({
-        customerId: "customer-2" as Id<"posCustomer">,
+        customerProfileId: "profile-2" as Id<"customerProfile">,
         name: "Efua Mensah",
         email: "efua@example.com",
         phone: "555-2222",
@@ -1099,7 +1099,7 @@ describe("useRegisterViewModel", () => {
       expect.objectContaining({
         sessionId: "session-1",
         staffProfileId: "staff-1",
-        customerId: "customer-2",
+        customerProfileId: "profile-2",
         customerInfo: {
           name: "Efua Mensah",
           email: "efua@example.com",
@@ -1130,14 +1130,12 @@ describe("useRegisterViewModel", () => {
 
     await act(async () => {
       result.current.customerPanel.setCustomerInfo({
-        customerId: "customer-2" as Id<"posCustomer">,
         customerProfileId: "profile-2" as Id<"customerProfile">,
         name: "Efua Mensah",
         email: "efua@example.com",
         phone: "555-2222",
       });
       await result.current.customerPanel.onCustomerCommitted({
-        customerId: "customer-2" as Id<"posCustomer">,
         customerProfileId: "profile-2" as Id<"customerProfile">,
         name: "Efua Mensah",
         email: "efua@example.com",
@@ -1149,7 +1147,6 @@ describe("useRegisterViewModel", () => {
       expect.objectContaining({
         sessionId: "session-1",
         staffProfileId: "staff-1",
-        customerId: "customer-2",
         customerProfileId: "profile-2",
         customerInfo: {
           name: "Efua Mensah",
@@ -1192,14 +1189,12 @@ describe("useRegisterViewModel", () => {
     let secondCommit!: Promise<void>;
     await act(async () => {
       firstCommit = result.current.customerPanel.onCustomerCommitted({
-        customerId: "customer-2" as Id<"posCustomer">,
         customerProfileId: "profile-2" as Id<"customerProfile">,
         name: "Efua Mensah",
         email: "efua@example.com",
         phone: "555-2222",
       });
       secondCommit = result.current.customerPanel.onCustomerCommitted({
-        customerId: "customer-3" as Id<"posCustomer">,
         customerProfileId: "profile-3" as Id<"customerProfile">,
         name: "Kofi Boateng",
         email: "kofi@example.com",
@@ -1212,7 +1207,6 @@ describe("useRegisterViewModel", () => {
     expect(mockUpdateSession).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
-        customerId: "customer-2",
         customerProfileId: "profile-2",
       }),
     );
@@ -1232,7 +1226,6 @@ describe("useRegisterViewModel", () => {
     expect(mockUpdateSession).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        customerId: "customer-3",
         customerProfileId: "profile-3",
       }),
     );
@@ -1263,14 +1256,12 @@ describe("useRegisterViewModel", () => {
     let secondCommit!: Promise<void>;
     await act(async () => {
       firstCommit = result.current.customerPanel.onCustomerCommitted({
-        customerId: "customer-2" as Id<"posCustomer">,
         customerProfileId: "profile-2" as Id<"customerProfile">,
         name: "Efua Mensah",
         email: "efua@example.com",
         phone: "555-2222",
       });
       secondCommit = result.current.customerPanel.onCustomerCommitted({
-        customerId: "customer-3" as Id<"posCustomer">,
         customerProfileId: "profile-3" as Id<"customerProfile">,
         name: "Kofi Boateng",
         email: "kofi@example.com",
@@ -1323,7 +1314,6 @@ describe("useRegisterViewModel", () => {
       expect.objectContaining({
         sessionId: "session-1",
         staffProfileId: "staff-1",
-        customerId: undefined,
         customerProfileId: undefined,
         customerInfo: {
           name: "Walk In Buyer",
@@ -1370,7 +1360,6 @@ describe("useRegisterViewModel", () => {
       expect.objectContaining({
         sessionId: "session-1",
         staffProfileId: "staff-1",
-        customerId: undefined,
         customerProfileId: undefined,
         customerInfo: undefined,
       }),
@@ -1415,14 +1404,12 @@ describe("useRegisterViewModel", () => {
 
     await act(async () => {
       result.current.customerPanel.setCustomerInfo({
-        customerId: "customer-2" as Id<"posCustomer">,
         customerProfileId: "profile-2" as Id<"customerProfile">,
         name: "Efua Mensah",
         email: "efua@example.com",
         phone: "555-2222",
       });
       await result.current.customerPanel.onCustomerCommitted({
-        customerId: "customer-2" as Id<"posCustomer">,
         customerProfileId: "profile-2" as Id<"customerProfile">,
         name: "Efua Mensah",
         email: "efua@example.com",
@@ -1431,7 +1418,6 @@ describe("useRegisterViewModel", () => {
     });
 
     expect(result.current.customerPanel.customerInfo).toEqual({
-      customerId: "customer-2",
       customerProfileId: "profile-2",
       name: "Efua Mensah",
       email: "efua@example.com",

@@ -12,7 +12,6 @@ describe("buildPosSessionTraceSeed", () => {
       posSessionId: "session_1" as Id<"posSession">,
       staffProfileId: "staff_1" as Id<"staffProfile">,
       terminalId: "terminal_1" as Id<"posTerminal">,
-      customerId: "customer_1" as Id<"posCustomer">,
       posTransactionId: "txn_1" as Id<"posTransaction">,
     });
 
@@ -26,7 +25,6 @@ describe("buildPosSessionTraceSeed", () => {
       posSessionId: "session_1",
       staffProfileId: "staff_1",
       terminalId: "terminal_1",
-      customerId: "customer_1",
       posTransactionId: "txn_1",
     });
     expect(seed.eventSource).toBe("workflow.posSession");

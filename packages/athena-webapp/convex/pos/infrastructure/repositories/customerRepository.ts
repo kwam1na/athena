@@ -103,12 +103,21 @@ export async function listCompletedTransactionsForCustomer(
     return [];
   }
 
+  const profile = await ctx.db
+    .query("customerProfile")
+    .withIndex("by_posCustomerId", (q) => q.eq("posCustomerId", args.customerId))
+    .first();
+
+  if (!profile) {
+    return [];
+  }
+
   return ctx.db
     .query("posTransaction")
     .withIndex("by_storeId", (q) => q.eq("storeId", customer.storeId))
     .filter((q) =>
       q.and(
-        q.eq(q.field("customerId"), args.customerId),
+        q.eq(q.field("customerProfileId"), profile._id),
         q.eq(q.field("status"), "completed"),
       ),
     )

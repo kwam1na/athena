@@ -7,7 +7,6 @@ import {
 } from "./queries/getTransactions";
 import {
   getCashierById,
-  getCustomerById,
   getPosSessionById,
   getPosTransactionById,
   listCompletedTransactions,
@@ -16,7 +15,6 @@ import {
 
 vi.mock("../infrastructure/repositories/transactionRepository", () => ({
   getCashierById: vi.fn(),
-  getCustomerById: vi.fn(),
   getPosSessionById: vi.fn(),
   getPosTransactionById: vi.fn(),
   listCompletedTransactions: vi.fn(),
@@ -40,11 +38,9 @@ describe("getCompletedTransactions", () => {
         paymentMethod: "cash",
         completedAt: 100,
         cashierId: undefined,
-        customerId: undefined,
       },
     ] as never);
     vi.mocked(getCashierById).mockResolvedValue(null as never);
-    vi.mocked(getCustomerById).mockResolvedValue(null as never);
     vi.mocked(getPosSessionById).mockResolvedValue(null as never);
     vi.mocked(listTransactionItems).mockResolvedValue([] as never);
 
@@ -71,12 +67,10 @@ describe("getCompletedTransactions", () => {
         paymentMethod: "cash",
         completedAt: 100,
         cashierId: undefined,
-        customerId: undefined,
         workflowTraceId: "pos_sale:pos-123456",
       },
     ] as never);
     vi.mocked(getCashierById).mockResolvedValue(null as never);
-    vi.mocked(getCustomerById).mockResolvedValue(null as never);
     vi.mocked(getPosSessionById).mockResolvedValue({
       _id: "session-1" as Id<"posSession">,
       workflowTraceId: "pos_session:ses-001",
@@ -104,21 +98,26 @@ describe("getCompletedTransactions", () => {
         total: 1000,
         paymentMethod: "cash",
         completedAt: 100,
-        customerId: "customer-1" as Id<"posCustomer">,
         customerProfileId: "profile-1" as Id<"customerProfile">,
       },
     ] as never);
     vi.mocked(getCashierById).mockResolvedValue(null as never);
-    vi.mocked(getCustomerById).mockResolvedValue({
-      _id: "customer-1" as Id<"posCustomer">,
-      name: "Ama Serwa",
-    } as never);
     vi.mocked(getPosSessionById).mockResolvedValue(null as never);
     vi.mocked(listTransactionItems).mockResolvedValue([] as never);
 
-    const result = await getCompletedTransactions({} as never, {
-      storeId: "store-1" as Id<"store">,
-    });
+    const result = await getCompletedTransactions(
+      {
+        db: {
+          get: vi.fn().mockResolvedValue({
+            _id: "profile-1" as Id<"customerProfile">,
+            fullName: "Ama Serwa",
+          }),
+        },
+      } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+      },
+    );
 
     expect(result).toEqual([
       expect.objectContaining({
@@ -149,7 +148,6 @@ describe("getTransactionById", () => {
       notes: undefined,
     } as never);
     vi.mocked(getCashierById).mockResolvedValue(null as never);
-    vi.mocked(getCustomerById).mockResolvedValue(null as never);
     vi.mocked(getPosSessionById).mockResolvedValue(null as never);
     vi.mocked(listTransactionItems).mockResolvedValue([] as never);
 
@@ -184,7 +182,6 @@ describe("getTransactionById", () => {
       notes: undefined,
     } as never);
     vi.mocked(getCashierById).mockResolvedValue(null as never);
-    vi.mocked(getCustomerById).mockResolvedValue(null as never);
     vi.mocked(getPosSessionById).mockResolvedValue(null as never);
     vi.mocked(listTransactionItems).mockResolvedValue([] as never);
 
@@ -220,7 +217,6 @@ describe("getTransactionById", () => {
       notes: undefined,
     } as never);
     vi.mocked(getCashierById).mockResolvedValue(null as never);
-    vi.mocked(getCustomerById).mockResolvedValue(null as never);
     vi.mocked(getPosSessionById).mockResolvedValue({
       _id: "session-1" as Id<"posSession">,
       workflowTraceId: "pos_session:ses-001",
@@ -253,31 +249,35 @@ describe("getTransactionById", () => {
       totalPaid: 1000,
       status: "completed",
       completedAt: 100,
-      customerId: "customer-1" as Id<"posCustomer">,
       customerProfileId: "profile-1" as Id<"customerProfile">,
       customerInfo: undefined,
       notes: undefined,
     } as never);
     vi.mocked(getCashierById).mockResolvedValue(null as never);
-    vi.mocked(getCustomerById).mockResolvedValue({
-      _id: "customer-1" as Id<"posCustomer">,
-      name: "Ama Serwa",
-      email: "ama@example.com",
-    } as never);
     vi.mocked(getPosSessionById).mockResolvedValue({
       _id: "session-1" as Id<"posSession">,
       workflowTraceId: "pos_session:ses-001",
     } as never);
     vi.mocked(listTransactionItems).mockResolvedValue([] as never);
 
-    const result = await getTransactionById({} as never, {
-      transactionId: "txn-4" as Id<"posTransaction">,
-    });
+    const result = await getTransactionById(
+      {
+        db: {
+          get: vi.fn().mockResolvedValue({
+            _id: "profile-1" as Id<"customerProfile">,
+            fullName: "Ama Serwa",
+            email: "ama@example.com",
+          }),
+        },
+      } as never,
+      {
+        transactionId: "txn-4" as Id<"posTransaction">,
+      },
+    );
 
     expect(result).toEqual(
       expect.objectContaining({
         customer: expect.objectContaining({
-          _id: "customer-1",
           customerProfileId: "profile-1",
           name: "Ama Serwa",
           email: "ama@example.com",

@@ -63,7 +63,7 @@ function hasCustomerDetails(
   }
 
   return Boolean(
-    customer.customerId ||
+    customer.customerProfileId ||
     customer.name.trim() ||
     customer.email.trim() ||
     customer.phone.trim(),
@@ -76,7 +76,6 @@ function mapSessionCustomer(customer: PosSessionCustomer): CustomerInfo {
   }
 
   return {
-    customerId: customer._id,
     customerProfileId: customer.customerProfileId,
     name: customer.name,
     email: customer.email ?? "",
@@ -510,7 +509,6 @@ export function useRegisterViewModel(): RegisterViewModel {
       const result = await updateSession({
         sessionId: session._id as Id<"posSession">,
         staffProfileId,
-        customerId: customerInfo.customerId,
         customerProfileId: customerInfo.customerProfileId,
         customerInfo: hasCustomerDetails(customerInfo)
           ? {
@@ -569,7 +567,6 @@ export function useRegisterViewModel(): RegisterViewModel {
         const result = await updateSession({
           sessionId,
           staffProfileId,
-          customerId: nextCustomerInfo.customerId,
           customerProfileId: nextCustomerInfo.customerProfileId,
           customerInfo: hasCustomerDetails(nextCustomerInfo)
             ? {

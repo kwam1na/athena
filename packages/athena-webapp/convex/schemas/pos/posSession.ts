@@ -17,7 +17,6 @@ export const posSessionSchema = v.object({
   // Kept here for backward compatibility queries only
 
   // Customer information
-  customerId: v.optional(v.id("posCustomer")),
   customerProfileId: v.optional(v.id("customerProfile")),
   customerInfo: v.optional(
     v.object({

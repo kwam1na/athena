@@ -22,7 +22,6 @@ interface RegisterCustomerAttributionProps {
 }
 
 const EMPTY_CUSTOMER_INFO: CustomerInfo = {
-  customerId: undefined,
   customerProfileId: undefined,
   name: "",
   email: "",
@@ -31,7 +30,6 @@ const EMPTY_CUSTOMER_INFO: CustomerInfo = {
 
 function trimCustomerInfo(customer: CustomerInfo): CustomerInfo {
   return {
-    customerId: customer.customerId,
     customerProfileId: customer.customerProfileId,
     name: customer.name.trim(),
     email: customer.email.trim(),
@@ -71,7 +69,6 @@ function getSecondaryIdentifier(customer: CustomerInfo) {
 
 function toCustomerInfo(customer: POSCustomerSummary): CustomerInfo {
   return {
-    customerId: customer._id,
     customerProfileId: customer.customerProfileId,
     name: customer.name,
     email: customer.email || "",
@@ -96,7 +93,7 @@ export function RegisterCustomerAttribution({
     [customerInfo],
   );
   const hasCustomer =
-    normalizedCustomer.customerId ||
+    normalizedCustomer.customerProfileId ||
     normalizedCustomer.name ||
     normalizedCustomer.email ||
     normalizedCustomer.phone;
@@ -166,7 +163,6 @@ export function RegisterCustomerAttribution({
     }
 
     const nextCustomer = {
-      customerId: result.data._id,
       customerProfileId: result.data.customerProfileId,
       name: result.data.name,
       email: result.data.email || "",
