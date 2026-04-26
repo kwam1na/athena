@@ -133,7 +133,7 @@ const baseSeed = {
 };
 
 describe("quickAddCatalogItem", () => {
-  it("creates hidden quick-add products and saves numeric lookup codes as barcodes", async () => {
+  it("creates hidden quick-add products, visible SKUs, and saves numeric lookup codes as barcodes", async () => {
     const { ctx, tables } = createQuickAddCtx(baseSeed);
 
     const result = await quickAddCatalogItem(ctx, {
@@ -156,7 +156,7 @@ describe("quickAddCatalogItem", () => {
     });
     expect(sku).toMatchObject({
       barcode: "123456789012",
-      isVisible: false,
+      isVisible: true,
       price: 115000,
       quantityAvailable: 2,
     });
@@ -184,6 +184,7 @@ describe("quickAddCatalogItem", () => {
     expect(Array.from(tables.productSku.values())[0]).toMatchObject({
       barcode: undefined,
       sku: "LW-BUNDLE",
+      isVisible: true,
     });
   });
 

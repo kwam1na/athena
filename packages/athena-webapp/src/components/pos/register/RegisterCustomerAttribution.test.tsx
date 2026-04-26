@@ -170,6 +170,34 @@ describe("RegisterCustomerAttribution", () => {
     expect(onCustomerCommitted).toHaveBeenCalledWith(expectedCustomer);
   });
 
+  it("submits customer creation when Enter is pressed in the search field", async () => {
+    const user = userEvent.setup();
+    const { setCustomerInfo, onCustomerCommitted } = renderAttribution();
+
+    await user.click(
+      screen.getByRole("button", { name: "Find or add customer" }),
+    );
+    const searchInput = screen.getByPlaceholderText("Name, phone, or email");
+    await user.type(searchInput, "Kojo Mensah");
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => {
+      expect(mockCreate).toHaveBeenCalledWith({
+        storeId: mockActiveStore._id,
+        name: "Kojo Mensah",
+      });
+    });
+
+    const expectedCustomer = {
+      customerProfileId: undefined,
+      name: "Kojo Mensah",
+      email: "",
+      phone: "",
+    };
+    expect(setCustomerInfo).toHaveBeenCalledWith(expectedCustomer);
+    expect(onCustomerCommitted).toHaveBeenCalledWith(expectedCustomer);
+  });
+
   it("creates reusable attribution when the search input is an email", async () => {
     const user = userEvent.setup();
     renderAttribution();
@@ -195,6 +223,15 @@ describe("RegisterCustomerAttribution", () => {
 
   it("creates reusable attribution when the search input is a phone number", async () => {
     const user = userEvent.setup();
+    mockCreate.mockResolvedValue({
+      kind: "ok",
+      data: {
+        _id: "customer_new",
+        name: "",
+        email: undefined,
+        phone: "+233 20 000 0000",
+      },
+    });
     renderAttribution();
 
     await user.click(
@@ -211,11 +248,13 @@ describe("RegisterCustomerAttribution", () => {
     await waitFor(() => {
       expect(mockCreate).toHaveBeenCalledWith({
         storeId: mockActiveStore._id,
-        name: "+233 20 000 0000",
+        name: "",
         email: undefined,
         phone: "+233 20 000 0000",
       });
     });
+
+    expect(screen.queryByText("No matching customer found.")).not.toBeInTheDocument();
   });
 
   it("collapses selected attribution to name and one secondary identifier", async () => {

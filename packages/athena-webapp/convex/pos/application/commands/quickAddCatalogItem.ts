@@ -244,7 +244,7 @@ export async function quickAddCatalogItem(
     barcode,
     images: [],
     inventoryCount: quantityAvailable,
-    isVisible: false,
+    isVisible: true,
     netPrice: args.price,
     price: args.price,
     productId,
