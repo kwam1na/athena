@@ -114,6 +114,8 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/organization-switcher.test.tsx`](../../src/components/organization-switcher.test.tsx)
 - [`src/components/pos/CashierAuthDialog.test.tsx`](../../src/components/pos/CashierAuthDialog.test.tsx)
 - [`src/components/pos/OrderSummary.test.tsx`](../../src/components/pos/OrderSummary.test.tsx)
+- [`src/components/pos/PaymentView.test.tsx`](../../src/components/pos/PaymentView.test.tsx)
+- [`src/components/pos/PaymentsAddedList.test.tsx`](../../src/components/pos/PaymentsAddedList.test.tsx)
 - [`src/components/pos/SessionManager.test.tsx`](../../src/components/pos/SessionManager.test.tsx)
 - [`src/components/pos/TotalsDisplay.test.tsx`](../../src/components/pos/TotalsDisplay.test.tsx)
 - [`src/components/pos/register/POSRegisterView.test.tsx`](../../src/components/pos/register/POSRegisterView.test.tsx)

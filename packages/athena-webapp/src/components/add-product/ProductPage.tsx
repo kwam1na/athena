@@ -18,12 +18,12 @@ export default function ProductPage() {
     api.inventory.categories.getById,
     activeStore && productData.categoryId
       ? { id: productData.categoryId, storeId: activeStore._id }
-      : "skip"
+      : "skip",
   );
 
   return (
     <SheetProvider>
-      <div className="h-full container mx-auto w-full p-8 space-y-12">
+      <div className="h-full container mx-auto w-full p-8 space-y-12 h-full overflow-y-auto scrollbar-hide pb-24">
         <div className="grid grid-cols-2 gap-8">
           <div className="space-y-8">
             <ProductCategorizationView />

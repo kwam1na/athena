@@ -19,6 +19,7 @@ import {
 import { cn } from "~/src/lib/utils";
 import {
   canCompleteTransaction,
+  isOverpayPaymentMethod,
   validatePaymentAmount,
 } from "~/src/lib/pos/validation";
 
@@ -33,7 +34,8 @@ interface PaymentViewProps {
   selectedPaymentMethod: SelectedPaymentMethod | null;
   setSelectedPaymentMethod: (method: SelectedPaymentMethod | null) => void;
   onAddPayment: (method: SelectedPaymentMethod, amount: number) => void;
-  onComplete: () => void | Promise<void>;
+  onComplete: () => void | Promise<boolean | void>;
+  onPaymentAmountChange?: (amount: number | undefined) => void;
   isCompleting?: boolean;
 }
 
@@ -45,7 +47,7 @@ const ActionButtons = ({
 }: {
   cartItemCount: number;
   canComplete: boolean;
-  onComplete: () => void | Promise<void>;
+  onComplete: () => void | Promise<boolean | void>;
   isCompleting?: boolean;
 }) => {
   return (
@@ -59,7 +61,7 @@ const ActionButtons = ({
           onClick={onComplete}
           disabled={isCompleting}
         >
-          {isCompleting ? "Completing transaction..." : "Complete Transaction"}
+          {isCompleting ? "Completing sale..." : "Complete Sale"}
           <ArrowRight className="w-4 h-4 ml-2" />
         </Button>
       )}
@@ -77,6 +79,7 @@ export const PaymentView = ({
   setSelectedPaymentMethod,
   onAddPayment,
   onComplete,
+  onPaymentAmountChange,
   isCompleting = false,
 }: PaymentViewProps) => {
   const [currentAmount, setCurrentAmount] = useState<number | undefined>(
@@ -86,6 +89,13 @@ export const PaymentView = ({
   const [keypadValue, setKeypadValue] = useState("");
 
   const canComplete = canCompleteTransaction(totalPaid, amountDue);
+  const enteredAmount = currentAmount ?? 0;
+  const shouldCompleteWithCurrentAmount =
+    Boolean(selectedPaymentMethod) &&
+    currentAmount !== undefined &&
+    enteredAmount > 0 &&
+    currentAmount >= remainingDue &&
+    remainingDue > 0;
 
   useEffect(() => {
     if (currentAmount === undefined && remainingDue > 0) {
@@ -105,6 +115,10 @@ export const PaymentView = ({
   useEffect(() => {
     setKeypadValue("");
   }, [selectedPaymentMethod]);
+
+  useEffect(() => {
+    onPaymentAmountChange?.(currentAmount);
+  }, [currentAmount, onPaymentAmountChange]);
 
   const paymentMethodStylesMap = {
     cash: {
@@ -147,7 +161,7 @@ export const PaymentView = ({
     card: "Card",
   } satisfies Record<SelectedPaymentMethod, string>;
 
-  const handleAddPayment = () => {
+  const handleAddPayment = async () => {
     if (!selectedPaymentMethod) {
       toast.error("Please select a payment method");
       return;
@@ -172,7 +186,19 @@ export const PaymentView = ({
 
     onAddPayment(selectedPaymentMethod, currentAmount);
 
-    if (selectedPaymentMethod === "cash" && currentAmount >= remainingDue) {
+    if (shouldCompleteWithCurrentAmount) {
+      const isCompleted = await onComplete();
+      if (isCompleted === false) {
+        return;
+      }
+
+      return;
+    }
+
+    if (
+      isOverpayPaymentMethod(selectedPaymentMethod) &&
+      currentAmount >= remainingDue
+    ) {
       setCurrentAmount(undefined);
     } else {
       setCurrentAmount(
@@ -195,7 +221,10 @@ export const PaymentView = ({
       return;
     }
 
-    if (selectedPaymentMethod !== "cash" && parsedAmount > remainingDue) {
+    if (
+      !isOverpayPaymentMethod(selectedPaymentMethod) &&
+      parsedAmount > remainingDue
+    ) {
       return;
     }
 
@@ -216,7 +245,7 @@ export const PaymentView = ({
   ) => {
     if (
       amount !== undefined &&
-      selectedPaymentMethod !== "cash" &&
+      !isOverpayPaymentMethod(selectedPaymentMethod) &&
       amount > remainingDue
     ) {
       return;
@@ -263,12 +292,6 @@ export const PaymentView = ({
 
   const paymentMethodStyles = paymentMethodStylesMap[selectedPaymentMethod];
   const selectedPaymentLabel = paymentMethodLabelMap[selectedPaymentMethod];
-  const enteredAmount = currentAmount ?? 0;
-  const remainingAfterPayment = Math.max(remainingDue - enteredAmount, 0);
-  const changeAfterPayment =
-    selectedPaymentMethod === "cash"
-      ? Math.max(enteredAmount - remainingDue, 0)
-      : 0;
   const quickAmountOptions = [
     { label: "Exact", amount: remainingDue },
     { label: "Half", amount: Math.round(remainingDue / 2) },
@@ -351,22 +374,6 @@ export const PaymentView = ({
               Clear
             </Button>
           </div>
-
-          <div className="mt-3 rounded-lg bg-gray-50 p-3 text-sm">
-            <div className="flex items-center justify-between">
-              <span>
-                {changeAfterPayment > 0 ? "Change due" : "Remaining after this"}
-              </span>
-              <span className="font-medium">
-                {formatStoredAmount(
-                  formatter,
-                  changeAfterPayment > 0
-                    ? changeAfterPayment
-                    : remainingAfterPayment,
-                )}
-              </span>
-            </div>
-          </div>
         </div>
 
         <div className="grid grid-cols-3 gap-2">
@@ -388,29 +395,45 @@ export const PaymentView = ({
       </div>
 
       <div className="shrink-0 space-y-3">
-        <Button
-          variant="outline"
-          className={cn(
-            "h-20 w-full rounded-xl px-6 text-lg font-semibold shadow-sm",
-            paymentMethodStyles.bg,
-            paymentMethodStyles.text,
-            paymentMethodStyles.hoverBg,
-            paymentMethodStyles.hoverText,
-          )}
-          onClick={handleAddPayment}
-        >
-          Add Payment
-          <ArrowRight className="h-5 w-5" />
-        </Button>
+        {shouldCompleteWithCurrentAmount ? (
+          <Button
+            variant="outline"
+            className={cn(
+              "h-20 w-full rounded-xl px-6 text-lg font-semibold shadow-sm",
+              "bg-green-600 text-white hover:bg-green-700 hover:text-white",
+            )}
+            onClick={handleAddPayment}
+            disabled={isCompleting}
+          >
+            {isCompleting ? "Completing sale..." : "Complete Sale"}
+            <ArrowRight className="w-5 h-5 ml-2" />
+          </Button>
+        ) : (
+          <>
+            <Button
+              variant="outline"
+              className={cn(
+                "h-20 w-full rounded-xl px-6 text-lg font-semibold shadow-sm",
+                paymentMethodStyles.bg,
+                paymentMethodStyles.text,
+                paymentMethodStyles.hoverBg,
+                paymentMethodStyles.hoverText,
+              )}
+              onClick={handleAddPayment}
+            >
+              Add Payment
+            </Button>
 
-        <Button
-          variant="outline"
-          className="flex h-16 w-full items-center gap-2 rounded-xl px-6 text-base text-red-700 hover:text-red-800"
-          onClick={() => setSelectedPaymentMethod(null)}
-        >
-          <ChevronLeft className="w-4 h-4" />
-          Cancel
-        </Button>
+            <Button
+              variant="outline"
+              className="flex h-16 w-full items-center gap-2 rounded-xl px-6 text-base text-red-700 hover:text-red-800"
+              onClick={() => setSelectedPaymentMethod(null)}
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Cancel
+            </Button>
+          </>
+        )}
       </div>
     </div>
   );

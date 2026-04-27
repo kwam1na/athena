@@ -102,6 +102,9 @@ export function OrderSummary({
     useState(false);
   const [isEditingPaymentAmount, setIsEditingPaymentAmount] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
+  const [paymentAmountDraft, setPaymentAmountDraft] = useState<number | undefined>(
+    undefined,
+  );
 
   const effectiveCartItems =
     completedTransactionData?.cartItems && (readOnly || isTransactionCompleted)
@@ -179,10 +182,34 @@ export function OrderSummary({
     !readOnly &&
     !isTransactionCompleted &&
     (showPaymentEditor || payments.length > 0);
+  const isPaymentAmountOverpaying =
+    selectedPaymentMethod !== null &&
+    paymentAmountDraft !== undefined &&
+    paymentAmountDraft > remainingDue;
+  const remainingAfterDraft =
+    paymentAmountDraft !== undefined && selectedPaymentMethod !== null
+      ? Math.max(remainingDue - paymentAmountDraft, 0)
+      : remainingDue;
+  const balanceDueLabel = isPaymentAmountOverpaying
+    ? "Change due"
+    : "Balance due";
+  const balanceDueAmount = isPaymentAmountOverpaying
+    ? paymentAmountDraft - remainingDue
+    : remainingAfterDraft;
+  const balanceDueToneClass = isPaymentAmountOverpaying
+    ? "border-green-200 bg-green-50"
+    : "border-primary/20 bg-primary/5";
+  const balanceDueLabelClass = isPaymentAmountOverpaying
+    ? "text-green-700"
+    : "text-primary";
 
   useEffect(() => {
+    if (selectedPaymentMethod === null) {
+      setPaymentAmountDraft(undefined);
+    }
+
     onPaymentFlowChange?.(isPaymentFlowActive);
-  }, [isPaymentFlowActive, onPaymentFlowChange]);
+  }, [isPaymentFlowActive, onPaymentFlowChange, selectedPaymentMethod]);
 
   useEffect(() => {
     return () => onPaymentFlowChange?.(false);
@@ -565,12 +592,22 @@ export function OrderSummary({
                 {cartItemsCount}
               </p>
             </div>
-            <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 shadow-sm">
-              <p className="text-xs font-medium uppercase tracking-wide text-primary">
-                Balance due
+            <div
+              className={cn(
+                "rounded-xl border p-4 shadow-sm",
+                balanceDueToneClass,
+              )}
+            >
+              <p
+                className={cn(
+                  "text-xs font-medium uppercase tracking-wide",
+                  balanceDueLabelClass,
+                )}
+              >
+                {balanceDueLabel}
               </p>
               <p className="mt-2 text-2xl font-semibold leading-none text-gray-950">
-                {formatStoredAmount(formatter, remainingDue)}
+                {formatStoredAmount(formatter, balanceDueAmount)}
               </p>
             </div>
           </div>
@@ -583,6 +620,8 @@ export function OrderSummary({
             totalAmountDue={total}
             itemCount={isPaymentFlowActive ? cartItemsCount : undefined}
             balanceDue={isPaymentFlowActive ? remainingDue : undefined}
+            selectedPaymentMethod={selectedPaymentMethod}
+            paymentAmountDraft={paymentAmountDraft}
             readOnly={readOnly}
             isTransactionCompleted={isTransactionCompleted}
             onUpdatePayment={onUpdatePayment}
@@ -621,12 +660,22 @@ export function OrderSummary({
             )}
           >
             {!shouldDockPaymentButtons && (
-              <div className="col-span-2 rounded-xl border border-primary/20 bg-primary/5 p-5">
-                <p className="text-xs font-medium uppercase tracking-wide text-primary">
-                  Balance due
+              <div
+                className={cn(
+                  "col-span-2 rounded-xl border p-5",
+                  balanceDueToneClass,
+                )}
+              >
+                <p
+                  className={cn(
+                    "text-xs font-medium uppercase tracking-wide",
+                    balanceDueLabelClass,
+                  )}
+                >
+                  {balanceDueLabel}
                 </p>
                 <p className="mt-2 text-4xl font-semibold leading-none text-gray-950">
-                  {formatStoredAmount(formatter, remainingDue)}
+                  {formatStoredAmount(formatter, balanceDueAmount)}
                 </p>
               </div>
             )}
@@ -699,6 +748,7 @@ export function OrderSummary({
               selectedPaymentMethod={selectedPaymentMethod}
               setSelectedPaymentMethod={setSelectedPaymentMethod}
               onAddPayment={(method, amount) => onAddPayment?.(method, amount)}
+              onPaymentAmountChange={setPaymentAmountDraft}
               onComplete={handleCompleteTransaction}
               isCompleting={isCompleting}
             />

@@ -97,7 +97,7 @@ export function CartItems({
         ) : (
           <div
             className={cn(
-              "min-h-0 flex-1 space-y-3 overflow-y-auto pr-1 pb-4",
+              "min-h-0 flex-1 space-y-3 overflow-y-auto pr-1 pb-12 scrollbar-hide",
               isCompact && "h-full",
             )}
           >
@@ -137,9 +137,11 @@ export function CartItems({
                         </span>
                       )}
                     </div>
-                    {readOnly && <div className="absolute -top-2 -left-2 bg-muted text-primary-background text-xs w-5 h-5 rounded-full flex items-center justify-center shadow-sm">
-                      {item.quantity}
-                    </div>}
+                    {readOnly && (
+                      <div className="absolute -top-2 -left-2 bg-muted text-primary-background text-xs w-5 h-5 rounded-full flex items-center justify-center shadow-sm">
+                        {item.quantity}
+                      </div>
+                    )}
                   </div>
 
                   <div
@@ -215,43 +217,45 @@ export function CartItems({
                       isCompact ? "justify-start" : "col-span-4 justify-center",
                     )}
                   >
-                    {!readOnly && <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-10 w-10"
-                        onClick={() =>
-                          onUpdateQuantity &&
-                          onUpdateQuantity(
-                            item.id as
-                            | Id<"posSessionItem">
-                            | Id<"expenseSessionItem">,
-                            item.quantity - 1,
-                          )
-                        }
-                      >
-                        <Minus className="w-4 h-4" />
-                      </Button>
-                      <span className="w-10 text-center font-medium text-sm">
-                        {item.quantity}
-                      </span>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-10 w-10"
-                        onClick={() =>
-                          onUpdateQuantity &&
-                          onUpdateQuantity(
-                            item.id as
-                            | Id<"posSessionItem">
-                            | Id<"expenseSessionItem">,
-                            item.quantity + 1,
-                          )
-                        }
-                      >
-                        <Plus className="w-4 h-4" />
-                      </Button>
-                    </div>}
+                    {!readOnly && (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-10 w-10"
+                          onClick={() =>
+                            onUpdateQuantity &&
+                            onUpdateQuantity(
+                              item.id as
+                                | Id<"posSessionItem">
+                                | Id<"expenseSessionItem">,
+                              item.quantity - 1,
+                            )
+                          }
+                        >
+                          <Minus className="w-4 h-4" />
+                        </Button>
+                        <span className="w-10 text-center font-medium text-sm">
+                          {item.quantity}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-10 w-10"
+                          onClick={() =>
+                            onUpdateQuantity &&
+                            onUpdateQuantity(
+                              item.id as
+                                | Id<"posSessionItem">
+                                | Id<"expenseSessionItem">,
+                              item.quantity + 1,
+                            )
+                          }
+                        >
+                          <Plus className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
 
                   <div
@@ -287,8 +291,8 @@ export function CartItems({
                           onRemoveItem &&
                           onRemoveItem(
                             item.id as
-                            | Id<"posSessionItem">
-                            | Id<"expenseSessionItem">,
+                              | Id<"posSessionItem">
+                              | Id<"expenseSessionItem">,
                           )
                         }
                       >

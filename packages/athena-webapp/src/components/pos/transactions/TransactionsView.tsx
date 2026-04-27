@@ -78,6 +78,8 @@ export function TransactionsView() {
           className="text-lg font-semibold"
         />
       }
+      lockDocumentScroll
+      fullHeight
     >
       <FadeIn>
         <div className="container mx-auto p-6 space-y-4">

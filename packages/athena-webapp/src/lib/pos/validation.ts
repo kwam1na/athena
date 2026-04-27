@@ -10,6 +10,7 @@ import { Product, CustomerInfo } from "@/components/pos/types";
 import { POSSession } from "../../../types";
 import { logger } from "../logger";
 import { formatStoredAmount } from "./displayAmounts";
+import type { PosPaymentMethod } from "./domain";
 
 export interface ValidationResult {
   isValid: boolean;
@@ -319,7 +320,7 @@ export function validatePaymentAmount(
   amount: number,
   remainingDue: number,
   formatter: Intl.NumberFormat,
-  paymentMethod?: "cash" | "card" | "mobile_money"
+  paymentMethod?: PosPaymentMethod | null,
 ): ValidationResult {
   const errors: string[] = [];
 
@@ -328,8 +329,8 @@ export function validatePaymentAmount(
   }
 
   // For cash payments, allow amount to exceed remaining due (change will be given)
-  // For card and mobile_money, amount cannot exceed remaining due
-  if (amount > remainingDue && paymentMethod !== "cash") {
+  // For other methods, amount cannot exceed remaining due
+  if (amount > remainingDue && !isOverpayPaymentMethod(paymentMethod)) {
     errors.push(
       `Payment amount (${formatStoredAmount(formatter, amount)}) cannot exceed remaining due (${formatStoredAmount(formatter, remainingDue)})`
     );
@@ -407,4 +408,11 @@ export function canCompleteTransaction(
   totalDue: number
 ): boolean {
   return totalPaid >= totalDue && totalPaid > 0 && totalDue > 0;
+}
+
+/**
+ * Returns whether a payment method can exceed remaining due amount.
+ */
+export function isOverpayPaymentMethod(paymentMethod?: PosPaymentMethod | null): boolean {
+  return paymentMethod === "cash";
 }

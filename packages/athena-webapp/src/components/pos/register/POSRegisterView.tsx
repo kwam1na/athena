@@ -57,33 +57,6 @@ function useCollapseSidebarForPosFlow() {
   }, []);
 }
 
-function useLockDocumentScroll(shouldLockScroll: boolean) {
-  useEffect(() => {
-    if (!shouldLockScroll) {
-      return;
-    }
-
-    const htmlStyle = document.documentElement.style;
-    const bodyStyle = document.body.style;
-    const previousHtmlOverflow = htmlStyle.overflow;
-    const previousHtmlOverscrollBehaviorY = htmlStyle.overscrollBehaviorY;
-    const previousBodyOverflow = bodyStyle.overflow;
-    const previousBodyOverscrollBehaviorY = bodyStyle.overscrollBehaviorY;
-
-    htmlStyle.overflow = "hidden";
-    htmlStyle.overscrollBehaviorY = "none";
-    bodyStyle.overflow = "hidden";
-    bodyStyle.overscrollBehaviorY = "none";
-
-    return () => {
-      htmlStyle.overflow = previousHtmlOverflow;
-      htmlStyle.overscrollBehaviorY = previousHtmlOverscrollBehaviorY;
-      bodyStyle.overflow = previousBodyOverflow;
-      bodyStyle.overscrollBehaviorY = previousBodyOverscrollBehaviorY;
-    };
-  }, [shouldLockScroll]);
-}
-
 function ProductLookupEmptyState() {
   return (
     <div className="flex h-full min-h-0 flex-col items-center justify-center rounded-lg border border-gray-200 bg-gradient-to-br from-gray-50/50 to-gray-100/30 p-8 text-center">
@@ -125,7 +98,6 @@ export function POSRegisterView({
   const viewModel = injectedViewModel ?? registerViewModel;
   const effectiveWorkflowMode: RegisterWorkflowMode =
     workflowMode ?? viewModel.workflowMode ?? "pos";
-  const isExpenseWorkflow = effectiveWorkflowMode === "expense";
   const isPosWorkflow = effectiveWorkflowMode === "pos";
   const [isPaymentInputActive, setIsPaymentInputActive] = useState(false);
   const productEntryRef = useRef<ProductEntryHandle>(null);
@@ -133,15 +105,11 @@ export function POSRegisterView({
 
   useCollapseSidebarForPosFlow();
   const isSessionActive = viewModel.header.isSessionActive;
-  const isAuthDialogOpen = Boolean(viewModel.authDialog?.open);
-  const shouldUseFullscreenRegisterShell = isSessionActive || isAuthDialogOpen;
-  useLockDocumentScroll(shouldUseFullscreenRegisterShell);
-
   const registerViewWidth = "full";
   const registerContentClassName = cn(
     "w-full px-6 py-5",
-    shouldUseFullscreenRegisterShell ? "h-full min-h-0" : "h-auto",
-    shouldUseFullscreenRegisterShell && "overflow-hidden",
+    "h-full min-h-0",
+    "overflow-hidden",
   );
   const hasProductSearchIntent =
     (viewModel.productEntry?.productSearchQuery ?? "").trim().length > 0;
@@ -149,7 +117,8 @@ export function POSRegisterView({
     isPosWorkflow && isPaymentInputActive && !hasProductSearchIntent;
   const canSearchProducts =
     !viewModel.checkout.isTransactionCompleted && !viewModel.drawerGate;
-  const shouldShowHeaderProductSearch = isSessionActive && canSearchProducts;
+  const isHeaderProductSearchSupported =
+    isSessionActive && canSearchProducts && !viewModel.productEntry.disabled;
   const shouldRenderSaleSurface = !viewModel.checkout.isTransactionCompleted;
   const shouldRenderCheckoutPanel =
     isPosWorkflow || !viewModel.checkout.isTransactionCompleted;
@@ -162,7 +131,10 @@ export function POSRegisterView({
 
   useEffect(() => {
     const handleCmdK = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "k") {
+      if (
+        !(event.metaKey || event.ctrlKey) ||
+        event.key.toLowerCase() !== "k"
+      ) {
         return;
       }
 
@@ -179,7 +151,7 @@ export function POSRegisterView({
 
       event.preventDefault();
 
-      if (!canSearchProducts) {
+      if (!isHeaderProductSearchSupported) {
         return;
       }
 
@@ -189,7 +161,7 @@ export function POSRegisterView({
         return;
       }
 
-      if (shouldShowHeaderProductSearch) {
+      if (isHeaderProductSearchSupported) {
         headerProductSearchInputRef.current?.focus();
         headerProductSearchInputRef.current?.select();
       }
@@ -197,7 +169,7 @@ export function POSRegisterView({
 
     document.addEventListener("keydown", handleCmdK);
     return () => document.removeEventListener("keydown", handleCmdK);
-  }, [canSearchProducts, shouldShowHeaderProductSearch]);
+  }, [isHeaderProductSearchSupported]);
 
   const handlePaymentFlowChange = useCallback((isActive: boolean) => {
     setIsPaymentInputActive(isActive);
@@ -214,6 +186,8 @@ export function POSRegisterView({
   if (!viewModel.hasActiveStore) {
     return (
       <View
+        fullHeight
+        lockDocumentScroll
         header={
           <ComposedPageHeader
             leadingContent={
@@ -238,18 +212,13 @@ export function POSRegisterView({
   return (
     <View
       width={registerViewWidth}
-      className={cn(
-        shouldUseFullscreenRegisterShell &&
-          "h-[calc(100dvh-2.5rem)] max-h-[calc(100dvh-2.5rem)] overflow-hidden",
-      )}
+      fullHeight
+      lockDocumentScroll
       contentClassName={cn(
-        shouldUseFullscreenRegisterShell &&
-          "flex h-full max-h-full flex-col overflow-hidden rounded-2xl border border-border/80 bg-white",
+        "flex h-full max-h-full flex-col overflow-hidden rounded-2xl border border-border/80 bg-white",
       )}
-      headerClassName={cn(shouldUseFullscreenRegisterShell && "shrink-0")}
-      mainClassName={cn(
-        shouldUseFullscreenRegisterShell && "min-h-0 flex-1 overflow-hidden",
-      )}
+      headerClassName="shrink-0"
+      mainClassName={cn("min-h-0 flex-1 overflow-hidden")}
       header={
         <ComposedPageHeader
           width={registerViewWidth}
@@ -258,27 +227,34 @@ export function POSRegisterView({
           leadingContent={
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-8">
               <div className="flex shrink-0 items-center gap-3">
-                {isSessionActive && (
+                {isSessionActive ? (
                   <FadeIn className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-green-600 rounded-full animate-pulse" />
+                    <div
+                      className={`w-2 h-2 bg-green-600 rounded-full animate-pulse`}
+                    />
                   </FadeIn>
+                ) : (
+                  <div
+                    className={`w-2 h-2 bg-background rounded-full animate-pulse`}
+                  />
                 )}
+
                 <p className="text-lg font-semibold text-gray-900">
                   {viewModel.header.title}
                 </p>
               </div>
 
-              {shouldShowHeaderProductSearch ? (
-                <ProductSearchInput
-                  ref={headerProductSearchInputRef}
-                  disabled={viewModel.productEntry.disabled}
-                  productSearchQuery={viewModel.productEntry.productSearchQuery}
-                  setProductSearchQuery={viewModel.productEntry.setProductSearchQuery}
-                  onBarcodeSubmit={viewModel.productEntry.onBarcodeSubmit}
-                  className="max-w-[800px] flex-1"
-                  inputClassName="h-14"
-                />
-              ) : null}
+              <ProductSearchInput
+                ref={headerProductSearchInputRef}
+                disabled={!isHeaderProductSearchSupported}
+                productSearchQuery={viewModel.productEntry.productSearchQuery}
+                setProductSearchQuery={
+                  viewModel.productEntry.setProductSearchQuery
+                }
+                onBarcodeSubmit={viewModel.productEntry.onBarcodeSubmit}
+                className="max-w-[800px] flex-1"
+                inputClassName="h-14"
+              />
             </div>
           }
           trailingContent={
@@ -384,9 +360,7 @@ export function POSRegisterView({
                           onPaymentEntryStart={handlePaymentEntryStart}
                         />
                       ) : (
-                        <ExpenseCompletionPanel
-                          checkout={viewModel.checkout}
-                        />
+                        <ExpenseCompletionPanel checkout={viewModel.checkout} />
                       )}
                     </div>
                   ) : null}

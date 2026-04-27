@@ -11,6 +11,8 @@ export default function View({
   hideHeaderBottomBorder = false,
   hideBorder = false,
   width = "contained",
+  lockDocumentScroll = false,
+  fullHeight = false,
 }: {
   children: React.ReactNode;
   className?: string;
@@ -21,10 +23,34 @@ export default function View({
   hideHeaderBottomBorder?: boolean;
   hideBorder?: boolean;
   width?: "contained" | "full";
+  lockDocumentScroll?: boolean;
+  fullHeight?: boolean;
 }) {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
+
+  useEffect(() => {
+    if (!lockDocumentScroll) {
+      return;
+    }
+    const htmlStyle = document.documentElement.style;
+    const bodyStyle = document.body.style;
+    const previousHtmlOverflow = htmlStyle.overflow;
+    const previousHtmlOverscrollBehaviorY = htmlStyle.overscrollBehaviorY;
+    const previousBodyOverflow = bodyStyle.overflow;
+    const previousBodyOverscrollBehaviorY = bodyStyle.overscrollBehaviorY;
+    htmlStyle.overflow = "hidden";
+    htmlStyle.overscrollBehaviorY = "none";
+    bodyStyle.overflow = "hidden";
+    bodyStyle.overscrollBehaviorY = "none";
+    return () => {
+      htmlStyle.overflow = previousHtmlOverflow;
+      htmlStyle.overscrollBehaviorY = previousHtmlOverscrollBehaviorY;
+      bodyStyle.overflow = previousBodyOverflow;
+      bodyStyle.overscrollBehaviorY = previousBodyOverscrollBehaviorY;
+    };
+  }, [lockDocumentScroll]);
 
   return (
     <section
@@ -32,12 +58,15 @@ export default function View({
         width === "full"
           ? "w-full max-w-none px-4 sm:px-6 lg:px-8"
           : "container mx-auto",
+        fullHeight &&
+          "h-[calc(100dvh-2.5rem)] max-h-[calc(100dvh-2.5rem)] min-h-0 overflow-hidden",
         className,
       )}
     >
       <div
         className={cn(
           "h-full rounded-lg",
+          fullHeight && "min-h-0 overflow-hidden",
           !hideBorder && "border",
           contentClassName,
         )}
@@ -53,7 +82,14 @@ export default function View({
             {header}
           </header>
         )}
-        <main className={mainClassName}>{children}</main>
+        <main
+          className={cn(
+            fullHeight && "min-h-0 h-full overflow-hidden",
+            mainClassName,
+          )}
+        >
+          {children}
+        </main>
       </div>
     </section>
   );

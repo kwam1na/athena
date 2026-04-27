@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import {
@@ -34,27 +34,6 @@ type RouteParams =
   | undefined;
 
 export function TransactionView() {
-  useEffect(() => {
-    const htmlStyle = document.documentElement.style;
-    const bodyStyle = document.body.style;
-    const previousHtmlOverflow = htmlStyle.overflow;
-    const previousHtmlOverscrollBehaviorY = htmlStyle.overscrollBehaviorY;
-    const previousBodyOverflow = bodyStyle.overflow;
-    const previousBodyOverscrollBehaviorY = bodyStyle.overscrollBehaviorY;
-
-    htmlStyle.overflow = "hidden";
-    htmlStyle.overscrollBehaviorY = "none";
-    bodyStyle.overflow = "hidden";
-    bodyStyle.overscrollBehaviorY = "none";
-
-    return () => {
-      htmlStyle.overflow = previousHtmlOverflow;
-      htmlStyle.overscrollBehaviorY = previousHtmlOverscrollBehaviorY;
-      bodyStyle.overflow = previousBodyOverflow;
-      bodyStyle.overscrollBehaviorY = previousBodyOverscrollBehaviorY;
-    };
-  }, []);
-
   const params = useParams({
     strict: false,
   }) as RouteParams;
@@ -140,13 +119,13 @@ export function TransactionView() {
 
   return (
     <View
-      className="h-[calc(100dvh-2.5rem)] max-h-[calc(100dvh-2.5rem)] min-h-0 overflow-hidden"
+      fullHeight
+      lockDocumentScroll
       header={
         <SimplePageHeader
           title={`Transaction #${transaction.transactionNumber}`}
         />
       }
-      mainClassName="min-h-0 h-full overflow-hidden"
     >
       <FadeIn className="h-full">
       <div className="container mx-auto h-full min-h-0 p-6">
