@@ -897,7 +897,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     }
 
     requestBootstrap();
-    toast.success("Drawer open. You can start selling.");
+    toast.success("Drawer open");
   }, [
     activeStore?._id,
     staffProfileId,
@@ -1450,8 +1450,6 @@ export function useRegisterViewModel(): RegisterViewModel {
         total: activeTotals.total,
       },
     });
-
-    console.log("complete result", result);
 
     if (!result.ok) {
       presentOperatorError(result.message);
