@@ -8,17 +8,25 @@ import {
 } from "@/lib/pos/infrastructure/convex/customerGateway";
 import { cn } from "~/src/lib/utils";
 import type { POSCustomerSummary } from "~/types";
-import { Plus, Search, UserRound, X } from "lucide-react";
+import {
+  Plus,
+  Search,
+  User,
+  User2,
+  UserCheck,
+  UserRound,
+  X,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { FadeIn } from "../../common/FadeIn";
 
 interface RegisterCustomerAttributionProps {
   customerInfo: CustomerInfo;
   onCustomerCommitted: (customer: CustomerInfo) => Promise<void>;
   setCustomerInfo: (
-    customer:
-      | CustomerInfo
-      | ((currentCustomer: CustomerInfo) => CustomerInfo),
+    customer: CustomerInfo | ((currentCustomer: CustomerInfo) => CustomerInfo),
   ) => void;
+  disabled?: boolean;
 }
 
 const EMPTY_CUSTOMER_INFO: CustomerInfo = {
@@ -81,6 +89,7 @@ export function RegisterCustomerAttribution({
   customerInfo,
   onCustomerCommitted,
   setCustomerInfo,
+  disabled = false,
 }: RegisterCustomerAttributionProps) {
   const { activeStore } = useGetActiveStore();
   const [isExpanded, setIsExpanded] = useState(false);
@@ -121,6 +130,10 @@ export function RegisterCustomerAttribution({
   };
 
   const handleSelectCustomer = (customer: POSCustomerSummary) => {
+    if (disabled) {
+      return;
+    }
+
     cancelPendingAdd();
     commitCustomer(toCustomerInfo(customer));
     setInlineError(null);
@@ -129,6 +142,10 @@ export function RegisterCustomerAttribution({
   };
 
   const handleClearCustomer = () => {
+    if (disabled) {
+      return;
+    }
+
     cancelPendingAdd();
     commitCustomer(EMPTY_CUSTOMER_INFO);
     setInlineError(null);
@@ -137,7 +154,7 @@ export function RegisterCustomerAttribution({
   };
 
   const handleAddFromSearch = async () => {
-    if (!activeStore || !trimmedSearchQuery || isAddingCustomer) {
+    if (disabled || !activeStore || !trimmedSearchQuery || isAddingCustomer) {
       return;
     }
 
@@ -177,7 +194,10 @@ export function RegisterCustomerAttribution({
   return (
     <section
       aria-label="Customer attribution"
-      className="rounded-lg border border-border/80 bg-muted/20 px-4 py-3"
+      className={cn(
+        "rounded-lg border border-border/80 bg-muted/20 px-4 py-3",
+        disabled && "opacity-60",
+      )}
     >
       <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-center gap-3">
@@ -185,11 +205,19 @@ export function RegisterCustomerAttribution({
             className={cn(
               "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border bg-white",
               hasCustomer
-                ? "border-emerald-50 text-emerald-700 bg-emerald-50"
+                ? "border-none text-emerald-700"
                 : "border-none text-muted-foreground",
             )}
           >
-            <UserRound className="h-4 w-4" aria-hidden="true" />
+            {hasCustomer ? (
+              <FadeIn>
+                <UserCheck className="h-4 w-4" aria-hidden="true" />
+              </FadeIn>
+            ) : (
+              <FadeIn>
+                <User className="h-4 w-4" aria-hidden="true" />
+              </FadeIn>
+            )}
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-gray-950">
@@ -213,6 +241,7 @@ export function RegisterCustomerAttribution({
                 variant="outline"
                 size="sm"
                 className="h-8 px-3 text-xs"
+                disabled={disabled}
                 onClick={() => setIsExpanded(true)}
               >
                 Change
@@ -223,6 +252,7 @@ export function RegisterCustomerAttribution({
                 variant="ghost"
                 size="sm"
                 className="h-8 px-3 text-xs text-muted-foreground hover:text-gray-950"
+                disabled={disabled}
                 onClick={handleClearCustomer}
               >
                 Clear
@@ -234,6 +264,7 @@ export function RegisterCustomerAttribution({
               type="button"
               size="sm"
               className="h-8 px-3 text-xs"
+              disabled={disabled}
               onClick={() => setIsExpanded(true)}
             >
               <Search className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
@@ -255,6 +286,10 @@ export function RegisterCustomerAttribution({
                 autoFocus
                 value={searchQuery}
                 onKeyDown={(event) => {
+                  if (disabled) {
+                    return;
+                  }
+
                   if (event.key !== "Enter") {
                     return;
                   }
@@ -263,11 +298,16 @@ export function RegisterCustomerAttribution({
                   void handleAddFromSearch();
                 }}
                 onChange={(event) => {
+                  if (disabled) {
+                    return;
+                  }
+
                   cancelPendingAdd();
                   setSearchQuery(event.target.value);
                   setInlineError(null);
                 }}
                 placeholder="Name, phone, or email"
+                disabled={disabled}
                 className="h-9 pl-9 text-sm"
               />
             </div>
@@ -278,7 +318,7 @@ export function RegisterCustomerAttribution({
                   variant="outline"
                   size="sm"
                   className="h-9 px-3 text-xs"
-                  disabled={isAddingCustomer || !activeStore}
+                  disabled={disabled || isAddingCustomer || !activeStore}
                   onClick={handleAddFromSearch}
                 >
                   <Plus className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
@@ -290,7 +330,12 @@ export function RegisterCustomerAttribution({
                 variant="ghost"
                 size="icon"
                 className="h-9 w-9"
+                disabled={disabled}
                 onClick={() => {
+                  if (disabled) {
+                    return;
+                  }
+
                   cancelPendingAdd();
                   setIsExpanded(false);
                   setInlineError(null);
@@ -315,7 +360,11 @@ export function RegisterCustomerAttribution({
                   <button
                     key={customer._id}
                     type="button"
-                    className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-transparent px-3 py-2 text-left text-sm hover:border-border hover:bg-white focus:outline-none focus:ring-2 focus:ring-ring"
+                    className={cn(
+                      "flex min-w-0 items-center justify-between gap-3 rounded-md border border-transparent px-3 py-2 text-left text-sm hover:border-border hover:bg-white focus:outline-none focus:ring-2 focus:ring-ring",
+                      disabled && "opacity-60",
+                    )}
+                    disabled={disabled}
                     onClick={() => handleSelectCustomer(customer)}
                   >
                     <span className="min-w-0">

@@ -1451,6 +1451,8 @@ export function useRegisterViewModel(): RegisterViewModel {
       },
     });
 
+    console.log("complete result", result);
+
     if (!result.ok) {
       presentOperatorError(result.message);
       return false;

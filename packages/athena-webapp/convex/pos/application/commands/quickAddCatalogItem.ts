@@ -134,15 +134,8 @@ async function findExistingSku(
     return null;
   }
 
-  const skuMatch = await ctx.db
-    .query("productSku")
-    .withIndex("by_storeId_sku", (q) =>
-      q.eq("storeId", args.storeId).eq("sku", lookupCode),
-    )
-    .first();
-
-  if (skuMatch) {
-    return skuMatch;
+  if (!isBarcodeLike(lookupCode)) {
+    return null;
   }
 
   return ctx.db
@@ -252,7 +245,6 @@ export async function quickAddCatalogItem(
 
   const barcode =
     lookupCode && isBarcodeLike(lookupCode) ? lookupCode : undefined;
-  const requestedSku = barcode ? undefined : lookupCode;
   const skuId = await ctx.db.insert("productSku", {
     attributes: {},
     barcode,
@@ -268,13 +260,11 @@ export async function quickAddCatalogItem(
     storeId: args.storeId,
   });
 
-  const sku =
-    requestedSku ||
-    generateSKU({
-      storeId: args.storeId,
-      productId,
-      skuId,
-    });
+  const sku = generateSKU({
+    storeId: args.storeId,
+    productId,
+    skuId,
+  });
   await ctx.db.patch("productSku", skuId, { sku });
 
   const productSku = (await ctx.db.get("productSku", skuId))!;

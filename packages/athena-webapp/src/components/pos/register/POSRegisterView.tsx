@@ -274,7 +274,10 @@ export function POSRegisterView({
         ) : (
           <div className="flex h-full min-h-0 flex-col gap-6 overflow-hidden">
             {isPosWorkflow && shouldRenderSaleSurface ? (
-              <RegisterCustomerPanel customerPanel={viewModel.customerPanel} />
+              <RegisterCustomerPanel
+                customerPanel={viewModel.customerPanel}
+                disabled={!isSessionActive}
+              />
             ) : null}
 
             <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 overflow-hidden lg:grid-cols-[minmax(0,2fr)_minmax(340px,1fr)]">

@@ -41,12 +41,16 @@ function makeCustomer(
   };
 }
 
-function renderAttribution(customerInfo?: Partial<CustomerInfo>) {
+function renderAttribution(
+  customerInfo?: Partial<CustomerInfo>,
+  disabled = false,
+) {
   const setCustomerInfo = vi.fn();
   const onCustomerCommitted = vi.fn().mockResolvedValue(undefined);
 
   render(
     <RegisterCustomerAttribution
+      disabled={disabled}
       customerInfo={{
         customerProfileId: customerInfo?.customerProfileId,
         name: customerInfo?.name ?? "",
@@ -107,6 +111,22 @@ describe("RegisterCustomerAttribution", () => {
     expect(
       screen.getByPlaceholderText("Name, phone, or email"),
     ).toBeInTheDocument();
+  });
+
+  it("disables the entire attribution flow when active store session is not active", async () => {
+    const user = userEvent.setup();
+
+    renderAttribution(undefined, true);
+
+    const findOrAddButton = screen.getByRole("button", {
+      name: "Find or add customer",
+    });
+    expect(findOrAddButton).toBeDisabled();
+
+    await user.click(findOrAddButton);
+    expect(
+      screen.queryByPlaceholderText("Name, phone, or email"),
+    ).not.toBeInTheDocument();
   });
 
   it("starts expanded lookup by name, phone, or email and offers results plus add from search", async () => {

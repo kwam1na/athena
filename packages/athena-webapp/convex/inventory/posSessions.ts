@@ -23,7 +23,10 @@ import {
   runResumeSessionCommand,
   runStartSessionCommand,
 } from "../pos/application/commands/sessionCommands";
-import { createTransactionFromSessionHandler, recordRegisterSessionSale } from "./pos";
+import {
+  createTransactionFromSessionHandler,
+  recordRegisterSessionSale,
+} from "./pos";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { ok, userError } from "../../shared/commandResult";
 import { isPosUsableRegisterSessionStatus } from "../../shared/registerSessionStatus";
@@ -53,9 +56,10 @@ const completeSessionDataValidator = v.object({
   transactionNumber: v.string(),
 });
 
-function userErrorFromSessionCommandFailure(
-  result: { status: string; message: string },
-) {
+function userErrorFromSessionCommandFailure(result: {
+  status: string;
+  message: string;
+}) {
   switch (result.status) {
     case "notFound":
       return userError({
@@ -178,13 +182,13 @@ async function loadPosSessionItems(ctx: QueryCtx, sessionId: Id<"posSession">) {
         ...item,
         color: colorName,
       };
-    })
+    }),
   );
 }
 
 async function listPosSessionsByStatusBefore(
   ctx: MutationCtx,
-  expiresBefore: number
+  expiresBefore: number,
 ) {
   const sessions = [];
   let cursor: string | null = null;
@@ -212,7 +216,7 @@ async function listPosSessionsByStatusBefore(
 async function listPosSessionsForStoreStatus(
   ctx: MutationCtx,
   storeId: Id<"store">,
-  status: "completed" | "void" | "expired"
+  status: "completed" | "void" | "expired",
 ) {
   const sessions = [];
   let cursor: string | null = null;
@@ -221,7 +225,7 @@ async function listPosSessionsForStoreStatus(
     const page = await ctx.db
       .query("posSession")
       .withIndex("by_storeId_and_status", (q) =>
-        q.eq("storeId", storeId).eq("status", status)
+        q.eq("storeId", storeId).eq("status", status),
       )
       .paginate({ cursor, numItems: SESSION_CLEANUP_BATCH_SIZE });
 
@@ -241,7 +245,7 @@ async function persistSessionWorkflowTraceIdBestEffort(
     session: PosSessionTraceableSession;
     traceCreated: boolean;
     traceId: string;
-  }
+  },
 ) {
   if (args.session.workflowTraceId || !args.traceCreated) {
     return;
@@ -274,7 +278,7 @@ async function recordSessionLifecycleTraceBestEffort(
     amount?: number;
     previousAmount?: number;
     paymentCount?: number;
-  }
+  },
 ) {
   try {
     const traceResult = await createPosSessionTraceRecorder(ctx).record(args);
@@ -283,7 +287,10 @@ async function recordSessionLifecycleTraceBestEffort(
       ...traceResult,
     });
   } catch (error) {
-    console.error(`[workflow-trace] pos.session.lifecycle.${args.stage}`, error);
+    console.error(
+      `[workflow-trace] pos.session.lifecycle.${args.stage}`,
+      error,
+    );
   }
 }
 
@@ -311,24 +318,24 @@ function normalizeCustomerSnapshot(session: CustomerSnapshot) {
   };
 }
 
-function hasCustomerSnapshotValue(snapshot: ReturnType<typeof normalizeCustomerSnapshot>) {
+function hasCustomerSnapshotValue(
+  snapshot: ReturnType<typeof normalizeCustomerSnapshot>,
+) {
   return Boolean(
     snapshot.customerProfileId ||
-      snapshot.customerInfo?.name ||
-      snapshot.customerInfo?.email ||
-      snapshot.customerInfo?.phone,
+    snapshot.customerInfo?.name ||
+    snapshot.customerInfo?.email ||
+    snapshot.customerInfo?.phone,
   );
 }
 
 function resolveCustomerTraceStage(
   previousSession: CustomerSnapshot,
   nextSession: CustomerSnapshot,
-):
-  | {
-      stage: "customerLinked" | "customerUpdated" | "customerCleared";
-      customerName?: string;
-    }
-  | null {
+): {
+  stage: "customerLinked" | "customerUpdated" | "customerCleared";
+  customerName?: string;
+} | null {
   const previous = normalizeCustomerSnapshot(previousSession);
   const next = normalizeCustomerSnapshot(nextSession);
 
@@ -365,10 +372,7 @@ function resolveCustomerTraceStage(
   };
 }
 
-async function loadSessionCustomer(
-  ctx: QueryCtx,
-  session: CustomerSnapshot,
-) {
+async function loadSessionCustomer(ctx: QueryCtx, session: CustomerSnapshot) {
   if (session.customerProfileId) {
     const customerProfile = await ctx.db.get(
       "customerProfile",
@@ -378,9 +382,7 @@ async function loadSessionCustomer(
     return {
       customerProfileId: session.customerProfileId,
       name:
-        customerProfile?.fullName ??
-        session.customerInfo?.name ??
-        "Customer",
+        customerProfile?.fullName ?? session.customerInfo?.name ?? "Customer",
       email: customerProfile?.email ?? session.customerInfo?.email,
       phone: customerProfile?.phoneNumber ?? session.customerInfo?.phone,
     };
@@ -427,7 +429,7 @@ export const getStoreSessions = query({
           q
             .eq("storeId", storeId)
             .eq("status", status)
-            .eq("terminalId", args.terminalId!)
+            .eq("terminalId", args.terminalId!),
         );
     } else if (status && args.staffProfileId) {
       indexedStaffFilter = true;
@@ -437,27 +439,27 @@ export const getStoreSessions = query({
           q
             .eq("storeId", storeId)
             .eq("status", status)
-            .eq("staffProfileId", args.staffProfileId!)
+            .eq("staffProfileId", args.staffProfileId!),
         );
     } else if (args.terminalId) {
       indexedTerminalFilter = true;
       sessionsQuery = ctx.db
         .query("posSession")
         .withIndex("by_storeId_terminalId", (q) =>
-          q.eq("storeId", storeId).eq("terminalId", args.terminalId!)
+          q.eq("storeId", storeId).eq("terminalId", args.terminalId!),
         );
     } else if (args.staffProfileId) {
       indexedStaffFilter = true;
       sessionsQuery = ctx.db
         .query("posSession")
         .withIndex("by_storeId_staffProfileId", (q) =>
-          q.eq("storeId", storeId).eq("staffProfileId", args.staffProfileId!)
+          q.eq("storeId", storeId).eq("staffProfileId", args.staffProfileId!),
         );
     } else if (status) {
       sessionsQuery = ctx.db
         .query("posSession")
         .withIndex("by_storeId_and_status", (q) =>
-          q.eq("storeId", storeId).eq("status", status)
+          q.eq("storeId", storeId).eq("status", status),
         );
     } else {
       sessionsQuery = ctx.db
@@ -469,13 +471,13 @@ export const getStoreSessions = query({
 
     if (args.terminalId && !indexedTerminalFilter) {
       sessions = sessions.filter(
-        (session) => session.terminalId === args.terminalId
+        (session) => session.terminalId === args.terminalId,
       );
     }
 
     if (args.staffProfileId && !indexedStaffFilter) {
       sessions = sessions.filter(
-        (session) => session.staffProfileId === args.staffProfileId
+        (session) => session.staffProfileId === args.staffProfileId,
       );
     }
 
@@ -493,7 +495,7 @@ export const getStoreSessions = query({
           cartItems,
           customer,
         };
-      })
+      }),
     );
 
     return enrichedSessions;
@@ -570,7 +572,7 @@ export const updateSession = mutation({
         name: v.optional(v.string()),
         email: v.optional(v.string()),
         phone: v.optional(v.string()),
-      })
+      }),
     ),
     subtotal: v.optional(v.number()),
     tax: v.optional(v.number()),
@@ -591,7 +593,8 @@ export const updateSession = mutation({
       : null;
 
     const isStaleCompletedSession =
-      currentSession?.status === "completed" || currentSession?.status === "void";
+      currentSession?.status === "completed" ||
+      currentSession?.status === "void";
     const isExpiredSession = Boolean(
       currentSession?.expiresAt && currentSession.expiresAt < now,
     );
@@ -613,7 +616,7 @@ export const updateSession = mutation({
     const validation = await validateSessionModifiable(
       ctx.db,
       sessionId,
-      args.staffProfileId
+      args.staffProfileId,
     );
     if (!validation.success) {
       return userErrorFromValidationMessage(
@@ -638,7 +641,10 @@ export const updateSession = mutation({
         updatedAt: now,
         expiresAt,
       };
-      const customerTrace = resolveCustomerTraceStage(previousSession, nextSession);
+      const customerTrace = resolveCustomerTraceStage(
+        previousSession,
+        nextSession,
+      );
 
       if (customerTrace) {
         await recordSessionLifecycleTraceBestEffort(ctx, {
@@ -701,7 +707,7 @@ export const completeSession = mutation({
         method: v.string(), // "cash", "card", "mobile_money"
         amount: v.number(),
         timestamp: v.number(),
-      })
+      }),
     ),
     notes: v.optional(v.string()),
     // Explicitly save final transaction totals for audit integrity
@@ -749,7 +755,10 @@ export const completeSession = mutation({
     const { transactionId, transactionNumber } = transactionResult.data;
     const sessionTransactionId = transactionId as Id<"posTransaction">;
     const registerSessionId = session.registerSessionId;
-    const totalPaid = args.payments.reduce((sum, payment) => sum + payment.amount, 0);
+    const totalPaid = args.payments.reduce(
+      (sum, payment) => sum + payment.amount,
+      0,
+    );
 
     if (!registerSessionId) {
       throw new Error("Session lost its drawer binding during completion.");
@@ -853,7 +862,7 @@ export const voidSession = mutation({
       ([skuId, quantity]) => ({
         skuId,
         quantity,
-      })
+      }),
     );
 
     await releaseInventoryHoldsBatch(ctx.db, releaseItems);
@@ -909,7 +918,7 @@ export const releaseSessionInventoryHoldsAndDeleteItems = mutation({
     const validation = await validateSessionActive(
       ctx.db,
       args.sessionId,
-      args.staffProfileId
+      args.staffProfileId,
     );
 
     if (!validation.success) {
@@ -941,7 +950,7 @@ export const releaseSessionInventoryHoldsAndDeleteItems = mutation({
       ([skuId, quantity]) => ({
         skuId,
         quantity,
-      })
+      }),
     );
 
     await releaseInventoryHoldsBatch(ctx.db, releaseItems);
@@ -949,7 +958,7 @@ export const releaseSessionInventoryHoldsAndDeleteItems = mutation({
     // Delete all items for this session
     const itemIds = items.map((item) => item._id);
     await Promise.all(
-      itemIds.map((itemId) => ctx.db.delete("posSessionItem", itemId))
+      itemIds.map((itemId) => ctx.db.delete("posSessionItem", itemId)),
     );
 
     const expiresAt = calculateSessionExpiration(now);
@@ -989,13 +998,13 @@ export const syncSessionCheckoutState = mutation({
         method: v.string(),
         amount: v.number(),
         timestamp: v.number(),
-      })
+      }),
     ),
     stage: v.union(
       v.literal("paymentAdded"),
       v.literal("paymentUpdated"),
       v.literal("paymentRemoved"),
-      v.literal("paymentsCleared")
+      v.literal("paymentsCleared"),
     ),
     paymentMethod: v.optional(v.string()),
     amount: v.optional(v.number()),
@@ -1006,7 +1015,7 @@ export const syncSessionCheckoutState = mutation({
     const validation = await validateSessionActive(
       ctx.db,
       args.sessionId,
-      args.staffProfileId
+      args.staffProfileId,
     );
 
     if (!validation.success) {
@@ -1085,7 +1094,7 @@ export const getActiveSession = query({
             q
               .eq("storeId", args.storeId)
               .eq("status", "active")
-              .eq("staffProfileId", args.staffProfileId!)
+              .eq("staffProfileId", args.staffProfileId!),
           )
           .order("desc")
           .take(ACTIVE_SESSION_CANDIDATE_LIMIT)
@@ -1095,7 +1104,7 @@ export const getActiveSession = query({
             q
               .eq("storeId", args.storeId)
               .eq("status", "active")
-              .eq("terminalId", args.terminalId)
+              .eq("terminalId", args.terminalId),
           )
           .order("desc")
           .take(ACTIVE_SESSION_CANDIDATE_LIMIT);
@@ -1103,7 +1112,7 @@ export const getActiveSession = query({
     // Filter out expired sessions (even if status is still "active")
     // This prevents returning sessions that expired but haven't been marked by cron yet
     const nonExpiredSessions = activeSessions.filter(
-      (session) => !session.expiresAt || session.expiresAt >= now
+      (session) => !session.expiresAt || session.expiresAt >= now,
     );
 
     // Filter by staff member and/or register if provided
@@ -1111,22 +1120,22 @@ export const getActiveSession = query({
 
     if (args.staffProfileId) {
       filteredSessions = filteredSessions.filter(
-        (s) => s.terminalId === args.terminalId
+        (s) => s.terminalId === args.terminalId,
       );
       filteredSessions = filteredSessions.filter(
-        (s) => s.staffProfileId === args.staffProfileId
+        (s) => s.staffProfileId === args.staffProfileId,
       );
     }
 
     if (args.registerNumber) {
       filteredSessions = filteredSessions.filter(
-        (s) => s.registerNumber === args.registerNumber
+        (s) => s.registerNumber === args.registerNumber,
       );
     }
 
     // Return the most recent active session
     const activeSession = filteredSessions.sort(
-      (a, b) => b.updatedAt - a.updatedAt
+      (a, b) => b.updatedAt - a.updatedAt,
     )[0];
 
     if (!activeSession) return null;
@@ -1158,7 +1167,7 @@ export const releasePosSessionItems = internalMutation({
     }
 
     console.log(
-      `[POS] Found ${expiredSessions.length} expired sessions to process`
+      `[POS] Found ${expiredSessions.length} expired sessions to process`,
     );
 
     const releasedSessionIds: string[] = [];
@@ -1184,19 +1193,20 @@ export const releasePosSessionItems = internalMutation({
           ([skuId, quantity]) => ({
             skuId,
             quantity,
-          })
+          }),
         );
 
         await releaseInventoryHoldsBatch(ctx.db, releaseItems);
         console.log(
-          `[POS] Released inventory holds for ${releaseItems.length} SKUs`
+          `[POS] Released inventory holds for ${releaseItems.length} SKUs`,
         );
 
         // Keep items for record-keeping - don't delete them
         // Items remain associated with expired session for audit trail
         const wasVoided = session.status === "void";
-        const expirationNote =
-          wasVoided ? session.notes : "Session expired - inventory holds released";
+        const expirationNote = wasVoided
+          ? session.notes
+          : "Session expired - inventory holds released";
 
         // Mark session as expired
         await ctx.db.patch("posSession", session._id, {
@@ -1220,7 +1230,7 @@ export const releasePosSessionItems = internalMutation({
 
         releasedSessionIds.push(session._id);
         console.log(
-          `[POS] Released inventory holds for session ${session.sessionNumber}`
+          `[POS] Released inventory holds for session ${session.sessionNumber}`,
         );
       } catch (error) {
         console.error(`[POS] Error releasing session ${session._id}:`, error);
@@ -1229,7 +1239,7 @@ export const releasePosSessionItems = internalMutation({
     }
 
     console.log(
-      `[POS] Successfully released ${releasedSessionIds.length} sessions`
+      `[POS] Successfully released ${releasedSessionIds.length} sessions`,
     );
     return {
       releasedCount: releasedSessionIds.length,
@@ -1254,9 +1264,9 @@ export const cleanupOldSessions = mutation({
           listPosSessionsForStoreStatus(
             ctx,
             args.storeId,
-            status as "completed" | "void" | "expired"
-          )
-        )
+            status as "completed" | "void" | "expired",
+          ),
+        ),
       )
     )
       .flat()
@@ -1264,7 +1274,7 @@ export const cleanupOldSessions = mutation({
 
     // Delete old sessions
     await Promise.all(
-      oldSessions.map((session) => ctx.db.delete("posSession", session._id))
+      oldSessions.map((session) => ctx.db.delete("posSession", session._id)),
     );
 
     return oldSessions.length;
@@ -1282,13 +1292,13 @@ export const expireAllSessionsForStaff = mutation({
       ctx.db
         .query("posSession")
         .withIndex("by_staffProfileId_and_status", (q) =>
-          q.eq("staffProfileId", args.staffProfileId).eq("status", "active")
+          q.eq("staffProfileId", args.staffProfileId).eq("status", "active"),
         )
         .take(ACTIVE_SESSION_CANDIDATE_LIMIT),
       ctx.db
         .query("posSession")
         .withIndex("by_staffProfileId_and_status", (q) =>
-          q.eq("staffProfileId", args.staffProfileId).eq("status", "held")
+          q.eq("staffProfileId", args.staffProfileId).eq("status", "held"),
         )
         .take(ACTIVE_SESSION_CANDIDATE_LIMIT),
     ]);
@@ -1298,8 +1308,8 @@ export const expireAllSessionsForStaff = mutation({
       sessions
         .filter((session) => session.terminalId !== args.terminalId)
         .map((session) =>
-          ctx.db.patch("posSession", session._id, { expiresAt: now })
-        )
+          ctx.db.patch("posSession", session._id, { expiresAt: now }),
+        ),
     );
 
     return {

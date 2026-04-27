@@ -19,14 +19,14 @@ interface SessionManagerProps {
 export function SessionManager({ sessionPanel }: SessionManagerProps) {
   return (
     <div className="flex items-center gap-4">
-      {sessionPanel.activeSessionNumber && (
+      {/* {sessionPanel.activeSessionNumber && (
         <FadeIn>
           <Badge variant="outline" className="flex items-center gap-1">
             <Clock className="h-3 w-3" />
             {sessionPanel.activeSessionNumber}
           </Badge>
         </FadeIn>
-      )}
+      )} */}
 
       {sessionPanel.hasExpiredSession && (
         <Badge

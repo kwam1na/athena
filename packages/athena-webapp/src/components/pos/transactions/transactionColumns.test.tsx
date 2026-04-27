@@ -28,8 +28,11 @@ vi.mock("../../traces/WorkflowTraceRouteLink", () => ({
   ),
 }));
 
-function renderTransactionCell(row: CompletedTransactionRow) {
-  const cell = transactionColumns[0]?.cell as
+function renderTransactionCell(
+  row: CompletedTransactionRow,
+  columnIndex = 0,
+) {
+  const cell = transactionColumns[columnIndex]?.cell as
     | ((args: {
         row: {
           original: CompletedTransactionRow;
@@ -42,7 +45,7 @@ function renderTransactionCell(row: CompletedTransactionRow) {
     throw new Error("Transaction column cell renderer is not configured.");
   }
 
-  render(
+  return render(
     <>{cell({
       row: {
         original: row,
@@ -89,5 +92,50 @@ describe("transactionColumns", () => {
     });
 
     expect(screen.queryByTestId("session-trace-link")).not.toBeInTheDocument();
+  });
+
+  it("renders a wallet cards icon for transactions with multiple payment methods", () => {
+    const { container } = renderTransactionCell({
+      _id: "txn_3" as CompletedTransactionRow["_id"],
+      transactionNumber: "POS-333333",
+      formattedTotal: "GHc 10.00",
+      paymentMethodLabel: "Multiple methods",
+      paymentMethod: "cash",
+      hasMultiplePaymentMethods: true,
+      cashierName: "Ada L.",
+      customerName: "Walk-in",
+      itemCount: 1,
+      completedAt: 100,
+      hasTrace: false,
+      sessionTraceId: null,
+    }, 1);
+
+    expect(
+      container.querySelector(".lucide-wallet-cards"),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps existing icons for transactions with a single payment method", () => {
+    const { container } = renderTransactionCell({
+      _id: "txn_4" as CompletedTransactionRow["_id"],
+      transactionNumber: "POS-444444",
+      formattedTotal: "GHc 10.00",
+      paymentMethodLabel: "Cash",
+      paymentMethod: "cash",
+      hasMultiplePaymentMethods: false,
+      cashierName: "Ada L.",
+      customerName: "Walk-in",
+      itemCount: 1,
+      completedAt: 100,
+      hasTrace: false,
+      sessionTraceId: null,
+    }, 1);
+
+    expect(
+      container.querySelector(".lucide-banknote"),
+    ).toBeInTheDocument();
+    expect(
+      container.querySelector(".lucide-wallet-cards"),
+    ).not.toBeInTheDocument();
   });
 });

@@ -27,12 +27,12 @@ export function ExpenseReportsView() {
 
   const expenseTransactions = useQuery(
     api.inventory.expenseTransactions.getExpenseTransactions,
-    activeStore?._id ? { storeId: activeStore._id } : "skip"
+    activeStore?._id ? { storeId: activeStore._id } : "skip",
   );
 
   const formatter = useMemo(
     () => (activeStore ? currencyFormatter(activeStore.currency) : null),
-    [activeStore]
+    [activeStore],
   );
 
   const tableData: ExpenseReportRow[] = useMemo(() => {
@@ -59,14 +59,7 @@ export function ExpenseReportsView() {
   const hasReports = filteredData.length > 0;
 
   return (
-    <View
-      header={
-        <SimplePageHeader
-          title="Expense Reports"
-          className="text-lg font-semibold"
-        />
-      }
-    >
+    <View header={<SimplePageHeader title="Expense Reports" />}>
       <FadeIn>
         <div className="container mx-auto p-6 space-y-4">
           <Tabs

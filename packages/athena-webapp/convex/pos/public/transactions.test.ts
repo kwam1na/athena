@@ -7,7 +7,7 @@ import {
 
 type SerializedValidator = {
   type: string;
-  value?: SerializedValidator[] | Record<string, SerializedValidator>;
+  value?: SerializedValidator[] | Record<string, SerializedValidator & { fieldType?: SerializedValidator; optional?: boolean }>;
 };
 
 function exportReturns(definition: unknown): string {
@@ -27,6 +27,10 @@ describe("POS public transaction query validators", () => {
       type: "object",
       value: {
         sessionTraceId: expect.any(Object),
+        hasMultiplePaymentMethods: {
+          fieldType: { type: "boolean" },
+          optional: false,
+        },
       },
     });
   });
