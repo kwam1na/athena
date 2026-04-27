@@ -43,11 +43,12 @@ export function RegisterCheckoutPanel({
         onPaymentEntryStart={onPaymentEntryStart}
       />
 
-      {!checkout.isTransactionCompleted && cashierCard && (
+      {!checkout.isTransactionCompleted && (
         <div className="shrink-0">
           <CashierView
-            cashierName={cashierCard.cashierName}
-            onSignOut={cashierCard.onSignOut}
+            cashierName={cashierCard?.cashierName ?? "Unassigned"}
+            isSignInRequired={!cashierCard}
+            onSignOut={cashierCard?.onSignOut}
           />
         </div>
       )}

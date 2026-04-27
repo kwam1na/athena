@@ -553,7 +553,7 @@ function ProductViewContent() {
   };
 
   return (
-    <View header={<Navigation />}>
+    <View header={<Navigation />} lockDocumentScroll fullHeight>
       <AlertModal
         title="Delete product?"
         isOpen={isDeleteModalOpen}

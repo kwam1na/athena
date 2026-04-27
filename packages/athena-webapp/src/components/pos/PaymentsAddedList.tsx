@@ -31,6 +31,8 @@ interface PaymentsAddedListProps {
   totalAmountDue: number;
   itemCount?: number;
   balanceDue?: number;
+  selectedPaymentMethod?: SelectedPaymentMethod | null;
+  paymentAmountDraft?: number;
   readOnly?: boolean;
   isTransactionCompleted?: boolean;
   onUpdatePayment?: (paymentId: string, amount: number) => void;
@@ -68,6 +70,8 @@ export const PaymentsAddedList = ({
   totalAmountDue,
   itemCount,
   balanceDue,
+  selectedPaymentMethod = null,
+  paymentAmountDraft,
   readOnly = false,
   isTransactionCompleted = false,
   onUpdatePayment,
@@ -139,15 +143,26 @@ export const PaymentsAddedList = ({
   }
 
   const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
-  const changeDue = Math.max(totalPaid - totalAmountDue, 0);
-  const hasChangeDue = changeDue > 0;
-  const summaryLabel = hasChangeDue ? "Change due" : "Balance due";
-  const summaryAmount = hasChangeDue ? changeDue : (balanceDue ?? 0);
-  const summaryToneClass = hasChangeDue
+  const projectedTotalPaid =
+    selectedPaymentMethod !== null &&
+    paymentAmountDraft !== undefined &&
+    paymentAmountDraft > 0
+      ? totalPaid + paymentAmountDraft
+      : totalPaid;
+  const projectedChangeDue = Math.max(projectedTotalPaid - totalAmountDue, 0);
+  const projectedRemainingDue = Math.max(totalAmountDue - projectedTotalPaid, 0);
+  const hasProjectedChangeDue = projectedChangeDue > 0;
+  const summaryLabel = hasProjectedChangeDue ? "Change due" : "Balance due";
+  const summaryAmount = hasProjectedChangeDue
+    ? projectedChangeDue
+    : projectedRemainingDue;
+  const summaryToneClass = hasProjectedChangeDue
     ? "border-green-200 bg-green-50"
     : "border-primary/20 bg-primary/5";
-  const summaryLabelClass = hasChangeDue ? "text-green-700" : "text-primary";
-  const summaryDividerClass = hasChangeDue
+  const summaryLabelClass = hasProjectedChangeDue
+    ? "text-green-700"
+    : "text-primary";
+  const summaryDividerClass = hasProjectedChangeDue
     ? "border-green-200"
     : "border-primary/10";
   const showSaleSummary = itemCount !== undefined && balanceDue !== undefined;

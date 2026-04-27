@@ -55,7 +55,9 @@ export function CustomerBehaviorTimeline({
           <h2 className="text-lg font-semibold text-gray-900">
             Customer Journey
           </h2>
-          <p className="text-sm text-gray-500">{getTimeRangeLabel(timeRange)}</p>
+          <p className="text-sm text-gray-500">
+            {getTimeRangeLabel(timeRange)}
+          </p>
         </div>
 
         <div className="flex items-center space-x-3">
@@ -73,16 +75,6 @@ export function CustomerBehaviorTimeline({
               <SelectItem value="all">All time</SelectItem>
             </SelectContent>
           </Select>
-
-          <Button
-            variant={groupByDay ? "default" : "outline"}
-            size="sm"
-            onClick={() => setGroupByDay(!groupByDay)}
-            className="flex items-center space-x-1"
-          >
-            <Calendar className="h-4 w-4" />
-            <span>Group by day</span>
-          </Button>
         </div>
       </div>
 
@@ -138,7 +130,8 @@ export function CustomerBehaviorTimeline({
         />
       ) : (
         <p className="pt-8 text-center text-sm text-muted-foreground">
-          No storefront observability events recorded for the selected time period.
+          No storefront observability events recorded for the selected time
+          period.
         </p>
       )}
     </div>

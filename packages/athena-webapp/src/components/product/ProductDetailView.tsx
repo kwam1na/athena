@@ -44,7 +44,7 @@ export const ProductDetailView = () => {
 
   return (
     <ProductProvider>
-      <View header={<ProductDetailViewHeader />}>
+      <View header={<ProductDetailViewHeader />} fullHeight lockDocumentScroll>
         <div className="container mx-auto h-full w-full p-8 space-y-12">
           {activeProduct !== null && (
             <div className="grid grid-cols-2 gap-16 min-h-[720px]">
