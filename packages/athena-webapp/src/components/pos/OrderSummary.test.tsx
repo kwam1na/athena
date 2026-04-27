@@ -96,6 +96,62 @@ describe("OrderSummary completed transaction summary", () => {
     expect(screen.queryByText("Tax")).not.toBeInTheDocument();
   });
 
+  it("shows completed subtotal and total in rail summaries", () => {
+    render(
+      <OrderSummary
+        cartItems={[]}
+        completedOrderNumber="404924"
+        completedTransactionData={{
+          paymentMethod: "cash",
+          completedAt: new Date("2026-04-25T18:08:00.000Z"),
+          cartItems: [],
+          customerInfo: undefined,
+          subtotal: 1700,
+          tax: 0,
+          total: 1000,
+          payments: [
+            { id: "payment-1", method: "cash", amount: 1300, timestamp: 2 },
+          ],
+        }}
+        isTransactionCompleted
+        presentation="rail"
+      />,
+    );
+
+    expect(screen.getByText("Amount paid")).toBeInTheDocument();
+    expect(screen.getByText("Change given")).toBeInTheDocument();
+    expect(screen.getByText("Subtotal")).toBeInTheDocument();
+    expect(screen.getByText("Total")).toBeInTheDocument();
+  });
+
+  it("shows all payment methods used for a completed transaction", () => {
+    render(
+      <OrderSummary
+        cartItems={[]}
+        completedOrderNumber="404925"
+        completedTransactionData={{
+          paymentMethod: "cash",
+          completedAt: new Date("2026-04-25T18:08:00.000Z"),
+          cartItems: [],
+          customerInfo: undefined,
+          subtotal: 1700,
+          tax: 0,
+          total: 1700,
+          payments: [
+            { id: "payment-1", method: "cash", amount: 1000, timestamp: 1 },
+            { id: "payment-2", method: "card", amount: 700, timestamp: 2 },
+          ],
+        }}
+        isTransactionCompleted
+        presentation="rail"
+      />,
+    );
+
+    expect(screen.getByText("Cash Payment, Card Payment")).toBeInTheDocument();
+    expect(screen.getByText(/Cash Payment/i)).toBeInTheDocument();
+    expect(screen.getByText(/Card Payment/i)).toBeInTheDocument();
+  });
+
   it("reflects a draft amount equal to balance due as zero remaining", async () => {
     const user = userEvent.setup();
 

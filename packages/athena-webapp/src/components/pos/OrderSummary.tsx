@@ -117,6 +117,13 @@ export function OrderSummary({
   const total = completedTransactionData?.total ?? propTotal ?? 0;
   const totalPaid = calculatePosTotalPaid(payments);
   const remainingDue = calculatePosRemainingDue(totalPaid, total);
+  const completedTransactionAmountPaid = completedTransactionData
+    ? calculatePosTotalPaid(completedTransactionData.payments ?? payments)
+    : totalPaid;
+  const completedTransactionChangeGiven =
+    completedTransactionAmountPaid > total
+      ? completedTransactionAmountPaid - total
+      : 0;
   const cartItemsCount = effectiveCartItems.reduce(
     (sum, item) => sum + item.quantity,
     0,
@@ -140,8 +147,19 @@ export function OrderSummary({
         hour12: true,
       })
     : "Pending";
-  const summaryPaymentMethod =
-    completedTransactionData?.paymentMethod ?? payments[0]?.method ?? "cash";
+  const completedTransactionPaymentMethods = completedTransactionData
+    ? completedTransactionData.payments?.length
+      ? completedTransactionData.payments.map((payment) => payment.method)
+      : [completedTransactionData.paymentMethod]
+    : payments.map((payment) => payment.method);
+  const dedupedCompletedPaymentMethods = Array.from(
+    new Set(completedTransactionPaymentMethods),
+  );
+  const summaryPaymentMethodLabel = dedupedCompletedPaymentMethods
+    .map((method) => formatPaymentMethod(method))
+    .join(", ");
+  const summaryPaymentMethodValue =
+    summaryPaymentMethodLabel || formatPaymentMethod("cash");
   const receiptLabel = readOnly
     ? (receiptNumberOverride ?? completedOrderNumber ?? "Transaction")
     : (completedOrderNumber ?? "Transaction");
@@ -153,7 +171,7 @@ export function OrderSummary({
     },
     {
       label: "Payment",
-      value: formatPaymentMethod(summaryPaymentMethod),
+      value: summaryPaymentMethodValue,
     },
     {
       label: "Register",
@@ -392,6 +410,28 @@ export function OrderSummary({
               {formatStoredAmount(formatter, summarySubtotal)}
             </span>
           </div>
+          {completedTransactionData && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Amount paid</span>
+              <span className="font-medium text-foreground">
+                {formatStoredAmount(
+                  formatter,
+                  completedTransactionAmountPaid,
+                )}
+              </span>
+            </div>
+          )}
+          {completedTransactionData && completedTransactionChangeGiven > 0 && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Change given</span>
+              <span className="font-medium text-foreground">
+                {formatStoredAmount(
+                  formatter,
+                  completedTransactionChangeGiven,
+                )}
+              </span>
+            </div>
+          )}
           <div className="flex items-baseline justify-between gap-4 pb-4">
             <span className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
               Total
@@ -465,12 +505,18 @@ export function OrderSummary({
                     </p>
                   </div>
                   <div className="rounded-[1.35rem] border border-border/70 bg-white/70 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                       Paid with
                     </p>
-                    <p className="mt-3 text-sm font-medium text-foreground">
-                      {formatPaymentMethod(summaryPaymentMethod)}
-                    </p>
+                    <div className="mt-3 flex flex-col gap-2 text-sm font-medium text-foreground">
+                      {dedupedCompletedPaymentMethods.length > 0 ? (
+                        dedupedCompletedPaymentMethods.map((method) => (
+                          <p key={method}>{formatPaymentMethod(method)}</p>
+                        ))
+                      ) : (
+                        <p>{formatPaymentMethod("cash")}</p>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -528,6 +574,28 @@ export function OrderSummary({
                   {formatStoredAmount(formatter, summarySubtotal)}
                 </span>
               </div>
+              {completedTransactionData && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Amount paid</span>
+                  <span className="font-medium text-foreground">
+                    {formatStoredAmount(
+                      formatter,
+                      completedTransactionAmountPaid,
+                    )}
+                  </span>
+                </div>
+              )}
+              {completedTransactionData && completedTransactionChangeGiven > 0 && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Change given</span>
+                  <span className="font-medium text-foreground">
+                    {formatStoredAmount(
+                      formatter,
+                      completedTransactionChangeGiven,
+                    )}
+                  </span>
+                </div>
+              )}
               <div className="flex items-center justify-between pt-2">
                 <span className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                   Total

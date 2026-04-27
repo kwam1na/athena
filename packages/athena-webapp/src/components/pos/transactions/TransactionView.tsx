@@ -5,6 +5,7 @@ import {
   Banknote,
   CheckCircle2,
   CreditCard,
+  WalletCards,
   Smartphone,
   User,
 } from "lucide-react";
@@ -12,17 +13,15 @@ import {
 import View from "../../View";
 import { FadeIn } from "../../common/FadeIn";
 import { SimplePageHeader } from "../../common/PageHeader";
-import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
 import { Badge } from "../../ui/badge";
 import { getRelativeTime } from "~/src/lib/utils";
+import { PosPaymentMethod } from "~/src/lib/pos/domain";
 import { OrderSummary } from "../OrderSummary";
 import { CartItems } from "../CartItems";
 import type { CartItem } from "../types";
 import type { Id } from "~/convex/_generated/dataModel";
 import { CardContent, CardHeader } from "../../ui/card";
-import { currencyFormatter } from "~/convex/utils";
-import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 import { WorkflowTraceRouteLink } from "../../traces/WorkflowTraceRouteLink";
 import { Button } from "../../ui/button";
 import config from "~/src/config";
@@ -38,7 +37,6 @@ export function TransactionView() {
     strict: false,
   }) as RouteParams;
   const transactionId = params?.transactionId;
-  const { activeStore } = useGetActiveStore();
 
   const transaction = useQuery(
     api.inventory.pos.getTransactionById,
@@ -47,11 +45,6 @@ export function TransactionView() {
           transactionId: transactionId as Id<"posTransaction">,
         }
       : "skip"
-  );
-
-  const formatter = useMemo(
-    () => currencyFormatter(activeStore?.currency || "USD"),
-    [activeStore]
   );
 
   const cartItems: CartItem[] = useMemo(() => {
@@ -78,6 +71,11 @@ export function TransactionView() {
       subtotal: transaction.subtotal,
       tax: transaction.tax,
       total: transaction.total,
+      payments: transaction.payments.map((payment, index) => ({
+        id: `${payment.method}-${index}-${payment.timestamp}`,
+        ...payment,
+        method: payment.method as PosPaymentMethod,
+      })),
       customerInfo:
         transaction.customerInfo ??
         (transaction.customer
@@ -104,12 +102,21 @@ export function TransactionView() {
     );
   }
 
+  const completedPaymentMethods = transaction.payments?.length
+    ? Array.from(new Set(transaction.payments.map((payment) => payment.method)))
+    : [transaction.paymentMethod || "Unknown"];
+  const paymentMethodLabel =
+    completedPaymentMethods.length > 1
+      ? "Multiple methods"
+      : completedPaymentMethods[0]?.replace("_", " ") || "Unknown";
   const paymentMethodIcon =
-    transaction.paymentMethod === "cash"
-      ? Banknote
-      : transaction.paymentMethod === "card"
-        ? CreditCard
-        : Smartphone;
+    completedPaymentMethods.length > 1
+      ? WalletCards
+      : transaction.paymentMethod === "cash"
+        ? Banknote
+        : transaction.paymentMethod === "card"
+          ? CreditCard
+          : Smartphone;
 
   const PaymentIcon = paymentMethodIcon;
   const storefrontReceiptUrl = `${config.storeFrontUrl.replace(
@@ -176,25 +183,8 @@ export function TransactionView() {
                     </div>
                     <div>
                       <p className="font-medium capitalize">
-                        {transaction.paymentMethod?.replace("_", " ") ||
-                          "Unknown"}
+                        {paymentMethodLabel}
                       </p>
-                      {/* {transaction.amountPaid !== undefined && (
-                        <p className="text-xs text-muted-foreground">
-                          Amount paid:{" "}
-                          {formatter.format(transaction.amountPaid)}
-                        </p>
-                      )} */}
-                  {transaction.changeGiven !== undefined &&
-                        transaction.changeGiven > 0 && (
-                          <p className="text-xs text-muted-foreground">
-                            Change given:{" "}
-                            {formatStoredAmount(
-                              formatter,
-                              transaction.changeGiven
-                            )}
-                          </p>
-                        )}
                     </div>
                   </div>
 

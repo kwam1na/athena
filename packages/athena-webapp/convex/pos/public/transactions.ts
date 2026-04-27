@@ -98,6 +98,7 @@ export const getCompletedTransactions = query({
       transactionNumber: v.string(),
       total: v.number(),
       paymentMethod: v.union(v.string(), v.null()),
+      hasMultiplePaymentMethods: v.boolean(),
       completedAt: v.number(),
       hasTrace: v.boolean(),
       sessionTraceId: v.union(v.string(), v.null()),

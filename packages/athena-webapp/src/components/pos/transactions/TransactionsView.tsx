@@ -50,8 +50,11 @@ export function TransactionsView() {
       _id: transaction._id,
       transactionNumber: transaction.transactionNumber,
       formattedTotal: formatStoredAmount(formatter, transaction.total),
-      paymentMethodLabel: formatPaymentMethod(transaction.paymentMethod),
+      paymentMethodLabel: transaction.hasMultiplePaymentMethods
+        ? "Multiple methods"
+        : formatPaymentMethod(transaction.paymentMethod),
       paymentMethod: transaction.paymentMethod || "cash",
+      hasMultiplePaymentMethods: Boolean(transaction.hasMultiplePaymentMethods),
       cashierName: transaction.cashierName,
       customerName: transaction.customerName,
       itemCount: transaction.itemCount,
@@ -72,12 +75,7 @@ export function TransactionsView() {
 
   return (
     <View
-      header={
-        <SimplePageHeader
-          title="Completed Transactions"
-          className="text-lg font-semibold"
-        />
-      }
+      header={<SimplePageHeader title="Completed Transactions" />}
       lockDocumentScroll
       fullHeight
     >

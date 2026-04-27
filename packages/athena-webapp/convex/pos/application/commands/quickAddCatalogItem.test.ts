@@ -169,7 +169,7 @@ describe("quickAddCatalogItem", () => {
     });
   });
 
-  it("uses non-barcode lookup codes as the requested SKU", async () => {
+  it("always auto-generates SKU and stores lookup code only as barcode when provided", async () => {
     const { ctx, tables } = createQuickAddCtx(baseSeed);
 
     await quickAddCatalogItem(ctx, {
@@ -183,7 +183,7 @@ describe("quickAddCatalogItem", () => {
 
     expect(Array.from(tables.productSku.values())[0]).toMatchObject({
       barcode: undefined,
-      sku: "LW-BUNDLE",
+      sku: expect.stringMatching(/^[A-Z0-9]+-[A-Z0-9]+-[A-Z0-9]+$/),
       isVisible: true,
     });
   });

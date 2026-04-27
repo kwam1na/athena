@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   CreditCard,
   Smartphone,
+  Loader2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { ChangeEvent, ReactNode } from "react";
@@ -61,11 +62,27 @@ const ActionButtons = ({
           onClick={onComplete}
           disabled={isCompleting}
         >
-          {isCompleting ? "Completing sale..." : "Complete Sale"}
-          <ArrowRight className="w-4 h-4 ml-2" />
+          Complete Sale
+          <CompleteSaleActionIcon isCompleting={isCompleting} />
         </Button>
       )}
     </div>
+  );
+};
+
+const CompleteSaleActionIcon = ({
+  isCompleting,
+}: {
+  isCompleting: boolean;
+}) => {
+  return (
+    <span className="relative ml-2 inline-flex h-4 w-4">
+      {isCompleting ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
+      ) : (
+        <ArrowRight className="h-4 w-4" />
+      )}
+    </span>
   );
 };
 
@@ -332,13 +349,15 @@ export const PaymentView = ({
               <span className="truncate text-sm font-semibold">
                 {selectedPaymentLabel}
               </span>
-              <Button
-                variant="outline"
-                className="ml-1 h-8 shrink-0 rounded-md border-white/50 bg-white/90 px-3 text-xs text-gray-950 hover:bg-white hover:text-gray-950"
-                onClick={() => setSelectedPaymentMethod(null)}
-              >
-                Change
-              </Button>
+              {!isCompleting && (
+                <Button
+                  variant="outline"
+                  className="ml-1 h-8 shrink-0 rounded-md border-white/50 bg-white/90 px-3 text-xs text-gray-950 hover:bg-white hover:text-gray-950"
+                  onClick={() => setSelectedPaymentMethod(null)}
+                >
+                  Change
+                </Button>
+              )}
             </div>
           </div>
 
@@ -395,7 +414,7 @@ export const PaymentView = ({
       </div>
 
       <div className="shrink-0 space-y-3">
-        {shouldCompleteWithCurrentAmount ? (
+        {shouldCompleteWithCurrentAmount || isCompleting ? (
           <Button
             variant="outline"
             className={cn(
@@ -405,8 +424,8 @@ export const PaymentView = ({
             onClick={handleAddPayment}
             disabled={isCompleting}
           >
-            {isCompleting ? "Completing sale..." : "Complete Sale"}
-            <ArrowRight className="w-5 h-5 ml-2" />
+            Complete Sale
+            <CompleteSaleActionIcon isCompleting={isCompleting} />
           </Button>
         ) : (
           <>
@@ -428,6 +447,7 @@ export const PaymentView = ({
               variant="outline"
               className="flex h-16 w-full items-center gap-2 rounded-xl px-6 text-base text-red-700 hover:text-red-800"
               onClick={() => setSelectedPaymentMethod(null)}
+              disabled={isCompleting}
             >
               <ChevronLeft className="w-4 h-4" />
               Cancel

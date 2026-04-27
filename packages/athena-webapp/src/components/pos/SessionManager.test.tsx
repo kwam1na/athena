@@ -76,7 +76,9 @@ describe("SessionManager", () => {
       />,
     );
 
-    expect(screen.getByText("SES-001")).toBeInTheDocument();
+    expect(
+      screen.queryByText("SES-001"),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /hold/i })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /clear sale/i }),

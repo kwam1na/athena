@@ -112,6 +112,10 @@ export async function getCompletedTransactions(
         transactionNumber: transaction.transactionNumber,
         total: transaction.total,
         paymentMethod: transaction.paymentMethod || null,
+        hasMultiplePaymentMethods: transaction.payments
+          ? Array.from(new Set(transaction.payments.map((payment) => payment.method)))
+              .length > 1
+          : false,
         completedAt: transaction.completedAt,
         hasTrace: Boolean(sessionTraceId),
         sessionTraceId,

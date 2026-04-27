@@ -1,6 +1,6 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { Link } from "@tanstack/react-router";
-import { Banknote, CreditCardIcon, Smartphone } from "lucide-react";
+import { Banknote, CreditCardIcon, Smartphone, WalletCards } from "lucide-react";
 
 import { DataTableColumnHeader } from "../../base/table/data-table-column-header";
 import { getRelativeTime } from "~/src/lib/utils";
@@ -14,6 +14,7 @@ export type CompletedTransactionRow = {
   formattedTotal: string;
   paymentMethodLabel: string;
   paymentMethod: string;
+  hasMultiplePaymentMethods?: boolean;
   cashierName: string | null;
   customerName: string | null;
   itemCount: number;
@@ -22,7 +23,17 @@ export type CompletedTransactionRow = {
   sessionTraceId: string | null;
 };
 
-const getPaymentMethodIcon = (paymentMethod: string) => {
+const getPaymentMethodIcon = ({
+  paymentMethod,
+  hasMultipleMethods,
+}: {
+  paymentMethod: string;
+  hasMultipleMethods?: boolean;
+}) => {
+  if (hasMultipleMethods) {
+    return <WalletCards className="w-4 h-4" />;
+  }
+
   switch (paymentMethod) {
     case "cash":
       return <Banknote className="w-4 h-4" />;
@@ -95,7 +106,10 @@ export const transactionColumns: ColumnDef<CompletedTransactionRow>[] = [
       >
         <span>{row.original.formattedTotal}</span>
         <span className="capitalize text-muted-foreground text-sm">
-          {getPaymentMethodIcon(row.original.paymentMethod)}
+          {getPaymentMethodIcon({
+            paymentMethod: row.original.paymentMethod,
+            hasMultipleMethods: row.original.hasMultiplePaymentMethods,
+          })}
         </span>
       </Link>
     ),

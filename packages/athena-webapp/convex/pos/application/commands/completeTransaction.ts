@@ -20,7 +20,11 @@ import {
   patchPosTransaction,
   patchProductSku,
 } from "../../infrastructure/repositories/transactionRepository";
-import { ok, userError, type CommandResult } from "../../../../shared/commandResult";
+import {
+  ok,
+  userError,
+  type CommandResult,
+} from "../../../../shared/commandResult";
 import { isPosUsableRegisterSessionStatus } from "../../../../shared/registerSessionStatus";
 
 type PosPaymentInput = {
@@ -243,7 +247,10 @@ export async function completeTransaction(
   const skuQuantityMap = new Map<Id<"productSku">, number>();
 
   for (const item of args.items) {
-    skuQuantityMap.set(item.skuId, (skuQuantityMap.get(item.skuId) || 0) + item.quantity);
+    skuQuantityMap.set(
+      item.skuId,
+      (skuQuantityMap.get(item.skuId) || 0) + item.quantity,
+    );
   }
 
   for (const [skuId, totalQuantity] of skuQuantityMap) {
@@ -257,7 +264,8 @@ export async function completeTransaction(
 
     if (sku.quantityAvailable < totalQuantity) {
       const itemName =
-        args.items.find((item) => item.skuId === skuId)?.name || "Unknown Product";
+        args.items.find((item) => item.skuId === skuId)?.name ||
+        "Unknown Product";
       return userError({
         code: "conflict",
         message: `Insufficient inventory for ${capitalizeWords(itemName)} (${sku.sku}). Available: ${sku.quantityAvailable}, Total Requested: ${totalQuantity}`,
@@ -287,7 +295,8 @@ export async function completeTransaction(
     });
   }
 
-  const changeGiven = totalPaid > args.total ? totalPaid - args.total : undefined;
+  const changeGiven =
+    totalPaid > args.total ? totalPaid - args.total : undefined;
   const primaryPaymentMethod = args.payments[0]?.method || "cash";
   const transactionNumber = generateTransactionNumber();
   const completedAt = Date.now();
@@ -357,7 +366,9 @@ export async function completeTransaction(
     args.items.map(async (item) => {
       const sku = await getProductSkuById(ctx, item.skuId);
       if (!sku) {
-        throw new Error(`SKU ${item.skuId} not found during transaction processing`);
+        throw new Error(
+          `SKU ${item.skuId} not found during transaction processing`,
+        );
       }
 
       const image = item.image ?? sku.images?.[0];
@@ -524,7 +535,9 @@ export async function createTransactionFromSessionHandler(
     }
 
     if (sku.inventoryCount < totalQuantity) {
-      const item = items.find((sessionItem) => sessionItem.productSkuId === skuId);
+      const item = items.find(
+        (sessionItem) => sessionItem.productSkuId === skuId,
+      );
       return userError({
         code: "conflict",
         message: `Insufficient inventory for ${capitalizeWords(item?.productName || "Unknown Product")} (${sku.sku}). In Stock: ${sku.inventoryCount}, Needed: ${totalQuantity}`,
