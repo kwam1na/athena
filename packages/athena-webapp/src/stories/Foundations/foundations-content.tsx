@@ -42,6 +42,12 @@ type MotionToken = {
   durationToken: `--${string}`;
 };
 
+type DetailViewRole = {
+  label: string;
+  detail: string;
+  className: string;
+};
+
 const COLOR_ROLES: readonly ColorRole[] = [
   {
     label: "Shell / ink",
@@ -165,6 +171,19 @@ const MOTION_TOKENS: readonly MotionToken[] = [
     detail: "Use for long-running activity and calm pending feedback.",
     animationClassName: "motion-safe:animate-status-breathe",
     durationToken: "--motion-slow",
+  },
+];
+
+const DETAIL_VIEW_ROLES: readonly DetailViewRole[] = [
+  {
+    label: "Receipt rail",
+    detail: "A narrow left column for status, actor, payment, receipt actions, and totals.",
+    className: "xl:col-span-4",
+  },
+  {
+    label: "Item canvas",
+    detail: "A broad right column for line items, traces, and review content with room to breathe.",
+    className: "xl:col-span-8",
   },
 ];
 
@@ -335,6 +354,107 @@ function MotionCard({ animationClassName, detail, durationToken, label }: Motion
   );
 }
 
+function DetailViewRoleCard({ className, detail, label }: DetailViewRole) {
+  return (
+    <div
+      className={cn(
+        "rounded-[calc(var(--radius)*1.15)] border border-border/80 bg-background p-layout-sm",
+        className,
+      )}
+    >
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-2 text-sm leading-6 text-foreground/85">{detail}</p>
+    </div>
+  );
+}
+
+function DetailViewSpecimen() {
+  return (
+    <div className="rounded-[calc(var(--radius)*1.35)] border border-border bg-surface-raised p-layout-md shadow-surface">
+      <div className="mb-layout-md flex flex-wrap items-center justify-between gap-3 border-b border-border/70 pb-layout-sm">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+            Detail view
+          </p>
+          <h3 className="mt-2 font-display text-2xl tracking-[-0.04em] text-foreground">
+            Transaction workspace
+          </h3>
+        </div>
+        <span className="rounded-full border border-[hsl(var(--success)/0.24)] bg-[hsl(var(--success)/0.08)] px-3 py-1 text-xs font-semibold text-[hsl(var(--success))]">
+          Completed
+        </span>
+      </div>
+
+      <div className="grid gap-layout-md xl:grid-cols-12">
+        {DETAIL_VIEW_ROLES.map((role) => (
+          <DetailViewRoleCard key={role.label} {...role} />
+        ))}
+      </div>
+
+      <div className="mt-layout-md grid gap-layout-md xl:grid-cols-[340px_minmax(0,1fr)]">
+        <section className="overflow-hidden rounded-[calc(var(--radius)*1.2)] border border-border/80 bg-surface shadow-surface">
+          <div className="border-b border-border/70 px-layout-md py-layout-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+              Transaction summary
+            </p>
+            <p className="mt-2 text-xl font-semibold tracking-[-0.03em] text-foreground">
+              Sale recorded
+            </p>
+          </div>
+          <div className="space-y-3 px-layout-md py-layout-md text-sm">
+            {[
+              ["Transaction", "#195161"],
+              ["Payment", "Cash payment"],
+              ["Cashier", "Kwamina M."],
+              ["Items", "1 item"],
+            ].map(([label, value]) => (
+              <div key={label} className="flex items-center justify-between gap-4">
+                <span className="text-muted-foreground">{label}</span>
+                <span className="font-medium text-foreground">{value}</span>
+              </div>
+            ))}
+            <div className="border-t border-border/70 pt-layout-sm">
+              <div className="flex items-end justify-between gap-4">
+                <span className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                  Total
+                </span>
+                <span className="font-display text-3xl tracking-[-0.05em] text-foreground">
+                  GHS 350
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-[calc(var(--radius)*1.2)] border border-border/80 bg-[linear-gradient(145deg,hsl(var(--surface-raised))_0%,hsl(var(--surface))_56%,hsl(var(--muted)/0.55)_100%)] p-layout-md shadow-surface">
+          <div className="mb-layout-md flex items-center justify-between gap-4">
+            <p className="text-sm font-semibold text-foreground">Items · 1</p>
+            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+              Review canvas
+            </p>
+          </div>
+          <div className="rounded-[calc(var(--radius)*0.95)] border border-border bg-background p-layout-sm">
+            <div className="grid gap-3 sm:grid-cols-[56px_1fr_auto] sm:items-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-[calc(var(--radius)*0.85)] bg-muted text-muted-foreground">
+                1
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">Og Skywalker</p>
+                <p className="mt-1 text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                  6N2Y-TZ5-JFF
+                </p>
+              </div>
+              <p className="text-sm font-semibold text-foreground">GHS 350</p>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
 export function AthenaFoundationsPage() {
   return (
     <StorybookShell
@@ -387,6 +507,13 @@ export function AthenaFoundationsPage() {
             ))}
           </div>
         </div>
+      </StorybookSection>
+
+      <StorybookSection
+        title="Detail view system"
+        description="The transaction view establishes Athena's default detail-view language: a receipt rail paired with a large item canvas."
+      >
+        <DetailViewSpecimen />
       </StorybookSection>
 
       <StorybookSection

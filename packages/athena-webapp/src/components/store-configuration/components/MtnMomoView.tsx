@@ -214,7 +214,9 @@ export const MtnMomoView = () => {
     <View
       hideBorder
       hideHeaderBottomBorder
-      className="h-auto w-full"
+      fullHeight={false}
+      lockDocumentScroll={false}
+      className="w-full"
       header={<p className="text-sm text-muted-foreground">MTN MoMo setup</p>}
     >
       <div className="container mx-auto space-y-6 py-8">

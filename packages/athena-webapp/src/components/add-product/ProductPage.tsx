@@ -23,7 +23,7 @@ export default function ProductPage() {
 
   return (
     <SheetProvider>
-      <div className="h-full container mx-auto w-full p-8 space-y-12 h-full overflow-y-auto scrollbar-hide pb-24">
+      <div className="container mx-auto w-full p-8 space-y-12 pb-24">
         <div className="grid grid-cols-2 gap-8">
           <div className="space-y-8">
             <ProductCategorizationView />

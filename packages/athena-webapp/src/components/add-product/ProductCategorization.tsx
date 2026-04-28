@@ -251,7 +251,8 @@ export function ProductCategorizationView() {
 
   return (
     <View
-      className="h-auto"
+      fullHeight={false}
+      lockDocumentScroll={false}
       hideBorder
       hideHeaderBottomBorder
       header={

@@ -1,6 +1,7 @@
 # Athena Webapp Agent Docs
 
 - [Architecture](./architecture.md)
+- [Design system](./design.md)
 - [Testing](./testing.md)
 - [Code map](./code-map.md)
 - [Route index](./route-index.md)

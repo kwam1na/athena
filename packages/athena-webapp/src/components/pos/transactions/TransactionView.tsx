@@ -44,22 +44,24 @@ export function TransactionView() {
       ? {
           transactionId: transactionId as Id<"posTransaction">,
         }
-      : "skip"
+      : "skip",
   );
 
   const cartItems: CartItem[] = useMemo(() => {
     if (!transaction) return [];
-    return transaction.items.map((item: (typeof transaction.items)[number]) => ({
-      id: item._id,
-      name: item.productName,
-      barcode: item.barcode || "",
-      sku: item.productSku,
-      price: item.unitPrice,
-      quantity: item.quantity,
-      productId: item.productId,
-      skuId: item.productSkuId,
-      image: item.image || undefined,
-    }));
+    return transaction.items.map(
+      (item: (typeof transaction.items)[number]) => ({
+        id: item._id,
+        name: item.productName,
+        barcode: item.barcode || "",
+        sku: item.productSku,
+        price: item.unitPrice,
+        quantity: item.quantity,
+        productId: item.productId,
+        skuId: item.productSkuId,
+        image: item.image || undefined,
+      }),
+    );
   }, [transaction]);
 
   const completedData = useMemo(() => {
@@ -107,7 +109,7 @@ export function TransactionView() {
     : [transaction.paymentMethod || "Unknown"];
   const paymentMethodLabel =
     completedPaymentMethods.length > 1
-      ? "Multiple methods"
+      ? "Multiple payment methods"
       : completedPaymentMethods[0]?.replace("_", " ") || "Unknown";
   const paymentMethodIcon =
     completedPaymentMethods.length > 1
@@ -126,8 +128,6 @@ export function TransactionView() {
 
   return (
     <View
-      fullHeight
-      lockDocumentScroll
       header={
         <SimplePageHeader
           title={`Transaction #${transaction.transactionNumber}`}
@@ -135,10 +135,10 @@ export function TransactionView() {
       }
     >
       <FadeIn className="h-full">
-      <div className="container mx-auto h-full min-h-0 p-6">
+        <div className="container mx-auto h-full min-h-0 p-6">
           <div className="grid h-full min-h-0 gap-8 xl:grid-cols-[380px,minmax(0,1fr)]">
             <div className="space-y-6">
-              <section className="overflow-hidden rounded-[1.25rem] border border-border/80 bg-surface-raised shadow-surface">
+              <section className="overflow-hidden rounded-[calc(var(--radius)*1.35)] border border-border/80 bg-surface-raised shadow-surface">
                 <CardHeader className="space-y-4 pb-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <Badge
@@ -165,7 +165,7 @@ export function TransactionView() {
                 <CardContent className="space-y-4 border-t border-border/70 pt-4 text-sm">
                   {transaction.cashier && (
                     <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[calc(var(--radius)*0.85)] bg-muted text-muted-foreground">
                         <User className="w-4 h-4" />
                       </div>
                       <div>
@@ -178,7 +178,7 @@ export function TransactionView() {
                   )}
 
                   <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[calc(var(--radius)*0.85)] bg-muted text-muted-foreground">
                       <PaymentIcon className="w-4 h-4" />
                     </div>
                     <div>
@@ -193,7 +193,11 @@ export function TransactionView() {
                       variant="outline"
                       className="w-full"
                       onClick={() =>
-                        window.open(storefrontReceiptUrl, "_blank", "noreferrer")
+                        window.open(
+                          storefrontReceiptUrl,
+                          "_blank",
+                          "noreferrer",
+                        )
                       }
                     >
                       View receipt

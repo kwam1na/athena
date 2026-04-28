@@ -421,7 +421,9 @@ export function ReturnExchangeView() {
     <View
       hideBorder
       hideHeaderBottomBorder
-      className="h-auto w-full"
+      fullHeight={false}
+      lockDocumentScroll={false}
+      className="w-full"
       header={<p className="text-sm text-muted-foreground">Return & Exchange</p>}
     >
       <div className="py-4">

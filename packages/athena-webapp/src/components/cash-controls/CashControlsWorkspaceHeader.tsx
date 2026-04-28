@@ -19,7 +19,7 @@ export function CashControlsWorkspaceHeader({
     <div className="container mx-auto py-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="max-w-3xl space-y-1">
-          <p className="text-xs uppercase tracking-[0.24em] text-amber-700/80">
+          <p className="text-xs uppercase tracking-[0.24em] text-signal">
             Cashroom Ops
           </p>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">
@@ -28,13 +28,13 @@ export function CashControlsWorkspaceHeader({
           <p className="text-sm text-muted-foreground">{description}</p>
         </div>
 
-        <div className="flex flex-wrap gap-2 rounded-xl border border-stone-200 bg-white/80 p-1.5">
+        <div className="flex flex-wrap gap-2 rounded-lg border border-border bg-surface-raised p-1.5 shadow-surface">
           <Button
             asChild
             className={
               activeView === "cash-controls"
-                ? "rounded-lg bg-stone-950 text-stone-50 hover:bg-stone-900 hover:text-stone-50"
-                : "rounded-lg border-stone-200 bg-white/80 text-stone-700 hover:bg-white"
+                ? "rounded-md border-transparent bg-shell text-shell-foreground hover:bg-shell/90 hover:text-shell-foreground"
+                : "rounded-md border-border bg-background text-muted-foreground hover:bg-surface hover:text-foreground"
             }
             size="sm"
             variant="outline"
@@ -50,8 +50,8 @@ export function CashControlsWorkspaceHeader({
             asChild
             className={
               activeView === "closeouts"
-                ? "rounded-lg bg-stone-950 text-stone-50 hover:bg-stone-900 hover:text-stone-50"
-                : "rounded-lg border-stone-200 bg-white/80 text-stone-700 hover:bg-white"
+                ? "rounded-md border-transparent bg-shell text-shell-foreground hover:bg-shell/90 hover:text-shell-foreground"
+                : "rounded-md border-border bg-background text-muted-foreground hover:bg-surface hover:text-foreground"
             }
             size="sm"
             variant="outline"

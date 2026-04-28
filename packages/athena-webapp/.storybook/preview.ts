@@ -2,6 +2,7 @@ import type { Preview } from "@storybook/react-vite";
 import "../src/index.css";
 import "./storybook.css";
 import {
+  athenaRadiusGlobalType,
   athenaThemeGlobalType,
   withAthenaTheme,
 } from "../src/stories/storybook-theme-decorator";
@@ -10,9 +11,11 @@ const preview: Preview = {
   decorators: [withAthenaTheme],
   globalTypes: {
     theme: athenaThemeGlobalType,
+    radius: athenaRadiusGlobalType,
   },
   initialGlobals: {
     theme: "light",
+    radius: "generous",
   },
   parameters: {
     layout: "fullscreen",

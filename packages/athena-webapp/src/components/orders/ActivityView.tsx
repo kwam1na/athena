@@ -212,9 +212,11 @@ export function ActivityView() {
 
   return (
     <View
-      className="h-auto w-full"
+      fullHeight={false}
+      lockDocumentScroll={false}
       hideBorder
       hideHeaderBottomBorder
+      className="w-full"
       header={<p className="text-sm text-muted-foreground">Activity</p>}
     >
       <div className="container mx-auto h-full w-full py-4 space-y-8">

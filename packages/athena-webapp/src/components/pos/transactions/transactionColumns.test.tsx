@@ -1,7 +1,10 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { transactionColumns, type CompletedTransactionRow } from "./transactionColumns";
+import {
+  transactionColumns,
+  type CompletedTransactionRow,
+} from "./transactionColumns";
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
@@ -28,10 +31,7 @@ vi.mock("../../traces/WorkflowTraceRouteLink", () => ({
   ),
 }));
 
-function renderTransactionCell(
-  row: CompletedTransactionRow,
-  columnIndex = 0,
-) {
+function renderTransactionCell(row: CompletedTransactionRow, columnIndex = 0) {
   const cell = transactionColumns[columnIndex]?.cell as
     | ((args: {
         row: {
@@ -46,12 +46,14 @@ function renderTransactionCell(
   }
 
   return render(
-    <>{cell({
-      row: {
-        original: row,
-        getValue: () => row.transactionNumber,
-      },
-    } as never)}</>,
+    <>
+      {cell({
+        row: {
+          original: row,
+          getValue: () => row.transactionNumber,
+        },
+      } as never)}
+    </>,
   );
 }
 
@@ -95,45 +97,47 @@ describe("transactionColumns", () => {
   });
 
   it("renders a wallet cards icon for transactions with multiple payment methods", () => {
-    const { container } = renderTransactionCell({
-      _id: "txn_3" as CompletedTransactionRow["_id"],
-      transactionNumber: "POS-333333",
-      formattedTotal: "GHc 10.00",
-      paymentMethodLabel: "Multiple methods",
-      paymentMethod: "cash",
-      hasMultiplePaymentMethods: true,
-      cashierName: "Ada L.",
-      customerName: "Walk-in",
-      itemCount: 1,
-      completedAt: 100,
-      hasTrace: false,
-      sessionTraceId: null,
-    }, 1);
+    const { container } = renderTransactionCell(
+      {
+        _id: "txn_3" as CompletedTransactionRow["_id"],
+        transactionNumber: "POS-333333",
+        formattedTotal: "GHc 10.00",
+        paymentMethodLabel: "Multiple payment methods",
+        paymentMethod: "cash",
+        hasMultiplePaymentMethods: true,
+        cashierName: "Ada L.",
+        customerName: "Walk-in",
+        itemCount: 1,
+        completedAt: 100,
+        hasTrace: false,
+        sessionTraceId: null,
+      },
+      1,
+    );
 
-    expect(
-      container.querySelector(".lucide-wallet-cards"),
-    ).toBeInTheDocument();
+    expect(container.querySelector(".lucide-wallet-cards")).toBeInTheDocument();
   });
 
   it("keeps existing icons for transactions with a single payment method", () => {
-    const { container } = renderTransactionCell({
-      _id: "txn_4" as CompletedTransactionRow["_id"],
-      transactionNumber: "POS-444444",
-      formattedTotal: "GHc 10.00",
-      paymentMethodLabel: "Cash",
-      paymentMethod: "cash",
-      hasMultiplePaymentMethods: false,
-      cashierName: "Ada L.",
-      customerName: "Walk-in",
-      itemCount: 1,
-      completedAt: 100,
-      hasTrace: false,
-      sessionTraceId: null,
-    }, 1);
+    const { container } = renderTransactionCell(
+      {
+        _id: "txn_4" as CompletedTransactionRow["_id"],
+        transactionNumber: "POS-444444",
+        formattedTotal: "GHc 10.00",
+        paymentMethodLabel: "Cash",
+        paymentMethod: "cash",
+        hasMultiplePaymentMethods: false,
+        cashierName: "Ada L.",
+        customerName: "Walk-in",
+        itemCount: 1,
+        completedAt: 100,
+        hasTrace: false,
+        sessionTraceId: null,
+      },
+      1,
+    );
 
-    expect(
-      container.querySelector(".lucide-banknote"),
-    ).toBeInTheDocument();
+    expect(container.querySelector(".lucide-banknote")).toBeInTheDocument();
     expect(
       container.querySelector(".lucide-wallet-cards"),
     ).not.toBeInTheDocument();

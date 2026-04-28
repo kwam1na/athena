@@ -21,7 +21,8 @@ export function ProductAttributesView() {
     <View
       hideBorder
       hideHeaderBottomBorder
-      className="h-auto"
+      fullHeight={false}
+      lockDocumentScroll={false}
       header={
         <div className="flex items-center justify-between">
           <p className="text-sm text-sm">Attributes</p>

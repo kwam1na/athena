@@ -149,7 +149,9 @@ export function RefundsView() {
       <View
         hideBorder
         hideHeaderBottomBorder
-        className="h-auto w-full"
+        fullHeight={false}
+        lockDocumentScroll={false}
+        className="w-full"
         header={<p className="text-sm text-sm text-muted-foreground">Refund</p>}
       >
         <div className="py-4">
@@ -187,7 +189,9 @@ export function RefundsView() {
     <View
       hideBorder
       hideHeaderBottomBorder
-      className="h-auto w-full"
+      fullHeight={false}
+      lockDocumentScroll={false}
+      className="w-full"
       header={<p className="text-sm text-muted-foreground">Refund</p>}
     >
       <ActionModal

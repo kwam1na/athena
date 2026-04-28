@@ -24,7 +24,7 @@ export default function OrdersView({ status }: { status?: string }) {
 
   const orders = useQuery(
     api.storeFront.onlineOrder.getAllOnlineOrders,
-    activeStore?._id ? { storeId: activeStore._id } : "skip"
+    activeStore?._id ? { storeId: activeStore._id } : "skip",
   );
 
   if (!activeStore || !orders) return null;
@@ -93,19 +93,18 @@ export default function OrdersView({ status }: { status?: string }) {
   };
 
   return (
-    <div>
-      <ProtectedRoute requires="full_admin">
+    <ProtectedRoute requires="full_admin">
+      <View
+        hideBorder
+        hideHeaderBottomBorder
+        header={hasOrders && <Navigation />}
+      >
         <OrderMetricsPanel
           storeId={activeStore._id}
           currency={activeStore.currency}
           onTimeRangeChange={handleTimeRangeChange}
         />
-        <View
-          hideBorder
-          hideHeaderBottomBorder
-          className="bg-background"
-          header={hasOrders && <Navigation />}
-        >
+        <div className="container mx-auto">
           <FadeIn>
             <OrdersTableToolbarProvider>
               <Orders
@@ -115,8 +114,8 @@ export default function OrdersView({ status }: { status?: string }) {
               />
             </OrdersTableToolbarProvider>
           </FadeIn>
-        </View>
-      </ProtectedRoute>
-    </div>
+        </div>
+      </View>
+    </ProtectedRoute>
   );
 }

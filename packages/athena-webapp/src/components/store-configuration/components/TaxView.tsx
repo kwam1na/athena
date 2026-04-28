@@ -55,7 +55,9 @@ export const TaxView = () => {
     <View
       hideBorder
       hideHeaderBottomBorder
-      className="h-auto w-full"
+      fullHeight={false}
+      lockDocumentScroll={false}
+      className="w-full"
       header={<p className="text-sm text-muted-foreground">Tax Settings</p>}
     >
       <div className="container mx-auto h-full py-8 space-y-6">

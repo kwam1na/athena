@@ -43,7 +43,7 @@ export function OrderDataTable<TData, TValue>({
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({});
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
-    []
+    [],
   );
   const [sorting, setSorting] = React.useState<SortingState>([]);
 
@@ -52,7 +52,7 @@ export function OrderDataTable<TData, TValue>({
   // Use the pagination persistence hook with default page size of 20
   const { pagination, setPagination } = usePaginationPersistence({
     tableId,
-    defaultPageSize: 20,
+    defaultPageSize: 10,
   });
 
   const table = useReactTable({
@@ -96,7 +96,7 @@ export function OrderDataTable<TData, TValue>({
                             ? null
                             : flexRender(
                                 header.column.columnDef.header,
-                                header.getContext()
+                                header.getContext(),
                               )}
                         </TableHead>
                       );
@@ -115,7 +115,7 @@ export function OrderDataTable<TData, TValue>({
                         <TableCell key={cell.id}>
                           {flexRender(
                             cell.column.columnDef.cell,
-                            cell.getContext()
+                            cell.getContext(),
                           )}
                         </TableCell>
                       ))}

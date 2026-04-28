@@ -23,7 +23,9 @@ export function PickupDetailsView() {
       <View
         hideBorder
         hideHeaderBottomBorder
-        className="h-auto w-full"
+        fullHeight={false}
+        lockDocumentScroll={false}
+        className="w-full"
         header={
           <p className="text-sm text-sm text-muted-foreground">Store pickup</p>
         }
@@ -44,7 +46,9 @@ export function PickupDetailsView() {
     <View
       hideBorder
       hideHeaderBottomBorder
-      className="h-auto w-full"
+      fullHeight={false}
+      lockDocumentScroll={false}
+      className="w-full"
       header={<p className="text-sm text-sm text-muted-foreground">Delivery</p>}
     >
       <div className="py-4 space-y-8">

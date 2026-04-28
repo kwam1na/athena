@@ -50,7 +50,13 @@ export function BarcodeView() {
   };
 
   return (
-    <View hideBorder hideHeaderBottomBorder className="h-auto w-full">
+    <View
+      hideBorder
+      hideHeaderBottomBorder
+      fullHeight={false}
+      lockDocumentScroll={false}
+      className="w-full"
+    >
       <FadeIn className="py-4 space-y-4">
         <div className="flex items-center justify-between">
           {/* <p className="text-sm text-muted-foreground">Barcode</p> */}

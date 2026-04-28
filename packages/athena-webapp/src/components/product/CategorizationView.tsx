@@ -9,7 +9,13 @@ export function CategorizationView() {
   if (!activeProduct) return null;
 
   return (
-    <View hideBorder hideHeaderBottomBorder className="h-auto w-full">
+    <View
+      hideBorder
+      hideHeaderBottomBorder
+      fullHeight={false}
+      lockDocumentScroll={false}
+      className="w-full"
+    >
       <FadeIn className="py-4 grid grid-cols-3">
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">Category</p>

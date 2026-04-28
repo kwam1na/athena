@@ -51,7 +51,7 @@ export function TransactionsView() {
       transactionNumber: transaction.transactionNumber,
       formattedTotal: formatStoredAmount(formatter, transaction.total),
       paymentMethodLabel: transaction.hasMultiplePaymentMethods
-        ? "Multiple methods"
+        ? "Multiple payment methods"
         : formatPaymentMethod(transaction.paymentMethod),
       paymentMethod: transaction.paymentMethod || "cash",
       hasMultiplePaymentMethods: Boolean(transaction.hasMultiplePaymentMethods),
@@ -74,11 +74,7 @@ export function TransactionsView() {
   const hasTransactions = filteredData.length > 0;
 
   return (
-    <View
-      header={<SimplePageHeader title="Completed Transactions" />}
-      lockDocumentScroll
-      fullHeight
-    >
+    <View header={<SimplePageHeader title="Completed Transactions" />}>
       <FadeIn>
         <div className="container mx-auto p-6 space-y-4">
           <Tabs

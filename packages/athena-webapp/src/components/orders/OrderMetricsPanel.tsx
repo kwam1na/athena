@@ -39,7 +39,13 @@ export default function OrderMetricsPanel({
   const isLoading = metrics === undefined;
 
   return (
-    <View hideBorder hideHeaderBottomBorder className="bg-background mb-6">
+    <View
+      hideBorder
+      hideHeaderBottomBorder
+      fullHeight={false}
+      lockDocumentScroll={false}
+      className="bg-background mb-6"
+    >
       <FadeIn className="container mx-auto py-6">
         <div className="flex items-center justify-between mb-6">
           {/* <h2 className="text-lg font-semibold">Order Metrics</h2> */}
