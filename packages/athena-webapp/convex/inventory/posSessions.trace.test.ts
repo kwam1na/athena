@@ -45,6 +45,7 @@ type SessionRecord = {
   expiresAt: number;
   staffProfileId?: string;
   customerId?: string;
+  customerProfileId?: string;
   registerSessionId?: string;
   customerInfo?: {
     name?: string;
@@ -219,6 +220,7 @@ function createMutationCtx(seed?: {
   return {
     db,
     sessions,
+    items,
   };
 }
 
@@ -275,6 +277,7 @@ describe("pos session lifecycle trace handlers", () => {
 
     const result = await getHandler(completeSession)(ctx as never, {
       sessionId: "session-1",
+      staffProfileId: "cashier-1",
       payments: [{ method: "cash", amount: 115, timestamp: 1_000 }],
       notes: "Completed in test",
       subtotal: 100,
@@ -293,6 +296,7 @@ describe("pos session lifecycle trace handlers", () => {
       ctx,
       expect.objectContaining({
         sessionId: "session-1",
+        staffProfileId: "cashier-1",
         recordRegisterSale: false,
       }),
     );
@@ -319,6 +323,43 @@ describe("pos session lifecycle trace handlers", () => {
     expect(ctx.db.patch).toHaveBeenCalledWith("posSession", "session-1", {
       workflowTraceId: "pos_session:ses-001",
     });
+  });
+
+  it("refuses to complete a session for a different cashier before transaction side effects", async () => {
+    const ctx = createMutationCtx({
+      sessions: [
+        buildSession({
+          _id: "session-1",
+          staffProfileId: "cashier-1",
+          registerSessionId: "drawer-1",
+          subtotal: 100,
+          tax: 15,
+          total: 115,
+        }),
+      ],
+    });
+
+    const result = await getHandler(completeSession)(ctx as never, {
+      sessionId: "session-1",
+      staffProfileId: "cashier-2",
+      payments: [{ method: "cash", amount: 115, timestamp: 1_000 }],
+      subtotal: 100,
+      tax: 15,
+      total: 115,
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        kind: "user_error",
+        error: expect.objectContaining({
+          code: "precondition_failed",
+          message: "This session is not associated with your cashier.",
+        }),
+      }),
+    );
+    expect(mocks.createTransactionFromSessionHandler).not.toHaveBeenCalled();
+    expect(mocks.traceRecord).not.toHaveBeenCalled();
+    expect(ctx.db.patch).not.toHaveBeenCalled();
   });
 
   it("records a voided lifecycle trace when voiding a session", async () => {
@@ -365,6 +406,87 @@ describe("pos session lifecycle trace handlers", () => {
     );
   });
 
+  it("voids an empty session without deleting audit items", async () => {
+    const ctx = createMutationCtx({
+      sessions: [
+        buildSession({
+          _id: "session-empty-void",
+        }),
+      ],
+    });
+
+    const result = await getHandler(voidSession)(ctx as never, {
+      sessionId: "session-empty-void",
+      voidReason: "No items added",
+    });
+
+    expect(result).toEqual({
+      kind: "ok",
+      data: {
+        sessionId: "session-empty-void",
+      },
+    });
+    expect(mocks.releaseInventoryHoldsBatch).toHaveBeenCalledWith(ctx.db, []);
+    expect(ctx.db.delete).not.toHaveBeenCalled();
+    expect(ctx.sessions[0]).toEqual(
+      expect.objectContaining({
+        status: "void",
+        notes: "No items added",
+      }),
+    );
+    expect(mocks.traceRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stage: "voided",
+        session: expect.objectContaining({
+          _id: "session-empty-void",
+          status: "void",
+        }),
+      }),
+    );
+  });
+
+  it("aggregates SKU quantities before releasing holds while voiding a session", async () => {
+    const ctx = createMutationCtx({
+      sessions: [
+        buildSession({
+          _id: "session-aggregate-void",
+        }),
+      ],
+      items: [
+        {
+          _id: "item-1",
+          sessionId: "session-aggregate-void",
+          productSkuId: "sku-1",
+          quantity: 2,
+        },
+        {
+          _id: "item-2",
+          sessionId: "session-aggregate-void",
+          productSkuId: "sku-1",
+          quantity: 3,
+        },
+        {
+          _id: "item-3",
+          sessionId: "session-aggregate-void",
+          productSkuId: "sku-2",
+          quantity: 1,
+        },
+      ],
+    });
+
+    await getHandler(voidSession)(ctx as never, {
+      sessionId: "session-aggregate-void",
+      voidReason: "Duplicate SKU lines",
+    });
+
+    expect(mocks.releaseInventoryHoldsBatch).toHaveBeenCalledWith(ctx.db, [
+      { skuId: "sku-1", quantity: 5 },
+      { skuId: "sku-2", quantity: 1 },
+    ]);
+    expect(ctx.items).toHaveLength(3);
+    expect(ctx.db.delete).not.toHaveBeenCalled();
+  });
+
   it("records customer milestones when session metadata links a customer", async () => {
     const ctx = createMutationCtx({
       sessions: [
@@ -407,6 +529,102 @@ describe("pos session lifecycle trace handlers", () => {
             name: "Ama Serwa",
             email: "ama@example.com",
           }),
+        }),
+      }),
+    );
+  });
+
+  it("preserves customerProfileId and records customer profile metadata milestones", async () => {
+    const ctx = createMutationCtx({
+      sessions: [
+        buildSession({
+          _id: "session-customer-profile",
+          customerProfileId: undefined,
+          customerInfo: undefined,
+        }),
+      ],
+    });
+
+    await getHandler(updateSession)(ctx as never, {
+      sessionId: "session-customer-profile",
+      staffProfileId: "cashier-1",
+      customerProfileId: "profile-1",
+      customerInfo: {
+        name: "Ama Serwa",
+        email: "ama@example.com",
+      },
+      subtotal: 100,
+      tax: 15,
+      total: 115,
+    });
+
+    expect(
+      ctx.sessions.find((session) => session._id === "session-customer-profile"),
+    ).toEqual(
+      expect.objectContaining({
+        customerProfileId: "profile-1",
+        customerInfo: expect.objectContaining({
+          name: "Ama Serwa",
+          email: "ama@example.com",
+        }),
+      }),
+    );
+    expect(mocks.traceRecord).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        stage: "customerLinked",
+        customerName: "Ama Serwa",
+        session: expect.objectContaining({
+          _id: "session-customer-profile",
+          customerProfileId: "profile-1",
+        }),
+      }),
+    );
+
+    await getHandler(updateSession)(ctx as never, {
+      sessionId: "session-customer-profile",
+      staffProfileId: "cashier-1",
+      customerProfileId: "profile-1",
+      customerInfo: {
+        name: "Ama Serwa Mensah",
+        email: "ama@example.com",
+      },
+      subtotal: 100,
+      tax: 15,
+      total: 115,
+    });
+
+    expect(mocks.traceRecord).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        stage: "customerUpdated",
+        customerName: "Ama Serwa Mensah",
+        session: expect.objectContaining({
+          _id: "session-customer-profile",
+          customerProfileId: "profile-1",
+          customerInfo: expect.objectContaining({
+            name: "Ama Serwa Mensah",
+          }),
+        }),
+      }),
+    );
+
+    await getHandler(updateSession)(ctx as never, {
+      sessionId: "session-customer-profile",
+      staffProfileId: "cashier-1",
+      customerProfileId: undefined,
+      customerInfo: undefined,
+      subtotal: 100,
+      tax: 15,
+      total: 115,
+    });
+
+    expect(mocks.traceRecord).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        stage: "customerCleared",
+        customerName: "Ama Serwa Mensah",
+        session: expect.objectContaining({
+          _id: "session-customer-profile",
+          customerProfileId: undefined,
+          customerInfo: undefined,
         }),
       }),
     );
@@ -492,6 +710,57 @@ describe("pos session lifecycle trace handlers", () => {
     );
     expect(mocks.traceRecord).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ["voided", "void", 4_102_444_800_000],
+    ["expired", "active", 500],
+  ] as const)(
+    "treats stale %s sessions owned by the cashier as a no-op metadata update",
+    async (_label, status, expiresAt) => {
+      const ctx = createMutationCtx({
+        sessions: [
+          buildSession({
+            _id: `session-${_label}`,
+            status,
+            expiresAt,
+            customerProfileId: "profile-original",
+          }),
+        ],
+      });
+
+      const result = await getHandler(updateSession)(ctx as never, {
+        sessionId: `session-${_label}`,
+        staffProfileId: "cashier-1",
+        customerProfileId: "profile-new",
+        customerInfo: {
+          name: "Ama Serwa",
+        },
+        subtotal: 100,
+        tax: 15,
+        total: 115,
+      });
+
+      expect(result).toEqual({
+        kind: "ok",
+        data: {
+          sessionId: `session-${_label}`,
+          expiresAt,
+        },
+      });
+      expect(ctx.sessions[0]).toEqual(
+        expect.objectContaining({
+          customerProfileId: "profile-original",
+          expiresAt,
+        }),
+      );
+      expect(ctx.db.patch).not.toHaveBeenCalledWith(
+        "posSession",
+        `session-${_label}`,
+        expect.anything(),
+      );
+      expect(mocks.traceRecord).not.toHaveBeenCalled();
+    },
+  );
 
   it("records a cart-cleared milestone and clears pending payments", async () => {
     const ctx = createMutationCtx({
@@ -688,6 +957,75 @@ describe("pos session lifecycle trace handlers", () => {
     expect(ctx.db.delete).not.toHaveBeenCalled();
   });
 
+  it.each([
+    [
+      "closing",
+      {
+        _id: "drawer-1",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        status: "closing",
+      },
+    ],
+    [
+      "mismatched-store",
+      {
+        _id: "drawer-1",
+        storeId: "store-2",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        status: "open",
+      },
+    ],
+  ] as const)(
+    "refuses to clear the cart when the bound drawer is %s and preserves items and holds",
+    async (label, drawer) => {
+      const ctx = createMutationCtx({
+        sessions: [
+          buildSession({
+            _id: `session-clear-${label}`,
+            checkoutStateVersion: 2,
+          }),
+        ],
+        registerSessions: [drawer],
+        items: [
+          {
+            _id: "item-1",
+            sessionId: `session-clear-${label}`,
+            productSkuId: "sku-1",
+            quantity: 1,
+          },
+        ],
+      });
+
+      const result = await getHandler(releaseSessionInventoryHoldsAndDeleteItems)(
+        ctx as never,
+        {
+          sessionId: `session-clear-${label}`,
+          staffProfileId: "cashier-1",
+          checkoutStateVersion: 4,
+        },
+      );
+
+      expect(result).toEqual({
+        kind: "user_error",
+        error: expect.objectContaining({
+          code: "validation_failed",
+          message: "Open the cash drawer before modifying this sale.",
+        }),
+      });
+      expect(mocks.releaseInventoryHoldsBatch).not.toHaveBeenCalled();
+      expect(ctx.db.delete).not.toHaveBeenCalled();
+      expect(ctx.items).toEqual([
+        expect.objectContaining({
+          _id: "item-1",
+          sessionId: `session-clear-${label}`,
+        }),
+      ]);
+    },
+  );
+
   it("keeps cleared carts fenced off from older payment-sync writes", async () => {
     const ctx = createMutationCtx({
       sessions: [
@@ -857,6 +1195,136 @@ describe("pos session lifecycle trace handlers", () => {
       "posSession",
       "session-checkout-no-drawer",
       expect.anything(),
+    );
+  });
+
+  it.each([
+    [
+      "closed",
+      {
+        _id: "drawer-1",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        status: "closed",
+      },
+    ],
+    [
+      "closing",
+      {
+        _id: "drawer-1",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        status: "closing",
+      },
+    ],
+    [
+      "mismatched-store",
+      {
+        _id: "drawer-1",
+        storeId: "store-2",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        status: "open",
+      },
+    ],
+    [
+      "mismatched-terminal",
+      {
+        _id: "drawer-1",
+        storeId: "store-1",
+        terminalId: "terminal-9",
+        registerNumber: "1",
+        status: "open",
+      },
+    ],
+  ] as const)(
+    "refuses to sync checkout payments when the bound drawer is %s before patching",
+    async (label, drawer) => {
+      const ctx = createMutationCtx({
+        sessions: [
+          buildSession({
+            _id: `session-checkout-${label}`,
+            payments: [{ method: "cash", amount: 60, timestamp: 1_000 }],
+            checkoutStateVersion: 2,
+          }),
+        ],
+        registerSessions: [drawer],
+      });
+
+      const result = await getHandler(syncSessionCheckoutState)(ctx as never, {
+        sessionId: `session-checkout-${label}`,
+        staffProfileId: "cashier-1",
+        checkoutStateVersion: 3,
+        payments: [{ method: "cash", amount: 120, timestamp: 1_000 }],
+        stage: "paymentUpdated",
+        paymentMethod: "cash",
+        amount: 120,
+        previousAmount: 60,
+      });
+
+      expect(result).toEqual({
+        kind: "user_error",
+        error: expect.objectContaining({
+          code: "validation_failed",
+          message: "Open the cash drawer before modifying this sale.",
+        }),
+      });
+      expect(ctx.db.patch).not.toHaveBeenCalledWith(
+        "posSession",
+        `session-checkout-${label}`,
+        expect.anything(),
+      );
+      expect(mocks.traceRecord).not.toHaveBeenCalled();
+      expect(ctx.sessions[0]).toEqual(
+        expect.objectContaining({
+          payments: [{ method: "cash", amount: 60, timestamp: 1_000 }],
+          checkoutStateVersion: 2,
+        }),
+      );
+    },
+  );
+
+  it("ignores stale checkout-state sync writes without patching or tracing", async () => {
+    const ctx = createMutationCtx({
+      sessions: [
+        buildSession({
+          _id: "session-stale-checkout-only",
+          checkoutStateVersion: 5,
+          payments: [{ method: "card", amount: 80, timestamp: 2_000 }],
+        }),
+      ],
+    });
+
+    const result = await getHandler(syncSessionCheckoutState)(ctx as never, {
+      sessionId: "session-stale-checkout-only",
+      staffProfileId: "cashier-1",
+      checkoutStateVersion: 4,
+      payments: [{ method: "cash", amount: 80, timestamp: 1_000 }],
+      stage: "paymentAdded",
+      paymentMethod: "cash",
+      amount: 80,
+    });
+
+    expect(result).toEqual({
+      kind: "ok",
+      data: {
+        sessionId: "session-stale-checkout-only",
+        expiresAt: 4_102_444_800_000,
+      },
+    });
+    expect(ctx.db.patch).not.toHaveBeenCalledWith(
+      "posSession",
+      "session-stale-checkout-only",
+      expect.anything(),
+    );
+    expect(mocks.traceRecord).not.toHaveBeenCalled();
+    expect(ctx.sessions[0]).toEqual(
+      expect.objectContaining({
+        payments: [{ method: "card", amount: 80, timestamp: 2_000 }],
+        checkoutStateVersion: 5,
+      }),
     );
   });
 

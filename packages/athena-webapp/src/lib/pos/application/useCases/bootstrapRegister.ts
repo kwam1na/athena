@@ -12,14 +12,16 @@ export function bootstrapRegister(input: {
     return undefined;
   }
 
+  const hasUsableRegisterSession =
+    registerState.activeRegisterSession?.status === "open" ||
+    registerState.activeRegisterSession?.status === "active";
+
   return {
     phase: registerState.phase,
     canStartSession:
-      registerState.phase === "readyToStart" &&
-      Boolean(registerState.activeRegisterSession),
+      registerState.phase === "readyToStart" && hasUsableRegisterSession,
     canResumeSession:
-      registerState.phase === "resumable" &&
-      Boolean(registerState.activeRegisterSession),
+      registerState.phase === "resumable" && hasUsableRegisterSession,
     terminal: registerState.terminal,
     cashier: registerState.cashier,
     activeRegisterSession: registerState.activeRegisterSession,

@@ -702,6 +702,7 @@ export const resumeSession = mutation({
 export const completeSession = mutation({
   args: {
     sessionId: v.id("posSession"),
+    staffProfileId: v.id("staffProfile"),
     payments: v.array(
       v.object({
         method: v.string(), // "cash", "card", "mobile_money"
@@ -741,8 +742,16 @@ export const completeSession = mutation({
       });
     }
 
+    if (session.staffProfileId !== args.staffProfileId) {
+      return userError({
+        code: "precondition_failed",
+        message: "This session is not associated with your cashier.",
+      });
+    }
+
     const transactionResult = await createTransactionFromSessionHandler(ctx, {
       sessionId: args.sessionId,
+      staffProfileId: args.staffProfileId,
       payments: args.payments,
       recordRegisterSale: false,
       notes: args.notes,

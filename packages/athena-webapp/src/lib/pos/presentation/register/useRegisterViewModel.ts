@@ -1421,7 +1421,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   ]);
 
   const handleCompleteTransaction = useCallback(async () => {
-    if (!activeSession) {
+    if (!activeSession || !staffProfileId) {
       toast.error("No sale in progress. Start a sale before taking payment.");
       return false;
     }
@@ -1439,6 +1439,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       },
       command: {
         sessionId: activeSession._id as Id<"posSession">,
+        staffProfileId,
         payments: currentPayments.map((payment) => ({
           method: payment.method,
           amount: payment.amount,

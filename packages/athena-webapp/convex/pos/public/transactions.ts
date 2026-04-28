@@ -185,6 +185,7 @@ export const voidTransaction = mutation({
 export const createTransactionFromSession = mutation({
   args: {
     sessionId: v.id("posSession"),
+    staffProfileId: v.id("staffProfile"),
     payments: v.array(paymentValidator),
     registerSessionId: v.optional(v.id("registerSession")),
     notes: v.optional(v.string()),

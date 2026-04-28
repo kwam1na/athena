@@ -113,15 +113,20 @@ export function POSRegisterView({
   );
   const hasProductSearchIntent =
     (viewModel.productEntry?.productSearchQuery ?? "").trim().length > 0;
+  const isAwaitingCashierAuth = Boolean(viewModel.authDialog?.open);
   const shouldShowPaymentWorkspace =
     isPosWorkflow && isPaymentInputActive && !hasProductSearchIntent;
   const canSearchProducts =
-    !viewModel.checkout.isTransactionCompleted && !viewModel.drawerGate;
+    !viewModel.checkout.isTransactionCompleted &&
+    !viewModel.drawerGate &&
+    !isAwaitingCashierAuth;
   const isHeaderProductSearchSupported =
     isSessionActive && canSearchProducts && !viewModel.productEntry.disabled;
-  const shouldRenderSaleSurface = !viewModel.checkout.isTransactionCompleted;
+  const shouldRenderSaleSurface =
+    !viewModel.checkout.isTransactionCompleted && !isAwaitingCashierAuth;
   const shouldRenderCheckoutPanel =
-    isPosWorkflow || !viewModel.checkout.isTransactionCompleted;
+    !isAwaitingCashierAuth &&
+    (isPosWorkflow || !viewModel.checkout.isTransactionCompleted);
 
   useEffect(() => {
     if (hasProductSearchIntent && isPaymentInputActive) {

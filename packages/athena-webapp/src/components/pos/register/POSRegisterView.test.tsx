@@ -146,7 +146,7 @@ describe("POSRegisterView", () => {
       sessionPanel: {},
       cashierCard: {},
       authDialog: {
-        open: true,
+        open: false,
       },
       drawerGate: null,
       onNavigateBack: vi.fn(),
@@ -161,7 +161,52 @@ describe("POSRegisterView", () => {
     expect(screen.getByText("Ready for product lookup")).toBeInTheDocument();
     expect(screen.getByText("cart-items")).toBeInTheDocument();
     expect(screen.getByText("register-checkout-panel")).toBeInTheDocument();
+    expect(screen.queryByText("cashier-auth-dialog")).not.toBeInTheDocument();
+  });
+
+  it("hides selling controls while cashier authentication is missing", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: true,
+      },
+      registerInfo: {
+        customerName: undefined,
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: true,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: null,
+      cashierCard: null,
+      authDialog: {
+        open: true,
+      },
+      drawerGate: null,
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
     expect(screen.getByText("cashier-auth-dialog")).toBeInTheDocument();
+    expect(screen.queryByText("register-action-bar")).not.toBeInTheDocument();
+    expect(screen.queryByText("register-customer-panel")).not.toBeInTheDocument();
+    expect(screen.queryByText("product-entry")).not.toBeInTheDocument();
+    expect(screen.queryByText("cart-items")).not.toBeInTheDocument();
+    expect(screen.queryByText("register-checkout-panel")).not.toBeInTheDocument();
   });
 
   it("renders expense completion UI in expense workflow without POS checkout controls", async () => {
