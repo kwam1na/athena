@@ -1,49 +1,48 @@
 import { v } from "convex/values";
 import { mutation, query } from "../_generated/server";
-import { Id } from "../_generated/dataModel";
 import {
-  acquireInventoryHold,
-  releaseInventoryHold,
-  adjustInventoryHold,
-} from "./helpers/inventoryHolds";
-import {
-  validateExpenseSessionActive,
-  validateExpenseSessionModifiable,
-  validateExpenseItemBelongsToSession,
-} from "./helpers/expenseSessionValidation";
+  runRemoveExpenseSessionItemCommand,
+  runUpsertExpenseSessionItemCommand,
+} from "../pos/application/commands/expenseSessionCommands";
 import {
   expenseItemOperationResultValidator,
   operationResultValidator,
 } from "./helpers/resultTypes";
-import { calculateExpenseSessionExpiration } from "./helpers/expenseSessionExpiration";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { ok, userError } from "../../shared/commandResult";
 
-function expenseItemError(
-  message: string,
-  code: "authorization_failed" | "conflict" | "not_found" | "precondition_failed" =
-    "precondition_failed",
-) {
-  return userError({
-    code,
-    message,
-  });
-}
-
-function mapExpenseValidationError(message: string) {
-  if (message === "Session not found" || message === "Item not found in cart") {
-    return expenseItemError(message, "not_found");
+function userErrorFromExpenseItemCommandFailure(result: {
+  status: string;
+  message: string;
+}) {
+  switch (result.status) {
+    case "notFound":
+      return userError({
+        code: "not_found",
+        message: result.message,
+      });
+    case "cashierMismatch":
+      return userError({
+        code: "authorization_failed",
+        message: result.message,
+      });
+    case "inventoryUnavailable":
+    case "terminalUnavailable":
+      return userError({
+        code: "conflict",
+        message: result.message,
+      });
+    case "validationFailed":
+      return userError({
+        code: "validation_failed",
+        message: result.message,
+      });
+    default:
+      return userError({
+        code: "precondition_failed",
+        message: result.message,
+      });
   }
-
-  if (message.includes("not associated")) {
-    return expenseItemError(message, "authorization_failed");
-  }
-
-  if (message.includes("does not belong")) {
-    return expenseItemError(message, "not_found");
-  }
-
-  return expenseItemError(message, "precondition_failed");
 }
 
 // Get all items for an expense session
@@ -101,107 +100,13 @@ export const addOrUpdateExpenseItem = mutation({
   },
   returns: commandResultValidator(expenseItemOperationResultValidator),
   handler: async (ctx, args) => {
-    const now = Date.now();
+    const result = await runUpsertExpenseSessionItemCommand(ctx, args);
 
-    // Validate session is active using helper
-    const validation = await validateExpenseSessionActive(
-      ctx.db,
-      args.sessionId,
-      args.staffProfileId
-    );
-    if (!validation.success) {
-      return mapExpenseValidationError(validation.message!);
+    if (result.status === "ok") {
+      return ok(result.data);
     }
 
-    const session = await ctx.db.get("expenseSession", args.sessionId);
-    if (!session) {
-      return expenseItemError("Session not found", "not_found");
-    }
-
-    // Check if item already exists in session
-    // Expense session carts stay small enough to read in full for a single session.
-    // eslint-disable-next-line @convex-dev/no-collect-in-query
-    const existingItems = await ctx.db
-      .query("expenseSessionItem")
-      .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
-      .collect();
-
-    const existingItem = existingItems.find(
-      (item) => item.productSkuId === args.productSkuId
-    );
-
-    let itemId: Id<"expenseSessionItem">;
-
-    if (existingItem) {
-      // Item exists - update quantity and adjust inventory holds using helper
-      const adjustResult = await adjustInventoryHold(
-        ctx.db,
-        args.productSkuId,
-        existingItem.quantity,
-        args.quantity
-      );
-
-      if (!adjustResult.success) {
-        return expenseItemError(
-          adjustResult.message || "Failed to adjust inventory",
-          "conflict",
-        );
-      }
-
-      // Update the item
-      await ctx.db.patch("expenseSessionItem", existingItem._id, {
-        quantity: args.quantity,
-        price: args.price,
-        barcode: args.barcode,
-        color: args.color,
-        updatedAt: now,
-      });
-
-      itemId = existingItem._id;
-    } else {
-      // New item - acquire inventory hold using helper
-      const holdResult = await acquireInventoryHold(
-        ctx.db,
-        args.productSkuId,
-        args.quantity
-      );
-
-      if (!holdResult.success) {
-        return expenseItemError(
-          holdResult.message || "Failed to acquire inventory hold",
-          "conflict",
-        );
-      }
-
-      // Create new item
-      itemId = await ctx.db.insert("expenseSessionItem", {
-        sessionId: args.sessionId,
-        storeId: session.storeId,
-        productId: args.productId,
-        productSkuId: args.productSkuId,
-        productSku: args.productSku,
-        barcode: args.barcode,
-        productName: args.productName,
-        price: args.price,
-        quantity: args.quantity,
-        image: args.image,
-        size: args.size,
-        length: args.length,
-        color: args.color,
-        createdAt: now,
-        updatedAt: now,
-      });
-    }
-
-    // Extend session expiration time
-    const expiresAt = calculateExpenseSessionExpiration(now);
-
-    await ctx.db.patch("expenseSession", args.sessionId, {
-      updatedAt: now,
-      expiresAt,
-    });
-
-    return ok({ itemId, expiresAt });
+    return userErrorFromExpenseItemCommandFailure(result);
   },
 });
 
@@ -214,48 +119,12 @@ export const removeExpenseItem = mutation({
   },
   returns: commandResultValidator(operationResultValidator),
   handler: async (ctx, args) => {
-    const now = Date.now();
+    const result = await runRemoveExpenseSessionItemCommand(ctx, args);
 
-    // Validate session can be modified (checks expiration)
-    const sessionValidation = await validateExpenseSessionModifiable(
-      ctx.db,
-      args.sessionId,
-      args.staffProfileId
-    );
-    if (!sessionValidation.success) {
-      return mapExpenseValidationError(sessionValidation.message!);
+    if (result.status === "ok") {
+      return ok(result.data);
     }
 
-    // Validate item belongs to session using helper
-    const validation = await validateExpenseItemBelongsToSession(
-      ctx.db,
-      args.itemId,
-      args.sessionId
-    );
-    if (!validation.success) {
-      return mapExpenseValidationError(validation.message!);
-    }
-
-    // Get the item to release its inventory hold
-    const item = await ctx.db.get("expenseSessionItem", args.itemId);
-    if (!item) {
-      return expenseItemError("Item not found in cart", "not_found");
-    }
-
-    // Release inventory hold using helper
-    await releaseInventoryHold(ctx.db, item.productSkuId, item.quantity);
-
-    // Delete the item
-    await ctx.db.delete("expenseSessionItem", args.itemId);
-
-    // Extend session expiration time
-    const expiresAt = calculateExpenseSessionExpiration(now);
-
-    await ctx.db.patch("expenseSession", args.sessionId, {
-      updatedAt: now,
-      expiresAt,
-    });
-
-    return ok({ expiresAt });
+    return userErrorFromExpenseItemCommandFailure(result);
   },
 });

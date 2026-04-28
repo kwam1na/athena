@@ -6,6 +6,7 @@ export const expenseSessionSchema = v.object({
   staffProfileId: v.id("staffProfile"), // Staff profile responsible for the session
   terminalId: v.id("posTerminal"),
   registerNumber: v.optional(v.string()),
+  registerSessionId: v.optional(v.id("registerSession")),
 
   // Session state
   status: v.string(), // "active", "held", "completed", "void", "expired"
