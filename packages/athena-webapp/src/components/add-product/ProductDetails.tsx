@@ -15,7 +15,8 @@ export function ProductDetailsView() {
     <View
       hideBorder
       hideHeaderBottomBorder
-      className="h-auto"
+      fullHeight={false}
+      lockDocumentScroll={false}
       header={<p className="text-sm text-sm font-medium">Details</p>}
     >
       <div className="px-4 py-8 space-y-4">

@@ -187,7 +187,8 @@ export function ProductStockView() {
     <View
       hideBorder
       hideHeaderBottomBorder
-      className="h-auto"
+      fullHeight={false}
+      lockDocumentScroll={false}
       header={
         <StockHeader
           isSkuReserved={isSkuReserved}

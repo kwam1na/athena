@@ -234,7 +234,9 @@ export function OrderDetailsView() {
     <View
       hideBorder
       hideHeaderBottomBorder
-      className="h-auto w-full"
+      fullHeight={false}
+      lockDocumentScroll={false}
+      className="w-full"
       header={
         <div className="flex items-center gap-2">
           <p className="text-sm text-sm text-muted-foreground">Payment</p>{" "}

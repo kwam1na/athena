@@ -73,6 +73,28 @@ export function AthenaGuidanceIntroductionPage() {
       </StorybookSection>
 
       <StorybookSection
+        title="Flow detail pattern"
+        description="Flow detail views should keep stable context visible while giving the active work enough room to breathe."
+      >
+        <StorybookPillRow
+          items={[
+            "Context summary card",
+            "Status-first context",
+            "Large working canvas",
+          ]}
+        />
+        <StorybookList
+          items={[
+            "Use a narrow rail for stable flow context, current state, ownership, key dates, totals, or next actions.",
+            "Use a large working canvas for editable records, review queues, audit trails, traces, line items, or supporting detail.",
+            "Keep card borders quiet, corners generous, and shadows soft so the layout feels deliberate without becoming decorative.",
+            "Separate card headers and content with a light rule when the top area carries state, progress, or a primary summary.",
+            "Use uppercase micro-labels only for section identity or totals; keep field labels sentence case and values right-aligned where comparison matters.",
+          ]}
+        />
+      </StorybookSection>
+
+      <StorybookSection
         title="Restrained motion"
         description="Motion should guide attention, not perform for its own sake."
       >

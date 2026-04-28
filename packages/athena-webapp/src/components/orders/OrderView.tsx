@@ -589,8 +589,8 @@ const Alerts = () => {
 export const OrderView = () => {
   return (
     <OnlineOrderProvider>
-      <View header={<Header />} fullHeight lockDocumentScroll>
-        <div className="container mx-auto h-full w-full p-8 space-y-12 overflow-y-scroll scrollbar-hide pb-24">
+      <View header={<Header />}>
+        <div className="container mx-auto w-full p-8 space-y-12 pb-24">
           {/* <Alerts /> */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="space-y-8">

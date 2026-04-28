@@ -75,7 +75,8 @@ export default function ProductImagesView() {
     <View
       hideBorder
       hideHeaderBottomBorder
-      className="h-auto"
+      fullHeight={false}
+      lockDocumentScroll={false}
       header={<Header />}
     >
       {!showLoaderForProduct && (

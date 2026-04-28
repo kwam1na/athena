@@ -38,14 +38,22 @@ vi.mock("../../common/PageHeader", () => ({
 }));
 
 vi.mock("../../ui/badge", () => ({
-  Badge: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  Badge: ({ children }: { children?: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
 vi.mock("../../ui/card", () => ({
   Card: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-  CardContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-  CardHeader: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-  CardTitle: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  CardContent: ({ children }: { children?: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  CardHeader: ({ children }: { children?: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  CardTitle: ({ children }: { children?: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
 vi.mock("../OrderSummary", () => ({
@@ -155,7 +163,7 @@ describe("TransactionView", () => {
     expect(screen.queryByText(/Change given:/)).not.toBeInTheDocument();
   });
 
-  it("displays multiple methods when more than one payment method is used", () => {
+  it("displays multiple payment methods when more than one payment method is used", () => {
     useParamsMock.mockReturnValue({ transactionId: "txn_4" });
     useQueryMock.mockReturnValue({
       _id: "txn_4",
@@ -182,7 +190,7 @@ describe("TransactionView", () => {
 
     const { container } = render(<TransactionView />);
 
-    expect(screen.getByText("Multiple methods")).toBeInTheDocument();
+    expect(screen.getByText("Multiple payment methods")).toBeInTheDocument();
     expect(container.querySelector(".lucide-wallet-cards")).toBeInTheDocument();
   });
 
@@ -197,9 +205,7 @@ describe("TransactionView", () => {
       hasTrace: false,
       sessionTraceId: null,
       paymentMethod: "cash",
-      payments: [
-        { method: "cash", amount: 1000, timestamp: 1 },
-      ],
+      payments: [{ method: "cash", amount: 1000, timestamp: 1 }],
       totalPaid: 1000,
       changeGiven: 0,
       status: "completed",
@@ -213,7 +219,9 @@ describe("TransactionView", () => {
     const { container } = render(<TransactionView />);
 
     expect(screen.getByText(/cash/i)).toBeInTheDocument();
-    expect(container.querySelector(".lucide-wallet-cards")).not.toBeInTheDocument();
+    expect(
+      container.querySelector(".lucide-wallet-cards"),
+    ).not.toBeInTheDocument();
     expect(container.querySelector(".lucide-banknote")).toBeInTheDocument();
   });
 });

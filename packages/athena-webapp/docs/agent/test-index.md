@@ -173,6 +173,8 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/stories/Guidance/introduction-content.test.tsx`](../../src/stories/Guidance/introduction-content.test.tsx)
 - [`src/stories/Patterns/admin-shell-patterns.test.tsx`](../../src/stories/Patterns/admin-shell-patterns.test.tsx)
 - [`src/stories/Templates/reference-fixtures.test.tsx`](../../src/stories/Templates/reference-fixtures.test.tsx)
+- [`src/stories/storybook-config.test.ts`](../../src/stories/storybook-config.test.ts)
+- [`src/stories/storybook-theme-decorator.test.ts`](../../src/stories/storybook-theme-decorator.test.ts)
 - [`src/tests/pos/backend.test.ts`](../../src/tests/pos/backend.test.ts)
 - [`src/tests/pos/inventoryValidationLogic.test.ts`](../../src/tests/pos/inventoryValidationLogic.test.ts)
 - [`src/tests/pos/simple.test.ts`](../../src/tests/pos/simple.test.ts)

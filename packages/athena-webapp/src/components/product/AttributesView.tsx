@@ -25,7 +25,13 @@ export function AttributesView() {
   }
 
   return (
-    <View hideBorder hideHeaderBottomBorder className="h-auto w-full">
+    <View
+      hideBorder
+      hideHeaderBottomBorder
+      fullHeight={false}
+      lockDocumentScroll={false}
+      className="w-full"
+    >
       <FadeIn className="py-4 grid grid-cols-3">
         {color && (
           <div className="space-y-4">

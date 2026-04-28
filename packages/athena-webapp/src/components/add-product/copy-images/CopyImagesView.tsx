@@ -21,7 +21,9 @@ export const CopyImagesView = () => {
     <View
       hideBorder
       hideHeaderBottomBorder
-      className="h-auto p-8"
+      fullHeight={false}
+      lockDocumentScroll={false}
+      className="p-8"
       header={
         <PageHeader>
           <p className="font-medium text-sm px-4">Copy images</p>

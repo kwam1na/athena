@@ -191,8 +191,6 @@ export function POSRegisterView({
   if (!viewModel.hasActiveStore) {
     return (
       <View
-        fullHeight
-        lockDocumentScroll
         header={
           <ComposedPageHeader
             leadingContent={
@@ -217,13 +215,11 @@ export function POSRegisterView({
   return (
     <View
       width={registerViewWidth}
-      fullHeight
-      lockDocumentScroll
       contentClassName={cn(
         "flex h-full max-h-full flex-col overflow-hidden rounded-2xl border border-border/80 bg-white",
       )}
       headerClassName="shrink-0"
-      mainClassName={cn("min-h-0 flex-1 overflow-hidden")}
+      mainClassName={cn("min-h-0 flex-1")}
       header={
         <ComposedPageHeader
           width={registerViewWidth}

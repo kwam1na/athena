@@ -72,7 +72,9 @@ export function ImagesView() {
     <View
       hideBorder
       hideHeaderBottomBorder
-      className="h-auto w-full"
+      fullHeight={false}
+      lockDocumentScroll={false}
+      className="w-full"
       header={null}
     >
       <FadeIn className="space-y-8">

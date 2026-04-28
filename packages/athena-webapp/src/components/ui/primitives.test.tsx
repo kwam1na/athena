@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest"
 
 import { Badge } from "./badge"
 import { Button } from "./button"
+import { Card } from "./card"
+import { Checkbox } from "./checkbox"
+import { RadioGroup, RadioGroupItem } from "./radio-group"
 import {
   Select,
   SelectContent,
@@ -10,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./select"
+import { Switch } from "./switch"
 import { Tabs, TabsList, TabsTrigger } from "./tabs"
 import { Input } from "./input"
 import { Textarea } from "./textarea"
@@ -23,6 +27,58 @@ describe("primitive sizing and token semantics", () => {
     expect(badge).toHaveClass("bg-destructive")
     expect(badge).toHaveClass("text-destructive-foreground")
     expect(badge).toHaveClass("h-6")
+  })
+
+  it("uses the app surface tokens for cards", () => {
+    render(<Card>Card body</Card>)
+
+    const card = screen.getByText("Card body")
+
+    expect(card).toHaveClass("border-border")
+    expect(card).toHaveClass("bg-surface-raised")
+    expect(card).toHaveClass("shadow-surface")
+  })
+
+  it("uses the signal token for primary actions and badges", () => {
+    render(
+      <>
+        <Button>Save sale</Button>
+        <Badge>Ready</Badge>
+      </>,
+    )
+
+    expect(screen.getByRole("button", { name: "Save sale" })).toHaveClass(
+      "bg-signal",
+      "text-signal-foreground",
+    )
+    expect(screen.getByText("Ready")).toHaveClass(
+      "bg-signal",
+      "text-signal-foreground",
+    )
+  })
+
+  it("uses signal tokens for selection controls", () => {
+    render(
+      <>
+        <Checkbox aria-label="Confirmed" defaultChecked />
+        <Switch aria-label="Active" defaultChecked />
+        <RadioGroup value="cash">
+          <RadioGroupItem aria-label="Cash" value="cash" />
+        </RadioGroup>
+      </>,
+    )
+
+    expect(screen.getByRole("checkbox", { name: "Confirmed" })).toHaveClass(
+      "border-signal",
+      "data-[state=checked]:bg-signal",
+    )
+    expect(screen.getByRole("switch", { name: "Active" })).toHaveClass(
+      "data-[state=checked]:bg-signal",
+    )
+    expect(screen.getByRole("radio", { name: "Cash" })).toHaveClass(
+      "border-signal",
+      "text-signal",
+    )
   })
 
   it("keeps outline buttons on the foreground token", () => {

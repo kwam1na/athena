@@ -353,7 +353,9 @@ export function OrderItemsView() {
     <View
       hideBorder
       hideHeaderBottomBorder
-      className="h-auto w-full"
+      fullHeight={false}
+      lockDocumentScroll={false}
+      className="w-full"
       header={
         <div className="flex items-center gap-8">
           <p className="text-sm text-sm text-muted-foreground">

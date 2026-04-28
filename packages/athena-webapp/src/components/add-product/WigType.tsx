@@ -10,7 +10,8 @@ export function WigTypeView() {
     <View
       hideBorder
       hideHeaderBottomBorder
-      className="h-auto"
+      fullHeight={false}
+      lockDocumentScroll={false}
       header={<p className="text-sm text-sm">Wig make</p>}
     >
       <WigType />

@@ -11,6 +11,9 @@ describe("AthenaGuidanceIntroductionPage", () => {
     expect(screen.getByRole("heading", { name: /typography/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /density/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /shell composition/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /flow detail pattern/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /restrained motion/i })).toBeInTheDocument();
+    expect(screen.getByText(/context summary card/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/large working canvas/i)).not.toHaveLength(0);
   });
 });

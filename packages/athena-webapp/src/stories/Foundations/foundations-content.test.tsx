@@ -28,6 +28,9 @@ describe("AthenaFoundationsPage", () => {
       screen.getByRole("heading", { name: /spacing and density/i }),
     ).toBeInTheDocument();
     expect(
+      screen.getByRole("heading", { name: /detail view system/i }),
+    ).toBeInTheDocument();
+    expect(
       screen.getByRole("heading", { name: /elevation and motion/i }),
     ).toBeInTheDocument();
 
@@ -35,6 +38,8 @@ describe("AthenaFoundationsPage", () => {
     expect(screen.getAllByText(/signal \/ action/i)).not.toHaveLength(0);
     expect(screen.getByText(/display serif/i)).toBeInTheDocument();
     expect(screen.getByText(/standard workspace/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/receipt rail/i)).not.toHaveLength(0);
+    expect(screen.getAllByText(/item canvas/i)).not.toHaveLength(0);
     expect(screen.getByText(/focus sweep/i)).toBeInTheDocument();
     for (const reviewButton of screen.getAllByRole("button", { name: /review/i })) {
       expect(reviewButton).toBeDisabled();
@@ -42,6 +47,7 @@ describe("AthenaFoundationsPage", () => {
   });
 
   it("keeps the light sidebar tokens aligned with the light canvas palette", () => {
+    expect(indexCss).toContain("--radius: 0.75rem;");
     expect(indexCss).toContain("--sidebar-background: var(--background);");
     expect(indexCss).toContain("--sidebar-foreground: var(--foreground);");
     expect(indexCss).toContain("--sidebar-accent: 220 20% 96%;");

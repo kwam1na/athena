@@ -12,7 +12,8 @@ export function ProcessingFeesView() {
     <View
       hideBorder
       hideHeaderBottomBorder
-      className="h-auto"
+      fullHeight={false}
+      lockDocumentScroll={false}
       header={<p className="text-sm text-sm"></p>}
     >
       <ProcessingFees />

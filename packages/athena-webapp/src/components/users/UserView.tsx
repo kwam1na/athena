@@ -120,11 +120,9 @@ export const UserView = () => {
           trailingContent={<UserActions />}
         />
       }
-      fullHeight
-      lockDocumentScroll
     >
       <FadeIn className="container mx-auto h-full w-full p-8 space-y-12">
-        <div className="flex justify-between gap-24 h-full overflow-y-auto scrollbar-hide">
+        <div className="flex justify-between gap-24">
           <div className="space-y-32 w-[60%]0">
             <div className="space-y-8">
               {/* <p className="text-sm font-medium">Contact Details</p> */}

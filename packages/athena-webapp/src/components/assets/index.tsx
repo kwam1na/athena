@@ -90,7 +90,9 @@ const FeesView = () => {
     <View
       hideBorder
       hideHeaderBottomBorder
-      className="h-auto w-full"
+      fullHeight={false}
+      lockDocumentScroll={false}
+      className="w-full"
       header={
         <p className="text-sm text-muted-foreground">{`Delivery fees (${activeStore?.currency.toUpperCase()})`}</p>
       }
@@ -196,7 +198,9 @@ const ContactView = () => {
     <View
       hideBorder
       hideHeaderBottomBorder
-      className="h-auto w-full"
+      fullHeight={false}
+      lockDocumentScroll={false}
+      className="w-full"
       header={
         <p className="text-sm text-muted-foreground">Contact Information</p>
       }
@@ -295,7 +299,9 @@ const MaintenanceView = () => {
     <View
       hideBorder
       hideHeaderBottomBorder
-      className="h-auto w-full"
+      fullHeight={false}
+      lockDocumentScroll={false}
+      className="w-full"
       header={
         <p className="text-sm text-muted-foreground">{`Store availability`}</p>
       }

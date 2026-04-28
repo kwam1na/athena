@@ -80,7 +80,9 @@ export const MaintenanceView = () => {
       <View
         hideBorder
         hideHeaderBottomBorder
-        className="h-auto w-full"
+        fullHeight={false}
+        lockDocumentScroll={false}
+        className="w-full"
         header={
           <p className="text-sm text-muted-foreground">{`Store availability`}</p>
         }
