@@ -481,6 +481,7 @@ export async function createTransactionFromSessionHandler(
   ctx: MutationCtx,
   args: {
     sessionId: Id<"posSession">;
+    staffProfileId: Id<"staffProfile">;
     payments: PosPaymentInput[];
     registerSessionId?: Id<"registerSession">;
     recordRegisterSale?: boolean;
@@ -498,6 +499,13 @@ export async function createTransactionFromSessionHandler(
     return userError({
       code: "not_found",
       message: "Session not found.",
+    });
+  }
+
+  if (session.staffProfileId !== args.staffProfileId) {
+    return userError({
+      code: "precondition_failed",
+      message: "This session is not associated with your cashier.",
     });
   }
 

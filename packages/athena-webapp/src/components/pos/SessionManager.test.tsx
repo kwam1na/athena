@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { SessionManager } from "./SessionManager";
@@ -107,5 +108,69 @@ describe("SessionManager", () => {
     expect(
       screen.queryByRole("link", { name: "View trace" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("disables hold and new-sale actions from panel state", async () => {
+    const onHoldCurrentSession = vi.fn();
+    const onStartNewSession = vi.fn();
+
+    render(
+      <SessionManager
+        sessionPanel={{
+          activeSessionNumber: "SES-001",
+          activeSessionTraceId: null,
+          hasExpiredSession: false,
+          canHoldSession: false,
+          disableNewSession: true,
+          heldSessions: [],
+          onHoldCurrentSession,
+          onVoidCurrentSession: vi.fn(),
+          onResumeSession: vi.fn(),
+          onVoidHeldSession: vi.fn(),
+          onStartNewSession,
+        }}
+      />,
+    );
+
+    const holdButton = screen.getByRole("button", { name: /hold/i });
+    const newSaleButton = screen.getByRole("button", { name: /new sale/i });
+
+    expect(holdButton).toBeDisabled();
+    expect(newSaleButton).toBeDisabled();
+
+    await userEvent.click(holdButton);
+    await userEvent.click(newSaleButton);
+
+    expect(onHoldCurrentSession).not.toHaveBeenCalled();
+    expect(onStartNewSession).not.toHaveBeenCalled();
+  });
+
+  it("keeps held-sale resume controls hidden when no held sessions exist", () => {
+    render(
+      <SessionManager
+        sessionPanel={{
+          activeSessionNumber: null,
+          activeSessionTraceId: null,
+          hasExpiredSession: false,
+          canHoldSession: false,
+          disableNewSession: false,
+          heldSessions: [],
+          onHoldCurrentSession: vi.fn(),
+          onVoidCurrentSession: vi.fn(),
+          onResumeSession: vi.fn(),
+          onVoidHeldSession: vi.fn(),
+          onStartNewSession: vi.fn(),
+        }}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /hold/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /clear sale/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /resume sale/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /new sale/i })).toBeInTheDocument();
   });
 });

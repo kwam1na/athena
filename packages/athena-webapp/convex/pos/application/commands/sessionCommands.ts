@@ -619,10 +619,17 @@ export function createPosSessionCommandService(
         );
       }
 
-      await dependencies.inventory.releaseHold(
+      const releaseResult = await dependencies.inventory.releaseHold(
         item.productSkuId,
         item.quantity,
       );
+      if (!releaseResult.success) {
+        return failure(
+          "inventoryUnavailable",
+          releaseResult.message || "Failed to release inventory hold",
+        );
+      }
+
       await dependencies.repository.deleteSessionItem(args.itemId);
 
       const expiresAt = dependencies.calculateExpiration(now);

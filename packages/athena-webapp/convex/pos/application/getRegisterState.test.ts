@@ -78,4 +78,45 @@ describe("buildRegisterState", () => {
 
     expect(result.phase).toBe("readyToStart");
   });
+
+  it("keeps the visible drawer in readyToStart state", () => {
+    const result = buildRegisterState({
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "cashier-1", firstName: "Ama", lastName: "K" },
+      activeRegisterSession: {
+        _id: "drawer-1" as Id<"registerSession">,
+        expectedCash: 5000,
+        openedAt: 1710000000000,
+        openingFloat: 5000,
+        registerNumber: "A1",
+        status: "open",
+      },
+      activeSession: null,
+      heldSessions: [],
+    });
+
+    expect(result.phase).toBe("readyToStart");
+    expect(result.activeRegisterSession?._id).toBe("drawer-1");
+  });
+
+  it("keeps a closing drawer visible without changing resumable phase selection", () => {
+    const result = buildRegisterState({
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "cashier-1", firstName: "Ama", lastName: "K" },
+      activeRegisterSession: {
+        _id: "drawer-1" as Id<"registerSession">,
+        expectedCash: 5000,
+        openedAt: 1710000000000,
+        openingFloat: 5000,
+        registerNumber: "A1",
+        status: "closing",
+      },
+      activeSession: null,
+      heldSessions: [{ _id: "session-2", sessionNumber: "POS-002" }],
+    });
+
+    expect(result.phase).toBe("resumable");
+    expect(result.activeRegisterSession?.status).toBe("closing");
+    expect(result.resumableSession?._id).toBe("session-2");
+  });
 });

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -751,6 +751,68 @@ describe("useRegisterViewModel", () => {
     expect(result.current.customerPanel.customerInfo.name).toBe("Ama Serwa");
   });
 
+  it("keeps a preserved sale gated when drawer recovery binding fails", async () => {
+    mockRegisterState = {
+      phase: "active",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
+      activeRegisterSession: null,
+      activeSession: { _id: "session-1", sessionNumber: "POS-0001" },
+      resumableSession: null,
+    };
+    mockActiveSession = {
+      ...mockActiveSession!,
+      registerSessionId: undefined,
+      payments: [{ method: "cash", amount: 120, timestamp: 1_000 }],
+    };
+    mockBindSessionToRegisterSession.mockResolvedValueOnce(
+      userError({
+        code: "conflict",
+        message: "This sale is already bound to another drawer.",
+      }),
+    );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result, rerender } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    mockRegisterState = {
+      ...mockRegisterState,
+      activeRegisterSession: {
+        _id: "drawer-2",
+        status: "open",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        openingFloat: 5_000,
+        expectedCash: 5_000,
+        openedAt: Date.now(),
+      },
+    };
+
+    await act(async () => {
+      rerender();
+    });
+
+    await waitFor(() => {
+      expect(result.current.drawerGate?.errorMessage).toBe(
+        "This sale is already bound to another drawer.",
+      );
+    });
+    expect(result.current.drawerGate?.mode).toBe("recovery");
+    expect(result.current.productEntry.disabled).toBe(true);
+    expect(result.current.checkout.cartItems).toHaveLength(1);
+    expect(result.current.checkout.payments).toEqual([
+      expect.objectContaining({ method: "cash", amount: 120 }),
+    ]);
+    expect(result.current.customerPanel.customerInfo.name).toBe("Ama Serwa");
+    expect(mockStartSession).not.toHaveBeenCalled();
+  });
+
   it("keeps the operator on the drawer gate when opening the drawer fails", async () => {
     mockRegisterState = {
       phase: "readyToStart",
@@ -790,6 +852,37 @@ describe("useRegisterViewModel", () => {
       "Drawer already open for this register. Return to the active sale or review it in Cash Controls.",
     );
     expect(toast.error).not.toHaveBeenCalled();
+    expect(mockStartSession).not.toHaveBeenCalled();
+  });
+
+  it("validates the drawer opening float before sending an open-drawer command", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
+      activeRegisterSession: null,
+      activeSession: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    await act(async () => {
+      await result.current.drawerGate?.onSubmit?.();
+    });
+
+    expect(result.current.drawerGate?.errorMessage).toBe(
+      "Opening float required. Enter an amount greater than 0.",
+    );
+    expect(mockOpenDrawer).not.toHaveBeenCalled();
     expect(mockStartSession).not.toHaveBeenCalled();
   });
 
@@ -976,6 +1069,81 @@ describe("useRegisterViewModel", () => {
     );
   });
 
+  it("keeps local payment draft state but skips payment sync while drawer recovery is required", async () => {
+    mockRegisterState = {
+      phase: "active",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
+      activeRegisterSession: null,
+      activeSession: { _id: "session-1", sessionNumber: "POS-0001" },
+      resumableSession: null,
+    };
+    mockActiveSession = {
+      ...mockActiveSession!,
+      registerSessionId: undefined,
+    };
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.checkout.onAddPayment("cash", 120);
+    });
+
+    expect(result.current.checkout.payments).toEqual([
+      expect.objectContaining({ method: "cash", amount: 120 }),
+    ]);
+    expect(mockSyncSessionCheckoutState).not.toHaveBeenCalled();
+  });
+
+  it("blocks cart mutation handlers while drawer recovery is required", async () => {
+    mockRegisterState = {
+      phase: "active",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
+      activeRegisterSession: null,
+      activeSession: { _id: "session-1", sessionNumber: "POS-0001" },
+      resumableSession: null,
+    };
+    mockActiveSession = {
+      ...mockActiveSession!,
+      registerSessionId: undefined,
+    };
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    await act(async () => {
+      await result.current.cart.onUpdateQuantity(
+        "item-1" as Id<"posSessionItem">,
+        2,
+      );
+      await result.current.cart.onRemoveItem(
+        "item-1" as Id<"posSessionItem">,
+      );
+      await result.current.cart.onClearCart();
+    });
+
+    expect(mockAddItem).not.toHaveBeenCalled();
+    expect(mockRemoveItem).not.toHaveBeenCalled();
+    expect(mockReleaseSessionInventoryHoldsAndDeleteItems).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith(
+      "Drawer closed. Open the drawer before updating this sale.",
+    );
+  });
+
   it("keeps back-to-back payment additions in sync with the latest checkout state", async () => {
     const { useRegisterViewModel } = await import("./useRegisterViewModel");
     const { result } = renderHook(() => useRegisterViewModel());
@@ -1074,6 +1242,150 @@ describe("useRegisterViewModel", () => {
       }),
     );
     expect(mockCompleteTransaction).toHaveBeenCalled();
+  });
+
+  it("keeps the sale editable when completion fails", async () => {
+    mockCompleteTransaction.mockResolvedValueOnce(
+      userError({
+        code: "conflict",
+        message: "Open the cash drawer before completing this sale.",
+      }),
+    );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.checkout.onAddPayment("cash", 120);
+    });
+
+    let completed = true;
+    await act(async () => {
+      completed = await result.current.checkout.onCompleteTransaction();
+    });
+
+    expect(completed).toBe(false);
+    expect(result.current.checkout.isTransactionCompleted).toBe(false);
+    expect(result.current.checkout.completedOrderNumber).toBeNull();
+    expect(result.current.checkout.cartItems).toHaveLength(1);
+    expect(result.current.checkout.payments).toEqual([
+      expect.objectContaining({ method: "cash", amount: 120 }),
+    ]);
+    expect(result.current.productEntry.disabled).toBe(false);
+    expect(toast.error).toHaveBeenCalledWith(
+      "Drawer closed. Open the drawer before completing this sale.",
+    );
+  });
+
+  it("keeps draft state when holding the current sale fails", async () => {
+    mockActiveSession = {
+      ...mockActiveSession!,
+      payments: [{ method: "card", amount: 120, timestamp: 1_000 }],
+    };
+    mockHoldSession.mockResolvedValueOnce(
+      userError({
+        code: "conflict",
+        message: "Unable to hold this sale right now.",
+      }),
+    );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("body wave");
+    });
+
+    await act(async () => {
+      await result.current.sessionPanel?.onHoldCurrentSession();
+    });
+
+    expect(result.current.checkout.cartItems).toHaveLength(1);
+    expect(result.current.checkout.payments).toEqual([
+      expect.objectContaining({ method: "card", amount: 120 }),
+    ]);
+    expect(result.current.customerPanel.customerInfo.name).toBe("Ama Serwa");
+    expect(result.current.cashierCard?.cashierName).toBe("Ama K.");
+    expect(result.current.productEntry.productSearchQuery).toBe("body wave");
+    expect(toast.success).not.toHaveBeenCalledWith("Sale placed on hold.");
+  });
+
+  it("keeps draft state and does not start a new sale when auto-hold fails", async () => {
+    mockHoldSession.mockResolvedValueOnce(
+      userError({
+        code: "conflict",
+        message: "Unable to hold this sale right now.",
+      }),
+    );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    await act(async () => {
+      await result.current.sessionPanel?.onStartNewSession();
+    });
+
+    expect(mockStartSession).not.toHaveBeenCalled();
+    expect(result.current.checkout.cartItems).toHaveLength(1);
+    expect(result.current.customerPanel.customerInfo.name).toBe("Ama Serwa");
+    expect(result.current.cashierCard?.cashierName).toBe("Ama K.");
+  });
+
+  it("keeps draft state and does not resume another sale when auto-hold fails", async () => {
+    mockHeldSessions = [
+      {
+        _id: "session-2" as Id<"posSession">,
+        expiresAt: Date.now() + 60_000,
+        sessionNumber: "POS-0002",
+        updatedAt: Date.now(),
+        cartItems: [],
+        customer: null,
+      },
+    ];
+    mockHoldSession.mockResolvedValueOnce(
+      userError({
+        code: "conflict",
+        message: "Unable to hold this sale right now.",
+      }),
+    );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    await act(async () => {
+      await result.current.sessionPanel?.onResumeSession(
+        "session-2" as Id<"posSession">,
+      );
+    });
+
+    expect(mockResumeSession).not.toHaveBeenCalled();
+    expect(result.current.checkout.cartItems).toHaveLength(1);
+    expect(result.current.customerPanel.customerInfo.name).toBe("Ama Serwa");
+    expect(result.current.cashierCard?.cashierName).toBe("Ama K.");
   });
 
   it("commits customer changes through the session update path", async () => {
@@ -1285,6 +1597,95 @@ describe("useRegisterViewModel", () => {
     });
 
     expect(mockUpdateSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not apply queued customer attribution commits to the previous active session", async () => {
+    const firstUpdate = deferred<ReturnType<typeof ok>>();
+    mockUpdateSession
+      .mockReset()
+      .mockImplementationOnce(() => firstUpdate.promise)
+      .mockResolvedValue(
+        ok({
+          sessionId: "session-2" as Id<"posSession">,
+          expiresAt: Date.now() + 60_000,
+        }),
+      );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result, rerender } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    let firstCommit!: Promise<void>;
+    await act(async () => {
+      firstCommit = result.current.customerPanel.onCustomerCommitted({
+        customerProfileId: "profile-2" as Id<"customerProfile">,
+        name: "Efua Mensah",
+        email: "efua@example.com",
+        phone: "555-2222",
+      });
+      await Promise.resolve();
+    });
+
+    expect(mockUpdateSession).toHaveBeenCalledTimes(1);
+    expect(mockUpdateSession).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        sessionId: "session-1",
+        customerProfileId: "profile-2",
+      }),
+    );
+
+    mockActiveSession = {
+      ...mockActiveSession!,
+      _id: "session-2" as Id<"posSession">,
+      sessionNumber: "SES-002",
+    };
+
+    await act(async () => {
+      rerender();
+    });
+
+    let secondCommit!: Promise<void>;
+    await act(async () => {
+      secondCommit = result.current.customerPanel.onCustomerCommitted({
+        customerProfileId: "profile-3" as Id<"customerProfile">,
+        name: "Kofi Boateng",
+        email: "kofi@example.com",
+        phone: "555-3333",
+      });
+      await Promise.resolve();
+    });
+
+    firstUpdate.resolve(
+      ok({
+        sessionId: "session-1" as Id<"posSession">,
+        expiresAt: Date.now() + 60_000,
+      }),
+    );
+
+    await act(async () => {
+      await Promise.all([firstCommit, secondCommit]);
+    });
+
+    expect(mockUpdateSession).toHaveBeenCalledTimes(2);
+    expect(mockUpdateSession).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        sessionId: "session-2",
+        customerProfileId: "profile-3",
+      }),
+    );
+    expect(mockUpdateSession).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "session-1",
+        customerProfileId: "profile-3",
+      }),
+    );
   });
 
   it("commits name-only attribution as sale-only customer info without customer ids", async () => {

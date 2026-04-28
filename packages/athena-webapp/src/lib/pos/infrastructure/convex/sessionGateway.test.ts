@@ -1,11 +1,26 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ok, userError } from "~/shared/commandResult";
 import {
   mapActiveSessionDto,
   mapHeldSessionsDto,
 } from "./sessionGateway.mapper";
+import { useConvexSessionActions } from "./sessionGateway";
+
+const { mockUseMutation } = vi.hoisted(() => ({
+  mockUseMutation: vi.fn(),
+}));
+
+vi.mock("convex/react", () => ({
+  useMutation: (...args: unknown[]) => mockUseMutation(...args),
+  useQuery: vi.fn(),
+}));
 
 describe("mapActiveSessionDto", () => {
+  beforeEach(() => {
+    mockUseMutation.mockReset();
+  });
+
   it("normalizes raw session cart items into the shared cart item shape", () => {
     const session = mapActiveSessionDto({
       _id: "session-1",
@@ -65,6 +80,53 @@ describe("mapActiveSessionDto", () => {
         quantity: 1,
       }),
     ]);
+  });
+
+  it("carries drawer, customer profile, payment, and checkout state fields", () => {
+    const session = mapActiveSessionDto({
+      _id: "session-1",
+      _creationTime: 1,
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      staffProfileId: "staff-1",
+      status: "active",
+      registerNumber: "REG-1",
+      registerSessionId: "drawer-1",
+      sessionNumber: "SES-001",
+      customerId: "customer-1",
+      customerProfileId: "profile-1",
+      subtotal: 120,
+      tax: 0,
+      total: 120,
+      payments: [{ method: "cash", amount: 120, timestamp: 1_000 }],
+      checkoutStateVersion: 3,
+      holdReason: undefined,
+      expiresAt: 10_000,
+      completedAt: undefined,
+      transactionId: undefined,
+      heldAt: undefined,
+      holdExpiresAt: undefined,
+      notes: undefined,
+      createdAt: 1,
+      updatedAt: 2,
+      customer: {
+        name: "Ama K",
+        customerProfileId: "profile-1",
+      },
+      cartItems: [],
+    } as never);
+
+    expect(session).toEqual(
+      expect.objectContaining({
+        registerSessionId: "drawer-1",
+        customerProfileId: "profile-1",
+        payments: [{ method: "cash", amount: 120, timestamp: 1_000 }],
+        checkoutStateVersion: 3,
+        customer: expect.objectContaining({
+          customerProfileId: "profile-1",
+        }),
+      }),
+    );
   });
 });
 
@@ -127,5 +189,136 @@ describe("mapHeldSessionsDto", () => {
         barcode: "",
       }),
     ]);
+  });
+});
+
+describe("useConvexSessionActions", () => {
+  beforeEach(() => {
+    mockUseMutation.mockReset();
+  });
+
+  it("normalizes resume command results while preserving register session payloads", async () => {
+    const resumeSessionMutation = vi.fn().mockResolvedValue(
+      ok({
+        sessionId: "session-1",
+        registerSessionId: "drawer-1",
+        expiresAt: 10_000,
+      }),
+    );
+    mockUseMutation.mockReturnValue(vi.fn());
+    mockUseMutation.mockReturnValueOnce(resumeSessionMutation);
+
+    const actions = useConvexSessionActions();
+    const result = await actions.resumeSession({
+      sessionId: "session-1",
+      staffProfileId: "staff-1",
+      registerSessionId: "drawer-1",
+    } as never);
+
+    expect(result).toEqual({
+      kind: "ok",
+      data: {
+        sessionId: "session-1",
+        registerSessionId: "drawer-1",
+        expiresAt: 10_000,
+      },
+    });
+    expect(resumeSessionMutation).toHaveBeenCalledWith({
+      sessionId: "session-1",
+      staffProfileId: "staff-1",
+      registerSessionId: "drawer-1",
+    });
+  });
+
+  it("normalizes recover/bind command failures without throwing", async () => {
+    const bindSessionMutation = vi.fn().mockResolvedValue(
+      userError({
+        code: "precondition_failed",
+        message: "Open the cash drawer before recovering this sale.",
+      }),
+    );
+    mockUseMutation.mockReturnValue(vi.fn());
+    mockUseMutation
+      .mockReturnValueOnce(vi.fn())
+      .mockReturnValueOnce(bindSessionMutation);
+
+    const actions = useConvexSessionActions();
+    const result = await actions.bindSessionToRegisterSession({
+      sessionId: "session-1",
+      staffProfileId: "staff-1",
+      registerSessionId: "drawer-1",
+    } as never);
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: "Open the cash drawer before recovering this sale.",
+      },
+    });
+  });
+
+  it("preserves checkout sync payload fields from modify command results", async () => {
+    const syncSessionCheckoutStateMutation = vi.fn().mockResolvedValue(
+      ok({
+        sessionId: "session-1",
+        payments: [{ method: "card", amount: 120, timestamp: 1_000 }],
+        checkoutStateVersion: 4,
+        customerProfileId: "profile-1",
+        expiresAt: 10_000,
+      }),
+    );
+    mockUseMutation.mockReturnValue(vi.fn());
+    mockUseMutation
+      .mockReturnValueOnce(vi.fn())
+      .mockReturnValueOnce(vi.fn())
+      .mockReturnValueOnce(vi.fn())
+      .mockReturnValueOnce(vi.fn())
+      .mockReturnValueOnce(syncSessionCheckoutStateMutation);
+
+    const actions = useConvexSessionActions();
+    const result = await actions.syncSessionCheckoutState({
+      sessionId: "session-1",
+      staffProfileId: "staff-1",
+      payments: [{ method: "card", amount: 120, timestamp: 1_000 }],
+      checkoutStateVersion: 4,
+    } as never);
+
+    expect(result).toEqual({
+      kind: "ok",
+      data: {
+        sessionId: "session-1",
+        payments: [{ method: "card", amount: 120, timestamp: 1_000 }],
+        checkoutStateVersion: 4,
+        customerProfileId: "profile-1",
+        expiresAt: 10_000,
+      },
+    });
+  });
+
+  it("normalizes thrown command faults to unexpected errors", async () => {
+    const removeItemMutation = vi.fn().mockRejectedValue(new Error("boom"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    mockUseMutation.mockReturnValue(vi.fn());
+    mockUseMutation
+      .mockReturnValueOnce(vi.fn())
+      .mockReturnValueOnce(vi.fn())
+      .mockReturnValueOnce(vi.fn())
+      .mockReturnValueOnce(vi.fn())
+      .mockReturnValueOnce(vi.fn())
+      .mockReturnValueOnce(vi.fn())
+      .mockReturnValueOnce(removeItemMutation);
+
+    const actions = useConvexSessionActions();
+    const result = await actions.removeItem({ itemId: "item-1" } as never);
+
+    expect(result).toEqual({
+      kind: "unexpected_error",
+      error: {
+        title: "Something went wrong",
+        message: "Please try again.",
+        traceId: undefined,
+      },
+    });
   });
 });

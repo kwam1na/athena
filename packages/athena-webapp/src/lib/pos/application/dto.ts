@@ -193,6 +193,7 @@ export interface PosPaymentDto {
 
 export interface PosCompleteTransactionInput {
   sessionId: Id<"posSession">;
+  staffProfileId: Id<"staffProfile">;
   payments: PosPaymentDto[];
   notes?: string;
   subtotal: number;

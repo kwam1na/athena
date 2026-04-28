@@ -46,6 +46,7 @@ export function useConvexCommandGateway(): PosCommandGateway {
     ): Promise<PosCompleteTransactionResultDto> {
       return completeSessionMutation({
         sessionId: input.sessionId,
+        staffProfileId: input.staffProfileId,
         payments: input.payments,
         notes: input.notes,
         subtotal: input.subtotal,
