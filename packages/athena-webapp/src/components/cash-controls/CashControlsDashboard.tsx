@@ -2,7 +2,7 @@ import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
-import { capitalizeWords, currencyFormatter } from "@/lib/utils";
+import { capitalizeWords, cn, currencyFormatter } from "@/lib/utils";
 import { formatStoredAmount } from "@/lib/pos/displayAmounts";
 import { api } from "~/convex/_generated/api";
 import View from "../View";
@@ -60,6 +60,7 @@ export type CashControlsDashboardSnapshot = {
   openSessions: CashControlsDashboardSession[];
   pendingCloseouts: CashControlsDashboardSession[];
   recentDeposits: CashControlsDashboardDeposit[];
+  registerSessions: CashControlsDashboardSession[];
   unresolvedVariances: CashControlsDashboardSession[];
 };
 
@@ -100,7 +101,22 @@ function getVarianceTone(variance?: number) {
     return "text-foreground";
   }
 
-  return variance > 0 ? "text-emerald-700" : "text-destructive";
+  return variance > 0 ? "text-success" : "text-danger";
+}
+
+function getStatusBadgeClass(status: string) {
+  switch (status) {
+    case "active":
+      return "border-transparent bg-success/10 text-success";
+    case "closing":
+      return "border-transparent bg-warning/15 text-warning";
+    case "open":
+      return "border-transparent bg-success/10 text-success";
+    case "closed":
+      return "border-transparent bg-muted text-muted-foreground";
+    default:
+      return "border-transparent bg-muted text-muted-foreground";
+  }
 }
 
 function SummaryStrip({
@@ -139,16 +155,16 @@ function SummaryStrip({
   ];
 
   return (
-    <dl className="grid gap-4 sm:grid-cols-2">
+    <dl className="divide-y divide-border/70 rounded-lg border border-border bg-surface-raised">
       {items.map((item) => (
         <div
-          className="space-y-1 border-b border-stone-200/70 pb-3 last:border-b-0 last:pb-0 sm:[&:nth-last-child(-n+2)]:border-b-0 sm:[&:nth-last-child(-n+2)]:pb-0"
+          className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-layout-md px-layout-md py-layout-sm"
           key={item.label}
         >
-          <dt className="text-[11px] font-medium uppercase tracking-[0.24em] text-amber-800/70">
+          <dt className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
             {item.label}
           </dt>
-          <dd className="font-mono text-2xl tracking-[-0.04em] text-stone-950">
+          <dd className="whitespace-nowrap text-right font-mono text-xl text-foreground">
             {item.value}
           </dd>
         </div>
@@ -179,51 +195,41 @@ function SessionLedger({
   title: string;
 }) {
   const navigate = useNavigate();
+  const tableHeadClass =
+    "text-[11px] uppercase tracking-[0.18em] text-muted-foreground";
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-layout-md">
       <div className="flex items-end justify-between gap-4">
-        <div className="space-y-1">
-          <h2 className="text-2xl font-semibold tracking-[-0.04em] text-stone-950">
+        <div className="space-y-layout-2xs">
+          <h2 className="font-display text-2xl font-semibold tracking-tight text-foreground">
             {title}
           </h2>
-          <p className="text-sm text-stone-600">{description}</p>
+          <p className="text-sm text-muted-foreground">{description}</p>
         </div>
       </div>
 
       {sessions.length === 0 ? (
-        <div className="rounded-[22px] bg-white/70 px-6 py-8 ring-1 ring-stone-200/70">
+        <div className="rounded-lg border border-dashed border-border bg-surface-raised px-layout-lg py-layout-xl">
           <EmptyState description={emptyDescription} title={emptyTitle} />
         </div>
       ) : (
-        <div className="overflow-hidden rounded-[22px] bg-white/80 ring-1 ring-stone-200/70">
+        <div className="overflow-hidden rounded-lg border border-border bg-surface-raised">
           <Table>
             <TableHeader>
-              <TableRow className="border-b border-stone-200/80 hover:bg-transparent">
-                <TableHead className="text-[11px] uppercase tracking-[0.18em] text-stone-500">
-                  Register
-                </TableHead>
-                <TableHead className="text-[11px] uppercase tracking-[0.18em] text-stone-500">
-                  Status
-                </TableHead>
-                <TableHead className="text-[11px] uppercase tracking-[0.18em] text-stone-500">
-                  Opened
-                </TableHead>
-                <TableHead className="text-[11px] uppercase tracking-[0.18em] text-stone-500">
-                  Expected
-                </TableHead>
-                <TableHead className="text-[11px] uppercase tracking-[0.18em] text-stone-500">
-                  Deposited
-                </TableHead>
-                <TableHead className="text-[11px] uppercase tracking-[0.18em] text-stone-500">
-                  Variance
-                </TableHead>
+              <TableRow className="border-b border-border hover:bg-transparent">
+                <TableHead className={tableHeadClass}>Register</TableHead>
+                <TableHead className={tableHeadClass}>Status</TableHead>
+                <TableHead className={tableHeadClass}>Opened</TableHead>
+                <TableHead className={tableHeadClass}>Expected</TableHead>
+                <TableHead className={tableHeadClass}>Deposited</TableHead>
+                <TableHead className={tableHeadClass}>Variance</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {sessions.map((session) => (
                 <TableRow
-                  className="group cursor-pointer border-b border-stone-200/70 hover:bg-[#f8f2e8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-inset"
+                  className="group cursor-pointer border-b border-border/70 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                   key={session._id}
                   onClick={() =>
                     navigate({
@@ -257,12 +263,12 @@ function SessionLedger({
                 >
                   <TableCell>
                     <div className="space-y-1">
-                      <p className="font-medium text-stone-950">
+                      <p className="font-medium text-foreground">
                         {formatRegisterName(session.registerNumber)}
                       </p>
                       {showPendingApproval &&
                       session.pendingApprovalRequest?.reason ? (
-                        <p className="max-w-md text-xs text-stone-500">
+                        <p className="max-w-md text-xs text-muted-foreground">
                           {session.pendingApprovalRequest.reason}
                         </p>
                       ) : null}
@@ -270,20 +276,20 @@ function SessionLedger({
                   </TableCell>
                   <TableCell>
                     <Badge
-                      className="border-stone-300/80 bg-stone-100 text-stone-700"
+                      className={getStatusBadgeClass(session.status)}
                       size="sm"
                       variant="outline"
                     >
                       {formatStatusLabel(session.status)}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-stone-600">
+                  <TableCell className="text-muted-foreground">
                     {formatTimestamp(session.openedAt)}
                   </TableCell>
-                  <TableCell className="font-mono text-stone-950">
+                  <TableCell className="font-mono text-foreground">
                     {formatCurrency(currency, session.expectedCash)}
                   </TableCell>
-                  <TableCell className="font-mono text-stone-950">
+                  <TableCell className="font-mono text-foreground">
                     {formatCurrency(currency, session.totalDeposited)}
                   </TableCell>
                   <TableCell
@@ -312,49 +318,40 @@ function DepositsLedger({
   orgUrlSlug: string;
   storeUrlSlug: string;
 }) {
+  const tableHeadClass =
+    "text-[11px] uppercase tracking-[0.18em] text-muted-foreground";
+
   return (
-    <section className="space-y-4">
-      <div className="space-y-1">
-        <h2 className="text-2xl font-semibold tracking-[-0.04em] text-stone-950">
+    <section className="space-y-layout-md">
+      <div className="space-y-layout-2xs">
+        <h2 className="font-display text-2xl font-semibold tracking-tight text-foreground">
           Recent deposits
         </h2>
-        <p className="text-sm text-stone-600">
+        <p className="text-sm text-muted-foreground">
           Recorded bank deposits grouped by register, with a quick path back
           into deposit entry when another drop needs logging.
         </p>
       </div>
 
       {deposits.length === 0 ? (
-        <div className="rounded-[22px] bg-white/70 px-6 py-8 ring-1 ring-stone-200/70">
+        <div className="rounded-lg border border-dashed border-border bg-surface-raised px-layout-lg py-layout-xl">
           <EmptyState
             description="Cash drops will appear here once deposits start getting recorded."
             title="No deposits recorded yet"
           />
         </div>
       ) : (
-        <div className="overflow-hidden rounded-[22px] bg-white/80 ring-1 ring-stone-200/70">
+        <div className="overflow-hidden rounded-lg border border-border bg-surface-raised">
           <Table>
             <TableHeader>
-              <TableRow className="border-b border-stone-200/80 hover:bg-transparent">
-                <TableHead className="text-[11px] uppercase tracking-[0.18em] text-stone-500">
-                  Register
-                </TableHead>
-                <TableHead className="text-[11px] uppercase tracking-[0.18em] text-stone-500">
-                  Amount
-                </TableHead>
-                <TableHead className="text-[11px] uppercase tracking-[0.18em] text-stone-500">
-                  Recorded
-                </TableHead>
-                <TableHead className="text-[11px] uppercase tracking-[0.18em] text-stone-500">
-                  Reference
-                </TableHead>
-                <TableHead className="text-[11px] uppercase tracking-[0.18em] text-stone-500">
-                  By
-                </TableHead>
-                <TableHead className="text-[11px] uppercase tracking-[0.18em] text-stone-500">
-                  Notes
-                </TableHead>
-                <TableHead className="text-right text-[11px] uppercase tracking-[0.18em] text-stone-500">
+              <TableRow className="border-b border-border hover:bg-transparent">
+                <TableHead className={tableHeadClass}>Register</TableHead>
+                <TableHead className={tableHeadClass}>Amount</TableHead>
+                <TableHead className={tableHeadClass}>Recorded</TableHead>
+                <TableHead className={tableHeadClass}>Reference</TableHead>
+                <TableHead className={tableHeadClass}>By</TableHead>
+                <TableHead className={tableHeadClass}>Notes</TableHead>
+                <TableHead className={cn(tableHeadClass, "text-right")}>
                   Next step
                 </TableHead>
               </TableRow>
@@ -362,16 +359,16 @@ function DepositsLedger({
             <TableBody>
               {deposits.map((deposit) => (
                 <TableRow
-                  className="group border-b border-stone-200/70 hover:bg-[#f8f2e8]"
+                  className="group border-b border-border/70 transition-colors hover:bg-muted/40"
                   key={deposit._id}
                 >
-                  <TableCell className="font-medium text-stone-950">
+                  <TableCell className="font-medium text-foreground">
                     {formatRegisterName(deposit.registerNumber)}
                   </TableCell>
-                  <TableCell className="font-mono text-stone-950">
+                  <TableCell className="font-mono text-foreground">
                     {formatCurrency(currency, deposit.amount)}
                   </TableCell>
-                  <TableCell className="text-stone-600">
+                  <TableCell className="text-muted-foreground">
                     {formatTimestamp(deposit.recordedAt)}
                   </TableCell>
                   <TableCell>{deposit.reference ?? "—"}</TableCell>
@@ -387,7 +384,7 @@ function DepositsLedger({
                     {deposit.registerSessionId ? (
                       <Button
                         asChild
-                        className="border-stone-300 bg-white/90 text-stone-800 hover:bg-white"
+                        className="border-border bg-background text-foreground hover:bg-surface"
                         size="sm"
                         variant="outline"
                       >
@@ -404,7 +401,7 @@ function DepositsLedger({
                         </Link>
                       </Button>
                     ) : (
-                      <span className="text-xs text-stone-400">—</span>
+                      <span className="text-xs text-muted-foreground">—</span>
                     )}
                   </TableCell>
                 </TableRow>
@@ -438,32 +435,13 @@ export function CashControlsDashboardContent({
         />
       }
     >
-      <FadeIn className="container mx-auto space-y-6 py-8">
-        <div className="space-y-6">
-          <section className="overflow-hidden rounded-[28px] bg-white/80 ring-1 ring-stone-200/70">
-            <div className="grid gap-0 xl:grid-cols-[minmax(0,1.22fr)_320px]">
-              <div className="border-b border-stone-200/80 px-6 py-6 xl:border-b-0 xl:border-r">
-                {isLoading ? (
-                  <div className="py-6 text-sm text-stone-600">
-                    Loading cash controls...
-                  </div>
-                ) : (
-                  <SessionLedger
-                    currency={currency}
-                    description="Live drawers with expected cash, deposited totals, and access to deposit entry."
-                    emptyDescription="New register sessions will appear here after the drawer opens."
-                    emptyTitle="No open register sessions"
-                    orgUrlSlug={orgUrlSlug}
-                    sessions={dashboardSnapshot.openSessions}
-                    storeUrlSlug={storeUrlSlug}
-                    title="Register sessions"
-                  />
-                )}
-              </div>
-
-              <aside className="px-6 py-6">
-                <div className="space-y-3">
-                  <p className="text-[11px] font-medium uppercase tracking-[0.24em] text-stone-500">
+      <FadeIn className="container mx-auto py-layout-xl">
+        <div className="space-y-layout-lg">
+          <section className="overflow-hidden rounded-lg border border-border bg-surface shadow-surface">
+            <div className="grid gap-0 xl:grid-cols-[minmax(280px,320px)_minmax(0,1fr)]">
+              <aside className="border-b border-border bg-muted/20 p-layout-lg xl:border-b-0 xl:border-r">
+                <div className="space-y-layout-md">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
                     Summary
                   </p>
                   <SummaryStrip
@@ -472,10 +450,29 @@ export function CashControlsDashboardContent({
                   />
                 </div>
               </aside>
+
+              <div className="p-layout-lg">
+                {isLoading ? (
+                  <div className="py-layout-lg text-sm text-muted-foreground">
+                    Loading cash controls...
+                  </div>
+                ) : (
+                  <SessionLedger
+                    currency={currency}
+                    description="Register sessions with expected cash, deposited totals, and access to session detail."
+                    emptyDescription="New register sessions will appear here after the drawer opens."
+                    emptyTitle="No register sessions"
+                    orgUrlSlug={orgUrlSlug}
+                    sessions={dashboardSnapshot.registerSessions}
+                    storeUrlSlug={storeUrlSlug}
+                    title="Register sessions"
+                  />
+                )}
+              </div>
             </div>
           </section>
 
-          <section className="rounded-[24px] bg-white/80 px-6 py-6 ring-1 ring-stone-200/70">
+          <section className="rounded-lg border border-border bg-surface p-layout-lg shadow-surface">
             <DepositsLedger
               currency={currency}
               deposits={dashboardSnapshot.recentDeposits}
@@ -553,6 +550,7 @@ export function CashControlsDashboard() {
           openSessions: [],
           pendingCloseouts: [],
           recentDeposits: [],
+          registerSessions: [],
           unresolvedVariances: [],
         }
       }

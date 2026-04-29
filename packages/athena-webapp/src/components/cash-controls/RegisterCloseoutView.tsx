@@ -18,6 +18,7 @@ import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import { userError } from "~/shared/commandResult";
 import { formatStaffDisplayName } from "~/shared/staffDisplayName";
+import { formatReviewReason } from "./formatReviewReason";
 import { getOrigin } from "@/lib/navigationUtils";
 import { EmptyState } from "../states/empty/empty-state";
 import { WorkflowTraceRouteLink } from "../traces/WorkflowTraceRouteLink";
@@ -143,21 +144,6 @@ function getVarianceTone(variance: null | number) {
   }
 
   return variance > 0 ? "text-emerald-700" : "text-destructive";
-}
-
-function formatReviewReason(
-  formatter: ReturnType<typeof currencyFormatter>,
-  reason?: string,
-) {
-  if (!reason) {
-    return undefined;
-  }
-
-  return reason.replace(
-    /Variance of (-?\d+) exceeded the closeout approval threshold\./,
-    (_match, rawVariance) =>
-      `Variance of ${formatStoredAmount(formatter, Number(rawVariance))} exceeded the closeout approval threshold.`,
-  );
 }
 
 function getDefaultActiveSessionId(registerSessions: RegisterCloseoutSession[]) {

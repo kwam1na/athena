@@ -243,6 +243,7 @@ export function buildCashControlsDashboardSnapshot(args: {
     );
 
   return {
+    registerSessions: sessionSummaries,
     openSessions: sessionSummaries.filter((registerSession) =>
       isPosUsableRegisterSessionStatus(registerSession.status)
     ),
@@ -282,28 +283,11 @@ async function listRegisterSessionsForDashboard(
   ctx: Pick<QueryCtx, "db">,
   storeId: Id<"store">
 ) {
-  const [openSessions, activeSessions, closingSessions] = await Promise.all([
-    ctx.db
-      .query("registerSession")
-      .withIndex("by_storeId_status", (q) =>
-        q.eq("storeId", storeId).eq("status", "open")
-      )
-      .take(SESSION_LIMIT),
-    ctx.db
-      .query("registerSession")
-      .withIndex("by_storeId_status", (q) =>
-        q.eq("storeId", storeId).eq("status", "active")
-      )
-      .take(SESSION_LIMIT),
-    ctx.db
-      .query("registerSession")
-      .withIndex("by_storeId_status", (q) =>
-        q.eq("storeId", storeId).eq("status", "closing")
-      )
-      .take(SESSION_LIMIT),
-  ]);
-
-  return [...openSessions, ...activeSessions, ...closingSessions];
+  return ctx.db
+    .query("registerSession")
+    .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+    .order("desc")
+    .take(SESSION_LIMIT);
 }
 
 async function listStoreDeposits(

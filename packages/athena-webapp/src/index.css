@@ -17,8 +17,7 @@
 @layer base {
   :root {
     --font-sans: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-    --font-display: "Inter", "Palatino Linotype", "Book Antiqua",
-      Georgia, serif;
+    --font-display: var(--font-sans);
     --font-mono: "SFMono-Regular", "JetBrains Mono", "Menlo", monospace;
 
     --background: 0 0% 100%;

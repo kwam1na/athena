@@ -88,6 +88,24 @@ const baseSnapshot = {
     registerNumber?: string | null;
     registerSessionId?: string | null;
   }>,
+  registerSessions: [] as Array<{
+    _id: string;
+    countedCash?: number;
+    expectedCash: number;
+    openedAt: number;
+    openingFloat: number;
+    pendingApprovalRequest?: {
+      _id: string;
+      reason?: string | null;
+      requestedByStaffName?: string | null;
+      status: string;
+    } | null;
+    registerNumber?: string | null;
+    status: string;
+    totalDeposited: number;
+    variance?: number;
+    workflowTraceId?: string | null;
+  }>,
   unresolvedVariances: [] as Array<{
     _id: string;
     countedCash?: number;
@@ -188,6 +206,49 @@ describe("CashControlsDashboardContent", () => {
               registerSessionId: "session-open",
             },
           ],
+          registerSessions: [
+            {
+              _id: "session-closing",
+              countedCash: 17100,
+              expectedCash: 17600,
+              openedAt: new Date("2026-04-21T07:30:00.000Z").getTime(),
+              openingFloat: 5000,
+              pendingApprovalRequest: {
+                _id: "approval-1",
+                reason: "Variance review required.",
+                requestedByStaffName: "Ama Mensah",
+                status: "pending",
+              },
+              registerNumber: "Register 3",
+              status: "closing",
+              totalDeposited: 2400,
+              variance: -500,
+              workflowTraceId: "register_session:reg-3",
+            },
+            {
+              _id: "session-open",
+              expectedCash: 24800,
+              openedAt: new Date("2026-04-21T09:15:00.000Z").getTime(),
+              openingFloat: 5000,
+              registerNumber: "Register 1",
+              status: "active",
+              totalDeposited: 8000,
+              variance: 0,
+              workflowTraceId: "register_session:reg-1",
+            },
+            {
+              _id: "session-closed",
+              countedCash: 5000,
+              expectedCash: 5000,
+              openedAt: new Date("2026-04-20T09:15:00.000Z").getTime(),
+              openingFloat: 5000,
+              registerNumber: "Register 4",
+              status: "closed",
+              totalDeposited: 0,
+              variance: 0,
+              workflowTraceId: "register_session:reg-4",
+            },
+          ],
           unresolvedVariances: [
             {
               _id: "session-closeout",
@@ -222,10 +283,9 @@ describe("CashControlsDashboardContent", () => {
     expect(screen.getAllByText("Recent deposits").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Register 1").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Register 3").length).toBeGreaterThan(0);
+    expect(screen.getByText("Register 4")).toBeInTheDocument();
     expect(screen.getByText("Midday safe drop")).toBeInTheDocument();
     expect(screen.getByText("BANK-339")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Cash Controls" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Closeouts" })).toBeInTheDocument();
   });
 
   it("surfaces a drawer opened from POS in the cash-controls ledgers", () => {
@@ -235,6 +295,19 @@ describe("CashControlsDashboardContent", () => {
         dashboardSnapshot={{
           ...baseSnapshot,
           openSessions: [
+            {
+              _id: "session-pos-open",
+              expectedCash: 6200,
+              openedAt: new Date("2026-04-22T08:45:00.000Z").getTime(),
+              openingFloat: 5000,
+              registerNumber: "Register 2",
+              status: "active",
+              totalDeposited: 1200,
+              variance: 0,
+              workflowTraceId: "register_session:drawer-pos-open",
+            },
+          ],
+          registerSessions: [
             {
               _id: "session-pos-open",
               expectedCash: 6200,
@@ -278,6 +351,18 @@ describe("CashControlsDashboardContent", () => {
         dashboardSnapshot={{
           ...baseSnapshot,
           openSessions: [
+            {
+              _id: "session-open",
+              expectedCash: 24800,
+              openedAt: new Date("2026-04-21T09:15:00.000Z").getTime(),
+              openingFloat: 5000,
+              registerNumber: "Register 1",
+              status: "active",
+              totalDeposited: 8000,
+              variance: 0,
+            },
+          ],
+          registerSessions: [
             {
               _id: "session-open",
               expectedCash: 24800,

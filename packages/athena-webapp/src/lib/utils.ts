@@ -1,6 +1,7 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { ZodError } from "zod";
+import { currencyFormatter as sharedCurrencyFormatter } from "~/shared/currencyFormatter";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -26,12 +27,7 @@ export function capitalizeWords(str: string): string {
 }
 
 export function currencyFormatter(currency: string) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  });
+  return sharedCurrencyFormatter(currency);
 }
 
 export function toSlug(str: string) {

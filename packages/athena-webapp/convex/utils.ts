@@ -1,6 +1,7 @@
 import { Address, OnlineOrder } from "../types";
 import { ALL_COUNTRIES } from "./constants/countries";
 import { accraNeighborhoods, ghanaRegions } from "./constants/ghana";
+import { currencyFormatter as sharedCurrencyFormatter } from "../shared/currencyFormatter";
 
 export function toSlug(str: string) {
   return str
@@ -45,12 +46,7 @@ export function capitalizeWords(str: string): string {
 }
 
 export function currencyFormatter(currency: string) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  });
+  return sharedCurrencyFormatter(currency);
 }
 
 export function formatDate(timestamp: number) {
