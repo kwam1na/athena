@@ -19,12 +19,17 @@ import {
 
 type SessionRecord = {
   _id: string;
+  sessionNumber: string;
+  storeId: string;
+  terminalId: string;
   status: "active" | "held" | "completed" | "void" | "expired";
   expiresAt: number;
   staffProfileId: string;
+  createdAt: number;
   updatedAt?: number;
   completedAt?: number;
   notes?: string;
+  workflowTraceId?: string;
 };
 
 function createMutationCtx(seed?: {
@@ -34,6 +39,9 @@ function createMutationCtx(seed?: {
 }) {
   const sessions = [...(seed?.sessions ?? [])];
   const terminals = [...(seed?.terminals ?? [])];
+  const workflowTraces: Array<Record<string, unknown>> = [];
+  const workflowTraceLookups: Array<Record<string, unknown>> = [];
+  const workflowTraceEvents: Array<Record<string, unknown>> = [];
 
   const db = {
     get: vi.fn(async (tableNameOrId: string, maybeId?: string) => {
@@ -51,14 +59,37 @@ function createMutationCtx(seed?: {
       return null;
     }),
     insert: vi.fn(async (tableName: string, doc: Record<string, unknown>) => {
+      if (tableName === "workflowTrace") {
+        const id = `workflow-trace-${workflowTraces.length + 1}`;
+        workflowTraces.push({ _id: id, ...doc });
+        return id;
+      }
+
+      if (tableName === "workflowTraceLookup") {
+        const id = `workflow-trace-lookup-${workflowTraceLookups.length + 1}`;
+        workflowTraceLookups.push({ _id: id, ...doc });
+        return id;
+      }
+
+      if (tableName === "workflowTraceEvent") {
+        const id = `workflow-trace-event-${workflowTraceEvents.length + 1}`;
+        workflowTraceEvents.push({ _id: id, ...doc });
+        return id;
+      }
+
       if (tableName !== "expenseSession") {
         return "inserted-id";
       }
 
       sessions.push({
         _id: "expense-session-inserted",
+        sessionNumber: doc.sessionNumber as string,
+        storeId: doc.storeId as string,
+        terminalId: doc.terminalId as string,
         expiresAt: doc.expiresAt as number,
         staffProfileId: doc.staffProfileId as string,
+        createdAt: doc.createdAt as number,
+        updatedAt: doc.updatedAt as number,
         status: doc.status as SessionRecord["status"],
       });
       return "expense-session-inserted";
@@ -77,11 +108,28 @@ function createMutationCtx(seed?: {
         Object.assign(session, patch);
       },
     ),
-    query: vi.fn(() => ({
+    query: vi.fn((tableName: string) => ({
       withIndex: vi.fn(() => ({
+        unique: vi.fn(async () => {
+          if (tableName === "workflowTrace") {
+            return workflowTraces[0] ?? null;
+          }
+
+          if (tableName === "workflowTraceLookup") {
+            return workflowTraceLookups[0] ?? null;
+          }
+
+          return null;
+        }),
         first: vi.fn(async () => seed?.latestSession ?? null),
         order: vi.fn(() => ({
-          first: vi.fn(async () => seed?.latestSession ?? null),
+          first: vi.fn(async () => {
+            if (tableName === "workflowTraceEvent") {
+              return workflowTraceEvents.at(-1) ?? null;
+            }
+
+            return seed?.latestSession ?? null;
+          }),
         })),
         take: vi.fn(async () => []),
       })),
@@ -97,9 +145,14 @@ function createMutationCtx(seed?: {
 function buildSession(overrides: Partial<SessionRecord>): SessionRecord {
   return {
     _id: "expense-session-1",
+    sessionNumber: "EXP-001",
+    storeId: "store-1",
+    terminalId: "terminal-1",
     status: "active",
     expiresAt: 4_102_444_800_000,
     staffProfileId: "staff-1",
+    createdAt: 1_000,
+    updatedAt: 1_000,
     ...overrides,
   };
 }

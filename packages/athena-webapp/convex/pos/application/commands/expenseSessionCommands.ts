@@ -11,6 +11,11 @@ import {
   type ExpenseSessionCommandRepository,
 } from "../../infrastructure/repositories/expenseSessionCommandRepository";
 import { isPosUsableRegisterSessionStatus } from "../../../../shared/registerSessionStatus";
+import {
+  createExpenseSessionTraceRecorder,
+  type ExpenseSessionTraceRecorder,
+  type ExpenseSessionTraceStage,
+} from "./expenseSessionTracing";
 
 type CommandFailureStatus =
   | "cashierMismatch"
@@ -125,6 +130,7 @@ type ExpenseSessionCommandDependencies = {
   calculateExpiration: (baseTime: number) => number;
   repository: ExpenseSessionCommandRepository;
   inventory: PosInventoryHoldGateway;
+  traceRecorder?: ExpenseSessionTraceRecorder;
 };
 
 export function createExpenseSessionCommandService(
@@ -216,6 +222,11 @@ export function createExpenseSessionCommandService(
         expiresAt,
       });
 
+      await recordSessionTrace(dependencies, {
+        sessionId,
+        stage: "started",
+      });
+
       return success({ sessionId, expiresAt });
     },
 
@@ -259,6 +270,12 @@ export function createExpenseSessionCommandService(
         resumedAt: now,
         updatedAt: now,
         expiresAt,
+      });
+
+      await recordSessionTrace(dependencies, {
+        sessionId: args.sessionId,
+        stage: "resumed",
+        occurredAt: now,
       });
 
       return success({ sessionId: args.sessionId, expiresAt });
@@ -318,6 +335,12 @@ export function createExpenseSessionCommandService(
         expiresAt,
       });
 
+      await recordSessionTrace(dependencies, {
+        sessionId: args.sessionId,
+        stage: "registerBound",
+        occurredAt: now,
+      });
+
       return success({ sessionId: args.sessionId, expiresAt });
     },
 
@@ -362,6 +385,14 @@ export function createExpenseSessionCommandService(
           updatedAt: now,
         });
         itemId = existingItem._id;
+        await recordSessionTrace(dependencies, {
+          sessionId: args.sessionId,
+          stage: "itemQuantityUpdated",
+          occurredAt: now,
+          itemName: args.productName,
+          quantity: args.quantity,
+          previousQuantity: existingItem.quantity,
+        });
       } else {
         const holdResult = await dependencies.inventory.acquireHold(
           args.productSkuId,
@@ -390,6 +421,13 @@ export function createExpenseSessionCommandService(
           color: args.color,
           createdAt: now,
           updatedAt: now,
+        });
+        await recordSessionTrace(dependencies, {
+          sessionId: args.sessionId,
+          stage: "itemAdded",
+          occurredAt: now,
+          itemName: args.productName,
+          quantity: args.quantity,
         });
       }
 
@@ -449,10 +487,19 @@ export function createExpenseSessionCommandService(
         expiresAt,
       });
 
+      await recordSessionTrace(dependencies, {
+        sessionId: args.sessionId,
+        stage: "itemRemoved",
+        occurredAt: now,
+        itemName: item.productName,
+        quantity: item.quantity,
+      });
+
       return success({ expiresAt });
     },
 
     async clearSessionItems(args) {
+      const now = dependencies.now();
       const session = await dependencies.repository.getSessionById(
         args.sessionId,
       );
@@ -488,9 +535,54 @@ export function createExpenseSessionCommandService(
         await dependencies.repository.deleteSessionItem(item._id);
       }
 
+      await recordSessionTrace(dependencies, {
+        sessionId: args.sessionId,
+        stage: "cartCleared",
+        occurredAt: now,
+        itemCount: items.length,
+      });
+
       return success({ sessionId: args.sessionId });
     },
   };
+}
+
+async function recordSessionTrace(
+  dependencies: ExpenseSessionCommandDependencies,
+  args: {
+    sessionId: Id<"expenseSession">;
+    stage: ExpenseSessionTraceStage;
+    occurredAt?: number;
+    itemName?: string;
+    quantity?: number;
+    previousQuantity?: number;
+    itemCount?: number;
+  },
+) {
+  if (!dependencies.traceRecorder) {
+    return;
+  }
+
+  const session = await dependencies.repository.getSessionById(args.sessionId);
+  if (!session) {
+    return;
+  }
+
+  const traceResult = await dependencies.traceRecorder.record({
+    stage: args.stage,
+    session,
+    occurredAt: args.occurredAt,
+    itemName: args.itemName,
+    quantity: args.quantity,
+    previousQuantity: args.previousQuantity,
+    itemCount: args.itemCount,
+  });
+
+  if (traceResult.traceCreated && !session.workflowTraceId) {
+    await dependencies.repository.patchSession(args.sessionId, {
+      workflowTraceId: traceResult.traceId,
+    });
+  }
 }
 
 export function runStartExpenseSessionCommand(
@@ -557,6 +649,7 @@ function createDefaultExpenseSessionCommandService(
     calculateExpiration: calculateExpenseSessionExpiration,
     repository: createExpenseSessionCommandRepository(ctx),
     inventory: createInventoryHoldGateway(ctx),
+    traceRecorder: createExpenseSessionTraceRecorder(ctx),
   });
 }
 
