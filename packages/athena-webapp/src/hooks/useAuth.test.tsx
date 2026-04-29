@@ -27,6 +27,7 @@ describe("useAuth", () => {
     mocked.useAuthToken.mockReturnValue(null);
     window.localStorage.clear();
     vi.mocked(window.localStorage.getItem).mockReset();
+    vi.mocked(window.localStorage.setItem).mockReset();
     vi.mocked(window.localStorage.removeItem).mockReset();
   });
 
@@ -67,9 +68,7 @@ describe("useAuth", () => {
     expect(window.localStorage.removeItem).toHaveBeenCalledWith(
       LOGGED_IN_USER_ID_KEY
     );
-    expect(mocked.useQuery.mock.calls.at(-1)?.[1]).toEqual({
-      id: null,
-    });
+    expect(mocked.useQuery.mock.calls.at(-1)?.[1]).toBe("skip");
   });
 
   it("keeps loading while Convex re-establishes the backend session for a stored token", () => {
@@ -90,20 +89,26 @@ describe("useAuth", () => {
     expect(window.localStorage.removeItem).not.toHaveBeenCalled();
   });
 
-  it("loads the Athena user once the Convex session is ready", async () => {
-    vi.mocked(window.localStorage.getItem).mockReturnValue("user-1");
+  it("loads the Athena user from the authenticated Convex session when local storage is missing", async () => {
+    vi.mocked(window.localStorage.getItem).mockReturnValue(null);
     mocked.useConvexAuth.mockReturnValue({
       isAuthenticated: true,
       isLoading: false,
     });
     mocked.useQuery.mockImplementation((_ref, args) => {
       if (args && typeof args === "object" && "id" in args) {
-        return args.id
-          ? {
-              _id: "user-1",
-              email: "manager@example.com",
-            }
-          : null;
+        return null;
+      }
+
+      if (
+        args &&
+        typeof args === "object" &&
+        Object.keys(args).length === 0
+      ) {
+        return {
+          _id: "user-1",
+          email: "manager@example.com",
+        };
       }
 
       return {
@@ -120,8 +125,44 @@ describe("useAuth", () => {
       _id: "user-1",
       email: "manager@example.com",
     });
-    expect(mocked.useQuery.mock.calls.at(-1)?.[1]).toEqual({
-      id: "user-1",
+    expect(window.localStorage.setItem).toHaveBeenCalledWith(
+      LOGGED_IN_USER_ID_KEY,
+      "user-1"
+    );
+  });
+
+  it("loads the Athena user once the Convex session is ready", async () => {
+    vi.mocked(window.localStorage.getItem).mockReturnValue("user-1");
+    mocked.useConvexAuth.mockReturnValue({
+      isAuthenticated: true,
+      isLoading: false,
     });
+    mocked.useQuery.mockImplementation((_ref, args) => {
+      if (
+        args &&
+        typeof args === "object" &&
+        Object.keys(args).length === 0
+      ) {
+        return {
+          _id: "user-1",
+          email: "manager@example.com",
+        };
+      }
+
+      return {
+        _id: "convex-user-1",
+        email: "manager@example.com",
+      };
+    });
+
+    const { result } = renderHook(() => useAuth());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.user).toMatchObject({
+      _id: "user-1",
+      email: "manager@example.com",
+    });
+    expect(mocked.useQuery.mock.calls.at(-1)?.[1]).toEqual({});
   });
 });

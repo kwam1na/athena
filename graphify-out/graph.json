@@ -23951,7 +23951,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_hooks_useauth_ts",
       "source_file": "packages/athena-webapp/src/hooks/useAuth.ts",
-      "source_location": "L8",
+      "source_location": "L7",
       "target": "useauth_useauth",
       "weight": 1
     },
