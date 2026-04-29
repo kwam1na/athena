@@ -33,6 +33,33 @@ function expenseTransactionError(
   });
 }
 
+export function formatExpenseStaffProfileName(
+  staffProfile:
+    | {
+        firstName?: string;
+        lastName?: string;
+        fullName?: string;
+      }
+    | null
+    | undefined,
+) {
+  if (!staffProfile) return null;
+
+  if (staffProfile.firstName && staffProfile.lastName) {
+    return `${staffProfile.firstName} ${staffProfile.lastName.charAt(0)}.`;
+  }
+
+  const fullNameParts = staffProfile.fullName?.trim().split(/\s+/) ?? [];
+  if (fullNameParts.length >= 2) {
+    const firstName = fullNameParts[0];
+    const lastName = fullNameParts.at(-1);
+
+    return `${firstName} ${lastName?.charAt(0)}.`;
+  }
+
+  return staffProfile.fullName?.trim() || null;
+}
+
 export async function createExpenseTransactionFromSessionHandler(
   ctx: MutationCtx,
   args: {
@@ -71,7 +98,10 @@ export async function createExpenseTransactionFromSessionHandler(
   for (const [skuId, totalQuantity] of skuQuantityMap) {
     const sku = await ctx.db.get("productSku", skuId);
     if (!sku) {
-      return expenseTransactionError(`Product SKU ${skuId} not found`, "not_found");
+      return expenseTransactionError(
+        `Product SKU ${skuId} not found`,
+        "not_found",
+      );
     }
 
     // Type guard to ensure we have a productSku
@@ -101,7 +131,10 @@ export async function createExpenseTransactionFromSessionHandler(
   }
 
   // Calculate total value from items (cost price * quantity)
-  const totalValue = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const totalValue = items.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0,
+  );
 
   // Generate transaction number
   const transactionNumber = generateTransactionNumber();
@@ -192,7 +225,7 @@ export const getExpenseTransactions = query({
       notes: v.optional(v.string()),
       voidedAt: v.optional(v.number()),
       itemCount: v.number(),
-    })
+    }),
   ),
   handler: async (ctx, args) => {
     const { storeId, status, limit = 50 } = args;
@@ -211,7 +244,7 @@ export const getExpenseTransactions = query({
 
     if (args.staffProfileId) {
       transactions = transactions.filter(
-        (transaction) => transaction.staffProfileId === args.staffProfileId
+        (transaction) => transaction.staffProfileId === args.staffProfileId,
       );
     }
 
@@ -220,16 +253,16 @@ export const getExpenseTransactions = query({
       transactions.map(async (transaction) => {
         const staffProfile = await ctx.db.get(
           "staffProfile",
-          transaction.staffProfileId
+          transaction.staffProfileId,
         );
-        const staffProfileName = staffProfile?.fullName ?? null;
+        const staffProfileName = formatExpenseStaffProfileName(staffProfile);
 
         // Individual transactions have a bounded item count, so reading all items is safe here.
         // eslint-disable-next-line @convex-dev/no-collect-in-query
         const items = await ctx.db
           .query("expenseTransactionItem")
           .withIndex("by_transactionId", (q) =>
-            q.eq("transactionId", transaction._id)
+            q.eq("transactionId", transaction._id),
           )
           .collect();
 
@@ -240,7 +273,7 @@ export const getExpenseTransactions = query({
           staffProfileName,
           itemCount,
         };
-      })
+      }),
     );
 
     return enrichedTransactions;
@@ -265,7 +298,7 @@ export const getExpenseTransactionById = query({
           fullName: v.string(),
           firstName: v.optional(v.string()),
           lastName: v.optional(v.string()),
-        })
+        }),
       ),
       registerNumber: v.optional(v.string()),
       totalValue: v.number(),
@@ -275,16 +308,19 @@ export const getExpenseTransactionById = query({
       voidedAt: v.optional(v.number()),
       items: v.array(v.any()),
     }),
-    v.null()
+    v.null(),
   ),
   handler: async (ctx, args) => {
-    const transaction = await ctx.db.get("expenseTransaction", args.transactionId);
+    const transaction = await ctx.db.get(
+      "expenseTransaction",
+      args.transactionId,
+    );
     if (!transaction) return null;
 
     // Get staff profile information
     const staffProfile = await ctx.db.get(
       "staffProfile",
-      transaction.staffProfileId
+      transaction.staffProfileId,
     );
 
     // Get transaction items
@@ -293,7 +329,7 @@ export const getExpenseTransactionById = query({
     const items = await ctx.db
       .query("expenseTransactionItem")
       .withIndex("by_transactionId", (q) =>
-        q.eq("transactionId", transaction._id)
+        q.eq("transactionId", transaction._id),
       )
       .collect();
 
@@ -320,7 +356,10 @@ export const voidExpenseTransaction = mutation({
   },
   returns: commandResultValidator(expenseTransactionIdValidator),
   handler: async (ctx, args) => {
-    const transaction = await ctx.db.get("expenseTransaction", args.transactionId);
+    const transaction = await ctx.db.get(
+      "expenseTransaction",
+      args.transactionId,
+    );
     if (!transaction) {
       return expenseTransactionError("Transaction not found", "not_found");
     }
@@ -338,7 +377,7 @@ export const voidExpenseTransaction = mutation({
     const items = await ctx.db
       .query("expenseTransactionItem")
       .withIndex("by_transactionId", (q) =>
-        q.eq("transactionId", transaction._id)
+        q.eq("transactionId", transaction._id),
       )
       .collect();
 

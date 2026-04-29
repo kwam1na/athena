@@ -12,16 +12,19 @@ vi.mock("@tanstack/react-router", () => ({
   Link: ({
     children,
     params,
+    search,
     to,
     ...props
   }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
     params?: unknown;
+    search?: Record<string, string>;
     to?: string;
   }) => {
     void params;
+    const searchParams = search ? `?${new URLSearchParams(search)}` : "";
 
     return (
-      <a href={to ?? "#"} {...props}>
+      <a href={`${to ?? "#"}${searchParams}`} {...props}>
         {children}
       </a>
     );
@@ -153,6 +156,10 @@ describe("RegisterCloseoutViewContent", () => {
     expect(screen.getByLabelText("Counted cash for Register 2")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Submit closeout" })).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "View trace" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: "View transactions" })).toHaveAttribute(
+      "href",
+      expect.stringContaining("registerSessionId=session-open"),
+    );
   });
 
   it("submits display counted cash as minor units with notes for a register session", async () => {

@@ -52,6 +52,34 @@ describe("POS and expense session indexing", () => {
     );
     expect(schema).toContain('.index("by_expiresAt", ["expiresAt"])');
     expect(schema).toContain('.index("by_registerSessionId", ["registerSessionId"])');
+
+    const posSessionSchema = readSourceSlice(
+      schema,
+      "posSession: defineTable(posSessionSchema)",
+      "posSessionItem: defineTable(posSessionItemSchema)",
+    );
+
+    expect(
+      posSessionSchema.match(/\.index\("by_registerSessionId"/g) ?? [],
+    ).toHaveLength(1);
+  });
+
+  it("adds a completed transaction index for register-session filtered closeout links", () => {
+    const schema = readProjectFile("convex", "schema.ts");
+    const repository = readProjectFile(
+      "convex",
+      "pos",
+      "infrastructure",
+      "repositories",
+      "transactionRepository.ts",
+    );
+
+    expect(schema).toContain(
+      '.index("by_storeId_status_registerSessionId_completedAt", [',
+    );
+    expect(repository).toContain(
+      'withIndex("by_storeId_status_registerSessionId_completedAt"',
+    );
   });
 
   it("uses targeted session indexes instead of broad status scans in posSessions", () => {

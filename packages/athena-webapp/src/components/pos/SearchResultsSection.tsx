@@ -4,6 +4,7 @@ import { ProductCard } from "./ProductCard";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "../ui/skeleton";
+import { useEffect } from "react";
 
 interface SearchResultsSectionProps {
   isLoading: boolean;
@@ -13,6 +14,7 @@ interface SearchResultsSectionProps {
   onClearSearch: () => void;
   onQuickAddProduct?: (product?: Product) => void;
   quickAddQuery?: string;
+  quickAddShortcutDisabled?: boolean;
   className?: string;
 }
 
@@ -55,12 +57,80 @@ export function SearchResultsSection({
   onClearSearch,
   onQuickAddProduct,
   quickAddQuery,
+  quickAddShortcutDisabled = false,
   className,
 }: SearchResultsSectionProps) {
   const allResultsForSameProduct =
     products.length > 0 &&
     products[0].productId !== undefined &&
     products.every((product) => product.productId === products[0].productId);
+  const variantSourceProduct = allResultsForSameProduct
+    ? products[0]
+    : undefined;
+  const shouldEnableQuickAddShortcut =
+    !isLoading && Boolean(onQuickAddProduct) && !quickAddShortcutDisabled;
+
+  useEffect(() => {
+    if (
+      !shouldEnableQuickAddShortcut ||
+      !onQuickAddProduct ||
+      !variantSourceProduct
+    ) {
+      return;
+    }
+
+    const handleQuickAddVariantShortcut = (event: KeyboardEvent) => {
+      const isShortcut =
+        (event.metaKey || event.ctrlKey) &&
+        !event.altKey &&
+        !event.shiftKey &&
+        event.key === "Enter";
+
+      if (!isShortcut || event.defaultPrevented || event.repeat) {
+        return;
+      }
+
+      event.preventDefault();
+      onQuickAddProduct(variantSourceProduct);
+    };
+
+    document.addEventListener("keydown", handleQuickAddVariantShortcut);
+    return () =>
+      document.removeEventListener("keydown", handleQuickAddVariantShortcut);
+  }, [
+    onQuickAddProduct,
+    shouldEnableQuickAddShortcut,
+    variantSourceProduct,
+  ]);
+
+  useEffect(() => {
+    if (
+      !shouldEnableQuickAddShortcut ||
+      !onQuickAddProduct ||
+      products.length !== 0
+    ) {
+      return;
+    }
+
+    const handleQuickAddProductShortcut = (event: KeyboardEvent) => {
+      const isShortcut =
+        (event.metaKey || event.ctrlKey) &&
+        !event.altKey &&
+        !event.shiftKey &&
+        event.key === "Enter";
+
+      if (!isShortcut || event.defaultPrevented || event.repeat) {
+        return;
+      }
+
+      event.preventDefault();
+      onQuickAddProduct();
+    };
+
+    document.addEventListener("keydown", handleQuickAddProductShortcut);
+    return () =>
+      document.removeEventListener("keydown", handleQuickAddProductShortcut);
+  }, [onQuickAddProduct, products.length, shouldEnableQuickAddShortcut]);
 
   if (isLoading) {
     return (
@@ -87,10 +157,17 @@ export function SearchResultsSection({
               type="button"
               size="sm"
               className="mt-5"
+              aria-keyshortcuts="Meta+Enter Control+Enter"
               onClick={() => onQuickAddProduct?.()}
             >
               <PackagePlus className="mr-2 h-4 w-4" />
-              Quick add product
+              <span>Quick add product</span>
+              <kbd
+                aria-hidden="true"
+                className="ml-1 rounded border border-current/20 bg-white/15 px-1.5 py-0.5 text-[10px] font-semibold leading-none"
+              >
+                ⌘+↵
+              </kbd>
             </Button>
           )}
         </div>
@@ -116,10 +193,17 @@ export function SearchResultsSection({
               type="button"
               size="sm"
               className="w-full sm:w-auto"
-              onClick={() => onQuickAddProduct(products[0])}
+              aria-keyshortcuts="Meta+Enter Control+Enter"
+              onClick={() => onQuickAddProduct(variantSourceProduct)}
             >
               <PackagePlus className="mr-2 h-4 w-4" />
-              Add variant for this product
+              <span>Add variant for this product</span>
+              <kbd
+                aria-hidden="true"
+                className="ml-1 rounded border border-current/20 bg-white/15 px-1.5 py-0.5 text-[10px] font-semibold leading-none"
+              >
+                ⌘+↵
+              </kbd>
             </Button>
           </div>
         )}

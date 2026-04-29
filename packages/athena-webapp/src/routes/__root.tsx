@@ -18,6 +18,7 @@ const rootPageSchema = z.object({
   variant: z.string().optional(),
   orderStatus: z.string().optional(),
   categorySlug: z.string().optional(),
+  registerSessionId: z.string().optional(),
 });
 
 export const Route = createRootRouteWithContext<{

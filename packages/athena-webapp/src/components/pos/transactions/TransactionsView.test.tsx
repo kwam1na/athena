@@ -1,10 +1,15 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TransactionsView } from "./TransactionsView";
 
 const useQueryMock = vi.fn();
 const useGetActiveStoreMock = vi.fn();
+const useSearchMock = vi.fn();
+
+vi.mock("@tanstack/react-router", () => ({
+  useSearch: () => useSearchMock(),
+}));
 
 vi.mock("convex/react", () => ({
   useQuery: (...args: unknown[]) => useQueryMock(...args),
@@ -68,6 +73,11 @@ vi.mock("@/components/ui/tabs", () => ({
 }));
 
 describe("TransactionsView", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useSearchMock.mockReturnValue({});
+  });
+
   it("does not render session traces on the completed transactions surface", () => {
     useGetActiveStoreMock.mockReturnValue({
       activeStore: {
@@ -106,5 +116,32 @@ describe("TransactionsView", () => {
 
     expect(screen.queryByTestId("session-trace-POS-123456")).not.toBeInTheDocument();
     expect(screen.queryByTestId("session-trace-POS-654321")).not.toBeInTheDocument();
+  });
+
+  it("passes the register session filter to the completed transactions query", () => {
+    useSearchMock.mockReturnValue({ registerSessionId: "session-1" });
+    useGetActiveStoreMock.mockReturnValue({
+      activeStore: {
+        _id: "store-1",
+        currency: "GHS",
+      },
+    });
+    useQueryMock.mockReturnValue([]);
+
+    render(<TransactionsView />);
+
+    expect(useQueryMock).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        storeId: "store-1",
+        registerSessionId: "session-1",
+      },
+    );
+    expect(
+      screen.getByText("Showing transactions linked to this register session."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("No transactions for this register session"),
+    ).toBeInTheDocument();
   });
 });

@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearch } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { Receipt } from "lucide-react";
 
@@ -16,6 +17,7 @@ import {
 import { SimplePageHeader } from "../../common/PageHeader";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
+import type { Id } from "~/convex/_generated/dataModel";
 
 function formatPaymentMethod(method: string | null) {
   if (!method) return "Unknown";
@@ -31,11 +33,26 @@ const isToday = (timestamp: number) => {
 
 export function TransactionsView() {
   const { activeStore } = useGetActiveStore();
-  const [filter, setFilter] = useState<"today" | "all">("today");
+  const { registerSessionId } = useSearch({ strict: false }) as {
+    registerSessionId?: string;
+  };
+  const [filter, setFilter] = useState<"today" | "all">(
+    registerSessionId ? "all" : "today",
+  );
 
   const transactions = useQuery(
     api.inventory.pos.getCompletedTransactions,
-    activeStore?._id ? { storeId: activeStore._id } : "skip",
+    activeStore?._id
+      ? {
+          storeId: activeStore._id,
+          ...(registerSessionId
+            ? {
+                registerSessionId:
+                  registerSessionId as Id<"registerSession">,
+              }
+            : {}),
+        }
+      : "skip",
   );
 
   const formatter = useMemo(
@@ -69,6 +86,12 @@ export function TransactionsView() {
     return tableData.filter((t) => isToday(t.completedAt));
   }, [tableData, filter]);
 
+  useEffect(() => {
+    if (registerSessionId) {
+      setFilter("all");
+    }
+  }, [registerSessionId]);
+
   if (!activeStore || !transactions || !formatter) return null;
 
   const hasTransactions = filteredData.length > 0;
@@ -77,6 +100,12 @@ export function TransactionsView() {
     <View header={<SimplePageHeader title="Completed Transactions" />}>
       <FadeIn>
         <div className="container mx-auto p-6 space-y-4">
+          {registerSessionId ? (
+            <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+              Showing transactions linked to this register session.
+            </div>
+          ) : null}
+
           <Tabs
             value={filter}
             onValueChange={(v) => setFilter(v as "today" | "all")}
@@ -101,6 +130,8 @@ export function TransactionsView() {
                   <p className="text-muted-foreground">
                     {filter === "today"
                       ? "No completed transactions today"
+                      : registerSessionId
+                        ? "No transactions for this register session"
                       : "No completed transactions"}
                   </p>
                 }

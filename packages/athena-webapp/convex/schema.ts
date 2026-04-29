@@ -203,6 +203,12 @@ const schema = defineSchema({
       "storeId",
       "status",
       "completedAt",
+    ])
+    .index("by_storeId_status_registerSessionId_completedAt", [
+      "storeId",
+      "status",
+      "registerSessionId",
+      "completedAt",
     ]),
   posTransactionItem: defineTable(posTransactionItemSchema).index(
     "by_transactionId",
@@ -224,8 +230,7 @@ const schema = defineSchema({
       "storeId",
       "status",
       "staffProfileId",
-    ])
-    .index("by_registerSessionId", ["registerSessionId"]),
+    ]),
   posSessionItem: defineTable(posSessionItemSchema).index("by_sessionId", [
     "sessionId",
   ]),

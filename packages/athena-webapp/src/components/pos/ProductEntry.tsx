@@ -426,6 +426,7 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
                 quickAddQuery={
                   isWaitingForStableQuery ? "" : productSearchQuery
                 }
+                quickAddShortcutDisabled={isQuickAddOpen}
                 className={resultsClassName}
               />
             )}

@@ -79,6 +79,9 @@ function ProductLookupEmptyState() {
         <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1">
           <Search className="h-3.5 w-3.5" />
           Product search
+          <kbd className="ml-1 rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-gray-500">
+            ⌘+K
+          </kbd>
         </span>
       </div>
     </div>

@@ -101,10 +101,24 @@ export async function listTransactionsByStore(
 export async function listCompletedTransactions(
   ctx: QueryCtx,
   args: {
+    registerSessionId?: Id<"registerSession">;
     storeId: Id<"store">;
     limit?: number;
   },
 ) {
+  if (args.registerSessionId) {
+    return ctx.db
+      .query("posTransaction")
+      .withIndex("by_storeId_status_registerSessionId_completedAt", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("status", "completed")
+          .eq("registerSessionId", args.registerSessionId),
+      )
+      .order("desc")
+      .take(args.limit ?? 50);
+  }
+
   return ctx.db
     .query("posTransaction")
     .withIndex("by_storeId_status_completedAt", (q) =>
