@@ -1,5 +1,5 @@
 import { ColumnDef } from "@tanstack/react-table";
-import { DataTableColumnHeader } from "./data-table-column-header";
+import { DataTableColumnHeader } from "~/src/components/base/table/data-table-column-header";
 import CopyButton from "../../ui/copy-button";
 import { Button } from "../../ui/button";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";

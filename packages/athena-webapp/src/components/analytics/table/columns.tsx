@@ -1,6 +1,6 @@
 import { ColumnDef } from "@tanstack/react-table";
 
-import { DataTableColumnHeader } from "./data-table-column-header";
+import { DataTableColumnHeader } from "~/src/components/base/table/data-table-column-header";
 import { Link } from "@tanstack/react-router";
 import { PromoCode } from "~/types";
 import { capitalizeFirstLetter, slugToWords } from "~/src/lib/utils";

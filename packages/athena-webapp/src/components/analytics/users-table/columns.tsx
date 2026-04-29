@@ -1,5 +1,5 @@
 import { ColumnDef } from "@tanstack/react-table";
-import { DataTableColumnHeader } from "./data-table-column-header";
+import { DataTableColumnHeader } from "~/src/components/base/table/data-table-column-header";
 import { formatUserId } from "~/src/lib/utils";
 import { Sparkle, UserRoundCheck, User } from "lucide-react";
 

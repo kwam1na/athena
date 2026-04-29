@@ -1,5 +1,5 @@
 import { ColumnDef } from "@tanstack/react-table";
-import { DataTableColumnHeader } from "./data-table-column-header";
+import { DataTableColumnHeader } from "~/src/components/base/table/data-table-column-header";
 import { capitalizeWords } from "~/convex/utils";
 import { AnalyticProduct } from "../AnalyticsProducts";
 import { Clock, Eye } from "lucide-react";

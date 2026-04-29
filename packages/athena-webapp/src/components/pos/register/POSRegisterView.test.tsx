@@ -491,6 +491,13 @@ describe("POSRegisterView", () => {
     render(<POSRegisterView />);
 
     expect(screen.getByText("Drawer closed")).toBeInTheDocument();
+    expect(screen.getByText("Open drawer to start selling")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Front Counter is closed. Enter the opening float before starting sales.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Opening float (GH₵)")).toBeInTheDocument();
     expect(screen.queryByText("product-entry")).not.toBeInTheDocument();
     expect(screen.queryByText("cart-items")).not.toBeInTheDocument();
     expect(
@@ -547,8 +554,11 @@ describe("POSRegisterView", () => {
     render(<POSRegisterView />);
 
     expect(screen.getByText("Drawer closed")).toBeInTheDocument();
+    expect(screen.getByText("Open drawer to continue")).toBeInTheDocument();
     expect(
-      screen.getByText(/needs an open drawer before this sale can continue/i),
+      screen.getByText(
+        "Front Counter is closed. Open the drawer to continue this sale.",
+      ),
     ).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Drawer already open for this register. Return to the active sale or review it in Cash Controls.",

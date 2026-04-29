@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { RegisterDrawerGateState } from "@/lib/pos/presentation/register/registerUiState";
 import { getOrigin } from "~/src/lib/navigationUtils";
+import { currencyDisplaySymbol } from "~/shared/currencyFormatter";
 
 function CashControlsButton({
   className,
@@ -94,21 +95,25 @@ export function RegisterDrawerGate({
 
   return (
     <div className="mx-auto max-w-2xl rounded-lg border border-stone-200 bg-white p-8 shadow-sm">
-      <div className="space-y-3">
-        <p className="text-sm font-medium uppercase tracking-[0.2em] text-stone-500">
-          Drawer status
-        </p>
-        <div className="space-y-1">
-          <h2 className="text-2xl font-semibold text-stone-900">
-            Drawer closed
-          </h2>
-          <p className="text-sm text-stone-600">
-            {isRecovery
-              ? `${drawerGate.registerLabel} needs an open drawer before this sale can continue.`
-              : `${drawerGate.registerLabel} needs an open drawer before you can start selling.`}
-          </p>
-          <p className="text-sm text-stone-500">
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <p className="text-sm font-medium uppercase tracking-[0.2em] text-stone-500">
             Register {drawerGate.registerNumber}
+          </p>
+          <span className="rounded-full border border-stone-200 bg-stone-50 px-2.5 py-1 text-xs font-medium text-stone-600">
+            Drawer closed
+          </span>
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-2xl font-semibold text-stone-900">
+            {isRecovery
+              ? "Open drawer to continue"
+              : "Open drawer to start selling"}
+          </h2>
+          <p className="text-sm leading-6 text-stone-600">
+            {isRecovery
+              ? `${drawerGate.registerLabel} is closed. Open the drawer to continue this sale.`
+              : `${drawerGate.registerLabel} is closed. Enter the opening float before starting sales.`}
           </p>
         </div>
       </div>
@@ -116,7 +121,7 @@ export function RegisterDrawerGate({
       <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
         <label className="block space-y-2">
           <span className="text-sm font-medium text-stone-700">
-            Opening float ({drawerGate.currency})
+            Opening float ({currencyDisplaySymbol(drawerGate.currency ?? "GHS")})
           </span>
           <Input
             autoFocus

@@ -63,6 +63,7 @@ import { useSkusReservedInCheckout } from "@/hooks/useSkusReservedInCheckout";
 import { useSkusReservedInPosSession } from "@/hooks/useSkusReservedInPosSession";
 import { AlertModal } from "../ui/modals/alert-modal";
 import { presentUnexpectedErrorToast } from "~/src/lib/errors/presentUnexpectedErrorToast";
+import { currencyDisplaySymbol } from "~/shared/currencyFormatter";
 
 export type ProductVariant = {
   id: string;
@@ -550,8 +551,12 @@ function Stock({
               <TableHead>Barcode</TableHead>
               <TableHead>Stock</TableHead>
               <TableHead>Quantity available</TableHead>
-              <TableHead>{`Price (${activeStore?.currency.toUpperCase()})`}</TableHead>
-              <TableHead>{`Cost (${activeStore?.currency.toUpperCase()})`}</TableHead>
+              <TableHead>
+                Price ({currencyDisplaySymbol(activeStore?.currency ?? "GHS")})
+              </TableHead>
+              <TableHead>
+                Cost ({currencyDisplaySymbol(activeStore?.currency ?? "GHS")})
+              </TableHead>
             </TableRow>
           </TableHeader>
 
@@ -794,7 +799,8 @@ function Stock({
 
                 <TableCell>
                   <Label htmlFor={`price-${index}`} className="sr-only">
-                    {`Price ${activeStore?.currency}`}
+                    Price{" "}
+                    {currencyDisplaySymbol(activeStore?.currency ?? "GHS")}
                   </Label>
                   {showLoaderForProduct ? (
                     <Skeleton className="h-[40px] w-full" />

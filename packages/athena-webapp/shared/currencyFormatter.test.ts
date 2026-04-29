@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { currencyFormatter } from "./currencyFormatter";
+import { currencyDisplaySymbol, currencyFormatter } from "./currencyFormatter";
 
 describe("currencyFormatter", () => {
   it("uses the Ghana cedi symbol for GHS", () => {
@@ -9,5 +9,15 @@ describe("currencyFormatter", () => {
 
   it("keeps standard Intl formatting for other currencies", () => {
     expect(currencyFormatter("USD").format(1250)).toBe("$1,250");
+  });
+});
+
+describe("currencyDisplaySymbol", () => {
+  it("uses the Ghana cedi symbol for GHS", () => {
+    expect(currencyDisplaySymbol("GHS")).toBe("GH₵");
+  });
+
+  it("keeps standard Intl currency symbols for other currencies", () => {
+    expect(currencyDisplaySymbol("USD")).toBe("$");
   });
 });
