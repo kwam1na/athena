@@ -4859,7 +4859,7 @@
       "relation": "calls",
       "source": "harness_repo_validation_sortuniquepaths",
       "source_file": "scripts/harness-repo-validation.ts",
-      "source_location": "L45",
+      "source_location": "L46",
       "target": "harness_repo_validation_collectharnessrepovalidationselection",
       "weight": 1
     },
@@ -4871,7 +4871,7 @@
       "relation": "calls",
       "source": "harness_repo_validation_normalizerepopath",
       "source_file": "scripts/harness-repo-validation.ts",
-      "source_location": "L37",
+      "source_location": "L38",
       "target": "harness_repo_validation_matchesharnessrepovalidationpath",
       "weight": 1
     },
@@ -35735,7 +35735,7 @@
       "relation": "contains",
       "source": "scripts_harness_app_registry_ts",
       "source_file": "scripts/harness-app-registry.ts",
-      "source_location": "L874",
+      "source_location": "L876",
       "target": "harness_app_registry_getharnesspackageregistration",
       "weight": 1
     },
@@ -38075,7 +38075,7 @@
       "relation": "contains",
       "source": "scripts_harness_repo_validation_ts",
       "source_file": "scripts/harness-repo-validation.ts",
-      "source_location": "L44",
+      "source_location": "L45",
       "target": "harness_repo_validation_collectharnessrepovalidationselection",
       "weight": 1
     },
@@ -38087,7 +38087,7 @@
       "relation": "contains",
       "source": "scripts_harness_repo_validation_ts",
       "source_file": "scripts/harness-repo-validation.ts",
-      "source_location": "L36",
+      "source_location": "L37",
       "target": "harness_repo_validation_matchesharnessrepovalidationpath",
       "weight": 1
     },
@@ -38099,7 +38099,7 @@
       "relation": "contains",
       "source": "scripts_harness_repo_validation_ts",
       "source_file": "scripts/harness-repo-validation.ts",
-      "source_location": "L26",
+      "source_location": "L27",
       "target": "harness_repo_validation_normalizerepopath",
       "weight": 1
     },
@@ -38111,7 +38111,7 @@
       "relation": "contains",
       "source": "scripts_harness_repo_validation_ts",
       "source_file": "scripts/harness-repo-validation.ts",
-      "source_location": "L30",
+      "source_location": "L31",
       "target": "harness_repo_validation_sortuniquepaths",
       "weight": 1
     },
@@ -53611,7 +53611,7 @@
       "label": "collectHarnessRepoValidationSelection()",
       "norm_label": "collectharnessrepovalidationselection()",
       "source_file": "scripts/harness-repo-validation.ts",
-      "source_location": "L44"
+      "source_location": "L45"
     },
     {
       "community": 188,
@@ -53620,7 +53620,7 @@
       "label": "matchesHarnessRepoValidationPath()",
       "norm_label": "matchesharnessrepovalidationpath()",
       "source_file": "scripts/harness-repo-validation.ts",
-      "source_location": "L36"
+      "source_location": "L37"
     },
     {
       "community": 188,
@@ -53629,7 +53629,7 @@
       "label": "normalizeRepoPath()",
       "norm_label": "normalizerepopath()",
       "source_file": "scripts/harness-repo-validation.ts",
-      "source_location": "L26"
+      "source_location": "L27"
     },
     {
       "community": 188,
@@ -53638,7 +53638,7 @@
       "label": "sortUniquePaths()",
       "norm_label": "sortuniquepaths()",
       "source_file": "scripts/harness-repo-validation.ts",
-      "source_location": "L30"
+      "source_location": "L31"
     },
     {
       "community": 188,
@@ -57877,7 +57877,7 @@
       "label": "getHarnessPackageRegistration()",
       "norm_label": "getharnesspackageregistration()",
       "source_file": "scripts/harness-app-registry.ts",
-      "source_location": "L874"
+      "source_location": "L876"
     },
     {
       "community": 264,

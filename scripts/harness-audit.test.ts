@@ -149,6 +149,7 @@ async function createFixtureRepo() {
     rootDir
   );
   await write("packages/athena-webapp/.storybook/main.ts", "export default {};\n", rootDir);
+  await write("packages/athena-webapp/index.html", "<div id=\"app\"></div>\n", rootDir);
   await write(
     "packages/athena-webapp/src/stories/Guidance/Introduction.stories.tsx",
     "export default {};\n",
