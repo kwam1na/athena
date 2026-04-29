@@ -27,43 +27,6 @@ export function CashControlsWorkspaceHeader({
           </h1>
           <p className="text-sm text-muted-foreground">{description}</p>
         </div>
-
-        <div className="flex flex-wrap gap-2 rounded-lg border border-border bg-surface-raised p-1.5 shadow-surface">
-          <Button
-            asChild
-            className={
-              activeView === "cash-controls"
-                ? "rounded-md border-transparent bg-shell text-shell-foreground hover:bg-shell/90 hover:text-shell-foreground"
-                : "rounded-md border-border bg-background text-muted-foreground hover:bg-surface hover:text-foreground"
-            }
-            size="sm"
-            variant="outline"
-          >
-            <Link
-              params={{ orgUrlSlug, storeUrlSlug }}
-              to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls"
-            >
-              Cash Controls
-            </Link>
-          </Button>
-          <Button
-            asChild
-            className={
-              activeView === "closeouts"
-                ? "rounded-md border-transparent bg-shell text-shell-foreground hover:bg-shell/90 hover:text-shell-foreground"
-                : "rounded-md border-border bg-background text-muted-foreground hover:bg-surface hover:text-foreground"
-            }
-            size="sm"
-            variant="outline"
-          >
-            <Link
-              params={{ orgUrlSlug, storeUrlSlug }}
-              to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/closeouts"
-            >
-              Closeouts
-            </Link>
-          </Button>
-        </div>
       </div>
     </div>
   );

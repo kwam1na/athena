@@ -70,9 +70,26 @@ describe("cash control deposits", () => {
           status: "closing",
           variance: -500,
         },
+        {
+          _id: "session_closed" as Id<"registerSession">,
+          countedCash: 5000,
+          expectedCash: 5000,
+          openedAt: 5,
+          openingFloat: 5000,
+          registerNumber: "C3",
+          status: "closed",
+          variance: 0,
+        },
       ],
       staffNamesById: new Map(),
     });
+
+    expect(snapshot.registerSessions).toHaveLength(3);
+    expect(snapshot.registerSessions.map((session) => session._id)).toEqual([
+      "session_closing",
+      "session_open",
+      "session_closed",
+    ]);
 
     expect(snapshot.openSessions).toHaveLength(1);
     expect(snapshot.openSessions[0]).toMatchObject({

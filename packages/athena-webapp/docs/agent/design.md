@@ -77,7 +77,8 @@ Rules:
 The font tokens are:
 
 - `--font-sans`: UI copy, controls, tables, helper text.
-- `--font-display`: page titles, section landmarks, key numerics.
+- `--font-display`: page titles, section landmarks, key numerics. This uses the
+  sans family and relies on weight and scale for hierarchy.
 - `--font-mono`: technical identifiers, trace IDs, codes, and compact diagnostics.
 
 Use display type sparingly. It should create hierarchy, not ornament every card. Avoid

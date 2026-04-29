@@ -24,6 +24,18 @@ function formatPaymentMethod(method: string | null) {
   return capitalizeWords(method.replace(/_/g, " "));
 }
 
+function formatRegisterFilterLabel(registerNumber?: string | null) {
+  const trimmedRegisterNumber = registerNumber?.trim();
+
+  if (!trimmedRegisterNumber) {
+    return "this register";
+  }
+
+  return /^register\b/i.test(trimmedRegisterNumber)
+    ? trimmedRegisterNumber
+    : `Register ${trimmedRegisterNumber}`;
+}
+
 // Helper to check if timestamp is today
 const isToday = (timestamp: number) => {
   const date = new Date(timestamp);
@@ -47,10 +59,18 @@ export function TransactionsView() {
           storeId: activeStore._id,
           ...(registerSessionId
             ? {
-                registerSessionId:
-                  registerSessionId as Id<"registerSession">,
+                registerSessionId: registerSessionId as Id<"registerSession">,
               }
             : {}),
+        }
+      : "skip",
+  );
+  const registerSessionSnapshot = useQuery(
+    api.cashControls.deposits.getRegisterSessionSnapshot,
+    activeStore?._id && registerSessionId
+      ? {
+          registerSessionId: registerSessionId as Id<"registerSession">,
+          storeId: activeStore._id,
         }
       : "skip",
   );
@@ -58,6 +78,9 @@ export function TransactionsView() {
   const formatter = useMemo(
     () => (activeStore ? currencyFormatter(activeStore.currency) : null),
     [activeStore],
+  );
+  const registerFilterLabel = formatRegisterFilterLabel(
+    registerSessionSnapshot?.registerSession?.registerNumber,
   );
 
   const tableData: CompletedTransactionRow[] = useMemo(() => {
@@ -102,7 +125,7 @@ export function TransactionsView() {
         <div className="container mx-auto p-6 space-y-4">
           {registerSessionId ? (
             <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-              Showing transactions linked to this register session.
+              Showing transactions linked to {registerFilterLabel}
             </div>
           ) : null}
 
@@ -131,8 +154,8 @@ export function TransactionsView() {
                     {filter === "today"
                       ? "No completed transactions today"
                       : registerSessionId
-                        ? "No transactions for this register session"
-                      : "No completed transactions"}
+                        ? `No transactions for ${registerFilterLabel}`
+                        : "No completed transactions"}
                   </p>
                 }
               />

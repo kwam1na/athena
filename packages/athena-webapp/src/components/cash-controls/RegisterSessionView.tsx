@@ -29,6 +29,7 @@ import { ComposedPageHeader } from "../common/PageHeader";
 import { EmptyState } from "../states/empty/empty-state";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
+import { formatReviewReason } from "./formatReviewReason";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -55,6 +56,8 @@ type RegisterSessionApprovalRequest = {
 
 type RegisterSessionDetail = {
   _id: string;
+  closedAt?: number;
+  closedByStaffName?: string | null;
   countedCash?: number;
   expectedCash: number;
   netExpectedCash?: number;
@@ -199,6 +202,78 @@ function getVarianceTone(variance?: number) {
   }
 
   return variance > 0 ? "text-emerald-700" : "text-destructive";
+}
+
+function formatStaffByline(staffName?: string | null) {
+  if (!staffName) {
+    return undefined;
+  }
+
+  return `By ${formatStaffDisplayName({ fullName: staffName })}`;
+}
+
+function buildLifecycleRows({
+  currency,
+  registerSession,
+  transactionCount,
+}: {
+  currency: string;
+  registerSession: RegisterSessionDetail;
+  transactionCount: number;
+}) {
+  const status = registerSession.status;
+  const rows = [
+    {
+      label: "Opened",
+      primary: formatTimestamp(registerSession.openedAt),
+      secondary: formatStaffByline(registerSession.openedByStaffName),
+    },
+  ];
+
+  if (transactionCount > 0 || status === "active") {
+    rows.push({
+      label: status === "active" ? "Active" : "Activity",
+      primary:
+        transactionCount === 1
+          ? "1 linked sale"
+          : `${transactionCount} linked sales`,
+      secondary:
+        status === "active"
+          ? "Sales are recording against this register."
+          : "Sales recorded against this register.",
+    });
+  } else if (status === "open") {
+    rows.push({
+      label: "Open",
+      primary: "Ready for sales",
+      secondary: "No linked sales recorded yet.",
+    });
+  }
+
+  if (status === "closing" || status === "closed") {
+    rows.push({
+      label: "Closing",
+      primary:
+        registerSession.countedCash === undefined
+          ? "Closeout in progress"
+          : `Counted cash ${formatCurrency(currency, registerSession.countedCash)}`,
+      secondary: registerSession.pendingApprovalRequest
+        ? "Manager approval pending."
+        : "Closeout review submitted.",
+    });
+  }
+
+  if (status === "closed") {
+    rows.push({
+      label: "Closed",
+      primary: registerSession.closedAt
+        ? formatTimestamp(registerSession.closedAt)
+        : "Closed",
+      secondary: formatStaffByline(registerSession.closedByStaffName),
+    });
+  }
+
+  return rows;
 }
 
 function getPaymentMethodIcon({
@@ -363,6 +438,15 @@ export function RegisterSessionViewContent({
   );
   const expectedCash =
     registerSession?.netExpectedCash ?? registerSession?.expectedCash ?? 0;
+  const reviewReasonFormatter = currencyFormatter(currency);
+  const formattedApprovalReason = formatReviewReason(
+    reviewReasonFormatter,
+    registerSession?.pendingApprovalRequest?.reason,
+  );
+  const formattedCloseoutReviewReason = formatReviewReason(
+    reviewReasonFormatter,
+    registerSessionSnapshot?.closeoutReview?.reason,
+  );
   const summaryRows = registerSession
     ? [
         {
@@ -383,6 +467,13 @@ export function RegisterSessionViewContent({
           valueClassName: getVarianceTone(registerSession.variance),
         },
       ]
+    : [];
+  const lifecycleRows = registerSession
+    ? buildLifecycleRows({
+        currency,
+        registerSession,
+        transactionCount: transactions.length,
+      })
     : [];
   const headerTitle = registerSession
     ? formatRegisterHeaderName(registerSession.registerNumber)
@@ -459,21 +550,25 @@ export function RegisterSessionViewContent({
                       </dd>
                     </div>
 
-                    <div className="rounded-lg border border-border bg-surface-raised p-layout-md">
-                      <dt className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                        Opened
-                      </dt>
-                      <dd className="mt-2 text-sm text-foreground">
-                        {formatTimestamp(registerSession.openedAt)}
-                      </dd>
-                      {registerSession.openedByStaffName ? (
-                        <dd className="mt-1 text-xs text-muted-foreground">
-                          By{" "}
-                          {formatStaffDisplayName({
-                            fullName: registerSession.openedByStaffName,
-                          })}
-                        </dd>
-                      ) : null}
+                    <div className="divide-y divide-border rounded-lg border border-border bg-surface-raised">
+                      {lifecycleRows.map((row) => (
+                        <div
+                          className="grid gap-1 px-layout-md py-3"
+                          key={row.label}
+                        >
+                          <dt className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                            {row.label}
+                          </dt>
+                          <dd className="text-sm font-medium text-foreground">
+                            {row.primary}
+                          </dd>
+                          {row.secondary ? (
+                            <dd className="text-xs text-muted-foreground">
+                              {row.secondary}
+                            </dd>
+                          ) : null}
+                        </div>
+                      ))}
                     </div>
 
                     <div className="divide-y divide-border rounded-lg border border-border bg-surface-raised">
@@ -495,13 +590,13 @@ export function RegisterSessionViewContent({
                     </div>
                   </dl>
 
-                  {registerSession.pendingApprovalRequest?.reason ? (
+                  {formattedApprovalReason ? (
                     <div className="mt-layout-lg border-t border-border/70 pt-layout-lg">
                       <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
                         Manager follow-up
                       </p>
                       <p className="mt-2 text-sm text-foreground">
-                        {registerSession.pendingApprovalRequest.reason}
+                        {formattedApprovalReason}
                       </p>
                     </div>
                   ) : null}
@@ -794,9 +889,9 @@ export function RegisterSessionViewContent({
                         ? "Yes"
                         : "No"}
                     </p>
-                    {registerSessionSnapshot.closeoutReview.reason ? (
+                    {formattedCloseoutReviewReason ? (
                       <p className="text-sm text-foreground">
-                        {registerSessionSnapshot.closeoutReview.reason}
+                        {formattedCloseoutReviewReason}
                       </p>
                     ) : null}
                   </div>

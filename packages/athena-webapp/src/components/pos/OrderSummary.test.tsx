@@ -1,11 +1,13 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
+import { render as renderEmail } from "@react-email/components";
 
+import { currencyFormatter } from "~/shared/currencyFormatter";
 import { OrderSummary } from "./OrderSummary";
 
 vi.mock("@react-email/components", () => ({
-  render: vi.fn(),
+  render: vi.fn().mockResolvedValue("<receipt />"),
 }));
 
 vi.mock("~/src/hooks/useGetActiveStore", () => ({
@@ -25,12 +27,7 @@ vi.mock("~/src/hooks/usePrint", () => ({
   }),
 }));
 
-const currencyFormatter = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "GHS",
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-});
+const formatter = currencyFormatter("GHS");
 
 function stripWhitespace(value: string) {
   return value.replace(/\s/g, "");
@@ -63,6 +60,10 @@ function getBalanceDueLabel() {
 }
 
 describe("OrderSummary completed transaction summary", () => {
+  beforeEach(() => {
+    vi.mocked(renderEmail).mockClear();
+  });
+
   it("does not render the tax line in the completed sale totals", () => {
     render(
       <OrderSummary
@@ -156,8 +157,8 @@ describe("OrderSummary completed transaction summary", () => {
     expect(screen.getAllByText(/Cash Payment/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Card Payment/i).length).toBeGreaterThan(0);
     expect(screen.getByText("Payments")).toBeInTheDocument();
-    expect(screen.getByText("GHS 10")).toBeInTheDocument();
-    expect(screen.getByText("GHS 7")).toBeInTheDocument();
+    expect(screen.getByText("GH₵10")).toBeInTheDocument();
+    expect(screen.getByText("GH₵7")).toBeInTheDocument();
   });
 
   it("combines repeated completed payments by method in the rail breakdown", () => {
@@ -185,8 +186,72 @@ describe("OrderSummary completed transaction summary", () => {
     );
 
     expect(screen.getByText("Payments")).toBeInTheDocument();
-    expect(screen.getByText("GHS 10")).toBeInTheDocument();
-    expect(screen.getByText("GHS 7")).toBeInTheDocument();
+    expect(screen.getByText("GH₵10")).toBeInTheDocument();
+    expect(screen.getByText("GH₵7")).toBeInTheDocument();
+  });
+
+  it("uses the shared currency formatter for generated receipt amounts", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <OrderSummary
+        cartItems={[]}
+        completedOrderNumber="404927"
+        completedTransactionData={{
+          paymentMethod: "cash",
+          completedAt: new Date("2026-04-25T18:08:00.000Z"),
+          cartItems: [
+            {
+              id: "item-1",
+              name: "keyboard",
+              barcode: "123456789012",
+              price: 29900,
+              quantity: 2,
+              productId: "product-1",
+              skuId: "sku-1",
+            },
+          ] as never,
+          customerInfo: undefined,
+          subtotal: 59800,
+          tax: 0,
+          total: 59800,
+          payments: [
+            { id: "payment-1", method: "cash", amount: 40000, timestamp: 1 },
+            { id: "payment-2", method: "card", amount: 19800, timestamp: 2 },
+          ],
+        }}
+        isTransactionCompleted
+        presentation="rail"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Print receipt/i }));
+
+    await waitFor(() => {
+      expect(renderEmail).toHaveBeenCalled();
+    });
+
+    const receiptElement = vi.mocked(renderEmail).mock.calls[0][0] as {
+      props: {
+        amountPaid: string;
+        items: Array<{ quantityLabel: string; totalPrice: string }>;
+        payments: Array<{ amount: string; method: string }>;
+        subtotal: string;
+        total: string;
+      };
+    };
+
+    expect(receiptElement.props.subtotal).toBe("GH₵598");
+    expect(receiptElement.props.total).toBe("GH₵598");
+    expect(receiptElement.props.amountPaid).toBe("GH₵598");
+    expect(receiptElement.props.items[0]).toMatchObject({
+      quantityLabel: "2 × GH₵299",
+      totalPrice: "GH₵598",
+    });
+    expect(receiptElement.props.payments).toEqual([
+      { method: "cash", amount: "GH₵400" },
+      { method: "card", amount: "GH₵198" },
+    ]);
   });
 
   it("reflects a draft amount equal to balance due as zero remaining", async () => {
@@ -216,7 +281,7 @@ describe("OrderSummary completed transaction summary", () => {
       const label = getBalanceDueLabel();
       expect(label).toHaveTextContent("Balance due");
       expect(stripWhitespace(getBalanceDueAmount())).toBe(
-        stripWhitespace(currencyFormatter.format(0)),
+        stripWhitespace(formatter.format(0)),
       );
     });
   });
@@ -254,7 +319,7 @@ describe("OrderSummary completed transaction summary", () => {
         const balanceDueLabel = getBalanceDueLabel();
         expect(balanceDueLabel).toHaveTextContent("Balance due");
         expect(stripWhitespace(getBalanceDueAmount())).toBe(
-          stripWhitespace(currencyFormatter.format(0)),
+          stripWhitespace(formatter.format(0)),
         );
       });
     },
@@ -290,7 +355,7 @@ describe("OrderSummary completed transaction summary", () => {
       const label = getBalanceDueLabel();
       expect(label).toHaveTextContent("Change due");
       expect(stripWhitespace(getBalanceDueAmount())).toBe(
-        stripWhitespace(currencyFormatter.format(300 / 100)),
+        stripWhitespace(formatter.format(300 / 100)),
       );
     });
   });
@@ -340,7 +405,7 @@ describe("OrderSummary completed transaction summary", () => {
       const label = getBalanceDueLabel();
       expect(label).toHaveTextContent("Balance due");
       expect(stripWhitespace(getBalanceDueAmount())).toBe(
-        stripWhitespace(currencyFormatter.format(0)),
+        stripWhitespace(formatter.format(0)),
       );
     });
   });
@@ -389,7 +454,7 @@ describe("OrderSummary completed transaction summary", () => {
       const label = getBalanceDueLabel();
       expect(label).toHaveTextContent("Change due");
       expect(stripWhitespace(getBalanceDueAmount())).toBe(
-        stripWhitespace(currencyFormatter.format(60 / 100)),
+        stripWhitespace(formatter.format(60 / 100)),
       );
     });
   });
@@ -429,7 +494,7 @@ describe("OrderSummary completed transaction summary", () => {
       const label = getBalanceDueLabel();
       expect(label).toHaveTextContent("Balance due");
       expect(stripWhitespace(getBalanceDueAmount())).toBe(
-        stripWhitespace(currencyFormatter.format(0)),
+        stripWhitespace(formatter.format(0)),
       );
     });
   });
@@ -472,7 +537,7 @@ describe("OrderSummary completed transaction summary", () => {
       const label = getBalanceDueLabel();
       expect(label).toHaveTextContent("Balance due");
       expect(stripWhitespace(getBalanceDueAmount())).toBe(
-        stripWhitespace(currencyFormatter.format(30 / 100)),
+        stripWhitespace(formatter.format(30 / 100)),
       );
     });
   });
@@ -515,7 +580,7 @@ describe("OrderSummary completed transaction summary", () => {
       const label = getBalanceDueLabel();
       expect(label).toHaveTextContent("Balance due");
       expect(stripWhitespace(getBalanceDueAmount())).toBe(
-        stripWhitespace(currencyFormatter.format(30 / 100)),
+        stripWhitespace(formatter.format(30 / 100)),
       );
     });
   });

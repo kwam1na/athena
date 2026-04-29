@@ -64,6 +64,7 @@ describe("utils", () => {
 
   it("formats and normalizes display strings", () => {
     expect(currencyFormatter("USD").format(1250)).toBe("$1,250");
+    expect(currencyFormatter("GHS").format(1250)).toBe("GH₵1,250");
     expect(toSlug("  Raw Hair Bundle! Deal  ")).toBe("raw-hair-bundle-deal");
     expect(slugToWords("same-day-delivery")).toBe("same day delivery");
   });

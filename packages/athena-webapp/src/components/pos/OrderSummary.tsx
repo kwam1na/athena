@@ -20,7 +20,7 @@ import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 import { capitalizeWords, cn } from "~/src/lib/utils";
 import config from "~/src/config";
 import PosReceiptEmail from "~/convex/emails/PosReceiptEmail";
-import { currencyFormatter } from "~/convex/utils";
+import { currencyFormatter } from "~/shared/currencyFormatter";
 
 import { PaymentView, type SelectedPaymentMethod } from "./PaymentView";
 import { PaymentsAddedList } from "./PaymentsAddedList";

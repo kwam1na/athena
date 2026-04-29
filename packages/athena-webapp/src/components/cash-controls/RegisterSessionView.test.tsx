@@ -166,6 +166,7 @@ describe("RegisterSessionViewContent", () => {
     );
 
     expect(screen.getAllByText("Register 3").length).toBeGreaterThan(0);
+    expect(screen.getByText("Opened")).toBeInTheDocument();
     expect(
       screen.getByText((_, element) =>
         Boolean(
@@ -174,6 +175,10 @@ describe("RegisterSessionViewContent", () => {
         ),
       ),
     ).toBeInTheDocument();
+    expect(screen.getByText("Activity")).toBeInTheDocument();
+    expect(screen.getByText("1 linked sale")).toBeInTheDocument();
+    expect(screen.getAllByText("Closing").length).toBeGreaterThan(0);
+    expect(screen.getByText("Counted cash $171")).toBeInTheDocument();
     expect(screen.getByText("Linked transactions")).toBeInTheDocument();
     const transactionRow = screen.getByRole("link", {
       name: "Open transaction #TXN-0031",
@@ -188,6 +193,77 @@ describe("RegisterSessionViewContent", () => {
     expect(
       screen.getByRole("link", { name: "View trace" }),
     ).toBeInTheDocument();
+  });
+
+  it("communicates when a register session has closed", () => {
+    const closedAt = new Date("2026-04-21T19:45:00.000Z").getTime();
+    const expectedClosedAt = new Date(closedAt).toLocaleString("en-US", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            closedAt,
+            closedByStaffName: "Kojo Mensimah",
+            status: "closed",
+          },
+        }}
+        orgUrlSlug="wigclub"
+        storeId="store-1"
+        storeUrlSlug="wigclub"
+      />,
+    );
+
+    expect(screen.getAllByText("Closed").length).toBeGreaterThan(0);
+    expect(screen.getByText(expectedClosedAt)).toBeInTheDocument();
+    expect(screen.getByText("By Kojo M.")).toBeInTheDocument();
+  });
+
+  it("formats variance amounts in manager follow-up copy", () => {
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          closeoutReview: {
+            hasVariance: true,
+            reason: "Variance of -6100 exceeded the closeout approval threshold.",
+            requiresApproval: true,
+            variance: -6100,
+          },
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            pendingApprovalRequest: {
+              _id: "approval-1",
+              reason: "Variance of -6100 exceeded the closeout approval threshold.",
+              requestedByStaffName: "Ama Mensah",
+              status: "pending",
+            },
+          },
+        }}
+        orgUrlSlug="wigclub"
+        storeId="store-1"
+        storeUrlSlug="wigclub"
+      />,
+    );
+
+    expect(
+      screen.getAllByText(
+        "Variance of GH₵-61 exceeded the closeout approval threshold.",
+      ).length,
+    ).toBeGreaterThan(0);
   });
 
   it("opens the transaction detail when the linked transaction row is clicked", async () => {

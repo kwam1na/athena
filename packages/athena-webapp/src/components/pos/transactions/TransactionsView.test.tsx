@@ -56,7 +56,9 @@ vi.mock("../../base/table/data-table", () => ({
         <div key={row.transactionNumber}>
           <span>{row.transactionNumber}</span>
           {row.sessionTraceId ? (
-            <span data-testid={`session-trace-${row.transactionNumber}`}>trace</span>
+            <span data-testid={`session-trace-${row.transactionNumber}`}>
+              trace
+            </span>
           ) : null}
         </div>
       ))}
@@ -66,7 +68,9 @@ vi.mock("../../base/table/data-table", () => ({
 
 vi.mock("@/components/ui/tabs", () => ({
   Tabs: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-  TabsList: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  TabsList: ({ children }: { children?: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   TabsTrigger: ({ children }: { children?: React.ReactNode }) => (
     <button type="button">{children}</button>
   ),
@@ -114,8 +118,12 @@ describe("TransactionsView", () => {
 
     render(<TransactionsView />);
 
-    expect(screen.queryByTestId("session-trace-POS-123456")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("session-trace-POS-654321")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("session-trace-POS-123456"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("session-trace-POS-654321"),
+    ).not.toBeInTheDocument();
   });
 
   it("passes the register session filter to the completed transactions query", () => {
@@ -126,22 +134,23 @@ describe("TransactionsView", () => {
         currency: "GHS",
       },
     });
-    useQueryMock.mockReturnValue([]);
+    useQueryMock.mockReturnValueOnce([]).mockReturnValueOnce({
+      registerSession: {
+        registerNumber: "3",
+      },
+    });
 
     render(<TransactionsView />);
 
-    expect(useQueryMock).toHaveBeenCalledWith(
-      expect.anything(),
-      {
-        storeId: "store-1",
-        registerSessionId: "session-1",
-      },
-    );
+    expect(useQueryMock).toHaveBeenNthCalledWith(1, expect.anything(), {
+      storeId: "store-1",
+      registerSessionId: "session-1",
+    });
     expect(
-      screen.getByText("Showing transactions linked to this register session."),
+      screen.getByText("Showing transactions linked to Register 3"),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("No transactions for this register session"),
+      screen.getByText("No transactions for Register 3"),
     ).toBeInTheDocument();
   });
 });
