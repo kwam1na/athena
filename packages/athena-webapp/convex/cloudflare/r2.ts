@@ -1,46 +1,123 @@
 import {
-  S3Client,
-  PutObjectCommand,
-  DeleteObjectCommand,
   ListObjectsV2Command,
+  DeleteObjectCommand,
   DeleteObjectsCommand,
+  PutObjectCommand,
+  S3Client,
 } from "@aws-sdk/client-s3";
 
-const BUCKET = process.env.R2_BUCKET!;
-const PUBLIC_URL = process.env.R2_PUBLIC_URL!; // https://images.wigclub.store
+type EnvSource = Record<string, string | undefined>;
 
-const r2 = new S3Client({
-  region: "auto",
-  endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-  credentials: {
-    accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
-  },
-});
+type R2Config = {
+  accountId: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  bucket: string;
+  publicUrl: string;
+  endpoint: string;
+};
+
+const REQUIRED_ENV_KEYS = [
+  "CLOUDFLARE_ACCOUNT_ID",
+  "R2_ACCESS_KEY_ID",
+  "R2_SECRET_ACCESS_KEY",
+  "R2_BUCKET",
+  "R2_PUBLIC_URL",
+] as const;
+
+let cachedR2:
+  | {
+      config: R2Config;
+      client: S3Client;
+    }
+  | undefined;
+
+const readEnvValue = (
+  env: EnvSource,
+  key: (typeof REQUIRED_ENV_KEYS)[number],
+): string | undefined => {
+  const value = env[key];
+  if (typeof value !== "string") return undefined;
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+};
+
+export const resolveR2ConfigFromEnv = (
+  env: EnvSource = process.env,
+): R2Config => {
+  const missing = REQUIRED_ENV_KEYS.filter((key) => !readEnvValue(env, key));
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing Cloudflare R2 environment variables: ${missing.join(", ")}`,
+    );
+  }
+
+  const accountId = readEnvValue(env, "CLOUDFLARE_ACCOUNT_ID")!;
+
+  return {
+    accountId,
+    accessKeyId: readEnvValue(env, "R2_ACCESS_KEY_ID")!,
+    secretAccessKey: readEnvValue(env, "R2_SECRET_ACCESS_KEY")!,
+    bucket: readEnvValue(env, "R2_BUCKET")!,
+    publicUrl: readEnvValue(env, "R2_PUBLIC_URL")!,
+    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+  };
+};
+
+const getR2 = () => {
+  const config = resolveR2ConfigFromEnv();
+
+  if (
+    cachedR2 &&
+    cachedR2.config.accountId === config.accountId &&
+    cachedR2.config.accessKeyId === config.accessKeyId &&
+    cachedR2.config.secretAccessKey === config.secretAccessKey &&
+    cachedR2.config.bucket === config.bucket &&
+    cachedR2.config.publicUrl === config.publicUrl
+  ) {
+    return cachedR2;
+  }
+
+  cachedR2 = {
+    config,
+    client: new S3Client({
+      region: "auto",
+      endpoint: config.endpoint,
+      credentials: {
+        accessKeyId: config.accessKeyId,
+        secretAccessKey: config.secretAccessKey,
+      },
+    }),
+  };
+
+  return cachedR2;
+};
 
 export const uploadFileToR2 = async (file: any, key: string) => {
+  const { client, config } = getR2();
+
   try {
     const params = {
-      Bucket: BUCKET,
+      Bucket: config.bucket,
       Key: key,
       Body: file,
     };
 
-    await r2.send(new PutObjectCommand(params));
-    return `${PUBLIC_URL}/${key}`;
+    await client.send(new PutObjectCommand(params));
+    return `${config.publicUrl}/${key}`;
   } catch (error) {
-    // handled
-    console.log(
-      `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-    );
     console.error(error);
+    throw error;
   }
 };
 
 export const deleteFileInR2 = async (path: string) => {
+  const { client, config } = getR2();
   const OLD_S3_PREFIX =
     "https://athena-amzn-bucket.s3.eu-west-1.amazonaws.com/";
-  let key = path.split(`${PUBLIC_URL}/`)[1];
+  let key = path.split(`${config.publicUrl}/`)[1];
   // Fallback: handle legacy S3 URLs during transition period
   if (!key) key = path.split(OLD_S3_PREFIX)[1];
 
@@ -48,49 +125,54 @@ export const deleteFileInR2 = async (path: string) => {
 
   try {
     const params = {
-      Bucket: BUCKET,
+      Bucket: config.bucket,
       Key: key,
     };
 
-    await r2.send(new DeleteObjectCommand(params));
+    await client.send(new DeleteObjectCommand(params));
     return { success: true, key };
   } catch (error) {
-    // handled
+    console.error(error);
+    throw error;
   }
 };
 
 export const deleteDirectoryInR2 = async (directory: string) => {
+  const { client, config } = getR2();
+
   try {
     let continuationToken: string | undefined;
 
     do {
       const listParams = {
-        Bucket: BUCKET,
+        Bucket: config.bucket,
         Prefix: `${directory}/`,
         ContinuationToken: continuationToken,
       };
 
-      const listResponse = await r2.send(new ListObjectsV2Command(listParams));
+      const listResponse = await client.send(
+        new ListObjectsV2Command(listParams),
+      );
 
       if (listResponse.Contents && listResponse.Contents.length > 0) {
         const deleteParams = {
-          Bucket: BUCKET,
+          Bucket: config.bucket,
           Delete: {
             Objects: listResponse.Contents.map(({ Key }) => ({ Key })),
           },
         };
 
-        await r2.send(new DeleteObjectsCommand(deleteParams));
+        await client.send(new DeleteObjectsCommand(deleteParams));
       }
 
       continuationToken = listResponse.NextContinuationToken;
     } while (continuationToken);
 
     const dirParams = {
-      Bucket: BUCKET,
+      Bucket: config.bucket,
       Key: `${directory}/`,
     };
-    await r2.send(new DeleteObjectCommand(dirParams));
+    await client.send(new DeleteObjectCommand(dirParams));
 
     return { success: true, directory };
   } catch (error) {
@@ -107,6 +189,8 @@ export const listItemsInR2Directory = async ({
   directory,
   firstLevelOnly = false,
 }: ListItemsOptions) => {
+  const { client, config } = getR2();
+
   try {
     const items: Array<{
       key: string;
@@ -118,13 +202,15 @@ export const listItemsInR2Directory = async ({
 
     do {
       const listParams = {
-        Bucket: BUCKET,
+        Bucket: config.bucket,
         Prefix: `${directory}/`,
         Delimiter: firstLevelOnly ? "/" : undefined,
         ContinuationToken: continuationToken,
       };
 
-      const listResponse = await r2.send(new ListObjectsV2Command(listParams));
+      const listResponse = await client.send(
+        new ListObjectsV2Command(listParams),
+      );
 
       if (listResponse.Contents && listResponse.Contents.length > 0) {
         for (const item of listResponse.Contents) {
@@ -133,7 +219,7 @@ export const listItemsInR2Directory = async ({
 
             items.push({
               key: item.Key,
-              url: `${PUBLIC_URL}/${item.Key}`,
+              url: `${config.publicUrl}/${item.Key}`,
               size: item.Size,
               type: "file",
             });
@@ -146,7 +232,7 @@ export const listItemsInR2Directory = async ({
           if (prefix.Prefix) {
             items.push({
               key: prefix.Prefix,
-              url: `${PUBLIC_URL}/${prefix.Prefix}`,
+              url: `${config.publicUrl}/${prefix.Prefix}`,
               type: "directory",
             });
           }

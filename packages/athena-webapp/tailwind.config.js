@@ -1,7 +1,10 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   darkMode: ["class"],
-  content: ["./src/**/*.{js,ts,jsx,tsx}"],
+  content: {
+    relative: true,
+    files: ["./src/**/*.{js,ts,jsx,tsx}"],
+  },
   safelist: [
     "bg-green-100",
     "text-green-700",
