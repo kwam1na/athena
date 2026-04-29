@@ -1,23 +1,27 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
 import { internal } from "../../../_generated/api";
+import {
+  collectSessionItemsFromPages,
+  findSessionItemBySkuInPages,
+} from "./sessionCommandRepository";
 
 const ACTIVE_SESSION_CANDIDATE_LIMIT = 100;
 const SESSION_ITEMS_PAGE_SIZE = 200;
 
-export interface SessionCommandRepository {
+export interface ExpenseSessionCommandRepository {
   getLatestSessionNumber(storeId: Id<"store">): Promise<string | null>;
   listActiveSessionsForTerminal(args: {
     storeId: Id<"store">;
     terminalId: Id<"posTerminal">;
-  }): Promise<Doc<"posSession">[]>;
-  listActiveSessionsForCashier(args: {
+  }): Promise<Doc<"expenseSession">[]>;
+  listActiveSessionsForStaffProfile(args: {
     storeId: Id<"store">;
     staffProfileId: Id<"staffProfile">;
-  }): Promise<Doc<"posSession">[]>;
+  }): Promise<Doc<"expenseSession">[]>;
   getSessionById(
-    sessionId: Id<"posSession">,
-  ): Promise<Doc<"posSession"> | null>;
+    sessionId: Id<"expenseSession">,
+  ): Promise<Doc<"expenseSession"> | null>;
   getRegisterSessionById(
     registerSessionId: Id<"registerSession">,
   ): Promise<Doc<"registerSession"> | null>;
@@ -27,39 +31,39 @@ export interface SessionCommandRepository {
     registerNumber?: string;
   }): Promise<Doc<"registerSession"> | null>;
   listSessionItems(
-    sessionId: Id<"posSession">,
-  ): Promise<Doc<"posSessionItem">[]>;
+    sessionId: Id<"expenseSession">,
+  ): Promise<Doc<"expenseSessionItem">[]>;
   findSessionItemBySku(args: {
-    sessionId: Id<"posSession">;
+    sessionId: Id<"expenseSession">;
     productSkuId: Id<"productSku">;
-  }): Promise<Doc<"posSessionItem"> | null>;
+  }): Promise<Doc<"expenseSessionItem"> | null>;
   getSessionItemById(
-    itemId: Id<"posSessionItem">,
-  ): Promise<Doc<"posSessionItem"> | null>;
+    itemId: Id<"expenseSessionItem">,
+  ): Promise<Doc<"expenseSessionItem"> | null>;
   createSession(
-    input: Omit<Doc<"posSession">, "_id" | "_creationTime">,
-  ): Promise<Id<"posSession">>;
+    input: Omit<Doc<"expenseSession">, "_id" | "_creationTime">,
+  ): Promise<Id<"expenseSession">>;
   patchSession(
-    sessionId: Id<"posSession">,
-    patch: Partial<Omit<Doc<"posSession">, "_id" | "_creationTime">>,
+    sessionId: Id<"expenseSession">,
+    patch: Partial<Omit<Doc<"expenseSession">, "_id" | "_creationTime">>,
   ): Promise<void>;
   createSessionItem(
-    input: Omit<Doc<"posSessionItem">, "_id" | "_creationTime">,
-  ): Promise<Id<"posSessionItem">>;
+    input: Omit<Doc<"expenseSessionItem">, "_id" | "_creationTime">,
+  ): Promise<Id<"expenseSessionItem">>;
   patchSessionItem(
-    itemId: Id<"posSessionItem">,
-    patch: Partial<Omit<Doc<"posSessionItem">, "_id" | "_creationTime">>,
+    itemId: Id<"expenseSessionItem">,
+    patch: Partial<Omit<Doc<"expenseSessionItem">, "_id" | "_creationTime">>,
   ): Promise<void>;
-  deleteSessionItem(itemId: Id<"posSessionItem">): Promise<void>;
+  deleteSessionItem(itemId: Id<"expenseSessionItem">): Promise<void>;
 }
 
-export function createSessionCommandRepository(
+export function createExpenseSessionCommandRepository(
   ctx: MutationCtx,
-): SessionCommandRepository {
+): ExpenseSessionCommandRepository {
   return {
     async getLatestSessionNumber(storeId) {
       const latestSession = await ctx.db
-        .query("posSession")
+        .query("expenseSession")
         .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
         .order("desc")
         .first();
@@ -68,7 +72,7 @@ export function createSessionCommandRepository(
     },
     listActiveSessionsForTerminal(args) {
       return ctx.db
-        .query("posSession")
+        .query("expenseSession")
         .withIndex("by_storeId_status_terminalId", (q) =>
           q
             .eq("storeId", args.storeId)
@@ -77,9 +81,9 @@ export function createSessionCommandRepository(
         )
         .take(ACTIVE_SESSION_CANDIDATE_LIMIT);
     },
-    listActiveSessionsForCashier(args) {
+    listActiveSessionsForStaffProfile(args) {
       return ctx.db
-        .query("posSession")
+        .query("expenseSession")
         .withIndex("by_storeId_status_staffProfileId", (q) =>
           q
             .eq("storeId", args.storeId)
@@ -89,7 +93,7 @@ export function createSessionCommandRepository(
         .take(ACTIVE_SESSION_CANDIDATE_LIMIT);
     },
     getSessionById(sessionId) {
-      return ctx.db.get("posSession", sessionId);
+      return ctx.db.get("expenseSession", sessionId);
     },
     getRegisterSessionById(registerSessionId) {
       return ctx.db.get("registerSession", registerSessionId);
@@ -107,7 +111,7 @@ export function createSessionCommandRepository(
     listSessionItems(sessionId) {
       return collectSessionItemsFromPages((cursor) =>
         ctx.db
-          .query("posSessionItem")
+          .query("expenseSessionItem")
           .withIndex("by_sessionId", (q) => q.eq("sessionId", sessionId))
           .paginate({
             cursor,
@@ -119,7 +123,7 @@ export function createSessionCommandRepository(
       return findSessionItemBySkuInPages(
         (cursor) =>
           ctx.db
-            .query("posSessionItem")
+            .query("expenseSessionItem")
             .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
             .paginate({
               cursor,
@@ -129,75 +133,22 @@ export function createSessionCommandRepository(
       );
     },
     getSessionItemById(itemId) {
-      return ctx.db.get("posSessionItem", itemId);
+      return ctx.db.get("expenseSessionItem", itemId);
     },
     createSession(input) {
-      return ctx.db.insert("posSession", input);
+      return ctx.db.insert("expenseSession", input);
     },
     async patchSession(sessionId, patch) {
-      await ctx.db.patch("posSession", sessionId, patch);
+      await ctx.db.patch("expenseSession", sessionId, patch);
     },
     createSessionItem(input) {
-      return ctx.db.insert("posSessionItem", input);
+      return ctx.db.insert("expenseSessionItem", input);
     },
     async patchSessionItem(itemId, patch) {
-      await ctx.db.patch("posSessionItem", itemId, patch);
+      await ctx.db.patch("expenseSessionItem", itemId, patch);
     },
     async deleteSessionItem(itemId) {
-      await ctx.db.delete("posSessionItem", itemId);
+      await ctx.db.delete("expenseSessionItem", itemId);
     },
   };
-}
-
-type PaginatedPage<TItem> = {
-  page: TItem[];
-  isDone: boolean;
-  continueCursor: string;
-};
-
-type PaginatedLoader<TItem> = (
-  cursor: string | null,
-) => Promise<PaginatedPage<TItem>>;
-
-export async function collectSessionItemsFromPages<TItem>(
-  loadPage: PaginatedLoader<TItem>,
-): Promise<TItem[]> {
-  const items: TItem[] = [];
-  let cursor: string | null = null;
-
-  while (true) {
-    const page = await loadPage(cursor);
-    items.push(...page.page);
-
-    if (page.isDone) {
-      return items;
-    }
-
-    cursor = page.continueCursor;
-  }
-}
-
-export async function findSessionItemBySkuInPages<
-  TItem extends { productSkuId: Id<"productSku"> },
->(
-  loadPage: PaginatedLoader<TItem>,
-  productSkuId: Id<"productSku">,
-): Promise<TItem | null> {
-  let cursor: string | null = null;
-
-  while (true) {
-    const page = await loadPage(cursor);
-    const matchingItem =
-      page.page.find((item) => item.productSkuId === productSkuId) ?? null;
-
-    if (matchingItem) {
-      return matchingItem;
-    }
-
-    if (page.isDone) {
-      return null;
-    }
-
-    cursor = page.continueCursor;
-  }
 }

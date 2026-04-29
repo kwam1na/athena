@@ -224,7 +224,8 @@ const schema = defineSchema({
       "storeId",
       "status",
       "staffProfileId",
-    ]),
+    ])
+    .index("by_registerSessionId", ["registerSessionId"]),
   posSessionItem: defineTable(posSessionItemSchema).index("by_sessionId", [
     "sessionId",
   ]),

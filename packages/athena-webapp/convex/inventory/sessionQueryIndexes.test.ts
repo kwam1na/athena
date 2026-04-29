@@ -51,6 +51,7 @@ describe("POS and expense session indexing", () => {
       '.index("by_storeId_status_staffProfileId", ['
     );
     expect(schema).toContain('.index("by_expiresAt", ["expiresAt"])');
+    expect(schema).toContain('.index("by_registerSessionId", ["registerSessionId"])');
   });
 
   it("uses targeted session indexes instead of broad status scans in posSessions", () => {
@@ -101,18 +102,71 @@ describe("POS and expense session indexing", () => {
       "inventory",
       "expenseSessions.ts"
     );
+    const repositorySource = readProjectFile(
+      "convex",
+      "pos",
+      "infrastructure",
+      "repositories",
+      "expenseSessionCommandRepository.ts",
+    );
+    const combinedSource = `${source}\n${repositorySource}`;
 
-    expect(source).toContain('withIndex("by_staffProfileId_and_status"');
     expect(source).toContain('withIndex("by_storeId_status_terminalId"');
-    expect(source).toContain('withIndex("by_storeId_status_staffProfileId"');
+    expect(combinedSource).toContain(
+      'withIndex("by_storeId_status_staffProfileId"',
+    );
     expect(source).toContain('withIndex("by_storeId_terminalId"');
     expect(source).toContain('withIndex("by_storeId_staffProfileId"');
 
-    expect(source).not.toContain(
+    expect(combinedSource).not.toContain(
       '.withIndex("by_staffProfileId", (q) => q.eq("staffProfileId", args.staffProfileId))\n      .filter((q) => q.eq(q.field("status"), "active"))'
     );
-    expect(source).not.toContain(
+    expect(combinedSource).not.toContain(
       '.withIndex("by_status", (q) => q.eq("status", "active"))\n          .filter((q) => q.lt(q.field("expiresAt"), now))'
+    );
+  });
+
+  it("exposes register session binding on expense session schema and query DTOs", () => {
+    const schemaSource = readProjectFile(
+      "convex",
+      "schemas",
+      "pos",
+      "expenseSession.ts",
+    );
+    const expenseSessionSource = readProjectFile(
+      "convex",
+      "inventory",
+      "expenseSessions.ts",
+    );
+
+    expect(schemaSource).toContain(
+      'registerSessionId: v.optional(v.id("registerSession"))',
+    );
+
+    const storeListSource = readSourceSlice(
+      expenseSessionSource,
+      "export const getStoreExpenseSessions = query({",
+      "// Get a specific expense session by ID",
+    );
+    const byIdSource = readSourceSlice(
+      expenseSessionSource,
+      "export const getExpenseSessionById = query({",
+      "// Create a new expense session",
+    );
+    const activeSource = readSourceSlice(
+      expenseSessionSource,
+      "export const getActiveExpenseSession = query({",
+      "// Release inventory holds from expired expense sessions",
+    );
+
+    expect(storeListSource).toContain(
+      'registerSessionId: v.optional(v.id("registerSession"))',
+    );
+    expect(byIdSource).toContain(
+      'registerSessionId: v.optional(v.id("registerSession"))',
+    );
+    expect(activeSource).toContain(
+      'registerSessionId: v.optional(v.id("registerSession"))',
     );
   });
 
