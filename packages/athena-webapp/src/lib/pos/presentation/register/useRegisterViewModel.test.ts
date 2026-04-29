@@ -653,6 +653,7 @@ describe("useRegisterViewModel", () => {
     expect(mockOpenDrawer).toHaveBeenCalledWith({
       storeId: "store-1",
       terminalId: "terminal-1",
+      staffProfileId: "staff-1",
       registerNumber: "1",
       openingFloat: 5_000,
       notes: "Opening float ready",

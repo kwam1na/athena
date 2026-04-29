@@ -14,12 +14,59 @@ vi.mock("../../lib/athenaUserAuth", () => ({
     authMocks.requireAuthenticatedAthenaUserWithCtx,
 }));
 
+const terminal = {
+  _id: "terminal-1" as Id<"posTerminal">,
+  storeId: "store-1" as Id<"store">,
+  registerNumber: "A1",
+};
+
+const activeStaffProfile = {
+  _id: "staff-1" as Id<"staffProfile">,
+  storeId: "store-1" as Id<"store">,
+  status: "active",
+};
+
+function createDbGetMock({
+  terminalOverride,
+  staffProfileOverride,
+}: {
+  terminalOverride?: Partial<typeof terminal>;
+  staffProfileOverride?: Partial<typeof activeStaffProfile> | null;
+} = {}) {
+  const resolvedTerminal = { ...terminal, ...terminalOverride };
+  const resolvedStaffProfile =
+    staffProfileOverride === null
+      ? null
+      : { ...activeStaffProfile, ...staffProfileOverride };
+
+  return vi.fn(
+    async (
+      tableNameOrId:
+        | "posTerminal"
+        | "staffProfile"
+        | Id<"posTerminal">
+        | Id<"staffProfile">,
+      maybeId?: Id<"posTerminal"> | Id<"staffProfile">,
+    ) => {
+      const tableName =
+        tableNameOrId === "posTerminal" || tableNameOrId === "staffProfile"
+          ? tableNameOrId
+          : tableNameOrId === "staff-1" || maybeId === "staff-1"
+            ? "staffProfile"
+            : "posTerminal";
+      return tableName === "staffProfile"
+        ? resolvedStaffProfile
+        : resolvedTerminal;
+    },
+  );
+}
+
 describe("openDrawer", () => {
   beforeEach(() => {
     vi.resetAllMocks();
   });
 
-  it("opens a register session with the authenticated Athena user and maps the result", async () => {
+  it("opens a register session with the authenticated Athena user and signed-in staff member", async () => {
     authMocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
       _id: "user-1" as Id<"athenaUser">,
     });
@@ -40,17 +87,14 @@ describe("openDrawer", () => {
         workflowTraceId: "register_session:a1",
       }),
       db: {
-        get: vi.fn().mockResolvedValue({
-          _id: "terminal-1" as Id<"posTerminal">,
-          storeId: "store-1" as Id<"store">,
-          registerNumber: "A1",
-        }),
+        get: createDbGetMock(),
       },
     } as unknown as MutationCtx;
 
     const result = await openDrawer(ctx, {
       storeId: "store-1" as Id<"store">,
       terminalId: "terminal-1" as Id<"posTerminal">,
+      staffProfileId: "staff-1" as Id<"staffProfile">,
       registerNumber: "A1",
       openingFloat: 5000,
       notes: "Opening float ready",
@@ -67,6 +111,7 @@ describe("openDrawer", () => {
         storeId: "store-1",
         organizationId: "org-1",
         openedByUserId: "user-1",
+        openedByStaffProfileId: "staff-1",
         openingFloat: 5000,
         registerNumber: "A1",
         terminalId: "terminal-1",
@@ -108,10 +153,8 @@ describe("openDrawer", () => {
         workflowTraceId: "register_session:b2",
       }),
       db: {
-        get: vi.fn().mockResolvedValue({
-          _id: "terminal-1" as Id<"posTerminal">,
-          storeId: "store-1" as Id<"store">,
-          registerNumber: "B2",
+        get: createDbGetMock({
+          terminalOverride: { registerNumber: "B2" },
         }),
       },
     } as unknown as MutationCtx;
@@ -119,6 +162,7 @@ describe("openDrawer", () => {
     const result = await openDrawer(ctx, {
       storeId: "store-1" as Id<"store">,
       terminalId: "terminal-1" as Id<"posTerminal">,
+      staffProfileId: "staff-1" as Id<"staffProfile">,
       openingFloat: 5000,
       notes: "Terminal based register number",
     });
@@ -128,6 +172,7 @@ describe("openDrawer", () => {
       expect.objectContaining({
         storeId: "store-1",
         organizationId: "org-1",
+        openedByStaffProfileId: "staff-1",
         registerNumber: "B2",
       }),
     );
@@ -160,6 +205,7 @@ describe("openDrawer", () => {
       openDrawer(ctx, {
         storeId: "store-1" as Id<"store">,
         terminalId: "terminal-1" as Id<"posTerminal">,
+        staffProfileId: "staff-1" as Id<"staffProfile">,
         openingFloat: 5000,
       }),
     ).resolves.toEqual(
@@ -183,11 +229,7 @@ describe("openDrawer", () => {
         organizationId: "org-1" as Id<"organization">,
       }),
       db: {
-        get: vi.fn().mockResolvedValue({
-          _id: "terminal-1" as Id<"posTerminal">,
-          storeId: "store-1" as Id<"store">,
-          registerNumber: "A1",
-        }),
+        get: createDbGetMock(),
       },
       runMutation: vi
         .fn()
@@ -200,6 +242,7 @@ describe("openDrawer", () => {
       openDrawer(ctx, {
         storeId: "store-1" as Id<"store">,
         terminalId: "terminal-1" as Id<"posTerminal">,
+        staffProfileId: "staff-1" as Id<"staffProfile">,
         openingFloat: 5000,
       }),
     ).resolves.toEqual(
@@ -221,11 +264,7 @@ describe("openDrawer", () => {
         organizationId: "org-1" as Id<"organization">,
       }),
       db: {
-        get: vi.fn().mockResolvedValue({
-          _id: "terminal-1" as Id<"posTerminal">,
-          storeId: "store-1" as Id<"store">,
-          registerNumber: "A1",
-        }),
+        get: createDbGetMock(),
       },
       runMutation: vi
         .fn()
@@ -238,6 +277,7 @@ describe("openDrawer", () => {
       openDrawer(ctx, {
         storeId: "store-1" as Id<"store">,
         terminalId: "terminal-1" as Id<"posTerminal">,
+        staffProfileId: "staff-1" as Id<"staffProfile">,
         registerNumber: "A1",
         openingFloat: 5000,
       }),
@@ -256,10 +296,8 @@ describe("openDrawer", () => {
         organizationId: "org-1" as Id<"organization">,
       }),
       db: {
-        get: vi.fn().mockResolvedValue({
-          _id: "terminal-1" as Id<"posTerminal">,
-          storeId: "store-1" as Id<"store">,
-          registerNumber: "B1",
+        get: createDbGetMock({
+          terminalOverride: { registerNumber: "B1" },
         }),
       },
       runMutation: vi.fn(),
@@ -269,6 +307,7 @@ describe("openDrawer", () => {
       openDrawer(ctx, {
         storeId: "store-1" as Id<"store">,
         terminalId: "terminal-1" as Id<"posTerminal">,
+        staffProfileId: "staff-1" as Id<"staffProfile">,
         registerNumber: "A1",
         openingFloat: 5000,
       }),
@@ -287,10 +326,8 @@ describe("openDrawer", () => {
         organizationId: "org-1" as Id<"organization">,
       }),
       db: {
-        get: vi.fn().mockResolvedValue({
-          _id: "terminal-1" as Id<"posTerminal">,
-          storeId: "store-1" as Id<"store">,
-          registerNumber: undefined,
+        get: createDbGetMock({
+          terminalOverride: { registerNumber: undefined },
         }),
       },
       runMutation: vi.fn(),
@@ -300,6 +337,7 @@ describe("openDrawer", () => {
       openDrawer(ctx, {
         storeId: "store-1" as Id<"store">,
         terminalId: "terminal-1" as Id<"posTerminal">,
+        staffProfileId: "staff-1" as Id<"staffProfile">,
         registerNumber: "A1",
         openingFloat: 5000,
       }),

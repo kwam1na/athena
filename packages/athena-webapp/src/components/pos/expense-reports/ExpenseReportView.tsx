@@ -13,6 +13,7 @@ import type { CartItem } from "../types";
 import type { Id } from "~/convex/_generated/dataModel";
 import { currencyFormatter } from "~/convex/utils";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
+import { formatStaffDisplayName } from "~/shared/staffDisplayName";
 
 type RouteParams =
   | {
@@ -63,11 +64,7 @@ export function ExpenseReportView() {
     const staffProfile = expenseTransaction?.staffProfile;
     if (!staffProfile) return null;
 
-    if (staffProfile.firstName && staffProfile.lastName) {
-      return `${staffProfile.firstName} ${staffProfile.lastName.charAt(0)}.`;
-    }
-
-    return staffProfile.fullName;
+    return formatStaffDisplayName(staffProfile);
   }, [expenseTransaction]);
 
   const totalQuantity = useMemo(

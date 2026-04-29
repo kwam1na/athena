@@ -25,6 +25,7 @@ import { CardContent, CardHeader } from "../../ui/card";
 import { WorkflowTraceRouteLink } from "../../traces/WorkflowTraceRouteLink";
 import { Button } from "../../ui/button";
 import config from "~/src/config";
+import { formatStaffDisplayName } from "~/shared/staffDisplayName";
 
 type RouteParams =
   | {
@@ -170,7 +171,7 @@ export function TransactionView() {
                       </div>
                       <div>
                         <p className="font-medium">
-                          {`${transaction.cashier.firstName} ${transaction.cashier.lastName.charAt(0)}.`}
+                          {formatStaffDisplayName(transaction.cashier)}
                         </p>
                         <p className="text-xs text-muted-foreground">Cashier</p>
                       </div>
@@ -252,7 +253,7 @@ export function TransactionView() {
                 completedTransactionData={completedData}
                 cashierName={
                   transaction.cashier
-                    ? `${transaction.cashier.firstName} ${transaction.cashier.lastName.charAt(0)}.`
+                    ? formatStaffDisplayName(transaction.cashier) ?? undefined
                     : undefined
                 }
                 receiptNumberOverride={transaction.transactionNumber}

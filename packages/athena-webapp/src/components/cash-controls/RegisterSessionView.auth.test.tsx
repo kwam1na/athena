@@ -7,6 +7,7 @@ import { RegisterSessionView } from "./RegisterSessionView";
 const mockedHooks = vi.hoisted(() => ({
   useAuth: vi.fn(),
   useMutation: vi.fn(),
+  useNavigate: vi.fn(),
   useProtectedAdminPageState: vi.fn(),
   useQuery: vi.fn(),
   useParams: vi.fn(),
@@ -31,6 +32,7 @@ vi.mock("@tanstack/react-router", () => ({
       {children}
     </a>
   ),
+  useNavigate: mockedHooks.useNavigate,
   useParams: mockedHooks.useParams,
 }));
 
@@ -80,6 +82,7 @@ describe("RegisterSessionView auth readiness", () => {
       storeUrlSlug: "east-legon",
     });
     mockedHooks.useMutation.mockReturnValue(vi.fn());
+    mockedHooks.useNavigate.mockReturnValue(vi.fn());
     mockedHooks.useQuery.mockReturnValue(undefined);
   });
 

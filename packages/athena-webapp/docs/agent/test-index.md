@@ -94,6 +94,7 @@ This index enumerates the current automated test files and ties them back to the
 
 - [`shared/commandResult.test.ts`](../../shared/commandResult.test.ts)
 - [`shared/registerSessionStatus.test.ts`](../../shared/registerSessionStatus.test.ts)
+- [`shared/staffDisplayName.test.ts`](../../shared/staffDisplayName.test.ts)
 
 ## Section `src`
 

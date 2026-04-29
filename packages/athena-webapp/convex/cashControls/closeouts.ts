@@ -6,6 +6,7 @@ import { buildApprovalRequest } from "../operations/approvalRequestHelpers";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { recordRegisterSessionTraceBestEffort } from "../operations/registerSessionTracing";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
+import { formatStaffDisplayName } from "../../shared/staffDisplayName";
 
 const CLOSEOUT_SESSION_LIMIT = 100;
 const DEFAULT_VARIANCE_APPROVAL_THRESHOLD = 5000;
@@ -311,7 +312,8 @@ async function listStaffNames(
   const staffEntries = await Promise.all(
     Array.from(staffProfileIds).map(async (staffProfileId) => {
       const staffProfile = await ctx.db.get("staffProfile", staffProfileId);
-      return staffProfile ? [staffProfileId, staffProfile.fullName] : null;
+      const staffName = formatStaffDisplayName(staffProfile);
+      return staffName ? [staffProfileId, staffName] : null;
     })
   );
 

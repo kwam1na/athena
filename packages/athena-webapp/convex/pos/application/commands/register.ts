@@ -53,6 +53,7 @@ export async function openDrawer(
   args: {
     storeId: Id<"store">;
     terminalId: Id<"posTerminal">;
+    staffProfileId: Id<"staffProfile">;
     registerNumber?: string;
     openingFloat: number;
     notes?: string;
@@ -78,6 +79,18 @@ export async function openDrawer(
     return userError({
       code: "validation_failed",
       message: "This terminal is not configured for this store.",
+    });
+  }
+
+  const staffProfile = await ctx.db.get("staffProfile", args.staffProfileId);
+  if (
+    !staffProfile ||
+    staffProfile.storeId !== args.storeId ||
+    staffProfile.status !== "active"
+  ) {
+    return userError({
+      code: "validation_failed",
+      message: "Register sign-in required. Sign in before opening the drawer.",
     });
   }
 
@@ -116,6 +129,7 @@ export async function openDrawer(
         terminalId: args.terminalId,
         registerNumber: resolvedRegisterNumber,
         openedByUserId: athenaUser._id,
+        openedByStaffProfileId: args.staffProfileId,
         openingFloat: args.openingFloat,
         notes: args.notes,
       },
