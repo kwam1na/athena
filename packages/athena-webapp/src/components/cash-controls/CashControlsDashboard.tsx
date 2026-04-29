@@ -1,6 +1,5 @@
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
-import { motion } from "framer-motion";
 
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { capitalizeWords, currencyFormatter } from "@/lib/utils";
@@ -22,26 +21,8 @@ import {
   TableRow,
 } from "../ui/table";
 import { getOrigin } from "~/src/lib/navigationUtils";
+import { formatStaffDisplayName } from "~/shared/staffDisplayName";
 import { CashControlsWorkspaceHeader } from "./CashControlsWorkspaceHeader";
-
-const containerVariants = {
-  hidden: {},
-  visible: {
-    transition: {
-      delayChildren: 0.04,
-      staggerChildren: 0.06,
-    },
-  },
-};
-
-const sectionVariants = {
-  hidden: { opacity: 0, y: 12 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.28, ease: [0.16, 1, 0.3, 1] },
-  },
-};
 
 type DashboardApprovalRequest = {
   _id: string;
@@ -394,7 +375,13 @@ function DepositsLedger({
                     {formatTimestamp(deposit.recordedAt)}
                   </TableCell>
                   <TableCell>{deposit.reference ?? "—"}</TableCell>
-                  <TableCell>{deposit.recordedByStaffName ?? "—"}</TableCell>
+                  <TableCell>
+                    {deposit.recordedByStaffName
+                      ? formatStaffDisplayName({
+                          fullName: deposit.recordedByStaffName,
+                        })
+                      : "—"}
+                  </TableCell>
                   <TableCell>{deposit.notes ?? "—"}</TableCell>
                   <TableCell className="text-right">
                     {deposit.registerSessionId ? (
@@ -452,16 +439,8 @@ export function CashControlsDashboardContent({
       }
     >
       <FadeIn className="container mx-auto space-y-6 py-8">
-        <motion.div
-          animate="visible"
-          className="space-y-6"
-          initial="hidden"
-          variants={containerVariants}
-        >
-          <motion.section
-            className="overflow-hidden rounded-[28px] bg-white/80 ring-1 ring-stone-200/70"
-            variants={sectionVariants}
-          >
+        <div className="space-y-6">
+          <section className="overflow-hidden rounded-[28px] bg-white/80 ring-1 ring-stone-200/70">
             <div className="grid gap-0 xl:grid-cols-[minmax(0,1.22fr)_320px]">
               <div className="border-b border-stone-200/80 px-6 py-6 xl:border-b-0 xl:border-r">
                 {isLoading ? (
@@ -494,20 +473,17 @@ export function CashControlsDashboardContent({
                 </div>
               </aside>
             </div>
-          </motion.section>
+          </section>
 
-          <motion.section
-            className="rounded-[24px] bg-white/80 px-6 py-6 ring-1 ring-stone-200/70"
-            variants={sectionVariants}
-          >
+          <section className="rounded-[24px] bg-white/80 px-6 py-6 ring-1 ring-stone-200/70">
             <DepositsLedger
               currency={currency}
               deposits={dashboardSnapshot.recentDeposits}
               orgUrlSlug={orgUrlSlug}
               storeUrlSlug={storeUrlSlug}
             />
-          </motion.section>
-        </motion.div>
+          </section>
+        </div>
       </FadeIn>
     </View>
   );

@@ -17,6 +17,7 @@ import { toDisplayAmount } from "~/convex/lib/currency";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import { userError } from "~/shared/commandResult";
+import { formatStaffDisplayName } from "~/shared/staffDisplayName";
 import { getOrigin } from "@/lib/navigationUtils";
 import { EmptyState } from "../states/empty/empty-state";
 import { WorkflowTraceRouteLink } from "../traces/WorkflowTraceRouteLink";
@@ -403,7 +404,9 @@ export function RegisterCloseoutViewContent({
                       <p className="text-sm text-muted-foreground">
                         Opened {formatTimestamp(registerSession.openedAt)}
                         {registerSession.openedByStaffName
-                          ? ` by ${registerSession.openedByStaffName}`
+                          ? ` by ${formatStaffDisplayName({
+                              fullName: registerSession.openedByStaffName,
+                            })}`
                           : ""}
                       </p>
                     </div>

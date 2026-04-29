@@ -7,8 +7,13 @@ import { recordPaymentAllocationWithCtx } from "../operations/paymentAllocations
 import { recordRegisterSessionDepositWithCtx } from "../operations/registerSessions";
 import { recordRegisterSessionTraceBestEffort } from "../operations/registerSessionTracing";
 import { toPesewas } from "../lib/currency";
+import {
+  listCompletedTransactions,
+  listTransactionItems,
+} from "../pos/infrastructure/repositories/transactionRepository";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { isPosUsableRegisterSessionStatus } from "../../shared/registerSessionStatus";
+import { formatStaffDisplayName } from "../../shared/staffDisplayName";
 
 const CASH_DEPOSIT_ALLOCATION_TYPE = "cash_deposit";
 const CASH_DEPOSIT_SUBJECT_TYPE = "register_cash_deposit";
@@ -86,6 +91,20 @@ type CashControlRegisterSession = Pick<
   | "workflowTraceId"
 >;
 
+type CashControlTransaction = Pick<
+  Doc<"posTransaction">,
+  | "_id"
+  | "completedAt"
+  | "customerInfo"
+  | "customerProfileId"
+  | "paymentMethod"
+  | "payments"
+  | "staffProfileId"
+  | "total"
+  | "transactionNumber"
+  | "workflowTraceId"
+>;
+
 type RecordRegisterSessionDepositResult = {
   action: "duplicate" | "recorded";
   deposit: Doc<"paymentAllocation"> | null;
@@ -136,7 +155,8 @@ async function listStaffNames(
   const staffEntries = await Promise.all(
     Array.from(staffProfileIds).map(async (staffProfileId) => {
       const staffProfile = await ctx.db.get("staffProfile", staffProfileId);
-      return staffProfile ? [staffProfileId, staffProfile.fullName] : null;
+      const staffName = formatStaffDisplayName(staffProfile);
+      return staffName ? [staffProfileId, staffName] : null;
     })
   );
 
@@ -327,11 +347,25 @@ async function listRegisterSessionTimeline(
   ).sort((left, right) => right.createdAt - left.createdAt);
 }
 
+async function listRegisterSessionTransactions(
+  ctx: QueryCtx,
+  args: {
+    registerSessionId: Id<"registerSession">;
+    storeId: Id<"store">;
+  }
+) {
+  return listCompletedTransactions(ctx, {
+    registerSessionId: args.registerSessionId,
+    storeId: args.storeId,
+  });
+}
+
 function collectStaffProfileIds(args: {
   approvalRequests: CashControlApprovalRequest[];
   deposits: CashControlDepositAllocation[];
   registerSessions: CashControlRegisterSession[];
   timeline?: Array<Pick<Doc<"operationalEvent">, "actorStaffProfileId">>;
+  transactions?: CashControlTransaction[];
 }) {
   const staffProfileIds = new Set<Id<"staffProfile">>();
 
@@ -360,6 +394,12 @@ function collectStaffProfileIds(args: {
   for (const event of args.timeline ?? []) {
     if (event.actorStaffProfileId) {
       staffProfileIds.add(event.actorStaffProfileId);
+    }
+  }
+
+  for (const transaction of args.transactions ?? []) {
+    if (transaction.staffProfileId) {
+      staffProfileIds.add(transaction.staffProfileId);
     }
   }
 
@@ -424,10 +464,14 @@ export const getRegisterSessionSnapshot = query({
       throw new Error("Register session not found for this store.");
     }
 
-    const [store, deposits, timeline, approvalRequest] = await Promise.all([
+    const [store, deposits, timeline, transactions, approvalRequest] = await Promise.all([
       ctx.db.get("store", args.storeId),
       listSessionDeposits(ctx, args.registerSessionId),
       listRegisterSessionTimeline(ctx, args.registerSessionId),
+      listRegisterSessionTransactions(ctx, {
+        registerSessionId: args.registerSessionId,
+        storeId: args.storeId,
+      }),
       registerSession.managerApprovalRequestId
         ? ctx.db.get("approvalRequest", registerSession.managerApprovalRequestId)
         : Promise.resolve(null),
@@ -440,7 +484,36 @@ export const getRegisterSessionSnapshot = query({
         deposits,
         registerSessions: [registerSession],
         timeline,
+        transactions,
       })
+    );
+    const transactionItemsById = new Map(
+      await Promise.all(
+        transactions.map(async (transaction) => {
+          const transactionItems = await listTransactionItems(ctx, transaction._id);
+          return [transaction._id, transactionItems] as const;
+        })
+      )
+    );
+    const customerNamesById = new Map(
+      (
+        await Promise.all(
+          transactions.map(async (transaction) => {
+            if (!transaction.customerProfileId) {
+              return null;
+            }
+
+            const customerProfile = await ctx.db.get(
+              "customerProfile",
+              transaction.customerProfileId
+            );
+
+            return customerProfile
+              ? [transaction.customerProfileId, customerProfile.fullName]
+              : null;
+          })
+        )
+      ).filter(Boolean) as Array<[Id<"customerProfile">, string | undefined]>
     );
     const totalDeposited = deposits.reduce((sum, deposit) => sum + deposit.amount, 0);
     const closeoutReview =
@@ -467,6 +540,34 @@ export const getRegisterSessionSnapshot = query({
           reference: deposit.externalReference,
           registerSessionId: deposit.registerSessionId ?? null,
         })),
+      transactions: transactions.map((transaction) => {
+        const transactionItems = transactionItemsById.get(transaction._id) ?? [];
+        const paymentMethods = transaction.payments?.length
+          ? Array.from(new Set(transaction.payments.map((payment) => payment.method)))
+          : transaction.paymentMethod
+            ? [transaction.paymentMethod]
+            : [];
+
+        return {
+          _id: transaction._id,
+          cashierName: transaction.staffProfileId
+            ? staffNamesById.get(transaction.staffProfileId) ?? null
+            : null,
+          completedAt: transaction.completedAt,
+          customerName:
+            (transaction.customerProfileId
+              ? customerNamesById.get(transaction.customerProfileId)
+              : null) ??
+            transaction.customerInfo?.name ??
+            null,
+          hasMultiplePaymentMethods: paymentMethods.length > 1,
+          itemCount: transactionItems.reduce((sum, item) => sum + item.quantity, 0),
+          paymentMethod: transaction.paymentMethod ?? paymentMethods[0] ?? null,
+          total: transaction.total,
+          transactionNumber: transaction.transactionNumber,
+          workflowTraceId: transaction.workflowTraceId ?? null,
+        };
+      }),
       registerSession: {
         ...buildRegisterSessionSummary({
           approvalRequest,

@@ -149,6 +149,7 @@ export interface PosStartSessionInput {
 export interface PosOpenDrawerInput {
   storeId: Id<"store">;
   terminalId: Id<"posTerminal">;
+  staffProfileId: Id<"staffProfile">;
   registerNumber?: string;
   openingFloat: number;
   notes?: string;

@@ -65,6 +65,7 @@ export const openDrawer = mutation({
   args: {
     storeId: v.id("store"),
     terminalId: v.id("posTerminal"),
+    staffProfileId: v.id("staffProfile"),
     registerNumber: v.optional(v.string()),
     openingFloat: v.number(),
     notes: v.optional(v.string()),

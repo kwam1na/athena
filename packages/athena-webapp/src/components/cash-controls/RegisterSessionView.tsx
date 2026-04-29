@@ -1,6 +1,13 @@
-import { Link, useParams } from "@tanstack/react-router";
+import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
-import { motion } from "framer-motion";
+import {
+  ArrowUpRight,
+  Banknote,
+  CreditCard,
+  Receipt,
+  Smartphone,
+  WalletCards,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -10,10 +17,12 @@ import {
   type NormalizedCommandResult,
   runCommand,
 } from "@/lib/errors/runCommand";
+import { getOrigin } from "@/lib/navigationUtils";
 import { capitalizeWords, currencyFormatter } from "@/lib/utils";
 import { formatStoredAmount } from "@/lib/pos/displayAmounts";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
+import { formatStaffDisplayName } from "~/shared/staffDisplayName";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
 import { ComposedPageHeader } from "../common/PageHeader";
@@ -35,24 +44,7 @@ import {
 import { Textarea } from "../ui/textarea";
 import { WorkflowTraceRouteLink } from "../traces/WorkflowTraceRouteLink";
 
-const containerVariants = {
-  hidden: {},
-  visible: {
-    transition: {
-      delayChildren: 0.04,
-      staggerChildren: 0.06,
-    },
-  },
-};
-
-const sectionVariants = {
-  hidden: { opacity: 0, y: 12 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.28, ease: [0.16, 1, 0.3, 1] },
-  },
-};
+const LINKED_TRANSACTIONS_PREVIEW_LIMIT = 5;
 
 type RegisterSessionApprovalRequest = {
   _id: string;
@@ -87,6 +79,19 @@ type RegisterSessionDeposit = {
   registerSessionId?: string | null;
 };
 
+type RegisterSessionTransaction = {
+  _id: string;
+  cashierName?: string | null;
+  completedAt: number;
+  customerName?: string | null;
+  hasMultiplePaymentMethods?: boolean;
+  itemCount: number;
+  paymentMethod?: string | null;
+  total: number;
+  transactionNumber: string;
+  workflowTraceId?: string | null;
+};
+
 type RegisterSessionCloseoutReview = {
   hasVariance: boolean;
   reason?: string | null;
@@ -98,6 +103,7 @@ export type RegisterSessionSnapshot = {
   closeoutReview: RegisterSessionCloseoutReview | null;
   deposits: RegisterSessionDeposit[];
   registerSession: RegisterSessionDetail;
+  transactions?: RegisterSessionTransaction[];
 };
 
 type RecordRegisterSessionDepositArgs = {
@@ -160,9 +166,31 @@ function formatStatusLabel(status: string) {
   return capitalizeWords(status.replaceAll("_", " "));
 }
 
+function formatPaymentMethod(method?: string | null) {
+  if (!method) {
+    return "Unknown";
+  }
+
+  return capitalizeWords(method.replaceAll("_", " "));
+}
+
 function formatRegisterName(registerNumber?: string | null) {
   const trimmedRegisterNumber = registerNumber?.trim();
   return trimmedRegisterNumber ? trimmedRegisterNumber : "Unnamed register";
+}
+
+function formatRegisterHeaderName(registerNumber?: string | null) {
+  const registerName = formatRegisterName(registerNumber);
+
+  if (/^register\b/i.test(registerName)) {
+    return registerName;
+  }
+
+  if (registerName === "Unnamed register") {
+    return "Register detail";
+  }
+
+  return `Register ${registerName}`;
 }
 
 function getVarianceTone(variance?: number) {
@@ -171,6 +199,29 @@ function getVarianceTone(variance?: number) {
   }
 
   return variance > 0 ? "text-emerald-700" : "text-destructive";
+}
+
+function getPaymentMethodIcon({
+  hasMultiplePaymentMethods,
+  paymentMethod,
+}: {
+  hasMultiplePaymentMethods?: boolean;
+  paymentMethod?: string | null;
+}) {
+  if (hasMultiplePaymentMethods) {
+    return WalletCards;
+  }
+
+  switch (paymentMethod) {
+    case "cash":
+      return Banknote;
+    case "card":
+      return CreditCard;
+    case "mobile_money":
+      return Smartphone;
+    default:
+      return Receipt;
+  }
 }
 
 function DetailNav({
@@ -188,7 +239,7 @@ function DetailNav({
     <div className="flex flex-wrap gap-2">
       <Button
         asChild
-        className="border-stone-300 bg-transparent text-stone-700 hover:bg-stone-100"
+        className="border-border bg-transparent text-muted-foreground hover:bg-muted"
         size="sm"
         variant="outline"
       >
@@ -201,7 +252,7 @@ function DetailNav({
       </Button>
       <Button
         asChild
-        className="border-amber-300/80 bg-amber-50 text-amber-900 hover:bg-amber-100"
+        className="border-border bg-muted text-foreground hover:bg-muted/80"
         size="sm"
         variant="outline"
       >
@@ -227,6 +278,7 @@ export function RegisterSessionViewContent({
   storeId,
   storeUrlSlug,
 }: RegisterSessionViewContentProps) {
+  const navigate = useNavigate();
   const registerSession = registerSessionSnapshot?.registerSession ?? null;
   const [amount, setAmount] = useState("");
   const [notes, setNotes] = useState("");
@@ -298,17 +350,72 @@ export function RegisterSessionViewContent({
     }
   }
 
+  const transactions = registerSessionSnapshot?.transactions ?? [];
+  const previewTransactions = transactions.slice(
+    0,
+    LINKED_TRANSACTIONS_PREVIEW_LIMIT,
+  );
+  const hasAdditionalTransactions =
+    transactions.length > previewTransactions.length;
+  const transactionTotal = transactions.reduce(
+    (sum, transaction) => sum + transaction.total,
+    0,
+  );
+  const expectedCash =
+    registerSession?.netExpectedCash ?? registerSession?.expectedCash ?? 0;
+  const summaryRows = registerSession
+    ? [
+        {
+          label: "Opening float",
+          value: formatCurrency(currency, registerSession.openingFloat),
+        },
+        {
+          label: "Sales linked",
+          value: formatCurrency(currency, transactionTotal),
+        },
+        {
+          label: "Total deposited",
+          value: formatCurrency(currency, registerSession.totalDeposited),
+        },
+        {
+          label: "Variance",
+          value: formatCurrency(currency, registerSession.variance ?? 0),
+          valueClassName: getVarianceTone(registerSession.variance),
+        },
+      ]
+    : [];
+  const headerTitle = registerSession
+    ? formatRegisterHeaderName(registerSession.registerNumber)
+    : "Register detail";
+
   return (
     <View
       header={
         <ComposedPageHeader
-          leadingContent={null}
+          leadingContent={
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="text-sm font-medium text-foreground">
+                {headerTitle}
+              </span>
+              {registerSession ? (
+                <>
+                  <Badge
+                    className="border-border bg-muted text-muted-foreground"
+                    size="sm"
+                    variant="outline"
+                  >
+                    {formatStatusLabel(registerSession.status)}
+                  </Badge>
+                </>
+              ) : null}
+            </div>
+          }
           trailingContent={
             <div className="flex flex-wrap items-center justify-end gap-2">
               {registerSession?.workflowTraceId ? (
                 <Button
                   asChild
-                  className="border-stone-300 bg-white/80 text-stone-700 hover:bg-white"
+                  className="border-border bg-surface text-muted-foreground hover:bg-muted"
                   size="sm"
                   variant="outline"
                 >
@@ -326,258 +433,401 @@ export function RegisterSessionViewContent({
       }
     >
       <FadeIn>
-        <motion.div
-          animate="visible"
-          className="container mx-auto space-y-6 p-6"
-          initial="hidden"
-          variants={containerVariants}
-        >
-          <motion.section
-            className="overflow-hidden rounded-[28px] bg-white/80 ring-1 ring-stone-200/70"
-            variants={sectionVariants}
-          >
-            <div className="border-b border-stone-200/80 px-6 py-6 lg:flex lg:items-start lg:justify-between">
-              <div className="max-w-2xl space-y-2">
-                <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-amber-800/75">
-                  Register detail
-                </p>
-                {registerSession ? (
-                  <>
-                    <div className="flex flex-wrap items-center gap-3">
-                      <h1 className="text-3xl font-semibold tracking-[-0.05em] text-stone-950">
-                        {formatRegisterName(registerSession.registerNumber)}
-                      </h1>
-                      <Badge
-                        className="border-stone-300/80 bg-stone-100 text-stone-700"
-                        size="sm"
-                        variant="outline"
-                      >
-                        {formatStatusLabel(registerSession.status)}
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-stone-600">
-                      Opened {formatTimestamp(registerSession.openedAt)}
-                      {registerSession.openedByStaffName
-                        ? ` by ${registerSession.openedByStaffName}`
-                        : ""}
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-sm text-stone-600">
-                    Register-level cash detail and deposit history.
-                  </p>
-                )}
-              </div>
-            </div>
-
+        <div className="container mx-auto space-y-6 p-6">
+          <section className="overflow-hidden rounded-[calc(var(--radius)*1.35)] border border-border bg-surface shadow-surface">
             {isLoading ? (
-              <div className="px-6 py-6 text-sm text-stone-600">
+              <div className="px-layout-lg py-layout-lg text-sm text-muted-foreground">
                 Loading register session...
               </div>
             ) : !registerSession ? (
-              <div className="px-6 py-8">
+              <div className="px-layout-lg py-layout-xl">
                 <EmptyState
                   description="Try re-opening the cash-controls workspace and selecting a register session again."
                   title="Register session not found"
                 />
               </div>
             ) : (
-              <div className="grid gap-0 xl:grid-cols-[minmax(0,1.18fr)_320px]">
-                <div className="border-b border-stone-200/80 px-6 py-6 xl:border-b-0 xl:border-r">
-                  <dl className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                    <div className="space-y-1 border-b border-stone-200/70 pb-3 xl:border-b-0 xl:pb-0">
-                      <dt className="text-[11px] font-medium uppercase tracking-[0.24em] text-amber-800/75">
-                        Opening float
-                      </dt>
-                      <dd className="font-mono text-2xl tracking-[-0.04em] text-stone-950">
-                        {formatCurrency(currency, registerSession.openingFloat)}
-                      </dd>
-                    </div>
-                    <div className="space-y-1 border-b border-stone-200/70 pb-3 xl:border-b-0 xl:pb-0">
-                      <dt className="text-[11px] font-medium uppercase tracking-[0.24em] text-amber-800/75">
+              <div className="grid gap-0 xl:grid-cols-[380px_minmax(0,1fr)]">
+                <aside className="border-b border-border/80 bg-muted/20 px-layout-lg py-layout-lg xl:border-b-0 xl:border-r">
+                  <dl className="space-y-layout-md">
+                    <div className="rounded-lg border border-border bg-surface-raised p-layout-md">
+                      <dt className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
                         Expected cash
                       </dt>
-                      <dd className="font-mono text-2xl tracking-[-0.04em] text-stone-950">
-                        {formatCurrency(
-                          currency,
-                          registerSession.netExpectedCash ??
-                            registerSession.expectedCash,
-                        )}
+                      <dd className="mt-2 font-mono text-3xl text-foreground">
+                        {formatCurrency(currency, expectedCash)}
                       </dd>
                     </div>
-                    <div className="space-y-1 border-b border-stone-200/70 pb-3 sm:border-b-0 sm:pb-0">
-                      <dt className="text-[11px] font-medium uppercase tracking-[0.24em] text-amber-800/75">
-                        Total deposited
+
+                    <div className="rounded-lg border border-border bg-surface-raised p-layout-md">
+                      <dt className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                        Opened
                       </dt>
-                      <dd className="font-mono text-2xl tracking-[-0.04em] text-stone-950">
-                        {formatCurrency(
-                          currency,
-                          registerSession.totalDeposited,
-                        )}
+                      <dd className="mt-2 text-sm text-foreground">
+                        {formatTimestamp(registerSession.openedAt)}
                       </dd>
+                      {registerSession.openedByStaffName ? (
+                        <dd className="mt-1 text-xs text-muted-foreground">
+                          By{" "}
+                          {formatStaffDisplayName({
+                            fullName: registerSession.openedByStaffName,
+                          })}
+                        </dd>
+                      ) : null}
                     </div>
-                    <div className="space-y-1">
-                      <dt className="text-[11px] font-medium uppercase tracking-[0.24em] text-amber-800/75">
-                        Variance
-                      </dt>
-                      <dd
-                        className={`font-mono text-2xl tracking-[-0.04em] ${getVarianceTone(registerSession.variance)}`}
-                      >
-                        {formatCurrency(
-                          currency,
-                          registerSession.variance ?? 0,
-                        )}
-                      </dd>
+
+                    <div className="divide-y divide-border rounded-lg border border-border bg-surface-raised">
+                      {summaryRows.map((row) => (
+                        <div
+                          className="flex items-center justify-between gap-layout-md px-layout-md py-3"
+                          key={row.label}
+                        >
+                          <dt className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                            {row.label}
+                          </dt>
+                          <dd
+                            className={`font-mono text-lg ${row.valueClassName ?? "text-foreground"}`}
+                          >
+                            {row.value}
+                          </dd>
+                        </div>
+                      ))}
                     </div>
                   </dl>
 
                   {registerSession.pendingApprovalRequest?.reason ? (
-                    <div className="mt-6 border-t border-stone-200/70 pt-6">
-                      <p className="text-[11px] font-medium uppercase tracking-[0.24em] text-stone-500">
+                    <div className="mt-layout-lg border-t border-border/70 pt-layout-lg">
+                      <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
                         Manager follow-up
                       </p>
-                      <p className="mt-2 text-sm text-stone-700">
+                      <p className="mt-2 text-sm text-foreground">
                         {registerSession.pendingApprovalRequest.reason}
                       </p>
                     </div>
                   ) : null}
-                </div>
-
-                <aside className="px-6 py-6">
-                  <div className="space-y-3">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.24em] text-stone-500">
-                      Closeout review
-                    </p>
-                    {registerSessionSnapshot?.closeoutReview ? (
-                      <div className="space-y-3">
-                        <p
-                          className={`font-mono text-3xl tracking-[-0.04em] ${getVarianceTone(registerSessionSnapshot.closeoutReview.variance)}`}
-                        >
-                          {formatCurrency(
-                            currency,
-                            registerSessionSnapshot.closeoutReview.variance,
-                          )}
-                        </p>
-                        <p className="text-sm text-stone-600">
-                          Approval required:{" "}
-                          {registerSessionSnapshot.closeoutReview
-                            .requiresApproval
-                            ? "Yes"
-                            : "No"}
-                        </p>
-                        {registerSessionSnapshot.closeoutReview.reason ? (
-                          <p className="text-sm text-stone-700">
-                            {registerSessionSnapshot.closeoutReview.reason}
-                          </p>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-stone-600">
-                        No closeout review has been submitted yet.
-                      </p>
-                    )}
-                  </div>
                 </aside>
+
+                <div className="space-y-layout-lg px-layout-lg py-layout-lg">
+                  <div className="flex flex-wrap items-start justify-between gap-layout-sm">
+                    <div className="space-y-1">
+                      <h2 className="font-display text-2xl font-semibold text-foreground">
+                        Linked transactions
+                      </h2>
+                      <p className="text-sm text-muted-foreground">
+                        Completed sales recorded against this register session.
+                      </p>
+                    </div>
+                    <Badge
+                      className="border-border bg-muted text-muted-foreground"
+                      variant="outline"
+                    >
+                      {transactions.length}{" "}
+                      {transactions.length === 1 ? "sale" : "sales"}
+                    </Badge>
+                  </div>
+
+                  {transactions.length === 0 ? (
+                    <div className="flex min-h-[260px] items-center justify-center rounded-lg border border-dashed border-border bg-muted/25">
+                      <EmptyState
+                        icon={
+                          <Receipt className="h-12 w-12 text-muted-foreground" />
+                        }
+                        description="Completed POS sales linked to this register will appear here."
+                        title="No linked transactions"
+                      />
+                    </div>
+                  ) : (
+                    <div className="overflow-hidden rounded-lg border border-border bg-surface-raised">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="border-b border-border hover:bg-transparent">
+                            <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                              Transaction
+                            </TableHead>
+                            <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                              Total
+                            </TableHead>
+                            <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                              Payment
+                            </TableHead>
+                            <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                              Cashier
+                            </TableHead>
+                            <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                              Completed
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {previewTransactions.map((transaction) => {
+                            const PaymentIcon = getPaymentMethodIcon({
+                              hasMultiplePaymentMethods:
+                                transaction.hasMultiplePaymentMethods,
+                              paymentMethod: transaction.paymentMethod,
+                            });
+                            const transactionLabel = `#${transaction.transactionNumber}`;
+                            const canOpenTransaction = Boolean(
+                              orgUrlSlug && storeUrlSlug,
+                            );
+                            const transactionRoute = canOpenTransaction
+                              ? {
+                                  params: {
+                                    orgUrlSlug: orgUrlSlug!,
+                                    storeUrlSlug: storeUrlSlug!,
+                                    transactionId: transaction._id,
+                                  },
+                                  search: { o: getOrigin() },
+                                  to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId" as const,
+                                }
+                              : null;
+
+                            const openTransaction = () => {
+                              if (!transactionRoute) {
+                                return;
+                              }
+
+                              navigate(transactionRoute);
+                            };
+
+                            return (
+                              <TableRow
+                                aria-label={
+                                  canOpenTransaction
+                                    ? `Open transaction ${transactionLabel}`
+                                    : undefined
+                                }
+                                className={
+                                  canOpenTransaction
+                                    ? "group border-b border-border/70 cursor-pointer transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                    : "border-b border-border/70 transition-colors"
+                                }
+                                key={transaction._id}
+                                onClick={
+                                  canOpenTransaction
+                                    ? openTransaction
+                                    : undefined
+                                }
+                                onKeyDown={
+                                  canOpenTransaction
+                                    ? (event) => {
+                                        if (
+                                          event.key !== "Enter" &&
+                                          event.key !== " "
+                                        ) {
+                                          return;
+                                        }
+
+                                        event.preventDefault();
+                                        openTransaction();
+                                      }
+                                    : undefined
+                                }
+                                role={canOpenTransaction ? "link" : undefined}
+                                tabIndex={canOpenTransaction ? 0 : undefined}
+                              >
+                                <TableCell>
+                                  <div className="flex flex-col gap-1">
+                                    <span className="inline-flex w-fit items-center gap-1 font-medium text-foreground group-hover:text-primary">
+                                      {transactionLabel}
+                                      {canOpenTransaction ? (
+                                        <ArrowUpRight className="h-3.5 w-3.5" />
+                                      ) : null}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground">
+                                      {transaction.itemCount}{" "}
+                                      {transaction.itemCount === 1
+                                        ? "item"
+                                        : "items"}
+                                      {transaction.customerName
+                                        ? ` - ${transaction.customerName}`
+                                        : ""}
+                                    </span>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="font-mono text-foreground">
+                                  {formatCurrency(currency, transaction.total)}
+                                </TableCell>
+                                <TableCell>
+                                  <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                                    <PaymentIcon className="h-4 w-4" />
+                                    {transaction.hasMultiplePaymentMethods
+                                      ? "Multiple"
+                                      : formatPaymentMethod(
+                                          transaction.paymentMethod,
+                                        )}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-sm text-muted-foreground">
+                                  {transaction.cashierName
+                                    ? formatStaffDisplayName({
+                                        fullName: transaction.cashierName,
+                                      })
+                                    : "N/A"}
+                                </TableCell>
+                                <TableCell className="text-sm text-muted-foreground">
+                                  {formatTimestamp(transaction.completedAt)}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                      {hasAdditionalTransactions &&
+                      registerSession &&
+                      orgUrlSlug &&
+                      storeUrlSlug ? (
+                        <div className="flex flex-wrap items-center justify-between gap-layout-sm border-t border-border/70 px-4 py-3">
+                          <p className="text-sm text-muted-foreground">
+                            Showing latest {previewTransactions.length} of{" "}
+                            {transactions.length} linked sales.
+                          </p>
+                          <Button asChild size="sm" variant="outline">
+                            <Link
+                              params={{ orgUrlSlug, storeUrlSlug }}
+                              search={{
+                                o: getOrigin(),
+                                registerSessionId: registerSession._id,
+                              }}
+                              to="/$orgUrlSlug/store/$storeUrlSlug/pos/transactions"
+                            >
+                              View all linked transactions
+                              <ArrowUpRight className="h-3.5 w-3.5" />
+                            </Link>
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
-          </motion.section>
+          </section>
 
-          <motion.section
-            className="rounded-[24px] bg-white/80 px-6 py-6 ring-1 ring-stone-200/70"
-            variants={sectionVariants}
-          >
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <h2 className="text-2xl font-semibold tracking-[-0.04em] text-stone-950">
-                  Deposit history
-                </h2>
-                <p className="text-sm text-stone-600">
-                  Every safe drop recorded against this drawer, newest first.
-                </p>
-              </div>
-
-              {!registerSessionSnapshot ? null : registerSessionSnapshot
-                  .deposits.length === 0 ? (
-                <EmptyState
-                  description="Once a safe drop is recorded it will appear here with the staff name and reference."
-                  title="No deposits recorded"
-                />
-              ) : (
-                <div className="overflow-hidden rounded-[22px] bg-white ring-1 ring-stone-200/70">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="border-b border-stone-200/80 hover:bg-transparent">
-                        <TableHead className="text-[11px] uppercase tracking-[0.18em] text-stone-500">
-                          Amount
-                        </TableHead>
-                        <TableHead className="text-[11px] uppercase tracking-[0.18em] text-stone-500">
-                          Recorded
-                        </TableHead>
-                        <TableHead className="text-[11px] uppercase tracking-[0.18em] text-stone-500">
-                          Reference
-                        </TableHead>
-                        <TableHead className="text-[11px] uppercase tracking-[0.18em] text-stone-500">
-                          By
-                        </TableHead>
-                        <TableHead className="text-[11px] uppercase tracking-[0.18em] text-stone-500">
-                          Notes
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {registerSessionSnapshot.deposits.map((deposit) => (
-                        <TableRow
-                          className="border-b border-stone-200/70 hover:bg-[#f8f2e8]"
-                          key={deposit._id}
-                        >
-                          <TableCell className="font-mono text-stone-950">
-                            {formatCurrency(currency, deposit.amount)}
-                          </TableCell>
-                          <TableCell className="text-stone-600">
-                            {formatTimestamp(deposit.recordedAt)}
-                          </TableCell>
-                          <TableCell>{deposit.reference ?? "—"}</TableCell>
-                          <TableCell>
-                            {deposit.recordedByStaffName ?? "—"}
-                          </TableCell>
-                          <TableCell>{deposit.notes ?? "—"}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </div>
-          </motion.section>
-
-          <motion.section
-            className="rounded-[24px] bg-white/80 px-6 py-6 ring-1 ring-stone-200/70"
-            variants={sectionVariants}
-          >
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-              <div className="space-y-2">
-                <p className="text-[11px] font-medium uppercase tracking-[0.24em] text-amber-800/75">
-                  Action
-                </p>
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+            <section className="rounded-[calc(var(--radius)*1.25)] border border-border bg-surface px-layout-lg py-layout-lg shadow-surface">
+              <div className="space-y-layout-md">
                 <div className="space-y-1">
-                  <h2 className="text-2xl font-semibold tracking-[-0.04em] text-stone-950">
-                    Record cash deposit
+                  <h2 className="font-display text-2xl font-semibold text-foreground">
+                    Deposit history
                   </h2>
-                  <p className="text-sm text-stone-600">
-                    Capture the next safe drop against this register session.
+                  <p className="text-sm text-muted-foreground">
+                    Safe drops recorded against this drawer, newest first.
                   </p>
                 </div>
+
+                {!registerSessionSnapshot ? null : registerSessionSnapshot
+                    .deposits.length === 0 ? (
+                  <EmptyState
+                    description="Once a safe drop is recorded it will appear here with the staff name and reference."
+                    title="No deposits recorded"
+                  />
+                ) : (
+                  <div className="overflow-hidden rounded-lg border border-border bg-surface-raised">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-b border-border hover:bg-transparent">
+                          <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                            Amount
+                          </TableHead>
+                          <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                            Recorded
+                          </TableHead>
+                          <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                            Reference
+                          </TableHead>
+                          <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                            By
+                          </TableHead>
+                          <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                            Notes
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {registerSessionSnapshot.deposits.map((deposit) => (
+                          <TableRow
+                            className="border-b border-border/70 transition-colors hover:bg-muted/40"
+                            key={deposit._id}
+                          >
+                            <TableCell className="font-mono text-foreground">
+                              {formatCurrency(currency, deposit.amount)}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {formatTimestamp(deposit.recordedAt)}
+                            </TableCell>
+                            <TableCell>{deposit.reference ?? "N/A"}</TableCell>
+                            <TableCell>
+                              {deposit.recordedByStaffName
+                                ? formatStaffDisplayName({
+                                    fullName: deposit.recordedByStaffName,
+                                  })
+                                : "N/A"}
+                            </TableCell>
+                            <TableCell>{deposit.notes ?? "N/A"}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <aside className="space-y-6 rounded-[calc(var(--radius)*1.25)] border border-border bg-surface px-layout-lg py-layout-lg shadow-surface">
+              <div className="space-y-3">
+                <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                  Closeout review
+                </p>
+                {registerSessionSnapshot?.closeoutReview ? (
+                  <div className="space-y-3">
+                    <p
+                      className={`font-mono text-3xl ${getVarianceTone(registerSessionSnapshot.closeoutReview.variance)}`}
+                    >
+                      {formatCurrency(
+                        currency,
+                        registerSessionSnapshot.closeoutReview.variance,
+                      )}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Approval required:{" "}
+                      {registerSessionSnapshot.closeoutReview.requiresApproval
+                        ? "Yes"
+                        : "No"}
+                    </p>
+                    {registerSessionSnapshot.closeoutReview.reason ? (
+                      <p className="text-sm text-foreground">
+                        {registerSessionSnapshot.closeoutReview.reason}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No closeout review has been submitted yet.
+                  </p>
+                )}
               </div>
 
-              <div className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-[180px_minmax(0,1fr)]">
+              <div className="border-t border-border/70 pt-6">
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                    Action
+                  </p>
+                  <h2 className="font-display text-xl font-semibold text-foreground">
+                    Record cash deposit
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    Capture the next safe drop for this register session.
+                  </p>
+                </div>
+
+                <div className="mt-4 space-y-4">
                   <label className="block space-y-2">
-                    <span className="text-sm font-medium text-stone-900">
+                    <span className="text-sm font-medium text-foreground">
                       Amount
                     </span>
                     <Input
                       aria-label="Deposit amount"
-                      className="border-stone-300 bg-white"
+                      className="border-input bg-background"
                       min={0}
                       onChange={(event) => setAmount(event.target.value)}
                       step="1"
@@ -587,51 +837,51 @@ export function RegisterSessionViewContent({
                   </label>
 
                   <label className="block space-y-2">
-                    <span className="text-sm font-medium text-stone-900">
+                    <span className="text-sm font-medium text-foreground">
                       Reference
                     </span>
                     <Input
                       aria-label="Deposit reference"
-                      className="border-stone-300 bg-white"
+                      className="border-input bg-background"
                       onChange={(event) => setReference(event.target.value)}
                       placeholder="BANK-123"
                       value={reference}
                     />
                   </label>
+
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium text-foreground">
+                      Notes
+                    </span>
+                    <Textarea
+                      aria-label="Deposit notes"
+                      className="min-h-[110px] border-input bg-background"
+                      onChange={(event) => setNotes(event.target.value)}
+                      placeholder="Optional handoff or safe-drop notes."
+                      value={notes}
+                    />
+                  </label>
+
+                  {errorMessage ? (
+                    <p className="text-sm text-destructive" role="alert">
+                      {errorMessage}
+                    </p>
+                  ) : null}
+
+                  <LoadingButton
+                    className="bg-signal text-signal-foreground hover:bg-signal/90"
+                    disabled={isRecordingDeposit}
+                    isLoading={isRecordingDeposit}
+                    onClick={() => void handleRecordDeposit()}
+                    type="button"
+                  >
+                    Record deposit
+                  </LoadingButton>
                 </div>
-
-                <label className="block space-y-2">
-                  <span className="text-sm font-medium text-stone-900">
-                    Notes
-                  </span>
-                  <Textarea
-                    aria-label="Deposit notes"
-                    className="min-h-[110px] border-stone-300 bg-white"
-                    onChange={(event) => setNotes(event.target.value)}
-                    placeholder="Optional handoff or safe-drop notes."
-                    value={notes}
-                  />
-                </label>
-
-                {errorMessage ? (
-                  <p className="text-sm text-destructive" role="alert">
-                    {errorMessage}
-                  </p>
-                ) : null}
-
-                <LoadingButton
-                  className="bg-stone-950 text-stone-50 hover:bg-stone-950/90"
-                  disabled={isRecordingDeposit}
-                  isLoading={isRecordingDeposit}
-                  onClick={() => void handleRecordDeposit()}
-                  type="button"
-                >
-                  Record deposit
-                </LoadingButton>
               </div>
-            </div>
-          </motion.section>
-        </motion.div>
+            </aside>
+          </div>
+        </div>
       </FadeIn>
     </View>
   );

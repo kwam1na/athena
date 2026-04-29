@@ -1,6 +1,7 @@
 import type { CustomerInfo } from "@/components/pos/types";
 import type { RegisterHeaderState, RegisterInfoState } from "./registerUiState";
 import { EMPTY_REGISTER_CUSTOMER_INFO } from "./registerUiState";
+import { formatStaffDisplayNameOrFallback } from "~/shared/staffDisplayName";
 
 export function getRegisterCustomerInfo(
   customer: CustomerInfo | null | undefined,
@@ -21,7 +22,7 @@ export function getCashierDisplayName(
     return "Unassigned";
   }
 
-  return `${cashier.firstName} ${cashier.lastName.charAt(0)}.`;
+  return formatStaffDisplayNameOrFallback(cashier, "Unassigned");
 }
 
 export function buildRegisterHeaderState(input: {

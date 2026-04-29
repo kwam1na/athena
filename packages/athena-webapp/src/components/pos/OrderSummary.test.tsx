@@ -44,10 +44,12 @@ function getBalanceDueAmount() {
     );
   });
   const panel = label.closest("div");
-  const amount = Array.from(panel?.querySelectorAll("p") ?? []).find((paragraph) => {
-    const text = paragraph.textContent?.trim() || "";
-    return !/^(Balance due|Change due)$/i.test(text);
-  });
+  const amount = Array.from(panel?.querySelectorAll("p") ?? []).find(
+    (paragraph) => {
+      const text = paragraph.textContent?.trim() || "";
+      return !/^(Balance due|Change due)$/i.test(text);
+    },
+  );
   return amount?.textContent ?? "";
 }
 
@@ -86,7 +88,9 @@ describe("OrderSummary completed transaction summary", () => {
           total: 115000,
         }}
         isTransactionCompleted
-        payments={[{ id: "payment-1", method: "cash", amount: 115000, timestamp: 1 }]}
+        payments={[
+          { id: "payment-1", method: "cash", amount: 115000, timestamp: 1 },
+        ]}
         registerNumber="3"
       />,
     );
@@ -120,6 +124,7 @@ describe("OrderSummary completed transaction summary", () => {
 
     expect(screen.getByText("Amount paid")).toBeInTheDocument();
     expect(screen.getByText("Change given")).toBeInTheDocument();
+    expect(screen.queryByText("Payments")).not.toBeInTheDocument();
     expect(screen.getByText("Subtotal")).toBeInTheDocument();
     expect(screen.getByText("Total")).toBeInTheDocument();
   });
@@ -148,8 +153,40 @@ describe("OrderSummary completed transaction summary", () => {
     );
 
     expect(screen.getByText("Cash Payment, Card Payment")).toBeInTheDocument();
-    expect(screen.getByText(/Cash Payment/i)).toBeInTheDocument();
-    expect(screen.getByText(/Card Payment/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Cash Payment/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Card Payment/i).length).toBeGreaterThan(0);
+    expect(screen.getByText("Payments")).toBeInTheDocument();
+    expect(screen.getByText("GHS 10")).toBeInTheDocument();
+    expect(screen.getByText("GHS 7")).toBeInTheDocument();
+  });
+
+  it("combines repeated completed payments by method in the rail breakdown", () => {
+    render(
+      <OrderSummary
+        cartItems={[]}
+        completedOrderNumber="404926"
+        completedTransactionData={{
+          paymentMethod: "cash",
+          completedAt: new Date("2026-04-25T18:08:00.000Z"),
+          cartItems: [],
+          customerInfo: undefined,
+          subtotal: 1700,
+          tax: 0,
+          total: 1700,
+          payments: [
+            { id: "payment-1", method: "cash", amount: 700, timestamp: 1 },
+            { id: "payment-2", method: "card", amount: 700, timestamp: 2 },
+            { id: "payment-3", method: "cash", amount: 300, timestamp: 3 },
+          ],
+        }}
+        isTransactionCompleted
+        presentation="rail"
+      />,
+    );
+
+    expect(screen.getByText("Payments")).toBeInTheDocument();
+    expect(screen.getByText("GHS 10")).toBeInTheDocument();
+    expect(screen.getByText("GHS 7")).toBeInTheDocument();
   });
 
   it("reflects a draft amount equal to balance due as zero remaining", async () => {
@@ -285,8 +322,12 @@ describe("OrderSummary completed transaction summary", () => {
     fireEvent.change(amountInput, { target: { value: "10" } });
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Add Payment" })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Add Payment" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Cancel" }),
+      ).toBeInTheDocument();
       expect(
         screen.queryByRole("button", { name: "Complete Sale" }),
       ).not.toBeInTheDocument();

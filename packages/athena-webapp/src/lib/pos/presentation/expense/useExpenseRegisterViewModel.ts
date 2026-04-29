@@ -31,6 +31,7 @@ import { presentCommandToast } from "@/lib/errors/presentCommandToast";
 import { EMPTY_REGISTER_CUSTOMER_INFO } from "@/lib/pos/presentation/register/registerUiState";
 import type { RegisterViewModel } from "@/lib/pos/presentation/register/registerUiState";
 import type { Id } from "~/convex/_generated/dataModel";
+import { formatStaffDisplayNameOrFallback } from "~/shared/staffDisplayName";
 
 function getCashierDisplayName(staffProfile?: {
   firstName?: string;
@@ -41,13 +42,7 @@ function getCashierDisplayName(staffProfile?: {
     return "Unassigned";
   }
 
-  if (staffProfile.fullName) {
-    return staffProfile.fullName;
-  }
-
-  return [staffProfile.firstName, staffProfile.lastName]
-    .filter(Boolean)
-    .join(" ");
+  return formatStaffDisplayNameOrFallback(staffProfile, "Unassigned");
 }
 
 function getExpenseSessionLoadKey(

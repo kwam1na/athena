@@ -883,6 +883,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       command: {
         storeId: activeStore._id,
         terminalId: terminal._id,
+        staffProfileId,
         registerNumber,
         openingFloat: parsedOpeningFloat,
         notes: trimOptional(drawerNotes),

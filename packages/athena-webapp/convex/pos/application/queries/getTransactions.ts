@@ -11,6 +11,7 @@ import {
   listTransactionItems,
   listTransactionsByStore,
 } from "../../infrastructure/repositories/transactionRepository";
+import { formatStaffDisplayName } from "../../../../shared/staffDisplayName";
 
 function summarizeCashierName(args: {
   fullName?: string;
@@ -40,14 +41,6 @@ function summarizeCashierName(args: {
     firstName: parts[0] ?? "Staff",
     lastName: parts.slice(1).join(" "),
   };
-}
-
-function formatCashierName(args: { firstName?: string; lastName?: string; fullName?: string }) {
-  const summary = summarizeCashierName(args);
-  return [summary.firstName, summary.lastName ? `${summary.lastName.charAt(0)}.` : ""]
-    .filter(Boolean)
-    .join(" ")
-    .trim();
 }
 
 async function loadCustomerProfile(
@@ -121,7 +114,7 @@ export async function getCompletedTransactions(
         hasTrace: Boolean(sessionTraceId),
         sessionTraceId,
         cashierName: cashier
-          ? formatCashierName(cashier)
+          ? formatStaffDisplayName(cashier)
           : null,
         customerProfileId,
         customerName:

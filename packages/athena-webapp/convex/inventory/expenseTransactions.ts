@@ -9,6 +9,7 @@ import type { Id } from "../_generated/dataModel";
 import { capitalizeWords, generateTransactionNumber } from "../utils";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { ok, userError } from "../../shared/commandResult";
+import { formatStaffDisplayName } from "../../shared/staffDisplayName";
 
 const expenseTransactionCreationValidator = v.object({
   transactionId: v.id("expenseTransaction"),
@@ -43,21 +44,7 @@ export function formatExpenseStaffProfileName(
     | null
     | undefined,
 ) {
-  if (!staffProfile) return null;
-
-  if (staffProfile.firstName && staffProfile.lastName) {
-    return `${staffProfile.firstName} ${staffProfile.lastName.charAt(0)}.`;
-  }
-
-  const fullNameParts = staffProfile.fullName?.trim().split(/\s+/) ?? [];
-  if (fullNameParts.length >= 2) {
-    const firstName = fullNameParts[0];
-    const lastName = fullNameParts.at(-1);
-
-    return `${firstName} ${lastName?.charAt(0)}.`;
-  }
-
-  return staffProfile.fullName?.trim() || null;
+  return formatStaffDisplayName(staffProfile);
 }
 
 export async function createExpenseTransactionFromSessionHandler(
