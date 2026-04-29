@@ -169,36 +169,12 @@ export function createExpenseSessionCommandService(
       }
 
       if (existingSession) {
-        const registerSessionBinding = await resolveRegisterSessionBinding(
-          dependencies,
-          {
-            storeId: existingSession.storeId,
-            terminalId: existingSession.terminalId,
-            registerNumber: existingSession.registerNumber ?? registerNumber,
-            preferredRegisterSessionId:
-              existingSession.registerSessionId ?? args.registerSessionId,
-            failureMessage: "Open the cash drawer before starting an expense session.",
-          },
-        );
-        if (registerSessionBinding.status !== "ok") {
-          return registerSessionBinding;
-        }
-
         const existingItems = await dependencies.repository.listSessionItems(
           existingSession._id,
         );
         const sessionPatch: Partial<
           Omit<Doc<"expenseSession">, "_id" | "_creationTime">
         > = {};
-
-        if (
-          existingSession.registerSessionId !==
-          registerSessionBinding.data.registerSessionId
-        ) {
-          sessionPatch.registerSessionId =
-            registerSessionBinding.data.registerSessionId;
-          sessionPatch.updatedAt = now;
-        }
 
         if (existingItems.length > 0) {
           Object.assign(sessionPatch, {
@@ -221,27 +197,6 @@ export function createExpenseSessionCommandService(
         });
       }
 
-      if (!registerNumber) {
-        return failure(
-          "validationFailed",
-          "A register number is required to create an expense session.",
-        );
-      }
-
-      const registerSessionBinding = await resolveRegisterSessionBinding(
-        dependencies,
-        {
-          storeId: args.storeId,
-          terminalId: args.terminalId,
-          registerNumber,
-          preferredRegisterSessionId: args.registerSessionId,
-          failureMessage: "Open the cash drawer before starting an expense session.",
-        },
-      );
-      if (registerSessionBinding.status !== "ok") {
-        return registerSessionBinding;
-      }
-
       const latestSessionNumber =
         await dependencies.repository.getLatestSessionNumber(args.storeId);
       const expiresAt = dependencies.calculateExpiration(now);
@@ -255,7 +210,6 @@ export function createExpenseSessionCommandService(
         staffProfileId: args.staffProfileId,
         terminalId: args.terminalId,
         registerNumber,
-        registerSessionId: registerSessionBinding.data.registerSessionId,
         status: "active",
         createdAt: now,
         updatedAt: now,
@@ -299,27 +253,12 @@ export function createExpenseSessionCommandService(
         );
       }
 
-      const registerSessionBinding = await resolveRegisterSessionBinding(
-        dependencies,
-        {
-          storeId: session.storeId,
-          terminalId: session.terminalId,
-          registerNumber: session.registerNumber,
-          preferredRegisterSessionId: session.registerSessionId,
-          failureMessage: "Open the cash drawer before resuming this expense session.",
-        },
-      );
-      if (registerSessionBinding.status !== "ok") {
-        return registerSessionBinding;
-      }
-
       const expiresAt = dependencies.calculateExpiration(now);
       await dependencies.repository.patchSession(args.sessionId, {
         status: "active",
         resumedAt: now,
         updatedAt: now,
         expiresAt,
-        registerSessionId: registerSessionBinding.data.registerSessionId,
       });
 
       return success({ sessionId: args.sessionId, expiresAt });
@@ -330,7 +269,11 @@ export function createExpenseSessionCommandService(
       const session = await dependencies.repository.getSessionById(
         args.sessionId,
       );
-      const validation = validateActiveSession(session, args.staffProfileId, now);
+      const validation = validateActiveSession(
+        session,
+        args.staffProfileId,
+        now,
+      );
       if (validation.status !== "ok") {
         return validation;
       }
@@ -342,7 +285,8 @@ export function createExpenseSessionCommandService(
           terminalId: validation.data.terminalId,
           registerNumber: validation.data.registerNumber,
           preferredRegisterSessionId: args.registerSessionId,
-          failureMessage: "Open the cash drawer before recovering this expense session.",
+          failureMessage:
+            "Open the cash drawer before recovering this expense session.",
         },
       );
       if (registerSessionBinding.status !== "ok") {
@@ -382,18 +326,13 @@ export function createExpenseSessionCommandService(
       const session = await dependencies.repository.getSessionById(
         args.sessionId,
       );
-      const validation = validateActiveSession(session, args.staffProfileId, now);
+      const validation = validateActiveSession(
+        session,
+        args.staffProfileId,
+        now,
+      );
       if (validation.status !== "ok") {
         return validation;
-      }
-
-      const drawerValidation = await validateActiveSessionRegisterBinding(
-        dependencies,
-        validation.data,
-        "Open the cash drawer before modifying this expense session.",
-      );
-      if (drawerValidation.status !== "ok") {
-        return drawerValidation;
       }
 
       const existingItem = await dependencies.repository.findSessionItemBySku({
@@ -477,16 +416,9 @@ export function createExpenseSessionCommandService(
         return validation;
       }
 
-      const drawerValidation = await validateActiveSessionRegisterBinding(
-        dependencies,
-        validation.data,
-        "Open the cash drawer before modifying this expense session.",
+      const item = await dependencies.repository.getSessionItemById(
+        args.itemId,
       );
-      if (drawerValidation.status !== "ok") {
-        return drawerValidation;
-      }
-
-      const item = await dependencies.repository.getSessionItemById(args.itemId);
       if (!item) {
         return failure("notFound", "Item not found in cart");
       }
@@ -528,16 +460,9 @@ export function createExpenseSessionCommandService(
         return failure("notFound", "Session not found");
       }
 
-      const drawerValidation = await validateActiveSessionRegisterBinding(
-        dependencies,
-        session,
-        "Open the cash drawer before clearing this expense session.",
+      const items = await dependencies.repository.listSessionItems(
+        args.sessionId,
       );
-      if (drawerValidation.status !== "ok") {
-        return drawerValidation;
-      }
-
-      const items = await dependencies.repository.listSessionItems(args.sessionId);
       const heldQuantities = new Map<Id<"productSku">, number>();
       for (const item of items) {
         heldQuantities.set(
@@ -574,7 +499,9 @@ export function runStartExpenseSessionCommand(
 ) {
   return (async () => {
     const terminal = await ctx.db.get("posTerminal", args.terminalId);
-    const terminalRegisterNumber = normalizeRegisterNumber(terminal?.registerNumber);
+    const terminalRegisterNumber = normalizeRegisterNumber(
+      terminal?.registerNumber,
+    );
     const nextRegisterNumber =
       terminalRegisterNumber ?? normalizeRegisterNumber(args.registerNumber);
 
@@ -596,9 +523,9 @@ export function runBindExpenseSessionToRegisterSessionCommand(
   ctx: MutationCtx,
   args: BindExpenseSessionToRegisterSessionArgs,
 ) {
-  return createDefaultExpenseSessionCommandService(ctx).bindSessionToRegisterSession(
-    args,
-  );
+  return createDefaultExpenseSessionCommandService(
+    ctx,
+  ).bindSessionToRegisterSession(args);
 }
 
 export function runUpsertExpenseSessionItemCommand(
@@ -712,26 +639,6 @@ async function resolveRegisterSessionBinding(
 
   return success({
     registerSessionId: registerSession._id,
-  });
-}
-
-async function validateActiveSessionRegisterBinding(
-  dependencies: ExpenseSessionCommandDependencies,
-  session: Doc<"expenseSession">,
-  failureMessage: string,
-): Promise<
-  ExpenseSessionCommandOutcome<{ registerSessionId: Id<"registerSession"> }>
-> {
-  if (!session.registerSessionId) {
-    return failure("validationFailed", failureMessage);
-  }
-
-  return resolveRegisterSessionBinding(dependencies, {
-    storeId: session.storeId,
-    terminalId: session.terminalId,
-    registerNumber: session.registerNumber,
-    preferredRegisterSessionId: session.registerSessionId,
-    failureMessage,
   });
 }
 

@@ -13,6 +13,7 @@ import {
 } from "./staffCredentials";
 
 type TableName =
+  | "expenseSession"
   | "posSession"
   | "staffCredential"
   | "staffProfile"
@@ -20,12 +21,16 @@ type TableName =
 type Row = Record<string, unknown> & { _id: string };
 
 function createStaffCredentialsMutationCtx(seed?: {
+  expenseSessions?: Row[];
   posSessions?: Row[];
   credentials?: Row[];
   profiles?: Row[];
   roles?: Row[];
 }) {
   const tables: Record<TableName, Map<string, Row>> = {
+    expenseSession: new Map(
+      (seed?.expenseSessions ?? []).map((row) => [row._id, row])
+    ),
     posSession: new Map((seed?.posSessions ?? []).map((row) => [row._id, row])),
     staffCredential: new Map(
       (seed?.credentials ?? []).map((row) => [row._id, row])
@@ -36,6 +41,7 @@ function createStaffCredentialsMutationCtx(seed?: {
     ),
   };
   const insertCounters: Record<TableName, number> = {
+    expenseSession: 0,
     posSession: 0,
     staffCredential: 0,
     staffProfile: 0,
@@ -668,6 +674,69 @@ describe("staff credential operations", () => {
         staffProfileId: "staff_profile_1",
         activeRoles: ["cashier"],
       }),
+    });
+  });
+
+  it("returns a precondition_failed result when the staff member has an active expense session on another terminal", async () => {
+    const now = Date.now();
+    const { ctx } = createStaffCredentialsMutationCtx({
+      credentials: [
+        {
+          _id: "credential-1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          username: "frontdesk",
+          pinHash: "hash-1",
+          status: "active",
+        },
+      ],
+      profiles: [
+        {
+          _id: "staff_profile_1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Ari Mensah",
+        },
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "cashier",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+      ],
+      expenseSessions: [
+        {
+          _id: "expense-session-1",
+          staffProfileId: "staff_profile_1",
+          terminalId: "terminal-2" as Id<"posTerminal">,
+          status: "active",
+          expiresAt: now + 60_000,
+        },
+      ],
+    });
+
+    await expect(
+      authenticateStaffCredentialForTerminalWithCtx(ctx, {
+        allowedRoles: ["cashier"],
+        pinHash: "hash-1",
+        storeId: "store_1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        username: "frontdesk",
+      })
+    ).resolves.toEqual({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: "This staff member has an active session on another terminal.",
+      },
     });
   });
 

@@ -12,6 +12,7 @@ vi.mock("./expenseTransactions", () => ({
 
 import {
   completeExpenseSession,
+  createExpenseSession,
   releaseExpenseSessionInventoryHoldsAndDeleteItems,
   updateExpenseSession,
 } from "./expenseSessions";
@@ -26,19 +27,41 @@ type SessionRecord = {
   notes?: string;
 };
 
-function createMutationCtx(seed?: { sessions?: SessionRecord[] }) {
+function createMutationCtx(seed?: {
+  latestSession?: SessionRecord;
+  sessions?: SessionRecord[];
+  terminals?: Array<{ _id: string; registerNumber?: string | null }>;
+}) {
   const sessions = [...(seed?.sessions ?? [])];
+  const terminals = [...(seed?.terminals ?? [])];
 
   const db = {
     get: vi.fn(async (tableNameOrId: string, maybeId?: string) => {
       const tableName = maybeId ? tableNameOrId : "expenseSession";
       const id = maybeId ?? tableNameOrId;
 
-      if (tableName !== "expenseSession") {
-        return null;
+      if (tableName === "expenseSession") {
+        return sessions.find((session) => session._id === id) ?? null;
       }
 
-      return sessions.find((session) => session._id === id) ?? null;
+      if (tableName === "posTerminal") {
+        return terminals.find((terminal) => terminal._id === id) ?? null;
+      }
+
+      return null;
+    }),
+    insert: vi.fn(async (tableName: string, doc: Record<string, unknown>) => {
+      if (tableName !== "expenseSession") {
+        return "inserted-id";
+      }
+
+      sessions.push({
+        _id: "expense-session-inserted",
+        expiresAt: doc.expiresAt as number,
+        staffProfileId: doc.staffProfileId as string,
+        status: doc.status as SessionRecord["status"],
+      });
+      return "expense-session-inserted";
     }),
     patch: vi.fn(
       async (tableName: string, id: string, patch: Record<string, unknown>) => {
@@ -56,6 +79,10 @@ function createMutationCtx(seed?: { sessions?: SessionRecord[] }) {
     ),
     query: vi.fn(() => ({
       withIndex: vi.fn(() => ({
+        first: vi.fn(async () => seed?.latestSession ?? null),
+        order: vi.fn(() => ({
+          first: vi.fn(async () => seed?.latestSession ?? null),
+        })),
         take: vi.fn(async () => []),
       })),
     })),
@@ -82,6 +109,41 @@ function getHandler(definition: unknown) {
 }
 
 describe("expense session command results", () => {
+  it("creates an expense session without requiring a register number", async () => {
+    const ctx = createMutationCtx({
+      terminals: [
+        {
+          _id: "terminal-1",
+          registerNumber: null,
+        },
+      ],
+    });
+
+    const result = await getHandler(createExpenseSession)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      staffProfileId: "staff-1",
+    });
+
+    expect(result).toEqual({
+      kind: "ok",
+      data: {
+        expiresAt: expect.any(Number),
+        sessionId: "expense-session-inserted",
+      },
+    });
+    expect(ctx.db.insert).toHaveBeenCalledWith(
+      "expenseSession",
+      expect.objectContaining({
+        registerNumber: undefined,
+        staffProfileId: "staff-1",
+        status: "active",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    );
+  });
+
   it("completes expense sessions through the in-mutation transaction helper", async () => {
     const ctx = createMutationCtx({
       sessions: [
@@ -112,13 +174,12 @@ describe("expense session command results", () => {
         transactionNumber: "EXP-1001",
       },
     });
-    expect(mocks.createExpenseTransactionFromSessionHandler).toHaveBeenCalledWith(
-      ctx,
-      {
-        notes: "Complete in test",
-        sessionId: "expense-session-1",
-      },
-    );
+    expect(
+      mocks.createExpenseTransactionFromSessionHandler,
+    ).toHaveBeenCalledWith(ctx, {
+      notes: "Complete in test",
+      sessionId: "expense-session-1",
+    });
     expect(ctx.runMutation).not.toHaveBeenCalled();
     expect(ctx.db.patch).toHaveBeenCalledWith(
       "expenseSession",

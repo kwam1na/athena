@@ -16,11 +16,13 @@ import {
 import { presentCommandToast } from "~/src/lib/errors/presentCommandToast";
 import { runCommand } from "~/src/lib/errors/runCommand";
 import { PinInput } from "./PinInput";
+import type { RegisterWorkflowMode } from "~/src/lib/pos/presentation/register/registerUiState";
 
 interface CashierAuthDialogProps {
   open: boolean;
   storeId: Id<"store">;
   terminalId: Id<"posTerminal">;
+  workflowMode?: RegisterWorkflowMode;
   onAuthenticated: (staffProfileId: Id<"staffProfile">) => void;
   onDismiss: () => void;
 }
@@ -29,6 +31,7 @@ export const CashierAuthDialog = ({
   open,
   storeId,
   terminalId,
+  workflowMode = "pos",
   onAuthenticated,
   onDismiss,
 }: CashierAuthDialogProps) => {
@@ -45,6 +48,7 @@ export const CashierAuthDialog = ({
   const expireAllSessionsForStaff = useMutation(
     api.inventory.posSessions.expireAllSessionsForStaff,
   );
+  const isExpenseWorkflow = workflowMode === "expense";
 
   // Auto-focus username field when dialog opens
   useEffect(() => {
@@ -123,9 +127,17 @@ export const CashierAuthDialog = ({
           });
 
           if (expireResult.success) {
-            toast.success("Signed out from all registers.");
+            toast.success(
+              isExpenseWorkflow
+                ? "Signed out from other sessions."
+                : "Signed out from all registers.",
+            );
           } else {
-            toast.error("Other register sign-outs not completed. Try again.");
+            toast.error(
+              isExpenseWorkflow
+                ? "Other session sign-outs not completed. Try again."
+                : "Other register sign-outs not completed. Try again.",
+            );
             setPin("");
             return;
           }
@@ -154,16 +166,28 @@ export const CashierAuthDialog = ({
 
   const header =
     state === "auth"
-      ? "Start register session"
-      : "Sign out from other registers";
+      ? isExpenseWorkflow
+        ? "Start expense session"
+        : "Start register session"
+      : isExpenseWorkflow
+        ? "Sign out from other sessions"
+        : "Sign out from other registers";
 
   const switchStateButtonText =
     state === "auth"
-      ? "Sign out from other registers"
-      : "Start register session";
+      ? isExpenseWorkflow
+        ? "Sign out from other sessions"
+        : "Sign out from other registers"
+      : isExpenseWorkflow
+        ? "Start expense session"
+        : "Start register session";
 
   const mainButtonText =
-    state === "auth" ? "Sign in" : "Sign out from all registers";
+    state === "auth"
+      ? "Sign in"
+      : isExpenseWorkflow
+        ? "Sign out from other sessions"
+        : "Sign out from all registers";
 
   return (
     <Dialog open={open} onOpenChange={onDismiss}>

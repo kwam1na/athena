@@ -6,10 +6,7 @@ import {
   type QueryCtx,
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import {
-  operationalRoleValidator,
-  type OperationalRole,
-} from "./staffRoles";
+import { operationalRoleValidator, type OperationalRole } from "./staffRoles";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
 
@@ -17,7 +14,7 @@ export const STAFF_CREDENTIAL_STATUS = v.union(
   v.literal("pending"),
   v.literal("active"),
   v.literal("suspended"),
-  v.literal("revoked")
+  v.literal("revoked"),
 );
 
 export type StaffCredentialStatus =
@@ -25,9 +22,7 @@ export type StaffCredentialStatus =
   | "active"
   | "suspended"
   | "revoked";
-type StaffCredentialReaderCtx =
-  | Pick<QueryCtx, "db">
-  | Pick<MutationCtx, "db">;
+type StaffCredentialReaderCtx = Pick<QueryCtx, "db"> | Pick<MutationCtx, "db">;
 
 type StaffCredentialAuthenticationData = {
   activeRoles: OperationalRole[];
@@ -38,6 +33,8 @@ type StaffCredentialAuthenticationData = {
 
 type StaffCredentialAuthenticationResult =
   CommandResult<StaffCredentialAuthenticationData>;
+
+const ACTIVE_STAFF_SESSION_LOOKUP_LIMIT = 100;
 
 function normalizeUsername(username: string) {
   return username.trim().toLowerCase();
@@ -61,7 +58,7 @@ function invalidStaffCredentialsResult(): StaffCredentialAuthenticationResult {
 }
 
 function staffAuthorizationFailedResult(
-  message: string
+  message: string,
 ): StaffCredentialAuthenticationResult {
   return userError({
     code: "authorization_failed",
@@ -70,7 +67,7 @@ function staffAuthorizationFailedResult(
 }
 
 function staffPreconditionFailedResult(
-  message: string
+  message: string,
 ): StaffCredentialAuthenticationResult {
   return userError({
     code: "precondition_failed",
@@ -80,19 +77,19 @@ function staffPreconditionFailedResult(
 
 export async function getStaffCredentialByStaffProfileIdWithCtx(
   ctx: StaffCredentialReaderCtx,
-  staffProfileId: Id<"staffProfile">
+  staffProfileId: Id<"staffProfile">,
 ) {
   const [activeCredential, pendingCredential] = await Promise.all([
     ctx.db
       .query("staffCredential")
       .withIndex("by_staffProfileId_status", (q) =>
-        q.eq("staffProfileId", staffProfileId).eq("status", "active")
+        q.eq("staffProfileId", staffProfileId).eq("status", "active"),
       )
       .first(),
     ctx.db
       .query("staffCredential")
       .withIndex("by_staffProfileId_status", (q) =>
-        q.eq("staffProfileId", staffProfileId).eq("status", "pending")
+        q.eq("staffProfileId", staffProfileId).eq("status", "pending"),
       )
       .first(),
   ]);
@@ -107,13 +104,15 @@ export async function getStaffCredentialByStaffProfileIdWithCtx(
 
   return ctx.db
     .query("staffCredential")
-    .withIndex("by_staffProfileId", (q) => q.eq("staffProfileId", staffProfileId))
+    .withIndex("by_staffProfileId", (q) =>
+      q.eq("staffProfileId", staffProfileId),
+    )
     .first();
 }
 
 async function getCredentialById(
   ctx: StaffCredentialReaderCtx,
-  staffCredentialId: Id<"staffCredential">
+  staffCredentialId: Id<"staffCredential">,
 ) {
   return ctx.db.get("staffCredential", staffCredentialId);
 }
@@ -123,7 +122,7 @@ async function getCredentialByUsername(
   args: {
     storeId: Id<"store">;
     username: string;
-  }
+  },
 ) {
   const normalizedUsername = normalizeUsername(args.username);
 
@@ -134,7 +133,7 @@ async function getCredentialByUsername(
   return ctx.db
     .query("staffCredential")
     .withIndex("by_storeId_username", (q) =>
-      q.eq("storeId", args.storeId).eq("username", normalizedUsername)
+      q.eq("storeId", args.storeId).eq("username", normalizedUsername),
     )
     .first();
 }
@@ -145,12 +144,12 @@ async function getActiveRolesForStaffProfile(
     organizationId: Id<"organization">;
     staffProfileId: Id<"staffProfile">;
     storeId: Id<"store">;
-  }
+  },
 ) {
   const roleAssignments = await ctx.db
     .query("staffRoleAssignment")
     .withIndex("by_staffProfileId", (q) =>
-      q.eq("staffProfileId", args.staffProfileId)
+      q.eq("staffProfileId", args.staffProfileId),
     )
     .take(20);
 
@@ -158,7 +157,7 @@ async function getActiveRolesForStaffProfile(
     (assignment) =>
       assignment.status === "active" &&
       assignment.organizationId === args.organizationId &&
-      assignment.storeId === args.storeId
+      assignment.storeId === args.storeId,
   );
 }
 
@@ -168,7 +167,7 @@ async function assertStaffProfileReadyForCredential(
     organizationId: Id<"organization">;
     staffProfileId: Id<"staffProfile">;
     storeId: Id<"store">;
-  }
+  },
 ) {
   const staffProfile = await ctx.db.get("staffProfile", args.staffProfileId);
 
@@ -201,7 +200,7 @@ export async function getStaffCredentialUsernameAvailabilityWithCtx(
   args: {
     storeId: Id<"store">;
     username: string;
-  }
+  },
 ) {
   const normalizedUsername = requireNonEmptyUsername(args.username);
   const existingCredential = await getCredentialByUsername(ctx, {
@@ -219,7 +218,7 @@ export async function listStaffCredentialsByStoreWithCtx(
   ctx: StaffCredentialReaderCtx,
   args: {
     storeId: Id<"store">;
-  }
+  },
 ) {
   // Store staff rosters stay small enough for the admin credential screen to read them in full.
   const [
@@ -227,37 +226,36 @@ export async function listStaffCredentialsByStoreWithCtx(
     activeCredentials,
     suspendedCredentials,
     revokedCredentials,
-  ] =
-    await Promise.all([
-      // eslint-disable-next-line @convex-dev/no-collect-in-query
-      ctx.db
-        .query("staffCredential")
-        .withIndex("by_storeId_status", (q) =>
-          q.eq("storeId", args.storeId).eq("status", "pending")
-        )
-        .collect(),
-      // eslint-disable-next-line @convex-dev/no-collect-in-query
-      ctx.db
-        .query("staffCredential")
-        .withIndex("by_storeId_status", (q) =>
-          q.eq("storeId", args.storeId).eq("status", "active")
-        )
-        .collect(),
-      // eslint-disable-next-line @convex-dev/no-collect-in-query
-      ctx.db
-        .query("staffCredential")
-        .withIndex("by_storeId_status", (q) =>
-          q.eq("storeId", args.storeId).eq("status", "suspended")
-        )
-        .collect(),
-      // eslint-disable-next-line @convex-dev/no-collect-in-query
-      ctx.db
-        .query("staffCredential")
-        .withIndex("by_storeId_status", (q) =>
-          q.eq("storeId", args.storeId).eq("status", "revoked")
-        )
-        .collect(),
-    ]);
+  ] = await Promise.all([
+    // eslint-disable-next-line @convex-dev/no-collect-in-query
+    ctx.db
+      .query("staffCredential")
+      .withIndex("by_storeId_status", (q) =>
+        q.eq("storeId", args.storeId).eq("status", "pending"),
+      )
+      .collect(),
+    // eslint-disable-next-line @convex-dev/no-collect-in-query
+    ctx.db
+      .query("staffCredential")
+      .withIndex("by_storeId_status", (q) =>
+        q.eq("storeId", args.storeId).eq("status", "active"),
+      )
+      .collect(),
+    // eslint-disable-next-line @convex-dev/no-collect-in-query
+    ctx.db
+      .query("staffCredential")
+      .withIndex("by_storeId_status", (q) =>
+        q.eq("storeId", args.storeId).eq("status", "suspended"),
+      )
+      .collect(),
+    // eslint-disable-next-line @convex-dev/no-collect-in-query
+    ctx.db
+      .query("staffCredential")
+      .withIndex("by_storeId_status", (q) =>
+        q.eq("storeId", args.storeId).eq("status", "revoked"),
+      )
+      .collect(),
+  ]);
 
   return [
     ...pendingCredentials,
@@ -275,17 +273,14 @@ export async function createStaffCredentialWithCtx(
     staffProfileId: Id<"staffProfile">;
     storeId: Id<"store">;
     username: string;
-  }
+  },
 ) {
   const normalizedUsername = requireNonEmptyUsername(args.username);
 
   await assertStaffProfileReadyForCredential(ctx, args);
 
   const existingCredentialForStaffProfile =
-    await getStaffCredentialByStaffProfileIdWithCtx(
-    ctx,
-    args.staffProfileId
-  );
+    await getStaffCredentialByStaffProfileIdWithCtx(ctx, args.staffProfileId);
 
   if (existingCredentialForStaffProfile) {
     throw new Error("Staff credential already exists for this staff profile.");
@@ -322,12 +317,15 @@ export async function updateStaffCredentialWithCtx(
     status?: StaffCredentialStatus;
     storeId: Id<"store">;
     username?: string;
-  }
+  },
 ) {
   const existingCredential = args.staffCredentialId
     ? await getCredentialById(ctx, args.staffCredentialId)
     : args.staffProfileId
-      ? await getStaffCredentialByStaffProfileIdWithCtx(ctx, args.staffProfileId)
+      ? await getStaffCredentialByStaffProfileIdWithCtx(
+          ctx,
+          args.staffProfileId,
+        )
       : null;
 
   if (!existingCredential) {
@@ -362,7 +360,10 @@ export async function updateStaffCredentialWithCtx(
       username: normalizedUsername,
     });
 
-    if (conflictingCredential && conflictingCredential._id !== existingCredential._id) {
+    if (
+      conflictingCredential &&
+      conflictingCredential._id !== existingCredential._id
+    ) {
       throw new Error("Username is already in use for this store.");
     }
 
@@ -383,7 +384,8 @@ export async function updateStaffCredentialWithCtx(
     updates.status = resolvedStatus;
   }
 
-  const nextStatus = (updates.status as StaffCredentialStatus | undefined) ??
+  const nextStatus =
+    (updates.status as StaffCredentialStatus | undefined) ??
     existingCredential.status;
   const nextPinHash =
     (updates.pinHash as string | undefined) ?? existingCredential.pinHash;
@@ -408,7 +410,7 @@ export async function authenticateStaffCredentialWithCtx(
     pinHash: string;
     storeId: Id<"store">;
     username: string;
-  }
+  },
 ): Promise<StaffCredentialAuthenticationResult> {
   const normalizedUsername = normalizeUsername(args.username);
 
@@ -419,12 +421,12 @@ export async function authenticateStaffCredentialWithCtx(
   const matchingCredentials = await ctx.db
     .query("staffCredential")
     .withIndex("by_storeId_username", (q) =>
-      q.eq("storeId", args.storeId).eq("username", normalizedUsername)
+      q.eq("storeId", args.storeId).eq("username", normalizedUsername),
     )
     .take(2);
 
   const activeCredential = matchingCredentials.find(
-    (credential) => credential.status === "active"
+    (credential) => credential.status === "active",
   );
 
   if (!activeCredential) {
@@ -441,7 +443,7 @@ export async function authenticateStaffCredentialWithCtx(
 
   const staffProfile = await ctx.db.get(
     "staffProfile",
-    activeCredential.staffProfileId
+    activeCredential.staffProfileId,
   );
 
   if (!staffProfile) {
@@ -464,7 +466,7 @@ export async function authenticateStaffCredentialWithCtx(
 
   if (activeRoles.length === 0) {
     return staffAuthorizationFailedResult(
-      "Staff profile has no active role assignments."
+      "Staff profile has no active role assignments.",
     );
   }
 
@@ -475,7 +477,7 @@ export async function authenticateStaffCredentialWithCtx(
 
   if (authorizedRoles.length === 0) {
     return staffAuthorizationFailedResult(
-      "Staff profile is not authorized for this subsystem."
+      "Staff profile is not authorized for this subsystem.",
     );
   }
 
@@ -499,7 +501,7 @@ export async function authenticateStaffCredentialForTerminalWithCtx(
     storeId: Id<"store">;
     terminalId: Id<"posTerminal">;
     username: string;
-  }
+  },
 ): Promise<StaffCredentialAuthenticationResult> {
   const authentication = await authenticateStaffCredentialWithCtx(ctx, args);
 
@@ -512,20 +514,35 @@ export async function authenticateStaffCredentialForTerminalWithCtx(
   const activeSessions = await ctx.db
     .query("posSession")
     .withIndex("by_staffProfileId", (q) =>
-      q.eq("staffProfileId", authentication.data.staffProfileId)
+      q.eq("staffProfileId", authentication.data.staffProfileId),
     )
     .collect();
+  const activeExpenseSessions = await ctx.db
+    .query("expenseSession")
+    .withIndex("by_staffProfileId_and_status", (q) =>
+      q
+        .eq("staffProfileId", authentication.data.staffProfileId)
+        .eq("status", "active"),
+    )
+    .take(ACTIVE_STAFF_SESSION_LOOKUP_LIMIT);
   const now = Date.now();
   const activeSessionsOnOtherTerminals = activeSessions.filter(
     (session) =>
       session.status === "active" &&
       session.expiresAt > now &&
-      session.terminalId !== args.terminalId
+      session.terminalId !== args.terminalId,
+  );
+  const activeExpenseSessionsOnOtherTerminals = activeExpenseSessions.filter(
+    (session) =>
+      session.expiresAt > now && session.terminalId !== args.terminalId,
   );
 
-  if (activeSessionsOnOtherTerminals.length > 0) {
+  if (
+    activeSessionsOnOtherTerminals.length > 0 ||
+    activeExpenseSessionsOnOtherTerminals.length > 0
+  ) {
     return staffPreconditionFailedResult(
-      "This staff member has an active session on another terminal."
+      "This staff member has an active session on another terminal.",
     );
   }
 
@@ -667,5 +684,6 @@ export const authenticateStaffCredentialForTerminal = mutation({
     terminalId: v.id("posTerminal"),
     username: v.string(),
   },
-  handler: (ctx, args) => authenticateStaffCredentialForTerminalWithCtx(ctx, args),
+  handler: (ctx, args) =>
+    authenticateStaffCredentialForTerminalWithCtx(ctx, args),
 });

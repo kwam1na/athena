@@ -380,6 +380,7 @@ export function POSRegisterView({
           open={viewModel.authDialog.open}
           storeId={viewModel.authDialog.storeId}
           terminalId={viewModel.authDialog.terminalId}
+          workflowMode={viewModel.authDialog.workflowMode}
           onAuthenticated={viewModel.authDialog.onAuthenticated}
           onDismiss={viewModel.authDialog.onDismiss}
         />

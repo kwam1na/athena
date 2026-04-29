@@ -50,7 +50,7 @@ type InventoryCall =
   | { kind: "release"; skuId: string; quantity: number };
 
 describe("createExpenseSessionCommandService", () => {
-  it("creates a fresh active expense session with a usable drawer binding", async () => {
+  it("creates a fresh active expense session without requiring a drawer binding", async () => {
     const commandService = await loadCommandService();
     const repository = createFakeRepository({
       registerSessions: [
@@ -92,13 +92,13 @@ describe("createExpenseSessionCommandService", () => {
         terminalId: "terminal-1",
         staffProfileId: "staff-1",
         registerNumber: "1",
-        registerSessionId: "drawer-1",
         expiresAt: 61_000,
       }),
     );
+    expect(repository.sessions[0]).not.toHaveProperty("registerSessionId");
   });
 
-  it("rejects a closing drawer before creating a session", async () => {
+  it("creates an expense session even when the drawer is closing", async () => {
     const commandService = await loadCommandService();
     const repository = createFakeRepository({
       registerSessions: [
@@ -127,10 +127,19 @@ describe("createExpenseSessionCommandService", () => {
     });
 
     expect(result).toEqual({
-      status: "validationFailed",
-      message: "Open the cash drawer before starting an expense session.",
+      status: "ok",
+      data: {
+        sessionId: "expense-session-1",
+        expiresAt: 61_000,
+      },
     });
-    expect(repository.sessions).toHaveLength(0);
+    expect(repository.sessions).toContainEqual(
+      expect.objectContaining({
+        _id: "expense-session-1",
+        status: "active",
+      }),
+    );
+    expect(repository.sessions[0]).not.toHaveProperty("registerSessionId");
     expect(repository.sessionPatches).toEqual([]);
   });
 
@@ -205,7 +214,7 @@ describe("createExpenseSessionCommandService", () => {
     expect(repository.items).toHaveLength(1);
   });
 
-  it("rejects item mutation without a drawer binding before inventory or item writes", async () => {
+  it("allows item mutation without a drawer binding", async () => {
     const commandService = await loadCommandService();
     const inventoryCalls: InventoryCall[] = [];
     const repository = createFakeRepository({
@@ -244,15 +253,35 @@ describe("createExpenseSessionCommandService", () => {
     });
 
     expect(result).toEqual({
-      status: "validationFailed",
-      message: "Open the cash drawer before modifying this expense session.",
+      status: "ok",
+      data: {
+        itemId: "item-1",
+        expiresAt: 61_000,
+      },
     });
-    expect(inventoryCalls).toEqual([]);
-    expect(repository.items).toEqual([]);
-    expect(repository.sessionPatches).toEqual([]);
+    expect(inventoryCalls).toEqual([
+      { kind: "acquire", skuId: "sku-1", quantity: 1 },
+    ]);
+    expect(repository.items).toContainEqual(
+      expect.objectContaining({
+        _id: "item-1",
+        sessionId: "expense-session-1",
+        productSkuId: "sku-1",
+        quantity: 1,
+      }),
+    );
+    expect(repository.sessionPatches).toEqual([
+      {
+        sessionId: "expense-session-1",
+        patch: {
+          updatedAt: 1_000,
+          expiresAt: 61_000,
+        },
+      },
+    ]);
   });
 
-  it("rejects clear cart with a mismatched drawer before releasing holds or deleting items", async () => {
+  it("clears cart items even when a stored drawer binding no longer matches", async () => {
     const commandService = await loadCommandService();
     const inventoryCalls: InventoryCall[] = [];
     const repository = createFakeRepository({
@@ -307,11 +336,15 @@ describe("createExpenseSessionCommandService", () => {
     });
 
     expect(result).toEqual({
-      status: "validationFailed",
-      message: "Open the cash drawer before clearing this expense session.",
+      status: "ok",
+      data: {
+        sessionId: "expense-session-1",
+      },
     });
-    expect(inventoryCalls).toEqual([]);
-    expect(repository.items).toHaveLength(1);
+    expect(inventoryCalls).toEqual([
+      { kind: "release", skuId: "sku-1", quantity: 2 },
+    ]);
+    expect(repository.items).toHaveLength(0);
   });
 });
 

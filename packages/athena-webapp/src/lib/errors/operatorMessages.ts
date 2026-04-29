@@ -5,7 +5,7 @@ const OPERATOR_MESSAGE_REWRITES: Array<[RegExp, string]> = [
   ],
   [
     /^This staff (member|profile) has an active session on another terminal\.?$/i,
-    "Register sign-in already active at another register. Sign out there before starting here.",
+    "Sign-in already active on another terminal. Sign out there before starting here.",
   ],
   [
     /^A register session is already open for this terminal\.?$/i,

@@ -15,7 +15,10 @@ import {
   extractBarcodeFromInput,
   type ExtractResult,
 } from "@/lib/pos/barcodeUtils";
-import { POS_AUTO_ADD_DELAY_MS, POS_SEARCH_DEBOUNCE_MS } from "@/lib/pos/constants";
+import {
+  POS_AUTO_ADD_DELAY_MS,
+  POS_SEARCH_DEBOUNCE_MS,
+} from "@/lib/pos/constants";
 import {
   usePOSBarcodeSearch,
   usePOSProductSearch,
@@ -42,7 +45,25 @@ function getCashierDisplayName(staffProfile?: {
     return staffProfile.fullName;
   }
 
-  return [staffProfile.firstName, staffProfile.lastName].filter(Boolean).join(" ");
+  return [staffProfile.firstName, staffProfile.lastName]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function getExpenseSessionLoadKey(
+  session: NonNullable<ReturnType<typeof useExpenseActiveSession>>,
+) {
+  const itemKey = (session.cartItems ?? [])
+    .map((item: any) => `${item._id}:${item.quantity}:${item.updatedAt ?? ""}`)
+    .join("|");
+
+  return [
+    session._id,
+    session.updatedAt,
+    session.expiresAt,
+    session.notes ?? "",
+    itemKey,
+  ].join("::");
 }
 
 export function useExpenseRegisterViewModel(): RegisterViewModel {
@@ -55,6 +76,8 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
     useSessionManagementExpense();
   const { voidSession } = useSessionManagementExpense();
   const autoSessionInitialized = useRef(false);
+  const loadedSessionKeyRef = useRef<string | null>(null);
+  const sessionContextKeyRef = useRef<string | null>(null);
   const completeExpenseSession = useMutation(
     api.inventory.expenseSessions.completeExpenseSession,
   );
@@ -100,12 +123,8 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
 
   const resetAutoSessionInitialized = useCallback(() => {
     autoSessionInitialized.current = false;
+    loadedSessionKeyRef.current = null;
   }, []);
-
-  const handleNewSession = useCallback(() => {
-    store.startNewTransaction();
-    resetAutoSessionInitialized();
-  }, [resetAutoSessionInitialized, store]);
 
   const activeSessionQuery = useExpenseActiveSession(
     activeStore?._id,
@@ -116,8 +135,8 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
 
   const isSessionActive = Boolean(
     activeSessionQuery?.status === "active" &&
-      activeSessionQuery.expiresAt &&
-      activeSessionQuery.expiresAt > Date.now(),
+    activeSessionQuery.expiresAt &&
+    activeSessionQuery.expiresAt > Date.now(),
   );
 
   const handleCashierAuthenticated = useCallback(
@@ -129,6 +148,26 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
   );
 
   useEffect(() => {
+    const sessionContextKey = [
+      activeStore?._id ?? "",
+      store.ui.registerNumber,
+      store.cashier.id ?? "",
+      store.terminalId ?? "",
+    ].join("::");
+
+    if (sessionContextKeyRef.current !== sessionContextKey) {
+      sessionContextKeyRef.current = sessionContextKey;
+      autoSessionInitialized.current = false;
+      loadedSessionKeyRef.current = null;
+    }
+  }, [
+    activeStore?._id,
+    store.cashier.id,
+    store.terminalId,
+    store.ui.registerNumber,
+  ]);
+
+  useEffect(() => {
     if (!activeStore?._id || !store.storeId) {
       return;
     }
@@ -137,15 +176,9 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
       return;
     }
 
-    if (autoSessionInitialized.current) {
-      return;
-    }
-
     if (activeSessionQuery === undefined) {
       return;
     }
-
-    autoSessionInitialized.current = true;
 
     if (activeSessionQuery) {
       if (
@@ -170,8 +203,15 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
         store.setActiveSession(null);
         store.clearCashier();
         autoSessionInitialized.current = false;
+        loadedSessionKeyRef.current = null;
         return;
       }
+
+      const sessionLoadKey = getExpenseSessionLoadKey(activeSessionQuery);
+      if (loadedSessionKeyRef.current === sessionLoadKey) {
+        return;
+      }
+      loadedSessionKeyRef.current = sessionLoadKey;
 
       logger.info("[Expense] Active session found, loading into store", {
         sessionId: activeSessionQuery._id,
@@ -183,6 +223,12 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
       return;
     }
 
+    if (autoSessionInitialized.current) {
+      return;
+    }
+
+    autoSessionInitialized.current = true;
+
     if (activeSessionQuery === null) {
       if (store.session.currentSessionId) {
         logger.debug("[Expense] Clearing stale session ID", {
@@ -190,6 +236,7 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
         });
         store.setCurrentSessionId(null);
         store.setActiveSession(null);
+        loadedSessionKeyRef.current = null;
         if (store.cashier.isAuthenticated) {
           store.clearCashier();
         }
@@ -208,30 +255,24 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
         staffProfileId: store.cashier.id,
       });
 
-      createSession(activeStore._id, store.cashier.id || undefined)
-        .then(handleNewSession)
-        .catch((error) => {
+      createSession(activeStore._id, store.cashier.id || undefined).catch(
+        (error) => {
           logger.error("[Expense] Failed to auto-create session", error);
           autoSessionInitialized.current = false;
-        });
+        },
+      );
     }
   }, [
     activeStore?._id,
     store.cashier.id,
     store.cashier.isAuthenticated,
-    store.cashier.id,
     activeSessionQuery,
     store.session.currentSessionId,
     store.session.isCreating,
     createSession,
-    handleNewSession,
     handleSessionLoaded,
     store.storeId,
   ]);
-
-  useEffect(() => {
-    autoSessionInitialized.current = false;
-  }, [activeStore?._id, store.ui.registerNumber]);
 
   const extractionCacheRef = useRef<ExtractResult | null>(null);
   const rawExtraction = extractBarcodeFromInput(store.ui.productSearchQuery);
@@ -257,16 +298,12 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
   const debouncedValue = useDebounce(extractedValue, POS_SEARCH_DEBOUNCE_MS);
   const productIdSearchResults =
     extractResult.type === "productId"
-      ? usePOSProductSearch(
-          activeStore?._id,
-          debouncedValue,
-        )
+      ? usePOSProductSearch(activeStore?._id, debouncedValue)
       : [];
   const barcodeSearchResult =
-    extractResult.type === "barcode" ? usePOSBarcodeSearch(
-      activeStore?._id,
-      debouncedValue,
-    ) : null;
+    extractResult.type === "barcode"
+      ? usePOSBarcodeSearch(activeStore?._id, debouncedValue)
+      : null;
 
   useEffect(() => {
     if (!extractedValue.trim()) {
@@ -357,7 +394,14 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
         }
       }
     },
-    [barcodeSearchResult, cart, extractResult.type, extractedValue, productIdSearchResults, store],
+    [
+      barcodeSearchResult,
+      cart,
+      extractResult.type,
+      extractedValue,
+      productIdSearchResults,
+      store,
+    ],
   );
 
   const handleClearCart = useCallback(async () => {
@@ -564,6 +608,7 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
             open: true,
             storeId: activeStore._id,
             terminalId: terminal._id,
+            workflowMode: "expense",
             onAuthenticated: handleCashierAuthenticated,
             onDismiss: handleNavigateBack,
           }
