@@ -103,6 +103,11 @@ describe("RegisterSessionViewContent", () => {
     window.scrollTo = vi.fn();
   });
 
+  const closeoutHandlers = {
+    onReviewCloseout: vi.fn(),
+    onSubmitCloseout: vi.fn(),
+  };
+
   it("shows a loading state while the register session is loading", () => {
     render(
       <RegisterSessionViewContent
@@ -110,6 +115,7 @@ describe("RegisterSessionViewContent", () => {
         currency="USD"
         isLoading
         onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
         registerSessionSnapshot={baseSnapshot}
         storeId="store-1"
       />,
@@ -125,6 +131,7 @@ describe("RegisterSessionViewContent", () => {
         currency="USD"
         isLoading={false}
         onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
         registerSessionSnapshot={{
           closeoutReview: {
             hasVariance: true,
@@ -166,6 +173,10 @@ describe("RegisterSessionViewContent", () => {
     );
 
     expect(screen.getAllByText("Register 3").length).toBeGreaterThan(0);
+    expect(screen.getByText("Session")).toBeInTheDocument();
+    expect(screen.getByText("Code")).toBeInTheDocument();
+    expect(screen.getByText("SION-1")).toBeInTheDocument();
+    expect(screen.getByText("Cash position")).toBeInTheDocument();
     expect(screen.getByText("Opened")).toBeInTheDocument();
     expect(
       screen.getByText((_, element) =>
@@ -177,8 +188,10 @@ describe("RegisterSessionViewContent", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Activity")).toBeInTheDocument();
     expect(screen.getByText("1 linked sale")).toBeInTheDocument();
-    expect(screen.getAllByText("Closing").length).toBeGreaterThan(0);
-    expect(screen.getByText("Counted cash $171")).toBeInTheDocument();
+    expect(screen.getByText("Closeout")).toBeInTheDocument();
+    expect(screen.getByText("Closeout in progress")).toBeInTheDocument();
+    expect(screen.getByText("Counted")).toBeInTheDocument();
+    expect(screen.getAllByText("$171").length).toBeGreaterThan(0);
     expect(screen.getByText("Linked transactions")).toBeInTheDocument();
     const transactionRow = screen.getByRole("link", {
       name: "Open transaction #TXN-0031",
@@ -187,6 +200,11 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getByText(/3 items - Esi Boateng/i)).toBeInTheDocument();
     expect(screen.getAllByText("Ama M.").length).toBeGreaterThan(0);
     expect(screen.getByText("Variance review required.")).toBeInTheDocument();
+    expect(screen.getByText("Closeout workflow")).toBeInTheDocument();
+    expect(screen.getByLabelText("Closeout counted cash")).toHaveValue(171);
+    expect(
+      screen.getByRole("button", { name: "Submit closeout" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Deposit history")).toBeInTheDocument();
     expect(screen.getByText("Record cash deposit")).toBeInTheDocument();
     expect(screen.getByText("BANK-339")).toBeInTheDocument();
@@ -208,6 +226,7 @@ describe("RegisterSessionViewContent", () => {
         currency="GHS"
         isLoading={false}
         onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
         registerSessionSnapshot={{
           ...baseSnapshot,
           registerSession: {
@@ -235,6 +254,7 @@ describe("RegisterSessionViewContent", () => {
         currency="GHS"
         isLoading={false}
         onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
         registerSessionSnapshot={{
           ...baseSnapshot,
           closeoutReview: {
@@ -266,6 +286,95 @@ describe("RegisterSessionViewContent", () => {
     ).toBeGreaterThan(0);
   });
 
+  it("submits the closeout count from the register detail page", async () => {
+    const user = userEvent.setup();
+    const onSubmitCloseout = vi.fn().mockResolvedValue(ok({ action: "closed" }));
+
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        onReviewCloseout={vi.fn()}
+        onSubmitCloseout={onSubmitCloseout}
+        registerSessionSnapshot={baseSnapshot}
+        storeId="store-1"
+      />,
+    );
+
+    await user.clear(screen.getByLabelText("Closeout counted cash"));
+    await user.type(screen.getByLabelText("Closeout counted cash"), "180");
+    await user.type(
+      screen.getByLabelText("Closeout notes"),
+      "Final count after second safe drop.",
+    );
+    await user.click(screen.getByRole("button", { name: "Submit closeout" }));
+
+    await waitFor(() =>
+      expect(onSubmitCloseout).toHaveBeenCalledWith({
+        countedCash: 18000,
+        notes: "Final count after second safe drop.",
+        registerSessionId: "session-1",
+      }),
+    );
+  });
+
+  it("reviews a pending closeout approval from the register detail page", async () => {
+    const user = userEvent.setup();
+    const onReviewCloseout = vi
+      .fn()
+      .mockResolvedValue(ok({ action: "approved" }));
+
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        onReviewCloseout={onReviewCloseout}
+        onSubmitCloseout={vi.fn()}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          closeoutReview: {
+            hasVariance: true,
+            reason: "Variance of -500 exceeded the closeout approval threshold.",
+            requiresApproval: true,
+            variance: -500,
+          },
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            pendingApprovalRequest: {
+              _id: "approval-1",
+              reason: "Variance of -500 exceeded the closeout approval threshold.",
+              requestedByStaffName: "Ama Mensah",
+              status: "pending",
+            },
+          },
+        }}
+        storeId="store-1"
+      />,
+    );
+
+    expect(screen.getByText("Manager review required")).toBeInTheDocument();
+    expect(screen.getAllByText("Expected").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("GH₵176").length).toBeGreaterThan(1);
+
+    await user.type(
+      screen.getByLabelText("Manager closeout notes"),
+      "Deposit variance approved.",
+    );
+    await user.click(screen.getByRole("button", { name: "Approve variance" }));
+
+    await waitFor(() =>
+      expect(onReviewCloseout).toHaveBeenCalledWith({
+        decision: "approved",
+        decisionNotes: "Deposit variance approved.",
+        registerSessionId: "session-1",
+      }),
+    );
+  });
+
   it("opens the transaction detail when the linked transaction row is clicked", async () => {
     const user = userEvent.setup();
 
@@ -275,6 +384,7 @@ describe("RegisterSessionViewContent", () => {
         currency="USD"
         isLoading={false}
         onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
         registerSessionSnapshot={{
           ...baseSnapshot,
           transactions: [
@@ -329,6 +439,7 @@ describe("RegisterSessionViewContent", () => {
         currency="USD"
         isLoading={false}
         onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
         registerSessionSnapshot={{
           ...baseSnapshot,
           transactions,
@@ -370,6 +481,7 @@ describe("RegisterSessionViewContent", () => {
         currency="USD"
         isLoading={false}
         onRecordDeposit={onRecordDeposit}
+        {...closeoutHandlers}
         registerSessionSnapshot={baseSnapshot}
         storeId="store-1"
       />,
@@ -412,6 +524,7 @@ describe("RegisterSessionViewContent", () => {
         currency="USD"
         isLoading={false}
         onRecordDeposit={onRecordDeposit}
+        {...closeoutHandlers}
         registerSessionSnapshot={baseSnapshot}
         storeId="store-1"
       />,
@@ -442,6 +555,7 @@ describe("RegisterSessionViewContent", () => {
         currency="USD"
         isLoading={false}
         onRecordDeposit={onRecordDeposit}
+        {...closeoutHandlers}
         registerSessionSnapshot={baseSnapshot}
         storeId="store-1"
       />,

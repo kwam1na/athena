@@ -1,5 +1,5 @@
 import { ColumnDef } from "@tanstack/react-table";
-import { DataTableColumnHeader } from "./data-table-column-header";
+import { DataTableColumnHeader } from "~/src/components/base/table/data-table-column-header";
 import { formatUserId, getRelativeTime } from "~/src/lib/utils";
 import { Monitor, Smartphone, User, Mail, Activity, Clock } from "lucide-react";
 import { Badge } from "../../ui/badge";

@@ -274,7 +274,11 @@ export function POSRegisterView({
     >
       <FadeIn className={registerContentClassName}>
         {isPosWorkflow && viewModel.drawerGate ? (
-          <RegisterDrawerGate drawerGate={viewModel.drawerGate} />
+          <div className="flex h-full min-h-0 w-full items-center justify-center overflow-y-auto py-6">
+            <div className="w-full -translate-y-1/4">
+              <RegisterDrawerGate drawerGate={viewModel.drawerGate} />
+            </div>
+          </div>
         ) : (
           <div className="flex h-full min-h-0 flex-col gap-6 overflow-hidden">
             {isPosWorkflow && shouldRenderSaleSurface ? (

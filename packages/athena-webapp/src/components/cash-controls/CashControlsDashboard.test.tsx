@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CashControlsDashboardContent } from "./CashControlsDashboard";
@@ -9,16 +9,19 @@ vi.mock("@tanstack/react-router", () => ({
   Link: ({
     children,
     params,
+    search,
     to,
     ...props
   }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
     params?: unknown;
+    search?: Record<string, string>;
     to?: string;
   }) => {
     void params;
+    const searchParams = search ? `?${new URLSearchParams(search)}` : "";
 
     return (
-      <a href={to ?? "#"} {...props}>
+      <a href={`${to ?? "#"}${searchParams}`} {...props}>
         {children}
       </a>
     );
@@ -90,6 +93,7 @@ const baseSnapshot = {
   }>,
   registerSessions: [] as Array<{
     _id: string;
+    closedAt?: number;
     countedCash?: number;
     expectedCash: number;
     openedAt: number;
@@ -147,6 +151,12 @@ describe("CashControlsDashboardContent", () => {
   });
 
   it("renders overview metrics, register activity, and recent deposits", () => {
+    const closedAt = new Date("2026-04-20T19:45:00.000Z").getTime();
+    const expectedClosedAt = new Date(closedAt).toLocaleString("en-US", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+
     render(
       <CashControlsDashboardContent
         currency="USD"
@@ -155,6 +165,7 @@ describe("CashControlsDashboardContent", () => {
             {
               _id: "session-open",
               expectedCash: 24800,
+              openedByStaffName: "Maame Serwaa",
               openedAt: new Date("2026-04-21T09:15:00.000Z").getTime(),
               openingFloat: 5000,
               registerNumber: "Register 1",
@@ -169,11 +180,13 @@ describe("CashControlsDashboardContent", () => {
               _id: "session-closeout",
               countedCash: 17100,
               expectedCash: 17600,
+              openedByStaffName: "Ama Mensah",
               openedAt: new Date("2026-04-21T07:30:00.000Z").getTime(),
               openingFloat: 5000,
               pendingApprovalRequest: {
                 _id: "approval-1",
-                reason: "Variance review required.",
+                reason:
+                  "Variance of -500 exceeded the closeout approval threshold.",
                 requestedByStaffName: "Ama Mensah",
                 status: "pending",
               },
@@ -211,11 +224,13 @@ describe("CashControlsDashboardContent", () => {
               _id: "session-closing",
               countedCash: 17100,
               expectedCash: 17600,
+              openedByStaffName: "Ama Mensah",
               openedAt: new Date("2026-04-21T07:30:00.000Z").getTime(),
               openingFloat: 5000,
               pendingApprovalRequest: {
                 _id: "approval-1",
-                reason: "Variance review required.",
+                reason:
+                  "Variance of -500 exceeded the closeout approval threshold.",
                 requestedByStaffName: "Ama Mensah",
                 status: "pending",
               },
@@ -228,6 +243,7 @@ describe("CashControlsDashboardContent", () => {
             {
               _id: "session-open",
               expectedCash: 24800,
+              openedByStaffName: "Maame Serwaa",
               openedAt: new Date("2026-04-21T09:15:00.000Z").getTime(),
               openingFloat: 5000,
               registerNumber: "Register 1",
@@ -238,8 +254,11 @@ describe("CashControlsDashboardContent", () => {
             },
             {
               _id: "session-closed",
+              closedAt,
+              closedByStaffName: "Kojo Mensimah",
               countedCash: 5000,
               expectedCash: 5000,
+              openedByStaffName: "Adjoa Tetteh",
               openedAt: new Date("2026-04-20T09:15:00.000Z").getTime(),
               openingFloat: 5000,
               registerNumber: "Register 4",
@@ -248,17 +267,55 @@ describe("CashControlsDashboardContent", () => {
               variance: 0,
               workflowTraceId: "register_session:reg-4",
             },
+            {
+              _id: "session-closed-older-1",
+              closedAt: new Date("2026-04-19T19:45:00.000Z").getTime(),
+              countedCash: 4200,
+              expectedCash: 4200,
+              openedAt: new Date("2026-04-19T09:15:00.000Z").getTime(),
+              openingFloat: 4200,
+              registerNumber: "Register 5",
+              status: "closed",
+              totalDeposited: 0,
+              variance: 0,
+            },
+            {
+              _id: "session-closed-older-2",
+              closedAt: new Date("2026-04-18T19:45:00.000Z").getTime(),
+              countedCash: 3900,
+              expectedCash: 4000,
+              openedAt: new Date("2026-04-18T09:15:00.000Z").getTime(),
+              openingFloat: 4000,
+              registerNumber: "Register 6",
+              status: "closed",
+              totalDeposited: 0,
+              variance: -100,
+            },
+            {
+              _id: "session-closed-older-3",
+              closedAt: new Date("2026-04-17T19:45:00.000Z").getTime(),
+              countedCash: 3200,
+              expectedCash: 3200,
+              openedAt: new Date("2026-04-17T09:15:00.000Z").getTime(),
+              openingFloat: 3200,
+              registerNumber: "Register 7",
+              status: "closed",
+              totalDeposited: 0,
+              variance: 0,
+            },
           ],
           unresolvedVariances: [
             {
               _id: "session-closeout",
               countedCash: 17100,
               expectedCash: 17600,
+              openedByStaffName: "Ama Mensah",
               openedAt: new Date("2026-04-21T07:30:00.000Z").getTime(),
               openingFloat: 5000,
               pendingApprovalRequest: {
                 _id: "approval-1",
-                reason: "Variance review required.",
+                reason:
+                  "Variance of -500 exceeded the closeout approval threshold.",
                 requestedByStaffName: "Ama Mensah",
                 status: "pending",
               },
@@ -277,13 +334,56 @@ describe("CashControlsDashboardContent", () => {
     );
 
     expect(screen.getByText("Cash controls workspace")).toBeInTheDocument();
-    expect(screen.getByText("Open sessions")).toBeInTheDocument();
-    expect(screen.getByText("Expected cash")).toBeInTheDocument();
-    expect(screen.getAllByText("Deposited").length).toBeGreaterThan(0);
+    expect(screen.getByText("Cashroom landing")).toBeInTheDocument();
+    expect(screen.getByText("Expected in drawers")).toBeInTheDocument();
+    expect(screen.getByText("Deposited today")).toBeInTheDocument();
     expect(screen.getAllByText("Recent deposits").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Review closeouts")).not.toBeInTheDocument();
+    expect(screen.getByText("Cashroom workflow")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Move drawers from live cash to reviewed closeout, with exceptions surfaced only when action is needed.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Ready for action")).toBeInTheDocument();
+    expect(screen.getAllByText("1 drawer").length).toBeGreaterThan(0);
+    expect(screen.getByText("Needs action")).toBeInTheDocument();
+    expect(screen.getByText("Live drawers")).toBeInTheDocument();
+    expect(screen.getByText("Closed sessions")).toBeInTheDocument();
+    expect(
+      screen.getByText("Showing latest 3 of 4 closed sessions."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /View all register sessions/i }),
+    ).toHaveAttribute(
+      "href",
+      "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers?o=%252F",
+    );
     expect(screen.getAllByText("Register 1").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Register 3").length).toBeGreaterThan(0);
     expect(screen.getByText("Register 4")).toBeInTheDocument();
+    expect(screen.getByText(expectedClosedAt)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Register 4" })).toHaveAttribute(
+      "href",
+      "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId?o=%252F",
+    );
+    expect(screen.getByText("Register 5")).toBeInTheDocument();
+    expect(screen.getByText("Register 6")).toBeInTheDocument();
+    expect(screen.queryByText("Register 7")).not.toBeInTheDocument();
+    expect(screen.getAllByText(/Opened .* by Ama M\./).length).toBeGreaterThan(
+      0,
+    );
+    expect(
+      screen.getAllByText(
+        "Variance of -$5 exceeded the closeout approval threshold.",
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.queryByText(
+        "Variance of -500 exceeded the closeout approval threshold.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText(/Opened .* by Maame S\./)).toBeInTheDocument();
     expect(screen.getByText("Midday safe drop")).toBeInTheDocument();
     expect(screen.getByText("BANK-339")).toBeInTheDocument();
   });
@@ -340,11 +440,49 @@ describe("CashControlsDashboardContent", () => {
     );
 
     expect(screen.getAllByText("Register 2").length).toBeGreaterThan(0);
-    expect(screen.getByText("First safe drop after POS drawer open")).toBeInTheDocument();
+    expect(
+      screen.getByText("First safe drop after POS drawer open"),
+    ).toBeInTheDocument();
     expect(screen.getByText("SAFE-120")).toBeInTheDocument();
   });
 
-  it("opens the register session route when a session row is clicked", () => {
+  it("does not use closed register sessions for the live register workflow card", () => {
+    render(
+      <CashControlsDashboardContent
+        currency="USD"
+        dashboardSnapshot={{
+          ...baseSnapshot,
+          registerSessions: [
+            {
+              _id: "session-closed-register-2",
+              closedAt: new Date("2026-04-29T20:06:00.000Z").getTime(),
+              countedCash: 40000,
+              expectedCash: 40000,
+              openedAt: new Date("2026-04-29T07:40:00.000Z").getTime(),
+              openingFloat: 40000,
+              registerNumber: "Register 2",
+              status: "closed",
+              totalDeposited: 0,
+              variance: 0,
+            },
+          ],
+        }}
+        isLoading={false}
+        orgUrlSlug="v26"
+        storeUrlSlug="east-legon"
+      />,
+    );
+
+    expect(
+      screen.queryByText("Register 2 is ready for review or deposit entry."),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getAllByText("No live drawers are open right now.").length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByText("No open sessions")).toBeInTheDocument();
+  });
+
+  it("links register session cards to the session route", () => {
     render(
       <CashControlsDashboardContent
         currency="USD"
@@ -381,16 +519,11 @@ describe("CashControlsDashboardContent", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("link", { name: /register 1/i }));
+    const registerLinks = screen.getAllByRole("link", { name: /register 1/i });
 
-    expect(mockNavigate).toHaveBeenCalledWith({
-      params: {
-        orgUrlSlug: "v26",
-        sessionId: "session-open",
-        storeUrlSlug: "east-legon",
-      },
-      search: { o: "%2F" },
-      to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
-    });
+    expect(registerLinks[registerLinks.length - 1]).toHaveAttribute(
+      "href",
+      "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId?o=%252F",
+    );
   });
 });

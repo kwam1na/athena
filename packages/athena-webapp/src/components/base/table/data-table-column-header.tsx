@@ -6,10 +6,14 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../../ui/dropdown-menu";
 import { Button } from "../../ui/button";
 import { useEffect } from "react";
+
+const tableHeaderClass =
+  "text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground";
 
 interface DataTableColumnHeaderProps<TData, TValue>
   extends React.HTMLAttributes<HTMLDivElement> {
@@ -41,7 +45,7 @@ export function DataTableColumnHeader<TData, TValue>({
   }, [column.getIsSorted(), title]);
 
   if (!column.getCanSort()) {
-    return <div className={cn(className)}>{title}</div>;
+    return <div className={cn(tableHeaderClass, className)}>{title}</div>;
   }
 
   return (
@@ -51,7 +55,10 @@ export function DataTableColumnHeader<TData, TValue>({
           <Button
             variant="ghost"
             size="sm"
-            className="-ml-3 h-8 data-[state=open]:bg-accent"
+            className={cn(
+              "-ml-3 h-8 data-[state=open]:bg-accent",
+              tableHeaderClass,
+            )}
           >
             <span>{title}</span>
             {column.getIsSorted() === "desc" ? (
@@ -72,6 +79,15 @@ export function DataTableColumnHeader<TData, TValue>({
             <ArrowDown className="h-3.5 w-3.5 mr-2 text-muted-foreground/70" />
             Desc
           </DropdownMenuItem>
+          {column.getCanHide() ? (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => column.toggleVisibility(false)}>
+                <EyeOff className="h-3.5 w-3.5 mr-2 text-muted-foreground/70" />
+                Hide
+              </DropdownMenuItem>
+            </>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

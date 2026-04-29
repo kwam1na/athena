@@ -41,6 +41,7 @@ import {
   XCircle,
   ShoppingCart,
   Layers,
+  Banknote,
 } from "lucide-react";
 import { AppHeader } from "./Navbar";
 import { Link } from "@tanstack/react-router";
@@ -160,6 +161,23 @@ export function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton disabled={!canAccessOperations()} asChild>
                   <Link
+                    to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls"
+                    params={(p) => ({
+                      ...p,
+                      orgUrlSlug: activeOrganization?.slug,
+                      storeUrlSlug: activeStore?.slug,
+                    })}
+                    className="flex items-center"
+                  >
+                    <Banknote className="w-4 h-4" />
+                    <p className="font-medium">Cash Controls</p>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton disabled={!canAccessOperations()} asChild>
+                  <Link
                     to="/$orgUrlSlug/store/$storeUrlSlug/operations"
                     params={(p) => ({
                       ...p,
@@ -172,61 +190,6 @@ export function AppSidebar() {
                     <p className="font-medium">Operations</p>
                   </Link>
                 </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              <SidebarMenuItem>
-                <SidebarMenuButton disabled={!canAccessOperations()} asChild>
-                  <Link
-                    to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls"
-                    params={(p) => ({
-                      ...p,
-                      orgUrlSlug: activeOrganization?.slug,
-                      storeUrlSlug: activeStore?.slug,
-                    })}
-                    className="flex items-center"
-                  >
-                    <AlertOctagon className="w-4 h-4" />
-                    <p className="font-medium">Cash Controls</p>
-                  </Link>
-                </SidebarMenuButton>
-
-                <SidebarMenuSub>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuButton disabled={!canAccessOperations()} asChild>
-                      <Link
-                        to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls"
-                        params={(p) => ({
-                          ...p,
-                          orgUrlSlug: activeOrganization?.slug,
-                          storeUrlSlug: activeStore?.slug,
-                        })}
-                        className="flex items-center"
-                      >
-                        <Store className="w-4 h-4 mr-2" />
-                        <p className="font-medium">Cash Controls</p>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuSubItem>
-                </SidebarMenuSub>
-
-                <SidebarMenuSub>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuButton disabled={!canAccessOperations()} asChild>
-                      <Link
-                        to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/closeouts"
-                        params={(p) => ({
-                          ...p,
-                          orgUrlSlug: activeOrganization?.slug,
-                          storeUrlSlug: activeStore?.slug,
-                        })}
-                        className="flex items-center"
-                      >
-                        <CheckCircle className="w-4 h-4 mr-2" />
-                        <p className="font-medium">Closeouts</p>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuSubItem>
-                </SidebarMenuSub>
               </SidebarMenuItem>
 
               <SidebarMenuItem>

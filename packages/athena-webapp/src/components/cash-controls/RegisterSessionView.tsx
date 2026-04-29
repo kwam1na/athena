@@ -19,9 +19,14 @@ import {
 } from "@/lib/errors/runCommand";
 import { getOrigin } from "@/lib/navigationUtils";
 import { capitalizeWords, currencyFormatter } from "@/lib/utils";
-import { formatStoredAmount } from "@/lib/pos/displayAmounts";
+import {
+  formatStoredAmount,
+  parseDisplayAmountInput,
+} from "@/lib/pos/displayAmounts";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
+import { toDisplayAmount } from "~/convex/lib/currency";
+import { userError } from "~/shared/commandResult";
 import { formatStaffDisplayName } from "~/shared/staffDisplayName";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
@@ -127,6 +132,25 @@ type RegisterSessionDepositPayload = {
 type RegisterSessionDepositResult =
   NormalizedCommandResult<RegisterSessionDepositPayload>;
 
+type RegisterCloseoutSubmitArgs = {
+  countedCash: number;
+  notes?: string;
+  registerSessionId: string;
+};
+
+type RegisterCloseoutReviewArgs = {
+  decision: "approved" | "rejected";
+  decisionNotes?: string;
+  registerSessionId: string;
+};
+
+type RegisterCloseoutCommandPayload = {
+  action?: "approval_required" | "closed" | "approved" | "rejected";
+};
+
+type RegisterCloseoutCommandResult =
+  NormalizedCommandResult<RegisterCloseoutCommandPayload>;
+
 type RegisterSessionViewContentProps = {
   actorStaffProfileId?: string;
   actorUserId?: string;
@@ -135,6 +159,12 @@ type RegisterSessionViewContentProps = {
   onRecordDeposit: (
     args: RecordRegisterSessionDepositArgs,
   ) => Promise<RegisterSessionDepositResult>;
+  onReviewCloseout: (
+    args: RegisterCloseoutReviewArgs,
+  ) => Promise<RegisterCloseoutCommandResult>;
+  onSubmitCloseout: (
+    args: RegisterCloseoutSubmitArgs,
+  ) => Promise<RegisterCloseoutCommandResult>;
   orgUrlSlug?: string;
   registerSessionSnapshot: RegisterSessionSnapshot | null;
   storeId?: string;
@@ -156,6 +186,10 @@ function formatCurrency(currency: string, amount?: number | null) {
   }
 
   return formatStoredAmount(currencyFormatter(currency), amount);
+}
+
+function formatStoredAmountForInput(amount: number) {
+  return String(toDisplayAmount(amount));
 }
 
 function formatTimestamp(timestamp: number) {
@@ -196,84 +230,16 @@ function formatRegisterHeaderName(registerNumber?: string | null) {
   return `Register ${registerName}`;
 }
 
+function formatSessionCode(sessionId: string) {
+  return sessionId.slice(-6).toUpperCase();
+}
+
 function getVarianceTone(variance?: number) {
   if (!variance) {
     return "text-foreground";
   }
 
   return variance > 0 ? "text-emerald-700" : "text-destructive";
-}
-
-function formatStaffByline(staffName?: string | null) {
-  if (!staffName) {
-    return undefined;
-  }
-
-  return `By ${formatStaffDisplayName({ fullName: staffName })}`;
-}
-
-function buildLifecycleRows({
-  currency,
-  registerSession,
-  transactionCount,
-}: {
-  currency: string;
-  registerSession: RegisterSessionDetail;
-  transactionCount: number;
-}) {
-  const status = registerSession.status;
-  const rows = [
-    {
-      label: "Opened",
-      primary: formatTimestamp(registerSession.openedAt),
-      secondary: formatStaffByline(registerSession.openedByStaffName),
-    },
-  ];
-
-  if (transactionCount > 0 || status === "active") {
-    rows.push({
-      label: status === "active" ? "Active" : "Activity",
-      primary:
-        transactionCount === 1
-          ? "1 linked sale"
-          : `${transactionCount} linked sales`,
-      secondary:
-        status === "active"
-          ? "Sales are recording against this register."
-          : "Sales recorded against this register.",
-    });
-  } else if (status === "open") {
-    rows.push({
-      label: "Open",
-      primary: "Ready for sales",
-      secondary: "No linked sales recorded yet.",
-    });
-  }
-
-  if (status === "closing" || status === "closed") {
-    rows.push({
-      label: "Closing",
-      primary:
-        registerSession.countedCash === undefined
-          ? "Closeout in progress"
-          : `Counted cash ${formatCurrency(currency, registerSession.countedCash)}`,
-      secondary: registerSession.pendingApprovalRequest
-        ? "Manager approval pending."
-        : "Closeout review submitted.",
-    });
-  }
-
-  if (status === "closed") {
-    rows.push({
-      label: "Closed",
-      primary: registerSession.closedAt
-        ? formatTimestamp(registerSession.closedAt)
-        : "Closed",
-      secondary: formatStaffByline(registerSession.closedByStaffName),
-    });
-  }
-
-  return rows;
 }
 
 function getPaymentMethodIcon({
@@ -348,6 +314,8 @@ export function RegisterSessionViewContent({
   currency,
   isLoading,
   onRecordDeposit,
+  onReviewCloseout,
+  onSubmitCloseout,
   orgUrlSlug,
   registerSessionSnapshot,
   storeId,
@@ -360,6 +328,13 @@ export function RegisterSessionViewContent({
   const [reference, setReference] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isRecordingDeposit, setIsRecordingDeposit] = useState(false);
+  const [countedCash, setCountedCash] = useState("");
+  const [closeoutNotes, setCloseoutNotes] = useState("");
+  const [managerNotes, setManagerNotes] = useState("");
+  const [closeoutErrorMessage, setCloseoutErrorMessage] = useState("");
+  const [pendingCloseoutAction, setPendingCloseoutAction] = useState<
+    "approved" | "rejected" | "submit" | null
+  >(null);
   const [submissionKey, setSubmissionKey] = useState(() =>
     buildDepositSubmissionKey(registerSession?._id ?? "session"),
   );
@@ -372,6 +347,27 @@ export function RegisterSessionViewContent({
     setSubmissionKey(buildDepositSubmissionKey(registerSession._id));
   }, [registerSession?._id]);
 
+  useEffect(() => {
+    if (!registerSession?._id) {
+      setCountedCash("");
+      setCloseoutNotes("");
+      setManagerNotes("");
+      setCloseoutErrorMessage("");
+      setPendingCloseoutAction(null);
+      return;
+    }
+
+    setCountedCash(
+      registerSession.countedCash !== undefined
+        ? formatStoredAmountForInput(registerSession.countedCash)
+        : "",
+    );
+    setCloseoutNotes("");
+    setManagerNotes("");
+    setCloseoutErrorMessage("");
+    setPendingCloseoutAction(null);
+  }, [registerSession?._id, registerSession?.countedCash]);
+
   const applyCommandResult = (result: RegisterSessionDepositResult) => {
     if (result.kind === "ok") {
       setErrorMessage("");
@@ -379,6 +375,18 @@ export function RegisterSessionViewContent({
     }
 
     setErrorMessage(result.error.message);
+    return false;
+  };
+
+  const applyCloseoutCommandResult = (
+    result: RegisterCloseoutCommandResult,
+  ) => {
+    if (result.kind === "ok") {
+      setCloseoutErrorMessage("");
+      return true;
+    }
+
+    setCloseoutErrorMessage(result.error.message);
     return false;
   };
 
@@ -425,6 +433,71 @@ export function RegisterSessionViewContent({
     }
   }
 
+  async function handleSubmitCloseout() {
+    if (!registerSession?._id) {
+      setCloseoutErrorMessage(
+        "A register session is required before submitting a closeout.",
+      );
+      return;
+    }
+
+    const parsedCountedCash = parseDisplayAmountInput(countedCash);
+
+    if (parsedCountedCash === undefined) {
+      setCloseoutErrorMessage(
+        "Enter the counted cash before submitting the closeout.",
+      );
+      return;
+    }
+
+    setCloseoutErrorMessage("");
+    setPendingCloseoutAction("submit");
+
+    try {
+      const result = await onSubmitCloseout({
+        countedCash: parsedCountedCash,
+        notes: trimOptional(closeoutNotes),
+        registerSessionId: registerSession._id,
+      });
+
+      if (!applyCloseoutCommandResult(result)) {
+        return;
+      }
+
+      setCloseoutNotes("");
+    } finally {
+      setPendingCloseoutAction(null);
+    }
+  }
+
+  async function handleReviewCloseout(decision: "approved" | "rejected") {
+    if (!registerSession?._id) {
+      setCloseoutErrorMessage(
+        "A register session is required before reviewing a closeout.",
+      );
+      return;
+    }
+
+    setCloseoutErrorMessage("");
+    setPendingCloseoutAction(decision);
+
+    try {
+      const result = await onReviewCloseout({
+        decision,
+        decisionNotes: trimOptional(managerNotes),
+        registerSessionId: registerSession._id,
+      });
+
+      if (!applyCloseoutCommandResult(result)) {
+        return;
+      }
+
+      setManagerNotes("");
+    } finally {
+      setPendingCloseoutAction(null);
+    }
+  }
+
   const transactions = registerSessionSnapshot?.transactions ?? [];
   const previewTransactions = transactions.slice(
     0,
@@ -439,6 +512,13 @@ export function RegisterSessionViewContent({
   const expectedCash =
     registerSession?.netExpectedCash ?? registerSession?.expectedCash ?? 0;
   const reviewReasonFormatter = currencyFormatter(currency);
+  const parsedCountedCash = parseDisplayAmountInput(countedCash);
+  const draftVariance =
+    registerSession && parsedCountedCash !== undefined
+      ? parsedCountedCash - expectedCash
+      : (registerSession?.variance ?? null);
+  const hasPendingCloseoutApproval =
+    registerSession?.pendingApprovalRequest?.status === "pending";
   const formattedApprovalReason = formatReviewReason(
     reviewReasonFormatter,
     registerSession?.pendingApprovalRequest?.reason,
@@ -447,37 +527,37 @@ export function RegisterSessionViewContent({
     reviewReasonFormatter,
     registerSessionSnapshot?.closeoutReview?.reason,
   );
-  const summaryRows = registerSession
-    ? [
-        {
-          label: "Opening float",
-          value: formatCurrency(currency, registerSession.openingFloat),
-        },
-        {
-          label: "Sales linked",
-          value: formatCurrency(currency, transactionTotal),
-        },
-        {
-          label: "Total deposited",
-          value: formatCurrency(currency, registerSession.totalDeposited),
-        },
-        {
-          label: "Variance",
-          value: formatCurrency(currency, registerSession.variance ?? 0),
-          valueClassName: getVarianceTone(registerSession.variance),
-        },
-      ]
-    : [];
-  const lifecycleRows = registerSession
-    ? buildLifecycleRows({
-        currency,
-        registerSession,
-        transactionCount: transactions.length,
-      })
-    : [];
   const headerTitle = registerSession
     ? formatRegisterHeaderName(registerSession.registerNumber)
     : "Register detail";
+  const sessionCode = registerSession
+    ? formatSessionCode(registerSession._id)
+    : undefined;
+  const openedByLine = registerSession?.openedByStaffName
+    ? `By ${formatStaffDisplayName({ fullName: registerSession.openedByStaffName })}`
+    : "Staff not recorded";
+  const linkedSalesLabel =
+    transactions.length === 1
+      ? "1 linked sale"
+      : `${transactions.length} linked sales`;
+  const closeoutState =
+    registerSession?.status === "closed"
+      ? "Closed"
+      : registerSession?.status === "closing"
+        ? registerSession.pendingApprovalRequest
+          ? "Manager approval pending"
+          : "Closeout in progress"
+        : registerSession?.status === "active"
+          ? "Sales recording"
+          : "Ready for sales";
+  const closeoutTimestamp =
+    registerSession?.status === "closed" && registerSession.closedAt
+      ? formatTimestamp(registerSession.closedAt)
+      : undefined;
+  const closeoutActorLine =
+    registerSession?.status === "closed" && registerSession.closedByStaffName
+      ? `By ${formatStaffDisplayName({ fullName: registerSession.closedByStaffName })}`
+      : undefined;
 
   return (
     <View
@@ -517,7 +597,6 @@ export function RegisterSessionViewContent({
                   </WorkflowTraceRouteLink>
                 </Button>
               ) : null}
-              <DetailNav orgUrlSlug={orgUrlSlug} storeUrlSlug={storeUrlSlug} />
             </div>
           }
         />
@@ -543,50 +622,111 @@ export function RegisterSessionViewContent({
                   <dl className="space-y-layout-md">
                     <div className="rounded-lg border border-border bg-surface-raised p-layout-md">
                       <dt className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                        Expected cash
+                        Cash position
                       </dt>
-                      <dd className="mt-2 font-mono text-3xl text-foreground">
-                        {formatCurrency(currency, expectedCash)}
+                      <dd className="mt-layout-sm space-y-2 pb-1">
+                        <span className="block text-xs text-muted-foreground">
+                          Expected cash
+                        </span>
+                        <span className="block font-mono text-3xl text-foreground">
+                          {formatCurrency(currency, expectedCash)}
+                        </span>
+                      </dd>
+                      <div className="mt-layout-md divide-y divide-border/70 rounded-md border border-border/70 bg-muted/10">
+                        <div className="flex items-center justify-between gap-layout-md px-3 py-2.5">
+                          <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                            Counted
+                          </dt>
+                          <dd className="font-mono text-sm text-foreground">
+                            {formatCurrency(
+                              currency,
+                              registerSession.countedCash,
+                            )}
+                          </dd>
+                        </div>
+                        <div className="flex items-center justify-between gap-layout-md px-3 py-2.5">
+                          <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                            Deposited
+                          </dt>
+                          <dd className="font-mono text-sm text-foreground">
+                            {formatCurrency(
+                              currency,
+                              registerSession.totalDeposited,
+                            )}
+                          </dd>
+                        </div>
+                        <div className="flex items-center justify-between gap-layout-md px-3 py-2.5">
+                          <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                            Variance
+                          </dt>
+                          <dd
+                            className={`font-mono text-sm ${getVarianceTone(registerSession.variance)}`}
+                          >
+                            {formatCurrency(
+                              currency,
+                              registerSession.variance ?? 0,
+                            )}
+                          </dd>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-border bg-surface-raised p-layout-md">
+                      <dt className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                        Session
+                      </dt>
+                      <dd className="mt-3 flex items-center justify-between gap-3 rounded-md border border-border/70 bg-muted/20 px-3 py-2">
+                        <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                          Code
+                        </span>
+                        <span className="font-mono text-sm text-foreground">
+                          {sessionCode}
+                        </span>
                       </dd>
                     </div>
 
                     <div className="divide-y divide-border rounded-lg border border-border bg-surface-raised">
-                      {lifecycleRows.map((row) => (
-                        <div
-                          className="grid gap-1 px-layout-md py-3"
-                          key={row.label}
-                        >
-                          <dt className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                            {row.label}
-                          </dt>
-                          <dd className="text-sm font-medium text-foreground">
-                            {row.primary}
+                      <div className="grid gap-1 px-layout-md py-3">
+                        <dt className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                          Opened
+                        </dt>
+                        <dd className="text-sm font-medium text-foreground">
+                          {formatTimestamp(registerSession.openedAt)}
+                        </dd>
+                        <dd className="text-xs text-muted-foreground">
+                          {openedByLine}
+                        </dd>
+                      </div>
+                      <div className="grid gap-1 px-layout-md py-3">
+                        <dt className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                          Activity
+                        </dt>
+                        <dd className="text-sm font-medium text-foreground">
+                          {linkedSalesLabel}
+                        </dd>
+                        <dd className="text-xs text-muted-foreground">
+                          {formatCurrency(currency, transactionTotal)} in linked
+                          sales
+                        </dd>
+                      </div>
+                      <div className="grid gap-1 px-layout-md py-3">
+                        <dt className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                          Closeout
+                        </dt>
+                        <dd className="text-sm font-medium text-foreground">
+                          {closeoutState}
+                        </dd>
+                        {closeoutTimestamp ? (
+                          <dd className="text-xs text-muted-foreground">
+                            {closeoutTimestamp}
                           </dd>
-                          {row.secondary ? (
-                            <dd className="text-xs text-muted-foreground">
-                              {row.secondary}
-                            </dd>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="divide-y divide-border rounded-lg border border-border bg-surface-raised">
-                      {summaryRows.map((row) => (
-                        <div
-                          className="flex items-center justify-between gap-layout-md px-layout-md py-3"
-                          key={row.label}
-                        >
-                          <dt className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                            {row.label}
-                          </dt>
-                          <dd
-                            className={`font-mono text-lg ${row.valueClassName ?? "text-foreground"}`}
-                          >
-                            {row.value}
+                        ) : null}
+                        {closeoutActorLine ? (
+                          <dd className="text-xs text-muted-foreground">
+                            {closeoutActorLine}
                           </dd>
-                        </div>
-                      ))}
+                        ) : null}
+                      </div>
                     </div>
                   </dl>
 
@@ -798,7 +938,7 @@ export function RegisterSessionViewContent({
             )}
           </section>
 
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_418px]">
             <section className="rounded-[calc(var(--radius)*1.25)] border border-border bg-surface px-layout-lg py-layout-lg shadow-surface">
               <div className="space-y-layout-md">
                 <div className="space-y-1">
@@ -869,37 +1009,264 @@ export function RegisterSessionViewContent({
             </section>
 
             <aside className="space-y-6 rounded-[calc(var(--radius)*1.25)] border border-border bg-surface px-layout-lg py-layout-lg shadow-surface">
-              <div className="space-y-3">
-                <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-                  Closeout review
-                </p>
-                {registerSessionSnapshot?.closeoutReview ? (
-                  <div className="space-y-3">
-                    <p
-                      className={`font-mono text-3xl ${getVarianceTone(registerSessionSnapshot.closeoutReview.variance)}`}
-                    >
-                      {formatCurrency(
-                        currency,
-                        registerSessionSnapshot.closeoutReview.variance,
-                      )}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Approval required:{" "}
-                      {registerSessionSnapshot.closeoutReview.requiresApproval
-                        ? "Yes"
-                        : "No"}
-                    </p>
-                    {formattedCloseoutReviewReason ? (
-                      <p className="text-sm text-foreground">
-                        {formattedCloseoutReviewReason}
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                    Closeout workflow
+                  </p>
+                  <h2 className="font-display text-xl font-semibold text-foreground">
+                    Count and close drawer
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    Submit the cash count, then resolve any variance approval
+                    before closing.
+                  </p>
+                </div>
+
+                {registerSession?.status === "closed" ? (
+                  <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-medium text-foreground">
+                        Closeout complete
                       </p>
-                    ) : null}
+                      <Badge
+                        className="border-border bg-muted text-muted-foreground"
+                        size="sm"
+                        variant="outline"
+                      >
+                        Closed
+                      </Badge>
+                    </div>
+                    <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+                      <div className="space-y-1">
+                        <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                          Expected
+                        </dt>
+                        <dd className="font-mono text-foreground">
+                          {formatCurrency(currency, expectedCash)}
+                        </dd>
+                      </div>
+                      <div className="space-y-1">
+                        <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                          Counted
+                        </dt>
+                        <dd className="font-mono text-foreground">
+                          {formatCurrency(
+                            currency,
+                            registerSession.countedCash,
+                          )}
+                        </dd>
+                      </div>
+                      <div className="space-y-1">
+                        <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                          Variance
+                        </dt>
+                        <dd
+                          className={`font-mono ${getVarianceTone(registerSession.variance)}`}
+                        >
+                          {formatCurrency(
+                            currency,
+                            registerSession.variance ?? 0,
+                          )}
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+                ) : hasPendingCloseoutApproval ? (
+                  <div className="space-y-4 rounded-lg border border-amber-200 bg-amber-50/40 p-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-medium text-foreground">
+                          Manager review required
+                        </p>
+                        <Badge
+                          className="border-amber-200 bg-amber-100/70 text-amber-800"
+                          size="sm"
+                          variant="outline"
+                        >
+                          Pending
+                        </Badge>
+                      </div>
+                      <p className="max-w-full overflow-hidden break-words text-sm leading-relaxed text-muted-foreground">
+                        {formattedApprovalReason ??
+                          formattedCloseoutReviewReason ??
+                          "Review the submitted count before closing this drawer."}
+                      </p>
+                    </div>
+
+                    <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+                      <div className="space-y-1">
+                        <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                          Expected
+                        </dt>
+                        <dd className="font-mono text-foreground">
+                          {formatCurrency(currency, expectedCash)}
+                        </dd>
+                      </div>
+                      <div className="space-y-1">
+                        <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                          Counted
+                        </dt>
+                        <dd className="font-mono text-foreground">
+                          {formatCurrency(
+                            currency,
+                            registerSession.countedCash,
+                          )}
+                        </dd>
+                      </div>
+                      <div className="space-y-1">
+                        <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                          Variance
+                        </dt>
+                        <dd
+                          className={`font-mono ${getVarianceTone(registerSession.variance)}`}
+                        >
+                          {formatCurrency(
+                            currency,
+                            registerSession.variance ?? 0,
+                          )}
+                        </dd>
+                      </div>
+                    </dl>
+
+                    <label className="block space-y-2">
+                      <span className="text-sm font-medium text-foreground">
+                        Manager notes
+                      </span>
+                      <Textarea
+                        aria-label="Manager closeout notes"
+                        className="min-h-[96px] border-input bg-background"
+                        onChange={(event) =>
+                          setManagerNotes(event.target.value)
+                        }
+                        placeholder="Add approval or rejection notes."
+                        value={managerNotes}
+                      />
+                    </label>
+
+                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                      <LoadingButton
+                        disabled={Boolean(pendingCloseoutAction)}
+                        isLoading={pendingCloseoutAction === "approved"}
+                        onClick={() => void handleReviewCloseout("approved")}
+                        type="button"
+                      >
+                        Approve variance
+                      </LoadingButton>
+                      <LoadingButton
+                        disabled={Boolean(pendingCloseoutAction)}
+                        isLoading={pendingCloseoutAction === "rejected"}
+                        onClick={() => void handleReviewCloseout("rejected")}
+                        type="button"
+                        variant="outline"
+                      >
+                        Reject variance
+                      </LoadingButton>
+                    </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground">
-                    No closeout review has been submitted yet.
-                  </p>
+                  <div className="space-y-4">
+                    {registerSessionSnapshot?.closeoutReview ? (
+                      <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="text-sm font-medium text-foreground">
+                            Submitted count
+                          </p>
+                          <p
+                            className={`font-mono text-lg ${getVarianceTone(registerSessionSnapshot.closeoutReview.variance)}`}
+                          >
+                            {formatCurrency(
+                              currency,
+                              registerSessionSnapshot.closeoutReview.variance,
+                            )}
+                          </p>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Approval required:{" "}
+                          {registerSessionSnapshot.closeoutReview
+                            .requiresApproval
+                            ? "Yes"
+                            : "No"}
+                        </p>
+                        {formattedCloseoutReviewReason ? (
+                          <p className="max-w-full overflow-hidden break-words text-sm leading-relaxed text-foreground">
+                            {formattedCloseoutReviewReason}
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    <label className="block space-y-2">
+                      <span className="text-sm font-medium text-foreground">
+                        Counted cash
+                      </span>
+                      <Input
+                        aria-label="Closeout counted cash"
+                        className="border-input bg-background"
+                        min={0}
+                        onChange={(event) => setCountedCash(event.target.value)}
+                        step="0.01"
+                        type="number"
+                        value={countedCash}
+                      />
+                    </label>
+
+                    <div className="rounded-lg border border-border bg-muted/20 p-4">
+                      <dl className="grid grid-cols-2 gap-3 text-sm">
+                        <div className="space-y-1">
+                          <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                            Expected
+                          </dt>
+                          <dd className="font-mono text-foreground">
+                            {formatCurrency(currency, expectedCash)}
+                          </dd>
+                        </div>
+                        <div className="space-y-1">
+                          <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                            Draft variance
+                          </dt>
+                          <dd
+                            className={`font-mono ${getVarianceTone(draftVariance ?? undefined)}`}
+                          >
+                            {draftVariance === null
+                              ? "Pending count"
+                              : formatCurrency(currency, draftVariance)}
+                          </dd>
+                        </div>
+                      </dl>
+                    </div>
+
+                    <label className="block space-y-2">
+                      <span className="text-sm font-medium text-foreground">
+                        Closeout notes
+                      </span>
+                      <Textarea
+                        aria-label="Closeout notes"
+                        className="min-h-[96px] border-input bg-background"
+                        onChange={(event) =>
+                          setCloseoutNotes(event.target.value)
+                        }
+                        placeholder="Add drawer notes if anything needs follow-up."
+                        value={closeoutNotes}
+                      />
+                    </label>
+
+                    <LoadingButton
+                      disabled={pendingCloseoutAction === "submit"}
+                      isLoading={pendingCloseoutAction === "submit"}
+                      onClick={() => void handleSubmitCloseout()}
+                      type="button"
+                    >
+                      Submit closeout
+                    </LoadingButton>
+                  </div>
                 )}
+
+                {closeoutErrorMessage ? (
+                  <p className="text-sm text-destructive" role="alert">
+                    {closeoutErrorMessage}
+                  </p>
+                ) : null}
               </div>
 
               <div className="border-t border-border/70 pt-6">
@@ -1013,6 +1380,12 @@ export function RegisterSessionView() {
   const recordRegisterSessionDeposit = useMutation(
     api.cashControls.deposits.recordRegisterSessionDeposit,
   );
+  const submitRegisterSessionCloseout = useMutation(
+    api.cashControls.closeouts.submitRegisterSessionCloseout,
+  );
+  const reviewRegisterSessionCloseout = useMutation(
+    api.cashControls.closeouts.reviewRegisterSessionCloseout,
+  );
 
   async function onRecordDeposit(args: RecordRegisterSessionDepositArgs) {
     const result = await runCommand(() =>
@@ -1035,6 +1408,64 @@ export function RegisterSessionView() {
         result.data?.action === "duplicate"
           ? "Deposit already recorded"
           : "Register deposit recorded",
+      );
+    }
+
+    return result;
+  }
+
+  async function onSubmitCloseout(args: RegisterCloseoutSubmitArgs) {
+    if (!activeStore?._id || !user?._id) {
+      return userError({
+        code: "authentication_failed",
+        message: "You must be logged in to submit a register closeout.",
+      });
+    }
+
+    const result = await runCommand(() =>
+      submitRegisterSessionCloseout({
+        actorUserId: user._id,
+        countedCash: args.countedCash,
+        notes: args.notes,
+        registerSessionId: args.registerSessionId as Id<"registerSession">,
+        storeId: activeStore._id,
+      }),
+    );
+
+    if (result.kind === "ok") {
+      toast.success(
+        result.data?.action === "approval_required"
+          ? "Closeout submitted for manager review"
+          : "Register session closed",
+      );
+    }
+
+    return result;
+  }
+
+  async function onReviewCloseout(args: RegisterCloseoutReviewArgs) {
+    if (!activeStore?._id || !user?._id) {
+      return userError({
+        code: "authentication_failed",
+        message: "You must be logged in to review a register closeout.",
+      });
+    }
+
+    const result = await runCommand(() =>
+      reviewRegisterSessionCloseout({
+        decision: args.decision,
+        decisionNotes: args.decisionNotes,
+        registerSessionId: args.registerSessionId as Id<"registerSession">,
+        reviewedByUserId: user._id,
+        storeId: activeStore._id,
+      }),
+    );
+
+    if (result.kind === "ok") {
+      toast.success(
+        args.decision === "approved"
+          ? "Register closeout approved"
+          : "Register closeout rejected",
       );
     }
 
@@ -1080,6 +1511,8 @@ export function RegisterSessionView() {
       currency={activeStore.currency || "USD"}
       isLoading={registerSessionSnapshot === undefined}
       onRecordDeposit={onRecordDeposit}
+      onReviewCloseout={onReviewCloseout}
+      onSubmitCloseout={onSubmitCloseout}
       orgUrlSlug={params?.orgUrlSlug}
       registerSessionSnapshot={registerSessionSnapshot ?? null}
       storeId={activeStore._id}
