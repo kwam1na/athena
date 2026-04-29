@@ -15,6 +15,7 @@ type ExpenseSessionRecord = {
   heldAt?: number;
   resumedAt?: number;
   notes?: string;
+  workflowTraceId?: string;
 };
 
 type RegisterSessionRecord = {
@@ -49,7 +50,59 @@ type InventoryCall =
     }
   | { kind: "release"; skuId: string; quantity: number };
 
+type TraceCall = {
+  stage: string;
+  sessionId: string;
+  sessionNumber: string;
+  traceId?: string;
+  itemName?: string;
+  quantity?: number;
+  previousQuantity?: number;
+  itemCount?: number;
+};
+
 describe("createExpenseSessionCommandService", () => {
+  it("records a started trace when creating a fresh expense session", async () => {
+    const commandService = await loadCommandService();
+    const traceCalls: TraceCall[] = [];
+    const repository = createFakeRepository();
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        traceCalls,
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).startSession({
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      staffProfileId: "staff-1",
+      registerNumber: "1",
+    });
+
+    expect(result).toEqual({
+      status: "ok",
+      data: {
+        sessionId: "expense-session-1",
+        expiresAt: 61_000,
+      },
+    });
+    expect(traceCalls).toEqual([
+      {
+        stage: "started",
+        sessionId: "expense-session-1",
+        sessionNumber: "EXP-001",
+        traceId: "expense_session:expense-session-1",
+      },
+    ]);
+    expect(repository.sessions[0]).toEqual(
+      expect.objectContaining({
+        workflowTraceId: "expense_session:expense-session-1",
+      }),
+    );
+  });
+
   it("creates a fresh active expense session without requiring a drawer binding", async () => {
     const commandService = await loadCommandService();
     const repository = createFakeRepository({
@@ -373,6 +426,7 @@ function createDependencies(options: {
   now: number;
   nextExpiration: number;
   inventoryCalls?: InventoryCall[];
+  traceCalls?: TraceCall[];
 }) {
   return {
     now: () => options.now,
@@ -401,6 +455,37 @@ function createDependencies(options: {
         return { success: true };
       },
     },
+    ...(options.traceCalls
+      ? {
+          traceRecorder: {
+            record: async (input: {
+              stage: string;
+              session: ExpenseSessionRecord;
+              itemName?: string;
+              quantity?: number;
+              previousQuantity?: number;
+              itemCount?: number;
+            }) => {
+              const traceId = `expense_session:${input.session._id}`;
+              options.traceCalls?.push({
+                stage: input.stage,
+                sessionId: input.session._id,
+                sessionNumber: input.session.sessionNumber,
+                traceId,
+                itemName: input.itemName,
+                quantity: input.quantity,
+                previousQuantity: input.previousQuantity,
+                itemCount: input.itemCount,
+              });
+
+              return {
+                traceCreated: true,
+                traceId,
+              };
+            },
+          },
+        }
+      : {}),
   };
 }
 

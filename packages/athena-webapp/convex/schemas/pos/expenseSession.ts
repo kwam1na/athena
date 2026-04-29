@@ -10,6 +10,7 @@ export const expenseSessionSchema = v.object({
 
   // Session state
   status: v.string(), // "active", "held", "completed", "void", "expired"
+  workflowTraceId: v.optional(v.string()),
 
   // Session metadata
   createdAt: v.number(),

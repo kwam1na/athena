@@ -6,7 +6,7 @@ import {
   MutationCtx,
   QueryCtx,
 } from "../_generated/server";
-import { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import { releaseInventoryHoldsBatch } from "./helpers/inventoryHolds";
 import { validateExpenseSessionModifiable } from "./helpers/expenseSessionValidation";
 import { calculateExpenseSessionExpiration } from "./helpers/expenseSessionExpiration";
@@ -19,6 +19,10 @@ import {
   runResumeExpenseSessionCommand,
   runStartExpenseSessionCommand,
 } from "../pos/application/commands/expenseSessionCommands";
+import {
+  createExpenseSessionTraceRecorder,
+  type ExpenseSessionTraceStage,
+} from "../pos/application/commands/expenseSessionTracing";
 
 const MAX_EXPENSE_SESSION_ITEMS = 200;
 const EXPENSE_SESSION_QUERY_CANDIDATE_LIMIT = 200;
@@ -132,6 +136,30 @@ async function loadExpenseSessionItems(
   );
 }
 
+async function recordExpenseSessionLifecycleTrace(
+  ctx: MutationCtx,
+  args: {
+    session: Doc<"expenseSession">;
+    stage: ExpenseSessionTraceStage;
+    occurredAt: number;
+    itemCount?: number;
+  },
+) {
+  const recorder = createExpenseSessionTraceRecorder(ctx);
+  const traceResult = await recorder.record({
+    stage: args.stage,
+    session: args.session,
+    occurredAt: args.occurredAt,
+    itemCount: args.itemCount,
+  });
+
+  if (traceResult.traceCreated && !args.session.workflowTraceId) {
+    await ctx.db.patch("expenseSession", args.session._id, {
+      workflowTraceId: traceResult.traceId,
+    });
+  }
+}
+
 async function listExpenseSessionsByStatusBefore(
   ctx: MutationCtx,
   expiresBefore: number,
@@ -178,6 +206,7 @@ export const getStoreExpenseSessions = query({
       terminalId: v.id("posTerminal"),
       registerNumber: v.optional(v.string()),
       registerSessionId: v.optional(v.id("registerSession")),
+      workflowTraceId: v.optional(v.string()),
       status: v.string(),
       createdAt: v.number(),
       updatedAt: v.number(),
@@ -288,6 +317,7 @@ export const getExpenseSessionById = query({
       terminalId: v.id("posTerminal"),
       registerNumber: v.optional(v.string()),
       registerSessionId: v.optional(v.id("registerSession")),
+      workflowTraceId: v.optional(v.string()),
       status: v.string(),
       createdAt: v.number(),
       updatedAt: v.number(),
@@ -442,6 +472,17 @@ export const holdExpenseSession = mutation({
       updatedAt: now,
     });
 
+    await recordExpenseSessionLifecycleTrace(ctx, {
+      session: {
+        ...session,
+        status: "held",
+        heldAt: now,
+        updatedAt: now,
+      },
+      stage: "held",
+      occurredAt: now,
+    });
+
     return ok({ sessionId: args.sessionId, expiresAt: session.expiresAt });
   },
 });
@@ -515,6 +556,18 @@ export const completeExpenseSession = mutation({
       notes: args.notes,
     });
 
+    await recordExpenseSessionLifecycleTrace(ctx, {
+      session: {
+        ...session,
+        status: "completed",
+        completedAt: now,
+        updatedAt: now,
+        notes: args.notes,
+      },
+      stage: "completed",
+      occurredAt: now,
+    });
+
     return ok({
       sessionId: args.sessionId,
       transactionNumber: transactionResult.data.transactionNumber,
@@ -566,6 +619,17 @@ export const voidExpenseSession = mutation({
       updatedAt: now,
     });
 
+    await recordExpenseSessionLifecycleTrace(ctx, {
+      session: {
+        ...session,
+        status: "void",
+        updatedAt: now,
+      },
+      stage: "voided",
+      occurredAt: now,
+      itemCount: items.length,
+    });
+
     return ok({ sessionId: args.sessionId });
   },
 });
@@ -604,6 +668,7 @@ export const getActiveExpenseSession = query({
       terminalId: v.id("posTerminal"),
       registerNumber: v.optional(v.string()),
       registerSessionId: v.optional(v.id("registerSession")),
+      workflowTraceId: v.optional(v.string()),
       status: v.string(),
       createdAt: v.number(),
       updatedAt: v.number(),
@@ -726,6 +791,17 @@ export const releaseExpenseSessionItems = internalMutation({
         await ctx.db.patch("expenseSession", session._id, {
           status: "expired",
           updatedAt: now,
+        });
+
+        await recordExpenseSessionLifecycleTrace(ctx, {
+          session: {
+            ...session,
+            status: "expired",
+            updatedAt: now,
+          },
+          stage: "expired",
+          occurredAt: now,
+          itemCount: items.length,
         });
 
         releasedSessionIds.push(session._id);
