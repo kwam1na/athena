@@ -80,9 +80,11 @@ const staffProfileId = "staff-1" as Id<"staffProfile">;
 function renderDialog({
   authenticateMutation = vi.fn(),
   expireMutation = vi.fn(),
+  workflowMode,
 }: {
   authenticateMutation?: ReturnType<typeof vi.fn>;
   expireMutation?: ReturnType<typeof vi.fn>;
+  workflowMode?: "pos" | "expense";
 } = {}) {
   mocks.useMutation.mockReset();
   let mutationCallCount = 0;
@@ -104,6 +106,7 @@ function renderDialog({
       onDismiss={onDismiss}
       storeId={storeId}
       terminalId={terminalId}
+      workflowMode={workflowMode}
     />,
   );
 
@@ -178,10 +181,23 @@ describe("CashierAuthDialog", () => {
 
     await waitFor(() =>
       expect(mocks.toastError).toHaveBeenCalledWith(
-        "Register sign-in already active at another register. Sign out there before starting here.",
+        "Sign-in already active on another terminal. Sign out there before starting here.",
       ),
     );
     expect(onAuthenticated).not.toHaveBeenCalled();
+  });
+
+  it("uses expense session copy when signing into expense mode", () => {
+    const authenticateMutation = vi.fn();
+
+    renderDialog({ authenticateMutation, workflowMode: "expense" });
+
+    expect(
+      screen.getByRole("heading", { name: "Start expense session" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Sign out from other sessions" }),
+    ).toBeInTheDocument();
   });
 
   it("collapses thrown faults to generic fallback copy and clears the PIN", async () => {

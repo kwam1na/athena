@@ -40,9 +40,6 @@ const completedExpenseSessionValidator = v.object({
   transactionNumber: v.string(),
 });
 
-const EXPENSE_SESSION_REGISTER_NUMBER_REQUIRED_MESSAGE =
-  "A register number is required to create an expense session.";
-
 function expenseSessionError(
   message: string,
   code:
@@ -62,7 +59,10 @@ function mapExpenseSessionValidationError(message: string) {
     return expenseSessionError(message, "not_found");
   }
 
-  if (message.includes("different terminal") || message.includes("active session")) {
+  if (
+    message.includes("different terminal") ||
+    message.includes("active session")
+  ) {
     return expenseSessionError(message, "conflict");
   }
 
@@ -73,7 +73,9 @@ function mapExpenseSessionValidationError(message: string) {
   return expenseSessionError(message, "precondition_failed");
 }
 
-function buildNextExpenseSessionNumber(latestSessionNumber: string | undefined) {
+function buildNextExpenseSessionNumber(
+  latestSessionNumber: string | undefined,
+) {
   const lastSequence = latestSessionNumber
     ? Number.parseInt(latestSessionNumber.split("-").at(-1) ?? "0", 10)
     : 0;
@@ -88,7 +90,7 @@ function normalizeOptionalRegisterNumber(value?: string) {
 
 async function loadExpenseSessionItems(
   ctx: QueryCtx,
-  sessionId: Id<"expenseSession">
+  sessionId: Id<"expenseSession">,
 ) {
   const cartItemsRaw = await ctx.db
     .query("expenseSessionItem")
@@ -107,13 +109,13 @@ async function loadExpenseSessionItems(
         ...item,
         color: colorName,
       };
-    })
+    }),
   );
 }
 
 async function listExpenseSessionsByStatusBefore(
   ctx: MutationCtx,
-  expiresBefore: number
+  expiresBefore: number,
 ) {
   const sessions = [];
   let cursor: string | null = null;
@@ -165,7 +167,7 @@ export const getStoreExpenseSessions = query({
       completedAt: v.optional(v.number()),
       notes: v.optional(v.string()),
       cartItems: v.array(v.any()),
-    })
+    }),
   ),
   handler: async (ctx, args) => {
     const { storeId, status, limit = 50 } = args;
@@ -183,7 +185,7 @@ export const getStoreExpenseSessions = query({
           q
             .eq("storeId", storeId)
             .eq("status", status)
-            .eq("terminalId", args.terminalId!)
+            .eq("terminalId", args.terminalId!),
         );
     } else if (status && args.staffProfileId) {
       indexedStaffProfileFilter = true;
@@ -193,27 +195,27 @@ export const getStoreExpenseSessions = query({
           q
             .eq("storeId", storeId)
             .eq("status", status)
-            .eq("staffProfileId", args.staffProfileId!)
+            .eq("staffProfileId", args.staffProfileId!),
         );
     } else if (args.terminalId) {
       indexedTerminalFilter = true;
       sessionsQuery = ctx.db
         .query("expenseSession")
         .withIndex("by_storeId_terminalId", (q) =>
-          q.eq("storeId", storeId).eq("terminalId", args.terminalId!)
+          q.eq("storeId", storeId).eq("terminalId", args.terminalId!),
         );
     } else if (args.staffProfileId) {
       indexedStaffProfileFilter = true;
       sessionsQuery = ctx.db
         .query("expenseSession")
         .withIndex("by_storeId_staffProfileId", (q) =>
-          q.eq("storeId", storeId).eq("staffProfileId", args.staffProfileId!)
+          q.eq("storeId", storeId).eq("staffProfileId", args.staffProfileId!),
         );
     } else if (status) {
       sessionsQuery = ctx.db
         .query("expenseSession")
         .withIndex("by_storeId_and_status", (q) =>
-          q.eq("storeId", storeId).eq("status", status)
+          q.eq("storeId", storeId).eq("status", status),
         );
     } else {
       sessionsQuery = ctx.db
@@ -225,13 +227,13 @@ export const getStoreExpenseSessions = query({
 
     if (args.terminalId && !indexedTerminalFilter) {
       sessions = sessions.filter(
-        (session) => session.terminalId === args.terminalId
+        (session) => session.terminalId === args.terminalId,
       );
     }
 
     if (args.staffProfileId && !indexedStaffProfileFilter) {
       sessions = sessions.filter(
-        (session) => session.staffProfileId === args.staffProfileId
+        (session) => session.staffProfileId === args.staffProfileId,
       );
     }
 
@@ -246,7 +248,7 @@ export const getStoreExpenseSessions = query({
           ...session,
           cartItems,
         };
-      })
+      }),
     );
 
     return enrichedSessions;
@@ -275,7 +277,7 @@ export const getExpenseSessionById = query({
       notes: v.optional(v.string()),
       cartItems: v.array(v.any()),
     }),
-    v.null()
+    v.null(),
   ),
   handler: async (ctx, args) => {
     const session = await ctx.db.get("expenseSession", args.sessionId);
@@ -304,13 +306,8 @@ export const createExpenseSession = mutation({
     let registerNumber = normalizeOptionalRegisterNumber(args.registerNumber);
     if (!registerNumber) {
       const terminal = await ctx.db.get("posTerminal", args.terminalId);
-      registerNumber = normalizeOptionalRegisterNumber(terminal?.registerNumber);
-    }
-
-    if (!registerNumber) {
-      return expenseSessionError(
-        EXPENSE_SESSION_REGISTER_NUMBER_REQUIRED_MESSAGE,
-        "precondition_failed",
+      registerNumber = normalizeOptionalRegisterNumber(
+        terminal?.registerNumber,
       );
     }
 
@@ -320,22 +317,22 @@ export const createExpenseSession = mutation({
         q
           .eq("storeId", args.storeId)
           .eq("status", "active")
-          .eq("terminalId", args.terminalId)
+          .eq("terminalId", args.terminalId),
       )
       .take(ACTIVE_EXPENSE_SESSION_CANDIDATE_LIMIT);
 
     const nonExpiredTerminalSessions = existingTerminalSessions.filter(
-      (session) => !session.expiresAt || session.expiresAt >= now
+      (session) => !session.expiresAt || session.expiresAt >= now,
     );
 
     const existingSession = nonExpiredTerminalSessions.find(
-      (session) => session.staffProfileId === args.staffProfileId
+      (session) => session.staffProfileId === args.staffProfileId,
     );
 
     const staffProfileSessions = await ctx.db
       .query("expenseSession")
       .withIndex("by_staffProfileId_and_status", (q) =>
-        q.eq("staffProfileId", args.staffProfileId).eq("status", "active")
+        q.eq("staffProfileId", args.staffProfileId).eq("status", "active"),
       )
       .take(ACTIVE_EXPENSE_SESSION_CANDIDATE_LIMIT);
 
@@ -343,7 +340,7 @@ export const createExpenseSession = mutation({
       (session) =>
         session.storeId === args.storeId &&
         session.terminalId !== args.terminalId &&
-        (!session.expiresAt || session.expiresAt >= now)
+        (!session.expiresAt || session.expiresAt >= now),
     );
 
     if (existingSessionOnDifferentTerminal) {
@@ -358,7 +355,7 @@ export const createExpenseSession = mutation({
       const existingItems = await ctx.db
         .query("expenseSessionItem")
         .withIndex("by_sessionId", (q) =>
-          q.eq("sessionId", existingSession._id)
+          q.eq("sessionId", existingSession._id),
         )
         .take(MAX_EXPENSE_SESSION_ITEMS);
 
@@ -384,7 +381,7 @@ export const createExpenseSession = mutation({
       .first();
 
     const sessionNumber = buildNextExpenseSessionNumber(
-      latestSession?.sessionNumber
+      latestSession?.sessionNumber,
     );
 
     // Calculate session expiration time (5 minutes)
@@ -422,14 +419,15 @@ export const updateExpenseSession = mutation({
     const validation = await validateExpenseSessionModifiable(
       ctx.db,
       sessionId,
-      args.staffProfileId
+      args.staffProfileId,
     );
     if (!validation.success) {
       const currentSession = await ctx.db.get("expenseSession", sessionId);
       if (
         currentSession &&
         currentSession.staffProfileId === args.staffProfileId &&
-        (currentSession.status === "completed" || currentSession.status === "void")
+        (currentSession.status === "completed" ||
+          currentSession.status === "void")
       ) {
         console.warn(
           `Attempted to update ${currentSession.status} expense session ${sessionId}. Ignoring update.`,
@@ -473,7 +471,7 @@ export const holdExpenseSession = mutation({
     const validation = await validateExpenseSessionModifiable(
       ctx.db,
       args.sessionId,
-      args.staffProfileId
+      args.staffProfileId,
     );
     if (!validation.success) {
       return mapExpenseSessionValidationError(validation.message!);
@@ -528,12 +526,12 @@ export const resumeExpenseSession = mutation({
     const staffProfileSessions = await ctx.db
       .query("expenseSession")
       .withIndex("by_staffProfileId_and_status", (q) =>
-        q.eq("staffProfileId", args.staffProfileId).eq("status", "active")
+        q.eq("staffProfileId", args.staffProfileId).eq("status", "active"),
       )
       .take(ACTIVE_EXPENSE_SESSION_CANDIDATE_LIMIT);
 
     const activeSessionsOnOtherTerminals = staffProfileSessions.filter(
-      (s) => s.expiresAt > now && s.terminalId !== args.terminalId
+      (s) => s.expiresAt > now && s.terminalId !== args.terminalId,
     );
 
     if (activeSessionsOnOtherTerminals.length > 0) {
@@ -588,10 +586,13 @@ export const completeExpenseSession = mutation({
       );
     }
 
-    const transactionResult = await createExpenseTransactionFromSessionHandler(ctx, {
-      sessionId: args.sessionId,
-      notes: args.notes,
-    });
+    const transactionResult = await createExpenseTransactionFromSessionHandler(
+      ctx,
+      {
+        sessionId: args.sessionId,
+        notes: args.notes,
+      },
+    );
     if (transactionResult.kind !== "ok") {
       return transactionResult;
     }
@@ -645,7 +646,7 @@ export const voidExpenseSession = mutation({
       ([skuId, quantity]) => ({
         skuId,
         quantity,
-      })
+      }),
     );
 
     await releaseInventoryHoldsBatch(ctx.db, releaseItems);
@@ -690,7 +691,7 @@ export const releaseExpenseSessionInventoryHoldsAndDeleteItems = mutation({
       ([skuId, quantity]) => ({
         skuId,
         quantity,
-      })
+      }),
     );
 
     await releaseInventoryHoldsBatch(ctx.db, releaseItems);
@@ -698,7 +699,7 @@ export const releaseExpenseSessionInventoryHoldsAndDeleteItems = mutation({
     // Delete all items for this session
     const itemIds = items.map((item) => item._id);
     await Promise.all(
-      itemIds.map((itemId) => ctx.db.delete("expenseSessionItem", itemId))
+      itemIds.map((itemId) => ctx.db.delete("expenseSessionItem", itemId)),
     );
 
     return ok({ sessionId: args.sessionId });
@@ -732,7 +733,7 @@ export const getActiveExpenseSession = query({
       notes: v.optional(v.string()),
       cartItems: v.array(v.any()),
     }),
-    v.null()
+    v.null(),
   ),
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -742,14 +743,14 @@ export const getActiveExpenseSession = query({
         q
           .eq("storeId", args.storeId)
           .eq("status", "active")
-          .eq("staffProfileId", args.staffProfileId)
+          .eq("staffProfileId", args.staffProfileId),
       )
       .order("desc")
       .take(ACTIVE_EXPENSE_SESSION_CANDIDATE_LIMIT);
 
     // Filter out expired sessions
     const nonExpiredSessions = activeSessions.filter(
-      (session) => !session.expiresAt || session.expiresAt >= now
+      (session) => !session.expiresAt || session.expiresAt >= now,
     );
 
     // Filter by staff profile and/or register if provided
@@ -757,23 +758,23 @@ export const getActiveExpenseSession = query({
 
     if (args.staffProfileId) {
       filteredSessions = filteredSessions.filter(
-        (s) => s.staffProfileId === args.staffProfileId
+        (s) => s.staffProfileId === args.staffProfileId,
       );
     }
 
     filteredSessions = filteredSessions.filter(
-      (s) => s.terminalId === args.terminalId
+      (s) => s.terminalId === args.terminalId,
     );
 
     if (args.registerNumber) {
       filteredSessions = filteredSessions.filter(
-        (s) => s.terminalId === args.terminalId
+        (s) => s.terminalId === args.terminalId,
       );
     }
 
     // Return the most recent active session
     const activeSession = filteredSessions.sort(
-      (a, b) => b.updatedAt - a.updatedAt
+      (a, b) => b.updatedAt - a.updatedAt,
     )[0];
 
     if (!activeSession) return null;
@@ -806,7 +807,7 @@ export const releaseExpenseSessionItems = internalMutation({
     }
 
     console.log(
-      `[Expense] Found ${expiredSessions.length} expired sessions to process`
+      `[Expense] Found ${expiredSessions.length} expired sessions to process`,
     );
 
     const releasedSessionIds: string[] = [];
@@ -832,12 +833,12 @@ export const releaseExpenseSessionItems = internalMutation({
           ([skuId, quantity]) => ({
             skuId,
             quantity,
-          })
+          }),
         );
 
         await releaseInventoryHoldsBatch(ctx.db, releaseItems);
         console.log(
-          `[Expense] Released inventory holds for ${releaseItems.length} SKUs`
+          `[Expense] Released inventory holds for ${releaseItems.length} SKUs`,
         );
 
         // Mark session as expired
@@ -848,19 +849,19 @@ export const releaseExpenseSessionItems = internalMutation({
 
         releasedSessionIds.push(session._id);
         console.log(
-          `[Expense] Released inventory holds for session ${session.sessionNumber}`
+          `[Expense] Released inventory holds for session ${session.sessionNumber}`,
         );
       } catch (error) {
         console.error(
           `[Expense] Error releasing session ${session._id}:`,
-          error
+          error,
         );
         // Continue processing other sessions even if one fails
       }
     }
 
     console.log(
-      `[Expense] Successfully released ${releasedSessionIds.length} sessions`
+      `[Expense] Successfully released ${releasedSessionIds.length} sessions`,
     );
     return {
       releasedCount: releasedSessionIds.length,

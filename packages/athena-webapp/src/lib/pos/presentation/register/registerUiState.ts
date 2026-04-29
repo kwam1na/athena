@@ -1,6 +1,11 @@
 import type { FormEvent } from "react";
 
-import type { CustomerInfo, CartItem, Payment, Product } from "@/components/pos/types";
+import type {
+  CustomerInfo,
+  CartItem,
+  Payment,
+  Product,
+} from "@/components/pos/types";
 import type { Id } from "~/convex/_generated/dataModel";
 import type { PosPaymentMethod } from "@/lib/pos/domain";
 
@@ -21,9 +26,7 @@ export interface RegisterCustomerPanelState {
   customerInfo: CustomerInfo;
   onCustomerCommitted: (customer: CustomerInfo) => Promise<void>;
   setCustomerInfo: (
-    customer:
-      | CustomerInfo
-      | ((currentCustomer: CustomerInfo) => CustomerInfo),
+    customer: CustomerInfo | ((currentCustomer: CustomerInfo) => CustomerInfo),
   ) => void;
 }
 
@@ -144,6 +147,7 @@ export interface RegisterAuthDialogState {
   open: boolean;
   storeId: Id<"store">;
   terminalId: Id<"posTerminal">;
+  workflowMode?: RegisterWorkflowMode;
   onAuthenticated: (staffProfileId: Id<"staffProfile">) => void;
   onDismiss: () => void;
 }

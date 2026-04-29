@@ -159,6 +159,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/lib/pos/domain/session.test.ts`](../../src/lib/pos/domain/session.test.ts)
 - [`src/lib/pos/infrastructure/convex/registerGateway.test.ts`](../../src/lib/pos/infrastructure/convex/registerGateway.test.ts)
 - [`src/lib/pos/infrastructure/convex/sessionGateway.test.ts`](../../src/lib/pos/infrastructure/convex/sessionGateway.test.ts)
+- [`src/lib/pos/presentation/expense/useExpenseRegisterViewModel.test.ts`](../../src/lib/pos/presentation/expense/useExpenseRegisterViewModel.test.ts)
 - [`src/lib/pos/presentation/register/useRegisterViewModel.test.ts`](../../src/lib/pos/presentation/register/useRegisterViewModel.test.ts)
 - [`src/lib/productUtils.test.ts`](../../src/lib/productUtils.test.ts)
 - [`src/lib/storeConfig.test.ts`](../../src/lib/storeConfig.test.ts)
