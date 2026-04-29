@@ -637,6 +637,7 @@ export const HARNESS_APP_REGISTRY = [
         title: "Storybook and frontend tooling edits",
         touchedPaths: [
           ".storybook",
+          "index.html",
           "src/stories",
           "src/index.css",
           "src/design-system-build-config.test.ts",
@@ -651,7 +652,8 @@ export const HARNESS_APP_REGISTRY = [
           { kind: "script", script: "build" },
           { kind: "script", script: "storybook:build" },
         ],
-        note: "Use this when Storybook config, story files, or package-level frontend tooling changes need isolated validation.",
+        note:
+          "Use this when the document shell, Storybook config, story files, or package-level frontend tooling changes need isolated validation.",
       },
     ],
   },

@@ -668,6 +668,7 @@ describe("HARNESS_APP_REGISTRY", () => {
     expect(storybookScenario).toMatchObject({
       touchedPaths: [
         ".storybook",
+        "index.html",
         "src/stories",
         "src/index.css",
         "src/design-system-build-config.test.ts",
@@ -683,7 +684,7 @@ describe("HARNESS_APP_REGISTRY", () => {
         { kind: "script", script: "storybook:build" },
       ],
       note:
-        "Use this when Storybook config, story files, or package-level frontend tooling changes need isolated validation.",
+        "Use this when the document shell, Storybook config, story files, or package-level frontend tooling changes need isolated validation.",
     });
   });
 

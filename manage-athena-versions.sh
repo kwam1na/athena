@@ -16,9 +16,30 @@ REMOTE_HOST="178.128.161.200"
 REMOTE="$REMOTE_USER@$REMOTE_HOST"
 
 # Local paths
-ATHENA_WEBAPP_DIR="$HOME/athena/packages/athena-webapp"
-STOREFRONT_DIR="$HOME/athena/packages/storefront-webapp"
-VALKEY_PROXY_DIR="$HOME/athena/packages/valkey-proxy-server"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+resolve_repo_root() {
+  if [ -n "$ATHENA_REPO_ROOT" ]; then
+    cd "$ATHENA_REPO_ROOT" 2>/dev/null && pwd
+    return
+  fi
+
+  if command -v git &> /dev/null; then
+    local cwd_root
+    cwd_root=$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null || true)
+    if [ -n "$cwd_root" ] && [ -d "$cwd_root/packages/athena-webapp" ]; then
+      echo "$cwd_root"
+      return
+    fi
+  fi
+
+  echo "$SCRIPT_DIR"
+}
+
+REPO_ROOT="$(resolve_repo_root)"
+ATHENA_WEBAPP_DIR="$REPO_ROOT/packages/athena-webapp"
+STOREFRONT_DIR="$REPO_ROOT/packages/storefront-webapp"
+VALKEY_PROXY_DIR="$REPO_ROOT/packages/valkey-proxy-server"
 
 # =============================================
 # Helper Functions
@@ -112,6 +133,9 @@ deploy_app() {
   # Build the app
   echo "Building $app_name..."
   cd "$app_dir" || { echo "Failed to change to $app_dir"; return 1; }
+  local git_branch=$(git -C "$app_dir" branch --show-current 2>/dev/null || echo "unknown")
+  local git_commit=$(git -C "$app_dir" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+  echo "Build source: $app_dir ($git_branch@$git_commit)"
   eval "$env_vars bun run build" || { echo "Build failed"; return 1; }
   
   # Deploy to server

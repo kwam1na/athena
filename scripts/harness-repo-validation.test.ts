@@ -14,6 +14,7 @@ describe("matchesHarnessRepoValidationPath", () => {
     "packages/AGENTS.md",
     "README.md",
     "package.json",
+    "manage-athena-versions.sh",
     ".github/workflows/athena-pr-tests.yml",
     ".husky/pre-commit",
     ".husky/pre-push",
