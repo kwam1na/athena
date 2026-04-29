@@ -56,10 +56,25 @@ vi.mock("@/components/common/PageHeader", () => ({
   ),
 }));
 
-vi.mock("@/components/pos/ProductEntry", () => ({
-  ProductEntry: () => <div>product-entry</div>,
-  ProductSearchInput: () => <div>product-search-input</div>,
-}));
+vi.mock("@/components/pos/ProductEntry", async () => {
+  const React = await import("react");
+
+  return {
+    ProductEntry: React.forwardRef((_, ref) => {
+      React.useImperativeHandle(ref, () => ({
+        focusProductSearchInput: () => true,
+      }));
+
+      return <div>product-entry</div>;
+    }),
+    ProductSearchInput: React.forwardRef<HTMLInputElement>((_, ref) => (
+      <div>
+        <input ref={ref} aria-label="product search input" />
+        <span>product-search-input</span>
+      </div>
+    )),
+  };
+});
 
 vi.mock("@/components/pos/CartItems", () => ({
   CartItems: () => <div>cart-items</div>,
@@ -159,6 +174,7 @@ describe("POSRegisterView", () => {
     expect(screen.getByText("register-customer-panel")).toBeInTheDocument();
     expect(screen.getByText("product-search-input")).toBeInTheDocument();
     expect(screen.getByText("Ready for product lookup")).toBeInTheDocument();
+    expect(screen.getByText("⌘+K")).toBeInTheDocument();
     expect(screen.getByText("cart-items")).toBeInTheDocument();
     expect(screen.getByText("register-checkout-panel")).toBeInTheDocument();
     expect(screen.queryByText("cashier-auth-dialog")).not.toBeInTheDocument();

@@ -1,4 +1,5 @@
 import { useMutation, useQuery } from "convex/react";
+import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
@@ -16,6 +17,7 @@ import { toDisplayAmount } from "~/convex/lib/currency";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import { userError } from "~/shared/commandResult";
+import { getOrigin } from "@/lib/navigationUtils";
 import { EmptyState } from "../states/empty/empty-state";
 import { WorkflowTraceRouteLink } from "../traces/WorkflowTraceRouteLink";
 import {
@@ -436,6 +438,21 @@ export function RegisterCloseoutViewContent({
                 <AccordionContent className="pb-0">
                   <div className="space-y-5 border-t border-border/60 px-2 pb-5 pt-5 sm:px-3">
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+                      <Link
+                        className="inline-flex text-sm font-medium text-primary underline-offset-4 hover:underline"
+                        params={(prev) => ({
+                          ...prev,
+                          orgUrlSlug: prev.orgUrlSlug!,
+                          storeUrlSlug: prev.storeUrlSlug!,
+                        })}
+                        search={{
+                          o: getOrigin(),
+                          registerSessionId: registerSession._id,
+                        }}
+                        to="/$orgUrlSlug/store/$storeUrlSlug/pos/transactions"
+                      >
+                        View transactions
+                      </Link>
                       {registerSession.workflowTraceId ? (
                         <WorkflowTraceRouteLink
                           className="inline-flex text-sm font-medium text-primary underline-offset-4 hover:underline"

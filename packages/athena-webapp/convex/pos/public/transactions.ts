@@ -90,6 +90,7 @@ export const getTransactionsByStore = query({
 export const getCompletedTransactions = query({
   args: {
     storeId: v.id("store"),
+    registerSessionId: v.optional(v.id("registerSession")),
     limit: v.optional(v.number()),
   },
   returns: v.array(
