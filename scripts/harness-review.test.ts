@@ -481,6 +481,45 @@ describe("runHarnessReview", () => {
     );
   });
 
+  it("points stale generated validation-map paths back to the registry source", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/docs/agent/validation-map.json",
+      JSON.stringify(
+        {
+          workspace: "@athena/webapp",
+          packageDir: "packages/athena-webapp",
+          surfaces: [
+            {
+              name: "removed-route",
+              pathPrefixes: [
+                "packages/athena-webapp/src/routes/removed-closeout.tsx",
+              ],
+              commands: [{ kind: "script", script: "test" }],
+            },
+          ],
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+
+    await expect(
+      runHarnessReview(rootDir, {
+        getChangedFiles: async () => ["packages/athena-webapp/src/app.ts"],
+        runHarnessCheck: async () => {},
+        runPackageScript: async () => {},
+        logger: {
+          log() {},
+          error() {},
+        },
+      })
+    ).rejects.toThrow(
+      "Stale harness review config: packages/athena-webapp/docs/agent/validation-map.json references missing path prefix \"packages/athena-webapp/src/routes/removed-closeout.tsx\". This path is generated from scripts/harness-app-registry.ts; update the registry validation scenario, then rerun `bun run harness:generate`."
+    );
+  });
+
   it("fails with a coverage-gap error when a touched file is not mapped", async () => {
     const rootDir = await createFixtureRepo();
     await write(

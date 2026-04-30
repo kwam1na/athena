@@ -6,6 +6,8 @@ import { HARNESS_APP_REGISTRY, type ValidationCommand } from "./harness-app-regi
 import { runHarnessCheck } from "./harness-check";
 import { collectHarnessRepoValidationSelection } from "./harness-repo-validation";
 
+const HARNESS_APP_REGISTRY_PATH = "scripts/harness-app-registry.ts";
+
 const REVIEW_TARGETS = HARNESS_APP_REGISTRY.map((app) => ({
   packageDir: app.packageDir,
   testingDocPath: app.harnessDocs.testingPath,
@@ -76,6 +78,16 @@ function normalizeValidationCommand(
 
 function normalizeBehaviorScenarioName(scenario: string) {
   return scenario.trim();
+}
+
+function formatMissingPathPrefixError(
+  validationMapPath: string,
+  pathPrefix: string
+) {
+  return [
+    `Stale harness review config: ${validationMapPath} references missing path prefix "${pathPrefix}".`,
+    `This path is generated from ${HARNESS_APP_REGISTRY_PATH}; update the registry validation scenario, then rerun \`bun run harness:generate\`.`,
+  ].join(" ");
 }
 
 async function fileExists(filePath: string) {
@@ -199,7 +211,7 @@ async function loadReviewTarget(
     for (const pathPrefix of surface.pathPrefixes) {
       if (!(await fileExists(path.join(rootDir, pathPrefix)))) {
         throw new Error(
-          `Stale harness review config: ${validationMapPath} references missing path prefix "${pathPrefix}".`
+          formatMissingPathPrefixError(validationMapPath, pathPrefix)
         );
       }
     }

@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 3980 nodes · 3552 edges · 1451 communities detected
+- 3981 nodes · 3554 edges · 1451 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1525,12 +1525,12 @@ Cohesion: 0.27
 Nodes (20): asBoolean(), asMtnMomoSetupStatus(), asNumber(), asOptionalArray(), asRecord(), asString(), cleanUndefined(), firstDefined() (+12 more)
 
 ### Community 9 - "Community 9"
-Cohesion: 0.18
-Nodes (16): createDefaultSessionCommandService(), createPosSessionCommandService(), failure(), isActiveRegisterSession(), isSessionExpired(), registerSessionMatchesIdentity(), resolveRegisterSessionBinding(), runBindSessionToRegisterSessionCommand() (+8 more)
+Cohesion: 0.16
+Nodes (16): buildGitProcessEnv(), collectCommandsForChangedFiles(), fileExists(), formatMissingPathPrefixError(), getChangedFilesForHarnessReview(), hasAnyHarnessDocs(), loadReviewTarget(), loadReviewTargets() (+8 more)
 
 ### Community 10 - "Community 10"
-Cohesion: 0.17
-Nodes (15): buildGitProcessEnv(), collectCommandsForChangedFiles(), fileExists(), getChangedFilesForHarnessReview(), hasAnyHarnessDocs(), loadReviewTarget(), loadReviewTargets(), matchesPathPrefix() (+7 more)
+Cohesion: 0.18
+Nodes (16): createDefaultSessionCommandService(), createPosSessionCommandService(), failure(), isActiveRegisterSession(), isSessionExpired(), registerSessionMatchesIdentity(), resolveRegisterSessionBinding(), runBindSessionToRegisterSessionCommand() (+8 more)
 
 ### Community 11 - "Community 11"
 Cohesion: 0.18
