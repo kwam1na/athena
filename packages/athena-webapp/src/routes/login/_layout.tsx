@@ -1,4 +1,9 @@
-import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  Outlet,
+  useNavigate,
+} from "@tanstack/react-router";
 import { useConvexAuth, useMutation } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import { useAuthToken } from "@convex-dev/auth/react";
@@ -58,6 +63,7 @@ export function LoginLayout() {
   const [pendingAuthSyncTick, setPendingAuthSyncTick] = useState(0);
   const isSyncingRef = useRef(false);
   const isMountedRef = useRef(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     return () => {
@@ -150,7 +156,7 @@ export function LoginLayout() {
 
         sessionStorage.removeItem(PENDING_ATHENA_AUTH_SYNC_KEY);
         localStorage.setItem(LOGGED_IN_USER_ID_KEY, userId);
-        window.location.assign("/");
+        navigate({ to: "/" });
       } catch (error) {
         if (!isMountedRef.current) {
           return;
@@ -171,6 +177,7 @@ export function LoginLayout() {
     authToken,
     isAuthenticated,
     isLoading,
+    navigate,
     pendingAuthSyncTick,
     syncAuthenticatedAthenaUser,
   ]);

@@ -79,13 +79,42 @@ describe("useAuth", () => {
       isLoading: false,
     });
     mocked.useQuery
-      .mockReturnValueOnce(null)
+      .mockReturnValueOnce(undefined)
       .mockReturnValueOnce(null);
 
     const { result } = renderHook(() => useAuth());
 
     expect(result.current.isLoading).toBe(true);
     expect(result.current.user).toBeUndefined();
+    expect(window.localStorage.removeItem).not.toHaveBeenCalled();
+  });
+
+  it("uses the cached Athena user while Safari rehydrates a stored auth token", async () => {
+    vi.mocked(window.localStorage.getItem).mockReturnValue("user-1");
+    mocked.useAuthToken.mockReturnValue("jwt-123");
+    mocked.useConvexAuth.mockReturnValue({
+      isAuthenticated: false,
+      isLoading: false,
+    });
+    mocked.useQuery.mockImplementation((_ref, args) => {
+      if (args && typeof args === "object" && "id" in args) {
+        return {
+          _id: "user-1",
+          email: "manager@example.com",
+        };
+      }
+
+      return null;
+    });
+
+    const { result } = renderHook(() => useAuth());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.user).toMatchObject({
+      _id: "user-1",
+      email: "manager@example.com",
+    });
     expect(window.localStorage.removeItem).not.toHaveBeenCalled();
   });
 
