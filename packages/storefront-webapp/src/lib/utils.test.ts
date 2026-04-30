@@ -26,4 +26,8 @@ describe("utils", () => {
   it("formats currency values without decimals", () => {
     expect(currencyFormatter("USD").format(1250)).toBe("$1,250");
   });
+
+  it("uses the Athena Ghana cedi symbol for GHS", () => {
+    expect(currencyFormatter("GHS").format(1250)).toBe("GH₵1,250");
+  });
 });
