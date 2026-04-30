@@ -3,7 +3,7 @@
   "private": true,
   "packageManager": "bun@1.1.29",
   "scripts": {
-    "prepare": "husky",
+    "prepare": "sh scripts/configure-git-hooks.sh",
     "architecture:check": "bun scripts/architecture-boundary-check.ts",
     "graphify:check": "bun scripts/graphify-check.ts",
     "graphify:rebuild": "bun scripts/graphify-rebuild.ts",

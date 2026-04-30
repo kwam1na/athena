@@ -25,6 +25,8 @@ Key repo-level commands:
 - `bun run pr:athena`
 - `bun run graphify:check`
 
+Run `bun install` (or `bun run prepare`) after cloning to point Git at the tracked hooks in `.husky/`. Worktrees inherit the repo config, so using the tracked `.husky` directory avoids the missing generated shim problem we saw with `.husky/_`.
+
 For repo-harness edits such as `scripts/harness-app-registry.ts`, keep
 `bun run harness:review --base origin/main` and
 `bun run harness:inferential-review` in the local ladder so a missing sibling
