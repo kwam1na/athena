@@ -236,7 +236,7 @@ export const BillingDetailsForm = () => {
             {!hasEnteredBillingDetails && user?.billingAddress && (
               <div className="ml-auto flex items-center gap-2">
                 <Checkbox
-                  className="h-4 w-4 text-primary border-gray-300 focus:ring-primary"
+                  className="h-4 w-4 text-primary border-gray-300"
                   onCheckedChange={(e) => handleUseBillingAddressOnFile(e)}
                 />
                 <label htmlFor="same-as-delivery" className="text-sm">
@@ -253,7 +253,7 @@ export const BillingDetailsForm = () => {
                   checkoutState.billingDetails?.billingAddressSameAsDelivery
                 )}
                 onCheckedChange={(e) => toggleSameAsDelivery(e)}
-                className="h-4 w-4 text-primary border-gray-300 focus:ring-primary"
+                className="h-4 w-4 text-primary border-gray-300"
               />
               <label htmlFor="same-as-delivery" className="text-sm">
                 Same as delivery address
@@ -328,7 +328,7 @@ export const BillingDetailsForm = () => {
                         </FormLabel>
                         <FormControl>
                           <select
-                            className="block w-full px-3 py-8 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm"
+                            className="block w-full px-3 py-8 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:border-primary text-sm"
                             value={field.value}
                             onChange={(e) => {
                               const selectedValue = e.target.value;

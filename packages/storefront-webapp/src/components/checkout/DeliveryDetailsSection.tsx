@@ -83,7 +83,7 @@ export const CountryFields = ({ form }: CheckoutFormSectionProps) => {
               </FormLabel>
               <FormControl>
                 <select
-                  className="block w-full px-3 py-8 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm"
+                  className="block w-full px-3 py-8 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:border-primary text-sm"
                   value={field.value}
                   onChange={(e) => {
                     const selectedValue = e.target.value;
@@ -137,7 +137,7 @@ const RegionFields = ({ form }: CheckoutFormSectionProps) => {
                 </FormLabel>
                 <FormControl>
                   <select
-                    className="block w-full px-3 py-8 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm"
+                    className="block w-full px-3 py-8 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:border-primary text-sm"
                     value={field.value}
                     onChange={(e) => {
                       const region = e.target.value;
@@ -307,7 +307,7 @@ const StateFields = ({ form }: CheckoutFormSectionProps) => {
               </FormLabel>
               <FormControl>
                 <select
-                  className="block w-full px-3 py-8 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm"
+                  className="block w-full px-3 py-8 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:border-primary text-sm"
                   value={field.value}
                   onChange={(e) => {
                     const selectedValue = e.target.value;
@@ -569,7 +569,7 @@ const GhanaAddressLocaleFields = ({
               !isEnteringNewNeighborhood ? (
                 <FormControl>
                   <select
-                    className="block w-full px-3 py-8 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm"
+                    className="block w-full px-3 py-8 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:border-primary text-sm"
                     value={field.value}
                     onChange={(e) => {
                       updateState({

@@ -321,7 +321,7 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
                 <Checkbox
                   checked={didAcceptStoreTerms}
                   onCheckedChange={(e) => handleAcceptedTerms("store-terms", e)}
-                  className="h-4 w-4 text-primary border-gray-300 focus:ring-primary"
+                  className="h-4 w-4 text-primary border-gray-300"
                 />
                 <label
                   htmlFor="terms"
@@ -341,7 +341,7 @@ export const PaymentSection = ({ form }: CheckoutFormSectionProps) => {
                 <Checkbox
                   checked={didAcceptCommsTerms}
                   onCheckedChange={(e) => handleAcceptedTerms("comms-terms", e)}
-                  className="h-4 w-4 text-primary border-gray-300 focus:ring-primary"
+                  className="h-4 w-4 text-primary border-gray-300"
                 />
                 <label htmlFor="terms" className="text-sm">
                   I agree to receive communications via email and/or SMS to any
