@@ -31025,6 +31025,18 @@
     },
     {
       "_src": "packages_storefront_webapp_src_contexts_storecontext_tsx",
+      "_tgt": "storecontext_useoptionalstorecontext",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "relation": "contains",
+      "source": "packages_storefront_webapp_src_contexts_storecontext_tsx",
+      "source_file": "packages/storefront-webapp/src/contexts/StoreContext.tsx",
+      "source_location": "L90",
+      "target": "storecontext_useoptionalstorecontext",
+      "weight": 1
+    },
+    {
+      "_src": "packages_storefront_webapp_src_contexts_storecontext_tsx",
       "_tgt": "storecontext_usestorecontext",
       "confidence": "EXTRACTED",
       "confidence_score": 1,
@@ -33251,7 +33263,7 @@
       "relation": "contains",
       "source": "vite_config_manualchunks",
       "source_file": "packages/storefront-webapp/vite.config.ts",
-      "source_location": "L19",
+      "source_location": "L23",
       "target": "packages_storefront_webapp_vite_config_ts",
       "weight": 1
     },
@@ -41548,6 +41560,18 @@
       "weight": 1
     },
     {
+      "_src": "storecontext_usestorecontext",
+      "_tgt": "storecontext_useoptionalstorecontext",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "relation": "calls",
+      "source": "storecontext_usestorecontext",
+      "source_file": "packages/storefront-webapp/src/contexts/StoreContext.tsx",
+      "source_location": "L83",
+      "target": "storecontext_useoptionalstorecontext",
+      "weight": 1
+    },
+    {
       "_src": "storefront_runtime_api_handlecheckoutsessionfetch",
       "_tgt": "storefront_runtime_api_emitsignal",
       "confidence": "EXTRACTED",
@@ -44295,65 +44319,65 @@
     {
       "community": 104,
       "file_type": "code",
-      "id": "packages_athena_webapp_src_lib_productutils_ts",
-      "label": "productUtils.ts",
-      "norm_label": "productutils.ts",
-      "source_file": "packages/athena-webapp/src/lib/productUtils.ts",
+      "id": "packages_athena_webapp_src_stories_templates_reference_fixtures_tsx",
+      "label": "reference-fixtures.tsx",
+      "norm_label": "reference-fixtures.tsx",
+      "source_file": "packages/athena-webapp/src/stories/Templates/reference-fixtures.tsx",
       "source_location": "L1"
     },
     {
       "community": 104,
       "file_type": "code",
-      "id": "packages_storefront_webapp_src_lib_productutils_ts",
-      "label": "productUtils.ts",
-      "norm_label": "productutils.ts",
-      "source_file": "packages/storefront-webapp/src/lib/productUtils.ts",
-      "source_location": "L1"
+      "id": "reference_fixtures_compacttable",
+      "label": "CompactTable()",
+      "norm_label": "compacttable()",
+      "source_file": "packages/athena-webapp/src/stories/Templates/reference-fixtures.tsx",
+      "source_location": "L263"
     },
     {
       "community": 104,
       "file_type": "code",
-      "id": "productutils_getproductname",
-      "label": "getProductName()",
-      "norm_label": "getproductname()",
-      "source_file": "packages/storefront-webapp/src/lib/productUtils.ts",
-      "source_location": "L18"
+      "id": "reference_fixtures_framecard",
+      "label": "FrameCard()",
+      "norm_label": "framecard()",
+      "source_file": "packages/athena-webapp/src/stories/Templates/reference-fixtures.tsx",
+      "source_location": "L163"
     },
     {
       "community": 104,
       "file_type": "code",
-      "id": "productutils_haslowstock",
-      "label": "hasLowStock()",
-      "norm_label": "haslowstock()",
-      "source_file": "packages/storefront-webapp/src/lib/productUtils.ts",
-      "source_location": "L52"
+      "id": "reference_fixtures_lanecard",
+      "label": "LaneCard()",
+      "norm_label": "lanecard()",
+      "source_file": "packages/athena-webapp/src/stories/Templates/reference-fixtures.tsx",
+      "source_location": "L213"
     },
     {
       "community": 104,
       "file_type": "code",
-      "id": "productutils_issoldout",
-      "label": "isSoldOut()",
-      "norm_label": "issoldout()",
-      "source_file": "packages/storefront-webapp/src/lib/productUtils.ts",
-      "source_location": "L45"
+      "id": "reference_fixtures_metrictile",
+      "label": "MetricTile()",
+      "norm_label": "metrictile()",
+      "source_file": "packages/athena-webapp/src/stories/Templates/reference-fixtures.tsx",
+      "source_location": "L194"
     },
     {
       "community": 104,
       "file_type": "code",
-      "id": "productutils_sortproduct",
-      "label": "sortProduct()",
-      "norm_label": "sortproduct()",
-      "source_file": "packages/storefront-webapp/src/lib/productUtils.ts",
-      "source_location": "L66"
+      "id": "reference_fixtures_minitrendchart",
+      "label": "MiniTrendChart()",
+      "norm_label": "minitrendchart()",
+      "source_file": "packages/athena-webapp/src/stories/Templates/reference-fixtures.tsx",
+      "source_location": "L240"
     },
     {
       "community": 104,
       "file_type": "code",
-      "id": "productutils_sortskusbylength",
-      "label": "sortSkusByLength()",
-      "norm_label": "sortskusbylength()",
-      "source_file": "packages/storefront-webapp/src/lib/productUtils.ts",
-      "source_location": "L62"
+      "id": "reference_fixtures_referencepageshell",
+      "label": "ReferencePageShell()",
+      "norm_label": "referencepageshell()",
+      "source_file": "packages/athena-webapp/src/stories/Templates/reference-fixtures.tsx",
+      "source_location": "L145"
     },
     {
       "community": 1040,
@@ -44448,65 +44472,65 @@
     {
       "community": 105,
       "file_type": "code",
-      "id": "packages_athena_webapp_src_stories_templates_reference_fixtures_tsx",
-      "label": "reference-fixtures.tsx",
-      "norm_label": "reference-fixtures.tsx",
-      "source_file": "packages/athena-webapp/src/stories/Templates/reference-fixtures.tsx",
+      "id": "packages_storefront_webapp_src_api_savedbag_ts",
+      "label": "savedBag.ts",
+      "norm_label": "savedbag.ts",
+      "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
       "source_location": "L1"
     },
     {
       "community": 105,
       "file_type": "code",
-      "id": "reference_fixtures_compacttable",
-      "label": "CompactTable()",
-      "norm_label": "compacttable()",
-      "source_file": "packages/athena-webapp/src/stories/Templates/reference-fixtures.tsx",
-      "source_location": "L263"
+      "id": "savedbag_additemtosavedbag",
+      "label": "addItemToSavedBag()",
+      "norm_label": "additemtosavedbag()",
+      "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
+      "source_location": "L25"
     },
     {
       "community": 105,
       "file_type": "code",
-      "id": "reference_fixtures_framecard",
-      "label": "FrameCard()",
-      "norm_label": "framecard()",
-      "source_file": "packages/athena-webapp/src/stories/Templates/reference-fixtures.tsx",
-      "source_location": "L163"
+      "id": "savedbag_getactivesavedbag",
+      "label": "getActiveSavedBag()",
+      "norm_label": "getactivesavedbag()",
+      "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
+      "source_location": "L10"
     },
     {
       "community": 105,
       "file_type": "code",
-      "id": "reference_fixtures_lanecard",
-      "label": "LaneCard()",
-      "norm_label": "lanecard()",
-      "source_file": "packages/athena-webapp/src/stories/Templates/reference-fixtures.tsx",
-      "source_location": "L213"
+      "id": "savedbag_getbaseurl",
+      "label": "getBaseUrl()",
+      "norm_label": "getbaseurl()",
+      "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
+      "source_location": "L8"
     },
     {
       "community": 105,
       "file_type": "code",
-      "id": "reference_fixtures_metrictile",
-      "label": "MetricTile()",
-      "norm_label": "metrictile()",
-      "source_file": "packages/athena-webapp/src/stories/Templates/reference-fixtures.tsx",
-      "source_location": "L194"
+      "id": "savedbag_removeitemfromsavedbag",
+      "label": "removeItemFromSavedBag()",
+      "norm_label": "removeitemfromsavedbag()",
+      "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
+      "source_location": "L91"
     },
     {
       "community": 105,
       "file_type": "code",
-      "id": "reference_fixtures_minitrendchart",
-      "label": "MiniTrendChart()",
-      "norm_label": "minitrendchart()",
-      "source_file": "packages/athena-webapp/src/stories/Templates/reference-fixtures.tsx",
-      "source_location": "L240"
+      "id": "savedbag_updatesavedbagitem",
+      "label": "updateSavedBagItem()",
+      "norm_label": "updatesavedbagitem()",
+      "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
+      "source_location": "L61"
     },
     {
       "community": 105,
       "file_type": "code",
-      "id": "reference_fixtures_referencepageshell",
-      "label": "ReferencePageShell()",
-      "norm_label": "referencepageshell()",
-      "source_file": "packages/athena-webapp/src/stories/Templates/reference-fixtures.tsx",
-      "source_location": "L145"
+      "id": "savedbag_updatesavedbagowner",
+      "label": "updateSavedBagOwner()",
+      "norm_label": "updatesavedbagowner()",
+      "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
+      "source_location": "L109"
     },
     {
       "community": 1050,
@@ -44601,65 +44625,65 @@
     {
       "community": 106,
       "file_type": "code",
-      "id": "packages_storefront_webapp_src_api_savedbag_ts",
-      "label": "savedBag.ts",
-      "norm_label": "savedbag.ts",
-      "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
+      "id": "packages_athena_webapp_src_lib_productutils_ts",
+      "label": "productUtils.ts",
+      "norm_label": "productutils.ts",
+      "source_file": "packages/athena-webapp/src/lib/productUtils.ts",
       "source_location": "L1"
     },
     {
       "community": 106,
       "file_type": "code",
-      "id": "savedbag_additemtosavedbag",
-      "label": "addItemToSavedBag()",
-      "norm_label": "additemtosavedbag()",
-      "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
-      "source_location": "L25"
+      "id": "packages_storefront_webapp_src_lib_productutils_ts",
+      "label": "productUtils.ts",
+      "norm_label": "productutils.ts",
+      "source_file": "packages/storefront-webapp/src/lib/productUtils.ts",
+      "source_location": "L1"
     },
     {
       "community": 106,
       "file_type": "code",
-      "id": "savedbag_getactivesavedbag",
-      "label": "getActiveSavedBag()",
-      "norm_label": "getactivesavedbag()",
-      "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
-      "source_location": "L10"
+      "id": "productutils_getproductname",
+      "label": "getProductName()",
+      "norm_label": "getproductname()",
+      "source_file": "packages/storefront-webapp/src/lib/productUtils.ts",
+      "source_location": "L18"
     },
     {
       "community": 106,
       "file_type": "code",
-      "id": "savedbag_getbaseurl",
-      "label": "getBaseUrl()",
-      "norm_label": "getbaseurl()",
-      "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
-      "source_location": "L8"
+      "id": "productutils_haslowstock",
+      "label": "hasLowStock()",
+      "norm_label": "haslowstock()",
+      "source_file": "packages/storefront-webapp/src/lib/productUtils.ts",
+      "source_location": "L52"
     },
     {
       "community": 106,
       "file_type": "code",
-      "id": "savedbag_removeitemfromsavedbag",
-      "label": "removeItemFromSavedBag()",
-      "norm_label": "removeitemfromsavedbag()",
-      "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
-      "source_location": "L91"
+      "id": "productutils_issoldout",
+      "label": "isSoldOut()",
+      "norm_label": "issoldout()",
+      "source_file": "packages/storefront-webapp/src/lib/productUtils.ts",
+      "source_location": "L45"
     },
     {
       "community": 106,
       "file_type": "code",
-      "id": "savedbag_updatesavedbagitem",
-      "label": "updateSavedBagItem()",
-      "norm_label": "updatesavedbagitem()",
-      "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
-      "source_location": "L61"
+      "id": "productutils_sortproduct",
+      "label": "sortProduct()",
+      "norm_label": "sortproduct()",
+      "source_file": "packages/storefront-webapp/src/lib/productUtils.ts",
+      "source_location": "L66"
     },
     {
       "community": 106,
       "file_type": "code",
-      "id": "savedbag_updatesavedbagowner",
-      "label": "updateSavedBagOwner()",
-      "norm_label": "updatesavedbagowner()",
-      "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
-      "source_location": "L109"
+      "id": "productutils_sortskusbylength",
+      "label": "sortSkusByLength()",
+      "norm_label": "sortskusbylength()",
+      "source_file": "packages/storefront-webapp/src/lib/productUtils.ts",
+      "source_location": "L62"
     },
     {
       "community": 1060,
@@ -49632,10 +49656,10 @@
     {
       "community": 1369,
       "file_type": "code",
-      "id": "packages_storefront_webapp_src_components_states_maintenance_maintenance_tsx",
-      "label": "Maintenance.tsx",
-      "norm_label": "maintenance.tsx",
-      "source_file": "packages/storefront-webapp/src/components/states/maintenance/Maintenance.tsx",
+      "id": "packages_storefront_webapp_src_components_states_maintenance_maintenance_test_tsx",
+      "label": "Maintenance.test.tsx",
+      "norm_label": "maintenance.test.tsx",
+      "source_file": "packages/storefront-webapp/src/components/states/maintenance/Maintenance.test.tsx",
       "source_location": "L1"
     },
     {
@@ -49695,6 +49719,15 @@
     {
       "community": 1370,
       "file_type": "code",
+      "id": "packages_storefront_webapp_src_components_states_maintenance_maintenance_tsx",
+      "label": "Maintenance.tsx",
+      "norm_label": "maintenance.tsx",
+      "source_file": "packages/storefront-webapp/src/components/states/maintenance/Maintenance.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 1371,
+      "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_animatedcard_tsx",
       "label": "AnimatedCard.tsx",
       "norm_label": "animatedcard.tsx",
@@ -49702,7 +49735,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1371,
+      "community": 1372,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_accordion_tsx",
       "label": "accordion.tsx",
@@ -49711,7 +49744,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1372,
+      "community": 1373,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_alert_tsx",
       "label": "alert.tsx",
@@ -49720,7 +49753,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1373,
+      "community": 1374,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_breadcrumb_tsx",
       "label": "breadcrumb.tsx",
@@ -49729,7 +49762,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1374,
+      "community": 1375,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_button_tsx",
       "label": "button.tsx",
@@ -49738,7 +49771,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1375,
+      "community": 1376,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_card_tsx",
       "label": "card.tsx",
@@ -49747,7 +49780,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1376,
+      "community": 1377,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_checkbox_tsx",
       "label": "checkbox.tsx",
@@ -49756,7 +49789,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1377,
+      "community": 1378,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_command_tsx",
       "label": "command.tsx",
@@ -49765,21 +49798,12 @@
       "source_location": "L1"
     },
     {
-      "community": 1378,
+      "community": 1379,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_context_menu_tsx",
       "label": "context-menu.tsx",
       "norm_label": "context-menu.tsx",
       "source_file": "packages/storefront-webapp/src/components/ui/context-menu.tsx",
-      "source_location": "L1"
-    },
-    {
-      "community": 1379,
-      "file_type": "code",
-      "id": "packages_storefront_webapp_src_components_ui_dialog_tsx",
-      "label": "dialog.tsx",
-      "norm_label": "dialog.tsx",
-      "source_file": "packages/storefront-webapp/src/components/ui/dialog.tsx",
       "source_location": "L1"
     },
     {
@@ -49839,6 +49863,15 @@
     {
       "community": 1380,
       "file_type": "code",
+      "id": "packages_storefront_webapp_src_components_ui_dialog_tsx",
+      "label": "dialog.tsx",
+      "norm_label": "dialog.tsx",
+      "source_file": "packages/storefront-webapp/src/components/ui/dialog.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 1381,
+      "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_dropdown_menu_tsx",
       "label": "dropdown-menu.tsx",
       "norm_label": "dropdown-menu.tsx",
@@ -49846,7 +49879,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1381,
+      "community": 1382,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_form_tsx",
       "label": "form.tsx",
@@ -49855,7 +49888,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1382,
+      "community": 1383,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_icons_tsx",
       "label": "icons.tsx",
@@ -49864,7 +49897,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1383,
+      "community": 1384,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_image_with_fallback_tsx",
       "label": "image-with-fallback.tsx",
@@ -49873,7 +49906,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1384,
+      "community": 1385,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_input_otp_tsx",
       "label": "input-otp.tsx",
@@ -49882,7 +49915,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1385,
+      "community": 1386,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_input_with_end_button_tsx",
       "label": "input-with-end-button.tsx",
@@ -49891,7 +49924,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1386,
+      "community": 1387,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_input_tsx",
       "label": "input.tsx",
@@ -49900,7 +49933,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1387,
+      "community": 1388,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_label_tsx",
       "label": "label.tsx",
@@ -49909,21 +49942,12 @@
       "source_location": "L1"
     },
     {
-      "community": 1388,
+      "community": 1389,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_modals_leaveareviewmodalform_tsx",
       "label": "LeaveAReviewModalForm.tsx",
       "norm_label": "leaveareviewmodalform.tsx",
       "source_file": "packages/storefront-webapp/src/components/ui/modals/LeaveAReviewModalForm.tsx",
-      "source_location": "L1"
-    },
-    {
-      "community": 1389,
-      "file_type": "code",
-      "id": "packages_storefront_webapp_src_components_ui_modals_action_modal_tsx",
-      "label": "action-modal.tsx",
-      "norm_label": "action-modal.tsx",
-      "source_file": "packages/storefront-webapp/src/components/ui/modals/action-modal.tsx",
       "source_location": "L1"
     },
     {
@@ -49983,6 +50007,15 @@
     {
       "community": 1390,
       "file_type": "code",
+      "id": "packages_storefront_webapp_src_components_ui_modals_action_modal_tsx",
+      "label": "action-modal.tsx",
+      "norm_label": "action-modal.tsx",
+      "source_file": "packages/storefront-webapp/src/components/ui/modals/action-modal.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 1391,
+      "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_modals_animations_welcomebackmodalanimations_ts",
       "label": "welcomeBackModalAnimations.ts",
       "norm_label": "welcomebackmodalanimations.ts",
@@ -49990,7 +50023,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1391,
+      "community": 1392,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_modals_index_ts",
       "label": "index.ts",
@@ -49999,7 +50032,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1392,
+      "community": 1393,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_modals_types_ts",
       "label": "types.ts",
@@ -50008,7 +50041,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1393,
+      "community": 1394,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_navigation_menu_tsx",
       "label": "navigation-menu.tsx",
@@ -50017,7 +50050,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1394,
+      "community": 1395,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_popover_tsx",
       "label": "popover.tsx",
@@ -50026,7 +50059,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1395,
+      "community": 1396,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_radio_group_tsx",
       "label": "radio-group.tsx",
@@ -50035,7 +50068,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1396,
+      "community": 1397,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_scroll_area_tsx",
       "label": "scroll-area.tsx",
@@ -50044,7 +50077,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1397,
+      "community": 1398,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_select_tsx",
       "label": "select.tsx",
@@ -50053,21 +50086,12 @@
       "source_location": "L1"
     },
     {
-      "community": 1398,
+      "community": 1399,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_separator_tsx",
       "label": "separator.tsx",
       "norm_label": "separator.tsx",
       "source_file": "packages/storefront-webapp/src/components/ui/separator.tsx",
-      "source_location": "L1"
-    },
-    {
-      "community": 1399,
-      "file_type": "code",
-      "id": "packages_storefront_webapp_src_components_ui_sheet_tsx",
-      "label": "sheet.tsx",
-      "norm_label": "sheet.tsx",
-      "source_file": "packages/storefront-webapp/src/components/ui/sheet.tsx",
       "source_location": "L1"
     },
     {
@@ -50307,6 +50331,15 @@
     {
       "community": 1400,
       "file_type": "code",
+      "id": "packages_storefront_webapp_src_components_ui_sheet_tsx",
+      "label": "sheet.tsx",
+      "norm_label": "sheet.tsx",
+      "source_file": "packages/storefront-webapp/src/components/ui/sheet.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 1401,
+      "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_table_tsx",
       "label": "table.tsx",
       "norm_label": "table.tsx",
@@ -50314,7 +50347,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1401,
+      "community": 1402,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_tabs_tsx",
       "label": "tabs.tsx",
@@ -50323,7 +50356,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1402,
+      "community": 1403,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_textarea_tsx",
       "label": "textarea.tsx",
@@ -50332,7 +50365,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1403,
+      "community": 1404,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_toggle_group_tsx",
       "label": "toggle-group.tsx",
@@ -50341,7 +50374,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1404,
+      "community": 1405,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_toggle_tsx",
       "label": "toggle.tsx",
@@ -50350,7 +50383,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1405,
+      "community": 1406,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_tooltip_tsx",
       "label": "tooltip.tsx",
@@ -50359,7 +50392,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1406,
+      "community": 1407,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_config_ts",
       "label": "config.ts",
@@ -50368,7 +50401,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1407,
+      "community": 1408,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_hooks_use_store_modal_tsx",
       "label": "use-store-modal.tsx",
@@ -50377,21 +50410,12 @@
       "source_location": "L1"
     },
     {
-      "community": 1408,
+      "community": 1409,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_hooks_useorganizationmodal_tsx",
       "label": "useOrganizationModal.tsx",
       "norm_label": "useorganizationmodal.tsx",
       "source_file": "packages/storefront-webapp/src/hooks/useOrganizationModal.tsx",
-      "source_location": "L1"
-    },
-    {
-      "community": 1409,
-      "file_type": "code",
-      "id": "packages_storefront_webapp_src_hooks_usestorefrontobservability_ts",
-      "label": "useStorefrontObservability.ts",
-      "norm_label": "usestorefrontobservability.ts",
-      "source_file": "packages/storefront-webapp/src/hooks/useStorefrontObservability.ts",
       "source_location": "L1"
     },
     {
@@ -50451,6 +50475,15 @@
     {
       "community": 1410,
       "file_type": "code",
+      "id": "packages_storefront_webapp_src_hooks_usestorefrontobservability_ts",
+      "label": "useStorefrontObservability.ts",
+      "norm_label": "usestorefrontobservability.ts",
+      "source_file": "packages/storefront-webapp/src/hooks/useStorefrontObservability.ts",
+      "source_location": "L1"
+    },
+    {
+      "community": 1411,
+      "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_constants_ts",
       "label": "constants.ts",
       "norm_label": "constants.ts",
@@ -50458,7 +50491,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1411,
+      "community": 1412,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_countries_ts",
       "label": "countries.ts",
@@ -50467,7 +50500,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1412,
+      "community": 1413,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_feeutils_test_ts",
       "label": "feeUtils.test.ts",
@@ -50476,7 +50509,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1413,
+      "community": 1414,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_ghana_ts",
       "label": "ghana.ts",
@@ -50485,7 +50518,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1414,
+      "community": 1415,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_ghanaregions_ts",
       "label": "ghanaRegions.ts",
@@ -50494,7 +50527,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1415,
+      "community": 1416,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_maintenanceutils_test_ts",
       "label": "maintenanceUtils.test.ts",
@@ -50503,7 +50536,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1416,
+      "community": 1417,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_mutations_ts_index_ts",
       "label": "index.ts",
@@ -50512,7 +50545,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1417,
+      "community": 1418,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_queries_store_ts",
       "label": "store.ts",
@@ -50521,21 +50554,12 @@
       "source_location": "L1"
     },
     {
-      "community": 1418,
+      "community": 1419,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_schemas_bag_ts",
       "label": "bag.ts",
       "norm_label": "bag.ts",
       "source_file": "packages/storefront-webapp/src/lib/schemas/bag.ts",
-      "source_location": "L1"
-    },
-    {
-      "community": 1419,
-      "file_type": "code",
-      "id": "packages_storefront_webapp_src_lib_schemas_bagitem_ts",
-      "label": "bagItem.ts",
-      "norm_label": "bagitem.ts",
-      "source_file": "packages/storefront-webapp/src/lib/schemas/bagItem.ts",
       "source_location": "L1"
     },
     {
@@ -50595,6 +50619,15 @@
     {
       "community": 1420,
       "file_type": "code",
+      "id": "packages_storefront_webapp_src_lib_schemas_bagitem_ts",
+      "label": "bagItem.ts",
+      "norm_label": "bagitem.ts",
+      "source_file": "packages/storefront-webapp/src/lib/schemas/bagItem.ts",
+      "source_location": "L1"
+    },
+    {
+      "community": 1421,
+      "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_schemas_category_ts",
       "label": "category.ts",
       "norm_label": "category.ts",
@@ -50602,7 +50635,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1421,
+      "community": 1422,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_schemas_organization_ts",
       "label": "organization.ts",
@@ -50611,7 +50644,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1422,
+      "community": 1423,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_schemas_product_ts",
       "label": "product.ts",
@@ -50620,7 +50653,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1423,
+      "community": 1424,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_schemas_store_ts",
       "label": "store.ts",
@@ -50629,7 +50662,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1424,
+      "community": 1425,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_schemas_subcategory_ts",
       "label": "subcategory.ts",
@@ -50638,7 +50671,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1425,
+      "community": 1426,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_schemas_user_ts",
       "label": "user.ts",
@@ -50647,7 +50680,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1426,
+      "community": 1427,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_states_ts",
       "label": "states.ts",
@@ -50656,7 +50689,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1427,
+      "community": 1428,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_storefrontfailureobservability_test_ts",
       "label": "storefrontFailureObservability.test.ts",
@@ -50665,21 +50698,12 @@
       "source_location": "L1"
     },
     {
-      "community": 1428,
+      "community": 1429,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_storefrontjourneyevents_test_ts",
       "label": "storefrontJourneyEvents.test.ts",
       "norm_label": "storefrontjourneyevents.test.ts",
       "source_file": "packages/storefront-webapp/src/lib/storefrontJourneyEvents.test.ts",
-      "source_location": "L1"
-    },
-    {
-      "community": 1429,
-      "file_type": "code",
-      "id": "packages_storefront_webapp_src_lib_utils_test_ts",
-      "label": "utils.test.ts",
-      "norm_label": "utils.test.ts",
-      "source_file": "packages/storefront-webapp/src/lib/utils.test.ts",
       "source_location": "L1"
     },
     {
@@ -50739,6 +50763,15 @@
     {
       "community": 1430,
       "file_type": "code",
+      "id": "packages_storefront_webapp_src_lib_utils_test_ts",
+      "label": "utils.test.ts",
+      "norm_label": "utils.test.ts",
+      "source_file": "packages/storefront-webapp/src/lib/utils.test.ts",
+      "source_location": "L1"
+    },
+    {
+      "community": 1431,
+      "file_type": "code",
       "id": "packages_storefront_webapp_src_routetree_gen_ts",
       "label": "routeTree.gen.ts",
       "norm_label": "routetree.gen.ts",
@@ -50746,7 +50779,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1431,
+      "community": 1432,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_homepageloader_test_ts",
       "label": "-homePageLoader.test.ts",
@@ -50755,7 +50788,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1432,
+      "community": 1433,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_root_tsx",
       "label": "__root.tsx",
@@ -50764,7 +50797,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1433,
+      "community": 1434,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_layout_orderslayout_shop_orders_orderid_orderitemid_review_tsx",
       "label": "$orderItemId.review.tsx",
@@ -50773,7 +50806,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1434,
+      "community": 1435,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_layout_orderslayout_shop_orders_index_tsx",
       "label": "index.tsx",
@@ -50782,7 +50815,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1435,
+      "community": 1436,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_layout_shoplayout_shop_categoryslug_subcategoryslug_tsx",
       "label": "$subcategorySlug.tsx",
@@ -50791,7 +50824,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1436,
+      "community": 1437,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_layout_shoplayout_shop_categoryslug_index_tsx",
       "label": "index.tsx",
@@ -50800,7 +50833,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1437,
+      "community": 1438,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_layout_rewards_index_tsx",
       "label": "rewards.index.tsx",
@@ -50809,21 +50842,12 @@
       "source_location": "L1"
     },
     {
-      "community": 1438,
+      "community": 1439,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_layout_shop_saved_index_tsx",
       "label": "shop.saved.index.tsx",
       "norm_label": "shop.saved.index.tsx",
       "source_file": "packages/storefront-webapp/src/routes/_layout/shop.saved.index.tsx",
-      "source_location": "L1"
-    },
-    {
-      "community": 1439,
-      "file_type": "code",
-      "id": "packages_storefront_webapp_src_routes_shop_bag_index_tsx",
-      "label": "bag.index.tsx",
-      "norm_label": "bag.index.tsx",
-      "source_file": "packages/storefront-webapp/src/routes/shop/bag.index.tsx",
       "source_location": "L1"
     },
     {
@@ -50883,6 +50907,15 @@
     {
       "community": 1440,
       "file_type": "code",
+      "id": "packages_storefront_webapp_src_routes_shop_bag_index_tsx",
+      "label": "bag.index.tsx",
+      "norm_label": "bag.index.tsx",
+      "source_file": "packages/storefront-webapp/src/routes/shop/bag.index.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 1441,
+      "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_shop_checkout_sessionidslug_complete_tsx",
       "label": "complete.tsx",
       "norm_label": "complete.tsx",
@@ -50890,7 +50923,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1441,
+      "community": 1442,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_shop_checkout_sessionidslug_incomplete_tsx",
       "label": "incomplete.tsx",
@@ -50899,7 +50932,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1442,
+      "community": 1443,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_shop_checkout_index_tsx",
       "label": "index.tsx",
@@ -50908,7 +50941,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1443,
+      "community": 1444,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_shop_checkout_pending_tsx",
       "label": "pending.tsx",
@@ -50917,7 +50950,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1444,
+      "community": 1445,
       "file_type": "code",
       "id": "packages_storefront_webapp_tailwind_config_js",
       "label": "tailwind.config.js",
@@ -50926,7 +50959,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1445,
+      "community": 1446,
       "file_type": "code",
       "id": "packages_storefront_webapp_vitest_config_ts",
       "label": "vitest.config.ts",
@@ -50935,7 +50968,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1446,
+      "community": 1447,
       "file_type": "code",
       "id": "packages_storefront_webapp_vitest_setup_ts",
       "label": "vitest.setup.ts",
@@ -50944,7 +50977,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1447,
+      "community": 1448,
       "file_type": "code",
       "id": "packages_valkey_proxy_server_index_js",
       "label": "index.js",
@@ -50953,21 +50986,12 @@
       "source_location": "L1"
     },
     {
-      "community": 1448,
+      "community": 1449,
       "file_type": "code",
       "id": "scripts_harness_app_registry_test_ts",
       "label": "harness-app-registry.test.ts",
       "norm_label": "harness-app-registry.test.ts",
       "source_file": "scripts/harness-app-registry.test.ts",
-      "source_location": "L1"
-    },
-    {
-      "community": 1449,
-      "file_type": "code",
-      "id": "scripts_harness_behavior_fixtures_valkey_runtime_app_test_ts",
-      "label": "valkey-runtime-app.test.ts",
-      "norm_label": "valkey-runtime-app.test.ts",
-      "source_file": "scripts/harness-behavior-fixtures/valkey-runtime-app.test.ts",
       "source_location": "L1"
     },
     {
@@ -51018,6 +51042,15 @@
     {
       "community": 1450,
       "file_type": "code",
+      "id": "scripts_harness_behavior_fixtures_valkey_runtime_app_test_ts",
+      "label": "valkey-runtime-app.test.ts",
+      "norm_label": "valkey-runtime-app.test.ts",
+      "source_file": "scripts/harness-behavior-fixtures/valkey-runtime-app.test.ts",
+      "source_location": "L1"
+    },
+    {
+      "community": 1451,
+      "file_type": "code",
       "id": "scripts_harness_behavior_scenarios_test_ts",
       "label": "harness-behavior-scenarios.test.ts",
       "norm_label": "harness-behavior-scenarios.test.ts",
@@ -51025,7 +51058,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1451,
+      "community": 1452,
       "file_type": "code",
       "id": "scripts_harness_repo_validation_test_ts",
       "label": "harness-repo-validation.test.ts",
@@ -52008,51 +52041,6 @@
     {
       "community": 160,
       "file_type": "code",
-      "id": "index_feesview",
-      "label": "FeesView()",
-      "norm_label": "feesview()",
-      "source_file": "packages/athena-webapp/src/components/assets/index.tsx",
-      "source_location": "L30"
-    },
-    {
-      "community": 160,
-      "file_type": "code",
-      "id": "index_header",
-      "label": "Header()",
-      "norm_label": "header()",
-      "source_file": "packages/athena-webapp/src/components/organization-members/index.tsx",
-      "source_location": "L43"
-    },
-    {
-      "community": 160,
-      "file_type": "code",
-      "id": "index_onsubmit",
-      "label": "onSubmit()",
-      "norm_label": "onsubmit()",
-      "source_file": "packages/athena-webapp/src/components/organization-members/index.tsx",
-      "source_location": "L106"
-    },
-    {
-      "community": 160,
-      "file_type": "code",
-      "id": "packages_athena_webapp_src_components_assets_index_tsx",
-      "label": "index.tsx",
-      "norm_label": "index.tsx",
-      "source_file": "packages/athena-webapp/src/components/assets/index.tsx",
-      "source_location": "L1"
-    },
-    {
-      "community": 160,
-      "file_type": "code",
-      "id": "packages_athena_webapp_src_components_organization_members_index_tsx",
-      "label": "index.tsx",
-      "norm_label": "index.tsx",
-      "source_file": "packages/athena-webapp/src/components/organization-members/index.tsx",
-      "source_location": "L1"
-    },
-    {
-      "community": 161,
-      "file_type": "code",
       "id": "packages_athena_webapp_src_components_common_pageheader_tsx",
       "label": "PageHeader.tsx",
       "norm_label": "pageheader.tsx",
@@ -52060,7 +52048,7 @@
       "source_location": "L1"
     },
     {
-      "community": 161,
+      "community": 160,
       "file_type": "code",
       "id": "pageheader_navigatebackbutton",
       "label": "NavigateBackButton()",
@@ -52069,7 +52057,7 @@
       "source_location": "L30"
     },
     {
-      "community": 161,
+      "community": 160,
       "file_type": "code",
       "id": "pageheader_pageheader",
       "label": "PageHeader()",
@@ -52078,7 +52066,7 @@
       "source_location": "L8"
     },
     {
-      "community": 161,
+      "community": 160,
       "file_type": "code",
       "id": "pageheader_simplepageheader",
       "label": "SimplePageHeader()",
@@ -52087,7 +52075,7 @@
       "source_location": "L49"
     },
     {
-      "community": 161,
+      "community": 160,
       "file_type": "code",
       "id": "pageheader_viewheader",
       "label": "ViewHeader()",
@@ -52096,7 +52084,7 @@
       "source_location": "L66"
     },
     {
-      "community": 162,
+      "community": 161,
       "file_type": "code",
       "id": "dashboard_getperiodrange",
       "label": "getPeriodRange()",
@@ -52105,7 +52093,7 @@
       "source_location": "L20"
     },
     {
-      "community": 162,
+      "community": 161,
       "file_type": "code",
       "id": "dashboard_loadingsection",
       "label": "LoadingSection()",
@@ -52114,7 +52102,7 @@
       "source_location": "L50"
     },
     {
-      "community": 162,
+      "community": 161,
       "file_type": "code",
       "id": "dashboard_renderproductssection",
       "label": "renderProductsSection()",
@@ -52123,7 +52111,7 @@
       "source_location": "L342"
     },
     {
-      "community": 162,
+      "community": 161,
       "file_type": "code",
       "id": "dashboard_rendersalessection",
       "label": "renderSalesSection()",
@@ -52132,7 +52120,7 @@
       "source_location": "L322"
     },
     {
-      "community": 162,
+      "community": 161,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_dashboard_dashboard_tsx",
       "label": "Dashboard.tsx",
@@ -52141,7 +52129,7 @@
       "source_location": "L1"
     },
     {
-      "community": 163,
+      "community": 162,
       "file_type": "code",
       "id": "herosectiontabs_handledisplaytypechange",
       "label": "handleDisplayTypeChange()",
@@ -52150,7 +52138,7 @@
       "source_location": "L61"
     },
     {
-      "community": 163,
+      "community": 162,
       "file_type": "code",
       "id": "herosectiontabs_handleimageupdate",
       "label": "handleImageUpdate()",
@@ -52159,7 +52147,7 @@
       "source_location": "L57"
     },
     {
-      "community": 163,
+      "community": 162,
       "file_type": "code",
       "id": "herosectiontabs_handleoverlaytoggle",
       "label": "handleOverlayToggle()",
@@ -52168,7 +52156,7 @@
       "source_location": "L98"
     },
     {
-      "community": 163,
+      "community": 162,
       "file_type": "code",
       "id": "herosectiontabs_handletexttoggle",
       "label": "handleTextToggle()",
@@ -52177,7 +52165,7 @@
       "source_location": "L134"
     },
     {
-      "community": 163,
+      "community": 162,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_homepage_herosectiontabs_tsx",
       "label": "HeroSectionTabs.tsx",
@@ -52186,7 +52174,7 @@
       "source_location": "L1"
     },
     {
-      "community": 164,
+      "community": 163,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_homepage_reeluploader_tsx",
       "label": "ReelUploader.tsx",
@@ -52195,7 +52183,7 @@
       "source_location": "L1"
     },
     {
-      "community": 164,
+      "community": 163,
       "file_type": "code",
       "id": "reeluploader_formatfilesize",
       "label": "formatFileSize()",
@@ -52204,7 +52192,7 @@
       "source_location": "L38"
     },
     {
-      "community": 164,
+      "community": 163,
       "file_type": "code",
       "id": "reeluploader_handlefileselect",
       "label": "handleFileSelect()",
@@ -52213,7 +52201,7 @@
       "source_location": "L64"
     },
     {
-      "community": 164,
+      "community": 163,
       "file_type": "code",
       "id": "reeluploader_handleupload",
       "label": "handleUpload()",
@@ -52222,7 +52210,7 @@
       "source_location": "L135"
     },
     {
-      "community": 164,
+      "community": 163,
       "file_type": "code",
       "id": "reeluploader_validatefile",
       "label": "validateFile()",
@@ -52231,7 +52219,7 @@
       "source_location": "L43"
     },
     {
-      "community": 165,
+      "community": 164,
       "file_type": "code",
       "id": "activityview_iscreatedaction",
       "label": "isCreatedAction()",
@@ -52240,7 +52228,7 @@
       "source_location": "L58"
     },
     {
-      "community": 165,
+      "community": 164,
       "file_type": "code",
       "id": "activityview_isfeedbackrequestaction",
       "label": "isFeedbackRequestAction()",
@@ -52249,7 +52237,7 @@
       "source_location": "L63"
     },
     {
-      "community": 165,
+      "community": 164,
       "file_type": "code",
       "id": "activityview_isrefundaction",
       "label": "isRefundAction()",
@@ -52258,7 +52246,7 @@
       "source_location": "L50"
     },
     {
-      "community": 165,
+      "community": 164,
       "file_type": "code",
       "id": "activityview_istransitionaction",
       "label": "isTransitionAction()",
@@ -52267,7 +52255,7 @@
       "source_location": "L53"
     },
     {
-      "community": 165,
+      "community": 164,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_orders_activityview_tsx",
       "label": "ActivityView.tsx",
@@ -52276,7 +52264,7 @@
       "source_location": "L1"
     },
     {
-      "community": 166,
+      "community": 165,
       "file_type": "code",
       "id": "orderdetailsview_fetchtransactions",
       "label": "fetchTransactions()",
@@ -52285,7 +52273,7 @@
       "source_location": "L140"
     },
     {
-      "community": 166,
+      "community": 165,
       "file_type": "code",
       "id": "orderdetailsview_handlemarkasverified",
       "label": "handleMarkAsVerified()",
@@ -52294,7 +52282,7 @@
       "source_location": "L177"
     },
     {
-      "community": 166,
+      "community": 165,
       "file_type": "code",
       "id": "orderdetailsview_handlemarkpaymentcollected",
       "label": "handleMarkPaymentCollected()",
@@ -52303,7 +52291,7 @@
       "source_location": "L195"
     },
     {
-      "community": 166,
+      "community": 165,
       "file_type": "code",
       "id": "orderdetailsview_verifiedbadge",
       "label": "VerifiedBadge()",
@@ -52312,7 +52300,7 @@
       "source_location": "L45"
     },
     {
-      "community": 166,
+      "community": 165,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_orders_orderdetailsview_tsx",
       "label": "OrderDetailsView.tsx",
@@ -52321,7 +52309,7 @@
       "source_location": "L1"
     },
     {
-      "community": 167,
+      "community": 166,
       "file_type": "code",
       "id": "orderitemsview_handlerequestfeedback",
       "label": "handleRequestFeedback()",
@@ -52330,7 +52318,7 @@
       "source_location": "L92"
     },
     {
-      "community": 167,
+      "community": 166,
       "file_type": "code",
       "id": "orderitemsview_handlerestockall",
       "label": "handleRestockAll()",
@@ -52339,7 +52327,7 @@
       "source_location": "L307"
     },
     {
-      "community": 167,
+      "community": 166,
       "file_type": "code",
       "id": "orderitemsview_handlereturnitemtostock",
       "label": "handleReturnItemToStock()",
@@ -52348,7 +52336,7 @@
       "source_location": "L70"
     },
     {
-      "community": 167,
+      "community": 166,
       "file_type": "code",
       "id": "orderitemsview_handleupdateorderitem",
       "label": "handleUpdateOrderItem()",
@@ -52357,12 +52345,57 @@
       "source_location": "L50"
     },
     {
-      "community": 167,
+      "community": 166,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_orders_orderitemsview_tsx",
       "label": "OrderItemsView.tsx",
       "norm_label": "orderitemsview.tsx",
       "source_file": "packages/athena-webapp/src/components/orders/OrderItemsView.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 167,
+      "file_type": "code",
+      "id": "index_feesview",
+      "label": "FeesView()",
+      "norm_label": "feesview()",
+      "source_file": "packages/athena-webapp/src/components/assets/index.tsx",
+      "source_location": "L30"
+    },
+    {
+      "community": 167,
+      "file_type": "code",
+      "id": "index_header",
+      "label": "Header()",
+      "norm_label": "header()",
+      "source_file": "packages/athena-webapp/src/components/organization-members/index.tsx",
+      "source_location": "L43"
+    },
+    {
+      "community": 167,
+      "file_type": "code",
+      "id": "index_onsubmit",
+      "label": "onSubmit()",
+      "norm_label": "onsubmit()",
+      "source_file": "packages/athena-webapp/src/components/organization-members/index.tsx",
+      "source_location": "L106"
+    },
+    {
+      "community": 167,
+      "file_type": "code",
+      "id": "packages_athena_webapp_src_components_assets_index_tsx",
+      "label": "index.tsx",
+      "norm_label": "index.tsx",
+      "source_file": "packages/athena-webapp/src/components/assets/index.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 167,
+      "file_type": "code",
+      "id": "packages_athena_webapp_src_components_organization_members_index_tsx",
+      "label": "index.tsx",
+      "norm_label": "index.tsx",
+      "source_file": "packages/athena-webapp/src/components/organization-members/index.tsx",
       "source_location": "L1"
     },
     {
@@ -57453,6 +57486,42 @@
     {
       "community": 257,
       "file_type": "code",
+      "id": "packages_storefront_webapp_src_contexts_storecontext_tsx",
+      "label": "StoreContext.tsx",
+      "norm_label": "storecontext.tsx",
+      "source_file": "packages/storefront-webapp/src/contexts/StoreContext.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 257,
+      "file_type": "code",
+      "id": "storecontext_storeprovider",
+      "label": "StoreProvider()",
+      "norm_label": "storeprovider()",
+      "source_file": "packages/storefront-webapp/src/contexts/StoreContext.tsx",
+      "source_location": "L25"
+    },
+    {
+      "community": 257,
+      "file_type": "code",
+      "id": "storecontext_useoptionalstorecontext",
+      "label": "useOptionalStoreContext()",
+      "norm_label": "useoptionalstorecontext()",
+      "source_file": "packages/storefront-webapp/src/contexts/StoreContext.tsx",
+      "source_location": "L90"
+    },
+    {
+      "community": 257,
+      "file_type": "code",
+      "id": "storecontext_usestorecontext",
+      "label": "useStoreContext()",
+      "norm_label": "usestorecontext()",
+      "source_file": "packages/storefront-webapp/src/contexts/StoreContext.tsx",
+      "source_location": "L82"
+    },
+    {
+      "community": 258,
+      "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_layout_shoplayout_tsx",
       "label": "_shopLayout.tsx",
       "norm_label": "_shoplayout.tsx",
@@ -57460,7 +57529,7 @@
       "source_location": "L1"
     },
     {
-      "community": 257,
+      "community": 258,
       "file_type": "code",
       "id": "shoplayout_clearfilters",
       "label": "clearFilters()",
@@ -57469,7 +57538,7 @@
       "source_location": "L115"
     },
     {
-      "community": 257,
+      "community": 258,
       "file_type": "code",
       "id": "shoplayout_onclickonmobilefilters",
       "label": "onClickOnMobileFilters()",
@@ -57478,7 +57547,7 @@
       "source_location": "L105"
     },
     {
-      "community": 257,
+      "community": 258,
       "file_type": "code",
       "id": "shoplayout_onmobilefilterscloseclick",
       "label": "onMobileFiltersCloseClick()",
@@ -57487,7 +57556,7 @@
       "source_location": "L110"
     },
     {
-      "community": 258,
+      "community": 259,
       "file_type": "code",
       "id": "index_cancelorder",
       "label": "cancelOrder()",
@@ -57496,7 +57565,7 @@
       "source_location": "L121"
     },
     {
-      "community": 258,
+      "community": 259,
       "file_type": "code",
       "id": "index_geterrormessage",
       "label": "getErrorMessage()",
@@ -57505,7 +57574,7 @@
       "source_location": "L26"
     },
     {
-      "community": 258,
+      "community": 259,
       "file_type": "code",
       "id": "index_placeorder",
       "label": "placeOrder()",
@@ -57514,48 +57583,12 @@
       "source_location": "L71"
     },
     {
-      "community": 258,
+      "community": 259,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_shop_checkout_sessionidslug_index_tsx",
       "label": "index.tsx",
       "norm_label": "index.tsx",
       "source_file": "packages/storefront-webapp/src/routes/shop/checkout/$sessionIdSlug/index.tsx",
-      "source_location": "L1"
-    },
-    {
-      "community": 259,
-      "file_type": "code",
-      "id": "bootstrap_bootstrapcheckout",
-      "label": "bootstrapCheckout()",
-      "norm_label": "bootstrapcheckout()",
-      "source_file": "packages/storefront-webapp/tests/e2e/helpers/bootstrap.ts",
-      "source_location": "L46"
-    },
-    {
-      "community": 259,
-      "file_type": "code",
-      "id": "bootstrap_createbootstraptoken",
-      "label": "createBootstrapToken()",
-      "norm_label": "createbootstraptoken()",
-      "source_file": "packages/storefront-webapp/tests/e2e/helpers/bootstrap.ts",
-      "source_location": "L24"
-    },
-    {
-      "community": 259,
-      "file_type": "code",
-      "id": "bootstrap_createmarker",
-      "label": "createMarker()",
-      "norm_label": "createmarker()",
-      "source_file": "packages/storefront-webapp/tests/e2e/helpers/bootstrap.ts",
-      "source_location": "L20"
-    },
-    {
-      "community": 259,
-      "file_type": "code",
-      "id": "packages_storefront_webapp_tests_e2e_helpers_bootstrap_ts",
-      "label": "bootstrap.ts",
-      "norm_label": "bootstrap.ts",
-      "source_file": "packages/storefront-webapp/tests/e2e/helpers/bootstrap.ts",
       "source_location": "L1"
     },
     {
@@ -57705,6 +57738,42 @@
     {
       "community": 260,
       "file_type": "code",
+      "id": "bootstrap_bootstrapcheckout",
+      "label": "bootstrapCheckout()",
+      "norm_label": "bootstrapcheckout()",
+      "source_file": "packages/storefront-webapp/tests/e2e/helpers/bootstrap.ts",
+      "source_location": "L46"
+    },
+    {
+      "community": 260,
+      "file_type": "code",
+      "id": "bootstrap_createbootstraptoken",
+      "label": "createBootstrapToken()",
+      "norm_label": "createbootstraptoken()",
+      "source_file": "packages/storefront-webapp/tests/e2e/helpers/bootstrap.ts",
+      "source_location": "L24"
+    },
+    {
+      "community": 260,
+      "file_type": "code",
+      "id": "bootstrap_createmarker",
+      "label": "createMarker()",
+      "norm_label": "createmarker()",
+      "source_file": "packages/storefront-webapp/tests/e2e/helpers/bootstrap.ts",
+      "source_location": "L20"
+    },
+    {
+      "community": 260,
+      "file_type": "code",
+      "id": "packages_storefront_webapp_tests_e2e_helpers_bootstrap_ts",
+      "label": "bootstrap.ts",
+      "norm_label": "bootstrap.ts",
+      "source_file": "packages/storefront-webapp/tests/e2e/helpers/bootstrap.ts",
+      "source_location": "L1"
+    },
+    {
+      "community": 261,
+      "file_type": "code",
       "id": "app_test_createinmemoryredis",
       "label": "createInMemoryRedis()",
       "norm_label": "createinmemoryredis()",
@@ -57712,7 +57781,7 @@
       "source_location": "L33"
     },
     {
-      "community": 260,
+      "community": 261,
       "file_type": "code",
       "id": "app_test_createresponserecorder",
       "label": "createResponseRecorder()",
@@ -57721,7 +57790,7 @@
       "source_location": "L6"
     },
     {
-      "community": 260,
+      "community": 261,
       "file_type": "code",
       "id": "app_test_createsilentlogger",
       "label": "createSilentLogger()",
@@ -57730,7 +57799,7 @@
       "source_location": "L25"
     },
     {
-      "community": 260,
+      "community": 261,
       "file_type": "code",
       "id": "packages_valkey_proxy_server_app_test_js",
       "label": "app.test.js",
@@ -57739,7 +57808,7 @@
       "source_location": "L1"
     },
     {
-      "community": 261,
+      "community": 262,
       "file_type": "code",
       "id": "graphify_check_test_createfixtureroot",
       "label": "createFixtureRoot()",
@@ -57748,7 +57817,7 @@
       "source_location": "L17"
     },
     {
-      "community": 261,
+      "community": 262,
       "file_type": "code",
       "id": "graphify_check_test_write",
       "label": "write()",
@@ -57757,7 +57826,7 @@
       "source_location": "L11"
     },
     {
-      "community": 261,
+      "community": 262,
       "file_type": "code",
       "id": "graphify_check_test_writegraphifywikiartifacts",
       "label": "writeGraphifyWikiArtifacts()",
@@ -57766,7 +57835,7 @@
       "source_location": "L24"
     },
     {
-      "community": 261,
+      "community": 262,
       "file_type": "code",
       "id": "scripts_graphify_check_test_ts",
       "label": "graphify-check.test.ts",
@@ -57775,7 +57844,7 @@
       "source_location": "L1"
     },
     {
-      "community": 262,
+      "community": 263,
       "file_type": "code",
       "id": "graphify_rebuild_test_createfixtureroot",
       "label": "createFixtureRoot()",
@@ -57784,7 +57853,7 @@
       "source_location": "L20"
     },
     {
-      "community": 262,
+      "community": 263,
       "file_type": "code",
       "id": "graphify_rebuild_test_spawn",
       "label": "spawn()",
@@ -57793,7 +57862,7 @@
       "source_location": "L65"
     },
     {
-      "community": 262,
+      "community": 263,
       "file_type": "code",
       "id": "graphify_rebuild_test_write",
       "label": "write()",
@@ -57802,7 +57871,7 @@
       "source_location": "L14"
     },
     {
-      "community": 262,
+      "community": 263,
       "file_type": "code",
       "id": "scripts_graphify_rebuild_test_ts",
       "label": "graphify-rebuild.test.ts",
@@ -57811,7 +57880,7 @@
       "source_location": "L1"
     },
     {
-      "community": 263,
+      "community": 264,
       "file_type": "code",
       "id": "harness_app_registry_buildharnessdocpaths",
       "label": "buildHarnessDocPaths()",
@@ -57820,7 +57889,7 @@
       "source_location": "L126"
     },
     {
-      "community": 263,
+      "community": 264,
       "file_type": "code",
       "id": "harness_app_registry_buildharnessdocpathsforarchetype",
       "label": "buildHarnessDocPathsForArchetype()",
@@ -57829,7 +57898,7 @@
       "source_location": "L130"
     },
     {
-      "community": 263,
+      "community": 264,
       "file_type": "code",
       "id": "harness_app_registry_getharnesspackageregistration",
       "label": "getHarnessPackageRegistration()",
@@ -57838,7 +57907,7 @@
       "source_location": "L875"
     },
     {
-      "community": 263,
+      "community": 264,
       "file_type": "code",
       "id": "scripts_harness_app_registry_ts",
       "label": "harness-app-registry.ts",
@@ -57847,7 +57916,7 @@
       "source_location": "L1"
     },
     {
-      "community": 264,
+      "community": 265,
       "file_type": "code",
       "id": "scripts_harness_behavior_fixtures_valkey_runtime_app_ts",
       "label": "valkey-runtime-app.ts",
@@ -57856,7 +57925,7 @@
       "source_location": "L1"
     },
     {
-      "community": 264,
+      "community": 265,
       "file_type": "code",
       "id": "valkey_runtime_app_createvalkeyruntimeserver",
       "label": "createValkeyRuntimeServer()",
@@ -57865,7 +57934,7 @@
       "source_location": "L8"
     },
     {
-      "community": 264,
+      "community": 265,
       "file_type": "code",
       "id": "valkey_runtime_app_shutdown",
       "label": "shutdown()",
@@ -57874,7 +57943,7 @@
       "source_location": "L79"
     },
     {
-      "community": 264,
+      "community": 265,
       "file_type": "code",
       "id": "valkey_runtime_app_stopvalkeyruntimeserver",
       "label": "stopValkeyRuntimeServer()",
@@ -57883,7 +57952,7 @@
       "source_location": "L61"
     },
     {
-      "community": 265,
+      "community": 266,
       "file_type": "code",
       "id": "harness_scorecard_test_createfixturerepo",
       "label": "createFixtureRepo()",
@@ -57892,7 +57961,7 @@
       "source_location": "L49"
     },
     {
-      "community": 265,
+      "community": 266,
       "file_type": "code",
       "id": "harness_scorecard_test_createinferentialartifact",
       "label": "createInferentialArtifact()",
@@ -57901,7 +57970,7 @@
       "source_location": "L17"
     },
     {
-      "community": 265,
+      "community": 266,
       "file_type": "code",
       "id": "harness_scorecard_test_write",
       "label": "write()",
@@ -57910,7 +57979,7 @@
       "source_location": "L11"
     },
     {
-      "community": 265,
+      "community": 266,
       "file_type": "code",
       "id": "scripts_harness_scorecard_test_ts",
       "label": "harness-scorecard.test.ts",
@@ -57919,7 +57988,7 @@
       "source_location": "L1"
     },
     {
-      "community": 266,
+      "community": 267,
       "file_type": "code",
       "id": "harness_test_collectharnesstesttargets",
       "label": "collectHarnessTestTargets()",
@@ -57928,7 +57997,7 @@
       "source_location": "L26"
     },
     {
-      "community": 266,
+      "community": 267,
       "file_type": "code",
       "id": "harness_test_parseharnesstestcliargs",
       "label": "parseHarnessTestCliArgs()",
@@ -57937,7 +58006,7 @@
       "source_location": "L72"
     },
     {
-      "community": 266,
+      "community": 267,
       "file_type": "code",
       "id": "harness_test_runharnesstest",
       "label": "runHarnessTest()",
@@ -57946,7 +58015,7 @@
       "source_location": "L36"
     },
     {
-      "community": 266,
+      "community": 267,
       "file_type": "code",
       "id": "scripts_harness_test_ts",
       "label": "harness-test.ts",
@@ -57955,7 +58024,7 @@
       "source_location": "L1"
     },
     {
-      "community": 267,
+      "community": 268,
       "file_type": "code",
       "id": "pre_push_review_test_error",
       "label": "error()",
@@ -57964,7 +58033,7 @@
       "source_location": "L96"
     },
     {
-      "community": 267,
+      "community": 268,
       "file_type": "code",
       "id": "pre_push_review_test_log",
       "label": "log()",
@@ -57973,7 +58042,7 @@
       "source_location": "L94"
     },
     {
-      "community": 267,
+      "community": 268,
       "file_type": "code",
       "id": "pre_push_review_test_warn",
       "label": "warn()",
@@ -57982,7 +58051,7 @@
       "source_location": "L95"
     },
     {
-      "community": 267,
+      "community": 268,
       "file_type": "code",
       "id": "scripts_pre_push_review_test_ts",
       "label": "pre-push-review.test.ts",
@@ -57991,7 +58060,7 @@
       "source_location": "L1"
     },
     {
-      "community": 268,
+      "community": 269,
       "file_type": "code",
       "id": "discountcode_chunkproducts",
       "label": "chunkProducts()",
@@ -58000,7 +58069,7 @@
       "source_location": "L98"
     },
     {
-      "community": 268,
+      "community": 269,
       "file_type": "code",
       "id": "discountcode_productcard",
       "label": "ProductCard()",
@@ -58009,39 +58078,12 @@
       "source_location": "L33"
     },
     {
-      "community": 268,
+      "community": 269,
       "file_type": "code",
       "id": "packages_athena_webapp_convex_emails_discountcode_tsx",
       "label": "DiscountCode.tsx",
       "norm_label": "discountcode.tsx",
       "source_file": "packages/athena-webapp/convex/emails/DiscountCode.tsx",
-      "source_location": "L1"
-    },
-    {
-      "community": 269,
-      "file_type": "code",
-      "id": "discountreminder_chunkproducts",
-      "label": "chunkProducts()",
-      "norm_label": "chunkproducts()",
-      "source_file": "packages/athena-webapp/convex/emails/DiscountReminder.tsx",
-      "source_location": "L85"
-    },
-    {
-      "community": 269,
-      "file_type": "code",
-      "id": "discountreminder_productcard",
-      "label": "ProductCard()",
-      "norm_label": "productcard()",
-      "source_file": "packages/athena-webapp/convex/emails/DiscountReminder.tsx",
-      "source_location": "L31"
-    },
-    {
-      "community": 269,
-      "file_type": "code",
-      "id": "packages_athena_webapp_convex_emails_discountreminder_tsx",
-      "label": "DiscountReminder.tsx",
-      "norm_label": "discountreminder.tsx",
-      "source_file": "packages/athena-webapp/convex/emails/DiscountReminder.tsx",
       "source_location": "L1"
     },
     {
@@ -58191,6 +58233,33 @@
     {
       "community": 270,
       "file_type": "code",
+      "id": "discountreminder_chunkproducts",
+      "label": "chunkProducts()",
+      "norm_label": "chunkproducts()",
+      "source_file": "packages/athena-webapp/convex/emails/DiscountReminder.tsx",
+      "source_location": "L85"
+    },
+    {
+      "community": 270,
+      "file_type": "code",
+      "id": "discountreminder_productcard",
+      "label": "ProductCard()",
+      "norm_label": "productcard()",
+      "source_file": "packages/athena-webapp/convex/emails/DiscountReminder.tsx",
+      "source_location": "L31"
+    },
+    {
+      "community": 270,
+      "file_type": "code",
+      "id": "packages_athena_webapp_convex_emails_discountreminder_tsx",
+      "label": "DiscountReminder.tsx",
+      "norm_label": "discountreminder.tsx",
+      "source_file": "packages/athena-webapp/convex/emails/DiscountReminder.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 271,
+      "file_type": "code",
       "id": "categories_removestorefronthiddencategories",
       "label": "removeStorefrontHiddenCategories()",
       "norm_label": "removestorefronthiddencategories()",
@@ -58198,7 +58267,7 @@
       "source_location": "L12"
     },
     {
-      "community": 270,
+      "community": 271,
       "file_type": "code",
       "id": "categories_removestorefronthiddensubcategories",
       "label": "removeStorefrontHiddenSubcategories()",
@@ -58207,7 +58276,7 @@
       "source_location": "L21"
     },
     {
-      "community": 270,
+      "community": 271,
       "file_type": "code",
       "id": "packages_athena_webapp_convex_http_domains_inventory_routes_categories_ts",
       "label": "categories.ts",
@@ -58216,7 +58285,7 @@
       "source_location": "L1"
     },
     {
-      "community": 271,
+      "community": 272,
       "file_type": "code",
       "id": "packages_athena_webapp_convex_http_utils_ts",
       "label": "utils.ts",
@@ -58225,7 +58294,7 @@
       "source_location": "L1"
     },
     {
-      "community": 271,
+      "community": 272,
       "file_type": "code",
       "id": "utils_getstoredatafromrequest",
       "label": "getStoreDataFromRequest()",
@@ -58234,7 +58303,7 @@
       "source_location": "L5"
     },
     {
-      "community": 271,
+      "community": 272,
       "file_type": "code",
       "id": "utils_getstorefrontuserfromrequest",
       "label": "getStorefrontUserFromRequest()",
@@ -58243,7 +58312,7 @@
       "source_location": "L12"
     },
     {
-      "community": 272,
+      "community": 273,
       "file_type": "code",
       "id": "packages_athena_webapp_convex_inventory_products_sku_test_ts",
       "label": "products.sku.test.ts",
@@ -58252,7 +58321,7 @@
       "source_location": "L1"
     },
     {
-      "community": 272,
+      "community": 273,
       "file_type": "code",
       "id": "products_sku_test_createskumutationctx",
       "label": "createSkuMutationCtx()",
@@ -58261,7 +58330,7 @@
       "source_location": "L14"
     },
     {
-      "community": 272,
+      "community": 273,
       "file_type": "code",
       "id": "products_sku_test_gethandler",
       "label": "getHandler()",
@@ -58270,7 +58339,7 @@
       "source_location": "L10"
     },
     {
-      "community": 273,
+      "community": 274,
       "file_type": "code",
       "id": "packages_athena_webapp_convex_inventory_sessionqueryindexes_test_ts",
       "label": "sessionQueryIndexes.test.ts",
@@ -58279,7 +58348,7 @@
       "source_location": "L1"
     },
     {
-      "community": 273,
+      "community": 274,
       "file_type": "code",
       "id": "sessionqueryindexes_test_readprojectfile",
       "label": "readProjectFile()",
@@ -58288,7 +58357,7 @@
       "source_location": "L6"
     },
     {
-      "community": 273,
+      "community": 274,
       "file_type": "code",
       "id": "sessionqueryindexes_test_readsourceslice",
       "label": "readSourceSlice()",
@@ -58297,7 +58366,7 @@
       "source_location": "L9"
     },
     {
-      "community": 274,
+      "community": 275,
       "file_type": "code",
       "id": "analyticsutils_calculateactivitytrend",
       "label": "calculateActivityTrend()",
@@ -58306,7 +58375,7 @@
       "source_location": "L43"
     },
     {
-      "community": 274,
+      "community": 275,
       "file_type": "code",
       "id": "analyticsutils_calculatedevicedistribution",
       "label": "calculateDeviceDistribution()",
@@ -58315,7 +58384,7 @@
       "source_location": "L11"
     },
     {
-      "community": 274,
+      "community": 275,
       "file_type": "code",
       "id": "packages_athena_webapp_convex_llm_utils_analyticsutils_ts",
       "label": "analyticsUtils.ts",
@@ -58324,7 +58393,7 @@
       "source_location": "L1"
     },
     {
-      "community": 275,
+      "community": 276,
       "file_type": "code",
       "id": "packages_athena_webapp_convex_operations_staffcredentials_test_ts",
       "label": "staffCredentials.test.ts",
@@ -58333,7 +58402,7 @@
       "source_location": "L1"
     },
     {
-      "community": 275,
+      "community": 276,
       "file_type": "code",
       "id": "staffcredentials_test_createstaffcredentialsmutationctx",
       "label": "createStaffCredentialsMutationCtx()",
@@ -58342,7 +58411,7 @@
       "source_location": "L23"
     },
     {
-      "community": 275,
+      "community": 276,
       "file_type": "code",
       "id": "staffcredentials_test_gethandler",
       "label": "getHandler()",
@@ -58351,7 +58420,7 @@
       "source_location": "L105"
     },
     {
-      "community": 276,
+      "community": 277,
       "file_type": "code",
       "id": "packages_athena_webapp_convex_operations_staffprofiles_test_ts",
       "label": "staffProfiles.test.ts",
@@ -58360,7 +58429,7 @@
       "source_location": "L1"
     },
     {
-      "community": 276,
+      "community": 277,
       "file_type": "code",
       "id": "staffprofiles_test_createstaffprofilesmutationctx",
       "label": "createStaffProfilesMutationCtx()",
@@ -58369,7 +58438,7 @@
       "source_location": "L16"
     },
     {
-      "community": 276,
+      "community": 277,
       "file_type": "code",
       "id": "staffprofiles_test_gethandler",
       "label": "getHandler()",
@@ -58378,7 +58447,7 @@
       "source_location": "L92"
     },
     {
-      "community": 277,
+      "community": 278,
       "file_type": "code",
       "id": "packages_athena_webapp_convex_operations_staffroles_ts",
       "label": "staffRoles.ts",
@@ -58387,7 +58456,7 @@
       "source_location": "L1"
     },
     {
-      "community": 277,
+      "community": 278,
       "file_type": "code",
       "id": "staffroles_derivedefaultoperationalroles",
       "label": "deriveDefaultOperationalRoles()",
@@ -58396,7 +58465,7 @@
       "source_location": "L21"
     },
     {
-      "community": 277,
+      "community": 278,
       "file_type": "code",
       "id": "staffroles_uniqueoperationalroles",
       "label": "uniqueOperationalRoles()",
@@ -58405,7 +58474,7 @@
       "source_location": "L31"
     },
     {
-      "community": 278,
+      "community": 279,
       "file_type": "code",
       "id": "index_listtransactions",
       "label": "listTransactions()",
@@ -58414,7 +58483,7 @@
       "source_location": "L7"
     },
     {
-      "community": 278,
+      "community": 279,
       "file_type": "code",
       "id": "index_verifytransaction",
       "label": "verifyTransaction()",
@@ -58423,39 +58492,12 @@
       "source_location": "L109"
     },
     {
-      "community": 278,
+      "community": 279,
       "file_type": "code",
       "id": "packages_athena_webapp_convex_paystack_index_ts",
       "label": "index.ts",
       "norm_label": "index.ts",
       "source_file": "packages/athena-webapp/convex/paystack/index.ts",
-      "source_location": "L1"
-    },
-    {
-      "community": 279,
-      "file_type": "code",
-      "id": "getregisterstate_buildregisterstate",
-      "label": "buildRegisterState()",
-      "norm_label": "buildregisterstate()",
-      "source_file": "packages/athena-webapp/convex/pos/application/queries/getRegisterState.ts",
-      "source_location": "L17"
-    },
-    {
-      "community": 279,
-      "file_type": "code",
-      "id": "getregisterstate_getregisterstate",
-      "label": "getRegisterState()",
-      "norm_label": "getregisterstate()",
-      "source_file": "packages/athena-webapp/convex/pos/application/queries/getRegisterState.ts",
-      "source_location": "L37"
-    },
-    {
-      "community": 279,
-      "file_type": "code",
-      "id": "packages_athena_webapp_convex_pos_application_queries_getregisterstate_ts",
-      "label": "getRegisterState.ts",
-      "norm_label": "getregisterstate.ts",
-      "source_file": "packages/athena-webapp/convex/pos/application/queries/getRegisterState.ts",
       "source_location": "L1"
     },
     {
@@ -58605,6 +58647,33 @@
     {
       "community": 280,
       "file_type": "code",
+      "id": "getregisterstate_buildregisterstate",
+      "label": "buildRegisterState()",
+      "norm_label": "buildregisterstate()",
+      "source_file": "packages/athena-webapp/convex/pos/application/queries/getRegisterState.ts",
+      "source_location": "L17"
+    },
+    {
+      "community": 280,
+      "file_type": "code",
+      "id": "getregisterstate_getregisterstate",
+      "label": "getRegisterState()",
+      "norm_label": "getregisterstate()",
+      "source_file": "packages/athena-webapp/convex/pos/application/queries/getRegisterState.ts",
+      "source_location": "L37"
+    },
+    {
+      "community": 280,
+      "file_type": "code",
+      "id": "packages_athena_webapp_convex_pos_application_queries_getregisterstate_ts",
+      "label": "getRegisterState.ts",
+      "norm_label": "getregisterstate.ts",
+      "source_file": "packages/athena-webapp/convex/pos/application/queries/getRegisterState.ts",
+      "source_location": "L1"
+    },
+    {
+      "community": 281,
+      "file_type": "code",
       "id": "packages_athena_webapp_convex_pos_application_queries_terminals_ts",
       "label": "terminals.ts",
       "norm_label": "terminals.ts",
@@ -58612,7 +58681,7 @@
       "source_location": "L1"
     },
     {
-      "community": 280,
+      "community": 281,
       "file_type": "code",
       "id": "terminals_getterminalbyfingerprint",
       "label": "getTerminalByFingerprint()",
@@ -58621,7 +58690,7 @@
       "source_location": "L18"
     },
     {
-      "community": 280,
+      "community": 281,
       "file_type": "code",
       "id": "terminals_listterminals",
       "label": "listTerminals()",
@@ -58630,7 +58699,7 @@
       "source_location": "L9"
     },
     {
-      "community": 281,
+      "community": 282,
       "file_type": "code",
       "id": "errors_posservererror",
       "label": "PosServerError",
@@ -58639,7 +58708,7 @@
       "source_location": "L8"
     },
     {
-      "community": 281,
+      "community": 282,
       "file_type": "code",
       "id": "errors_posservererror_constructor",
       "label": ".constructor()",
@@ -58648,7 +58717,7 @@
       "source_location": "L9"
     },
     {
-      "community": 281,
+      "community": 282,
       "file_type": "code",
       "id": "packages_athena_webapp_convex_pos_domain_errors_ts",
       "label": "errors.ts",
@@ -58657,7 +58726,7 @@
       "source_location": "L1"
     },
     {
-      "community": 282,
+      "community": 283,
       "file_type": "code",
       "id": "packages_athena_webapp_convex_pos_domain_sessionrules_ts",
       "label": "sessionRules.ts",
@@ -58666,7 +58735,7 @@
       "source_location": "L1"
     },
     {
-      "community": 282,
+      "community": 283,
       "file_type": "code",
       "id": "sessionrules_deriveregisterphase",
       "label": "deriveRegisterPhase()",
@@ -58675,7 +58744,7 @@
       "source_location": "L7"
     },
     {
-      "community": 282,
+      "community": 283,
       "file_type": "code",
       "id": "sessionrules_selectresumablesession",
       "label": "selectResumableSession()",
@@ -58684,7 +58753,7 @@
       "source_location": "L29"
     },
     {
-      "community": 283,
+      "community": 284,
       "file_type": "code",
       "id": "packages_athena_webapp_convex_pos_infrastructure_integrations_paymentallocationservice_ts",
       "label": "paymentAllocationService.ts",
@@ -58693,7 +58762,7 @@
       "source_location": "L1"
     },
     {
-      "community": 283,
+      "community": 284,
       "file_type": "code",
       "id": "paymentallocationservice_recordretailsalepaymentallocations",
       "label": "recordRetailSalePaymentAllocations()",
@@ -58702,7 +58771,7 @@
       "source_location": "L13"
     },
     {
-      "community": 283,
+      "community": 284,
       "file_type": "code",
       "id": "paymentallocationservice_recordretailvoidpaymentallocations",
       "label": "recordRetailVoidPaymentAllocations()",
@@ -58711,7 +58780,7 @@
       "source_location": "L45"
     },
     {
-      "community": 284,
+      "community": 285,
       "file_type": "code",
       "id": "packages_athena_webapp_convex_pos_infrastructure_repositories_registersessionrepository_ts",
       "label": "registerSessionRepository.ts",
@@ -58720,7 +58789,7 @@
       "source_location": "L1"
     },
     {
-      "community": 284,
+      "community": 285,
       "file_type": "code",
       "id": "registersessionrepository_getactiveregistersessionforregisterstate",
       "label": "getActiveRegisterSessionForRegisterState()",
@@ -58729,7 +58798,7 @@
       "source_location": "L33"
     },
     {
-      "community": 284,
+      "community": 285,
       "file_type": "code",
       "id": "registersessionrepository_mapregistersessiontocashdrawersummary",
       "label": "mapRegisterSessionToCashDrawerSummary()",
@@ -58738,7 +58807,7 @@
       "source_location": "L13"
     },
     {
-      "community": 285,
+      "community": 286,
       "file_type": "code",
       "id": "packages_athena_webapp_convex_pos_public_transactions_test_ts",
       "label": "transactions.test.ts",
@@ -58747,7 +58816,7 @@
       "source_location": "L1"
     },
     {
-      "community": 285,
+      "community": 286,
       "file_type": "code",
       "id": "transactions_test_exportreturns",
       "label": "exportReturns()",
@@ -58756,7 +58825,7 @@
       "source_location": "L13"
     },
     {
-      "community": 285,
+      "community": 286,
       "file_type": "code",
       "id": "transactions_test_parsevalidator",
       "label": "parseValidator()",
@@ -58765,7 +58834,7 @@
       "source_location": "L17"
     },
     {
-      "community": 286,
+      "community": 287,
       "file_type": "code",
       "id": "appointments_buildserviceappointment",
       "label": "buildServiceAppointment()",
@@ -58774,7 +58843,7 @@
       "source_location": "L17"
     },
     {
-      "community": 286,
+      "community": 287,
       "file_type": "code",
       "id": "appointments_findoverlappingappointment",
       "label": "findOverlappingAppointment()",
@@ -58783,7 +58852,7 @@
       "source_location": "L61"
     },
     {
-      "community": 286,
+      "community": 287,
       "file_type": "code",
       "id": "packages_athena_webapp_convex_serviceops_appointments_ts",
       "label": "appointments.ts",
@@ -58792,7 +58861,7 @@
       "source_location": "L1"
     },
     {
-      "community": 287,
+      "community": 288,
       "file_type": "code",
       "id": "packages_athena_webapp_convex_serviceops_servicecases_test_ts",
       "label": "serviceCases.test.ts",
@@ -58801,7 +58870,7 @@
       "source_location": "L1"
     },
     {
-      "community": 287,
+      "community": 288,
       "file_type": "code",
       "id": "servicecases_test_expectindex",
       "label": "expectIndex()",
@@ -58810,7 +58879,7 @@
       "source_location": "L23"
     },
     {
-      "community": 287,
+      "community": 288,
       "file_type": "code",
       "id": "servicecases_test_gettableindexes",
       "label": "getTableIndexes()",
@@ -58819,7 +58888,7 @@
       "source_location": "L16"
     },
     {
-      "community": 288,
+      "community": 289,
       "file_type": "code",
       "id": "packages_athena_webapp_convex_stockops_receiving_test_ts",
       "label": "receiving.test.ts",
@@ -58828,7 +58897,7 @@
       "source_location": "L1"
     },
     {
-      "community": 288,
+      "community": 289,
       "file_type": "code",
       "id": "receiving_test_createreceivingmutationctx",
       "label": "createReceivingMutationCtx()",
@@ -58837,40 +58906,13 @@
       "source_location": "L20"
     },
     {
-      "community": 288,
+      "community": 289,
       "file_type": "code",
       "id": "receiving_test_getsource",
       "label": "getSource()",
       "norm_label": "getsource()",
       "source_file": "packages/athena-webapp/convex/stockOps/receiving.test.ts",
       "source_location": "L16"
-    },
-    {
-      "community": 289,
-      "file_type": "code",
-      "id": "packages_athena_webapp_convex_stockops_vendors_ts",
-      "label": "vendors.ts",
-      "norm_label": "vendors.ts",
-      "source_file": "packages/athena-webapp/convex/stockOps/vendors.ts",
-      "source_location": "L1"
-    },
-    {
-      "community": 289,
-      "file_type": "code",
-      "id": "vendors_normalizevendorlookupkey",
-      "label": "normalizeVendorLookupKey()",
-      "norm_label": "normalizevendorlookupkey()",
-      "source_file": "packages/athena-webapp/convex/stockOps/vendors.ts",
-      "source_location": "L12"
-    },
-    {
-      "community": 289,
-      "file_type": "code",
-      "id": "vendors_trimoptional",
-      "label": "trimOptional()",
-      "norm_label": "trimoptional()",
-      "source_file": "packages/athena-webapp/convex/stockOps/vendors.ts",
-      "source_location": "L7"
     },
     {
       "community": 29,
@@ -59010,6 +59052,33 @@
     {
       "community": 290,
       "file_type": "code",
+      "id": "packages_athena_webapp_convex_stockops_vendors_ts",
+      "label": "vendors.ts",
+      "norm_label": "vendors.ts",
+      "source_file": "packages/athena-webapp/convex/stockOps/vendors.ts",
+      "source_location": "L1"
+    },
+    {
+      "community": 290,
+      "file_type": "code",
+      "id": "vendors_normalizevendorlookupkey",
+      "label": "normalizeVendorLookupKey()",
+      "norm_label": "normalizevendorlookupkey()",
+      "source_file": "packages/athena-webapp/convex/stockOps/vendors.ts",
+      "source_location": "L12"
+    },
+    {
+      "community": 290,
+      "file_type": "code",
+      "id": "vendors_trimoptional",
+      "label": "trimOptional()",
+      "norm_label": "trimoptional()",
+      "source_file": "packages/athena-webapp/convex/stockOps/vendors.ts",
+      "source_location": "L7"
+    },
+    {
+      "community": 291,
+      "file_type": "code",
       "id": "errorfoundation_test_gethandler",
       "label": "getHandler()",
       "norm_label": "gethandler()",
@@ -59017,7 +59086,7 @@
       "source_location": "L25"
     },
     {
-      "community": 290,
+      "community": 291,
       "file_type": "code",
       "id": "errorfoundation_test_getsource",
       "label": "getSource()",
@@ -59026,7 +59095,7 @@
       "source_location": "L21"
     },
     {
-      "community": 290,
+      "community": 291,
       "file_type": "code",
       "id": "packages_athena_webapp_convex_storefront_errorfoundation_test_ts",
       "label": "errorFoundation.test.ts",
@@ -59035,7 +59104,7 @@
       "source_location": "L1"
     },
     {
-      "community": 291,
+      "community": 292,
       "file_type": "code",
       "id": "bag_listbagitems",
       "label": "listBagItems()",
@@ -59044,7 +59113,7 @@
       "source_location": "L7"
     },
     {
-      "community": 291,
+      "community": 292,
       "file_type": "code",
       "id": "bag_loadbagwithitems",
       "label": "loadBagWithItems()",
@@ -59053,7 +59122,7 @@
       "source_location": "L14"
     },
     {
-      "community": 291,
+      "community": 292,
       "file_type": "code",
       "id": "packages_athena_webapp_convex_storefront_helpers_bag_ts",
       "label": "bag.ts",
@@ -59062,7 +59131,7 @@
       "source_location": "L1"
     },
     {
-      "community": 292,
+      "community": 293,
       "file_type": "code",
       "id": "packages_athena_webapp_convex_workflowtraces_adapters_registersession_ts",
       "label": "registerSession.ts",
@@ -59071,7 +59140,7 @@
       "source_location": "L1"
     },
     {
-      "community": 292,
+      "community": 293,
       "file_type": "code",
       "id": "registersession_buildregistersessiontraceseed",
       "label": "buildRegisterSessionTraceSeed()",
@@ -59080,7 +59149,7 @@
       "source_location": "L45"
     },
     {
-      "community": 292,
+      "community": 293,
       "file_type": "code",
       "id": "registersession_formatregistersessionlabel",
       "label": "formatRegisterSessionLabel()",
@@ -59089,7 +59158,7 @@
       "source_location": "L37"
     },
     {
-      "community": 293,
+      "community": 294,
       "file_type": "code",
       "id": "packages_athena_webapp_convex_workflowtraces_public_ts",
       "label": "public.ts",
@@ -59098,7 +59167,7 @@
       "source_location": "L1"
     },
     {
-      "community": 293,
+      "community": 294,
       "file_type": "code",
       "id": "public_getworkflowtraceviewbyidwithctx",
       "label": "getWorkflowTraceViewByIdWithCtx()",
@@ -59107,7 +59176,7 @@
       "source_location": "L10"
     },
     {
-      "community": 293,
+      "community": 294,
       "file_type": "code",
       "id": "public_getworkflowtraceviewbylookupwithctx",
       "label": "getWorkflowTraceViewByLookupWithCtx()",
@@ -59116,7 +59185,7 @@
       "source_location": "L44"
     },
     {
-      "community": 294,
+      "community": 295,
       "file_type": "code",
       "id": "packages_athena_webapp_convex_workflowtraces_queryusage_test_ts",
       "label": "queryUsage.test.ts",
@@ -59125,7 +59194,7 @@
       "source_location": "L1"
     },
     {
-      "community": 294,
+      "community": 295,
       "file_type": "code",
       "id": "queryusage_test_comparebyfields",
       "label": "compareByFields()",
@@ -59134,7 +59203,7 @@
       "source_location": "L84"
     },
     {
-      "community": 294,
+      "community": 295,
       "file_type": "code",
       "id": "queryusage_test_createtestctx",
       "label": "createTestCtx()",
@@ -59143,7 +59212,7 @@
       "source_location": "L100"
     },
     {
-      "community": 295,
+      "community": 296,
       "file_type": "code",
       "id": "currencyformatter_currencydisplaysymbol",
       "label": "currencyDisplaySymbol()",
@@ -59152,7 +59221,7 @@
       "source_location": "L5"
     },
     {
-      "community": 295,
+      "community": 296,
       "file_type": "code",
       "id": "currencyformatter_currencyformatter",
       "label": "currencyFormatter()",
@@ -59161,7 +59230,7 @@
       "source_location": "L25"
     },
     {
-      "community": 295,
+      "community": 296,
       "file_type": "code",
       "id": "packages_athena_webapp_shared_currencyformatter_ts",
       "label": "currencyFormatter.ts",
@@ -59170,7 +59239,7 @@
       "source_location": "L1"
     },
     {
-      "community": 296,
+      "community": 297,
       "file_type": "code",
       "id": "packages_athena_webapp_shared_workflowtrace_ts",
       "label": "workflowTrace.ts",
@@ -59179,7 +59248,7 @@
       "source_location": "L1"
     },
     {
-      "community": 296,
+      "community": 297,
       "file_type": "code",
       "id": "workflowtrace_createworkflowtraceid",
       "label": "createWorkflowTraceId()",
@@ -59188,7 +59257,7 @@
       "source_location": "L35"
     },
     {
-      "community": 296,
+      "community": 297,
       "file_type": "code",
       "id": "workflowtrace_normalizeworkflowtracelookupvalue",
       "label": "normalizeWorkflowTraceLookupValue()",
@@ -59197,7 +59266,7 @@
       "source_location": "L25"
     },
     {
-      "community": 297,
+      "community": 298,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_view_tsx",
       "label": "View.tsx",
@@ -59206,7 +59275,7 @@
       "source_location": "L1"
     },
     {
-      "community": 297,
+      "community": 298,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_view_tsx",
       "label": "View.tsx",
@@ -59215,7 +59284,7 @@
       "source_location": "L1"
     },
     {
-      "community": 297,
+      "community": 298,
       "file_type": "code",
       "id": "view_view",
       "label": "View()",
@@ -59224,7 +59293,7 @@
       "source_location": "L4"
     },
     {
-      "community": 298,
+      "community": 299,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_add_product_productavailability_tsx",
       "label": "ProductAvailability.tsx",
@@ -59233,7 +59302,7 @@
       "source_location": "L1"
     },
     {
-      "community": 298,
+      "community": 299,
       "file_type": "code",
       "id": "productavailability_productavailability",
       "label": "ProductAvailability()",
@@ -59242,40 +59311,13 @@
       "source_location": "L19"
     },
     {
-      "community": 298,
+      "community": 299,
       "file_type": "code",
       "id": "productavailability_productavailabilityview",
       "label": "ProductAvailabilityView()",
       "norm_label": "productavailabilityview()",
       "source_file": "packages/athena-webapp/src/components/add-product/ProductAvailability.tsx",
       "source_location": "L5"
-    },
-    {
-      "community": 299,
-      "file_type": "code",
-      "id": "packages_athena_webapp_src_components_add_product_sheetprovider_tsx",
-      "label": "SheetProvider.tsx",
-      "norm_label": "sheetprovider.tsx",
-      "source_file": "packages/athena-webapp/src/components/add-product/SheetProvider.tsx",
-      "source_location": "L1"
-    },
-    {
-      "community": 299,
-      "file_type": "code",
-      "id": "sheetprovider_sheetprovider",
-      "label": "SheetProvider()",
-      "norm_label": "sheetprovider()",
-      "source_file": "packages/athena-webapp/src/components/add-product/SheetProvider.tsx",
-      "source_location": "L19"
-    },
-    {
-      "community": 299,
-      "file_type": "code",
-      "id": "sheetprovider_usesheet",
-      "label": "useSheet()",
-      "norm_label": "usesheet()",
-      "source_file": "packages/athena-webapp/src/components/add-product/SheetProvider.tsx",
-      "source_location": "L11"
     },
     {
       "community": 3,
@@ -59694,6 +59736,33 @@
     {
       "community": 300,
       "file_type": "code",
+      "id": "packages_athena_webapp_src_components_add_product_sheetprovider_tsx",
+      "label": "SheetProvider.tsx",
+      "norm_label": "sheetprovider.tsx",
+      "source_file": "packages/athena-webapp/src/components/add-product/SheetProvider.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 300,
+      "file_type": "code",
+      "id": "sheetprovider_sheetprovider",
+      "label": "SheetProvider()",
+      "norm_label": "sheetprovider()",
+      "source_file": "packages/athena-webapp/src/components/add-product/SheetProvider.tsx",
+      "source_location": "L19"
+    },
+    {
+      "community": 300,
+      "file_type": "code",
+      "id": "sheetprovider_usesheet",
+      "label": "useSheet()",
+      "norm_label": "usesheet()",
+      "source_file": "packages/athena-webapp/src/components/add-product/SheetProvider.tsx",
+      "source_location": "L11"
+    },
+    {
+      "community": 301,
+      "file_type": "code",
       "id": "packages_athena_webapp_src_components_add_product_wigtype_tsx",
       "label": "WigType.tsx",
       "norm_label": "wigtype.tsx",
@@ -59701,7 +59770,7 @@
       "source_location": "L1"
     },
     {
-      "community": 300,
+      "community": 301,
       "file_type": "code",
       "id": "wigtype_wigtype",
       "label": "WigType()",
@@ -59710,7 +59779,7 @@
       "source_location": "L22"
     },
     {
-      "community": 300,
+      "community": 301,
       "file_type": "code",
       "id": "wigtype_wigtypeview",
       "label": "WigTypeView()",
@@ -59719,7 +59788,7 @@
       "source_location": "L8"
     },
     {
-      "community": 301,
+      "community": 302,
       "file_type": "code",
       "id": "copyimagesprovider_copyimagesprovider",
       "label": "CopyImagesProvider()",
@@ -59728,7 +59797,7 @@
       "source_location": "L21"
     },
     {
-      "community": 301,
+      "community": 302,
       "file_type": "code",
       "id": "copyimagesprovider_usecopyimages",
       "label": "useCopyImages()",
@@ -59737,7 +59806,7 @@
       "source_location": "L13"
     },
     {
-      "community": 301,
+      "community": 302,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_add_product_copy_images_copyimagesprovider_tsx",
       "label": "CopyImagesProvider.tsx",
@@ -59746,7 +59815,7 @@
       "source_location": "L1"
     },
     {
-      "community": 302,
+      "community": 303,
       "file_type": "code",
       "id": "analyticscombinedusers_analyticscombinedusers",
       "label": "AnalyticsCombinedUsers()",
@@ -59755,7 +59824,7 @@
       "source_location": "L100"
     },
     {
-      "community": 302,
+      "community": 303,
       "file_type": "code",
       "id": "analyticscombinedusers_processanalyticstousers",
       "label": "processAnalyticsToUsers()",
@@ -59764,7 +59833,7 @@
       "source_location": "L10"
     },
     {
-      "community": 302,
+      "community": 303,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_analytics_analyticscombinedusers_tsx",
       "label": "AnalyticsCombinedUsers.tsx",
@@ -59773,7 +59842,7 @@
       "source_location": "L1"
     },
     {
-      "community": 303,
+      "community": 304,
       "file_type": "code",
       "id": "analyticstopusers_analyticstopusers",
       "label": "AnalyticsTopUsers()",
@@ -59782,7 +59851,7 @@
       "source_location": "L100"
     },
     {
-      "community": 303,
+      "community": 304,
       "file_type": "code",
       "id": "analyticstopusers_processanalyticstousers",
       "label": "processAnalyticsToUsers()",
@@ -59791,7 +59860,7 @@
       "source_location": "L10"
     },
     {
-      "community": 303,
+      "community": 304,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_analytics_analyticstopusers_tsx",
       "label": "AnalyticsTopUsers.tsx",
@@ -59800,7 +59869,7 @@
       "source_location": "L1"
     },
     {
-      "community": 304,
+      "community": 305,
       "file_type": "code",
       "id": "log_items_provider_logitemsprovider",
       "label": "LogItemsProvider()",
@@ -59809,7 +59878,7 @@
       "source_location": "L15"
     },
     {
-      "community": 304,
+      "community": 305,
       "file_type": "code",
       "id": "log_items_provider_uselogitems",
       "label": "useLogItems()",
@@ -59818,7 +59887,7 @@
       "source_location": "L39"
     },
     {
-      "community": 304,
+      "community": 305,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_app_logs_analytics_data_table_log_items_provider_tsx",
       "label": "log-items-provider.tsx",
@@ -59827,7 +59896,7 @@
       "source_location": "L1"
     },
     {
-      "community": 305,
+      "community": 306,
       "file_type": "code",
       "id": "inputotp_handlepinchange",
       "label": "handlePinChange()",
@@ -59836,7 +59905,7 @@
       "source_location": "L43"
     },
     {
-      "community": 305,
+      "community": 306,
       "file_type": "code",
       "id": "inputotp_onsubmit",
       "label": "onSubmit()",
@@ -59845,7 +59914,7 @@
       "source_location": "L51"
     },
     {
-      "community": 305,
+      "community": 306,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_auth_login_inputotp_tsx",
       "label": "InputOTP.tsx",
@@ -59854,7 +59923,7 @@
       "source_location": "L1"
     },
     {
-      "community": 306,
+      "community": 307,
       "file_type": "code",
       "id": "fadein_fadein",
       "label": "FadeIn()",
@@ -59863,7 +59932,7 @@
       "source_location": "L3"
     },
     {
-      "community": 306,
+      "community": 307,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_common_fadein_tsx",
       "label": "FadeIn.tsx",
@@ -59872,7 +59941,7 @@
       "source_location": "L1"
     },
     {
-      "community": 306,
+      "community": 307,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_common_fadein_tsx",
       "label": "FadeIn.tsx",
@@ -59881,7 +59950,7 @@
       "source_location": "L1"
     },
     {
-      "community": 307,
+      "community": 308,
       "file_type": "code",
       "id": "bestsellers_handleremovebestseller",
       "label": "handleRemoveBestSeller()",
@@ -59890,7 +59959,7 @@
       "source_location": "L53"
     },
     {
-      "community": 307,
+      "community": 308,
       "file_type": "code",
       "id": "bestsellers_ondragend",
       "label": "onDragEnd()",
@@ -59899,7 +59968,7 @@
       "source_location": "L65"
     },
     {
-      "community": 307,
+      "community": 308,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_homepage_bestsellers_tsx",
       "label": "BestSellers.tsx",
@@ -59908,7 +59977,7 @@
       "source_location": "L1"
     },
     {
-      "community": 308,
+      "community": 309,
       "file_type": "code",
       "id": "featuredsection_handlehighlighteditem",
       "label": "handleHighlightedItem()",
@@ -59917,7 +59986,7 @@
       "source_location": "L47"
     },
     {
-      "community": 308,
+      "community": 309,
       "file_type": "code",
       "id": "featuredsection_ondragend",
       "label": "onDragEnd()",
@@ -59926,40 +59995,13 @@
       "source_location": "L53"
     },
     {
-      "community": 308,
+      "community": 309,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_homepage_featuredsection_tsx",
       "label": "FeaturedSection.tsx",
       "norm_label": "featuredsection.tsx",
       "source_file": "packages/athena-webapp/src/components/homepage/FeaturedSection.tsx",
       "source_location": "L1"
-    },
-    {
-      "community": 309,
-      "file_type": "code",
-      "id": "packages_athena_webapp_src_components_homepage_videoplayer_tsx",
-      "label": "VideoPlayer.tsx",
-      "norm_label": "videoplayer.tsx",
-      "source_file": "packages/athena-webapp/src/components/homepage/VideoPlayer.tsx",
-      "source_location": "L1"
-    },
-    {
-      "community": 309,
-      "file_type": "code",
-      "id": "packages_storefront_webapp_src_components_home_videoplayer_tsx",
-      "label": "VideoPlayer.tsx",
-      "norm_label": "videoplayer.tsx",
-      "source_file": "packages/storefront-webapp/src/components/home/VideoPlayer.tsx",
-      "source_location": "L1"
-    },
-    {
-      "community": 309,
-      "file_type": "code",
-      "id": "videoplayer_videoplayer",
-      "label": "VideoPlayer()",
-      "norm_label": "videoplayer()",
-      "source_file": "packages/storefront-webapp/src/components/home/VideoPlayer.tsx",
-      "source_location": "L9"
     },
     {
       "community": 31,
@@ -60090,6 +60132,33 @@
     {
       "community": 310,
       "file_type": "code",
+      "id": "packages_athena_webapp_src_components_homepage_videoplayer_tsx",
+      "label": "VideoPlayer.tsx",
+      "norm_label": "videoplayer.tsx",
+      "source_file": "packages/athena-webapp/src/components/homepage/VideoPlayer.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 310,
+      "file_type": "code",
+      "id": "packages_storefront_webapp_src_components_home_videoplayer_tsx",
+      "label": "VideoPlayer.tsx",
+      "norm_label": "videoplayer.tsx",
+      "source_file": "packages/storefront-webapp/src/components/home/VideoPlayer.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 310,
+      "file_type": "code",
+      "id": "videoplayer_videoplayer",
+      "label": "VideoPlayer()",
+      "norm_label": "videoplayer()",
+      "source_file": "packages/storefront-webapp/src/components/home/VideoPlayer.tsx",
+      "source_location": "L9"
+    },
+    {
+      "community": 311,
+      "file_type": "code",
       "id": "operationsqueueview_handledecideapprovalrequest",
       "label": "handleDecideApprovalRequest()",
       "norm_label": "handledecideapprovalrequest()",
@@ -60097,7 +60166,7 @@
       "source_location": "L295"
     },
     {
-      "community": 310,
+      "community": 311,
       "file_type": "code",
       "id": "operationsqueueview_handlesubmitstockbatch",
       "label": "handleSubmitStockBatch()",
@@ -60106,7 +60175,7 @@
       "source_location": "L285"
     },
     {
-      "community": 310,
+      "community": 311,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_operations_operationsqueueview_tsx",
       "label": "OperationsQueueView.tsx",
@@ -60115,7 +60184,7 @@
       "source_location": "L1"
     },
     {
-      "community": 311,
+      "community": 312,
       "file_type": "code",
       "id": "orderview_handlerefundorder",
       "label": "handleRefundOrder()",
@@ -60124,7 +60193,7 @@
       "source_location": "L70"
     },
     {
-      "community": 311,
+      "community": 312,
       "file_type": "code",
       "id": "orderview_toast",
       "label": "toast()",
@@ -60133,7 +60202,7 @@
       "source_location": "L227"
     },
     {
-      "community": 311,
+      "community": 312,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_orders_orderview_tsx",
       "label": "OrderView.tsx",
@@ -60142,7 +60211,7 @@
       "source_location": "L1"
     },
     {
-      "community": 312,
+      "community": 313,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_orders_pickupdetailsview_tsx",
       "label": "PickupDetailsView.tsx",
@@ -60151,7 +60220,7 @@
       "source_location": "L1"
     },
     {
-      "community": 312,
+      "community": 313,
       "file_type": "code",
       "id": "pickupdetailsview_deliverydetails",
       "label": "DeliveryDetails()",
@@ -60160,7 +60229,7 @@
       "source_location": "L71"
     },
     {
-      "community": 312,
+      "community": 313,
       "file_type": "code",
       "id": "pickupdetailsview_pickupdetailsview",
       "label": "PickupDetailsView()",
@@ -60169,7 +60238,7 @@
       "source_location": "L9"
     },
     {
-      "community": 313,
+      "community": 314,
       "file_type": "code",
       "id": "organization_switcher_handlesignout",
       "label": "handleSignOut()",
@@ -60178,7 +60247,7 @@
       "source_location": "L100"
     },
     {
-      "community": 313,
+      "community": 314,
       "file_type": "code",
       "id": "organization_switcher_onorganizationselect",
       "label": "onOrganizationSelect()",
@@ -60187,7 +60256,7 @@
       "source_location": "L95"
     },
     {
-      "community": 313,
+      "community": 314,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_organization_switcher_tsx",
       "label": "organization-switcher.tsx",
@@ -60196,7 +60265,7 @@
       "source_location": "L1"
     },
     {
-      "community": 314,
+      "community": 315,
       "file_type": "code",
       "id": "cashierauthdialog_authenticatestaff",
       "label": "authenticateStaff()",
@@ -60205,7 +60274,7 @@
       "source_location": "L48"
     },
     {
-      "community": 314,
+      "community": 315,
       "file_type": "code",
       "id": "cashierauthdialog_getstaffdisplayname",
       "label": "getStaffDisplayName()",
@@ -60214,7 +60283,7 @@
       "source_location": "L23"
     },
     {
-      "community": 314,
+      "community": 315,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_pos_cashierauthdialog_tsx",
       "label": "CashierAuthDialog.tsx",
@@ -60223,7 +60292,7 @@
       "source_location": "L1"
     },
     {
-      "community": 315,
+      "community": 316,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_pos_searchresultssection_tsx",
       "label": "SearchResultsSection.tsx",
@@ -60232,7 +60301,7 @@
       "source_location": "L1"
     },
     {
-      "community": 315,
+      "community": 316,
       "file_type": "code",
       "id": "searchresultssection_handlequickaddproductshortcut",
       "label": "handleQuickAddProductShortcut()",
@@ -60241,7 +60310,7 @@
       "source_location": "L115"
     },
     {
-      "community": 315,
+      "community": 316,
       "file_type": "code",
       "id": "searchresultssection_handlequickaddvariantshortcut",
       "label": "handleQuickAddVariantShortcut()",
@@ -60250,7 +60319,7 @@
       "source_location": "L82"
     },
     {
-      "community": 316,
+      "community": 317,
       "file_type": "code",
       "id": "expensereportsview_istoday",
       "label": "isToday()",
@@ -60259,7 +60328,7 @@
       "source_location": "L28"
     },
     {
-      "community": 316,
+      "community": 317,
       "file_type": "code",
       "id": "expensereportsview_toexpensereportrows",
       "label": "toExpenseReportRows()",
@@ -60268,7 +60337,7 @@
       "source_location": "L34"
     },
     {
-      "community": 316,
+      "community": 317,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_pos_expense_reports_expensereportsview_tsx",
       "label": "ExpenseReportsView.tsx",
@@ -60277,7 +60346,7 @@
       "source_location": "L1"
     },
     {
-      "community": 317,
+      "community": 318,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_pos_register_registerdrawergate_tsx",
       "label": "RegisterDrawerGate.tsx",
@@ -60286,7 +60355,7 @@
       "source_location": "L1"
     },
     {
-      "community": 317,
+      "community": 318,
       "file_type": "code",
       "id": "registerdrawergate_cashcontrolsbutton",
       "label": "CashControlsButton()",
@@ -60295,7 +60364,7 @@
       "source_location": "L12"
     },
     {
-      "community": 317,
+      "community": 318,
       "file_type": "code",
       "id": "registerdrawergate_handlesubmit",
       "label": "handleSubmit()",
@@ -60304,7 +60373,7 @@
       "source_location": "L45"
     },
     {
-      "community": 318,
+      "community": 319,
       "file_type": "code",
       "id": "heldsessionslist_getsessioncartitemscount",
       "label": "getSessionCartItemsCount()",
@@ -60313,7 +60382,7 @@
       "source_location": "L36"
     },
     {
-      "community": 318,
+      "community": 319,
       "file_type": "code",
       "id": "heldsessionslist_hasexpired",
       "label": "hasExpired()",
@@ -60322,40 +60391,13 @@
       "source_location": "L32"
     },
     {
-      "community": 318,
+      "community": 319,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_pos_session_heldsessionslist_tsx",
       "label": "HeldSessionsList.tsx",
       "norm_label": "heldsessionslist.tsx",
       "source_file": "packages/athena-webapp/src/components/pos/session/HeldSessionsList.tsx",
       "source_location": "L1"
-    },
-    {
-      "community": 319,
-      "file_type": "code",
-      "id": "packages_athena_webapp_src_components_product_productstatus_test_tsx",
-      "label": "ProductStatus.test.tsx",
-      "norm_label": "productstatus.test.tsx",
-      "source_file": "packages/athena-webapp/src/components/product/ProductStatus.test.tsx",
-      "source_location": "L1"
-    },
-    {
-      "community": 319,
-      "file_type": "code",
-      "id": "productstatus_test_makeproduct",
-      "label": "makeProduct()",
-      "norm_label": "makeproduct()",
-      "source_file": "packages/athena-webapp/src/components/product/ProductStatus.test.tsx",
-      "source_location": "L8"
-    },
-    {
-      "community": 319,
-      "file_type": "code",
-      "id": "productstatus_test_makevariant",
-      "label": "makeVariant()",
-      "norm_label": "makevariant()",
-      "source_file": "packages/athena-webapp/src/components/product/ProductStatus.test.tsx",
-      "source_location": "L18"
     },
     {
       "community": 32,
@@ -60486,6 +60528,33 @@
     {
       "community": 320,
       "file_type": "code",
+      "id": "packages_athena_webapp_src_components_product_productstatus_test_tsx",
+      "label": "ProductStatus.test.tsx",
+      "norm_label": "productstatus.test.tsx",
+      "source_file": "packages/athena-webapp/src/components/product/ProductStatus.test.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 320,
+      "file_type": "code",
+      "id": "productstatus_test_makeproduct",
+      "label": "makeProduct()",
+      "norm_label": "makeproduct()",
+      "source_file": "packages/athena-webapp/src/components/product/ProductStatus.test.tsx",
+      "source_location": "L8"
+    },
+    {
+      "community": 320,
+      "file_type": "code",
+      "id": "productstatus_test_makevariant",
+      "label": "makeVariant()",
+      "norm_label": "makevariant()",
+      "source_file": "packages/athena-webapp/src/components/product/ProductStatus.test.tsx",
+      "source_location": "L18"
+    },
+    {
+      "community": 321,
+      "file_type": "code",
       "id": "packages_athena_webapp_src_components_products_productslistview_tsx",
       "label": "ProductsListView.tsx",
       "norm_label": "productslistview.tsx",
@@ -60493,7 +60562,7 @@
       "source_location": "L1"
     },
     {
-      "community": 320,
+      "community": 321,
       "file_type": "code",
       "id": "productslistview_handleclearcache",
       "label": "handleClearCache()",
@@ -60502,7 +60571,7 @@
       "source_location": "L65"
     },
     {
-      "community": 320,
+      "community": 321,
       "file_type": "code",
       "id": "productslistview_productactionstogglegroup",
       "label": "ProductActionsToggleGroup()",
@@ -60511,7 +60580,7 @@
       "source_location": "L20"
     },
     {
-      "community": 321,
+      "community": 322,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_products_productstablecontext_tsx",
       "label": "ProductsTableContext.tsx",
@@ -60520,7 +60589,7 @@
       "source_location": "L1"
     },
     {
-      "community": 321,
+      "community": 322,
       "file_type": "code",
       "id": "productstablecontext_productstableprovider",
       "label": "ProductsTableProvider()",
@@ -60529,7 +60598,7 @@
       "source_location": "L16"
     },
     {
-      "community": 321,
+      "community": 322,
       "file_type": "code",
       "id": "productstablecontext_useproductstablestate",
       "label": "useProductsTableState()",
@@ -60538,7 +60607,7 @@
       "source_location": "L60"
     },
     {
-      "community": 322,
+      "community": 323,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_products_storeproductsview_tsx",
       "label": "StoreProductsView.tsx",
@@ -60547,7 +60616,7 @@
       "source_location": "L1"
     },
     {
-      "community": 322,
+      "community": 323,
       "file_type": "code",
       "id": "storeproductsview_navigation",
       "label": "Navigation()",
@@ -60556,7 +60625,7 @@
       "source_location": "L45"
     },
     {
-      "community": 322,
+      "community": 323,
       "file_type": "code",
       "id": "storeproductsview_productactionstogglegroup",
       "label": "ProductActionsToggleGroup()",
@@ -60565,7 +60634,7 @@
       "source_location": "L19"
     },
     {
-      "community": 323,
+      "community": 324,
       "file_type": "code",
       "id": "addcomplimentaryproduct_addcomplimentaryproduct",
       "label": "AddComplimentaryProduct()",
@@ -60574,7 +60643,7 @@
       "source_location": "L128"
     },
     {
-      "community": 323,
+      "community": 324,
       "file_type": "code",
       "id": "addcomplimentaryproduct_handleaddcomplimentaryproducts",
       "label": "handleAddComplimentaryProducts()",
@@ -60583,7 +60652,7 @@
       "source_location": "L40"
     },
     {
-      "community": 323,
+      "community": 324,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_products_complimentary_addcomplimentaryproduct_tsx",
       "label": "AddComplimentaryProduct.tsx",
@@ -60592,7 +60661,7 @@
       "source_location": "L1"
     },
     {
-      "community": 324,
+      "community": 325,
       "file_type": "code",
       "id": "color_picker_handleblur",
       "label": "handleBlur()",
@@ -60601,7 +60670,7 @@
       "source_location": "L24"
     },
     {
-      "community": 324,
+      "community": 325,
       "file_type": "code",
       "id": "color_picker_handleinputchange",
       "label": "handleInputChange()",
@@ -60610,7 +60679,7 @@
       "source_location": "L20"
     },
     {
-      "community": 324,
+      "community": 325,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_promo_codes_modals_color_picker_tsx",
       "label": "color-picker.tsx",
@@ -60619,7 +60688,7 @@
       "source_location": "L1"
     },
     {
-      "community": 325,
+      "community": 326,
       "file_type": "code",
       "id": "currency_provider_currencyprovider",
       "label": "CurrencyProvider()",
@@ -60628,7 +60697,7 @@
       "source_location": "L25"
     },
     {
-      "community": 325,
+      "community": 326,
       "file_type": "code",
       "id": "currency_provider_usestorecurrency",
       "label": "useStoreCurrency()",
@@ -60637,7 +60706,7 @@
       "source_location": "L17"
     },
     {
-      "community": 325,
+      "community": 326,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_providers_currency_provider_tsx",
       "label": "currency-provider.tsx",
@@ -60646,7 +60715,7 @@
       "source_location": "L1"
     },
     {
-      "community": 326,
+      "community": 327,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_services_serviceappointmentsview_test_tsx",
       "label": "ServiceAppointmentsView.test.tsx",
@@ -60655,7 +60724,7 @@
       "source_location": "L1"
     },
     {
-      "community": 326,
+      "community": 327,
       "file_type": "code",
       "id": "serviceappointmentsview_test_choosedatetime",
       "label": "chooseDateTime()",
@@ -60664,7 +60733,7 @@
       "source_location": "L59"
     },
     {
-      "community": 326,
+      "community": 327,
       "file_type": "code",
       "id": "serviceappointmentsview_test_chooseselectoption",
       "label": "chooseSelectOption()",
@@ -60673,7 +60742,7 @@
       "source_location": "L50"
     },
     {
-      "community": 327,
+      "community": 328,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_services_serviceintakeview_tsx",
       "label": "ServiceIntakeView.tsx",
@@ -60682,7 +60751,7 @@
       "source_location": "L1"
     },
     {
-      "community": 327,
+      "community": 328,
       "file_type": "code",
       "id": "serviceintakeview_serviceintakeview",
       "label": "ServiceIntakeView()",
@@ -60691,7 +60760,7 @@
       "source_location": "L225"
     },
     {
-      "community": 327,
+      "community": 328,
       "file_type": "code",
       "id": "serviceintakeview_serviceintakeviewcontent",
       "label": "ServiceIntakeViewContent()",
@@ -60700,7 +60769,7 @@
       "source_location": "L80"
     },
     {
-      "community": 328,
+      "community": 329,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_staff_staffmanagement_test_tsx",
       "label": "StaffManagement.test.tsx",
@@ -60709,7 +60778,7 @@
       "source_location": "L1"
     },
     {
-      "community": 328,
+      "community": 329,
       "file_type": "code",
       "id": "staffmanagement_test_chooserole",
       "label": "chooseRole()",
@@ -60718,40 +60787,13 @@
       "source_location": "L127"
     },
     {
-      "community": 328,
+      "community": 329,
       "file_type": "code",
       "id": "staffmanagement_test_mockconvex",
       "label": "mockConvex()",
       "norm_label": "mockconvex()",
       "source_file": "packages/athena-webapp/src/components/staff/StaffManagement.test.tsx",
       "source_location": "L71"
-    },
-    {
-      "community": 329,
-      "file_type": "code",
-      "id": "packages_athena_webapp_src_components_staff_auth_staffauthenticationdialog_tsx",
-      "label": "StaffAuthenticationDialog.tsx",
-      "norm_label": "staffauthenticationdialog.tsx",
-      "source_file": "packages/athena-webapp/src/components/staff-auth/StaffAuthenticationDialog.tsx",
-      "source_location": "L1"
-    },
-    {
-      "community": 329,
-      "file_type": "code",
-      "id": "staffauthenticationdialog_handlekeydown",
-      "label": "handleKeyDown()",
-      "norm_label": "handlekeydown()",
-      "source_file": "packages/athena-webapp/src/components/staff-auth/StaffAuthenticationDialog.tsx",
-      "source_location": "L157"
-    },
-    {
-      "community": 329,
-      "file_type": "code",
-      "id": "staffauthenticationdialog_handlesubmit",
-      "label": "handleSubmit()",
-      "norm_label": "handlesubmit()",
-      "source_file": "packages/athena-webapp/src/components/staff-auth/StaffAuthenticationDialog.tsx",
-      "source_location": "L104"
     },
     {
       "community": 33,
@@ -60882,6 +60924,33 @@
     {
       "community": 330,
       "file_type": "code",
+      "id": "packages_athena_webapp_src_components_staff_auth_staffauthenticationdialog_tsx",
+      "label": "StaffAuthenticationDialog.tsx",
+      "norm_label": "staffauthenticationdialog.tsx",
+      "source_file": "packages/athena-webapp/src/components/staff-auth/StaffAuthenticationDialog.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 330,
+      "file_type": "code",
+      "id": "staffauthenticationdialog_handlekeydown",
+      "label": "handleKeyDown()",
+      "norm_label": "handlekeydown()",
+      "source_file": "packages/athena-webapp/src/components/staff-auth/StaffAuthenticationDialog.tsx",
+      "source_location": "L157"
+    },
+    {
+      "community": 330,
+      "file_type": "code",
+      "id": "staffauthenticationdialog_handlesubmit",
+      "label": "handleSubmit()",
+      "norm_label": "handlesubmit()",
+      "source_file": "packages/athena-webapp/src/components/staff-auth/StaffAuthenticationDialog.tsx",
+      "source_location": "L104"
+    },
+    {
+      "community": 331,
+      "file_type": "code",
       "id": "packages_athena_webapp_src_components_states_error_singlelineerror_tsx",
       "label": "SingleLineError.tsx",
       "norm_label": "singlelineerror.tsx",
@@ -60889,7 +60958,7 @@
       "source_location": "L1"
     },
     {
-      "community": 330,
+      "community": 331,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_states_error_singlelineerror_tsx",
       "label": "SingleLineError.tsx",
@@ -60898,7 +60967,7 @@
       "source_location": "L1"
     },
     {
-      "community": 330,
+      "community": 331,
       "file_type": "code",
       "id": "singlelineerror_singlelineerror",
       "label": "SingleLineError()",
@@ -60907,7 +60976,7 @@
       "source_location": "L3"
     },
     {
-      "community": 331,
+      "community": 332,
       "file_type": "code",
       "id": "index_errorpage",
       "label": "ErrorPage()",
@@ -60916,7 +60985,7 @@
       "source_location": "L9"
     },
     {
-      "community": 331,
+      "community": 332,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_states_error_index_tsx",
       "label": "index.tsx",
@@ -60925,7 +60994,7 @@
       "source_location": "L1"
     },
     {
-      "community": 331,
+      "community": 332,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_states_error_index_tsx",
       "label": "index.tsx",
@@ -60934,7 +61003,7 @@
       "source_location": "L1"
     },
     {
-      "community": 332,
+      "community": 333,
       "file_type": "code",
       "id": "app_skeleton_appskeleton",
       "label": "AppSkeleton()",
@@ -60943,7 +61012,7 @@
       "source_location": "L3"
     },
     {
-      "community": 332,
+      "community": 333,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_states_loading_app_skeleton_tsx",
       "label": "app-skeleton.tsx",
@@ -60952,7 +61021,7 @@
       "source_location": "L1"
     },
     {
-      "community": 332,
+      "community": 333,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_states_loading_app_skeleton_tsx",
       "label": "app-skeleton.tsx",
@@ -60961,7 +61030,7 @@
       "source_location": "L1"
     },
     {
-      "community": 333,
+      "community": 334,
       "file_type": "code",
       "id": "dashboard_skeleton_dashboardskeleton",
       "label": "DashboardSkeleton()",
@@ -60970,7 +61039,7 @@
       "source_location": "L3"
     },
     {
-      "community": 333,
+      "community": 334,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_states_loading_dashboard_skeleton_tsx",
       "label": "dashboard-skeleton.tsx",
@@ -60979,7 +61048,7 @@
       "source_location": "L1"
     },
     {
-      "community": 333,
+      "community": 334,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_states_loading_dashboard_skeleton_tsx",
       "label": "dashboard-skeleton.tsx",
@@ -60988,7 +61057,7 @@
       "source_location": "L1"
     },
     {
-      "community": 334,
+      "community": 335,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_states_loading_table_skeleton_tsx",
       "label": "table-skeleton.tsx",
@@ -60997,7 +61066,7 @@
       "source_location": "L1"
     },
     {
-      "community": 334,
+      "community": 335,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_states_loading_table_skeleton_tsx",
       "label": "table-skeleton.tsx",
@@ -61006,7 +61075,7 @@
       "source_location": "L1"
     },
     {
-      "community": 334,
+      "community": 335,
       "file_type": "code",
       "id": "table_skeleton_tableskeleton",
       "label": "TableSkeleton()",
@@ -61015,7 +61084,7 @@
       "source_location": "L3"
     },
     {
-      "community": 335,
+      "community": 336,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_states_loading_transactions_skeleton_tsx",
       "label": "transactions-skeleton.tsx",
@@ -61024,7 +61093,7 @@
       "source_location": "L1"
     },
     {
-      "community": 335,
+      "community": 336,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_states_loading_transactions_skeleton_tsx",
       "label": "transactions-skeleton.tsx",
@@ -61033,7 +61102,7 @@
       "source_location": "L1"
     },
     {
-      "community": 335,
+      "community": 336,
       "file_type": "code",
       "id": "transactions_skeleton_transactionsskeleton",
       "label": "TransactionsSkeleton()",
@@ -61042,7 +61111,7 @@
       "source_location": "L3"
     },
     {
-      "community": 336,
+      "community": 337,
       "file_type": "code",
       "id": "notfound_notfound",
       "label": "NotFound()",
@@ -61051,7 +61120,7 @@
       "source_location": "L4"
     },
     {
-      "community": 336,
+      "community": 337,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_states_not_found_notfound_tsx",
       "label": "NotFound.tsx",
@@ -61060,7 +61129,7 @@
       "source_location": "L1"
     },
     {
-      "community": 336,
+      "community": 337,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_states_not_found_notfound_tsx",
       "label": "NotFound.tsx",
@@ -61069,7 +61138,7 @@
       "source_location": "L1"
     },
     {
-      "community": 337,
+      "community": 338,
       "file_type": "code",
       "id": "feesview_handletoggleallfees",
       "label": "handleToggleAllFees()",
@@ -61078,7 +61147,7 @@
       "source_location": "L120"
     },
     {
-      "community": 337,
+      "community": 338,
       "file_type": "code",
       "id": "feesview_handleupdatefees",
       "label": "handleUpdateFees()",
@@ -61087,7 +61156,7 @@
       "source_location": "L36"
     },
     {
-      "community": 337,
+      "community": 338,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_store_configuration_components_feesview_tsx",
       "label": "FeesView.tsx",
@@ -61096,7 +61165,7 @@
       "source_location": "L1"
     },
     {
-      "community": 338,
+      "community": 339,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_traces_workflowtraceroutelink_tsx",
       "label": "WorkflowTraceRouteLink.tsx",
@@ -61105,7 +61174,7 @@
       "source_location": "L1"
     },
     {
-      "community": 338,
+      "community": 339,
       "file_type": "code",
       "id": "workflowtraceroutelink_getworkflowtraceroutetarget",
       "label": "getWorkflowTraceRouteTarget()",
@@ -61114,40 +61183,13 @@
       "source_location": "L23"
     },
     {
-      "community": 338,
+      "community": 339,
       "file_type": "code",
       "id": "workflowtraceroutelink_workflowtraceroutelink",
       "label": "WorkflowTraceRouteLink()",
       "norm_label": "workflowtraceroutelink()",
       "source_file": "packages/athena-webapp/src/components/traces/WorkflowTraceRouteLink.tsx",
       "source_location": "L41"
-    },
-    {
-      "community": 339,
-      "file_type": "code",
-      "id": "app_context_menu_appcontextmenu",
-      "label": "AppContextMenu()",
-      "norm_label": "appcontextmenu()",
-      "source_file": "packages/storefront-webapp/src/components/ui/app-context-menu.tsx",
-      "source_location": "L20"
-    },
-    {
-      "community": 339,
-      "file_type": "code",
-      "id": "packages_athena_webapp_src_components_ui_app_context_menu_tsx",
-      "label": "app-context-menu.tsx",
-      "norm_label": "app-context-menu.tsx",
-      "source_file": "packages/athena-webapp/src/components/ui/app-context-menu.tsx",
-      "source_location": "L1"
-    },
-    {
-      "community": 339,
-      "file_type": "code",
-      "id": "packages_storefront_webapp_src_components_ui_app_context_menu_tsx",
-      "label": "app-context-menu.tsx",
-      "norm_label": "app-context-menu.tsx",
-      "source_file": "packages/storefront-webapp/src/components/ui/app-context-menu.tsx",
-      "source_location": "L1"
     },
     {
       "community": 34,
@@ -61269,6 +61311,33 @@
     {
       "community": 340,
       "file_type": "code",
+      "id": "app_context_menu_appcontextmenu",
+      "label": "AppContextMenu()",
+      "norm_label": "appcontextmenu()",
+      "source_file": "packages/storefront-webapp/src/components/ui/app-context-menu.tsx",
+      "source_location": "L20"
+    },
+    {
+      "community": 340,
+      "file_type": "code",
+      "id": "packages_athena_webapp_src_components_ui_app_context_menu_tsx",
+      "label": "app-context-menu.tsx",
+      "norm_label": "app-context-menu.tsx",
+      "source_file": "packages/athena-webapp/src/components/ui/app-context-menu.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 340,
+      "file_type": "code",
+      "id": "packages_storefront_webapp_src_components_ui_app_context_menu_tsx",
+      "label": "app-context-menu.tsx",
+      "norm_label": "app-context-menu.tsx",
+      "source_file": "packages/storefront-webapp/src/components/ui/app-context-menu.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 341,
+      "file_type": "code",
       "id": "badge_badge",
       "label": "Badge()",
       "norm_label": "badge()",
@@ -61276,7 +61345,7 @@
       "source_location": "L30"
     },
     {
-      "community": 340,
+      "community": 341,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_ui_badge_tsx",
       "label": "badge.tsx",
@@ -61285,7 +61354,7 @@
       "source_location": "L1"
     },
     {
-      "community": 340,
+      "community": 341,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_badge_tsx",
       "label": "badge.tsx",
@@ -61294,7 +61363,7 @@
       "source_location": "L1"
     },
     {
-      "community": 341,
+      "community": 342,
       "file_type": "code",
       "id": "loading_button_loadingbutton",
       "label": "LoadingButton()",
@@ -61303,7 +61372,7 @@
       "source_location": "L9"
     },
     {
-      "community": 341,
+      "community": 342,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_ui_loading_button_tsx",
       "label": "loading-button.tsx",
@@ -61312,7 +61381,7 @@
       "source_location": "L1"
     },
     {
-      "community": 341,
+      "community": 342,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_loading_button_tsx",
       "label": "loading-button.tsx",
@@ -61321,7 +61390,7 @@
       "source_location": "L1"
     },
     {
-      "community": 342,
+      "community": 343,
       "file_type": "code",
       "id": "modal_onchange",
       "label": "onChange()",
@@ -61330,7 +61399,7 @@
       "source_location": "L38"
     },
     {
-      "community": 342,
+      "community": 343,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_ui_modal_tsx",
       "label": "modal.tsx",
@@ -61339,7 +61408,7 @@
       "source_location": "L1"
     },
     {
-      "community": 342,
+      "community": 343,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_modal_tsx",
       "label": "modal.tsx",
@@ -61348,7 +61417,7 @@
       "source_location": "L1"
     },
     {
-      "community": 343,
+      "community": 344,
       "file_type": "code",
       "id": "alert_modal_alertmodal",
       "label": "AlertModal()",
@@ -61357,7 +61426,7 @@
       "source_location": "L20"
     },
     {
-      "community": 343,
+      "community": 344,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_ui_modals_alert_modal_tsx",
       "label": "alert-modal.tsx",
@@ -61366,7 +61435,7 @@
       "source_location": "L1"
     },
     {
-      "community": 343,
+      "community": 344,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_modals_alert_modal_tsx",
       "label": "alert-modal.tsx",
@@ -61375,7 +61444,7 @@
       "source_location": "L1"
     },
     {
-      "community": 344,
+      "community": 345,
       "file_type": "code",
       "id": "overlay_modal_overlaymodal",
       "label": "OverlayModal()",
@@ -61384,7 +61453,7 @@
       "source_location": "L12"
     },
     {
-      "community": 344,
+      "community": 345,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_ui_modals_overlay_modal_tsx",
       "label": "overlay-modal.tsx",
@@ -61393,7 +61462,7 @@
       "source_location": "L1"
     },
     {
-      "community": 344,
+      "community": 345,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_modals_overlay_modal_tsx",
       "label": "overlay-modal.tsx",
@@ -61402,7 +61471,7 @@
       "source_location": "L1"
     },
     {
-      "community": 345,
+      "community": 346,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_ui_skeleton_tsx",
       "label": "skeleton.tsx",
@@ -61411,7 +61480,7 @@
       "source_location": "L1"
     },
     {
-      "community": 345,
+      "community": 346,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_skeleton_tsx",
       "label": "skeleton.tsx",
@@ -61420,7 +61489,7 @@
       "source_location": "L1"
     },
     {
-      "community": 345,
+      "community": 346,
       "file_type": "code",
       "id": "skeleton_skeleton",
       "label": "Skeleton()",
@@ -61429,7 +61498,7 @@
       "source_location": "L3"
     },
     {
-      "community": 346,
+      "community": 347,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_ui_sonner_tsx",
       "label": "sonner.tsx",
@@ -61438,7 +61507,7 @@
       "source_location": "L1"
     },
     {
-      "community": 346,
+      "community": 347,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_sonner_tsx",
       "label": "sonner.tsx",
@@ -61447,7 +61516,7 @@
       "source_location": "L1"
     },
     {
-      "community": 346,
+      "community": 347,
       "file_type": "code",
       "id": "sonner_toaster",
       "label": "Toaster()",
@@ -61456,7 +61525,7 @@
       "source_location": "L6"
     },
     {
-      "community": 347,
+      "community": 348,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_ui_spinner_tsx",
       "label": "spinner.tsx",
@@ -61465,7 +61534,7 @@
       "source_location": "L1"
     },
     {
-      "community": 347,
+      "community": 348,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_spinner_tsx",
       "label": "spinner.tsx",
@@ -61474,7 +61543,7 @@
       "source_location": "L1"
     },
     {
-      "community": 347,
+      "community": 348,
       "file_type": "code",
       "id": "spinner_spinner",
       "label": "Spinner()",
@@ -61483,7 +61552,7 @@
       "source_location": "L3"
     },
     {
-      "community": 348,
+      "community": 349,
       "file_type": "code",
       "id": "activitysummarycards_activitysummarycards",
       "label": "ActivitySummaryCards()",
@@ -61492,7 +61561,7 @@
       "source_location": "L44"
     },
     {
-      "community": 348,
+      "community": 349,
       "file_type": "code",
       "id": "activitysummarycards_summarycard",
       "label": "SummaryCard()",
@@ -61501,40 +61570,13 @@
       "source_location": "L19"
     },
     {
-      "community": 348,
+      "community": 349,
       "file_type": "code",
       "id": "packages_athena_webapp_src_components_users_activitysummarycards_tsx",
       "label": "ActivitySummaryCards.tsx",
       "norm_label": "activitysummarycards.tsx",
       "source_file": "packages/athena-webapp/src/components/users/ActivitySummaryCards.tsx",
       "source_location": "L1"
-    },
-    {
-      "community": 349,
-      "file_type": "code",
-      "id": "packages_athena_webapp_src_components_users_timelineeventcard_tsx",
-      "label": "TimelineEventCard.tsx",
-      "norm_label": "timelineeventcard.tsx",
-      "source_file": "packages/athena-webapp/src/components/users/TimelineEventCard.tsx",
-      "source_location": "L1"
-    },
-    {
-      "community": 349,
-      "file_type": "code",
-      "id": "timelineeventcard_formatobservabilitylabel",
-      "label": "formatObservabilityLabel()",
-      "norm_label": "formatobservabilitylabel()",
-      "source_file": "packages/athena-webapp/src/components/users/TimelineEventCard.tsx",
-      "source_location": "L159"
-    },
-    {
-      "community": 349,
-      "file_type": "code",
-      "id": "timelineeventcard_loadmore",
-      "label": "loadMore()",
-      "norm_label": "loadmore()",
-      "source_file": "packages/athena-webapp/src/components/users/TimelineEventCard.tsx",
-      "source_location": "L195"
     },
     {
       "community": 35,
@@ -61656,6 +61698,33 @@
     {
       "community": 350,
       "file_type": "code",
+      "id": "packages_athena_webapp_src_components_users_timelineeventcard_tsx",
+      "label": "TimelineEventCard.tsx",
+      "norm_label": "timelineeventcard.tsx",
+      "source_file": "packages/athena-webapp/src/components/users/TimelineEventCard.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 350,
+      "file_type": "code",
+      "id": "timelineeventcard_formatobservabilitylabel",
+      "label": "formatObservabilityLabel()",
+      "norm_label": "formatobservabilitylabel()",
+      "source_file": "packages/athena-webapp/src/components/users/TimelineEventCard.tsx",
+      "source_location": "L159"
+    },
+    {
+      "community": 350,
+      "file_type": "code",
+      "id": "timelineeventcard_loadmore",
+      "label": "loadMore()",
+      "norm_label": "loadmore()",
+      "source_file": "packages/athena-webapp/src/components/users/TimelineEventCard.tsx",
+      "source_location": "L195"
+    },
+    {
+      "community": 351,
+      "file_type": "code",
       "id": "packages_athena_webapp_src_components_users_useractivity_tsx",
       "label": "UserActivity.tsx",
       "norm_label": "useractivity.tsx",
@@ -61663,7 +61732,7 @@
       "source_location": "L1"
     },
     {
-      "community": 350,
+      "community": 351,
       "file_type": "code",
       "id": "useractivity_activityheader",
       "label": "ActivityHeader()",
@@ -61672,7 +61741,7 @@
       "source_location": "L22"
     },
     {
-      "community": 350,
+      "community": 351,
       "file_type": "code",
       "id": "useractivity_useractivity",
       "label": "UserActivity()",
@@ -61681,7 +61750,7 @@
       "source_location": "L45"
     },
     {
-      "community": 351,
+      "community": 352,
       "file_type": "code",
       "id": "onlineordercontext_onlineorderprovider",
       "label": "OnlineOrderProvider()",
@@ -61690,7 +61759,7 @@
       "source_location": "L24"
     },
     {
-      "community": 351,
+      "community": 352,
       "file_type": "code",
       "id": "onlineordercontext_useonlineorder",
       "label": "useOnlineOrder()",
@@ -61699,7 +61768,7 @@
       "source_location": "L38"
     },
     {
-      "community": 351,
+      "community": 352,
       "file_type": "code",
       "id": "packages_athena_webapp_src_contexts_onlineordercontext_tsx",
       "label": "OnlineOrderContext.tsx",
@@ -61708,7 +61777,7 @@
       "source_location": "L1"
     },
     {
-      "community": 352,
+      "community": 353,
       "file_type": "code",
       "id": "packages_athena_webapp_src_contexts_permissionscontext_tsx",
       "label": "PermissionsContext.tsx",
@@ -61717,7 +61786,7 @@
       "source_location": "L1"
     },
     {
-      "community": 352,
+      "community": 353,
       "file_type": "code",
       "id": "permissionscontext_permissionsprovider",
       "label": "PermissionsProvider()",
@@ -61726,7 +61795,7 @@
       "source_location": "L23"
     },
     {
-      "community": 352,
+      "community": 353,
       "file_type": "code",
       "id": "permissionscontext_usepermissionscontext",
       "label": "usePermissionsContext()",
@@ -61735,7 +61804,7 @@
       "source_location": "L51"
     },
     {
-      "community": 353,
+      "community": 354,
       "file_type": "code",
       "id": "packages_athena_webapp_src_contexts_productcontext_tsx",
       "label": "ProductContext.tsx",
@@ -61744,7 +61813,7 @@
       "source_location": "L1"
     },
     {
-      "community": 353,
+      "community": 354,
       "file_type": "code",
       "id": "productcontext_productprovider",
       "label": "ProductProvider()",
@@ -61753,7 +61822,7 @@
       "source_location": "L54"
     },
     {
-      "community": 353,
+      "community": 354,
       "file_type": "code",
       "id": "productcontext_useproduct",
       "label": "useProduct()",
@@ -61762,7 +61831,7 @@
       "source_location": "L282"
     },
     {
-      "community": 354,
+      "community": 355,
       "file_type": "code",
       "id": "packages_athena_webapp_src_contexts_usercontext_tsx",
       "label": "UserContext.tsx",
@@ -61771,7 +61840,7 @@
       "source_location": "L1"
     },
     {
-      "community": 354,
+      "community": 355,
       "file_type": "code",
       "id": "usercontext_userprovider",
       "label": "UserProvider()",
@@ -61780,7 +61849,7 @@
       "source_location": "L12"
     },
     {
-      "community": 354,
+      "community": 355,
       "file_type": "code",
       "id": "usercontext_useusercontext",
       "label": "useUserContext()",
@@ -61789,7 +61858,7 @@
       "source_location": "L37"
     },
     {
-      "community": 355,
+      "community": 356,
       "file_type": "code",
       "id": "packages_athena_webapp_src_hooks_useauth_ts",
       "label": "useAuth.ts",
@@ -61798,7 +61867,7 @@
       "source_location": "L1"
     },
     {
-      "community": 355,
+      "community": 356,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_hooks_useauth_ts",
       "label": "useAuth.ts",
@@ -61807,7 +61876,7 @@
       "source_location": "L1"
     },
     {
-      "community": 355,
+      "community": 356,
       "file_type": "code",
       "id": "useauth_useauth",
       "label": "useAuth()",
@@ -61816,7 +61885,7 @@
       "source_location": "L4"
     },
     {
-      "community": 356,
+      "community": 357,
       "file_type": "code",
       "id": "packages_athena_webapp_src_hooks_usegetactivestore_ts",
       "label": "useGetActiveStore.ts",
@@ -61825,7 +61894,7 @@
       "source_location": "L1"
     },
     {
-      "community": 356,
+      "community": 357,
       "file_type": "code",
       "id": "usegetactivestore_usegetactivestore",
       "label": "useGetActiveStore()",
@@ -61834,7 +61903,7 @@
       "source_location": "L9"
     },
     {
-      "community": 356,
+      "community": 357,
       "file_type": "code",
       "id": "usegetactivestore_usegetstores",
       "label": "useGetStores()",
@@ -61843,7 +61912,7 @@
       "source_location": "L50"
     },
     {
-      "community": 357,
+      "community": 358,
       "file_type": "code",
       "id": "packages_athena_webapp_src_hooks_usegetorganizations_ts",
       "label": "useGetOrganizations.ts",
@@ -61852,7 +61921,7 @@
       "source_location": "L1"
     },
     {
-      "community": 357,
+      "community": 358,
       "file_type": "code",
       "id": "usegetorganizations_usegetactiveorganization",
       "label": "useGetActiveOrganization()",
@@ -61861,7 +61930,7 @@
       "source_location": "L6"
     },
     {
-      "community": 357,
+      "community": 358,
       "file_type": "code",
       "id": "usegetorganizations_usegetorganizations",
       "label": "useGetOrganizations()",
@@ -61870,7 +61939,7 @@
       "source_location": "L31"
     },
     {
-      "community": 358,
+      "community": 359,
       "file_type": "code",
       "id": "packages_athena_webapp_src_hooks_usegetproducts_ts",
       "label": "useGetProducts.ts",
@@ -61879,7 +61948,7 @@
       "source_location": "L1"
     },
     {
-      "community": 358,
+      "community": 359,
       "file_type": "code",
       "id": "usegetproducts_usegetproducts",
       "label": "useGetProducts()",
@@ -61888,40 +61957,13 @@
       "source_location": "L5"
     },
     {
-      "community": 358,
+      "community": 359,
       "file_type": "code",
       "id": "usegetproducts_usegetunresolvedproducts",
       "label": "useGetUnresolvedProducts()",
       "norm_label": "usegetunresolvedproducts()",
       "source_file": "packages/athena-webapp/src/hooks/useGetProducts.ts",
       "source_location": "L31"
-    },
-    {
-      "community": 359,
-      "file_type": "code",
-      "id": "packages_athena_webapp_src_hooks_usesessionmanagementexpense_ts",
-      "label": "useSessionManagementExpense.ts",
-      "norm_label": "usesessionmanagementexpense.ts",
-      "source_file": "packages/athena-webapp/src/hooks/useSessionManagementExpense.ts",
-      "source_location": "L1"
-    },
-    {
-      "community": 359,
-      "file_type": "code",
-      "id": "usesessionmanagementexpense_getcommanderrormessage",
-      "label": "getCommandErrorMessage()",
-      "norm_label": "getcommanderrormessage()",
-      "source_file": "packages/athena-webapp/src/hooks/useSessionManagementExpense.ts",
-      "source_location": "L19"
-    },
-    {
-      "community": 359,
-      "file_type": "code",
-      "id": "usesessionmanagementexpense_usesessionmanagementexpense",
-      "label": "useSessionManagementExpense()",
-      "norm_label": "usesessionmanagementexpense()",
-      "source_file": "packages/athena-webapp/src/hooks/useSessionManagementExpense.ts",
-      "source_location": "L33"
     },
     {
       "community": 36,
@@ -62043,6 +62085,33 @@
     {
       "community": 360,
       "file_type": "code",
+      "id": "packages_athena_webapp_src_hooks_usesessionmanagementexpense_ts",
+      "label": "useSessionManagementExpense.ts",
+      "norm_label": "usesessionmanagementexpense.ts",
+      "source_file": "packages/athena-webapp/src/hooks/useSessionManagementExpense.ts",
+      "source_location": "L1"
+    },
+    {
+      "community": 360,
+      "file_type": "code",
+      "id": "usesessionmanagementexpense_getcommanderrormessage",
+      "label": "getCommandErrorMessage()",
+      "norm_label": "getcommanderrormessage()",
+      "source_file": "packages/athena-webapp/src/hooks/useSessionManagementExpense.ts",
+      "source_location": "L19"
+    },
+    {
+      "community": 360,
+      "file_type": "code",
+      "id": "usesessionmanagementexpense_usesessionmanagementexpense",
+      "label": "useSessionManagementExpense()",
+      "norm_label": "usesessionmanagementexpense()",
+      "source_file": "packages/athena-webapp/src/hooks/useSessionManagementExpense.ts",
+      "source_location": "L33"
+    },
+    {
+      "community": 361,
+      "file_type": "code",
       "id": "packages_athena_webapp_src_lib_errors_runcommand_ts",
       "label": "runCommand.ts",
       "norm_label": "runcommand.ts",
@@ -62050,7 +62119,7 @@
       "source_location": "L1"
     },
     {
-      "community": 360,
+      "community": 361,
       "file_type": "code",
       "id": "runcommand_extracttraceid",
       "label": "extractTraceId()",
@@ -62059,7 +62128,7 @@
       "source_location": "L18"
     },
     {
-      "community": 360,
+      "community": 361,
       "file_type": "code",
       "id": "runcommand_runcommand",
       "label": "runCommand()",
@@ -62068,7 +62137,7 @@
       "source_location": "L26"
     },
     {
-      "community": 361,
+      "community": 362,
       "file_type": "code",
       "id": "maintenanceutils_isinmaintenancemode",
       "label": "isInMaintenanceMode()",
@@ -62077,7 +62146,7 @@
       "source_location": "L7"
     },
     {
-      "community": 361,
+      "community": 362,
       "file_type": "code",
       "id": "packages_athena_webapp_src_lib_maintenanceutils_ts",
       "label": "maintenanceUtils.ts",
@@ -62086,7 +62155,7 @@
       "source_location": "L1"
     },
     {
-      "community": 361,
+      "community": 362,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_maintenanceutils_ts",
       "label": "maintenanceUtils.ts",
@@ -62095,7 +62164,7 @@
       "source_location": "L1"
     },
     {
-      "community": 362,
+      "community": 363,
       "file_type": "code",
       "id": "bootstrapregister_test_drawer",
       "label": "drawer()",
@@ -62104,7 +62173,7 @@
       "source_location": "L9"
     },
     {
-      "community": 362,
+      "community": 363,
       "file_type": "code",
       "id": "bootstrapregister_test_state",
       "label": "state()",
@@ -62113,7 +62182,7 @@
       "source_location": "L23"
     },
     {
-      "community": 362,
+      "community": 363,
       "file_type": "code",
       "id": "packages_athena_webapp_src_lib_pos_application_bootstrapregister_test_ts",
       "label": "bootstrapRegister.test.ts",
@@ -62122,7 +62191,7 @@
       "source_location": "L1"
     },
     {
-      "community": 363,
+      "community": 364,
       "file_type": "code",
       "id": "displayamounts_formatstoredamount",
       "label": "formatStoredAmount()",
@@ -62131,7 +62200,7 @@
       "source_location": "L3"
     },
     {
-      "community": 363,
+      "community": 364,
       "file_type": "code",
       "id": "displayamounts_parsedisplayamountinput",
       "label": "parseDisplayAmountInput()",
@@ -62140,7 +62209,7 @@
       "source_location": "L10"
     },
     {
-      "community": 363,
+      "community": 364,
       "file_type": "code",
       "id": "packages_athena_webapp_src_lib_pos_displayamounts_ts",
       "label": "displayAmounts.ts",
@@ -62149,7 +62218,7 @@
       "source_location": "L1"
     },
     {
-      "community": 364,
+      "community": 365,
       "file_type": "code",
       "id": "commandgateway_useconvexcommandgateway",
       "label": "useConvexCommandGateway()",
@@ -62158,7 +62227,7 @@
       "source_location": "L18"
     },
     {
-      "community": 364,
+      "community": 365,
       "file_type": "code",
       "id": "commandgateway_useconvexdirecttransactionmutation",
       "label": "useConvexDirectTransactionMutation()",
@@ -62167,7 +62236,7 @@
       "source_location": "L60"
     },
     {
-      "community": 364,
+      "community": 365,
       "file_type": "code",
       "id": "packages_athena_webapp_src_lib_pos_infrastructure_convex_commandgateway_ts",
       "label": "commandGateway.ts",
@@ -62176,7 +62245,7 @@
       "source_location": "L1"
     },
     {
-      "community": 365,
+      "community": 366,
       "file_type": "code",
       "id": "main_app",
       "label": "App()",
@@ -62185,7 +62254,7 @@
       "source_location": "L31"
     },
     {
-      "community": 365,
+      "community": 366,
       "file_type": "code",
       "id": "packages_athena_webapp_src_main_tsx",
       "label": "main.tsx",
@@ -62194,7 +62263,7 @@
       "source_location": "L1"
     },
     {
-      "community": 365,
+      "community": 366,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_main_tsx",
       "label": "main.tsx",
@@ -62203,7 +62272,7 @@
       "source_location": "L1"
     },
     {
-      "community": 366,
+      "community": 367,
       "file_type": "code",
       "id": "packages_athena_webapp_src_routetree_browser_boundary_test_ts",
       "label": "routeTree.browser-boundary.test.ts",
@@ -62212,7 +62281,7 @@
       "source_location": "L1"
     },
     {
-      "community": 366,
+      "community": 367,
       "file_type": "code",
       "id": "routetree_browser_boundary_test_collectsourcefiles",
       "label": "collectSourceFiles()",
@@ -62221,7 +62290,7 @@
       "source_location": "L28"
     },
     {
-      "community": 366,
+      "community": 367,
       "file_type": "code",
       "id": "routetree_browser_boundary_test_findillegalconveximports",
       "label": "findIllegalConvexImports()",
@@ -62230,7 +62299,7 @@
       "source_location": "L46"
     },
     {
-      "community": 367,
+      "community": 368,
       "file_type": "code",
       "id": "authed_authedcomponent",
       "label": "AuthedComponent()",
@@ -62239,7 +62308,7 @@
       "source_location": "L18"
     },
     {
-      "community": 367,
+      "community": 368,
       "file_type": "code",
       "id": "authed_layout",
       "label": "Layout()",
@@ -62248,7 +62317,7 @@
       "source_location": "L28"
     },
     {
-      "community": 367,
+      "community": 368,
       "file_type": "code",
       "id": "packages_athena_webapp_src_routes_authed_tsx",
       "label": "_authed.tsx",
@@ -62257,7 +62326,7 @@
       "source_location": "L1"
     },
     {
-      "community": 368,
+      "community": 369,
       "file_type": "code",
       "id": "admin_shell_patterns_patterncard",
       "label": "PatternCard()",
@@ -62266,7 +62335,7 @@
       "source_location": "L127"
     },
     {
-      "community": 368,
+      "community": 369,
       "file_type": "code",
       "id": "admin_shell_patterns_patternshell",
       "label": "PatternShell()",
@@ -62275,40 +62344,13 @@
       "source_location": "L106"
     },
     {
-      "community": 368,
+      "community": 369,
       "file_type": "code",
       "id": "packages_athena_webapp_src_stories_patterns_admin_shell_patterns_tsx",
       "label": "admin-shell-patterns.tsx",
       "norm_label": "admin-shell-patterns.tsx",
       "source_file": "packages/athena-webapp/src/stories/Patterns/admin-shell-patterns.tsx",
       "source_location": "L1"
-    },
-    {
-      "community": 369,
-      "file_type": "code",
-      "id": "packages_athena_webapp_src_stories_storybook_theme_decorator_tsx",
-      "label": "storybook-theme-decorator.tsx",
-      "norm_label": "storybook-theme-decorator.tsx",
-      "source_file": "packages/athena-webapp/src/stories/storybook-theme-decorator.tsx",
-      "source_location": "L1"
-    },
-    {
-      "community": 369,
-      "file_type": "code",
-      "id": "storybook_theme_decorator_getathenadesigntokenstyle",
-      "label": "getAthenaDesignTokenStyle()",
-      "norm_label": "getathenadesigntokenstyle()",
-      "source_file": "packages/athena-webapp/src/stories/storybook-theme-decorator.tsx",
-      "source_location": "L49"
-    },
-    {
-      "community": 369,
-      "file_type": "code",
-      "id": "storybook_theme_decorator_withathenatheme",
-      "label": "withAthenaTheme()",
-      "norm_label": "withathenatheme()",
-      "source_file": "packages/athena-webapp/src/stories/storybook-theme-decorator.tsx",
-      "source_location": "L62"
     },
     {
       "community": 37,
@@ -62430,6 +62472,33 @@
     {
       "community": 370,
       "file_type": "code",
+      "id": "packages_athena_webapp_src_stories_storybook_theme_decorator_tsx",
+      "label": "storybook-theme-decorator.tsx",
+      "norm_label": "storybook-theme-decorator.tsx",
+      "source_file": "packages/athena-webapp/src/stories/storybook-theme-decorator.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 370,
+      "file_type": "code",
+      "id": "storybook_theme_decorator_getathenadesigntokenstyle",
+      "label": "getAthenaDesignTokenStyle()",
+      "norm_label": "getathenadesigntokenstyle()",
+      "source_file": "packages/athena-webapp/src/stories/storybook-theme-decorator.tsx",
+      "source_location": "L49"
+    },
+    {
+      "community": 370,
+      "file_type": "code",
+      "id": "storybook_theme_decorator_withathenatheme",
+      "label": "withAthenaTheme()",
+      "norm_label": "withathenatheme()",
+      "source_file": "packages/athena-webapp/src/stories/storybook-theme-decorator.tsx",
+      "source_location": "L62"
+    },
+    {
+      "community": 371,
+      "file_type": "code",
       "id": "inventoryvalidationlogic_test_mockgetsku",
       "label": "mockGetSku()",
       "norm_label": "mockgetsku()",
@@ -62437,7 +62506,7 @@
       "source_location": "L66"
     },
     {
-      "community": 370,
+      "community": 371,
       "file_type": "code",
       "id": "inventoryvalidationlogic_test_validateinventoryfortransaction",
       "label": "validateInventoryForTransaction()",
@@ -62446,7 +62515,7 @@
       "source_location": "L20"
     },
     {
-      "community": 370,
+      "community": 371,
       "file_type": "code",
       "id": "packages_athena_webapp_src_tests_pos_inventoryvalidationlogic_test_ts",
       "label": "inventoryValidationLogic.test.ts",
@@ -62455,7 +62524,7 @@
       "source_location": "L1"
     },
     {
-      "community": 371,
+      "community": 372,
       "file_type": "code",
       "id": "index_hashpassword",
       "label": "hashPassword()",
@@ -62464,7 +62533,7 @@
       "source_location": "L1"
     },
     {
-      "community": 371,
+      "community": 372,
       "file_type": "code",
       "id": "packages_athena_webapp_src_utils_index_ts",
       "label": "index.ts",
@@ -62473,7 +62542,7 @@
       "source_location": "L1"
     },
     {
-      "community": 371,
+      "community": 372,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_utils_index_ts",
       "label": "index.ts",
@@ -62482,7 +62551,7 @@
       "source_location": "L1"
     },
     {
-      "community": 372,
+      "community": 373,
       "file_type": "code",
       "id": "packages_athena_webapp_src_utils_versionchecker_ts",
       "label": "versionChecker.ts",
@@ -62491,7 +62560,7 @@
       "source_location": "L1"
     },
     {
-      "community": 372,
+      "community": 373,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_utils_versionchecker_ts",
       "label": "versionChecker.ts",
@@ -62500,7 +62569,7 @@
       "source_location": "L1"
     },
     {
-      "community": 372,
+      "community": 373,
       "file_type": "code",
       "id": "versionchecker_createversionchecker",
       "label": "createVersionChecker()",
@@ -62509,7 +62578,7 @@
       "source_location": "L16"
     },
     {
-      "community": 373,
+      "community": 374,
       "file_type": "code",
       "id": "packages_athena_webapp_vite_config_ts",
       "label": "vite.config.ts",
@@ -62518,7 +62587,7 @@
       "source_location": "L1"
     },
     {
-      "community": 373,
+      "community": 374,
       "file_type": "code",
       "id": "packages_storefront_webapp_vite_config_ts",
       "label": "vite.config.ts",
@@ -62527,16 +62596,16 @@
       "source_location": "L1"
     },
     {
-      "community": 373,
+      "community": 374,
       "file_type": "code",
       "id": "vite_config_manualchunks",
       "label": "manualChunks()",
       "norm_label": "manualchunks()",
       "source_file": "packages/storefront-webapp/vite.config.ts",
-      "source_location": "L19"
+      "source_location": "L23"
     },
     {
-      "community": 374,
+      "community": 375,
       "file_type": "code",
       "id": "packages_athena_webapp_vitest_setup_ts",
       "label": "vitest.setup.ts",
@@ -62545,7 +62614,7 @@
       "source_location": "L1"
     },
     {
-      "community": 374,
+      "community": 375,
       "file_type": "code",
       "id": "vitest_setup_pointercapturestub",
       "label": "pointerCaptureStub()",
@@ -62554,7 +62623,7 @@
       "source_location": "L23"
     },
     {
-      "community": 374,
+      "community": 375,
       "file_type": "code",
       "id": "vitest_setup_pointerreleasestub",
       "label": "pointerReleaseStub()",
@@ -62563,7 +62632,7 @@
       "source_location": "L24"
     },
     {
-      "community": 375,
+      "community": 376,
       "file_type": "code",
       "id": "auth_logout",
       "label": "logout()",
@@ -62572,7 +62641,7 @@
       "source_location": "L32"
     },
     {
-      "community": 375,
+      "community": 376,
       "file_type": "code",
       "id": "auth_verifyuseraccount",
       "label": "verifyUserAccount()",
@@ -62581,7 +62650,7 @@
       "source_location": "L3"
     },
     {
-      "community": 375,
+      "community": 376,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_api_auth_ts",
       "label": "auth.ts",
@@ -62590,7 +62659,7 @@
       "source_location": "L1"
     },
     {
-      "community": 376,
+      "community": 377,
       "file_type": "code",
       "id": "color_getallcolors",
       "label": "getAllColors()",
@@ -62599,7 +62668,7 @@
       "source_location": "L7"
     },
     {
-      "community": 376,
+      "community": 377,
       "file_type": "code",
       "id": "color_getbaseurl",
       "label": "getBaseUrl()",
@@ -62608,7 +62677,7 @@
       "source_location": "L5"
     },
     {
-      "community": 376,
+      "community": 377,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_api_color_ts",
       "label": "color.ts",
@@ -62617,7 +62686,7 @@
       "source_location": "L1"
     },
     {
-      "community": 377,
+      "community": 378,
       "file_type": "code",
       "id": "organization_getallorganizations",
       "label": "getAllOrganizations()",
@@ -62626,7 +62695,7 @@
       "source_location": "L6"
     },
     {
-      "community": 377,
+      "community": 378,
       "file_type": "code",
       "id": "organization_getorganization",
       "label": "getOrganization()",
@@ -62635,7 +62704,7 @@
       "source_location": "L18"
     },
     {
-      "community": 377,
+      "community": 378,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_api_organization_ts",
       "label": "organization.ts",
@@ -62644,7 +62713,7 @@
       "source_location": "L1"
     },
     {
-      "community": 378,
+      "community": 379,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_api_postransaction_ts",
       "label": "posTransaction.ts",
@@ -62653,7 +62722,7 @@
       "source_location": "L1"
     },
     {
-      "community": 378,
+      "community": 379,
       "file_type": "code",
       "id": "postransaction_getbaseurl",
       "label": "getBaseUrl()",
@@ -62662,40 +62731,13 @@
       "source_location": "L60"
     },
     {
-      "community": 378,
+      "community": 379,
       "file_type": "code",
       "id": "postransaction_getpostransaction",
       "label": "getPosTransaction()",
       "norm_label": "getpostransaction()",
       "source_file": "packages/storefront-webapp/src/api/posTransaction.ts",
       "source_location": "L62"
-    },
-    {
-      "community": 379,
-      "file_type": "code",
-      "id": "packages_storefront_webapp_src_api_upsells_ts",
-      "label": "upsells.ts",
-      "norm_label": "upsells.ts",
-      "source_file": "packages/storefront-webapp/src/api/upsells.ts",
-      "source_location": "L1"
-    },
-    {
-      "community": 379,
-      "file_type": "code",
-      "id": "upsells_getbaseurl",
-      "label": "getBaseUrl()",
-      "norm_label": "getbaseurl()",
-      "source_file": "packages/storefront-webapp/src/api/upsells.ts",
-      "source_location": "L3"
-    },
-    {
-      "community": 379,
-      "file_type": "code",
-      "id": "upsells_getlastviewedproduct",
-      "label": "getLastViewedProduct()",
-      "norm_label": "getlastviewedproduct()",
-      "source_file": "packages/storefront-webapp/src/api/upsells.ts",
-      "source_location": "L5"
     },
     {
       "community": 38,
@@ -62817,6 +62859,33 @@
     {
       "community": 380,
       "file_type": "code",
+      "id": "packages_storefront_webapp_src_api_upsells_ts",
+      "label": "upsells.ts",
+      "norm_label": "upsells.ts",
+      "source_file": "packages/storefront-webapp/src/api/upsells.ts",
+      "source_location": "L1"
+    },
+    {
+      "community": 380,
+      "file_type": "code",
+      "id": "upsells_getbaseurl",
+      "label": "getBaseUrl()",
+      "norm_label": "getbaseurl()",
+      "source_file": "packages/storefront-webapp/src/api/upsells.ts",
+      "source_location": "L3"
+    },
+    {
+      "community": 380,
+      "file_type": "code",
+      "id": "upsells_getlastviewedproduct",
+      "label": "getLastViewedProduct()",
+      "norm_label": "getlastviewedproduct()",
+      "source_file": "packages/storefront-webapp/src/api/upsells.ts",
+      "source_location": "L5"
+    },
+    {
+      "community": 381,
+      "file_type": "code",
       "id": "packages_storefront_webapp_src_api_useroffers_ts",
       "label": "userOffers.ts",
       "norm_label": "useroffers.ts",
@@ -62824,7 +62893,7 @@
       "source_location": "L1"
     },
     {
-      "community": 380,
+      "community": 381,
       "file_type": "code",
       "id": "useroffers_getbaseurl",
       "label": "getBaseUrl()",
@@ -62833,7 +62902,7 @@
       "source_location": "L18"
     },
     {
-      "community": 380,
+      "community": 381,
       "file_type": "code",
       "id": "useroffers_getuserofferseligibility",
       "label": "getUserOffersEligibility()",
@@ -62842,7 +62911,7 @@
       "source_location": "L23"
     },
     {
-      "community": 381,
+      "community": 382,
       "file_type": "code",
       "id": "customerdetails_enteredcustomerdetails",
       "label": "EnteredCustomerDetails()",
@@ -62851,7 +62920,7 @@
       "source_location": "L22"
     },
     {
-      "community": 381,
+      "community": 382,
       "file_type": "code",
       "id": "customerdetails_onsubmit",
       "label": "onSubmit()",
@@ -62860,7 +62929,7 @@
       "source_location": "L55"
     },
     {
-      "community": 381,
+      "community": 382,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_checkout_customerdetails_tsx",
       "label": "CustomerDetails.tsx",
@@ -62869,7 +62938,7 @@
       "source_location": "L1"
     },
     {
-      "community": 382,
+      "community": 383,
       "file_type": "code",
       "id": "deliveryoptionsselector_handlechange",
       "label": "handleChange()",
@@ -62878,7 +62947,7 @@
       "source_location": "L77"
     },
     {
-      "community": 382,
+      "community": 383,
       "file_type": "code",
       "id": "deliveryoptionsselector_storeselector",
       "label": "StoreSelector()",
@@ -62887,7 +62956,7 @@
       "source_location": "L11"
     },
     {
-      "community": 382,
+      "community": 383,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_checkout_deliverydetails_deliveryoptionsselector_tsx",
       "label": "DeliveryOptionsSelector.tsx",
@@ -62896,7 +62965,7 @@
       "source_location": "L1"
     },
     {
-      "community": 383,
+      "community": 384,
       "file_type": "code",
       "id": "deliverysection_deliverydetails",
       "label": "DeliveryDetails()",
@@ -62905,7 +62974,7 @@
       "source_location": "L11"
     },
     {
-      "community": 383,
+      "community": 384,
       "file_type": "code",
       "id": "deliverysection_deliveryoptions",
       "label": "DeliveryOptions()",
@@ -62914,7 +62983,7 @@
       "source_location": "L22"
     },
     {
-      "community": 383,
+      "community": 384,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_checkout_deliverydetails_deliverysection_tsx",
       "label": "DeliverySection.tsx",
@@ -62923,7 +62992,7 @@
       "source_location": "L1"
     },
     {
-      "community": 384,
+      "community": 385,
       "file_type": "code",
       "id": "mobilebagsummary_handlekeydown",
       "label": "handleKeyDown()",
@@ -62932,7 +63001,7 @@
       "source_location": "L110"
     },
     {
-      "community": 384,
+      "community": 385,
       "file_type": "code",
       "id": "mobilebagsummary_handleredeempromocode",
       "label": "handleRedeemPromoCode()",
@@ -62941,7 +63010,7 @@
       "source_location": "L89"
     },
     {
-      "community": 384,
+      "community": 385,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_checkout_mobilebagsummary_tsx",
       "label": "MobileBagSummary.tsx",
@@ -62950,7 +63019,7 @@
       "source_location": "L1"
     },
     {
-      "community": 385,
+      "community": 386,
       "file_type": "code",
       "id": "checkoutstorage_loadcheckoutstate",
       "label": "loadCheckoutState()",
@@ -62959,7 +63028,7 @@
       "source_location": "L4"
     },
     {
-      "community": 385,
+      "community": 386,
       "file_type": "code",
       "id": "checkoutstorage_savecheckoutstate",
       "label": "saveCheckoutState()",
@@ -62968,7 +63037,7 @@
       "source_location": "L24"
     },
     {
-      "community": 385,
+      "community": 386,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_checkout_checkoutstorage_ts",
       "label": "checkoutStorage.ts",
@@ -62977,7 +63046,7 @@
       "source_location": "L1"
     },
     {
-      "community": 386,
+      "community": 387,
       "file_type": "code",
       "id": "footer_enablecategories",
       "label": "enableCategories()",
@@ -62986,7 +63055,7 @@
       "source_location": "L131"
     },
     {
-      "community": 386,
+      "community": 387,
       "file_type": "code",
       "id": "footer_linkgroup",
       "label": "LinkGroup()",
@@ -62995,7 +63064,7 @@
       "source_location": "L12"
     },
     {
-      "community": 386,
+      "community": 387,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_footer_footer_tsx",
       "label": "Footer.tsx",
@@ -63004,7 +63073,7 @@
       "source_location": "L1"
     },
     {
-      "community": 387,
+      "community": 388,
       "file_type": "code",
       "id": "featuredproductssection_featuredproductssection",
       "label": "FeaturedProductsSection()",
@@ -63013,7 +63082,7 @@
       "source_location": "L20"
     },
     {
-      "community": 387,
+      "community": 388,
       "file_type": "code",
       "id": "featuredproductssection_featuredsection",
       "label": "FeaturedSection()",
@@ -63022,7 +63091,7 @@
       "source_location": "L46"
     },
     {
-      "community": 387,
+      "community": 388,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_home_featuredproductssection_tsx",
       "label": "FeaturedProductsSection.tsx",
@@ -63031,7 +63100,7 @@
       "source_location": "L1"
     },
     {
-      "community": 388,
+      "community": 389,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_home_promoalert_tsx",
       "label": "PromoAlert.tsx",
@@ -63040,7 +63109,7 @@
       "source_location": "L1"
     },
     {
-      "community": 388,
+      "community": 389,
       "file_type": "code",
       "id": "promoalert_getpromoalertcopy",
       "label": "getPromoAlertCopy()",
@@ -63049,40 +63118,13 @@
       "source_location": "L20"
     },
     {
-      "community": 388,
+      "community": 389,
       "file_type": "code",
       "id": "promoalert_promoalert",
       "label": "PromoAlert()",
       "norm_label": "promoalert()",
       "source_file": "packages/storefront-webapp/src/components/home/PromoAlert.tsx",
       "source_location": "L59"
-    },
-    {
-      "community": 389,
-      "file_type": "code",
-      "id": "packages_storefront_webapp_src_components_home_rewardsalert_tsx",
-      "label": "RewardsAlert.tsx",
-      "norm_label": "rewardsalert.tsx",
-      "source_file": "packages/storefront-webapp/src/components/home/RewardsAlert.tsx",
-      "source_location": "L1"
-    },
-    {
-      "community": 389,
-      "file_type": "code",
-      "id": "rewardsalert_handleshopnow",
-      "label": "handleShopNow()",
-      "norm_label": "handleshopnow()",
-      "source_file": "packages/storefront-webapp/src/components/home/RewardsAlert.tsx",
-      "source_location": "L25"
-    },
-    {
-      "community": 389,
-      "file_type": "code",
-      "id": "rewardsalert_onrewardsalertclose",
-      "label": "onRewardsAlertClose()",
-      "norm_label": "onrewardsalertclose()",
-      "source_file": "packages/storefront-webapp/src/components/home/RewardsAlert.tsx",
-      "source_location": "L20"
     },
     {
       "community": 39,
@@ -63204,6 +63246,33 @@
     {
       "community": 390,
       "file_type": "code",
+      "id": "packages_storefront_webapp_src_components_home_rewardsalert_tsx",
+      "label": "RewardsAlert.tsx",
+      "norm_label": "rewardsalert.tsx",
+      "source_file": "packages/storefront-webapp/src/components/home/RewardsAlert.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 390,
+      "file_type": "code",
+      "id": "rewardsalert_handleshopnow",
+      "label": "handleShopNow()",
+      "norm_label": "handleshopnow()",
+      "source_file": "packages/storefront-webapp/src/components/home/RewardsAlert.tsx",
+      "source_location": "L25"
+    },
+    {
+      "community": 390,
+      "file_type": "code",
+      "id": "rewardsalert_onrewardsalertclose",
+      "label": "onRewardsAlertClose()",
+      "norm_label": "onrewardsalertclose()",
+      "source_file": "packages/storefront-webapp/src/components/home/RewardsAlert.tsx",
+      "source_location": "L20"
+    },
+    {
+      "community": 391,
+      "file_type": "code",
       "id": "navigationbar_navigationbar",
       "label": "NavigationBar()",
       "norm_label": "navigationbar()",
@@ -63211,7 +63280,7 @@
       "source_location": "L30"
     },
     {
-      "community": 390,
+      "community": 391,
       "file_type": "code",
       "id": "navigationbar_storecategoriessubmenu",
       "label": "StoreCategoriesSubmenu()",
@@ -63220,7 +63289,7 @@
       "source_location": "L95"
     },
     {
-      "community": 390,
+      "community": 391,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_navigation_bar_navigationbar_tsx",
       "label": "NavigationBar.tsx",
@@ -63229,7 +63298,7 @@
       "source_location": "L1"
     },
     {
-      "community": 391,
+      "community": 392,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_product_reviews_revieweditor_tsx",
       "label": "ReviewEditor.tsx",
@@ -63238,7 +63307,7 @@
       "source_location": "L1"
     },
     {
-      "community": 391,
+      "community": 392,
       "file_type": "code",
       "id": "revieweditor_handleformdatachange",
       "label": "handleFormDataChange()",
@@ -63247,7 +63316,7 @@
       "source_location": "L150"
     },
     {
-      "community": 391,
+      "community": 392,
       "file_type": "code",
       "id": "revieweditor_handlesubmit",
       "label": "handleSubmit()",
@@ -63256,7 +63325,7 @@
       "source_location": "L157"
     },
     {
-      "community": 392,
+      "community": 393,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_modals_upsellmodalform_tsx",
       "label": "UpsellModalForm.tsx",
@@ -63265,7 +63334,7 @@
       "source_location": "L1"
     },
     {
-      "community": 392,
+      "community": 393,
       "file_type": "code",
       "id": "upsellmodalform_handleinputchange",
       "label": "handleInputChange()",
@@ -63274,7 +63343,7 @@
       "source_location": "L63"
     },
     {
-      "community": 392,
+      "community": 393,
       "file_type": "code",
       "id": "upsellmodalform_handlesubmit",
       "label": "handleSubmit()",
@@ -63283,7 +63352,7 @@
       "source_location": "L48"
     },
     {
-      "community": 393,
+      "community": 394,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_modals_welcomebackmodal_tsx",
       "label": "WelcomeBackModal.tsx",
@@ -63292,7 +63361,7 @@
       "source_location": "L1"
     },
     {
-      "community": 393,
+      "community": 394,
       "file_type": "code",
       "id": "welcomebackmodal_handleclose",
       "label": "handleClose()",
@@ -63301,7 +63370,7 @@
       "source_location": "L63"
     },
     {
-      "community": 393,
+      "community": 394,
       "file_type": "code",
       "id": "welcomebackmodal_handlesuccess",
       "label": "handleSuccess()",
@@ -63310,7 +63379,7 @@
       "source_location": "L76"
     },
     {
-      "community": 394,
+      "community": 395,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_components_ui_modals_welcomebackmodalform_tsx",
       "label": "WelcomeBackModalForm.tsx",
@@ -63319,7 +63388,7 @@
       "source_location": "L1"
     },
     {
-      "community": 394,
+      "community": 395,
       "file_type": "code",
       "id": "welcomebackmodalform_handleinputchange",
       "label": "handleInputChange()",
@@ -63328,7 +63397,7 @@
       "source_location": "L51"
     },
     {
-      "community": 394,
+      "community": 395,
       "file_type": "code",
       "id": "welcomebackmodalform_handlesubmit",
       "label": "handleSubmit()",
@@ -63337,7 +63406,7 @@
       "source_location": "L36"
     },
     {
-      "community": 395,
+      "community": 396,
       "file_type": "code",
       "id": "navigationbarprovider_navigationbarprovider",
       "label": "NavigationBarProvider()",
@@ -63346,7 +63415,7 @@
       "source_location": "L16"
     },
     {
-      "community": 395,
+      "community": 396,
       "file_type": "code",
       "id": "navigationbarprovider_usenavigationbarcontext",
       "label": "useNavigationBarContext()",
@@ -63355,40 +63424,13 @@
       "source_location": "L39"
     },
     {
-      "community": 395,
+      "community": 396,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_contexts_navigationbarprovider_tsx",
       "label": "NavigationBarProvider.tsx",
       "norm_label": "navigationbarprovider.tsx",
       "source_file": "packages/storefront-webapp/src/contexts/NavigationBarProvider.tsx",
       "source_location": "L1"
-    },
-    {
-      "community": 396,
-      "file_type": "code",
-      "id": "packages_storefront_webapp_src_contexts_storecontext_tsx",
-      "label": "StoreContext.tsx",
-      "norm_label": "storecontext.tsx",
-      "source_file": "packages/storefront-webapp/src/contexts/StoreContext.tsx",
-      "source_location": "L1"
-    },
-    {
-      "community": 396,
-      "file_type": "code",
-      "id": "storecontext_storeprovider",
-      "label": "StoreProvider()",
-      "norm_label": "storeprovider()",
-      "source_file": "packages/storefront-webapp/src/contexts/StoreContext.tsx",
-      "source_location": "L25"
-    },
-    {
-      "community": 396,
-      "file_type": "code",
-      "id": "storecontext_usestorecontext",
-      "label": "useStoreContext()",
-      "norm_label": "usestorecontext()",
-      "source_file": "packages/storefront-webapp/src/contexts/StoreContext.tsx",
-      "source_location": "L82"
     },
     {
       "community": 397,

@@ -1,10 +1,11 @@
-import { useStoreContext } from "@/contexts/StoreContext";
+import type { Store } from "@athena/webapp";
+import { useOptionalStoreContext } from "@/contexts/StoreContext";
 import { useCountdown } from "@/components/common/hooks";
 import { getStoreConfigV2 } from "@/lib/storeConfig";
 
-export const MaintenanceMode = () => {
-  const { store } = useStoreContext();
-  const storeConfig = getStoreConfigV2(store);
+export const MaintenanceMode = ({ store }: { store?: Store }) => {
+  const context = useOptionalStoreContext();
+  const storeConfig = getStoreConfigV2(store ?? context?.store);
   const maintenanceConfig = storeConfig.operations.maintenance;
 
   const { timeLeft } = useCountdown(maintenanceConfig?.countdownEndsAt);

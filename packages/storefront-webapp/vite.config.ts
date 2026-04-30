@@ -1,11 +1,15 @@
 import path from "path";
-import { defineConfig } from "vite";
+import { defineConfig, type PluginOption } from "vite";
 import react from "@vitejs/plugin-react";
 import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
 import { visualizer } from "rollup-plugin-visualizer";
 
 export default defineConfig({
   base: "/",
+  server: {
+    host: "127.0.0.1",
+    port: 5174,
+  },
   build: {
     rollupOptions: {
       treeshake: true,
@@ -37,7 +41,7 @@ export default defineConfig({
       },
     },
   },
-  plugins: [TanStackRouterVite(), react()],
+  plugins: [TanStackRouterVite(), react() as unknown as PluginOption],
   resolve: {
     alias: {
       "~": __dirname,

@@ -80,9 +80,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
 };
 
 export const useStoreContext = () => {
-  const context = useContext(StoreContext);
+  const context = useOptionalStoreContext();
   if (context === undefined) {
     throw new Error("useStoreContext must be used within a StoreProvider");
   }
   return context;
 };
+
+export const useOptionalStoreContext = () => useContext(StoreContext);
