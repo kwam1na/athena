@@ -11,6 +11,8 @@ Git worktrees create isolated workspaces sharing the same repository, allowing w
 
 **Core principle:** Systematic directory selection + safety verification = reliable isolation.
 
+**Branch rule:** Base from `origin/main` when appropriate, but never create a linked worktree whose checked-out branch is `main` or another protected long-lived branch.
+
 **Announce at start:** "I'm using the using-git-worktrees skill to set up an isolated workspace."
 
 ## Directory Selection Process
@@ -98,6 +100,8 @@ git worktree add "$path" -b "$BRANCH_NAME"
 cd "$path"
 ```
 
+`$BRANCH_NAME` must be a feature branch such as `codex/<ticket-id>`, `feat/<topic>`, or `fix/<topic>`, not `main`, `master`, `develop`, `dev`, `trunk`, `staging`, or `release/*`.
+
 ### 3. Run Project Setup
 
 Auto-detect and run appropriate setup:
@@ -164,6 +168,11 @@ Ready to implement <feature-name>
 
 - **Problem:** Creates inconsistency, violates project conventions
 - **Fix:** Follow priority: existing > CLAUDE.md > ask
+
+### Reusing a protected branch name
+
+- **Problem:** A linked worktree can block later `git switch main` or produce "`main` is already checked out" failures
+- **Fix:** Always branch the worktree off `origin/main`; never make the worktree checkout itself `main`
 
 ### Proceeding with failing tests
 

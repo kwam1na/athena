@@ -34,6 +34,9 @@ Creates .worktrees/<branch-name> with <branch-name> branched from
 
 The main repo checkout is not modified; from-branch is fetched but
 not checked out.
+
+Protected branch names such as main, master, develop, dev, trunk,
+staging, and release/* are rejected as worktree branch names.
 EOF
 }
 
@@ -104,6 +107,14 @@ is_trusted_base_branch() {
   esac
 }
 
+is_protected_branch_name() {
+  local branch="$1"
+  case "$branch" in
+    main|master|develop|dev|trunk|staging|release/*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 # Return 0 if worktree's copy of $file has the same blob hash as $base_ref's.
 # Symlinks are rejected (can't verify content).
 config_unchanged() {
@@ -160,6 +171,11 @@ create_worktree() {
   if [[ -z "$branch_name" ]]; then
     echo "Error: branch name required" >&2
     usage >&2
+    exit 1
+  fi
+  if is_protected_branch_name "$branch_name"; then
+    echo "Error: refusing to create a linked worktree on protected branch '$branch_name'" >&2
+    echo "Create a feature branch instead, for example 'codex/<ticket-id>' or 'feat/<name>'." >&2
     exit 1
   fi
 

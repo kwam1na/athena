@@ -62,6 +62,7 @@ Use this resolution order before asking the user for context:
 ## Defaults
 
 - Start each ticket from the latest `origin/main` in a fresh worktree and `codex/` branch.
+- Never check out `main` itself inside a linked worktree; use `origin/main` only as the base ref for a ticket branch.
 - Include the Linear ticket id in every commit message.
 - Prefer Linear MCP operations for status changes, comments, and follow-up issue creation.
 - Prefer sub-agents when the work can be split into parallelizable chunks with clear ownership.
@@ -87,6 +88,7 @@ Use this resolution order before asking the user for context:
 
 - Create a fresh worktree from the latest `origin/main`.
 - Use a `codex/` branch name that includes the ticket id.
+- Treat any attempt to create a worktree on `main` or another protected long-lived branch as a setup error and fix it before editing.
 - Respect repo rules in `AGENTS.md` and related docs before coding.
 - If the overall batch is expected to land through one integration PR, still keep each ticket's implementation isolated in its own worktree or branch so the final integration step is deliberate.
 

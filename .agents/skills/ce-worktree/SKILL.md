@@ -21,6 +21,7 @@ bash scripts/worktree-manager.sh create <branch-name> [from-branch]
 Defaults:
 - `from-branch` defaults to origin's default branch (or `main` if that cannot be resolved)
 - The new branch is created at `origin/<from-branch>` (or the local ref if the remote is unavailable)
+- `branch-name` must be a feature branch name, not a protected branch like `main`, `master`, `develop`, `dev`, `trunk`, `staging`, or `release/*`
 
 Examples:
 ```bash
@@ -68,9 +69,13 @@ Do not create a worktree for single-task work that can happen on a branch in the
 
 `ce-work` and `ce-code-review` offer this skill as an option. When the user selects "worktree" in those flows, invoke `bash scripts/worktree-manager.sh create <branch>` with a meaningful branch name derived from the work description (e.g., `feat/crowd-sniff`, `fix/email-validation`). Avoid auto-generated names like `worktree-jolly-beaming-raven` that obscure the work.
 
+Never check out `main` itself inside a linked worktree. Start from `origin/main` when needed, but always create a separate branch for the worktree checkout.
+
 ## Troubleshooting
 
 **"Worktree already exists"**: the path is already in use. Either switch to it (`cd .worktrees/<branch>`) or remove it (`git worktree remove .worktrees/<branch>`) before recreating.
+
+**"Refusing to create a linked worktree on protected branch"**: choose a feature branch name such as `codex/<ticket-id>` or `feat/<topic>`. Protected long-lived branches stay in the main checkout.
 
 **"Cannot remove worktree: it is the current worktree"**: `cd` out of the worktree first, then `git worktree remove`.
 
