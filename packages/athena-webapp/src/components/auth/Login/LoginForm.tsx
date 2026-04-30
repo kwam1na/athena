@@ -6,6 +6,7 @@ import { Input } from "../../ui/input";
 import { LoadingButton } from "../../ui/loading-button";
 import { ATHENA_EMAIL_OTP_PROVIDER_ID } from "../../../../shared/auth";
 import { z } from "zod";
+import { ArrowRight } from "lucide-react";
 
 export function LoginForm({
   setStep,
@@ -36,24 +37,21 @@ export function LoginForm({
     },
   });
   return (
-    <div className="mx-auto flex h-full w-full max-w-96 flex-col items-center justify-center gap-6">
-      <div className="mb-2 flex flex-col gap-4">
-        <h3 className="text-center text-xl font-medium text-primary">
+    <div className="flex w-full flex-col gap-layout-xl">
+      <div>
+        <h2 className="font-display text-2xl font-light uppercase tracking-[0.18em] text-foreground">
           Log in to athena
-        </h3>
+        </h2>
       </div>
       <form
-        className="flex w-full flex-col items-start gap-4"
+        className="flex w-full flex-col items-start gap-layout-md"
         onSubmit={(e) => {
           e.preventDefault();
           e.stopPropagation();
           form.handleSubmit();
         }}
       >
-        <div className="flex w-full flex-col gap-1.5">
-          <label htmlFor="email" className="sr-only">
-            Email
-          </label>
+        <div className="flex w-full flex-col gap-layout-xs">
           <form.Field
             name="email"
             validators={{
@@ -64,11 +62,14 @@ export function LoginForm({
             }}
             children={(field) => (
               <Input
+                id="email"
+                type="email"
+                autoComplete="email"
                 placeholder="Email"
                 value={field.state.value}
                 onBlur={field.handleBlur}
                 onChange={(e) => field.handleChange(e.target.value)}
-                className={`bg-transparent ${
+                className={`h-control-standard bg-background ${
                   field.state.meta?.errors.length > 0 &&
                   "border-destructive focus-visible:ring-destructive"
                 }`}
@@ -77,9 +78,9 @@ export function LoginForm({
           />
         </div>
 
-        <div className="flex flex-col">
+        <div className="min-h-5">
           {form.state.fieldMeta.email?.errors.length > 0 && (
-            <span className="mb-2 text-sm text-destructive">
+            <span className="text-sm text-destructive">
               {form.state.fieldMeta.email?.errors.join(" ")}
             </span>
           )}
@@ -88,9 +89,10 @@ export function LoginForm({
         <LoadingButton
           isLoading={isSubmitting}
           type="submit"
-          className="w-full"
+          className="group h-control-standard w-full"
         >
           Continue
+          <ArrowRight className="h-4 w-4 transition-transform duration-standard ease-emphasized group-hover:translate-x-1 group-focus-visible:translate-x-1" />
         </LoadingButton>
       </form>
     </div>

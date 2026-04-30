@@ -39,7 +39,9 @@ describe("InputOTPForm", () => {
 
     mocked.signIn.mockResolvedValue({ signingIn: true });
 
-    render(<InputOTPForm email=" Manager@Example.com " />);
+    render(
+      <InputOTPForm email=" Manager@Example.com " onBack={vi.fn()} />
+    );
 
     await user.type(screen.getByLabelText(/verification code/i), "123456");
 
@@ -60,12 +62,52 @@ describe("InputOTPForm", () => {
 
     mocked.signIn.mockResolvedValue({ signingIn: false });
 
-    render(<InputOTPForm email="manager@example.com" />);
+    render(
+      <InputOTPForm email="manager@example.com" onBack={vi.fn()} />
+    );
 
     await user.type(screen.getByLabelText(/verification code/i), "123456");
 
     await waitFor(() =>
       expect(screen.getByText("Invalid code entered")).toBeInTheDocument()
     );
+  });
+
+  it("lets the operator return to the email step", async () => {
+    const user = userEvent.setup();
+    const onBack = vi.fn();
+
+    render(
+      <InputOTPForm email="manager@example.com" onBack={onBack} />
+    );
+
+    await user.click(screen.getByRole("button", { name: /change email/i }));
+
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("requests a fresh code for the same email after the resend delay", async () => {
+    const user = userEvent.setup();
+
+    mocked.signIn.mockResolvedValue({});
+
+    render(
+      <InputOTPForm
+        email=" Manager@Example.com "
+        onBack={vi.fn()}
+        requestNewCodeDelaySeconds={0}
+      />
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /request a new code/i })
+    );
+
+    await waitFor(() =>
+      expect(mocked.signIn).toHaveBeenCalledWith(ATHENA_EMAIL_OTP_PROVIDER_ID, {
+        email: "manager@example.com",
+      })
+    );
+    expect(screen.getByText(/request a new code/i)).toBeInTheDocument();
   });
 });
