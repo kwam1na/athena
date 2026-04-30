@@ -834,6 +834,18 @@ describe("repo harness ergonomics", () => {
     );
   });
 
+  it("configures Git to use the tracked .husky hooks directory", async () => {
+    const [packageJson, configureHooksScript] = await Promise.all([
+      readFile(path.join(ROOT_DIR, "package.json"), "utf8"),
+      readFile(path.join(ROOT_DIR, "scripts/configure-git-hooks.sh"), "utf8"),
+    ]);
+
+    expect(JSON.parse(packageJson).scripts?.prepare).toBe(
+      "sh scripts/configure-git-hooks.sh"
+    );
+    expect(configureHooksScript).toContain("git config core.hooksPath .husky");
+  });
+
   it("pins Bun in package.json and keeps GitHub Actions aligned with that repo version", async () => {
     const [packageJsonText, workflow] = await Promise.all([
       readFile(path.join(ROOT_DIR, "package.json"), "utf8"),
