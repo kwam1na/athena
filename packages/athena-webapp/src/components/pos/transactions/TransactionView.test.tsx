@@ -1,12 +1,16 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TransactionView } from "./TransactionView";
 
 const useQueryMock = vi.fn();
+const useMutationMock = vi.fn();
 const useParamsMock = vi.fn();
+const useProtectedAdminPageStateMock = vi.fn();
 
 vi.mock("convex/react", () => ({
+  useMutation: (...args: unknown[]) => useMutationMock(...args),
   useQuery: (...args: unknown[]) => useQueryMock(...args),
 }));
 
@@ -56,6 +60,27 @@ vi.mock("../../ui/card", () => ({
   ),
 }));
 
+vi.mock("../../ui/input", () => ({
+  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => (
+    <input {...props} />
+  ),
+}));
+
+vi.mock("~/src/hooks/useProtectedAdminPageState", () => ({
+  useProtectedAdminPageState: () => useProtectedAdminPageStateMock(),
+}));
+
+vi.mock("../../staff-auth/StaffAuthenticationDialog", () => ({
+  StaffAuthenticationDialog: ({ open }: { open: boolean }) =>
+    open ? <div data-testid="staff-auth-dialog" /> : null,
+}));
+
+vi.mock("sonner", () => ({
+  toast: {
+    success: vi.fn(),
+  },
+}));
+
 vi.mock("../OrderSummary", () => ({
   OrderSummary: () => <div data-testid="order-summary" />,
 }));
@@ -80,6 +105,33 @@ vi.mock("../../traces/WorkflowTraceRouteLink", () => ({
 }));
 
 describe("TransactionView", () => {
+  const baseTransaction = {
+    _id: "txn_1",
+    transactionNumber: "POS-123456",
+    subtotal: 1000,
+    tax: 0,
+    total: 1000,
+    hasTrace: false,
+    sessionTraceId: null,
+    paymentMethod: "cash",
+    payments: [{ method: "cash", amount: 1000, timestamp: 123 }],
+    totalPaid: 1000,
+    status: "completed",
+    completedAt: 100,
+    cashier: null,
+    customer: null,
+    customerInfo: undefined,
+    items: [],
+  };
+
+  beforeEach(() => {
+    useMutationMock.mockReturnValue(vi.fn());
+    useProtectedAdminPageStateMock.mockReturnValue({
+      activeStore: { _id: "store_1" },
+      isAuthenticated: true,
+    });
+  });
+
   it("renders the session trace link when the transaction has a session trace", () => {
     useParamsMock.mockReturnValue({ transactionId: "txn_1" });
     useQueryMock.mockReturnValue({
@@ -223,5 +275,91 @@ describe("TransactionView", () => {
       container.querySelector(".lucide-wallet-cards"),
     ).not.toBeInTheDocument();
     expect(container.querySelector(".lucide-banknote")).toBeInTheDocument();
+  });
+
+  it("renders correction categories for completed transactions", async () => {
+    const user = userEvent.setup();
+    useParamsMock.mockReturnValue({ transactionId: "txn_6" });
+    useQueryMock.mockReturnValue(baseTransaction);
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Correct" }));
+
+    expect(
+      screen.getByRole("button", { name: "Customer attribution" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Payment method" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Items or quantities" }),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Customer attribution" }),
+    );
+
+    expect(screen.getByText("Customer correction")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Customer correction reason"),
+    ).toBeInTheDocument();
+  });
+
+  it("routes high-risk transaction corrections to safe guidance", async () => {
+    const user = userEvent.setup();
+    useParamsMock.mockReturnValue({ transactionId: "txn_7" });
+    useQueryMock.mockReturnValue(baseTransaction);
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Correct" }));
+    await user.click(screen.getByRole("button", { name: "Amounts or totals" }));
+
+    expect(
+      screen.getByText(
+        "Use refund, exchange, or manager review for item, amount, total, or discount corrections.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Payment method correction reason"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders correction history when operational events are present", () => {
+    useParamsMock.mockReturnValue({ transactionId: "txn_8" });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      correctionHistory: [
+        {
+          _id: "event-1",
+          actorStaffName: "Ama Mensah",
+          createdAt: Date.now() - 60_000,
+          eventType: "transaction_customer_corrected",
+          message: "Customer attribution corrected",
+          reason: "Customer called with receipt.",
+        },
+      ],
+    });
+
+    render(<TransactionView />);
+
+    expect(screen.getByText("Correction history")).toBeInTheDocument();
+    expect(
+      screen.getByText("Customer attribution corrected"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Customer called with receipt."),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/by Ama M\./)).toBeInTheDocument();
+  });
+
+  it("omits correction history when no events are present", () => {
+    useParamsMock.mockReturnValue({ transactionId: "txn_9" });
+    useQueryMock.mockReturnValue(baseTransaction);
+
+    render(<TransactionView />);
+
+    expect(screen.queryByText("Correction history")).not.toBeInTheDocument();
   });
 });

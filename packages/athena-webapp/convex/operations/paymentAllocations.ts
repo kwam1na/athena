@@ -1,5 +1,5 @@
 import { internalMutation, internalQuery, MutationCtx } from "../_generated/server";
-import { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 
 export type RecordPaymentAllocationArgs = {
@@ -54,6 +54,30 @@ export function summarizePaymentAllocations(
   );
 }
 
+export function findSameAmountSinglePaymentAllocation(
+  allocations: Array<
+    Pick<
+      Doc<"paymentAllocation">,
+      "_id" | "amount" | "direction" | "method" | "status"
+    >
+  >,
+  args: {
+    amount: number;
+  }
+) {
+  const recordedIncomingAllocations = allocations.filter(
+    (allocation) =>
+      allocation.status === "recorded" && allocation.direction === "in"
+  );
+
+  if (recordedIncomingAllocations.length !== 1) {
+    return null;
+  }
+
+  const [allocation] = recordedIncomingAllocations;
+  return allocation.amount === args.amount ? allocation : null;
+}
+
 function matchesExistingAllocation(
   existingAllocation: {
     allocationType: string;
@@ -104,6 +128,52 @@ export async function recordPaymentAllocationWithCtx(
   );
 
   return ctx.db.get("paymentAllocation", allocationId);
+}
+
+export async function listPaymentAllocationsForTargetWithCtx(
+  ctx: MutationCtx,
+  args: {
+    storeId: Id<"store">;
+    targetType: string;
+    targetId: string;
+  }
+) {
+  // eslint-disable-next-line @convex-dev/no-collect-in-query -- Correction validation needs the full target-scoped ledger before mutating one allocation.
+  return ctx.db
+    .query("paymentAllocation")
+    .withIndex("by_storeId_target", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("targetType", args.targetType)
+        .eq("targetId", args.targetId)
+    )
+    .collect();
+}
+
+export async function correctSameAmountSinglePaymentAllocationWithCtx(
+  ctx: MutationCtx,
+  args: {
+    storeId: Id<"store">;
+    targetType: string;
+    targetId: string;
+    amount: number;
+    method: string;
+  }
+) {
+  const allocations = await listPaymentAllocationsForTargetWithCtx(ctx, args);
+  const allocation = findSameAmountSinglePaymentAllocation(allocations, args);
+
+  if (!allocation) {
+    return null;
+  }
+
+  if (allocation.method !== args.method) {
+    await ctx.db.patch("paymentAllocation", allocation._id, {
+      method: args.method,
+    });
+  }
+
+  return { ...allocation, method: args.method };
 }
 
 export const recordPaymentAllocation = internalMutation({

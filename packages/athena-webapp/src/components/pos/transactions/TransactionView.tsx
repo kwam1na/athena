@@ -1,6 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useParams } from "@tanstack/react-router";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
+import { toast } from "sonner";
 import {
   Banknote,
   CheckCircle2,
@@ -26,6 +27,15 @@ import { WorkflowTraceRouteLink } from "../../traces/WorkflowTraceRouteLink";
 import { Button } from "../../ui/button";
 import config from "~/src/config";
 import { formatStaffDisplayName } from "~/shared/staffDisplayName";
+import { Textarea } from "../../ui/textarea";
+import { Input } from "../../ui/input";
+import { runCommand } from "~/src/lib/errors/runCommand";
+import type { CommandResult } from "~/shared/commandResult";
+import {
+  StaffAuthenticationDialog,
+  type StaffAuthenticationResult,
+} from "../../staff-auth/StaffAuthenticationDialog";
+import { useProtectedAdminPageState } from "~/src/hooks/useProtectedAdminPageState";
 
 type RouteParams =
   | {
@@ -33,11 +43,59 @@ type RouteParams =
     }
   | undefined;
 
+type CorrectionEvent = {
+  _id: string;
+  actorStaffName?: string | null;
+  createdAt: number;
+  eventType: string;
+  message?: string | null;
+  reason?: string | null;
+};
+
+function formatCorrectionEventType(eventType: string) {
+  return eventType
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function getTransactionCorrectionHistory(transaction: {
+  correctionHistory?: CorrectionEvent[];
+  timeline?: CorrectionEvent[];
+}) {
+  return transaction.correctionHistory ?? transaction.timeline ?? [];
+}
+
 export function TransactionView() {
   const params = useParams({
     strict: false,
   }) as RouteParams;
   const transactionId = params?.transactionId;
+  const [correctionPanelOpen, setCorrectionPanelOpen] = useState(false);
+  const [selectedCorrection, setSelectedCorrection] = useState<
+    | "customer"
+    | "payment_method"
+    | "line_items"
+    | "amounts"
+    | "discounts"
+    | null
+  >(null);
+  const [customerProfileIdInput, setCustomerProfileIdInput] = useState("");
+  const [customerCorrectionReason, setCustomerCorrectionReason] = useState("");
+  const [paymentCorrectionReason, setPaymentCorrectionReason] = useState("");
+  const [paymentMethodInput, setPaymentMethodInput] = useState("");
+  const [correctionError, setCorrectionError] = useState<string | null>(null);
+  const [correctionSubmitting, setCorrectionSubmitting] = useState(false);
+  const [pendingCorrection, setPendingCorrection] = useState<
+    "customer" | "payment_method" | null
+  >(null);
+  const { activeStore, isAuthenticated } = useProtectedAdminPageState();
+  const correctAuth = useMutation(
+    api.operations.staffCredentials.authenticateStaffCredential,
+  );
+  const correctCustomer = useMutation(api.inventory.pos.correctTransactionCustomer);
+  const correctPaymentMethod = useMutation(
+    api.inventory.pos.correctTransactionPaymentMethod,
+  );
 
   const transaction = useQuery(
     api.inventory.pos.getTransactionById,
@@ -126,6 +184,133 @@ export function TransactionView() {
     /\/$/,
     "",
   )}/shop/receipt/${transactionId}`;
+  const correctionHistory = getTransactionCorrectionHistory(transaction);
+  const isCompletedTransaction = transaction.status === "completed";
+  const hasSinglePayment = (transaction.payments?.length ?? 0) <= 1;
+  const showPaymentMethodDirectFlow =
+    selectedCorrection === "payment_method" && hasSinglePayment;
+
+  async function authenticateCorrectionStaff(args: {
+    pinHash: string;
+    username: string;
+  }) {
+    if (!activeStore?._id) {
+      return {
+        kind: "user_error" as const,
+        error: {
+          code: "authentication_failed" as const,
+          message: "Select a store before confirming staff credentials.",
+        },
+      };
+    }
+
+    return runCommand(() =>
+      correctAuth({
+        allowedRoles: ["cashier", "manager"],
+        pinHash: args.pinHash,
+        storeId: activeStore._id,
+        username: args.username,
+      }),
+    );
+  }
+
+  async function runCustomerCorrection(staff: StaffAuthenticationResult) {
+    if (!isAuthenticated) {
+      setCorrectionError("Sign in again before correcting this transaction.");
+      return;
+    }
+
+    const reason = customerCorrectionReason.trim();
+    if (!reason) {
+      setCorrectionError("Add a reason for this correction.");
+      return;
+    }
+
+    setCorrectionSubmitting(true);
+    setCorrectionError(null);
+    const result = await runCommand(() =>
+      correctCustomer({
+        actorStaffProfileId: staff.staffProfileId,
+        customerProfileId: customerProfileIdInput.trim()
+          ? (customerProfileIdInput.trim() as Id<"customerProfile">)
+          : undefined,
+        reason,
+        transactionId: transactionId as Id<"posTransaction">,
+      }) as Promise<CommandResult<unknown>>,
+    );
+    setCorrectionSubmitting(false);
+
+    if (result.kind === "ok") {
+      setCustomerCorrectionReason("");
+      setCustomerProfileIdInput("");
+      toast.success("Customer attribution corrected");
+      return;
+    }
+
+    setCorrectionError(result.error.message);
+  }
+
+  async function runPaymentMethodCorrection(staff: StaffAuthenticationResult) {
+    if (!isAuthenticated) {
+      setCorrectionError("Sign in again before correcting this transaction.");
+      return;
+    }
+
+    const paymentMethod = paymentMethodInput.trim();
+    const reason = paymentCorrectionReason.trim();
+    if (!paymentMethod) {
+      setCorrectionError("Choose the corrected payment method.");
+      return;
+    }
+    if (!reason) {
+      setCorrectionError("Add a reason for this correction.");
+      return;
+    }
+
+    setCorrectionSubmitting(true);
+    setCorrectionError(null);
+    const result = await runCommand(() =>
+      correctPaymentMethod({
+        actorStaffProfileId: staff.staffProfileId,
+        paymentMethod,
+        reason,
+        transactionId: transactionId as Id<"posTransaction">,
+      }) as Promise<CommandResult<unknown>>,
+    );
+    setCorrectionSubmitting(false);
+
+    if (result.kind === "ok") {
+      setPaymentCorrectionReason("");
+      setPaymentMethodInput("");
+      toast.success("Payment method corrected");
+      return;
+    }
+
+    setCorrectionError(result.error.message);
+  }
+
+  function requestCorrectionSubmit(kind: "customer" | "payment_method") {
+    setCorrectionError(null);
+
+    if (kind === "customer" && !customerCorrectionReason.trim()) {
+      setCorrectionError("Add a reason for this correction.");
+      return;
+    }
+
+    if (kind === "payment_method") {
+      if (!paymentMethodInput.trim()) {
+        setCorrectionError("Choose the corrected payment method.");
+        return;
+      }
+
+      if (!paymentCorrectionReason.trim()) {
+        setCorrectionError("Add a reason for this correction.");
+        return;
+      }
+    }
+
+    setPendingCorrection(kind);
+  }
 
   return (
     <View
@@ -135,6 +320,36 @@ export function TransactionView() {
         />
       }
     >
+      <StaffAuthenticationDialog
+        copy={{
+          title: "Staff sign-in required",
+          description: "Enter username and PIN to record this correction.",
+          submitLabel: "Confirm staff",
+        }}
+        getSuccessMessage={(result) => {
+          const staffDisplayName = formatStaffDisplayName(result.staffProfile);
+          return staffDisplayName
+            ? `Confirmed as ${staffDisplayName}.`
+            : "Staff credentials confirmed.";
+        }}
+        onAuthenticate={(args) =>
+          authenticateCorrectionStaff({
+            pinHash: args.pinHash,
+            username: args.username,
+          })
+        }
+        onAuthenticated={(result) => {
+          const correction = pendingCorrection;
+          setPendingCorrection(null);
+          if (correction === "customer") {
+            void runCustomerCorrection(result);
+          } else if (correction === "payment_method") {
+            void runPaymentMethodCorrection(result);
+          }
+        }}
+        onDismiss={() => setPendingCorrection(null)}
+        open={Boolean(pendingCorrection)}
+      />
       <FadeIn className="h-full">
         <div className="container mx-auto h-full min-h-0 p-6">
           <div className="grid h-full min-h-0 gap-8 xl:grid-cols-[380px,minmax(0,1fr)]">
@@ -164,6 +379,20 @@ export function TransactionView() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4 border-t border-border/70 pt-4 text-sm">
+                  {isCompletedTransaction ? (
+                    <Button
+                      className="w-full"
+                      onClick={() => {
+                        setCorrectionPanelOpen((value) => !value);
+                        setSelectedCorrection(null);
+                      }}
+                      type="button"
+                      variant="outline"
+                    >
+                      Correct
+                    </Button>
+                  ) : null}
+
                   {transaction.cashier && (
                     <div className="flex items-center gap-3">
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[calc(var(--radius)*0.85)] bg-muted text-muted-foreground">
@@ -244,6 +473,207 @@ export function TransactionView() {
                 </CardContent>
               </section>
 
+              {correctionPanelOpen ? (
+                <section className="space-y-4 overflow-hidden rounded-[calc(var(--radius)*1.35)] border border-border/80 bg-surface-raised p-4 shadow-surface">
+                  <div className="space-y-1">
+                    <h2 className="font-display text-xl font-semibold text-foreground">
+                      Transaction correction
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      Choose the correction type. Completed sale totals stay
+                      locked.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Button
+                      className="justify-start"
+                      onClick={() => setSelectedCorrection("customer")}
+                      type="button"
+                      variant={
+                        selectedCorrection === "customer"
+                          ? "default"
+                          : "outline"
+                      }
+                    >
+                      Customer attribution
+                    </Button>
+                    <Button
+                      className="justify-start"
+                      onClick={() => setSelectedCorrection("payment_method")}
+                      type="button"
+                      variant={
+                        selectedCorrection === "payment_method"
+                          ? "default"
+                          : "outline"
+                      }
+                    >
+                      Payment method
+                    </Button>
+                    <Button
+                      className="justify-start"
+                      onClick={() => setSelectedCorrection("line_items")}
+                      type="button"
+                      variant={
+                        selectedCorrection === "line_items"
+                          ? "default"
+                          : "outline"
+                      }
+                    >
+                      Items or quantities
+                    </Button>
+                    <Button
+                      className="justify-start"
+                      onClick={() => setSelectedCorrection("amounts")}
+                      type="button"
+                      variant={
+                        selectedCorrection === "amounts" ? "default" : "outline"
+                      }
+                    >
+                      Amounts or totals
+                    </Button>
+                    <Button
+                      className="justify-start"
+                      onClick={() => setSelectedCorrection("discounts")}
+                      type="button"
+                      variant={
+                        selectedCorrection === "discounts"
+                          ? "default"
+                          : "outline"
+                      }
+                    >
+                      Discounts
+                    </Button>
+                  </div>
+
+                  {selectedCorrection === "customer" ? (
+                    <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
+                      <p className="text-sm font-medium text-foreground">
+                        Customer correction
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Staff sign-in and customer lookup will update
+                        attribution only.
+                      </p>
+                      <Input
+                        aria-label="Corrected customer profile ID"
+                        className="border-input bg-background"
+                        onChange={(event) =>
+                          setCustomerProfileIdInput(event.target.value)
+                        }
+                        placeholder="Customer profile ID, or leave blank for walk-in."
+                        value={customerProfileIdInput}
+                      />
+                      <Textarea
+                        aria-label="Customer correction reason"
+                        className="min-h-[80px] border-input bg-background"
+                        onChange={(event) =>
+                          setCustomerCorrectionReason(event.target.value)
+                        }
+                        placeholder="Reason for customer attribution correction."
+                        value={customerCorrectionReason}
+                      />
+                      <Button
+                        disabled={correctionSubmitting}
+                        onClick={() => requestCorrectionSubmit("customer")}
+                        type="button"
+                      >
+                        Submit customer correction
+                      </Button>
+                    </div>
+                  ) : showPaymentMethodDirectFlow ? (
+                    <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
+                      <p className="text-sm font-medium text-foreground">
+                        Same-amount payment method correction
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Staff sign-in will keep the paid amount unchanged and
+                        update the method history.
+                      </p>
+                      <Input
+                        aria-label="Corrected payment method"
+                        className="border-input bg-background"
+                        onChange={(event) =>
+                          setPaymentMethodInput(event.target.value)
+                        }
+                        placeholder="cash, card, mobile_money..."
+                        value={paymentMethodInput}
+                      />
+                      <Textarea
+                        aria-label="Payment method correction reason"
+                        className="min-h-[80px] border-input bg-background"
+                        onChange={(event) =>
+                          setPaymentCorrectionReason(event.target.value)
+                        }
+                        placeholder="Reason for payment method correction."
+                        value={paymentCorrectionReason}
+                      />
+                      <Button
+                        disabled={correctionSubmitting}
+                        onClick={() =>
+                          requestCorrectionSubmit("payment_method")
+                        }
+                        type="button"
+                      >
+                        Submit payment correction
+                      </Button>
+                    </div>
+                  ) : selectedCorrection === "payment_method" ? (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-4 text-sm text-muted-foreground">
+                      Multi-payment corrections need review before editing
+                      payment records.
+                    </div>
+                  ) : selectedCorrection ? (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-4 text-sm text-muted-foreground">
+                      Use refund, exchange, or manager review for item, amount,
+                      total, or discount corrections.
+                    </div>
+                  ) : null}
+                  {correctionError ? (
+                    <p className="text-sm text-destructive">
+                      {correctionError}
+                    </p>
+                  ) : null}
+                </section>
+              ) : null}
+
+              {correctionHistory.length > 0 ? (
+                <section className="space-y-3 overflow-hidden rounded-[calc(var(--radius)*1.35)] border border-border/80 bg-surface-raised p-4 shadow-surface">
+                  <div className="space-y-1">
+                    <h2 className="font-display text-xl font-semibold text-foreground">
+                      Correction history
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      Operational corrections recorded for this transaction.
+                    </p>
+                  </div>
+                  <div className="space-y-3">
+                    {correctionHistory.map((event) => (
+                      <div
+                        className="rounded-lg border border-border bg-muted/20 p-3"
+                        key={event._id}
+                      >
+                        <p className="text-sm font-medium text-foreground">
+                          {event.message ??
+                            formatCorrectionEventType(event.eventType)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {getRelativeTime(event.createdAt)}
+                          {event.actorStaffName
+                            ? ` by ${formatStaffDisplayName({ fullName: event.actorStaffName })}`
+                            : ""}
+                        </p>
+                        {event.reason ? (
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {event.reason}
+                          </p>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
               <OrderSummary
                 cartItems={cartItems}
                 readOnly
@@ -253,7 +683,7 @@ export function TransactionView() {
                 completedTransactionData={completedData}
                 cashierName={
                   transaction.cashier
-                    ? formatStaffDisplayName(transaction.cashier) ?? undefined
+                    ? (formatStaffDisplayName(transaction.cashier) ?? undefined)
                     : undefined
                 }
                 receiptNumberOverride={transaction.transactionNumber}

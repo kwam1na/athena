@@ -27,6 +27,20 @@ beforeEach(() => {
   vi.resetAllMocks();
 });
 
+function mockCorrectionHistoryDb(overrides?: {
+  get?: ReturnType<typeof vi.fn>;
+  correctionHistory?: unknown[];
+}) {
+  return {
+    get: overrides?.get ?? vi.fn().mockResolvedValue(null),
+    query: vi.fn(() => ({
+      withIndex: vi.fn(() => ({
+        collect: vi.fn().mockResolvedValue(overrides?.correctionHistory ?? []),
+      })),
+    })),
+  };
+}
+
 describe("getCompletedTransactions", () => {
   it("returns hasTrace false for historical transactions without a persisted workflow trace id", async () => {
     vi.mocked(listCompletedTransactions).mockResolvedValue([
@@ -151,9 +165,12 @@ describe("getTransactionById", () => {
     vi.mocked(getPosSessionById).mockResolvedValue(null as never);
     vi.mocked(listTransactionItems).mockResolvedValue([] as never);
 
-    const result = await getTransactionById({} as never, {
-      transactionId: "txn-1" as Id<"posTransaction">,
-    });
+    const result = await getTransactionById(
+      { db: mockCorrectionHistoryDb() } as never,
+      {
+        transactionId: "txn-1" as Id<"posTransaction">,
+      },
+    );
 
     expect(result).toEqual(
       expect.objectContaining({
@@ -185,9 +202,12 @@ describe("getTransactionById", () => {
     vi.mocked(getPosSessionById).mockResolvedValue(null as never);
     vi.mocked(listTransactionItems).mockResolvedValue([] as never);
 
-    const result = await getTransactionById({} as never, {
-      transactionId: "txn-2" as Id<"posTransaction">,
-    });
+    const result = await getTransactionById(
+      { db: mockCorrectionHistoryDb() } as never,
+      {
+        transactionId: "txn-2" as Id<"posTransaction">,
+      },
+    );
 
     expect(result).toEqual(
       expect.objectContaining({
@@ -223,9 +243,12 @@ describe("getTransactionById", () => {
     } as never);
     vi.mocked(listTransactionItems).mockResolvedValue([] as never);
 
-    const result = await getTransactionById({} as never, {
-      transactionId: "txn-3" as Id<"posTransaction">,
-    });
+    const result = await getTransactionById(
+      { db: mockCorrectionHistoryDb() } as never,
+      {
+        transactionId: "txn-3" as Id<"posTransaction">,
+      },
+    );
 
     expect(result).toEqual(
       expect.objectContaining({
@@ -262,13 +285,13 @@ describe("getTransactionById", () => {
 
     const result = await getTransactionById(
       {
-        db: {
+        db: mockCorrectionHistoryDb({
           get: vi.fn().mockResolvedValue({
             _id: "profile-1" as Id<"customerProfile">,
             fullName: "Ama Serwa",
             email: "ama@example.com",
           }),
-        },
+        }),
       } as never,
       {
         transactionId: "txn-4" as Id<"posTransaction">,
@@ -282,6 +305,70 @@ describe("getTransactionById", () => {
           name: "Ama Serwa",
           email: "ama@example.com",
         }),
+      }),
+    );
+  });
+
+  it("returns operational-event correction history for transaction detail", async () => {
+    vi.mocked(getPosTransactionById).mockResolvedValue({
+      _id: "txn-5" as Id<"posTransaction">,
+      storeId: "store-1" as Id<"store">,
+      transactionNumber: "POS-555555",
+      subtotal: 1000,
+      tax: 0,
+      total: 1000,
+      paymentMethod: "card",
+      payments: [{ method: "card", amount: 1000, timestamp: 1 }],
+      totalPaid: 1000,
+      status: "completed",
+      completedAt: 100,
+    } as never);
+    vi.mocked(getCashierById).mockResolvedValue(null as never);
+    vi.mocked(getPosSessionById).mockResolvedValue(null as never);
+    vi.mocked(listTransactionItems).mockResolvedValue([] as never);
+
+    const collect = vi.fn().mockResolvedValue([
+      {
+        _id: "event-1",
+        eventType: "pos_transaction_payment_method_corrected",
+        message: "Corrected payment method.",
+        reason: "Till entry correction",
+        metadata: { paymentMethod: "card" },
+        createdAt: 200,
+        actorStaffProfileId: "staff-1",
+      },
+    ]);
+    const ctx = {
+      db: {
+        get: vi.fn().mockResolvedValue(null),
+        query: vi.fn(() => ({
+          withIndex: vi.fn((_indexName, callback) => {
+            callback({
+              eq: vi.fn(() => ({
+                eq: vi.fn(() => ({
+                  eq: vi.fn(),
+                })),
+              })),
+            });
+            return { collect };
+          }),
+        })),
+      },
+    } as never;
+
+    const result = await getTransactionById(ctx, {
+      transactionId: "txn-5" as Id<"posTransaction">,
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        correctionHistory: [
+          expect.objectContaining({
+            _id: "event-1",
+            eventType: "pos_transaction_payment_method_corrected",
+            metadata: { paymentMethod: "card" },
+          }),
+        ],
       }),
     );
   });

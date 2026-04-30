@@ -145,6 +145,7 @@ describe("RegisterSessionViewContent", () => {
 
   const closeoutHandlers = {
     onAuthenticateStaff: vi.fn(),
+    onCorrectOpeningFloat: vi.fn(),
     onReviewCloseout: vi.fn(),
     onSubmitCloseout: vi.fn(),
   };
@@ -384,7 +385,8 @@ describe("RegisterSessionViewContent", () => {
           ...baseSnapshot,
           closeoutReview: {
             hasVariance: true,
-            reason: "Variance of -6100 exceeded the closeout approval threshold.",
+            reason:
+              "Variance of -6100 exceeded the closeout approval threshold.",
             requiresApproval: true,
             variance: -6100,
           },
@@ -392,7 +394,8 @@ describe("RegisterSessionViewContent", () => {
             ...baseSnapshot.registerSession,
             pendingApprovalRequest: {
               _id: "approval-1",
-              reason: "Variance of -6100 exceeded the closeout approval threshold.",
+              reason:
+                "Variance of -6100 exceeded the closeout approval threshold.",
               requestedByStaffName: "Ama Mensah",
               status: "pending",
             },
@@ -414,7 +417,9 @@ describe("RegisterSessionViewContent", () => {
   it("submits the closeout count from the register detail page", async () => {
     const user = userEvent.setup();
     const onAuthenticateStaff = vi.fn();
-    const onSubmitCloseout = vi.fn().mockResolvedValue(ok({ action: "closed" }));
+    const onSubmitCloseout = vi
+      .fn()
+      .mockResolvedValue(ok({ action: "closed" }));
 
     render(
       <RegisterSessionViewContent
@@ -456,6 +461,142 @@ describe("RegisterSessionViewContent", () => {
     );
   });
 
+  it("submits an opening float correction after staff authentication", async () => {
+    const user = userEvent.setup();
+    const onAuthenticateStaff = vi.fn();
+    const onCorrectOpeningFloat = vi
+      .fn()
+      .mockResolvedValue(ok({ action: "corrected" }));
+
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="USD"
+        isLoading={false}
+        onAuthenticateStaff={onAuthenticateStaff}
+        onCorrectOpeningFloat={onCorrectOpeningFloat}
+        onRecordDeposit={vi.fn()}
+        onReviewCloseout={vi.fn()}
+        onSubmitCloseout={vi.fn()}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            status: "active",
+          },
+        }}
+        storeId="store-1"
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Correct opening float" }),
+    );
+    await user.clear(screen.getByLabelText("Corrected opening float"));
+    await user.type(screen.getByLabelText("Corrected opening float"), "60");
+    await user.type(
+      screen.getByLabelText("Opening float correction reason"),
+      "Opening cash was recounted.",
+    );
+    expect(screen.getByText("$10")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Submit correction" }));
+    await user.click(
+      screen.getByRole("button", {
+        name: "Confirm staff for Correct opening float",
+      }),
+    );
+
+    expect(onAuthenticateStaff).toHaveBeenCalledWith({
+      allowedRoles: ["cashier", "manager"],
+      pinHash: "hashed-pin",
+      username: "ato",
+    });
+    await waitFor(() =>
+      expect(onCorrectOpeningFloat).toHaveBeenCalledWith({
+        actorStaffProfileId: "staff-1",
+        correctedOpeningFloat: 6000,
+        reason: "Opening cash was recounted.",
+        registerSessionId: "session-1",
+      }),
+    );
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Opening float corrected.",
+    );
+  });
+
+  it("does not offer opening float correction once closeout has started", () => {
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="USD"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        registerSessionSnapshot={baseSnapshot}
+        storeId="store-1"
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Correct opening float" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Opening float corrections are available before closeout starts.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("shows opening float correction command errors inline", async () => {
+    const user = userEvent.setup();
+    const onCorrectOpeningFloat = vi.fn().mockResolvedValue(
+      userError({
+        code: "precondition_failed",
+        message:
+          "Opening float can only be corrected while the drawer is open.",
+      }),
+    );
+
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="USD"
+        isLoading={false}
+        onAuthenticateStaff={vi.fn()}
+        onCorrectOpeningFloat={onCorrectOpeningFloat}
+        onRecordDeposit={vi.fn()}
+        onReviewCloseout={vi.fn()}
+        onSubmitCloseout={vi.fn()}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            status: "open",
+          },
+        }}
+        storeId="store-1"
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Correct opening float" }),
+    );
+    await user.type(
+      screen.getByLabelText("Opening float correction reason"),
+      "Correction from counted opening cash.",
+    );
+    await user.click(screen.getByRole("button", { name: "Submit correction" }));
+    await user.click(
+      screen.getByRole("button", {
+        name: "Confirm staff for Correct opening float",
+      }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Opening float can only be corrected while the drawer is open.",
+    );
+  });
+
   it("reviews a pending closeout approval from the register detail page", async () => {
     const user = userEvent.setup();
     const onAuthenticateStaff = vi.fn();
@@ -476,7 +617,8 @@ describe("RegisterSessionViewContent", () => {
           ...baseSnapshot,
           closeoutReview: {
             hasVariance: true,
-            reason: "Variance of -500 exceeded the closeout approval threshold.",
+            reason:
+              "Variance of -500 exceeded the closeout approval threshold.",
             requiresApproval: true,
             variance: -500,
           },
@@ -484,7 +626,8 @@ describe("RegisterSessionViewContent", () => {
             ...baseSnapshot.registerSession,
             pendingApprovalRequest: {
               _id: "approval-1",
-              reason: "Variance of -500 exceeded the closeout approval threshold.",
+              reason:
+                "Variance of -500 exceeded the closeout approval threshold.",
               requestedByStaffName: "Ama Mensah",
               status: "pending",
             },

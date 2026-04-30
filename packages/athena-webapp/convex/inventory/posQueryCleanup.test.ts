@@ -64,7 +64,7 @@ describe("V26-173 POS query cleanup", () => {
       'export { search as searchProducts, barcodeLookup as lookupByBarcode, } from "../pos/public/catalog";'
     );
     expect(source).toContain(
-      'export { updateInventory, completeTransaction, getTransaction, getTransactionsByStore, getCompletedTransactions, getTransactionById, voidTransaction, createTransactionFromSession, getRecentTransactionsWithCustomers, getTodaySummary, } from "../pos/public/transactions";'
+      'export { updateInventory, completeTransaction, getTransaction, getTransactionsByStore, getCompletedTransactions, getTransactionById, voidTransaction, createTransactionFromSession, correctTransactionCustomer, correctTransactionPaymentMethod, getRecentTransactionsWithCustomers, getTodaySummary, } from "../pos/public/transactions";'
     );
     expect(source).not.toContain("query({");
     expect(source).not.toContain("mutation({");

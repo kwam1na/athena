@@ -2,6 +2,11 @@ import { v } from "convex/values";
 
 import { mutation, query } from "../../_generated/server";
 import { commandResultValidator } from "../../lib/commandResultValidators";
+import { ok, userError, type CommandResult } from "../../../shared/commandResult";
+import {
+  correctTransactionCustomer as correctTransactionCustomerCommand,
+  correctTransactionPaymentMethod as correctTransactionPaymentMethodCommand,
+} from "../application/commands/correctTransaction";
 import {
   completeTransaction as completeTransactionCommand,
   createTransactionFromSessionHandler,
@@ -28,6 +33,29 @@ const customerInfoValidator = v.object({
   email: v.optional(v.string()),
   phone: v.optional(v.string()),
 });
+
+function mapCorrectionError(error: unknown): CommandResult<never> | null {
+  const message = error instanceof Error ? error.message : "";
+
+  if (message === "Transaction not found.") {
+    return userError({ code: "not_found", message });
+  }
+
+  if (message === "Customer profile not found.") {
+    return userError({ code: "not_found", message });
+  }
+
+  if (
+    message === "Only completed transactions can be corrected." ||
+    message === "Only single-payment transactions can be corrected." ||
+    message === "Only same-amount payment method corrections are supported." ||
+    message === "Payment allocation must be a same-amount single payment."
+  ) {
+    return userError({ code: "precondition_failed", message });
+  }
+
+  return null;
+}
 
 export const updateInventory = mutation({
   args: {
@@ -153,6 +181,18 @@ export const getTransactionById = query({
         }),
       ),
       customerInfo: v.optional(customerInfoValidator),
+      correctionHistory: v.array(
+        v.object({
+          _id: v.id("operationalEvent"),
+          eventType: v.string(),
+          message: v.string(),
+          reason: v.optional(v.string()),
+          metadata: v.optional(v.record(v.string(), v.any())),
+          createdAt: v.number(),
+          actorUserId: v.optional(v.id("athenaUser")),
+          actorStaffProfileId: v.optional(v.id("staffProfile")),
+        }),
+      ),
       items: v.array(
         v.object({
           _id: v.id("posTransactionItem"),
@@ -199,6 +239,93 @@ export const createTransactionFromSession = mutation({
     }),
   ),
   handler: async (ctx, args) => createTransactionFromSessionHandler(ctx, args),
+});
+
+export const correctTransactionCustomer = mutation({
+  args: {
+    transactionId: v.id("posTransaction"),
+    customerProfileId: v.optional(v.id("customerProfile")),
+    reason: v.string(),
+    actorUserId: v.optional(v.id("athenaUser")),
+    actorStaffProfileId: v.optional(v.id("staffProfile")),
+  },
+  returns: commandResultValidator(
+    v.object({
+      transactionId: v.id("posTransaction"),
+      previousCustomerProfileId: v.optional(v.id("customerProfile")),
+      customerProfileId: v.optional(v.id("customerProfile")),
+      operationalEventId: v.optional(v.id("operationalEvent")),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    if (!args.actorStaffProfileId) {
+      return userError({
+        code: "authentication_failed",
+        message: "Staff sign-in is required before correcting customer attribution.",
+      });
+    }
+
+    if (!args.reason.trim()) {
+      return userError({
+        code: "validation_failed",
+        message: "Reason is required to correct customer attribution.",
+      });
+    }
+
+    try {
+      return ok(await correctTransactionCustomerCommand(ctx, args));
+    } catch (error) {
+      const mappedError = mapCorrectionError(error);
+      if (mappedError) {
+        return mappedError;
+      }
+      throw error;
+    }
+  },
+});
+
+export const correctTransactionPaymentMethod = mutation({
+  args: {
+    transactionId: v.id("posTransaction"),
+    paymentMethod: v.string(),
+    reason: v.string(),
+    actorUserId: v.optional(v.id("athenaUser")),
+    actorStaffProfileId: v.optional(v.id("staffProfile")),
+  },
+  returns: commandResultValidator(
+    v.object({
+      transactionId: v.id("posTransaction"),
+      previousPaymentMethod: v.string(),
+      paymentMethod: v.string(),
+      paymentAllocationId: v.id("paymentAllocation"),
+      operationalEventId: v.optional(v.id("operationalEvent")),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    if (!args.actorStaffProfileId) {
+      return userError({
+        code: "authentication_failed",
+        message: "Staff sign-in is required before correcting payment method.",
+      });
+    }
+
+    if (!args.reason.trim()) {
+      return userError({
+        code: "validation_failed",
+        message: "Reason is required to correct payment method.",
+      });
+    }
+
+    try {
+      return ok(await correctTransactionPaymentMethodCommand(ctx, args));
+    } catch (error) {
+      const mappedError = mapCorrectionError(error);
+      if (mappedError) {
+        return mappedError;
+      }
+      throw error;
+    }
+  },
 });
 
 export const getRecentTransactionsWithCustomers = query({

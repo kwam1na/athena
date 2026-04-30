@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Id } from "../_generated/dataModel";
 import {
   buildPaymentAllocation,
+  findSameAmountSinglePaymentAllocation,
   summarizePaymentAllocations,
 } from "./paymentAllocations";
 
@@ -42,5 +43,65 @@ describe("payment allocation helpers", () => {
       totalOut: 2500,
       netAmount: 6500,
     });
+  });
+
+  it("characterizes correction support as one recorded incoming allocation with the same amount", () => {
+    expect(
+      findSameAmountSinglePaymentAllocation(
+        [
+          {
+            _id: "allocation_1" as Id<"paymentAllocation">,
+            direction: "in",
+            method: "cash",
+            amount: 2500,
+            status: "recorded",
+          },
+        ],
+        { amount: 2500 },
+      ),
+    ).toMatchObject({
+      _id: "allocation_1",
+      method: "cash",
+      amount: 2500,
+    });
+  });
+
+  it("does not support payment-method correction when allocation cardinality or amount changes", () => {
+    expect(
+      findSameAmountSinglePaymentAllocation(
+        [
+          {
+            _id: "allocation_1" as Id<"paymentAllocation">,
+            direction: "in",
+            method: "cash",
+            amount: 1500,
+            status: "recorded",
+          },
+          {
+            _id: "allocation_2" as Id<"paymentAllocation">,
+            direction: "in",
+            method: "card",
+            amount: 1000,
+            status: "recorded",
+          },
+        ],
+        { amount: 2500 },
+      ),
+    ).toBeNull();
+
+    expect(
+      findSameAmountSinglePaymentAllocation(
+        [
+          {
+            _id: "allocation_1" as Id<"paymentAllocation">,
+            direction: "in",
+            method: "cash",
+            amount: 2000,
+            status: "recorded",
+          },
+        ],
+        { amount: 2500 },
+      ),
+    ).toBeNull();
   });
 });
