@@ -106,12 +106,15 @@ function SummaryItem({
   return (
     <div className="flex items-center justify-between">
       <div className="flex items-center space-x-4">
-        <div className="h-12 w-12 rounded-lg overflow-hidden">
+        <div className="relative">
           <img
             src={item.productImage || fallbackImageUrl || placeholder}
             alt={item.productName || "product image"}
-            className="aspect-square object-cover rounded-lg"
+            className="w-12 h-12 aspect-square object-cover rounded-lg"
           />
+          <div className="absolute -top-2 -right-2 bg-background/90 text-primary text-xs font-medium w-4 h-4 rounded-full shadow-md flex items-center justify-center">
+            {item.quantity}
+          </div>
         </div>
         <div className="space-y-2">
           <p className="text-sm font-medium">{getProductName(item)}</p>
@@ -142,7 +145,7 @@ function SummaryItem({
           )}
         </div>
       </div>
-      <p className="text-xs text-muted-foreground">{`x ${item.quantity}`}</p>
+      {/* <p className="text-xs text-muted-foreground">{`x ${item.quantity}`}</p> */}
     </div>
   );
 }
