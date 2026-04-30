@@ -89,7 +89,26 @@ describe("useAuth", () => {
     expect(window.localStorage.removeItem).not.toHaveBeenCalled();
   });
 
-  it("uses the cached Athena user while Safari rehydrates a stored auth token", async () => {
+  it("does not promote a stored token to an authenticated user before Convex confirms the session", async () => {
+    vi.mocked(window.localStorage.getItem).mockReturnValue("user-1");
+    mocked.useAuthToken.mockReturnValue("jwt-123");
+    mocked.useConvexAuth.mockReturnValue({
+      isAuthenticated: false,
+      isLoading: false,
+    });
+    mocked.useQuery.mockReturnValue(null);
+
+    const { result } = renderHook(() => useAuth());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.user).toBeNull();
+    expect(window.localStorage.removeItem).toHaveBeenCalledWith(
+      LOGGED_IN_USER_ID_KEY
+    );
+  });
+
+  it("loads the Athena user when the Convex user query confirms a Safari-rehydrating token", async () => {
     vi.mocked(window.localStorage.getItem).mockReturnValue("user-1");
     mocked.useAuthToken.mockReturnValue("jwt-123");
     mocked.useConvexAuth.mockReturnValue({
@@ -97,7 +116,18 @@ describe("useAuth", () => {
       isLoading: false,
     });
     mocked.useQuery.mockImplementation((_ref, args) => {
-      if (args && typeof args === "object" && "id" in args) {
+      if (args === undefined) {
+        return {
+          _id: "convex-user-1",
+          email: "manager@example.com",
+        };
+      }
+
+      if (
+        args &&
+        typeof args === "object" &&
+        Object.keys(args).length === 0
+      ) {
         return {
           _id: "user-1",
           email: "manager@example.com",

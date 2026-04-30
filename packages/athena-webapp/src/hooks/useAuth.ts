@@ -9,19 +9,13 @@ export const useAuth = () => {
   const [isStorageLoaded, setIsStorageLoaded] = useState(false);
   const authToken = useAuthToken();
   const { isAuthenticated, isLoading: isLoadingConvexAuth } = useConvexAuth();
-  const cachedAthenaUser = useQuery(
-    api.inventory.athenaUser.getUserById,
-    loggedInUserId ? { id: loggedInUserId } : "skip"
-  );
   const currentConvexUser = useQuery(api.app.getCurrentUser);
-  const isRecoveringConvexSession = Boolean(authToken) && !isAuthenticated;
-  const isLoadingCachedAthenaUser =
-    isRecoveringConvexSession &&
-    Boolean(loggedInUserId) &&
-    cachedAthenaUser === undefined;
-  const hasReadyConvexUser = Boolean(isAuthenticated && currentConvexUser);
+  const isRecoveringConvexSession =
+    Boolean(authToken) && !isAuthenticated && currentConvexUser === undefined;
+  const hasReadyConvexUser = Boolean(currentConvexUser);
   const isLoadingConvexUser =
-    isAuthenticated && currentConvexUser === undefined;
+    (isAuthenticated || Boolean(authToken)) &&
+    currentConvexUser === undefined;
   const authenticatedAthenaUser = useQuery(
     api.inventory.athenaUser.getAuthenticatedUser,
     hasReadyConvexUser ? {} : "skip"
@@ -39,8 +33,7 @@ export const useAuth = () => {
     if (
       !isStorageLoaded ||
       isLoadingConvexAuth ||
-      isLoadingCachedAthenaUser ||
-      (isRecoveringConvexSession && !loggedInUserId) ||
+      isRecoveringConvexSession ||
       isLoadingConvexUser ||
       isLoadingAthenaUser
     ) {
@@ -48,10 +41,6 @@ export const useAuth = () => {
     }
 
     const authenticatedAthenaUserId = authenticatedAthenaUser?._id ?? null;
-
-    if (isRecoveringConvexSession && cachedAthenaUser) {
-      return;
-    }
 
     if (authenticatedAthenaUserId) {
       if (loggedInUserId !== authenticatedAthenaUserId) {
@@ -67,9 +56,7 @@ export const useAuth = () => {
     }
   }, [
     authenticatedAthenaUser,
-    cachedAthenaUser,
     isLoadingConvexAuth,
-    isLoadingCachedAthenaUser,
     isRecoveringConvexSession,
     isLoadingConvexUser,
     isLoadingAthenaUser,
@@ -79,8 +66,7 @@ export const useAuth = () => {
   const isLoading =
     !isStorageLoaded ||
     isLoadingConvexAuth ||
-    isLoadingCachedAthenaUser ||
-    (isRecoveringConvexSession && !loggedInUserId) ||
+    isRecoveringConvexSession ||
     isLoadingConvexUser ||
     isLoadingAthenaUser;
 
@@ -89,8 +75,6 @@ export const useAuth = () => {
       ? undefined
       : hasReadyConvexUser
         ? authenticatedAthenaUser
-        : isRecoveringConvexSession
-          ? (cachedAthenaUser ?? null)
         : null,
     isLoading,
   };
