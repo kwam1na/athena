@@ -129,6 +129,7 @@ import type * as otp_EmailOTP from "../otp/EmailOTP.js";
 import type * as paystack_index from "../paystack/index.js";
 import type * as pos_application_commands_assignCustomer from "../pos/application/commands/assignCustomer.js";
 import type * as pos_application_commands_completeTransaction from "../pos/application/commands/completeTransaction.js";
+import type * as pos_application_commands_correctTransaction from "../pos/application/commands/correctTransaction.js";
 import type * as pos_application_commands_expenseSessionCommands from "../pos/application/commands/expenseSessionCommands.js";
 import type * as pos_application_commands_expenseSessionTracing from "../pos/application/commands/expenseSessionTracing.js";
 import type * as pos_application_commands_posSessionTracing from "../pos/application/commands/posSessionTracing.js";
@@ -136,6 +137,8 @@ import type * as pos_application_commands_quickAddCatalogItem from "../pos/appli
 import type * as pos_application_commands_register from "../pos/application/commands/register.js";
 import type * as pos_application_commands_sessionCommands from "../pos/application/commands/sessionCommands.js";
 import type * as pos_application_commands_terminals from "../pos/application/commands/terminals.js";
+import type * as pos_application_corrections_correctionEvents from "../pos/application/corrections/correctionEvents.js";
+import type * as pos_application_corrections_correctionPolicy from "../pos/application/corrections/correctionPolicy.js";
 import type * as pos_application_dto from "../pos/application/dto.js";
 import type * as pos_application_queries_getRegisterState from "../pos/application/queries/getRegisterState.js";
 import type * as pos_application_queries_getTransactions from "../pos/application/queries/getTransactions.js";
@@ -415,6 +418,7 @@ declare const fullApi: ApiFromModules<{
   "paystack/index": typeof paystack_index;
   "pos/application/commands/assignCustomer": typeof pos_application_commands_assignCustomer;
   "pos/application/commands/completeTransaction": typeof pos_application_commands_completeTransaction;
+  "pos/application/commands/correctTransaction": typeof pos_application_commands_correctTransaction;
   "pos/application/commands/expenseSessionCommands": typeof pos_application_commands_expenseSessionCommands;
   "pos/application/commands/expenseSessionTracing": typeof pos_application_commands_expenseSessionTracing;
   "pos/application/commands/posSessionTracing": typeof pos_application_commands_posSessionTracing;
@@ -422,6 +426,8 @@ declare const fullApi: ApiFromModules<{
   "pos/application/commands/register": typeof pos_application_commands_register;
   "pos/application/commands/sessionCommands": typeof pos_application_commands_sessionCommands;
   "pos/application/commands/terminals": typeof pos_application_commands_terminals;
+  "pos/application/corrections/correctionEvents": typeof pos_application_corrections_correctionEvents;
+  "pos/application/corrections/correctionPolicy": typeof pos_application_corrections_correctionPolicy;
   "pos/application/dto": typeof pos_application_dto;
   "pos/application/queries/getRegisterState": typeof pos_application_queries_getRegisterState;
   "pos/application/queries/getTransactions": typeof pos_application_queries_getTransactions;
