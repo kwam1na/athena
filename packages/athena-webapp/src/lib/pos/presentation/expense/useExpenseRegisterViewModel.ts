@@ -448,15 +448,9 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
         return;
       }
 
-      store.setTransactionCompleted(true, result.data.transactionNumber, {
-        completedAt: new Date(),
-        cartItems: store.cart.items,
-        totalValue,
-        notes: store.ui.notes,
-      });
       toast.success("Expense recorded successfully");
-      cart.clearCart();
-      store.clearSession();
+      store.startNewTransaction();
+      resetAutoSessionInitialized();
       store.clearCashier();
     } catch (error) {
       logger.error("[Expense] Failed to complete expense", error as Error);
@@ -597,6 +591,7 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
       onSignOut: handleCashierSignOut,
     },
     drawerGate: null,
+    closeoutControl: null,
     authDialog:
       activeStore && terminal && !store.cashier.isAuthenticated
         ? {

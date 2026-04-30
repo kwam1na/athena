@@ -15,7 +15,7 @@ const registerSessionStatusSet = (
 const REGISTER_SESSION_TRANSITIONS = {
   active: registerSessionStatusSet("closing"),
   closed: registerSessionStatusSet(),
-  closing: registerSessionStatusSet("closed"),
+  closing: registerSessionStatusSet("active", "closed"),
   open: registerSessionStatusSet("active", "closing"),
 } satisfies Record<RegisterSessionStatus, ReadonlySet<RegisterSessionStatus>>;
 type RegisterSessionIdentity = {
@@ -208,6 +208,19 @@ export function buildRegisterSessionCloseoutPatch(
       args.countedCash !== undefined
         ? args.countedCash - session.expectedCash
         : session.variance,
+  };
+}
+
+export function buildReopenedRegisterSessionPatch(session: {
+  status: RegisterSessionStatus;
+}) {
+  assertValidRegisterSessionTransition(session.status, "active");
+
+  return {
+    countedCash: undefined,
+    managerApprovalRequestId: undefined,
+    status: "active" as const,
+    variance: undefined,
   };
 }
 
@@ -537,6 +550,26 @@ export const beginRegisterSessionCloseout = internalMutation({
       "registerSession",
       args.registerSessionId,
       buildRegisterSessionCloseoutPatch(session, args)
+    );
+
+    return ctx.db.get("registerSession", args.registerSessionId);
+  },
+});
+
+export const reopenRegisterSession = internalMutation({
+  args: {
+    registerSessionId: v.id("registerSession"),
+  },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get("registerSession", args.registerSessionId);
+    if (!session) {
+      throw new Error("Register session not found.");
+    }
+
+    await ctx.db.patch(
+      "registerSession",
+      args.registerSessionId,
+      buildReopenedRegisterSessionPatch(session)
     );
 
     return ctx.db.get("registerSession", args.registerSessionId);

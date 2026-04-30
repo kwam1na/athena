@@ -4,10 +4,15 @@ import { Link } from "@tanstack/react-router";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { LoadingButton } from "@/components/ui/loading-button";
 import { Textarea } from "@/components/ui/textarea";
+import { formatStoredAmount } from "@/lib/pos/displayAmounts";
 import type { RegisterDrawerGateState } from "@/lib/pos/presentation/register/registerUiState";
 import { getOrigin } from "~/src/lib/navigationUtils";
-import { currencyDisplaySymbol } from "~/shared/currencyFormatter";
+import {
+  currencyDisplaySymbol,
+  currencyFormatter,
+} from "~/shared/currencyFormatter";
 
 function CashControlsButton({
   className,
@@ -37,6 +42,22 @@ function CashControlsButton({
   );
 }
 
+function formatCurrency(currency: string, amount?: number | null) {
+  if (amount === undefined || amount === null) {
+    return "Pending";
+  }
+
+  return formatStoredAmount(currencyFormatter(currency), amount);
+}
+
+function getVarianceTone(variance?: number) {
+  if (variance === undefined || variance === 0) {
+    return "text-stone-900";
+  }
+
+  return variance > 0 ? "text-emerald-700" : "text-red-700";
+}
+
 export function RegisterDrawerGate({
   drawerGate,
 }: {
@@ -46,49 +67,131 @@ export function RegisterDrawerGate({
     event.preventDefault();
     void drawerGate.onSubmit?.();
   };
+  const handleCloseoutSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void drawerGate.onSubmitCloseout?.();
+  };
   const isCloseoutBlocked = drawerGate.mode === "closeoutBlocked";
   const isRecovery = drawerGate.mode === "recovery";
 
   if (isCloseoutBlocked) {
+    const currency = drawerGate.currency ?? "GHS";
+
     return (
       <div className="mx-auto max-w-2xl rounded-lg border border-stone-200 bg-white p-8 shadow-sm">
-        <div className="space-y-3">
-          <p className="text-sm font-medium uppercase tracking-[0.2em] text-stone-500">
-            Register closeout
+        <div className="space-y-1">
+          <h2 className="text-2xl font-semibold text-stone-900">
+            Register {drawerGate.registerNumber} closeout in progress
+          </h2>
+          <p className="text-sm text-stone-600">
+            Finish this register closeout in Cash Controls before selling here.
           </p>
-          <div className="space-y-1">
-            <h2 className="text-2xl font-semibold text-stone-900">
-              Closeout in progress
-            </h2>
-            <p className="text-sm text-stone-600">
-              {drawerGate.registerLabel} is already in closeout. Finish it in
-              Cash Controls before selling here again.
-            </p>
-            <p className="text-sm text-stone-500">
-              Register {drawerGate.registerNumber}
-            </p>
+        </div>
+
+        <form className="mt-8 space-y-5" onSubmit={handleCloseoutSubmit}>
+          <div className="rounded-lg border border-stone-200 bg-stone-50/70 p-4">
+            <dl className="grid grid-cols-2 gap-3 text-sm">
+              <div className="space-y-1">
+                <dt className="text-[11px] uppercase tracking-[0.16em] text-stone-500">
+                  Expected
+                </dt>
+                <dd className="font-mono text-stone-900">
+                  {formatCurrency(currency, drawerGate.expectedCash)}
+                </dd>
+              </div>
+              <div className="space-y-1">
+                <dt className="text-[11px] uppercase tracking-[0.16em] text-stone-500">
+                  Draft variance
+                </dt>
+                <dd
+                  className={`font-mono ${getVarianceTone(drawerGate.closeoutDraftVariance)}`}
+                >
+                  {drawerGate.closeoutDraftVariance === undefined
+                    ? "Pending count"
+                    : formatCurrency(currency, drawerGate.closeoutDraftVariance)}
+                </dd>
+              </div>
+            </dl>
           </div>
-        </div>
 
-        {drawerGate.errorMessage ? (
-          <p className="mt-6 text-sm text-red-600" role="alert">
-            {drawerGate.errorMessage}
-          </p>
-        ) : null}
+          <label className="block space-y-2">
+            <span className="text-sm font-medium text-stone-700">
+              Counted cash ({currencyDisplaySymbol(currency)})
+            </span>
+            <Input
+              autoFocus
+              disabled={drawerGate.isCloseoutSubmitting}
+              inputMode="decimal"
+              onChange={(event) =>
+                drawerGate.onCloseoutCountedCashChange?.(event.target.value)
+              }
+              placeholder="0.00"
+              value={drawerGate.closeoutCountedCash ?? ""}
+            />
+          </label>
 
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <CashControlsButton className="w-full sm:w-auto" variant="default" />
+          <label className="block space-y-2">
+            <span className="text-sm font-medium text-stone-700">
+              Closeout notes
+            </span>
+            <Textarea
+              disabled={drawerGate.isCloseoutSubmitting}
+              onChange={(event) =>
+                drawerGate.onCloseoutNotesChange?.(event.target.value)
+              }
+              placeholder="Add drawer notes if anything needs follow-up."
+              rows={3}
+              value={drawerGate.closeoutNotes ?? ""}
+            />
+          </label>
 
-          <Button
-            className="w-full sm:w-auto"
-            onClick={() => void drawerGate.onSignOut()}
-            type="button"
-            variant="outline"
-          >
-            <LogOutIcon className="mr-2 h-4 w-4" />
-            Sign out
-          </Button>
-        </div>
+          {drawerGate.errorMessage ? (
+            <p className="text-sm text-red-600" role="alert">
+              {drawerGate.errorMessage}
+            </p>
+          ) : null}
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <LoadingButton
+              className="w-full sm:w-auto"
+              disabled={Boolean(drawerGate.isCloseoutSubmitting)}
+              isLoading={Boolean(drawerGate.isCloseoutSubmitting)}
+              type="submit"
+            >
+              Submit closeout
+            </LoadingButton>
+
+            <LoadingButton
+              className="w-full sm:w-auto"
+              disabled={Boolean(
+                drawerGate.isCloseoutSubmitting ||
+                  drawerGate.isReopeningCloseout,
+              )}
+              isLoading={Boolean(drawerGate.isReopeningCloseout)}
+              onClick={() => void drawerGate.onReopenRegister?.()}
+              type="button"
+              variant="outline"
+            >
+              {drawerGate.closeoutSecondaryActionLabel ?? "Reopen register"}
+            </LoadingButton>
+
+            <CashControlsButton className="w-full sm:w-auto" />
+
+            <Button
+              className="w-full sm:w-auto"
+              disabled={
+                drawerGate.isCloseoutSubmitting ||
+                drawerGate.isReopeningCloseout
+              }
+              onClick={() => void drawerGate.onSignOut()}
+              type="button"
+              variant="outline"
+            >
+              <LogOutIcon className="mr-2 h-4 w-4" />
+              Sign out
+            </Button>
+          </div>
+        </form>
       </div>
     );
   }

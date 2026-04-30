@@ -107,6 +107,12 @@ type ReviewRegisterSessionCloseoutResult =
       registerSession: Doc<"registerSession"> | null;
     };
 
+type ReopenRegisterSessionResult = {
+  action: "reopened";
+  approvalRequest: Doc<"approvalRequest"> | null;
+  registerSession: Doc<"registerSession"> | null;
+};
+
 const closeoutReviewValidator = v.object({
   hasVariance: v.boolean(),
   reason: v.optional(v.string()),
@@ -152,6 +158,21 @@ const reviewRegisterSessionCloseoutResultValidator = v.union(
         registerSession: v.union(v.null(), v.any()),
       }),
     ),
+  }),
+  v.object({
+    kind: v.literal("user_error"),
+    error: userErrorValidator,
+  }),
+);
+
+const reopenRegisterSessionResultValidator = v.union(
+  v.object({
+    kind: v.literal("ok"),
+    data: v.object({
+      action: v.literal("reopened"),
+      approvalRequest: v.union(v.null(), v.any()),
+      registerSession: v.union(v.null(), v.any()),
+    }),
   }),
   v.object({
     kind: v.literal("user_error"),
@@ -360,6 +381,7 @@ async function staffProfileCanReviewCloseoutVariance(
 async function cancelPendingApprovalIfNeeded(args: {
   ctx: Pick<MutationCtx, "db" | "runMutation">;
   approvalRequestId?: Id<"approvalRequest">;
+  decisionNotes?: string;
   reviewedByUserId?: Id<"athenaUser">;
   reviewedByStaffProfileId?: Id<"staffProfile">;
 }): Promise<Doc<"approvalRequest"> | null> {
@@ -381,7 +403,8 @@ async function cancelPendingApprovalIfNeeded(args: {
     decision: "cancelled",
     reviewedByStaffProfileId: args.reviewedByStaffProfileId,
     reviewedByUserId: args.reviewedByUserId,
-    decisionNotes: "Superseded by a new register closeout submission.",
+    decisionNotes:
+      args.decisionNotes ?? "Superseded by a new register closeout submission.",
   });
 }
 
@@ -718,6 +741,70 @@ export const submitRegisterSessionCloseout = mutation({
       action: "closed" as const,
       closeoutReview,
       registerSession: closedSession,
+    });
+  },
+});
+
+export const reopenRegisterSessionCloseout = mutation({
+  args: {
+    actorStaffProfileId: v.optional(v.id("staffProfile")),
+    actorUserId: v.optional(v.id("athenaUser")),
+    registerSessionId: v.id("registerSession"),
+    storeId: v.id("store"),
+  },
+  returns: reopenRegisterSessionResultValidator,
+  handler: async (
+    ctx: MutationCtx,
+    args
+  ): Promise<CommandResult<ReopenRegisterSessionResult>> => {
+    const registerSession = await ctx.db.get("registerSession", args.registerSessionId);
+
+    if (!registerSession || registerSession.storeId !== args.storeId) {
+      return userError({
+        code: "not_found",
+        message: "Register session not found for this store.",
+      });
+    }
+
+    if (registerSession.status !== "closing") {
+      return userError({
+        code: "precondition_failed",
+        message: "Register session is not in closeout.",
+      });
+    }
+
+    const approvalRequest = await cancelPendingApprovalIfNeeded({
+      approvalRequestId: registerSession.managerApprovalRequestId,
+      ctx,
+      decisionNotes: "Register closeout reopened from POS.",
+      reviewedByStaffProfileId: args.actorStaffProfileId,
+      reviewedByUserId: args.actorUserId,
+    });
+
+    const reopenedSession = await ctx.runMutation(
+      internal.operations.registerSessions.reopenRegisterSession,
+      {
+        registerSessionId: args.registerSessionId,
+      }
+    );
+
+    await recordOperationalEventWithCtx(ctx, {
+      actorStaffProfileId: args.actorStaffProfileId,
+      actorUserId: args.actorUserId,
+      eventType: "register_session_closeout_reopened",
+      message: "Register closeout reopened from POS.",
+      organizationId: registerSession.organizationId,
+      registerSessionId: registerSession._id,
+      storeId: args.storeId,
+      subjectId: registerSession._id,
+      subjectLabel: registerSession.registerNumber,
+      subjectType: "register_session",
+    });
+
+    return ok({
+      action: "reopened",
+      approvalRequest,
+      registerSession: reopenedSession,
     });
   },
 });

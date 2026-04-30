@@ -516,21 +516,19 @@ export function RegisterSessionViewContent({
   const closeoutStaffAuthCopy =
     closeoutStaffAuthIntent?.kind === "review"
       ? {
-          title:
-            closeoutStaffAuthIntent.decision === "approved"
-              ? "Approve variance"
-              : "Reject variance",
+          title: "Manager sign-in required",
           description:
-            "Confirm manager credentials so this variance decision is attributed correctly.",
+            closeoutStaffAuthIntent.decision === "approved"
+              ? "Enter username and PIN to approve variance."
+              : "Enter username and PIN to reject variance.",
           submitLabel:
             closeoutStaffAuthIntent.decision === "approved"
               ? "Approve variance"
               : "Reject variance",
         }
       : {
-          title: "Submit closeout",
-          description:
-            "Confirm staff credentials so the closeout and any variance request are attributed correctly.",
+          title: "Closeout sign-in required",
+          description: "Enter username and PIN to submit closeout.",
           submitLabel: "Submit closeout",
         };
 

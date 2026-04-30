@@ -1,6 +1,7 @@
 import { ComposedPageHeader } from "@/components/common/PageHeader";
 import { FadeIn } from "@/components/common/FadeIn";
 import { CashierAuthDialog } from "@/components/pos/CashierAuthDialog";
+import { CashierView } from "@/components/pos/CashierView";
 import { CartItems } from "@/components/pos/CartItems";
 import {
   ProductEntry,
@@ -57,7 +58,13 @@ function useCollapseSidebarForPosFlow() {
   }, []);
 }
 
-function ProductLookupEmptyState() {
+function ProductLookupEmptyState({
+  workflowMode,
+}: {
+  workflowMode: RegisterWorkflowMode;
+}) {
+  const isExpenseWorkflow = workflowMode === "expense";
+
   return (
     <div className="flex h-full min-h-0 flex-col items-center justify-center rounded-lg border border-gray-200 bg-gradient-to-br from-gray-50/50 to-gray-100/30 p-8 text-center">
       <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white text-muted-foreground shadow-sm ">
@@ -65,10 +72,14 @@ function ProductLookupEmptyState() {
       </div>
       <div className="space-y-1">
         <p className="text-sm font-medium text-gray-900">
-          Ready for product lookup
+          {isExpenseWorkflow
+            ? "Ready for expense entry"
+            : "Ready for product lookup"}
         </p>
         <p className="text-sm text-muted-foreground">
-          Scan a barcode or search products to add items to this sale
+          {isExpenseWorkflow
+            ? "Search or scan products to add expense items"
+            : "Scan a barcode or search products to add items to this sale"}
         </p>
       </div>
       <div className="mt-5 flex items-center gap-2 text-xs text-muted-foreground">
@@ -83,6 +94,38 @@ function ProductLookupEmptyState() {
             ⌘+K
           </kbd>
         </span>
+      </div>
+    </div>
+  );
+}
+
+function CashierAuthWorkspace({
+  authDialog,
+}: {
+  authDialog: NonNullable<RegisterViewModel["authDialog"]>;
+}) {
+  return (
+    <CashierAuthDialog
+      open={authDialog.open}
+      presentation="inline"
+      storeId={authDialog.storeId}
+      terminalId={authDialog.terminalId}
+      workflowMode={authDialog.workflowMode}
+      onAuthenticated={authDialog.onAuthenticated}
+      onDismiss={authDialog.onDismiss}
+    />
+  );
+}
+
+function DrawerGateWorkspace({
+  drawerGate,
+}: {
+  drawerGate: NonNullable<RegisterViewModel["drawerGate"]>;
+}) {
+  return (
+    <div className="flex h-full min-h-0 items-start justify-center overflow-y-auto rounded-lg border border-gray-200 bg-gradient-to-br from-gray-50/50 to-gray-100/30 px-6 py-10 sm:px-8 sm:pt-20">
+      <div className="w-[min(100%,40rem)]">
+        <RegisterDrawerGate drawerGate={drawerGate} />
       </div>
     </div>
   );
@@ -126,10 +169,16 @@ export function POSRegisterView({
   const isHeaderProductSearchSupported =
     isSessionActive && canSearchProducts && !viewModel.productEntry.disabled;
   const shouldRenderSaleSurface =
-    !viewModel.checkout.isTransactionCompleted && !isAwaitingCashierAuth;
+    isPosWorkflow ? !viewModel.checkout.isTransactionCompleted : true;
+  const shouldRenderExpenseCompletionPanel = !isPosWorkflow;
   const shouldRenderCheckoutPanel =
-    !isAwaitingCashierAuth &&
-    (isPosWorkflow || !viewModel.checkout.isTransactionCompleted);
+    isPosWorkflow || shouldRenderExpenseCompletionPanel;
+  const shouldRenderCartSidebar =
+    shouldRenderSaleSurface && !shouldShowPaymentWorkspace;
+  const shouldRenderWorkspaceSidebar =
+    shouldRenderCartSidebar ||
+    shouldRenderCheckoutPanel ||
+    isAwaitingCashierAuth;
 
   useEffect(() => {
     if (hasProductSearchIntent && isPaymentInputActive) {
@@ -264,6 +313,7 @@ export function POSRegisterView({
           trailingContent={
             canSearchProducts && isPosWorkflow ? (
               <RegisterActionBar
+                closeoutControl={viewModel.closeoutControl}
                 registerInfo={viewModel.registerInfo}
                 sessionPanel={viewModel.sessionPanel}
               />
@@ -273,69 +323,70 @@ export function POSRegisterView({
       }
     >
       <FadeIn className={registerContentClassName}>
-        {isPosWorkflow && viewModel.drawerGate ? (
-          <div className="flex h-full min-h-0 w-full items-center justify-center overflow-y-auto py-6">
-            <div className="w-full -translate-y-1/4">
-              <RegisterDrawerGate drawerGate={viewModel.drawerGate} />
-            </div>
-          </div>
-        ) : (
-          <div className="flex h-full min-h-0 flex-col gap-6 overflow-hidden">
-            {isPosWorkflow && shouldRenderSaleSurface ? (
-              <RegisterCustomerPanel
-                customerPanel={viewModel.customerPanel}
-                disabled={!isSessionActive}
-              />
+        <div className="flex h-full min-h-0 flex-col gap-6 overflow-hidden">
+          {isPosWorkflow && shouldRenderSaleSurface ? (
+            <RegisterCustomerPanel
+              customerPanel={viewModel.customerPanel}
+              disabled={!isSessionActive}
+            />
+          ) : null}
+
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 overflow-hidden lg:grid-cols-[minmax(0,2fr)_minmax(340px,1fr)]">
+            {shouldRenderSaleSurface ? (
+              <div
+                className={cn(
+                  "flex min-h-0 flex-col overflow-hidden pr-1",
+                  !shouldRenderWorkspaceSidebar && "lg:col-span-2",
+                )}
+              >
+                {isPosWorkflow && viewModel.drawerGate ? (
+                  <DrawerGateWorkspace drawerGate={viewModel.drawerGate} />
+                ) : isAwaitingCashierAuth && viewModel.authDialog ? (
+                  <CashierAuthWorkspace authDialog={viewModel.authDialog} />
+                ) : shouldShowPaymentWorkspace ? (
+                  <CartItems
+                    cartItems={viewModel.cart.items}
+                    onUpdateQuantity={viewModel.cart.onUpdateQuantity}
+                    onRemoveItem={viewModel.cart.onRemoveItem}
+                    clearCart={viewModel.cart.onClearCart}
+                    density="comfortable"
+                  />
+                ) : hasProductSearchIntent ? (
+                  <div className="min-h-0 flex-1">
+                    <ProductEntry
+                      ref={productEntryRef}
+                      disabled={viewModel.productEntry.disabled}
+                      showProductLookup={viewModel.productEntry.showProductLookup}
+                      setShowProductLookup={
+                        viewModel.productEntry.setShowProductLookup
+                      }
+                      productSearchQuery={viewModel.productEntry.productSearchQuery}
+                      setProductSearchQuery={
+                        viewModel.productEntry.setProductSearchQuery
+                      }
+                      onBarcodeSubmit={viewModel.productEntry.onBarcodeSubmit}
+                      onAddProduct={viewModel.productEntry.onAddProduct}
+                      barcodeSearchResult={
+                        viewModel.productEntry.barcodeSearchResult
+                      }
+                      productIdSearchResults={
+                        viewModel.productEntry.productIdSearchResults
+                      }
+                      showSearchInput={false}
+                      containerClassName="h-full min-h-0"
+                      lookupPanelClassName="flex h-full min-h-0 flex-col overflow-hidden"
+                      resultsClassName="max-h-none min-h-0 flex-1 pr-1"
+                    />
+                  </div>
+                ) : (
+                  <ProductLookupEmptyState
+                    workflowMode={effectiveWorkflowMode}
+                  />
+                )}
+              </div>
             ) : null}
 
-            <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 overflow-hidden lg:grid-cols-[minmax(0,2fr)_minmax(340px,1fr)]">
-              {shouldRenderSaleSurface ? (
-                <div className="flex min-h-0 flex-col overflow-hidden pr-1">
-                  {shouldShowPaymentWorkspace ? (
-                    <CartItems
-                      cartItems={viewModel.cart.items}
-                      onUpdateQuantity={viewModel.cart.onUpdateQuantity}
-                      onRemoveItem={viewModel.cart.onRemoveItem}
-                      clearCart={viewModel.cart.onClearCart}
-                      density="comfortable"
-                    />
-                  ) : hasProductSearchIntent ? (
-                    <div className="min-h-0 flex-1">
-                      <ProductEntry
-                        ref={productEntryRef}
-                        disabled={viewModel.productEntry.disabled}
-                        showProductLookup={
-                          viewModel.productEntry.showProductLookup
-                        }
-                        setShowProductLookup={
-                          viewModel.productEntry.setShowProductLookup
-                        }
-                        productSearchQuery={
-                          viewModel.productEntry.productSearchQuery
-                        }
-                        setProductSearchQuery={
-                          viewModel.productEntry.setProductSearchQuery
-                        }
-                        onBarcodeSubmit={viewModel.productEntry.onBarcodeSubmit}
-                        onAddProduct={viewModel.productEntry.onAddProduct}
-                        barcodeSearchResult={
-                          viewModel.productEntry.barcodeSearchResult
-                        }
-                        productIdSearchResults={
-                          viewModel.productEntry.productIdSearchResults
-                        }
-                        showSearchInput={false}
-                        containerClassName="h-full min-h-0"
-                        lookupPanelClassName="flex h-full min-h-0 flex-col overflow-hidden"
-                        resultsClassName="max-h-none min-h-0 flex-1 pr-1"
-                      />
-                    </div>
-                  ) : (
-                    <ProductLookupEmptyState />
-                  )}
-                </div>
-              ) : null}
-
+            {shouldRenderWorkspaceSidebar ? (
               <div
                 className={cn(
                   "flex h-full min-h-0 overflow-hidden",
@@ -343,7 +394,7 @@ export function POSRegisterView({
                 )}
               >
                 <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
-                  {shouldRenderSaleSurface && !shouldShowPaymentWorkspace ? (
+                  {shouldRenderCartSidebar ? (
                     <CartItems
                       cartItems={viewModel.cart.items}
                       onUpdateQuantity={viewModel.cart.onUpdateQuantity}
@@ -375,14 +426,28 @@ export function POSRegisterView({
                       )}
                     </div>
                   ) : null}
+
+                  {!isPosWorkflow ? (
+                    <div className="shrink-0">
+                      <CashierView
+                        cashierName={
+                          viewModel.cashierCard?.cashierName ?? "Unassigned"
+                        }
+                        isSignInRequired={
+                          isAwaitingCashierAuth || !viewModel.cashierCard
+                        }
+                        onSignOut={viewModel.cashierCard?.onSignOut}
+                      />
+                    </div>
+                  ) : null}
                 </div>
               </div>
+            ) : null}
             </div>
           </div>
-        )}
       </FadeIn>
 
-      {viewModel.authDialog && (
+      {viewModel.authDialog && !isAwaitingCashierAuth && (
         <CashierAuthDialog
           open={viewModel.authDialog.open}
           storeId={viewModel.authDialog.storeId}

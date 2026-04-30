@@ -1,14 +1,7 @@
-import { useQuery } from "convex/react";
-
-import { api } from "~/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { CartItem } from "../pos/types";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { currencyFormatter } from "~/convex/utils";
-import { CashierView } from "../pos/CashierView";
-import { useExpenseStore } from "~/src/stores/expenseStore";
-import { useExpenseActiveSession } from "~/src/hooks/useExpenseSessions";
-import { useSessionManagementExpense } from "~/src/hooks/useSessionManagementExpense";
 import { toDisplayAmount } from "~/convex/lib/currency";
 
 interface ExpenseCompletionProps {
@@ -41,36 +34,6 @@ export function ExpenseCompletion({
 }: ExpenseCompletionProps) {
   const { activeStore } = useGetActiveStore();
   const formatter = currencyFormatter(activeStore?.currency || "GHS");
-
-  const staffProfileId = useExpenseStore((state) => state.cashier.id);
-  const terminalId = useExpenseStore((state) => state.terminalId);
-  const storeId = useExpenseStore((state) => state.storeId);
-  const clearCashier = useExpenseStore((state) => state.clearCashier);
-  const activeSession = useExpenseActiveSession(
-    storeId,
-    terminalId,
-    staffProfileId || undefined,
-  );
-  const { voidSession } = useSessionManagementExpense();
-  const staffProfile = useQuery(
-    api.operations.staffProfiles.getStaffProfileById,
-    staffProfileId ? { staffProfileId } : "skip",
-  );
-  const cashierName = staffProfile
-    ? staffProfile.fullName ||
-      [staffProfile.firstName, staffProfile.lastName].filter(Boolean).join(" ")
-    : "Unassigned";
-
-  const handleCashierSignOut = async () => {
-    if (activeSession) {
-      const result = await voidSession();
-      if (!result.success) {
-        return;
-      }
-    }
-
-    clearCashier();
-  };
 
   //   if (isCompleted && completedTransactionData) {
   //     return (
@@ -147,20 +110,18 @@ export function ExpenseCompletion({
 
         <Button
           onClick={onComplete}
-          disabled={isCompleting || cartItems.length === 0}
+          disabled={!isCompleted && (isCompleting || cartItems.length === 0)}
           className="w-full p-8 bg-green-500 text-white hover:text-white hover:bg-green-600"
           variant="outline"
           size="lg"
         >
-          {isCompleting ? "Recording Expense..." : "Complete Expense"}
+          {isCompleted
+            ? "Start new expense"
+            : isCompleting
+              ? "Recording expense..."
+              : "Complete expense"}
         </Button>
 
-        {storeId && terminalId && staffProfileId && (
-          <CashierView
-            cashierName={cashierName}
-            onSignOut={handleCashierSignOut}
-          />
-        )}
       </div>
     </div>
   );

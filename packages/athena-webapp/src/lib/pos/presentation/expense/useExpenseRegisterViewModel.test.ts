@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -21,6 +21,16 @@ let mockActiveSessionQuery: {
     _id: Id<"expenseSessionItem">;
     quantity: number;
     updatedAt: number;
+    productName?: string;
+    productSku?: string;
+    barcode?: string;
+    price?: number;
+    image?: string | null;
+    size?: string;
+    length?: number | null;
+    color?: string;
+    productId?: Id<"product">;
+    productSkuId?: Id<"productSku">;
   }>;
 } | null;
 
@@ -165,5 +175,57 @@ describe("useExpenseRegisterViewModel", () => {
     const { result } = renderHook(() => useExpenseRegisterViewModel());
 
     expect(result.current.authDialog?.workflowMode).toBe("expense");
+  });
+
+  it("clears expense totals and transaction state after completing a session", async () => {
+    mockActiveSessionQuery = {
+      _id: "expense-session-1" as Id<"expenseSession">,
+      status: "active",
+      expiresAt: Date.now() + 60_000,
+      sessionNumber: "EXP-0001",
+      updatedAt: 100,
+      notes: "Damaged item",
+      cartItems: [],
+    };
+
+    const { result, rerender } = renderHook(() => useExpenseRegisterViewModel());
+
+    act(() => {
+      useExpenseStore
+        .getState()
+        .setCurrentSessionId("expense-session-1" as Id<"expenseSession">);
+      useExpenseStore.getState().setSessionExpiresAt(Date.now() + 60_000);
+      useExpenseStore.getState().setNotes("Damaged item");
+      useExpenseStore.getState().addToCart({
+        id: "expense-item-1" as Id<"expenseSessionItem">,
+        name: "Repair kit",
+        barcode: "123",
+        sku: "KIT-1",
+        price: 3600,
+        quantity: 1,
+        image: null,
+        productId: "product-1" as Id<"product">,
+        skuId: "product-sku-1" as Id<"productSku">,
+      });
+    });
+    rerender();
+
+    expect(useExpenseStore.getState().cart.total).toBeGreaterThan(0);
+
+    await act(async () => {
+      await result.current.checkout.onCompleteTransaction();
+    });
+
+    const state = useExpenseStore.getState();
+    expect(toast.success).toHaveBeenCalledWith("Expense recorded successfully");
+    expect(state.cart.items).toEqual([]);
+    expect(state.cart.total).toBe(0);
+    expect(state.session.currentSessionId).toBeNull();
+    expect(state.session.activeSession).toBeNull();
+    expect(state.session.expiresAt).toBeNull();
+    expect(state.transaction.isCompleted).toBe(false);
+    expect(state.transaction.completedTransactionData).toBeNull();
+    expect(state.cashier.isAuthenticated).toBe(false);
+    expect(state.ui.notes).toBe("");
   });
 });
