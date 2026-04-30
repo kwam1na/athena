@@ -14,6 +14,7 @@ const mocked = vi.hoisted(() => ({
   useAuthToken: vi.fn(),
   useConvexAuthIdentity: vi.fn(),
   syncAuthenticatedAthenaUser: vi.fn(),
+  navigate: vi.fn(),
 }));
 
 vi.mock("convex/react", () => ({
@@ -31,6 +32,7 @@ vi.mock("@/hooks/useConvexAuthIdentity", () => ({
 
 vi.mock("@tanstack/react-router", () => ({
   createFileRoute: () => () => ({}),
+  useNavigate: () => mocked.navigate,
   Link: ({ children, to, ...props }: { children: ReactNode; to: string }) => (
     <a href={to} {...props}>
       {children}
@@ -45,6 +47,7 @@ describe("LoginLayout", () => {
     mocked.useAuthToken.mockReset();
     mocked.useConvexAuthIdentity.mockReset();
     mocked.syncAuthenticatedAthenaUser.mockReset();
+    mocked.navigate.mockReset();
     mocked.useAuthToken.mockReturnValue(null);
     mocked.useConvexAuthIdentity.mockReturnValue(null);
     window.sessionStorage.clear();
@@ -120,6 +123,7 @@ describe("LoginLayout", () => {
       LOGGED_IN_USER_ID_KEY,
       "user-2"
     );
+    expect(mocked.navigate).toHaveBeenCalledWith({ to: "/" });
   });
 
   it("surfaces safe auth-sync user errors without storing a bogus Athena user id", async () => {

@@ -10,8 +10,8 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-function Index() {
-  const { user } = useAuth();
+export function Index() {
+  const { isLoading, user } = useAuth();
 
   const userOrgs = useQuery(
     api.inventory.organizations.getAll,
@@ -25,13 +25,28 @@ function Index() {
       const org = userOrgs[0];
       navigate({ to: "/$orgUrlSlug", params: { orgUrlSlug: org.slug } });
     }
-  }, [userOrgs]);
+  }, [navigate, userOrgs]);
 
   useEffect(() => {
-    if (user === null) {
+    if (!isLoading && user === null) {
       navigate({ to: "/login" });
     }
-  }, [user]);
+  }, [isLoading, navigate, user]);
+
+  if (isLoading || user === undefined || (user && userOrgs === undefined)) {
+    return (
+      <div
+        className="flex min-h-[60vh] w-full items-center justify-center text-sm text-muted-foreground"
+        aria-live="polite"
+      >
+        Loading workspace...
+      </div>
+    );
+  }
+
+  if (user === null) {
+    return null;
+  }
 
   return (
     <>

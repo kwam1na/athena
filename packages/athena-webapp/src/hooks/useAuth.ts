@@ -10,10 +10,12 @@ export const useAuth = () => {
   const authToken = useAuthToken();
   const { isAuthenticated, isLoading: isLoadingConvexAuth } = useConvexAuth();
   const currentConvexUser = useQuery(api.app.getCurrentUser);
-  const isRecoveringConvexSession = Boolean(authToken) && !isAuthenticated;
-  const hasReadyConvexUser = Boolean(isAuthenticated && currentConvexUser);
+  const isRecoveringConvexSession =
+    Boolean(authToken) && !isAuthenticated && currentConvexUser === undefined;
+  const hasReadyConvexUser = Boolean(currentConvexUser);
   const isLoadingConvexUser =
-    isAuthenticated && currentConvexUser === undefined;
+    (isAuthenticated || Boolean(authToken)) &&
+    currentConvexUser === undefined;
   const authenticatedAthenaUser = useQuery(
     api.inventory.athenaUser.getAuthenticatedUser,
     hasReadyConvexUser ? {} : "skip"

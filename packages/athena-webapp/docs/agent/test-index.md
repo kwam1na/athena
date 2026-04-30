@@ -177,6 +177,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/routeTree.browser-boundary.test.ts`](../../src/routeTree.browser-boundary.test.ts)
 - [`src/routes/_authed.test.tsx`](../../src/routes/_authed.test.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId.test.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId.test.tsx)
+- [`src/routes/index.test.tsx`](../../src/routes/index.test.tsx)
 - [`src/routes/login/_layout.index.test.tsx`](../../src/routes/login/_layout.index.test.tsx)
 - [`src/routes/login/_layout.test.tsx`](../../src/routes/login/_layout.test.tsx)
 - [`src/stories/Foundations/foundations-content.test.tsx`](../../src/stories/Foundations/foundations-content.test.tsx)
