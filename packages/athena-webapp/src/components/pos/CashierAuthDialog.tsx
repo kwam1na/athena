@@ -15,6 +15,7 @@ interface CashierAuthDialogProps {
   onAuthenticated: (staffProfileId: Id<"staffProfile">) => void;
   onDismiss: () => void;
   open: boolean;
+  presentation?: "dialog" | "inline";
   storeId: Id<"store">;
   terminalId: Id<"posTerminal">;
   workflowMode?: RegisterWorkflowMode;
@@ -33,6 +34,7 @@ export function CashierAuthDialog({
   onAuthenticated,
   onDismiss,
   open,
+  presentation = "dialog",
   storeId,
   terminalId,
   workflowMode = "pos",
@@ -85,7 +87,15 @@ export function CashierAuthDialog({
     return authenticationResult;
   }
 
-  const sessionLabel = isExpenseWorkflow ? "expense session" : "register session";
+  const primaryCopy = isExpenseWorkflow
+    ? {
+        title: "Expense sign-in required",
+        description: "Enter username and PIN before recording expenses.",
+      }
+    : {
+        title: "Register sign-in required",
+        description: "Enter username and PIN before adding items.",
+      };
   const recoveryLabel = isExpenseWorkflow
     ? "Sign out from other sessions"
     : "Sign out from other registers";
@@ -93,10 +103,11 @@ export function CashierAuthDialog({
   return (
     <StaffAuthenticationDialog
       open={open}
+      presentation={presentation}
       onDismiss={onDismiss}
       copy={{
-        title: `Start ${sessionLabel}`,
-        description: `Sign in with staff credentials before this ${sessionLabel} can continue.`,
+        title: primaryCopy.title,
+        description: primaryCopy.description,
         submitLabel: "Sign in",
       }}
       alternateCopy={{
@@ -109,7 +120,7 @@ export function CashierAuthDialog({
           : "Sign out from all registers",
       }}
       alternateTriggerLabel={recoveryLabel}
-      returnTriggerLabel={`Start ${sessionLabel}`}
+      returnTriggerLabel="Return to sign in"
       onAuthenticate={authenticateStaff}
       getSuccessMessage={(result, mode) => {
         if (mode === "recover") {

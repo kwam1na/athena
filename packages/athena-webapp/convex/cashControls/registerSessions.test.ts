@@ -7,6 +7,7 @@ import {
   buildClosedRegisterSessionPatch,
   buildRegisterSessionDepositPatch,
   buildRegisterSessionCloseoutPatch,
+  buildReopenedRegisterSessionPatch,
   buildRegisterSession,
   buildRegisterSessionTransactionPatch,
   calculateRegisterSessionCashDelta,
@@ -66,6 +67,10 @@ describe("cash controls register sessions", () => {
 
     expect(() =>
       assertValidRegisterSessionTransition("closing", "closed")
+    ).not.toThrow();
+
+    expect(() =>
+      assertValidRegisterSessionTransition("closing", "active")
     ).not.toThrow();
 
     expect(() =>
@@ -192,6 +197,19 @@ describe("cash controls register sessions", () => {
       variance: 200,
     });
     expect(closedPatch.closedAt).toEqual(expect.any(Number));
+  });
+
+  it("reopens closeout sessions by clearing closeout draft fields", () => {
+    expect(
+      buildReopenedRegisterSessionPatch({
+        status: "closing",
+      })
+    ).toEqual({
+      countedCash: undefined,
+      managerApprovalRequestId: undefined,
+      status: "active",
+      variance: undefined,
+    });
   });
 
   it("subtracts recorded deposits from expected cash without letting the drawer go negative", () => {

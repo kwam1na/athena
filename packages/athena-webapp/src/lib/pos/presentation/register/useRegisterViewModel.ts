@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
+import { useMutation } from "convex/react";
 import { toast } from "sonner";
 
+import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 
 import type { CustomerInfo, Payment, Product } from "@/components/pos/types";
+import { useAuth } from "@/hooks/useAuth";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useGetTerminal } from "@/hooks/useGetTerminal";
@@ -33,6 +36,7 @@ import {
 } from "@/lib/pos/constants";
 import { parseDisplayAmountInput } from "@/lib/pos/displayAmounts";
 import { toOperatorMessage } from "@/lib/errors/operatorMessages";
+import { runCommand } from "@/lib/errors/runCommand";
 import { logger } from "@/lib/logger";
 import { useConvexCommandGateway } from "@/lib/pos/infrastructure/convex/commandGateway";
 import { useConvexRegisterState } from "@/lib/pos/infrastructure/convex/registerGateway";
@@ -121,6 +125,7 @@ function presentOperatorError(message: string): void {
 
 export function useRegisterViewModel(): RegisterViewModel {
   const { activeStore } = useGetActiveStore();
+  const { user } = useAuth();
   const terminal = useGetTerminal();
   const navigateBack = useNavigateBack();
   const [staffProfileId, setStaffProfileId] =
@@ -141,10 +146,15 @@ export function useRegisterViewModel(): RegisterViewModel {
   >(null);
   const [drawerOpeningFloat, setDrawerOpeningFloat] = useState("");
   const [drawerNotes, setDrawerNotes] = useState("");
+  const [closeoutCountedCash, setCloseoutCountedCash] = useState("");
+  const [closeoutNotes, setCloseoutNotes] = useState("");
   const [drawerErrorMessage, setDrawerErrorMessage] = useState<string | null>(
     null,
   );
   const [isOpeningDrawer, setIsOpeningDrawer] = useState(false);
+  const [isSubmittingCloseout, setIsSubmittingCloseout] = useState(false);
+  const [isReopeningCloseout, setIsReopeningCloseout] = useState(false);
+  const [isCloseoutRequested, setIsCloseoutRequested] = useState(false);
   const [completedTransactionData, setCompletedTransactionData] =
     useState<RegisterViewModel["checkout"]["completedTransactionData"]>(null);
   const bootstrapInitialized = useRef(false);
@@ -214,6 +224,12 @@ export function useRegisterViewModel(): RegisterViewModel {
     openDrawer: openDrawerCommand,
     completeTransaction: completeTransactionCommand,
   } = useConvexCommandGateway();
+  const submitRegisterSessionCloseout = useMutation(
+    api.cashControls.closeouts.submitRegisterSessionCloseout,
+  );
+  const reopenRegisterSessionCloseout = useMutation(
+    api.cashControls.closeouts.reopenRegisterSessionCloseout,
+  );
   const {
     resumeSession,
     bindSessionToRegisterSession,
@@ -282,8 +298,11 @@ export function useRegisterViewModel(): RegisterViewModel {
     hasCloseoutBlockedDrawerState &&
     (hasMissingDrawerRecoveryState || activeSessionHasBlockedRegisterBinding),
   );
+  const activeCloseoutRegisterSession =
+    closeoutBlockedRegisterSession ??
+    (isCloseoutRequested ? usableActiveRegisterSession : null);
   const drawerGateMode: "initialSetup" | "recovery" | "closeoutBlocked" =
-    hasCloseoutBlockedDrawerState
+    hasCloseoutBlockedDrawerState || activeCloseoutRegisterSession
       ? "closeoutBlocked"
       : hasMissingDrawerRecoveryState || activeSessionHasBlockedRegisterBinding
         ? "recovery"
@@ -908,6 +927,135 @@ export function useRegisterViewModel(): RegisterViewModel {
     registerNumber,
     requestBootstrap,
     terminal?._id,
+  ]);
+
+  const handleSubmitRegisterCloseout = useCallback(async () => {
+    if (!activeStore?._id || !user?._id || !staffProfileId) {
+      setDrawerErrorMessage(
+        "Register sign-in required. Sign in before submitting closeout.",
+      );
+      return;
+    }
+
+    const registerSessionId = activeCloseoutRegisterSession?._id as
+      | Id<"registerSession">
+      | undefined;
+
+    if (!registerSessionId) {
+      setDrawerErrorMessage(
+        "Closeout unavailable. Refresh the register and try again.",
+      );
+      return;
+    }
+
+    const parsedCountedCash = parseDisplayAmountInput(closeoutCountedCash);
+
+    if (parsedCountedCash === undefined) {
+      setDrawerErrorMessage("Counted cash required. Enter the drawer total.");
+      return;
+    }
+
+    setDrawerErrorMessage(null);
+    setIsSubmittingCloseout(true);
+
+    const result = await runCommand(() =>
+      submitRegisterSessionCloseout({
+        actorStaffProfileId: staffProfileId,
+        actorUserId: user._id,
+        countedCash: parsedCountedCash,
+        notes: trimOptional(closeoutNotes),
+        registerSessionId,
+        storeId: activeStore._id,
+      }),
+    );
+
+    setIsSubmittingCloseout(false);
+
+    if (result.kind !== "ok") {
+      setDrawerErrorMessage(toOperatorMessage(result.error.message));
+      return;
+    }
+
+    setCloseoutCountedCash("");
+    setCloseoutNotes("");
+    if (result.data?.action === "closed") {
+      setIsCloseoutRequested(false);
+    }
+    requestBootstrap();
+    toast.success(
+      result.data?.action === "approval_required"
+        ? "Closeout submitted for manager review"
+        : "Register session closed",
+    );
+  }, [
+    activeStore?._id,
+    activeCloseoutRegisterSession?._id,
+    closeoutCountedCash,
+    closeoutNotes,
+    requestBootstrap,
+    staffProfileId,
+    submitRegisterSessionCloseout,
+    user?._id,
+  ]);
+
+  const handleReopenRegisterCloseout = useCallback(async () => {
+    if (!closeoutBlockedRegisterSession) {
+      setIsCloseoutRequested(false);
+      setCloseoutCountedCash("");
+      setCloseoutNotes("");
+      setDrawerErrorMessage(null);
+      return;
+    }
+
+    if (!activeStore?._id || !user?._id || !staffProfileId) {
+      setDrawerErrorMessage(
+        "Register sign-in required. Sign in before reopening the register.",
+      );
+      return;
+    }
+
+    const registerSessionId = activeCloseoutRegisterSession?._id as
+      | Id<"registerSession">
+      | undefined;
+
+    if (!registerSessionId) {
+      setDrawerErrorMessage(
+        "Reopen unavailable. Refresh the register and try again.",
+      );
+      return;
+    }
+
+    setDrawerErrorMessage(null);
+    setIsReopeningCloseout(true);
+
+    const result = await runCommand(() =>
+      reopenRegisterSessionCloseout({
+        actorStaffProfileId: staffProfileId,
+        actorUserId: user._id,
+        registerSessionId,
+        storeId: activeStore._id,
+      }),
+    );
+
+    setIsReopeningCloseout(false);
+
+    if (result.kind !== "ok") {
+      setDrawerErrorMessage(toOperatorMessage(result.error.message));
+      return;
+    }
+
+    setCloseoutCountedCash("");
+    setCloseoutNotes("");
+    requestBootstrap();
+    toast.success("Register reopened.");
+  }, [
+    activeStore?._id,
+    activeCloseoutRegisterSession?._id,
+    closeoutBlockedRegisterSession,
+    reopenRegisterSessionCloseout,
+    requestBootstrap,
+    staffProfileId,
+    user?._id,
   ]);
 
   useEffect(() => {
@@ -1688,16 +1836,45 @@ export function useRegisterViewModel(): RegisterViewModel {
           onSignOut: handleCashierSignOut,
         }
       : null;
+  const parsedCloseoutCountedCash = parseDisplayAmountInput(closeoutCountedCash);
+  const shouldShowDrawerGate = Boolean(
+    requiresDrawerGate || activeCloseoutRegisterSession,
+  );
 
   const drawerGate =
-    activeStore?._id && terminal?._id && staffProfileId && requiresDrawerGate
+    activeStore?._id && terminal?._id && staffProfileId && shouldShowDrawerGate
       ? drawerGateMode === "closeoutBlocked"
         ? {
             mode: drawerGateMode,
             isRecovery: closeoutBlockedGateIsRecovery,
             registerLabel: terminal.displayName,
             registerNumber,
+            currency: activeStore.currency,
+            closeoutCountedCash,
+            closeoutDraftVariance:
+              parsedCloseoutCountedCash !== undefined &&
+              activeCloseoutRegisterSession
+                ? parsedCloseoutCountedCash -
+                  activeCloseoutRegisterSession.expectedCash
+                : undefined,
+            closeoutNotes,
+            closeoutSecondaryActionLabel: closeoutBlockedRegisterSession
+              ? "Reopen register"
+              : "Return to sale",
+            expectedCash: activeCloseoutRegisterSession?.expectedCash,
             errorMessage: drawerErrorMessage,
+            isCloseoutSubmitting: isSubmittingCloseout,
+            isReopeningCloseout,
+            onCloseoutCountedCashChange: (value: string) => {
+              setCloseoutCountedCash(value);
+              setDrawerErrorMessage(null);
+            },
+            onCloseoutNotesChange: (value: string) => {
+              setCloseoutNotes(value);
+              setDrawerErrorMessage(null);
+            },
+            onSubmitCloseout: handleSubmitRegisterCloseout,
+            onReopenRegister: handleReopenRegisterCloseout,
             onSignOut: handleCashierSignOut,
           }
         : {
@@ -1724,6 +1901,23 @@ export function useRegisterViewModel(): RegisterViewModel {
             onSubmit: handleOpenDrawer,
             onSignOut: handleCashierSignOut,
           }
+      : null;
+  const closeoutControl =
+    activeStore?._id && terminal?._id && staffProfileId
+      ? {
+          canCloseout: Boolean(
+            usableActiveRegisterSession &&
+              !requiresDrawerGate &&
+              !hasActiveCartDraft &&
+              payments.length === 0 &&
+              !isTransactionCompleted,
+          ),
+          onRequestCloseout: () => {
+            setProductSearchQuery("");
+            setIsCloseoutRequested(true);
+            setDrawerErrorMessage(null);
+          },
+        }
       : null;
 
   const authDialog =
@@ -1752,7 +1946,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       disabled:
         !terminal ||
         !staffProfileId ||
-        requiresDrawerGate ||
+        shouldShowDrawerGate ||
         activeSessionHasBlockedRegisterBinding ||
         isOpeningDrawer,
       showProductLookup: showProductEntry,
@@ -1801,6 +1995,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     sessionPanel,
     cashierCard,
     drawerGate,
+    closeoutControl,
     authDialog,
     onNavigateBack: handleNavigateBack,
   };

@@ -134,13 +134,29 @@ export interface RegisterDrawerGateState {
   registerNumber: string;
   currency?: string;
   openingFloat?: string;
+  closeoutCountedCash?: string;
+  closeoutDraftVariance?: number;
+  closeoutNotes?: string;
+  closeoutSecondaryActionLabel?: string;
+  expectedCash?: number;
   notes?: string;
   errorMessage: string | null;
+  isCloseoutSubmitting?: boolean;
+  isReopeningCloseout?: boolean;
   isSubmitting?: boolean;
+  onCloseoutCountedCashChange?: (value: string) => void;
+  onCloseoutNotesChange?: (value: string) => void;
   onOpeningFloatChange?: (value: string) => void;
   onNotesChange?: (value: string) => void;
+  onSubmitCloseout?: () => Promise<void>;
+  onReopenRegister?: () => Promise<void>;
   onSubmit?: () => Promise<void>;
   onSignOut: () => Promise<void>;
+}
+
+export interface RegisterCloseoutControlState {
+  canCloseout: boolean;
+  onRequestCloseout: () => void;
 }
 
 export interface RegisterAuthDialogState {
@@ -166,6 +182,7 @@ export interface RegisterViewModel {
   sessionPanel: RegisterSessionPanelState | null;
   cashierCard: RegisterCashierCardState | null;
   drawerGate: RegisterDrawerGateState | null;
+  closeoutControl: RegisterCloseoutControlState | null;
   authDialog: RegisterAuthDialogState | null;
   onNavigateBack: () => Promise<void>;
 }

@@ -10,6 +10,7 @@ import type { Id } from "~/convex/_generated/dataModel";
 import { ok, userError } from "~/shared/commandResult";
 
 const mockUseQuery = vi.fn();
+const mockUseMutation = vi.fn();
 const mockStartSession = vi.fn();
 const mockAddItem = vi.fn();
 const mockHoldSession = vi.fn();
@@ -22,6 +23,8 @@ const mockSyncSessionCheckoutState = vi.fn();
 const mockReleaseSessionInventoryHoldsAndDeleteItems = vi.fn();
 const mockRemoveItem = vi.fn();
 const mockBindSessionToRegisterSession = vi.fn();
+const mockSubmitRegisterSessionCloseout = vi.fn();
+const mockReopenRegisterSessionCloseout = vi.fn();
 const mockNavigateBack = vi.fn();
 
 let mockActiveStore: { _id: Id<"store">; currency: string } | null;
@@ -98,9 +101,11 @@ let mockHeldSessions:
 let mockBarcodeSearchResult: null;
 let mockProductIdSearchResults: [] | null;
 let mockCashier: { firstName: string; lastName: string } | null;
+let mockUser: { _id: Id<"athenaUser"> } | null;
 
 vi.mock("convex/react", () => ({
   useQuery: (...args: unknown[]) => mockUseQuery(...args),
+  useMutation: (...args: unknown[]) => mockUseMutation(...args),
 }));
 
 vi.mock("sonner", () => ({
@@ -113,6 +118,12 @@ vi.mock("sonner", () => ({
 vi.mock("@/hooks/useGetActiveStore", () => ({
   default: () => ({
     activeStore: mockActiveStore,
+  }),
+}));
+
+vi.mock("@/hooks/useAuth", () => ({
+  useAuth: () => ({
+    user: mockUser,
   }),
 }));
 
@@ -233,8 +244,30 @@ describe("useRegisterViewModel", () => {
       firstName: "Ama",
       lastName: "Kusi",
     };
+    mockUser = {
+      _id: "user-1" as Id<"athenaUser">,
+    };
 
     mockUseQuery.mockImplementation(() => mockCashier);
+    mockUseMutation.mockReset();
+    mockUseMutation.mockImplementation(() => {
+      const callIndex = mockUseMutation.mock.calls.length;
+      return callIndex % 2 === 1
+        ? mockSubmitRegisterSessionCloseout
+        : mockReopenRegisterSessionCloseout;
+    });
+    mockSubmitRegisterSessionCloseout.mockReset();
+    mockSubmitRegisterSessionCloseout.mockResolvedValue(
+      ok({
+        action: "closed",
+      }),
+    );
+    mockReopenRegisterSessionCloseout.mockReset();
+    mockReopenRegisterSessionCloseout.mockResolvedValue(
+      ok({
+        action: "reopened",
+      }),
+    );
     mockStartSession.mockReset();
     mockStartSession.mockResolvedValue(
       ok({
@@ -438,6 +471,130 @@ describe("useRegisterViewModel", () => {
     expect(mockStartSession).not.toHaveBeenCalled();
     expect(mockOpenDrawer).not.toHaveBeenCalled();
     expect(result.current.drawerGate).not.toHaveProperty("onSubmit");
+    expect(result.current.drawerGate?.onSubmitCloseout).toEqual(
+      expect.any(Function),
+    );
+    expect(result.current.drawerGate?.expectedCash).toBe(5_000);
+  });
+
+  it("submits closeout from the POS drawer gate with the current cashier", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
+      activeRegisterSession: {
+        _id: "drawer-1",
+        status: "closing",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        openingFloat: 5_000,
+        expectedCash: 5_000,
+        openedAt: Date.now(),
+      },
+      activeSession: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.drawerGate?.onCloseoutCountedCashChange?.("48.00");
+      result.current.drawerGate?.onCloseoutNotesChange?.("End of shift count");
+    });
+
+    expect(result.current.drawerGate?.closeoutDraftVariance).toBe(-200);
+
+    await act(async () => {
+      await result.current.drawerGate?.onSubmitCloseout?.();
+    });
+
+    expect(mockSubmitRegisterSessionCloseout).toHaveBeenCalledWith({
+      actorStaffProfileId: "staff-1",
+      actorUserId: "user-1",
+      countedCash: 4_800,
+      notes: "End of shift count",
+      registerSessionId: "drawer-1",
+      storeId: "store-1",
+    });
+    expect(toast.success).toHaveBeenCalledWith("Register session closed");
+  });
+
+  it("opens the closeout drawer gate from an active empty register", async () => {
+    mockActiveSession = {
+      ...mockActiveSession!,
+      cartItems: [],
+    };
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    expect(result.current.closeoutControl?.canCloseout).toBe(true);
+
+    act(() => {
+      result.current.closeoutControl?.onRequestCloseout();
+    });
+
+    expect(result.current.drawerGate?.mode).toBe("closeoutBlocked");
+    expect(result.current.drawerGate?.expectedCash).toBe(5_000);
+    expect(result.current.drawerGate?.closeoutSecondaryActionLabel).toBe(
+      "Return to sale",
+    );
+    expect(result.current.productEntry.disabled).toBe(true);
+  });
+
+  it("reopens a closing register session from the POS drawer gate", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
+      activeRegisterSession: {
+        _id: "drawer-1",
+        status: "closing",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        openingFloat: 5_000,
+        expectedCash: 5_000,
+        openedAt: Date.now(),
+      },
+      activeSession: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    await act(async () => {
+      await result.current.drawerGate?.onReopenRegister?.();
+    });
+
+    expect(mockReopenRegisterSessionCloseout).toHaveBeenCalledWith({
+      actorStaffProfileId: "staff-1",
+      actorUserId: "user-1",
+      registerSessionId: "drawer-1",
+      storeId: "store-1",
+    });
+    expect(toast.success).toHaveBeenCalledWith("Register reopened.");
   });
 
   it("gates an active POS session without a register assignment while preserving the sale", async () => {
@@ -507,6 +664,9 @@ describe("useRegisterViewModel", () => {
     expect(mockBindSessionToRegisterSession).not.toHaveBeenCalled();
     expect(mockOpenDrawer).not.toHaveBeenCalled();
     expect(result.current.drawerGate).not.toHaveProperty("onSubmit");
+    expect(result.current.drawerGate?.onSubmitCloseout).toEqual(
+      expect.any(Function),
+    );
   });
 
   it("gates an active POS session assigned to a different open drawer", async () => {

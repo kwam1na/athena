@@ -394,6 +394,7 @@ export const useExpenseStore = create<ExpenseState>()(
             state.cart.total = 0;
             state.session.currentSessionId = null;
             state.session.activeSession = null;
+            state.session.expiresAt = null;
             state.transaction.isCompleted = false;
             state.transaction.isCompleting = false;
             state.transaction.completedTransactionNumber = null;

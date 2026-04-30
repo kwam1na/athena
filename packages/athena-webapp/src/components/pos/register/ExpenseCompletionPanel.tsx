@@ -22,8 +22,21 @@ export function ExpenseCompletionPanel({
       totalValue: checkout.completedTransactionData.total,
     };
   }, [checkout.completedTransactionData]);
+  const displayCartItems =
+    checkout.isTransactionCompleted && completedTransactionData
+      ? completedTransactionData.cartItems
+      : checkout.cartItems;
+  const displayTotal =
+    checkout.isTransactionCompleted && completedTransactionData
+      ? completedTransactionData.totalValue
+      : checkout.total;
 
   const handleComplete = async () => {
+    if (checkout.isTransactionCompleted) {
+      checkout.onStartNewTransaction();
+      return;
+    }
+
     if (!checkout.onCompleteTransaction) {
       return;
     }
@@ -38,8 +51,8 @@ export function ExpenseCompletionPanel({
 
   return (
     <ExpenseCompletion
-      cartItems={checkout.cartItems}
-      totalValue={checkout.total}
+      cartItems={displayCartItems}
+      totalValue={displayTotal}
       notes=""
       onNotesChange={() => {}}
       onComplete={handleComplete}

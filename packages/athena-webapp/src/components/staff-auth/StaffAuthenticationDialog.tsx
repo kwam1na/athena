@@ -6,7 +6,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -57,6 +56,7 @@ export type StaffAuthenticationDialogProps = {
   ) => void;
   onDismiss: () => void;
   open: boolean;
+  presentation?: "dialog" | "inline";
   returnTriggerLabel?: string;
 };
 
@@ -69,6 +69,7 @@ export function StaffAuthenticationDialog({
   onAuthenticated,
   onDismiss,
   open,
+  presentation = "dialog",
   returnTriggerLabel,
 }: StaffAuthenticationDialogProps) {
   const [mode, setMode] = useState<StaffAuthMode>("authenticate");
@@ -160,6 +161,100 @@ export function StaffAuthenticationDialog({
     }
   }
 
+  if (!open) {
+    return null;
+  }
+
+  const content = (
+    <div className="space-y-layout-xl p-layout-lg">
+      <div className="space-y-layout-xs text-left">
+        {presentation === "dialog" ? (
+          <DialogTitle>{activeCopy.title}</DialogTitle>
+        ) : (
+          <h2 className="text-lg font-semibold tracking-tight">
+            {activeCopy.title}
+          </h2>
+        )}
+        {presentation === "dialog" ? (
+          <DialogDescription className="text-sm text-muted-foreground">
+            {activeCopy.description}
+          </DialogDescription>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            {activeCopy.description}
+          </p>
+        )}
+      </div>
+
+      <div className="space-y-layout-lg">
+        <div className="max-w-72 space-y-layout-xs">
+          <Label htmlFor="staff-auth-username">Username</Label>
+          <Input
+            ref={usernameInputRef}
+            id="staff-auth-username"
+            placeholder="Enter username"
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={isAuthenticating}
+          />
+        </div>
+
+        <div className="space-y-layout-xs">
+          <Label htmlFor="staff-auth-pin">PIN</Label>
+          <PinInput
+            value={pin}
+            onChange={setPin}
+            disabled={isAuthenticating}
+            onKeyDown={handleKeyDown}
+            maxLength={6}
+            size="sm"
+          />
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-layout-sm border-t pt-layout-lg sm:flex-row sm:items-center sm:justify-between">
+        {alternateCopy && alternateTriggerLabel ? (
+          <button
+            type="button"
+            className="text-left text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            onClick={() => {
+              setMode((currentMode) =>
+                currentMode === "authenticate" ? "recover" : "authenticate",
+              );
+              setPin("");
+            }}
+            disabled={isAuthenticating}
+          >
+            {mode === "authenticate"
+              ? alternateTriggerLabel
+              : returnTriggerLabel ?? copy.title}
+          </button>
+        ) : (
+          <span />
+        )}
+
+        <LoadingButton
+          onClick={handleSubmit}
+          isLoading={isAuthenticating}
+          disabled={!canSubmit || isAuthenticating}
+        >
+          {activeCopy.submitLabel}
+        </LoadingButton>
+      </div>
+    </div>
+  );
+
+  if (presentation === "inline") {
+    return (
+      <div className="flex h-full min-h-0 items-start justify-center overflow-y-auto rounded-lg border border-gray-200 bg-gradient-to-br from-gray-50/50 to-gray-100/30 px-6 py-10 sm:px-8 sm:pt-20">
+        <div className="w-[min(100%,32rem)] rounded-xl border border-border bg-white shadow-sm">
+          {content}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={onDismiss}>
       <DialogContent
@@ -167,74 +262,7 @@ export function StaffAuthenticationDialog({
         onPointerDownOutside={(event) => event.preventDefault()}
         onEscapeKeyDown={(event) => event.preventDefault()}
       >
-        <div className="space-y-layout-xl p-layout-lg">
-          <DialogHeader className="space-y-layout-xs text-left">
-            <p className="text-xs font-medium uppercase tracking-[0.28em] text-muted-foreground">
-              Staff authentication
-            </p>
-            <DialogTitle>{activeCopy.title}</DialogTitle>
-            <DialogDescription className="text-sm text-muted-foreground">
-              {activeCopy.description}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-layout-lg">
-            <div className="max-w-72 space-y-layout-xs">
-              <Label htmlFor="staff-auth-username">Username</Label>
-              <Input
-                ref={usernameInputRef}
-                id="staff-auth-username"
-                placeholder="Enter username"
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-                onKeyDown={handleKeyDown}
-                disabled={isAuthenticating}
-              />
-            </div>
-
-            <div className="space-y-layout-xs">
-              <Label htmlFor="staff-auth-pin">PIN</Label>
-              <PinInput
-                value={pin}
-                onChange={setPin}
-                disabled={isAuthenticating}
-                onKeyDown={handleKeyDown}
-                maxLength={6}
-                size="sm"
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-layout-sm border-t pt-layout-lg sm:flex-row sm:items-center sm:justify-between">
-            {alternateCopy && alternateTriggerLabel ? (
-              <button
-                type="button"
-                className="text-left text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                onClick={() => {
-                  setMode((currentMode) =>
-                    currentMode === "authenticate" ? "recover" : "authenticate",
-                  );
-                  setPin("");
-                }}
-                disabled={isAuthenticating}
-              >
-                {mode === "authenticate"
-                  ? alternateTriggerLabel
-                  : returnTriggerLabel ?? copy.title}
-              </button>
-            ) : (
-              <span />
-            )}
-
-            <LoadingButton
-              onClick={handleSubmit}
-              isLoading={isAuthenticating}
-              disabled={!canSubmit || isAuthenticating}
-            >
-              {activeCopy.submitLabel}
-            </LoadingButton>
-          </div>
-        </div>
+        {content}
       </DialogContent>
     </Dialog>
   );

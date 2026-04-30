@@ -86,7 +86,26 @@ vi.mock("@/components/pos/CashierAuthDialog", () => ({
 }));
 
 vi.mock("./RegisterActionBar", () => ({
-  RegisterActionBar: () => <div>register-action-bar</div>,
+  RegisterActionBar: ({
+    closeoutControl,
+  }: {
+    closeoutControl?: {
+      canCloseout: boolean;
+      onRequestCloseout: () => void;
+    } | null;
+  }) => (
+    <div>
+      register-action-bar
+      {closeoutControl ? (
+        <button
+          disabled={!closeoutControl.canCloseout}
+          onClick={closeoutControl.onRequestCloseout}
+        >
+          closeout-control
+        </button>
+      ) : null}
+    </div>
+  ),
 }));
 
 vi.mock("./RegisterCustomerPanel", () => ({
@@ -160,6 +179,10 @@ describe("POSRegisterView", () => {
       },
       sessionPanel: {},
       cashierCard: {},
+      closeoutControl: {
+        canCloseout: true,
+        onRequestCloseout: vi.fn(),
+      },
       authDialog: {
         open: false,
       },
@@ -171,6 +194,7 @@ describe("POSRegisterView", () => {
     render(<POSRegisterView />);
 
     expect(screen.getByText("register-action-bar")).toBeInTheDocument();
+    expect(screen.getByText("closeout-control")).toBeInTheDocument();
     expect(screen.getByText("register-customer-panel")).toBeInTheDocument();
     expect(screen.getByText("product-search-input")).toBeInTheDocument();
     expect(screen.getByText("Ready for product lookup")).toBeInTheDocument();
@@ -180,7 +204,7 @@ describe("POSRegisterView", () => {
     expect(screen.queryByText("cashier-auth-dialog")).not.toBeInTheDocument();
   });
 
-  it("hides selling controls while cashier authentication is missing", async () => {
+  it("renders cashier authentication in the product lookup space while keeping POS controls visible", async () => {
     mockUseRegisterViewModel.mockReturnValue({
       hasActiveStore: true,
       header: {
@@ -218,11 +242,10 @@ describe("POSRegisterView", () => {
     render(<POSRegisterView />);
 
     expect(screen.getByText("cashier-auth-dialog")).toBeInTheDocument();
-    expect(screen.queryByText("register-action-bar")).not.toBeInTheDocument();
-    expect(screen.queryByText("register-customer-panel")).not.toBeInTheDocument();
+    expect(screen.getByText("register-customer-panel")).toBeInTheDocument();
     expect(screen.queryByText("product-entry")).not.toBeInTheDocument();
-    expect(screen.queryByText("cart-items")).not.toBeInTheDocument();
-    expect(screen.queryByText("register-checkout-panel")).not.toBeInTheDocument();
+    expect(screen.getByText("cart-items")).toBeInTheDocument();
+    expect(screen.getByText("register-checkout-panel")).toBeInTheDocument();
   });
 
   it("renders expense completion UI in expense workflow without POS checkout controls", async () => {
@@ -330,6 +353,110 @@ describe("POSRegisterView", () => {
     expect(screen.getByText("expense-completion-panel")).toBeInTheDocument();
     expect(screen.queryByText("register-checkout-panel")).not.toBeInTheDocument();
     expect(screen.queryByText("register-action-bar")).not.toBeInTheDocument();
+  });
+
+  it("shows the expense entry state after an expense session completes", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "Expense Products",
+        isSessionActive: true,
+      },
+      registerInfo: {
+        customerName: "Ama Serwa",
+        registerLabel: "Expenses",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: false,
+        showProductLookup: false,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+        onAddProduct: vi.fn(),
+        setShowProductLookup: vi.fn(),
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: true,
+      },
+      workflowMode: "expense",
+      sessionPanel: null,
+      cashierCard: null,
+      drawerGate: null,
+      authDialog: {
+        open: false,
+      },
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(screen.getByText("Ready for expense entry")).toBeInTheDocument();
+    expect(
+      screen.getByText("Search or scan products to add expense items"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("cart-items")).toBeInTheDocument();
+    expect(screen.getByText("expense-completion-panel")).toBeInTheDocument();
+    expect(screen.getByText("Cashier")).toBeInTheDocument();
+    expect(screen.getByText("Unassigned")).toBeInTheDocument();
+    expect(screen.queryByText("register-checkout-panel")).not.toBeInTheDocument();
+  });
+
+  it("keeps the register shell around expense authentication", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "Expense Products",
+        isSessionActive: true,
+      },
+      registerInfo: {
+        customerName: "Ama Serwa",
+        registerLabel: "Expenses",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: true,
+        showProductLookup: false,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+        onAddProduct: vi.fn(),
+        setShowProductLookup: vi.fn(),
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: true,
+      },
+      workflowMode: "expense",
+      sessionPanel: null,
+      cashierCard: null,
+      drawerGate: null,
+      authDialog: {
+        open: true,
+      },
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    const authDialog = screen.getByText("cashier-auth-dialog");
+
+    expect(authDialog).toBeInTheDocument();
+    expect(authDialog.parentElement).not.toHaveClass("lg:col-span-2");
+    expect(screen.getByText("cart-items")).toBeInTheDocument();
+    expect(screen.getByText("expense-completion-panel")).toBeInTheDocument();
+    expect(screen.getByText("Cashier")).toBeInTheDocument();
+    expect(screen.getByText("Unassigned")).toBeInTheDocument();
+    expect(screen.queryByText("Ready for expense entry")).not.toBeInTheDocument();
   });
 
   it("keeps POS workflow behavior when expense completion data is present but mode is not set to expense", async () => {
@@ -445,7 +572,7 @@ describe("POSRegisterView", () => {
     expect(setProductSearchQuery).toHaveBeenCalledWith("");
   });
 
-  it("renders the drawer gate instead of the selling surface while drawer setup is pending", async () => {
+  it("renders the drawer gate in the product lookup space while drawer setup is pending", async () => {
     mockUseRegisterViewModel.mockReturnValue({
       hasActiveStore: true,
       header: {
@@ -498,15 +625,14 @@ describe("POSRegisterView", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("Opening float (GH₵)")).toBeInTheDocument();
+    expect(screen.getByText("register-customer-panel")).toBeInTheDocument();
     expect(screen.queryByText("product-entry")).not.toBeInTheDocument();
-    expect(screen.queryByText("cart-items")).not.toBeInTheDocument();
-    expect(
-      screen.queryByText("register-checkout-panel"),
-    ).not.toBeInTheDocument();
+    expect(screen.getByText("cart-items")).toBeInTheDocument();
+    expect(screen.getByText("register-checkout-panel")).toBeInTheDocument();
     expect(screen.queryByText("register-action-bar")).not.toBeInTheDocument();
   });
 
-  it("renders recovery copy, inline errors, and escape actions while hiding sale controls", async () => {
+  it("renders recovery copy, inline errors, and escape actions in the product lookup space", async () => {
     const onSignOut = vi.fn();
     mockUseRegisterViewModel.mockReturnValue({
       hasActiveStore: true,
@@ -563,11 +689,10 @@ describe("POSRegisterView", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Drawer already open for this register. Return to the active sale or review it in Cash Controls.",
     );
+    expect(screen.getByText("register-customer-panel")).toBeInTheDocument();
     expect(screen.queryByText("product-entry")).not.toBeInTheDocument();
-    expect(screen.queryByText("cart-items")).not.toBeInTheDocument();
-    expect(
-      screen.queryByText("register-checkout-panel"),
-    ).not.toBeInTheDocument();
+    expect(screen.getByText("cart-items")).toBeInTheDocument();
+    expect(screen.getByText("register-checkout-panel")).toBeInTheDocument();
     expect(screen.queryByText("register-action-bar")).not.toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /cash controls/i }),
@@ -607,7 +732,18 @@ describe("POSRegisterView", () => {
         isRecovery: false,
         registerLabel: "Front Counter",
         registerNumber: "1",
+        currency: "GHS",
+        closeoutCountedCash: "",
+        closeoutDraftVariance: undefined,
+        closeoutNotes: "",
+        expectedCash: 5000,
         errorMessage: null,
+        isCloseoutSubmitting: false,
+        isReopeningCloseout: false,
+        onCloseoutCountedCashChange: vi.fn(),
+        onCloseoutNotesChange: vi.fn(),
+        onReopenRegister: vi.fn(),
+        onSubmitCloseout: vi.fn(),
         onSignOut,
       },
       sessionPanel: null,
@@ -621,28 +757,38 @@ describe("POSRegisterView", () => {
     const { POSRegisterView } = await import("./POSRegisterView");
     render(<POSRegisterView />);
 
-    expect(screen.getByText("Closeout in progress")).toBeInTheDocument();
+    expect(
+      screen.getByText("Register 1 closeout in progress"),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(
-        /Front Counter is already in closeout. Finish it in Cash Controls before selling here again./i,
+        /Finish this register closeout in Cash Controls before selling here./i,
       ),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /cash controls/i }),
     ).toBeInTheDocument();
+    expect(screen.getByText("Expected")).toBeInTheDocument();
+    expect(screen.getByText("GH₵50")).toBeInTheDocument();
+    expect(screen.getByLabelText(/counted cash/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/closeout notes/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /submit closeout/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /reopen register/i }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /sign out/i }),
     ).toBeInTheDocument();
     expect(screen.queryByLabelText(/opening float/i)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/notes/i)).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /open drawer/i }),
     ).not.toBeInTheDocument();
+    expect(screen.getByText("register-customer-panel")).toBeInTheDocument();
     expect(screen.queryByText("product-entry")).not.toBeInTheDocument();
-    expect(screen.queryByText("cart-items")).not.toBeInTheDocument();
-    expect(
-      screen.queryByText("register-checkout-panel"),
-    ).not.toBeInTheDocument();
+    expect(screen.getByText("cart-items")).toBeInTheDocument();
+    expect(screen.getByText("register-checkout-panel")).toBeInTheDocument();
     expect(screen.queryByText("register-action-bar")).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: /sign out/i }));

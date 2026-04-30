@@ -1,23 +1,26 @@
-import { ArrowRightIcon } from "lucide-react";
+import { ArrowRightIcon, LockKeyhole } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 
 import type {
+  RegisterCloseoutControlState,
   RegisterInfoState,
   RegisterSessionPanelState,
 } from "@/lib/pos/presentation/register/registerUiState";
+import { Button } from "@/components/ui/button";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import { cn } from "~/src/lib/utils";
 
 import { RegisterActions } from "../RegisterActions";
 import { RegisterSessionPanel } from "./RegisterSessionPanel";
-import { FadeIn } from "../../common/FadeIn";
 
 interface RegisterActionBarProps {
+  closeoutControl: RegisterCloseoutControlState | null;
   registerInfo: RegisterInfoState;
   sessionPanel: RegisterSessionPanelState | null;
 }
 
 export function RegisterActionBar({
+  closeoutControl,
   registerInfo,
   sessionPanel,
 }: RegisterActionBarProps) {
@@ -36,6 +39,18 @@ export function RegisterActionBar({
           registerNumber={registerInfo.registerLabel}
           hasTerminal={registerInfo.hasTerminal}
         />
+        {closeoutControl ? (
+          <Button
+            className="h-10"
+            disabled={!closeoutControl.canCloseout}
+            onClick={closeoutControl.onRequestCloseout}
+            type="button"
+            variant="outline"
+          >
+            <LockKeyhole className="mr-2 h-4 w-4" />
+            Closeout
+          </Button>
+        ) : null}
         {!registerInfo.hasTerminal && (
           <Link
             params={(params) => ({
