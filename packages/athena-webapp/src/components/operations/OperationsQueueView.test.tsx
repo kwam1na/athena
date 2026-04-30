@@ -53,12 +53,6 @@ vi.mock("sonner", () => ({
   toast: mockedToast,
 }));
 
-vi.mock("../cash-controls/RegisterCloseoutView", () => ({
-  RegisterCloseoutView: () => (
-    <div data-testid="register-closeout-view">Register closeouts stub</div>
-  ),
-}));
-
 const baseProps = {
   approvalRequests: [] as {
     _id: Id<"approvalRequest">;
@@ -228,11 +222,11 @@ describe("OperationsQueueViewContent", () => {
     });
   });
 
-  it("renders the register closeout section in the live operations page", () => {
+  it("renders the live operations page without the register closeout surface", () => {
     render(<OperationsQueueView />);
 
     expect(screen.getByText("Operations workspace")).toBeInTheDocument();
-    expect(screen.getByTestId("register-closeout-view")).toBeInTheDocument();
+    expect(screen.queryByText(/register closeouts/i)).not.toBeInTheDocument();
   });
 
   it("routes approval decisions without sending a raw Athena user id from the client", async () => {

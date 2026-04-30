@@ -52,6 +52,45 @@ vi.mock("../common/PageHeader", () => ({
   ),
 }));
 
+vi.mock("@/components/staff-auth/StaffAuthenticationDialog", () => ({
+  StaffAuthenticationDialog: ({
+    copy,
+    onAuthenticate,
+    onAuthenticated,
+    open,
+  }: {
+    copy: { submitLabel: string };
+    onAuthenticate: (args: {
+      mode: "authenticate";
+      pinHash: string;
+      username: string;
+    }) => Promise<unknown>;
+    onAuthenticated: (result: {
+      staffProfile: { fullName: string };
+      staffProfileId: string;
+    }) => void;
+    open: boolean;
+  }) =>
+    open ? (
+      <button
+        type="button"
+        onClick={async () => {
+          await onAuthenticate({
+            mode: "authenticate",
+            pinHash: "hashed-pin",
+            username: "ato",
+          });
+          onAuthenticated({
+            staffProfile: { fullName: "Ato Kofi" },
+            staffProfileId: "staff-1",
+          });
+        }}
+      >
+        Confirm staff for {copy.submitLabel}
+      </button>
+    ) : null,
+}));
+
 const baseSnapshot = {
   closeoutReview: null as {
     hasVariance: boolean;
@@ -91,6 +130,7 @@ const baseSnapshot = {
     pendingApprovalRequest: null,
     registerNumber: "Register 3",
     status: "closing",
+    terminalName: "Front counter",
     totalDeposited: 2400,
     variance: -500,
     workflowTraceId: "register_session:reg-3",
@@ -104,6 +144,7 @@ describe("RegisterSessionViewContent", () => {
   });
 
   const closeoutHandlers = {
+    onAuthenticateStaff: vi.fn(),
     onReviewCloseout: vi.fn(),
     onSubmitCloseout: vi.fn(),
   };
@@ -173,6 +214,7 @@ describe("RegisterSessionViewContent", () => {
     );
 
     expect(screen.getAllByText("Register 3").length).toBeGreaterThan(0);
+    expect(screen.getByText("Front counter")).toBeInTheDocument();
     expect(screen.getByText("Session")).toBeInTheDocument();
     expect(screen.getByText("Code")).toBeInTheDocument();
     expect(screen.getByText("SION-1")).toBeInTheDocument();
@@ -190,6 +232,8 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getByText("1 linked sale")).toBeInTheDocument();
     expect(screen.getByText("Closeout")).toBeInTheDocument();
     expect(screen.getByText("Closeout in progress")).toBeInTheDocument();
+    expect(screen.getByText("Opening float")).toBeInTheDocument();
+    expect(screen.getByText("$50")).toBeInTheDocument();
     expect(screen.getByText("Counted")).toBeInTheDocument();
     expect(screen.getAllByText("$171").length).toBeGreaterThan(0);
     expect(screen.getByText("Linked transactions")).toBeInTheDocument();
@@ -247,6 +291,87 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getByText("By Kojo M.")).toBeInTheDocument();
   });
 
+  it("keeps closed metadata structured when closer staff is missing", () => {
+    const closedAt = new Date("2026-04-21T19:45:00.000Z").getTime();
+    const expectedClosedAt = new Date(closedAt).toLocaleString("en-US", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            closedAt,
+            closedByStaffName: null,
+            status: "closed",
+          },
+        }}
+        orgUrlSlug="wigclub"
+        storeId="store-1"
+        storeUrlSlug="wigclub"
+      />,
+    );
+
+    expect(screen.getByText(expectedClosedAt)).toBeInTheDocument();
+    expect(screen.getByText("Staff not recorded")).toBeInTheDocument();
+  });
+
+  it("omits closeout metadata while the drawer is open or actively recording sales", () => {
+    const { rerender } = render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            status: "active",
+          },
+        }}
+        orgUrlSlug="wigclub"
+        storeId="store-1"
+        storeUrlSlug="wigclub"
+      />,
+    );
+
+    expect(screen.queryByText("Closeout")).not.toBeInTheDocument();
+    expect(screen.queryByText("Sales recording")).not.toBeInTheDocument();
+
+    rerender(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            status: "open",
+          },
+        }}
+        orgUrlSlug="wigclub"
+        storeId="store-1"
+        storeUrlSlug="wigclub"
+      />,
+    );
+
+    expect(screen.queryByText("Closeout")).not.toBeInTheDocument();
+    expect(screen.queryByText("Ready for sales")).not.toBeInTheDocument();
+  });
+
   it("formats variance amounts in manager follow-up copy", () => {
     render(
       <RegisterSessionViewContent
@@ -288,6 +413,7 @@ describe("RegisterSessionViewContent", () => {
 
   it("submits the closeout count from the register detail page", async () => {
     const user = userEvent.setup();
+    const onAuthenticateStaff = vi.fn();
     const onSubmitCloseout = vi.fn().mockResolvedValue(ok({ action: "closed" }));
 
     render(
@@ -295,6 +421,7 @@ describe("RegisterSessionViewContent", () => {
         actorUserId="user-1"
         currency="GHS"
         isLoading={false}
+        onAuthenticateStaff={onAuthenticateStaff}
         onRecordDeposit={vi.fn()}
         onReviewCloseout={vi.fn()}
         onSubmitCloseout={onSubmitCloseout}
@@ -310,9 +437,18 @@ describe("RegisterSessionViewContent", () => {
       "Final count after second safe drop.",
     );
     await user.click(screen.getByRole("button", { name: "Submit closeout" }));
+    await user.click(
+      screen.getByRole("button", { name: "Confirm staff for Submit closeout" }),
+    );
 
+    expect(onAuthenticateStaff).toHaveBeenCalledWith({
+      allowedRoles: ["cashier", "manager"],
+      pinHash: "hashed-pin",
+      username: "ato",
+    });
     await waitFor(() =>
       expect(onSubmitCloseout).toHaveBeenCalledWith({
+        actorStaffProfileId: "staff-1",
         countedCash: 18000,
         notes: "Final count after second safe drop.",
         registerSessionId: "session-1",
@@ -322,6 +458,7 @@ describe("RegisterSessionViewContent", () => {
 
   it("reviews a pending closeout approval from the register detail page", async () => {
     const user = userEvent.setup();
+    const onAuthenticateStaff = vi.fn();
     const onReviewCloseout = vi
       .fn()
       .mockResolvedValue(ok({ action: "approved" }));
@@ -331,6 +468,7 @@ describe("RegisterSessionViewContent", () => {
         actorUserId="user-1"
         currency="GHS"
         isLoading={false}
+        onAuthenticateStaff={onAuthenticateStaff}
         onRecordDeposit={vi.fn()}
         onReviewCloseout={onReviewCloseout}
         onSubmitCloseout={vi.fn()}
@@ -357,6 +495,7 @@ describe("RegisterSessionViewContent", () => {
     );
 
     expect(screen.getByText("Manager review required")).toBeInTheDocument();
+    expect(screen.getByText("Requested by Ama M.")).toBeInTheDocument();
     expect(screen.getAllByText("Expected").length).toBeGreaterThan(0);
     expect(screen.getAllByText("GH₵176").length).toBeGreaterThan(1);
 
@@ -365,12 +504,23 @@ describe("RegisterSessionViewContent", () => {
       "Deposit variance approved.",
     );
     await user.click(screen.getByRole("button", { name: "Approve variance" }));
+    await user.click(
+      screen.getByRole("button", {
+        name: "Confirm staff for Approve variance",
+      }),
+    );
 
+    expect(onAuthenticateStaff).toHaveBeenCalledWith({
+      allowedRoles: ["manager"],
+      pinHash: "hashed-pin",
+      username: "ato",
+    });
     await waitFor(() =>
       expect(onReviewCloseout).toHaveBeenCalledWith({
         decision: "approved",
         decisionNotes: "Deposit variance approved.",
         registerSessionId: "session-1",
+        reviewedByStaffProfileId: "staff-1",
       }),
     );
   });

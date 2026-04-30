@@ -106,7 +106,6 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/bulk-operations/BulkOperationsPreview.test.tsx`](../../src/components/bulk-operations/BulkOperationsPreview.test.tsx)
 - [`src/components/cash-controls/CashControlsDashboard.auth.test.tsx`](../../src/components/cash-controls/CashControlsDashboard.auth.test.tsx)
 - [`src/components/cash-controls/CashControlsDashboard.test.tsx`](../../src/components/cash-controls/CashControlsDashboard.test.tsx)
-- [`src/components/cash-controls/RegisterCloseoutView.test.tsx`](../../src/components/cash-controls/RegisterCloseoutView.test.tsx)
 - [`src/components/cash-controls/RegisterSessionView.auth.test.tsx`](../../src/components/cash-controls/RegisterSessionView.auth.test.tsx)
 - [`src/components/cash-controls/RegisterSessionView.test.tsx`](../../src/components/cash-controls/RegisterSessionView.test.tsx)
 - [`src/components/cash-controls/RegisterSessionsView.test.tsx`](../../src/components/cash-controls/RegisterSessionsView.test.tsx)

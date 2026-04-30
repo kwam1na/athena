@@ -23,7 +23,6 @@ This route index enumerates the current files under `src/routes` so agents can o
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bags.$bagId.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bags.$bagId.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bags.index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bags.index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bulk-operations/index.tsx)
-- [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/closeouts.index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/closeouts.index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers.index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers.index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId.tsx)

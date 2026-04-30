@@ -57,6 +57,7 @@ describe("cash control deposits", () => {
           openingFloat: 5000,
           registerNumber: "A1",
           status: "active",
+          terminalId: "terminal_1" as Id<"posTerminal">,
           variance: undefined,
         },
         {
@@ -68,6 +69,7 @@ describe("cash control deposits", () => {
           openingFloat: 5000,
           registerNumber: "B2",
           status: "closing",
+          terminalId: "terminal_2" as Id<"posTerminal">,
           variance: -500,
         },
         {
@@ -82,6 +84,10 @@ describe("cash control deposits", () => {
         },
       ],
       staffNamesById: new Map(),
+      terminalNamesById: new Map([
+        ["terminal_1" as Id<"posTerminal">, "Front counter"],
+        ["terminal_2" as Id<"posTerminal">, "Back counter"],
+      ]),
     });
 
     expect(snapshot.registerSessions).toHaveLength(3);
@@ -95,6 +101,7 @@ describe("cash control deposits", () => {
     expect(snapshot.openSessions[0]).toMatchObject({
       _id: "session_open",
       registerNumber: "A1",
+      terminalName: "Front counter",
       totalDeposited: 1200,
     });
 
@@ -105,6 +112,7 @@ describe("cash control deposits", () => {
         _id: "approval_1",
         status: "pending",
       },
+      terminalName: "Back counter",
       totalDeposited: 500,
     });
 

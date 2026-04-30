@@ -34,7 +34,7 @@ vi.mock("~/src/lib/security/pinHash", () => ({
   hashPin: mocks.hashPin,
 }));
 
-vi.mock("./PinInput", () => ({
+vi.mock("@/components/pos/PinInput", () => ({
   PinInput: ({
     disabled,
     onChange,
@@ -248,6 +248,53 @@ describe("CashierAuthDialog", () => {
     );
     expect(onAuthenticated).toHaveBeenCalledWith(staffProfileId);
     expect(mocks.toastError).not.toHaveBeenCalled();
+  });
+
+  it("authenticates before signing out from other registers", async () => {
+    const authenticateMutation = vi.fn().mockResolvedValue(
+      ok({
+        activeRoles: ["manager"],
+        credentialId: "credential-1",
+        staffProfile: {
+          firstName: "Ama",
+          fullName: "Ama Mensah",
+          lastName: "Mensah",
+        },
+        staffProfileId,
+      }),
+    );
+    const expireMutation = vi.fn().mockResolvedValue({ success: true });
+
+    const { user, onAuthenticated } = renderDialog({
+      authenticateMutation,
+      expireMutation,
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: "Sign out from other registers" }),
+    );
+    expect(
+      screen.getByRole("heading", { name: "Sign out from other registers" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Start register session" }),
+    ).toBeInTheDocument();
+
+    await submitCredentials(user);
+    await user.click(
+      screen.getByRole("button", { name: "Sign out from all registers" }),
+    );
+
+    await waitFor(() =>
+      expect(expireMutation).toHaveBeenCalledWith({
+        staffProfileId,
+        terminalId,
+      }),
+    );
+    expect(mocks.toastSuccess).toHaveBeenCalledWith(
+      "Signed out from all registers.",
+    );
+    expect(onAuthenticated).toHaveBeenCalledWith(staffProfileId);
   });
 });
 

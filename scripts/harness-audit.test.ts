@@ -654,11 +654,6 @@ async function createFixtureRepo() {
     rootDir
   );
   await write(
-    "packages/athena-webapp/src/components/cash-controls/RegisterCloseoutView.tsx",
-    "export {};\n",
-    rootDir
-  );
-  await write(
     "packages/athena-webapp/src/components/staff/StaffManagement.tsx",
     "export {};\n",
     rootDir

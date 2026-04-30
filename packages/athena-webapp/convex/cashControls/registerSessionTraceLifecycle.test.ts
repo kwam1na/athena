@@ -60,6 +60,22 @@ type ApprovalRequestRecord = {
   status: "pending" | "approved" | "rejected" | "cancelled";
 };
 
+type StaffProfileRecord = {
+  _id: Id<"staffProfile">;
+  organizationId: Id<"organization">;
+  status: "active" | "inactive";
+  storeId: Id<"store">;
+};
+
+type StaffRoleAssignmentRecord = {
+  _id: Id<"staffRoleAssignment">;
+  organizationId: Id<"organization">;
+  role: "manager" | "cashier";
+  staffProfileId: Id<"staffProfile">;
+  status: "active" | "inactive";
+  storeId: Id<"store">;
+};
+
 function buildRegisterSession(
   overrides?: Partial<RegisterSessionRecord>,
 ): RegisterSessionRecord {
@@ -79,9 +95,33 @@ function buildRegisterSession(
 function createMutationCtx(seed?: {
   approvalRequests?: ApprovalRequestRecord[];
   registerSessions?: RegisterSessionRecord[];
+  staffProfiles?: StaffProfileRecord[];
+  staffRoleAssignments?: StaffRoleAssignmentRecord[];
 }) {
   const approvalRequests = [...(seed?.approvalRequests ?? [])];
   const registerSessions = [...(seed?.registerSessions ?? [])];
+  const staffProfiles = [
+    ...(seed?.staffProfiles ?? [
+      {
+        _id: "staff-2" as Id<"staffProfile">,
+        organizationId: "org-1" as Id<"organization">,
+        status: "active" as const,
+        storeId: "store-1" as Id<"store">,
+      },
+    ]),
+  ];
+  const staffRoleAssignments = [
+    ...(seed?.staffRoleAssignments ?? [
+      {
+        _id: "role-1" as Id<"staffRoleAssignment">,
+        organizationId: "org-1" as Id<"organization">,
+        role: "manager" as const,
+        staffProfileId: "staff-2" as Id<"staffProfile">,
+        status: "active" as const,
+        storeId: "store-1" as Id<"store">,
+      },
+    ]),
+  ];
 
   const db = {
     get: vi.fn(async (table: string, id: string) => {
@@ -91,6 +131,10 @@ function createMutationCtx(seed?: {
 
       if (table === "approvalRequest") {
         return approvalRequests.find((request) => request._id === id) ?? null;
+      }
+
+      if (table === "staffProfile") {
+        return staffProfiles.find((staffProfile) => staffProfile._id === id) ?? null;
       }
 
       return null;
@@ -142,6 +186,19 @@ function createMutationCtx(seed?: {
         ) {
           return {
             first: async () => null,
+          };
+        }
+
+        if (
+          table === "staffRoleAssignment" &&
+          indexName === "by_staffProfileId"
+        ) {
+          return {
+            take: async () =>
+              staffRoleAssignments.filter(
+                (assignment) =>
+                  assignment.staffProfileId === filters.staffProfileId,
+              ),
           };
         }
 
@@ -450,6 +507,64 @@ describe("register session trace lifecycle handlers", () => {
     expect(ctx.db.patch).toHaveBeenCalledWith("registerSession", "session-1", {
       workflowTraceId: "register_session:session-1",
     });
+  });
+
+  it("rejects variance review actions from non-manager staff", async () => {
+    const ctx = createMutationCtx({
+      approvalRequests: [
+        {
+          _id: "approval-1" as Id<"approvalRequest">,
+          createdAt: 222,
+          registerSessionId: "session-1" as Id<"registerSession">,
+          requestType: "variance_review",
+          status: "pending",
+        },
+      ],
+      registerSessions: [
+        buildRegisterSession({
+          countedCash: 16_050,
+          managerApprovalRequestId: "approval-1" as Id<"approvalRequest">,
+          status: "closing",
+        }),
+      ],
+      staffProfiles: [
+        {
+          _id: "staff-3" as Id<"staffProfile">,
+          organizationId: "org-1" as Id<"organization">,
+          status: "active",
+          storeId: "store-1" as Id<"store">,
+        },
+      ],
+      staffRoleAssignments: [
+        {
+          _id: "role-1" as Id<"staffRoleAssignment">,
+          organizationId: "org-1" as Id<"organization">,
+          role: "cashier",
+          staffProfileId: "staff-3" as Id<"staffProfile">,
+          status: "active",
+          storeId: "store-1" as Id<"store">,
+        },
+      ],
+    });
+
+    const result = await getHandler(reviewRegisterSessionCloseout)(ctx as never, {
+      decision: "approved",
+      decisionNotes: "Approved after recount",
+      registerSessionId: "session-1",
+      reviewedByStaffProfileId: "staff-3",
+      reviewedByUserId: "user-2",
+      storeId: "store-1",
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "Only managers can approve or reject register variance reviews.",
+      },
+    });
+    expect(ctx.runMutation).not.toHaveBeenCalled();
+    expect(mocks.traceRecord).not.toHaveBeenCalled();
   });
 
   it("records a rejected closeout trace milestone when manager review fails", async () => {

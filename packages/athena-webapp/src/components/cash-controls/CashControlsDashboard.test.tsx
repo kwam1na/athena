@@ -192,6 +192,7 @@ describe("CashControlsDashboardContent", () => {
               },
               registerNumber: "Register 3",
               status: "closing",
+              terminalName: "Back counter",
               totalDeposited: 2400,
               variance: -500,
               workflowTraceId: "register_session:reg-3",
@@ -236,6 +237,7 @@ describe("CashControlsDashboardContent", () => {
               },
               registerNumber: "Register 3",
               status: "closing",
+              terminalName: "Back counter",
               totalDeposited: 2400,
               variance: -500,
               workflowTraceId: "register_session:reg-3",
@@ -336,7 +338,17 @@ describe("CashControlsDashboardContent", () => {
     expect(screen.getByText("Cash controls workspace")).toBeInTheDocument();
     expect(screen.getByText("Cashroom landing")).toBeInTheDocument();
     expect(screen.getByText("Expected in drawers")).toBeInTheDocument();
+    expect(screen.getByText("$424")).toBeInTheDocument();
+    expect(screen.getByText("1 live drawer, 1 in review")).toBeInTheDocument();
     expect(screen.getByText("Deposited today")).toBeInTheDocument();
+    expect(screen.getByText("$104")).toBeInTheDocument();
+    expect(screen.getAllByText("Still in drawers").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("$320").length).toBeGreaterThan(0);
+    expect(
+      screen.getByText("Live and review drawers minus deposits"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Variance to review")).toBeInTheDocument();
+    expect(screen.getAllByText("$5").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Recent deposits").length).toBeGreaterThan(0);
     expect(screen.queryByText("Review closeouts")).not.toBeInTheDocument();
     expect(screen.getByText("Cashroom workflow")).toBeInTheDocument();
@@ -361,9 +373,19 @@ describe("CashControlsDashboardContent", () => {
     );
     expect(screen.getAllByText("Register 1").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Register 3").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Back counter").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Needs review").length).toBeGreaterThan(0);
     expect(screen.getByText("Register 4")).toBeInTheDocument();
     expect(screen.getByText(expectedClosedAt)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Register 4" })).toHaveAttribute(
+      "href",
+      "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId?o=%252F",
+    );
+    expect(
+      screen.getByRole("link", {
+        name: `Open Register 4 closed ${expectedClosedAt}`,
+      }),
+    ).toHaveAttribute(
       "href",
       "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId?o=%252F",
     );
@@ -374,10 +396,10 @@ describe("CashControlsDashboardContent", () => {
       0,
     );
     expect(
-      screen.getAllByText(
+      screen.queryByText(
         "Variance of -$5 exceeded the closeout approval threshold.",
-      ).length,
-    ).toBeGreaterThan(0);
+      ),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByText(
         "Variance of -500 exceeded the closeout approval threshold.",
@@ -440,6 +462,11 @@ describe("CashControlsDashboardContent", () => {
     );
 
     expect(screen.getAllByText("Register 2").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Needs action")).not.toBeInTheDocument();
+    expect(screen.getByText("Live drawers")).toBeInTheDocument();
+    expect(
+      screen.queryByText("No drawer needs closeout or variance review."),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByText("First safe drop after POS drawer open"),
     ).toBeInTheDocument();
@@ -479,6 +506,11 @@ describe("CashControlsDashboardContent", () => {
     expect(
       screen.getAllByText("No live drawers are open right now.").length,
     ).toBeGreaterThan(0);
+    expect(screen.queryByText("Needs action")).not.toBeInTheDocument();
+    expect(screen.queryByText("Live drawers")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("No drawer needs closeout or variance review."),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("No open sessions")).toBeInTheDocument();
   });
 

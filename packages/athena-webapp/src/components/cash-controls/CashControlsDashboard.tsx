@@ -30,7 +30,6 @@ import {
 import { getOrigin } from "~/src/lib/navigationUtils";
 import { formatStaffDisplayName } from "~/shared/staffDisplayName";
 import { CashControlsWorkspaceHeader } from "./CashControlsWorkspaceHeader";
-import { formatReviewReason } from "./formatReviewReason";
 
 const CLOSED_SESSION_PREVIEW_LIMIT = 3;
 
@@ -53,6 +52,7 @@ export type CashControlsDashboardSession = {
   pendingApprovalRequest?: DashboardApprovalRequest | null;
   registerNumber?: string | null;
   status: string;
+  terminalName?: string | null;
   totalDeposited: number;
   variance?: number;
   workflowTraceId?: string | null;
@@ -139,11 +139,14 @@ function getStatusBadgeClass(status: string) {
 }
 
 function getSnapshotTotals(snapshot: CashControlsDashboardSnapshot) {
-  const expectedCashTotal = snapshot.openSessions.reduce(
+  const cashExposureSessions = snapshot.registerSessions.filter((session) =>
+    ["active", "open", "closing"].includes(session.status),
+  );
+  const expectedCashTotal = cashExposureSessions.reduce(
     (total, session) => total + session.expectedCash,
     0,
   );
-  const depositedTotal = snapshot.openSessions.reduce(
+  const depositedTotal = cashExposureSessions.reduce(
     (total, session) => total + session.totalDeposited,
     0,
   );
@@ -158,6 +161,22 @@ function getSnapshotTotals(snapshot: CashControlsDashboardSnapshot) {
     onHandTotal: Math.max(expectedCashTotal - depositedTotal, 0),
     unresolvedVarianceTotal,
   };
+}
+
+function formatCashExposureSupporting(snapshot: CashControlsDashboardSnapshot) {
+  const liveCount = snapshot.openSessions.length;
+  const reviewCount = snapshot.pendingCloseouts.length;
+  const parts = [];
+
+  if (liveCount > 0) {
+    parts.push(`${liveCount} live drawer${liveCount === 1 ? "" : "s"}`);
+  }
+
+  if (reviewCount > 0) {
+    parts.push(`${reviewCount} in review`);
+  }
+
+  return parts.length > 0 ? parts.join(", ") : "No drawers in cashroom flow";
 }
 
 function CashPositionSummary({
@@ -177,7 +196,7 @@ function CashPositionSummary({
   const items = [
     {
       label: "Expected in drawers",
-      supporting: `${snapshot.openSessions.length} open session${snapshot.openSessions.length === 1 ? "" : "s"}`,
+      supporting: formatCashExposureSupporting(snapshot),
       value: formatCurrency(currency, expectedCashTotal),
     },
     {
@@ -187,7 +206,7 @@ function CashPositionSummary({
     },
     {
       label: "Still in drawers",
-      supporting: "Expected minus deposits",
+      supporting: "Live and review drawers minus deposits",
       value: formatCurrency(currency, onHandTotal),
     },
     {
@@ -355,20 +374,8 @@ function getSessionActionLabel(session: CashControlsDashboardSession) {
   return "Open drawer detail";
 }
 
-function getSessionReason(session: CashControlsDashboardSession) {
-  if (session.pendingApprovalRequest || session.variance) {
-    return "Variance needs review";
-  }
-
-  if (session.status === "closing") {
-    return "Ready for closeout";
-  }
-
-  if (["active", "open"].includes(session.status)) {
-    return "Live drawer";
-  }
-
-  return "Closed session";
+function needsVarianceReview(session: CashControlsDashboardSession) {
+  return Boolean(session.pendingApprovalRequest || session.variance);
 }
 
 function formatStaffByline(staffName?: string | null) {
@@ -386,6 +393,12 @@ function getSessionOpenedLine(session: CashControlsDashboardSession) {
   return openedBy
     ? `Opened ${openedAt} by ${openedBy}`
     : `Opened ${openedAt}; staff not recorded`;
+}
+
+function getSessionTerminalLine(session: CashControlsDashboardSession) {
+  const terminalName = session.terminalName?.trim();
+
+  return terminalName;
 }
 
 function getSessionActionTone(session: CashControlsDashboardSession) {
@@ -436,10 +449,7 @@ function DrawerSessionCard({
 }) {
   const variance = session.variance ?? 0;
   const openedLine = getSessionOpenedLine(session);
-  const formattedApprovalReason = formatReviewReason(
-    currencyFormatter(currency),
-    session.pendingApprovalRequest?.reason,
-  );
+  const terminalLine = getSessionTerminalLine(session);
 
   return (
     <Link
@@ -457,23 +467,36 @@ function DrawerSessionCard({
     >
       <div className="flex items-start justify-between gap-layout-md">
         <div className="min-w-0 space-y-1">
-          <p className="truncate font-medium text-foreground">
-            {formatRegisterName(session.registerNumber)}
-          </p>
-          <p
-            className={cn("text-sm font-medium", getSessionActionTone(session))}
-          >
-            {getSessionReason(session)}
-          </p>
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <p className="truncate font-medium text-foreground">
+              {formatRegisterName(session.registerNumber)}
+            </p>
+            {terminalLine ? (
+              <p className="truncate text-xs text-muted-foreground">
+                {terminalLine}
+              </p>
+            ) : null}
+          </div>
           <p className="text-xs text-muted-foreground">{openedLine}</p>
         </div>
-        <Badge
-          className={getStatusBadgeClass(session.status)}
-          size="sm"
-          variant="outline"
-        >
-          {formatStatusLabel(session.status)}
-        </Badge>
+        <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+          {needsVarianceReview(session) ? (
+            <Badge
+              className="border-transparent bg-danger/10 text-danger"
+              size="sm"
+              variant="outline"
+            >
+              Needs review
+            </Badge>
+          ) : null}
+          <Badge
+            className={getStatusBadgeClass(session.status)}
+            size="sm"
+            variant="outline"
+          >
+            {formatStatusLabel(session.status)}
+          </Badge>
+        </div>
       </div>
 
       <dl className="mt-layout-md grid grid-cols-3 gap-layout-sm">
@@ -504,12 +527,6 @@ function DrawerSessionCard({
           </dd>
         </div>
       </dl>
-
-      {formattedApprovalReason ? (
-        <p className="mt-layout-sm max-w-full overflow-hidden break-words rounded-md border border-danger/20 bg-danger/5 px-layout-sm py-layout-xs text-xs leading-relaxed text-danger">
-          {formattedApprovalReason}
-        </p>
-      ) : null}
 
       <span
         className={cn(
@@ -593,7 +610,7 @@ function ClosedSessionsSummary({
     "text-[11px] uppercase tracking-[0.16em] text-muted-foreground";
 
   return (
-    <aside className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
+    <aside className="space-y-layout-sm">
       <div className="flex items-start justify-between gap-layout-md">
         <div className="space-y-1">
           <h3 className="text-sm font-semibold text-foreground">
@@ -613,11 +630,11 @@ function ClosedSessionsSummary({
       </div>
 
       {sessions.length === 0 ? (
-        <p className="mt-layout-md text-sm text-muted-foreground">
+        <p className="rounded-lg border border-dashed border-border bg-background/60 px-layout-md py-layout-lg text-sm text-muted-foreground">
           Closed sessions will appear after closeout.
         </p>
       ) : (
-        <div className="mt-layout-md overflow-hidden rounded-lg border border-border bg-background/70">
+        <div className="overflow-hidden rounded-lg border border-border bg-background">
           <Table>
             <TableHeader>
               <TableRow className="border-b border-border hover:bg-transparent">
@@ -632,12 +649,12 @@ function ClosedSessionsSummary({
             <TableBody>
               {previewSessions.map((session) => (
                 <TableRow
-                  className="border-b border-border/70 transition-colors hover:bg-muted/40"
+                  className="group border-b border-border/70 transition-colors hover:bg-muted/40"
                   key={session._id}
                 >
-                  <TableCell className="font-medium text-foreground">
+                  <TableCell className="p-0 font-medium text-foreground">
                     <Link
-                      className="block rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="block h-full w-full px-4 py-4 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                       params={{
                         orgUrlSlug,
                         sessionId: session._id,
@@ -649,9 +666,10 @@ function ClosedSessionsSummary({
                       {formatRegisterName(session.registerNumber)}
                     </Link>
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
+                  <TableCell className="p-0 text-xs text-muted-foreground">
                     <Link
-                      className="block rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label={`Open ${formatRegisterName(session.registerNumber)} opened ${formatTimestamp(session.openedAt)}`}
+                      className="block h-full w-full px-4 py-4 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                       params={{
                         orgUrlSlug,
                         sessionId: session._id,
@@ -663,9 +681,14 @@ function ClosedSessionsSummary({
                       {formatTimestamp(session.openedAt)}
                     </Link>
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
+                  <TableCell className="p-0 text-xs text-muted-foreground">
                     <Link
-                      className="block rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label={`Open ${formatRegisterName(session.registerNumber)} closed ${
+                        session.closedAt
+                          ? formatTimestamp(session.closedAt)
+                          : "not recorded"
+                      }`}
+                      className="block h-full w-full px-4 py-4 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                       params={{
                         orgUrlSlug,
                         sessionId: session._id,
@@ -681,12 +704,16 @@ function ClosedSessionsSummary({
                   </TableCell>
                   <TableCell
                     className={cn(
-                      "text-right font-mono",
+                      "p-0 text-right font-mono",
                       getVarianceTone(session.variance),
                     )}
                   >
                     <Link
-                      className="block rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label={`Open ${formatRegisterName(session.registerNumber)} variance ${formatCurrency(
+                        currency,
+                        session.variance ?? 0,
+                      )}`}
+                      className="block h-full w-full px-4 py-4 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                       params={{
                         orgUrlSlug,
                         sessionId: session._id,
@@ -750,6 +777,21 @@ function CashroomWorkflow({
     (session) => session.status === "closed",
   );
   const { onHandTotal, unresolvedVarianceTotal } = getSnapshotTotals(snapshot);
+  const hasNeedsAttention = needsAttention.length > 0;
+  const hasLiveDrawers = liveDrawers.length > 0;
+  const primaryLane = hasNeedsAttention
+    ? {
+        emptyDescription: "No drawer needs closeout or variance review.",
+        sessions: needsAttention,
+        title: "Needs action",
+      }
+    : hasLiveDrawers
+      ? {
+          emptyDescription: "No live drawers are open right now.",
+          sessions: liveDrawers,
+          title: "Live drawers",
+        }
+      : undefined;
 
   return (
     <section className="space-y-layout-md rounded-lg border border-border bg-surface p-layout-lg shadow-surface">
@@ -788,25 +830,36 @@ function CashroomWorkflow({
           />
         </div>
       ) : (
-        <div className="grid gap-layout-lg xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-          <DrawerSessionLane
-            currency={currency}
-            emptyDescription="No drawer needs closeout or variance review."
-            orgUrlSlug={orgUrlSlug}
-            sessions={needsAttention}
-            storeUrlSlug={storeUrlSlug}
-            title="Needs action"
-            variant="primary"
-          />
-          <div className="space-y-layout-lg">
+        <div
+          className={cn(
+            "grid gap-layout-lg",
+            primaryLane
+              ? "xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]"
+              : "xl:grid-cols-[minmax(0,1fr)]",
+          )}
+        >
+          {primaryLane ? (
             <DrawerSessionLane
               currency={currency}
-              emptyDescription="No live drawers are open right now."
+              emptyDescription={primaryLane.emptyDescription}
               orgUrlSlug={orgUrlSlug}
-              sessions={liveDrawers}
+              sessions={primaryLane.sessions}
               storeUrlSlug={storeUrlSlug}
-              title="Live drawers"
+              title={primaryLane.title}
+              variant="primary"
             />
+          ) : null}
+          <div className="space-y-layout-lg">
+            {hasNeedsAttention ? (
+              <DrawerSessionLane
+                currency={currency}
+                emptyDescription="No live drawers are open right now."
+                orgUrlSlug={orgUrlSlug}
+                sessions={liveDrawers}
+                storeUrlSlug={storeUrlSlug}
+                title="Live drawers"
+              />
+            ) : null}
             <ClosedSessionsSummary
               currency={currency}
               orgUrlSlug={orgUrlSlug}

@@ -14,6 +14,10 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import {
+  StaffAuthenticationDialog,
+  type StaffAuthenticationResult,
+} from "@/components/staff-auth/StaffAuthenticationDialog";
+import {
   type NormalizedCommandResult,
   runCommand,
 } from "@/lib/errors/runCommand";
@@ -72,6 +76,7 @@ type RegisterSessionDetail = {
   pendingApprovalRequest?: RegisterSessionApprovalRequest | null;
   registerNumber?: string | null;
   status: string;
+  terminalName?: string | null;
   totalDeposited: number;
   variance?: number;
   workflowTraceId?: string | null;
@@ -133,6 +138,7 @@ type RegisterSessionDepositResult =
   NormalizedCommandResult<RegisterSessionDepositPayload>;
 
 type RegisterCloseoutSubmitArgs = {
+  actorStaffProfileId: string;
   countedCash: number;
   notes?: string;
   registerSessionId: string;
@@ -142,6 +148,7 @@ type RegisterCloseoutReviewArgs = {
   decision: "approved" | "rejected";
   decisionNotes?: string;
   registerSessionId: string;
+  reviewedByStaffProfileId: string;
 };
 
 type RegisterCloseoutCommandPayload = {
@@ -150,6 +157,11 @@ type RegisterCloseoutCommandPayload = {
 
 type RegisterCloseoutCommandResult =
   NormalizedCommandResult<RegisterCloseoutCommandPayload>;
+
+type StaffAuthenticationCommandResult =
+  NormalizedCommandResult<StaffAuthenticationResult>;
+
+type StaffAuthenticationRole = "cashier" | "manager";
 
 type RegisterSessionViewContentProps = {
   actorStaffProfileId?: string;
@@ -162,6 +174,11 @@ type RegisterSessionViewContentProps = {
   onReviewCloseout: (
     args: RegisterCloseoutReviewArgs,
   ) => Promise<RegisterCloseoutCommandResult>;
+  onAuthenticateStaff: (args: {
+    allowedRoles: StaffAuthenticationRole[];
+    pinHash: string;
+    username: string;
+  }) => Promise<StaffAuthenticationCommandResult>;
   onSubmitCloseout: (
     args: RegisterCloseoutSubmitArgs,
   ) => Promise<RegisterCloseoutCommandResult>;
@@ -170,6 +187,20 @@ type RegisterSessionViewContentProps = {
   storeId?: string;
   storeUrlSlug?: string;
 };
+
+type CloseoutStaffAuthIntent =
+  | {
+      kind: "submit";
+      countedCash: number;
+      notes?: string;
+      registerSessionId: string;
+    }
+  | {
+      decision: "approved" | "rejected";
+      decisionNotes?: string;
+      kind: "review";
+      registerSessionId: string;
+    };
 
 function trimOptional(value?: string) {
   const nextValue = value?.trim();
@@ -265,54 +296,12 @@ function getPaymentMethodIcon({
   }
 }
 
-function DetailNav({
-  orgUrlSlug,
-  storeUrlSlug,
-}: {
-  orgUrlSlug?: string;
-  storeUrlSlug?: string;
-}) {
-  if (!orgUrlSlug || !storeUrlSlug) {
-    return null;
-  }
-
-  return (
-    <div className="flex flex-wrap gap-2">
-      <Button
-        asChild
-        className="border-border bg-transparent text-muted-foreground hover:bg-muted"
-        size="sm"
-        variant="outline"
-      >
-        <Link
-          params={{ orgUrlSlug, storeUrlSlug }}
-          to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls"
-        >
-          Cash Controls
-        </Link>
-      </Button>
-      <Button
-        asChild
-        className="border-border bg-muted text-foreground hover:bg-muted/80"
-        size="sm"
-        variant="outline"
-      >
-        <Link
-          params={{ orgUrlSlug, storeUrlSlug }}
-          to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/closeouts"
-        >
-          Closeouts
-        </Link>
-      </Button>
-    </div>
-  );
-}
-
 export function RegisterSessionViewContent({
   actorStaffProfileId,
   actorUserId,
   currency,
   isLoading,
+  onAuthenticateStaff,
   onRecordDeposit,
   onReviewCloseout,
   onSubmitCloseout,
@@ -335,6 +324,8 @@ export function RegisterSessionViewContent({
   const [pendingCloseoutAction, setPendingCloseoutAction] = useState<
     "approved" | "rejected" | "submit" | null
   >(null);
+  const [closeoutStaffAuthIntent, setCloseoutStaffAuthIntent] =
+    useState<CloseoutStaffAuthIntent | null>(null);
   const [submissionKey, setSubmissionKey] = useState(() =>
     buildDepositSubmissionKey(registerSession?._id ?? "session"),
   );
@@ -354,6 +345,7 @@ export function RegisterSessionViewContent({
       setManagerNotes("");
       setCloseoutErrorMessage("");
       setPendingCloseoutAction(null);
+      setCloseoutStaffAuthIntent(null);
       return;
     }
 
@@ -366,6 +358,7 @@ export function RegisterSessionViewContent({
     setManagerNotes("");
     setCloseoutErrorMessage("");
     setPendingCloseoutAction(null);
+    setCloseoutStaffAuthIntent(null);
   }, [registerSession?._id, registerSession?.countedCash]);
 
   const applyCommandResult = (result: RegisterSessionDepositResult) => {
@@ -451,23 +444,12 @@ export function RegisterSessionViewContent({
     }
 
     setCloseoutErrorMessage("");
-    setPendingCloseoutAction("submit");
-
-    try {
-      const result = await onSubmitCloseout({
-        countedCash: parsedCountedCash,
-        notes: trimOptional(closeoutNotes),
-        registerSessionId: registerSession._id,
-      });
-
-      if (!applyCloseoutCommandResult(result)) {
-        return;
-      }
-
-      setCloseoutNotes("");
-    } finally {
-      setPendingCloseoutAction(null);
-    }
+    setCloseoutStaffAuthIntent({
+      kind: "submit",
+      countedCash: parsedCountedCash,
+      notes: trimOptional(closeoutNotes),
+      registerSessionId: registerSession._id,
+    });
   }
 
   async function handleReviewCloseout(decision: "approved" | "rejected") {
@@ -479,24 +461,78 @@ export function RegisterSessionViewContent({
     }
 
     setCloseoutErrorMessage("");
-    setPendingCloseoutAction(decision);
+    setCloseoutStaffAuthIntent({
+      kind: "review",
+      decision,
+      decisionNotes: trimOptional(managerNotes),
+      registerSessionId: registerSession._id,
+    });
+  }
+
+  async function handleAuthenticatedCloseoutStaff(
+    result: StaffAuthenticationResult,
+  ) {
+    if (!closeoutStaffAuthIntent) {
+      return;
+    }
+
+    const intent = closeoutStaffAuthIntent;
+    const action = intent.kind === "submit" ? "submit" : intent.decision;
+
+    setCloseoutErrorMessage("");
+    setPendingCloseoutAction(action);
+    setCloseoutStaffAuthIntent(null);
 
     try {
-      const result = await onReviewCloseout({
-        decision,
-        decisionNotes: trimOptional(managerNotes),
-        registerSessionId: registerSession._id,
-      });
+      const commandResult =
+        intent.kind === "submit"
+          ? await onSubmitCloseout({
+              actorStaffProfileId: result.staffProfileId,
+              countedCash: intent.countedCash,
+              notes: intent.notes,
+              registerSessionId: intent.registerSessionId,
+            })
+          : await onReviewCloseout({
+              decision: intent.decision,
+              decisionNotes: intent.decisionNotes,
+              registerSessionId: intent.registerSessionId,
+              reviewedByStaffProfileId: result.staffProfileId,
+            });
 
-      if (!applyCloseoutCommandResult(result)) {
+      if (!applyCloseoutCommandResult(commandResult)) {
         return;
       }
 
-      setManagerNotes("");
+      if (intent.kind === "submit") {
+        setCloseoutNotes("");
+      } else {
+        setManagerNotes("");
+      }
     } finally {
       setPendingCloseoutAction(null);
     }
   }
+
+  const closeoutStaffAuthCopy =
+    closeoutStaffAuthIntent?.kind === "review"
+      ? {
+          title:
+            closeoutStaffAuthIntent.decision === "approved"
+              ? "Approve variance"
+              : "Reject variance",
+          description:
+            "Confirm manager credentials so this variance decision is attributed correctly.",
+          submitLabel:
+            closeoutStaffAuthIntent.decision === "approved"
+              ? "Approve variance"
+              : "Reject variance",
+        }
+      : {
+          title: "Submit closeout",
+          description:
+            "Confirm staff credentials so the closeout and any variance request are attributed correctly.",
+          submitLabel: "Submit closeout",
+        };
 
   const transactions = registerSessionSnapshot?.transactions ?? [];
   const previewTransactions = transactions.slice(
@@ -530,6 +566,7 @@ export function RegisterSessionViewContent({
   const headerTitle = registerSession
     ? formatRegisterHeaderName(registerSession.registerNumber)
     : "Register detail";
+  const headerTerminalName = registerSession?.terminalName?.trim();
   const sessionCode = registerSession
     ? formatSessionCode(registerSession._id)
     : undefined;
@@ -547,16 +584,17 @@ export function RegisterSessionViewContent({
         ? registerSession.pendingApprovalRequest
           ? "Manager approval pending"
           : "Closeout in progress"
-        : registerSession?.status === "active"
-          ? "Sales recording"
-          : "Ready for sales";
+        : undefined;
+  const shouldShowCloseoutSummary = Boolean(closeoutState);
   const closeoutTimestamp =
     registerSession?.status === "closed" && registerSession.closedAt
       ? formatTimestamp(registerSession.closedAt)
       : undefined;
   const closeoutActorLine =
-    registerSession?.status === "closed" && registerSession.closedByStaffName
-      ? `By ${formatStaffDisplayName({ fullName: registerSession.closedByStaffName })}`
+    registerSession?.status === "closed"
+      ? registerSession.closedByStaffName
+        ? `By ${formatStaffDisplayName({ fullName: registerSession.closedByStaffName })}`
+        : "Staff not recorded"
       : undefined;
 
   return (
@@ -568,6 +606,11 @@ export function RegisterSessionViewContent({
               <span className="text-sm font-medium text-foreground">
                 {headerTitle}
               </span>
+              {headerTerminalName ? (
+                <span className="text-sm text-muted-foreground">
+                  {headerTerminalName}
+                </span>
+              ) : null}
               {registerSession ? (
                 <>
                   <Badge
@@ -602,6 +645,30 @@ export function RegisterSessionViewContent({
         />
       }
     >
+      <StaffAuthenticationDialog
+        copy={closeoutStaffAuthCopy}
+        getSuccessMessage={(result) => {
+          const staffDisplayName = formatStaffDisplayName(result.staffProfile);
+          return staffDisplayName
+            ? `Confirmed as ${staffDisplayName}.`
+            : "Staff credentials confirmed.";
+        }}
+        onAuthenticate={(args) =>
+          onAuthenticateStaff({
+            allowedRoles:
+              closeoutStaffAuthIntent?.kind === "review"
+                ? ["manager"]
+                : ["cashier", "manager"],
+            pinHash: args.pinHash,
+            username: args.username,
+          })
+        }
+        onAuthenticated={(result) => {
+          void handleAuthenticatedCloseoutStaff(result);
+        }}
+        onDismiss={() => setCloseoutStaffAuthIntent(null)}
+        open={Boolean(closeoutStaffAuthIntent)}
+      />
       <FadeIn>
         <div className="container mx-auto space-y-6 p-6">
           <section className="overflow-hidden rounded-[calc(var(--radius)*1.35)] border border-border bg-surface shadow-surface">
@@ -633,6 +700,17 @@ export function RegisterSessionViewContent({
                         </span>
                       </dd>
                       <div className="mt-layout-md divide-y divide-border/70 rounded-md border border-border/70 bg-muted/10">
+                        <div className="flex items-center justify-between gap-layout-md px-3 py-2.5">
+                          <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                            Opening float
+                          </dt>
+                          <dd className="font-mono text-sm text-foreground">
+                            {formatCurrency(
+                              currency,
+                              registerSession.openingFloat,
+                            )}
+                          </dd>
+                        </div>
                         <div className="flex items-center justify-between gap-layout-md px-3 py-2.5">
                           <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
                             Counted
@@ -709,24 +787,23 @@ export function RegisterSessionViewContent({
                           sales
                         </dd>
                       </div>
-                      <div className="grid gap-1 px-layout-md py-3">
-                        <dt className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                          Closeout
-                        </dt>
-                        <dd className="text-sm font-medium text-foreground">
-                          {closeoutState}
-                        </dd>
-                        {closeoutTimestamp ? (
-                          <dd className="text-xs text-muted-foreground">
-                            {closeoutTimestamp}
+                      {shouldShowCloseoutSummary ? (
+                        <div className="grid gap-1 px-layout-md py-3">
+                          <dt className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                            {registerSession.status === "closed"
+                              ? "Closed"
+                              : "Closeout"}
+                          </dt>
+                          <dd className="text-sm font-medium text-foreground">
+                            {closeoutTimestamp ?? closeoutState}
                           </dd>
-                        ) : null}
-                        {closeoutActorLine ? (
-                          <dd className="text-xs text-muted-foreground">
-                            {closeoutActorLine}
-                          </dd>
-                        ) : null}
-                      </div>
+                          {closeoutActorLine ? (
+                            <dd className="text-xs text-muted-foreground">
+                              {closeoutActorLine}
+                            </dd>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                   </dl>
 
@@ -1092,6 +1169,17 @@ export function RegisterSessionViewContent({
                           formattedCloseoutReviewReason ??
                           "Review the submitted count before closing this drawer."}
                       </p>
+                      <p className="text-xs text-muted-foreground">
+                        Requested by{" "}
+                        {registerSession.pendingApprovalRequest
+                          ?.requestedByStaffName
+                          ? formatStaffDisplayName({
+                              fullName:
+                                registerSession.pendingApprovalRequest
+                                  .requestedByStaffName,
+                            })
+                          : "staff not recorded"}
+                      </p>
                     </div>
 
                     <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
@@ -1386,6 +1474,9 @@ export function RegisterSessionView() {
   const reviewRegisterSessionCloseout = useMutation(
     api.cashControls.closeouts.reviewRegisterSessionCloseout,
   );
+  const authenticateStaffCredential = useMutation(
+    api.operations.staffCredentials.authenticateStaffCredential,
+  );
 
   async function onRecordDeposit(args: RecordRegisterSessionDepositArgs) {
     const result = await runCommand(() =>
@@ -1424,6 +1515,7 @@ export function RegisterSessionView() {
 
     const result = await runCommand(() =>
       submitRegisterSessionCloseout({
+        actorStaffProfileId: args.actorStaffProfileId as Id<"staffProfile">,
         actorUserId: user._id,
         countedCash: args.countedCash,
         notes: args.notes,
@@ -1443,6 +1535,28 @@ export function RegisterSessionView() {
     return result;
   }
 
+  async function onAuthenticateStaff(args: {
+    allowedRoles: StaffAuthenticationRole[];
+    pinHash: string;
+    username: string;
+  }) {
+    if (!activeStore?._id) {
+      return userError({
+        code: "authentication_failed",
+        message: "Select a store before confirming staff credentials.",
+      });
+    }
+
+    return runCommand(() =>
+      authenticateStaffCredential({
+        allowedRoles: args.allowedRoles,
+        pinHash: args.pinHash,
+        storeId: activeStore._id,
+        username: args.username,
+      }),
+    );
+  }
+
   async function onReviewCloseout(args: RegisterCloseoutReviewArgs) {
     if (!activeStore?._id || !user?._id) {
       return userError({
@@ -1456,6 +1570,8 @@ export function RegisterSessionView() {
         decision: args.decision,
         decisionNotes: args.decisionNotes,
         registerSessionId: args.registerSessionId as Id<"registerSession">,
+        reviewedByStaffProfileId:
+          args.reviewedByStaffProfileId as Id<"staffProfile">,
         reviewedByUserId: user._id,
         storeId: activeStore._id,
       }),
@@ -1510,6 +1626,7 @@ export function RegisterSessionView() {
       actorUserId={user?._id}
       currency={activeStore.currency || "USD"}
       isLoading={registerSessionSnapshot === undefined}
+      onAuthenticateStaff={onAuthenticateStaff}
       onRecordDeposit={onRecordDeposit}
       onReviewCloseout={onReviewCloseout}
       onSubmitCloseout={onSubmitCloseout}
