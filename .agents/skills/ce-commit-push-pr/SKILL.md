@@ -152,6 +152,14 @@ If the PR check returned `state: OPEN`, note the URL -- this is the existing-PR 
 git push -u origin HEAD
 ```
 
+If the push is blocked by a repo harness, pre-push hook, generated-artifact check, graph/doc freshness check, validation-map check, or similar repo sensor:
+
+1. Classify the block using `$compound-delivery-kernel`: documented repair drift, semantic blocker, or unrelated environment.
+2. Apply only the smallest legitimate fix needed to unblock the current delivery, then rerun the blocking command.
+3. If the agent had to perform extra investigative or corrective work beyond running the repo's documented repair once, proactively create a follow-up with `$create-linear-ticket` before continuing. The ticket should ask whether this failure class can be resolved by harness auto-repair or whether the harness should emit a better diagnostic so future agents do not repeat the same manual work.
+4. The ticket must include the failing command, relevant output or diagnosis, what extra work was required, why it is separate from the current PR, acceptance criteria, test scenarios, execution posture, expected sensors, and compounding opportunity.
+5. Link the follow-up ticket from the PR body or a PR comment when a PR exists, and include it in the final handoff.
+
 ### Step 6: Generate the PR title and body
 
 The working-tree diff from Step 1 only shows uncommitted changes at invocation time. The PR description must cover **all commits** in the PR.

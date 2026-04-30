@@ -103,6 +103,8 @@ EOF
 )"
 ```
 
+If `git push` is blocked by a repo harness, pre-push hook, generated-artifact check, graph/doc freshness check, validation-map check, or similar repo sensor, apply `$compound-delivery-kernel` before retrying. If resolving the block requires extra work beyond running the documented repair once, use `$create-linear-ticket` to file a follow-up that asks whether the harness can safely auto-repair the failure class or emit a better diagnostic for future agents. Include the failing command/output, the extra work performed, why it is separate from the current branch, acceptance criteria, test scenarios, execution posture, expected sensors, and compounding opportunity. Link the ticket in the PR or handoff.
+
 Then: Cleanup worktree (Step 5)
 
 #### Option 3: Keep As-Is
