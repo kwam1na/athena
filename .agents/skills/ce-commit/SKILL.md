@@ -100,6 +100,13 @@ EOF
 )"
 ```
 
+If a commit hook or repo harness blocks the commit:
+
+1. Classify the block using `$compound-delivery-kernel`: documented repair drift, semantic blocker, or unrelated environment.
+2. Apply only the smallest legitimate fix needed to complete the current commit, then rerun the blocked command.
+3. If the agent had to do extra investigative or corrective work beyond running the repo's documented repair once, proactively create a follow-up with `$create-linear-ticket`. The ticket should ask whether this failure class can be resolved by harness auto-repair or whether the harness should emit a better diagnostic for future agents.
+4. Include the failing command, relevant output or diagnosis, extra work performed, why it is separate from the current commit, acceptance criteria, test scenarios, execution posture, expected sensors, and compounding opportunity. Mention the follow-up ticket in the commit handoff.
+
 ### Step 5: Confirm
 
 Run `git status` after the commit to verify success. Report the commit hash(es) and subject line(s).
