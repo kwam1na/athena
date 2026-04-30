@@ -4943,7 +4943,7 @@
       "relation": "calls",
       "source": "harness_review_fileexists",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L331",
+      "source_location": "L343",
       "target": "harness_review_collectcommandsforchangedfiles",
       "weight": 1
     },
@@ -4955,7 +4955,7 @@
       "relation": "calls",
       "source": "harness_review_rungitcommand",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L417",
+      "source_location": "L429",
       "target": "harness_review_getchangedfilesforharnessreview",
       "weight": 1
     },
@@ -4967,7 +4967,7 @@
       "relation": "calls",
       "source": "harness_review_sortuniquepaths",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L450",
+      "source_location": "L462",
       "target": "harness_review_getchangedfilesforharnessreview",
       "weight": 1
     },
@@ -4979,7 +4979,7 @@
       "relation": "calls",
       "source": "harness_review_fileexists",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L102",
+      "source_location": "L114",
       "target": "harness_review_hasanyharnessdocs",
       "weight": 1
     },
@@ -4991,7 +4991,19 @@
       "relation": "calls",
       "source": "harness_review_fileexists",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L127",
+      "source_location": "L139",
+      "target": "harness_review_loadreviewtarget",
+      "weight": 1
+    },
+    {
+      "_src": "harness_review_loadreviewtarget",
+      "_tgt": "harness_review_formatmissingpathprefixerror",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "relation": "calls",
+      "source": "harness_review_formatmissingpathprefixerror",
+      "source_file": "scripts/harness-review.ts",
+      "source_location": "L214",
       "target": "harness_review_loadreviewtarget",
       "weight": 1
     },
@@ -5003,7 +5015,7 @@
       "relation": "calls",
       "source": "harness_review_normalizebehaviorscenarioname",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L234",
+      "source_location": "L246",
       "target": "harness_review_loadreviewtarget",
       "weight": 1
     },
@@ -5015,7 +5027,7 @@
       "relation": "calls",
       "source": "harness_review_normalizerepopath",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L243",
+      "source_location": "L255",
       "target": "harness_review_loadreviewtarget",
       "weight": 1
     },
@@ -5027,7 +5039,7 @@
       "relation": "calls",
       "source": "harness_review_hasanyharnessdocs",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L269",
+      "source_location": "L281",
       "target": "harness_review_loadreviewtargets",
       "weight": 1
     },
@@ -5039,7 +5051,7 @@
       "relation": "calls",
       "source": "harness_review_loadreviewtarget",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L277",
+      "source_location": "L289",
       "target": "harness_review_loadreviewtargets",
       "weight": 1
     },
@@ -5051,7 +5063,7 @@
       "relation": "calls",
       "source": "harness_review_normalizerepopath",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L56",
+      "source_location": "L58",
       "target": "harness_review_matchespathprefix",
       "weight": 1
     },
@@ -5063,7 +5075,7 @@
       "relation": "calls",
       "source": "harness_review_fileexists",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L534",
+      "source_location": "L546",
       "target": "harness_review_resolveharnessreviewshell",
       "weight": 1
     },
@@ -5075,7 +5087,7 @@
       "relation": "calls",
       "source": "harness_review_rungitcommand",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L391",
+      "source_location": "L403",
       "target": "harness_review_buildgitprocessenv",
       "weight": 1
     },
@@ -5087,7 +5099,7 @@
       "relation": "calls",
       "source": "harness_review_collectcommandsforchangedfiles",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L592",
+      "source_location": "L604",
       "target": "harness_review_runharnessreview",
       "weight": 1
     },
@@ -5099,7 +5111,7 @@
       "relation": "calls",
       "source": "harness_review_loadreviewtargets",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L585",
+      "source_location": "L597",
       "target": "harness_review_runharnessreview",
       "weight": 1
     },
@@ -5111,7 +5123,7 @@
       "relation": "calls",
       "source": "harness_review_resolveharnessreviewshell",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L543",
+      "source_location": "L555",
       "target": "harness_review_runrawcommand",
       "weight": 1
     },
@@ -38111,7 +38123,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_test_ts",
       "source_file": "scripts/harness-review.test.ts",
-      "source_location": "L960",
+      "source_location": "L999",
       "target": "harness_review_test_error",
       "weight": 1
     },
@@ -38135,7 +38147,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_test_ts",
       "source_file": "scripts/harness-review.test.ts",
-      "source_location": "L959",
+      "source_location": "L998",
       "target": "harness_review_test_log",
       "weight": 1
     },
@@ -38171,7 +38183,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_ts",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L407",
+      "source_location": "L419",
       "target": "harness_review_buildgitprocessenv",
       "weight": 1
     },
@@ -38183,7 +38195,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_ts",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L290",
+      "source_location": "L302",
       "target": "harness_review_collectcommandsforchangedfiles",
       "weight": 1
     },
@@ -38195,8 +38207,20 @@
       "relation": "contains",
       "source": "scripts_harness_review_ts",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L81",
+      "source_location": "L93",
       "target": "harness_review_fileexists",
+      "weight": 1
+    },
+    {
+      "_src": "scripts_harness_review_ts",
+      "_tgt": "harness_review_formatmissingpathprefixerror",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "relation": "contains",
+      "source": "scripts_harness_review_ts",
+      "source_file": "scripts/harness-review.ts",
+      "source_location": "L83",
+      "target": "harness_review_formatmissingpathprefixerror",
       "weight": 1
     },
     {
@@ -38207,7 +38231,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_ts",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L413",
+      "source_location": "L425",
       "target": "harness_review_getchangedfilesforharnessreview",
       "weight": 1
     },
@@ -38219,7 +38243,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_ts",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L90",
+      "source_location": "L102",
       "target": "harness_review_hasanyharnessdocs",
       "weight": 1
     },
@@ -38231,7 +38255,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_ts",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L120",
+      "source_location": "L132",
       "target": "harness_review_loadreviewtarget",
       "weight": 1
     },
@@ -38243,7 +38267,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_ts",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L257",
+      "source_location": "L269",
       "target": "harness_review_loadreviewtargets",
       "weight": 1
     },
@@ -38255,7 +38279,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_ts",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L55",
+      "source_location": "L57",
       "target": "harness_review_matchespathprefix",
       "weight": 1
     },
@@ -38267,7 +38291,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_ts",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L77",
+      "source_location": "L79",
       "target": "harness_review_normalizebehaviorscenarioname",
       "weight": 1
     },
@@ -38279,7 +38303,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_ts",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L51",
+      "source_location": "L53",
       "target": "harness_review_normalizerepopath",
       "weight": 1
     },
@@ -38291,7 +38315,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_ts",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L69",
+      "source_location": "L71",
       "target": "harness_review_normalizevalidationcommand",
       "weight": 1
     },
@@ -38303,7 +38327,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_ts",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L654",
+      "source_location": "L666",
       "target": "harness_review_parseharnessreviewargs",
       "weight": 1
     },
@@ -38315,7 +38339,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_ts",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L110",
+      "source_location": "L122",
       "target": "harness_review_readjsonfile",
       "weight": 1
     },
@@ -38327,7 +38351,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_ts",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L521",
+      "source_location": "L533",
       "target": "harness_review_resolveharnessreviewshell",
       "weight": 1
     },
@@ -38339,7 +38363,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_ts",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L386",
+      "source_location": "L398",
       "target": "harness_review_rungitcommand",
       "weight": 1
     },
@@ -38351,7 +38375,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_ts",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L556",
+      "source_location": "L568",
       "target": "harness_review_runharnessbehaviorscenario",
       "weight": 1
     },
@@ -38363,7 +38387,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_ts",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L570",
+      "source_location": "L582",
       "target": "harness_review_runharnessreview",
       "weight": 1
     },
@@ -38375,7 +38399,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_ts",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L507",
+      "source_location": "L519",
       "target": "harness_review_runpackagescript",
       "weight": 1
     },
@@ -38387,7 +38411,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_ts",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L542",
+      "source_location": "L554",
       "target": "harness_review_runrawcommand",
       "weight": 1
     },
@@ -38399,7 +38423,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_ts",
       "source_file": "scripts/harness-review.ts",
-      "source_location": "L114",
+      "source_location": "L126",
       "target": "harness_review_sortuniquepaths",
       "weight": 1
     },
@@ -43470,191 +43494,191 @@
     {
       "community": 10,
       "file_type": "code",
-      "id": "harness_review_buildgitprocessenv",
-      "label": "buildGitProcessEnv()",
-      "norm_label": "buildgitprocessenv()",
-      "source_file": "scripts/harness-review.ts",
-      "source_location": "L407"
-    },
-    {
-      "community": 10,
-      "file_type": "code",
-      "id": "harness_review_collectcommandsforchangedfiles",
-      "label": "collectCommandsForChangedFiles()",
-      "norm_label": "collectcommandsforchangedfiles()",
-      "source_file": "scripts/harness-review.ts",
-      "source_location": "L290"
-    },
-    {
-      "community": 10,
-      "file_type": "code",
-      "id": "harness_review_fileexists",
-      "label": "fileExists()",
-      "norm_label": "fileexists()",
-      "source_file": "scripts/harness-review.ts",
-      "source_location": "L81"
-    },
-    {
-      "community": 10,
-      "file_type": "code",
-      "id": "harness_review_getchangedfilesforharnessreview",
-      "label": "getChangedFilesForHarnessReview()",
-      "norm_label": "getchangedfilesforharnessreview()",
-      "source_file": "scripts/harness-review.ts",
-      "source_location": "L413"
-    },
-    {
-      "community": 10,
-      "file_type": "code",
-      "id": "harness_review_hasanyharnessdocs",
-      "label": "hasAnyHarnessDocs()",
-      "norm_label": "hasanyharnessdocs()",
-      "source_file": "scripts/harness-review.ts",
-      "source_location": "L90"
-    },
-    {
-      "community": 10,
-      "file_type": "code",
-      "id": "harness_review_loadreviewtarget",
-      "label": "loadReviewTarget()",
-      "norm_label": "loadreviewtarget()",
-      "source_file": "scripts/harness-review.ts",
-      "source_location": "L120"
-    },
-    {
-      "community": 10,
-      "file_type": "code",
-      "id": "harness_review_loadreviewtargets",
-      "label": "loadReviewTargets()",
-      "norm_label": "loadreviewtargets()",
-      "source_file": "scripts/harness-review.ts",
-      "source_location": "L257"
-    },
-    {
-      "community": 10,
-      "file_type": "code",
-      "id": "harness_review_matchespathprefix",
-      "label": "matchesPathPrefix()",
-      "norm_label": "matchespathprefix()",
-      "source_file": "scripts/harness-review.ts",
-      "source_location": "L55"
-    },
-    {
-      "community": 10,
-      "file_type": "code",
-      "id": "harness_review_normalizebehaviorscenarioname",
-      "label": "normalizeBehaviorScenarioName()",
-      "norm_label": "normalizebehaviorscenarioname()",
-      "source_file": "scripts/harness-review.ts",
-      "source_location": "L77"
-    },
-    {
-      "community": 10,
-      "file_type": "code",
-      "id": "harness_review_normalizerepopath",
-      "label": "normalizeRepoPath()",
-      "norm_label": "normalizerepopath()",
-      "source_file": "scripts/harness-review.ts",
-      "source_location": "L51"
-    },
-    {
-      "community": 10,
-      "file_type": "code",
-      "id": "harness_review_normalizevalidationcommand",
-      "label": "normalizeValidationCommand()",
-      "norm_label": "normalizevalidationcommand()",
-      "source_file": "scripts/harness-review.ts",
-      "source_location": "L69"
-    },
-    {
-      "community": 10,
-      "file_type": "code",
-      "id": "harness_review_parseharnessreviewargs",
-      "label": "parseHarnessReviewArgs()",
-      "norm_label": "parseharnessreviewargs()",
-      "source_file": "scripts/harness-review.ts",
-      "source_location": "L654"
-    },
-    {
-      "community": 10,
-      "file_type": "code",
-      "id": "harness_review_readjsonfile",
-      "label": "readJsonFile()",
-      "norm_label": "readjsonfile()",
-      "source_file": "scripts/harness-review.ts",
-      "source_location": "L110"
-    },
-    {
-      "community": 10,
-      "file_type": "code",
-      "id": "harness_review_resolveharnessreviewshell",
-      "label": "resolveHarnessReviewShell()",
-      "norm_label": "resolveharnessreviewshell()",
-      "source_file": "scripts/harness-review.ts",
-      "source_location": "L521"
-    },
-    {
-      "community": 10,
-      "file_type": "code",
-      "id": "harness_review_rungitcommand",
-      "label": "runGitCommand()",
-      "norm_label": "rungitcommand()",
-      "source_file": "scripts/harness-review.ts",
-      "source_location": "L386"
-    },
-    {
-      "community": 10,
-      "file_type": "code",
-      "id": "harness_review_runharnessbehaviorscenario",
-      "label": "runHarnessBehaviorScenario()",
-      "norm_label": "runharnessbehaviorscenario()",
-      "source_file": "scripts/harness-review.ts",
-      "source_location": "L556"
-    },
-    {
-      "community": 10,
-      "file_type": "code",
-      "id": "harness_review_runharnessreview",
-      "label": "runHarnessReview()",
-      "norm_label": "runharnessreview()",
-      "source_file": "scripts/harness-review.ts",
-      "source_location": "L570"
-    },
-    {
-      "community": 10,
-      "file_type": "code",
-      "id": "harness_review_runpackagescript",
-      "label": "runPackageScript()",
-      "norm_label": "runpackagescript()",
-      "source_file": "scripts/harness-review.ts",
-      "source_location": "L507"
-    },
-    {
-      "community": 10,
-      "file_type": "code",
-      "id": "harness_review_runrawcommand",
-      "label": "runRawCommand()",
-      "norm_label": "runrawcommand()",
-      "source_file": "scripts/harness-review.ts",
-      "source_location": "L542"
-    },
-    {
-      "community": 10,
-      "file_type": "code",
-      "id": "harness_review_sortuniquepaths",
-      "label": "sortUniquePaths()",
-      "norm_label": "sortuniquepaths()",
-      "source_file": "scripts/harness-review.ts",
-      "source_location": "L114"
-    },
-    {
-      "community": 10,
-      "file_type": "code",
-      "id": "scripts_harness_review_ts",
-      "label": "harness-review.ts",
-      "norm_label": "harness-review.ts",
-      "source_file": "scripts/harness-review.ts",
+      "id": "packages_athena_webapp_convex_pos_application_commands_sessioncommands_ts",
+      "label": "sessionCommands.ts",
+      "norm_label": "sessioncommands.ts",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
       "source_location": "L1"
+    },
+    {
+      "community": 10,
+      "file_type": "code",
+      "id": "sessioncommands_buildnextsessionnumber",
+      "label": "buildNextSessionNumber()",
+      "norm_label": "buildnextsessionnumber()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
+      "source_location": "L754"
+    },
+    {
+      "community": 10,
+      "file_type": "code",
+      "id": "sessioncommands_createdefaultsessioncommandservice",
+      "label": "createDefaultSessionCommandService()",
+      "norm_label": "createdefaultsessioncommandservice()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
+      "source_location": "L709"
+    },
+    {
+      "community": 10,
+      "file_type": "code",
+      "id": "sessioncommands_createpossessioncommandservice",
+      "label": "createPosSessionCommandService()",
+      "norm_label": "createpossessioncommandservice()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
+      "source_location": "L139"
+    },
+    {
+      "community": 10,
+      "file_type": "code",
+      "id": "sessioncommands_failure",
+      "label": "failure()",
+      "norm_label": "failure()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
+      "source_location": "L947"
+    },
+    {
+      "community": 10,
+      "file_type": "code",
+      "id": "sessioncommands_isactiveregistersession",
+      "label": "isActiveRegisterSession()",
+      "norm_label": "isactiveregistersession()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
+      "source_location": "L765"
+    },
+    {
+      "community": 10,
+      "file_type": "code",
+      "id": "sessioncommands_issessionexpired",
+      "label": "isSessionExpired()",
+      "norm_label": "issessionexpired()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
+      "source_location": "L856"
+    },
+    {
+      "community": 10,
+      "file_type": "code",
+      "id": "sessioncommands_normalizeregisternumber",
+      "label": "normalizeRegisterNumber()",
+      "norm_label": "normalizeregisternumber()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
+      "source_location": "L29"
+    },
+    {
+      "community": 10,
+      "file_type": "code",
+      "id": "sessioncommands_recordsessionlifecyclebesteffort",
+      "label": "recordSessionLifecycleBestEffort()",
+      "norm_label": "recordsessionlifecyclebesteffort()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
+      "source_location": "L721"
+    },
+    {
+      "community": 10,
+      "file_type": "code",
+      "id": "sessioncommands_registersessionmatchesidentity",
+      "label": "registerSessionMatchesIdentity()",
+      "norm_label": "registersessionmatchesidentity()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
+      "source_location": "L771"
+    },
+    {
+      "community": 10,
+      "file_type": "code",
+      "id": "sessioncommands_resolveregistersessionbinding",
+      "label": "resolveRegisterSessionBinding()",
+      "norm_label": "resolveregistersessionbinding()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
+      "source_location": "L800"
+    },
+    {
+      "community": 10,
+      "file_type": "code",
+      "id": "sessioncommands_runbindsessiontoregistersessioncommand",
+      "label": "runBindSessionToRegisterSessionCommand()",
+      "norm_label": "runbindsessiontoregistersessioncommand()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
+      "source_location": "L686"
+    },
+    {
+      "community": 10,
+      "file_type": "code",
+      "id": "sessioncommands_runholdsessioncommand",
+      "label": "runHoldSessionCommand()",
+      "norm_label": "runholdsessioncommand()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
+      "source_location": "L675"
+    },
+    {
+      "community": 10,
+      "file_type": "code",
+      "id": "sessioncommands_runremovesessionitemcommand",
+      "label": "runRemoveSessionItemCommand()",
+      "norm_label": "runremovesessionitemcommand()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
+      "source_location": "L702"
+    },
+    {
+      "community": 10,
+      "file_type": "code",
+      "id": "sessioncommands_runresumesessioncommand",
+      "label": "runResumeSessionCommand()",
+      "norm_label": "runresumesessioncommand()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
+      "source_location": "L679"
+    },
+    {
+      "community": 10,
+      "file_type": "code",
+      "id": "sessioncommands_runstartsessioncommand",
+      "label": "runStartSessionCommand()",
+      "norm_label": "runstartsessioncommand()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
+      "source_location": "L658"
+    },
+    {
+      "community": 10,
+      "file_type": "code",
+      "id": "sessioncommands_runupsertsessionitemcommand",
+      "label": "runUpsertSessionItemCommand()",
+      "norm_label": "runupsertsessionitemcommand()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
+      "source_location": "L695"
+    },
+    {
+      "community": 10,
+      "file_type": "code",
+      "id": "sessioncommands_success",
+      "label": "success()",
+      "norm_label": "success()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
+      "source_location": "L940"
+    },
+    {
+      "community": 10,
+      "file_type": "code",
+      "id": "sessioncommands_validateactivesession",
+      "label": "validateActiveSession()",
+      "norm_label": "validateactivesession()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
+      "source_location": "L863"
+    },
+    {
+      "community": 10,
+      "file_type": "code",
+      "id": "sessioncommands_validateactivesessionregisterbinding",
+      "label": "validateActiveSessionRegisterBinding()",
+      "norm_label": "validateactivesessionregisterbinding()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
+      "source_location": "L836"
+    },
+    {
+      "community": 10,
+      "file_type": "code",
+      "id": "sessioncommands_validatemodifiablesession",
+      "label": "validateModifiableSession()",
+      "norm_label": "validatemodifiablesession()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
+      "source_location": "L907"
     },
     {
       "community": 100,
@@ -76734,191 +76758,200 @@
     {
       "community": 9,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_pos_application_commands_sessioncommands_ts",
-      "label": "sessionCommands.ts",
-      "norm_label": "sessioncommands.ts",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
+      "id": "harness_review_buildgitprocessenv",
+      "label": "buildGitProcessEnv()",
+      "norm_label": "buildgitprocessenv()",
+      "source_file": "scripts/harness-review.ts",
+      "source_location": "L419"
+    },
+    {
+      "community": 9,
+      "file_type": "code",
+      "id": "harness_review_collectcommandsforchangedfiles",
+      "label": "collectCommandsForChangedFiles()",
+      "norm_label": "collectcommandsforchangedfiles()",
+      "source_file": "scripts/harness-review.ts",
+      "source_location": "L302"
+    },
+    {
+      "community": 9,
+      "file_type": "code",
+      "id": "harness_review_fileexists",
+      "label": "fileExists()",
+      "norm_label": "fileexists()",
+      "source_file": "scripts/harness-review.ts",
+      "source_location": "L93"
+    },
+    {
+      "community": 9,
+      "file_type": "code",
+      "id": "harness_review_formatmissingpathprefixerror",
+      "label": "formatMissingPathPrefixError()",
+      "norm_label": "formatmissingpathprefixerror()",
+      "source_file": "scripts/harness-review.ts",
+      "source_location": "L83"
+    },
+    {
+      "community": 9,
+      "file_type": "code",
+      "id": "harness_review_getchangedfilesforharnessreview",
+      "label": "getChangedFilesForHarnessReview()",
+      "norm_label": "getchangedfilesforharnessreview()",
+      "source_file": "scripts/harness-review.ts",
+      "source_location": "L425"
+    },
+    {
+      "community": 9,
+      "file_type": "code",
+      "id": "harness_review_hasanyharnessdocs",
+      "label": "hasAnyHarnessDocs()",
+      "norm_label": "hasanyharnessdocs()",
+      "source_file": "scripts/harness-review.ts",
+      "source_location": "L102"
+    },
+    {
+      "community": 9,
+      "file_type": "code",
+      "id": "harness_review_loadreviewtarget",
+      "label": "loadReviewTarget()",
+      "norm_label": "loadreviewtarget()",
+      "source_file": "scripts/harness-review.ts",
+      "source_location": "L132"
+    },
+    {
+      "community": 9,
+      "file_type": "code",
+      "id": "harness_review_loadreviewtargets",
+      "label": "loadReviewTargets()",
+      "norm_label": "loadreviewtargets()",
+      "source_file": "scripts/harness-review.ts",
+      "source_location": "L269"
+    },
+    {
+      "community": 9,
+      "file_type": "code",
+      "id": "harness_review_matchespathprefix",
+      "label": "matchesPathPrefix()",
+      "norm_label": "matchespathprefix()",
+      "source_file": "scripts/harness-review.ts",
+      "source_location": "L57"
+    },
+    {
+      "community": 9,
+      "file_type": "code",
+      "id": "harness_review_normalizebehaviorscenarioname",
+      "label": "normalizeBehaviorScenarioName()",
+      "norm_label": "normalizebehaviorscenarioname()",
+      "source_file": "scripts/harness-review.ts",
+      "source_location": "L79"
+    },
+    {
+      "community": 9,
+      "file_type": "code",
+      "id": "harness_review_normalizerepopath",
+      "label": "normalizeRepoPath()",
+      "norm_label": "normalizerepopath()",
+      "source_file": "scripts/harness-review.ts",
+      "source_location": "L53"
+    },
+    {
+      "community": 9,
+      "file_type": "code",
+      "id": "harness_review_normalizevalidationcommand",
+      "label": "normalizeValidationCommand()",
+      "norm_label": "normalizevalidationcommand()",
+      "source_file": "scripts/harness-review.ts",
+      "source_location": "L71"
+    },
+    {
+      "community": 9,
+      "file_type": "code",
+      "id": "harness_review_parseharnessreviewargs",
+      "label": "parseHarnessReviewArgs()",
+      "norm_label": "parseharnessreviewargs()",
+      "source_file": "scripts/harness-review.ts",
+      "source_location": "L666"
+    },
+    {
+      "community": 9,
+      "file_type": "code",
+      "id": "harness_review_readjsonfile",
+      "label": "readJsonFile()",
+      "norm_label": "readjsonfile()",
+      "source_file": "scripts/harness-review.ts",
+      "source_location": "L122"
+    },
+    {
+      "community": 9,
+      "file_type": "code",
+      "id": "harness_review_resolveharnessreviewshell",
+      "label": "resolveHarnessReviewShell()",
+      "norm_label": "resolveharnessreviewshell()",
+      "source_file": "scripts/harness-review.ts",
+      "source_location": "L533"
+    },
+    {
+      "community": 9,
+      "file_type": "code",
+      "id": "harness_review_rungitcommand",
+      "label": "runGitCommand()",
+      "norm_label": "rungitcommand()",
+      "source_file": "scripts/harness-review.ts",
+      "source_location": "L398"
+    },
+    {
+      "community": 9,
+      "file_type": "code",
+      "id": "harness_review_runharnessbehaviorscenario",
+      "label": "runHarnessBehaviorScenario()",
+      "norm_label": "runharnessbehaviorscenario()",
+      "source_file": "scripts/harness-review.ts",
+      "source_location": "L568"
+    },
+    {
+      "community": 9,
+      "file_type": "code",
+      "id": "harness_review_runharnessreview",
+      "label": "runHarnessReview()",
+      "norm_label": "runharnessreview()",
+      "source_file": "scripts/harness-review.ts",
+      "source_location": "L582"
+    },
+    {
+      "community": 9,
+      "file_type": "code",
+      "id": "harness_review_runpackagescript",
+      "label": "runPackageScript()",
+      "norm_label": "runpackagescript()",
+      "source_file": "scripts/harness-review.ts",
+      "source_location": "L519"
+    },
+    {
+      "community": 9,
+      "file_type": "code",
+      "id": "harness_review_runrawcommand",
+      "label": "runRawCommand()",
+      "norm_label": "runrawcommand()",
+      "source_file": "scripts/harness-review.ts",
+      "source_location": "L554"
+    },
+    {
+      "community": 9,
+      "file_type": "code",
+      "id": "harness_review_sortuniquepaths",
+      "label": "sortUniquePaths()",
+      "norm_label": "sortuniquepaths()",
+      "source_file": "scripts/harness-review.ts",
+      "source_location": "L126"
+    },
+    {
+      "community": 9,
+      "file_type": "code",
+      "id": "scripts_harness_review_ts",
+      "label": "harness-review.ts",
+      "norm_label": "harness-review.ts",
+      "source_file": "scripts/harness-review.ts",
       "source_location": "L1"
-    },
-    {
-      "community": 9,
-      "file_type": "code",
-      "id": "sessioncommands_buildnextsessionnumber",
-      "label": "buildNextSessionNumber()",
-      "norm_label": "buildnextsessionnumber()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
-      "source_location": "L754"
-    },
-    {
-      "community": 9,
-      "file_type": "code",
-      "id": "sessioncommands_createdefaultsessioncommandservice",
-      "label": "createDefaultSessionCommandService()",
-      "norm_label": "createdefaultsessioncommandservice()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
-      "source_location": "L709"
-    },
-    {
-      "community": 9,
-      "file_type": "code",
-      "id": "sessioncommands_createpossessioncommandservice",
-      "label": "createPosSessionCommandService()",
-      "norm_label": "createpossessioncommandservice()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
-      "source_location": "L139"
-    },
-    {
-      "community": 9,
-      "file_type": "code",
-      "id": "sessioncommands_failure",
-      "label": "failure()",
-      "norm_label": "failure()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
-      "source_location": "L947"
-    },
-    {
-      "community": 9,
-      "file_type": "code",
-      "id": "sessioncommands_isactiveregistersession",
-      "label": "isActiveRegisterSession()",
-      "norm_label": "isactiveregistersession()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
-      "source_location": "L765"
-    },
-    {
-      "community": 9,
-      "file_type": "code",
-      "id": "sessioncommands_issessionexpired",
-      "label": "isSessionExpired()",
-      "norm_label": "issessionexpired()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
-      "source_location": "L856"
-    },
-    {
-      "community": 9,
-      "file_type": "code",
-      "id": "sessioncommands_normalizeregisternumber",
-      "label": "normalizeRegisterNumber()",
-      "norm_label": "normalizeregisternumber()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
-      "source_location": "L29"
-    },
-    {
-      "community": 9,
-      "file_type": "code",
-      "id": "sessioncommands_recordsessionlifecyclebesteffort",
-      "label": "recordSessionLifecycleBestEffort()",
-      "norm_label": "recordsessionlifecyclebesteffort()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
-      "source_location": "L721"
-    },
-    {
-      "community": 9,
-      "file_type": "code",
-      "id": "sessioncommands_registersessionmatchesidentity",
-      "label": "registerSessionMatchesIdentity()",
-      "norm_label": "registersessionmatchesidentity()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
-      "source_location": "L771"
-    },
-    {
-      "community": 9,
-      "file_type": "code",
-      "id": "sessioncommands_resolveregistersessionbinding",
-      "label": "resolveRegisterSessionBinding()",
-      "norm_label": "resolveregistersessionbinding()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
-      "source_location": "L800"
-    },
-    {
-      "community": 9,
-      "file_type": "code",
-      "id": "sessioncommands_runbindsessiontoregistersessioncommand",
-      "label": "runBindSessionToRegisterSessionCommand()",
-      "norm_label": "runbindsessiontoregistersessioncommand()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
-      "source_location": "L686"
-    },
-    {
-      "community": 9,
-      "file_type": "code",
-      "id": "sessioncommands_runholdsessioncommand",
-      "label": "runHoldSessionCommand()",
-      "norm_label": "runholdsessioncommand()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
-      "source_location": "L675"
-    },
-    {
-      "community": 9,
-      "file_type": "code",
-      "id": "sessioncommands_runremovesessionitemcommand",
-      "label": "runRemoveSessionItemCommand()",
-      "norm_label": "runremovesessionitemcommand()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
-      "source_location": "L702"
-    },
-    {
-      "community": 9,
-      "file_type": "code",
-      "id": "sessioncommands_runresumesessioncommand",
-      "label": "runResumeSessionCommand()",
-      "norm_label": "runresumesessioncommand()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
-      "source_location": "L679"
-    },
-    {
-      "community": 9,
-      "file_type": "code",
-      "id": "sessioncommands_runstartsessioncommand",
-      "label": "runStartSessionCommand()",
-      "norm_label": "runstartsessioncommand()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
-      "source_location": "L658"
-    },
-    {
-      "community": 9,
-      "file_type": "code",
-      "id": "sessioncommands_runupsertsessionitemcommand",
-      "label": "runUpsertSessionItemCommand()",
-      "norm_label": "runupsertsessionitemcommand()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
-      "source_location": "L695"
-    },
-    {
-      "community": 9,
-      "file_type": "code",
-      "id": "sessioncommands_success",
-      "label": "success()",
-      "norm_label": "success()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
-      "source_location": "L940"
-    },
-    {
-      "community": 9,
-      "file_type": "code",
-      "id": "sessioncommands_validateactivesession",
-      "label": "validateActiveSession()",
-      "norm_label": "validateactivesession()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
-      "source_location": "L863"
-    },
-    {
-      "community": 9,
-      "file_type": "code",
-      "id": "sessioncommands_validateactivesessionregisterbinding",
-      "label": "validateActiveSessionRegisterBinding()",
-      "norm_label": "validateactivesessionregisterbinding()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
-      "source_location": "L836"
-    },
-    {
-      "community": 9,
-      "file_type": "code",
-      "id": "sessioncommands_validatemodifiablesession",
-      "label": "validateModifiableSession()",
-      "norm_label": "validatemodifiablesession()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts",
-      "source_location": "L907"
     },
     {
       "community": 90,
