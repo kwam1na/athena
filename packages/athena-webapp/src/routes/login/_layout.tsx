@@ -16,31 +16,6 @@ import { runCommand } from "~/src/lib/errors/runCommand";
 
 const HOME_PATH = "/";
 
-const QUOTES = [
-  {
-    quote: "There is nothing impossible to they who will try.",
-    author: "Alexander the Great",
-  },
-  {
-    quote: "The only way to do great work is to love what you do.",
-    author: "Steve Jobs",
-  },
-  {
-    quote: "The best way to predict the future is to create it.",
-    author: "Peter Drucker",
-  },
-  {
-    quote:
-      "The only limit to our realization of tomorrow will be our doubts of today.",
-    author: "Franklin D. Roosevelt",
-  },
-  {
-    quote: "The only thing we have to fear is fear itself.",
-    author: "Franklin D. Roosevelt",
-  },
-];
-
-const randomQuote = QUOTES[Math.floor(Math.random() * QUOTES.length)];
 const AUTH_SYNC_RETRY_DELAY_MS = 100;
 const AUTH_SYNC_MAX_ATTEMPTS = 20;
 const AUTH_SYNC_RETRYABLE_MESSAGE = "Sign in again to continue.";
@@ -49,11 +24,42 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function useDocumentScrollLock() {
+  useEffect(() => {
+    const htmlStyle = document.documentElement.style;
+    const bodyStyle = document.body.style;
+    const previousHtmlHeight = htmlStyle.height;
+    const previousHtmlOverflow = htmlStyle.overflow;
+    const previousHtmlOverscrollBehaviorY = htmlStyle.overscrollBehaviorY;
+    const previousBodyHeight = bodyStyle.height;
+    const previousBodyOverflow = bodyStyle.overflow;
+    const previousBodyOverscrollBehaviorY = bodyStyle.overscrollBehaviorY;
+
+    htmlStyle.height = "100%";
+    htmlStyle.overflow = "hidden";
+    htmlStyle.overscrollBehaviorY = "none";
+    bodyStyle.height = "100%";
+    bodyStyle.overflow = "hidden";
+    bodyStyle.overscrollBehaviorY = "none";
+
+    return () => {
+      htmlStyle.height = previousHtmlHeight;
+      htmlStyle.overflow = previousHtmlOverflow;
+      htmlStyle.overscrollBehaviorY = previousHtmlOverscrollBehaviorY;
+      bodyStyle.height = previousBodyHeight;
+      bodyStyle.overflow = previousBodyOverflow;
+      bodyStyle.overscrollBehaviorY = previousBodyOverscrollBehaviorY;
+    };
+  }, []);
+}
+
 export const Route = createFileRoute("/login/_layout")({
   component: LoginLayout,
 });
 
 export function LoginLayout() {
+  useDocumentScrollLock();
+
   const { isAuthenticated, isLoading } = useConvexAuth();
   const authToken = useAuthToken();
   const syncAuthenticatedAthenaUser = useMutation(
@@ -183,38 +189,32 @@ export function LoginLayout() {
   ]);
 
   return (
-    <div className="flex h-screen w-full" aria-busy={isLoading}>
-      <div className="absolute left-1/2 top-10 mx-auto flex -translate-x-1/2 transform lg:hidden">
+    <main
+      className="flex h-screen w-full overflow-hidden bg-background text-foreground"
+      aria-busy={isLoading}
+    >
+      <div className="absolute left-layout-xl top-layout-xl z-20">
         <Link
           to={HOME_PATH}
-          className="z-10 flex h-10 flex-col items-center justify-center gap-2"
+          className="flex h-10 items-center justify-center rounded-md px-layout-sm font-display text-base font-semibold text-foreground transition-colors duration-standard ease-standard hover:text-signal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           athena
         </Link>
       </div>
-      <div className="relative hidden h-full w-[50%] flex-col justify-between overflow-hidden bg-card p-10 lg:flex">
-        <Link to={HOME_PATH} className="z-10 flex h-10 w-10 items-center gap-1">
-          athena
-        </Link>
 
-        {/* <div className="z-10 flex flex-col items-start gap-2">
-          <p className="text-base font-normal text-primary">
-            {randomQuote.quote}
-          </p>
-          <p className="text-base font-normal text-primary/60">
-            -{randomQuote.author}
-          </p>
-        </div> */}
-        <div className="base-grid absolute left-0 top-0 z-0 h-full w-full opacity-40" />
+      <div className="flex h-full w-full items-center justify-center px-layout-md py-layout-xl sm:px-layout-xl">
+        <section className="w-full max-w-[25rem]">
+          {authSyncError && (
+            <div
+              className="mb-layout-md rounded-md border border-danger/20 bg-danger/10 px-layout-md py-layout-sm text-sm text-danger"
+              role="alert"
+            >
+              {authSyncError}
+            </div>
+          )}
+          <Outlet />
+        </section>
       </div>
-      <div className="flex h-full w-full flex-col border-l border-primary/5 bg-card lg:w-[50%]">
-        {authSyncError && (
-          <div className="px-6 pt-6 text-sm text-destructive">
-            {authSyncError}
-          </div>
-        )}
-        <Outlet />
-      </div>
-    </div>
+    </main>
   );
 }

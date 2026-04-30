@@ -63,7 +63,7 @@ describe("LoginLayout", () => {
     render(<LoginLayout />);
 
     expect(screen.getByText("Mock Login Outlet")).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: /athena/i })).toHaveLength(2);
+    expect(screen.getAllByRole("link", { name: /athena/i })).toHaveLength(1);
   });
 
   it("waits for the Convex session before retrying the pending Athena-user sync", async () => {

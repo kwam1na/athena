@@ -8,5 +8,7 @@ export function Login() {
   if (step === "signIn") {
     return <LoginForm setStep={setStep} />;
   }
-  return <InputOTPForm email={step.email} />;
+  return (
+    <InputOTPForm email={step.email} onBack={() => setStep("signIn")} />
+  );
 }

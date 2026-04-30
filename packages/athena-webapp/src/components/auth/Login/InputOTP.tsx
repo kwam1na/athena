@@ -18,8 +18,11 @@ import { ATHENA_EMAIL_OTP_PROVIDER_ID } from "../../../../shared/auth";
 import { LoadingButton } from "~/src/components/ui/loading-button";
 import { PENDING_ATHENA_AUTH_SYNC_KEY } from "~/src/lib/constants";
 import { useForm } from "react-hook-form";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { z } from "zod";
+import { ArrowLeft, ArrowRight } from "lucide-react";
+
+const REQUEST_NEW_CODE_DELAY_SECONDS = 90;
 
 const FormSchema = z.object({
   pin: z.string().min(6, {
@@ -27,7 +30,22 @@ const FormSchema = z.object({
   }),
 });
 
-export function InputOTPForm({ email }: { email: string }) {
+function formatRequestDelay(seconds: number) {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+
+  return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
+}
+
+export function InputOTPForm({
+  email,
+  onBack,
+  requestNewCodeDelaySeconds = REQUEST_NEW_CODE_DELAY_SECONDS,
+}: {
+  email: string;
+  onBack: () => void;
+  requestNewCodeDelaySeconds?: number;
+}) {
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
@@ -36,8 +54,28 @@ export function InputOTPForm({ email }: { email: string }) {
   });
 
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isRequestingNewCode, setIsRequestingNewCode] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [requestDelaySeconds, setRequestDelaySeconds] = useState(
+    requestNewCodeDelaySeconds,
+  );
   const { signIn } = useAuthActions();
+
+  useEffect(() => {
+    setRequestDelaySeconds(requestNewCodeDelaySeconds);
+  }, [email, requestNewCodeDelaySeconds]);
+
+  useEffect(() => {
+    if (requestDelaySeconds <= 0) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setRequestDelaySeconds((seconds) => Math.max(seconds - 1, 0));
+    }, 1000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [requestDelaySeconds]);
 
   // Automatically submit the form when 6 digits are entered
   const handlePinChange = (newValue: string) => {
@@ -68,30 +106,70 @@ export function InputOTPForm({ email }: { email: string }) {
       window.dispatchEvent(new Event("athena:pending-auth-sync"));
       return;
     } catch (e) {
-      const message =
-        e instanceof Error ? e.message : "Could not verify code";
+      const message = e instanceof Error ? e.message : "Could not verify code";
 
       setErrorMessage(
         message.includes("Could not verify code")
           ? "Invalid code entered"
-          : message
+          : message,
       );
       setIsSigningIn(false);
     }
   }
 
+  async function handleRequestNewCode() {
+    try {
+      setIsRequestingNewCode(true);
+      setErrorMessage(null);
+
+      await signIn(ATHENA_EMAIL_OTP_PROVIDER_ID, {
+        email: email.trim().toLowerCase(),
+      });
+
+      form.reset({ pin: "" });
+      setRequestDelaySeconds(requestNewCodeDelaySeconds);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Could not request a new code";
+
+      setErrorMessage(message);
+    } finally {
+      setIsRequestingNewCode(false);
+    }
+  }
+
   return (
-    <div className="mx-auto flex h-full w-full max-w-96 flex-col items-center justify-center gap-6">
+    <div className="flex w-full flex-col gap-layout-lg">
+      <div className="space-y-layout-sm">
+        <h2 className="font-display text-2xl font-light uppercase tracking-[0.18em] text-foreground">
+          Enter code
+        </h2>
+        <p className="text-sm leading-6 text-muted-foreground">
+          Sent to {email}
+        </p>
+        <button
+          type="button"
+          className="group inline-flex items-center gap-layout-xs text-sm text-muted-foreground underline-offset-4 transition-colors duration-standard ease-standard hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          onClick={onBack}
+        >
+          <ArrowLeft className="h-3.5 w-3.5 transition-transform duration-standard ease-emphasized group-hover:-translate-x-1 group-focus-visible:-translate-x-1" />
+          Change email
+        </button>
+      </div>
+
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit(onSubmit)}
-          className="w-2/3 space-y-6"
+          className="w-full space-y-layout-lg"
         >
           <FormField
             control={form.control}
             name="pin"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className="space-y-layout-sm">
+                <FormLabel className="text-sm font-medium text-foreground">
+                  One-time code
+                </FormLabel>
                 <FormControl>
                   <InputOTP maxLength={6} {...field} onChange={handlePinChange}>
                     <InputOTPGroup>
@@ -104,33 +182,45 @@ export function InputOTPForm({ email }: { email: string }) {
                     </InputOTPGroup>
                   </InputOTP>
                 </FormControl>
-                <FormDescription>
-                  {errorMessage
-                    ? errorMessage
-                    : `Enter the one-time code sent to ${email}`}
+                <FormDescription
+                  className={errorMessage ? "text-danger" : undefined}
+                >
+                  {errorMessage ? errorMessage : ""}
                 </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
           />
 
-          <LoadingButton isLoading={isSigningIn} type="submit">
+          <LoadingButton
+            isLoading={isSigningIn}
+            type="submit"
+            className="group h-control-standard w-fit px-layout-lg"
+          >
             Continue
+            <ArrowRight className="h-4 w-4 transition-transform duration-standard ease-emphasized group-hover:translate-x-1 group-focus-visible:translate-x-1" />
           </LoadingButton>
+
+          <div className="pt-layout-xs text-sm text-muted-foreground">
+            {requestDelaySeconds > 0 ? (
+              <p>
+                Request a new code in {formatRequestDelay(requestDelaySeconds)}
+              </p>
+            ) : (
+              <button
+                type="button"
+                className="text-signal underline-offset-4 transition-colors duration-standard ease-standard hover:text-signal/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                disabled={isRequestingNewCode}
+                onClick={handleRequestNewCode}
+              >
+                {isRequestingNewCode
+                  ? "Requesting new code..."
+                  : "Request a new code"}
+              </button>
+            )}
+          </div>
         </form>
       </Form>
-
-      {/* <div className="flex w-full flex-col">
-        <p className="text-center text-sm font-normal text-primary/60">
-          Did not receive the code?
-        </p>
-        <Button
-          variant="ghost"
-          className="w-full hover:bg-transparent"
-        >
-          Request New Code
-        </Button>
-      </div> */}
     </div>
   );
 }
