@@ -7,6 +7,7 @@ import {
   buildClosedRegisterSessionPatch,
   buildRegisterSessionDepositPatch,
   buildRegisterSessionCloseoutPatch,
+  buildRegisterSessionOpeningFloatCorrectionPatch,
   buildReopenedRegisterSessionPatch,
   buildRegisterSession,
   buildRegisterSessionTransactionPatch,
@@ -238,5 +239,42 @@ describe("cash controls register sessions", () => {
         amount: 15000,
       })
     ).toThrow("Register session expected cash cannot be negative.");
+  });
+
+  it("corrects opening float by applying only the float delta to expected cash", () => {
+    const registerSession = {
+      ...buildRegisterSession({
+        storeId: "store_1" as Id<"store">,
+        openingFloat: 30000,
+        registerNumber: "A1",
+      }),
+      countedCash: 37000,
+      expectedCash: 45000,
+      status: "active" as const,
+    };
+
+    expect(
+      buildRegisterSessionOpeningFloatCorrectionPatch(registerSession, {
+        correctedOpeningFloat: 20000,
+      })
+    ).toEqual({
+      expectedCash: 35000,
+      openingFloat: 20000,
+      variance: 2000,
+    });
+  });
+
+  it("does not create a patch when the corrected opening float is unchanged", () => {
+    const registerSession = buildRegisterSession({
+      storeId: "store_1" as Id<"store">,
+      openingFloat: 30000,
+      registerNumber: "A1",
+    });
+
+    expect(
+      buildRegisterSessionOpeningFloatCorrectionPatch(registerSession, {
+        correctedOpeningFloat: 30000,
+      })
+    ).toEqual({});
   });
 });

@@ -5,6 +5,7 @@ import { v } from "convex/values";
 import { buildApprovalRequest } from "../operations/approvalRequestHelpers";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { recordRegisterSessionTraceBestEffort } from "../operations/registerSessionTracing";
+import { commandResultValidator } from "../lib/commandResultValidators";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { formatStaffDisplayName } from "../../shared/staffDisplayName";
 
@@ -113,6 +114,22 @@ type ReopenRegisterSessionResult = {
   registerSession: Doc<"registerSession"> | null;
 };
 
+type CorrectRegisterSessionOpeningFloatArgs = {
+  actorStaffProfileId?: Id<"staffProfile">;
+  actorUserId?: Id<"athenaUser">;
+  correctedOpeningFloat: number;
+  reason: string;
+  registerSessionId: Id<"registerSession">;
+  storeId: Id<"store">;
+};
+
+type CorrectRegisterSessionOpeningFloatResult = {
+  action: "corrected" | "unchanged";
+  correctedOpeningFloat: number;
+  previousOpeningFloat: number;
+  registerSession: Doc<"registerSession"> | null;
+};
+
 const closeoutReviewValidator = v.object({
   hasVariance: v.boolean(),
   reason: v.optional(v.string()),
@@ -177,6 +194,15 @@ const reopenRegisterSessionResultValidator = v.union(
   v.object({
     kind: v.literal("user_error"),
     error: userErrorValidator,
+  }),
+);
+
+const correctRegisterSessionOpeningFloatResultValidator = commandResultValidator(
+  v.object({
+    action: v.union(v.literal("corrected"), v.literal("unchanged")),
+    correctedOpeningFloat: v.number(),
+    previousOpeningFloat: v.number(),
+    registerSession: v.union(v.null(), v.any()),
   }),
 );
 
@@ -805,6 +831,127 @@ export const reopenRegisterSessionCloseout = mutation({
       action: "reopened",
       approvalRequest,
       registerSession: reopenedSession,
+    });
+  },
+});
+
+export const correctRegisterSessionOpeningFloat = mutation({
+  args: {
+    actorStaffProfileId: v.optional(v.id("staffProfile")),
+    actorUserId: v.optional(v.id("athenaUser")),
+    correctedOpeningFloat: v.number(),
+    reason: v.string(),
+    registerSessionId: v.id("registerSession"),
+    storeId: v.id("store"),
+  },
+  returns: correctRegisterSessionOpeningFloatResultValidator,
+  handler: async (
+    ctx: MutationCtx,
+    args: CorrectRegisterSessionOpeningFloatArgs
+  ): Promise<CommandResult<CorrectRegisterSessionOpeningFloatResult>> => {
+    const reason = trimOptional(args.reason);
+
+    if (!Number.isFinite(args.correctedOpeningFloat) || args.correctedOpeningFloat < 0) {
+      return userError({
+        code: "validation_failed",
+        message: "Corrected opening float must be a non-negative amount.",
+      });
+    }
+
+    if (!reason) {
+      return userError({
+        code: "validation_failed",
+        message: "Reason is required to correct an opening float.",
+      });
+    }
+
+    const registerSession = await ctx.db.get(
+      "registerSession",
+      args.registerSessionId
+    );
+
+    if (!registerSession || registerSession.storeId !== args.storeId) {
+      return userError({
+        code: "not_found",
+        message: "Register session not found for this store.",
+      });
+    }
+
+    if (registerSession.status !== "open" && registerSession.status !== "active") {
+      return userError({
+        code: "precondition_failed",
+        message: "Opening float can only be corrected while the register session is open.",
+      });
+    }
+
+    if (args.correctedOpeningFloat === registerSession.openingFloat) {
+      return ok({
+        action: "unchanged" as const,
+        correctedOpeningFloat: args.correctedOpeningFloat,
+        previousOpeningFloat: registerSession.openingFloat,
+        registerSession,
+      });
+    }
+
+    const previousOpeningFloat = registerSession.openingFloat;
+    const updatedSession = await ctx.runMutation(
+      internal.operations.registerSessions.correctRegisterSessionOpeningFloat,
+      {
+        correctedOpeningFloat: args.correctedOpeningFloat,
+        registerSessionId: args.registerSessionId,
+      }
+    );
+    const correctionOccurredAt = Date.now();
+
+    await recordOperationalEventWithCtx(ctx, {
+      actorStaffProfileId: args.actorStaffProfileId,
+      actorUserId: args.actorUserId,
+      eventType: "register_session_opening_float_corrected",
+      message: "Register session opening float corrected.",
+      metadata: {
+        correctedOpeningFloat: args.correctedOpeningFloat,
+        expectedCash: updatedSession?.expectedCash,
+        previousOpeningFloat,
+        reason,
+      },
+      organizationId: registerSession.organizationId,
+      reason,
+      registerSessionId: registerSession._id,
+      storeId: args.storeId,
+      subjectId: registerSession._id,
+      subjectLabel: registerSession.registerNumber,
+      subjectType: "register_session",
+    });
+
+    const traceResult = await recordRegisterSessionTraceBestEffort(ctx, {
+      stage: "opening_float_corrected",
+      session: updatedSession ?? {
+        ...registerSession,
+        expectedCash:
+          registerSession.expectedCash +
+          (args.correctedOpeningFloat - previousOpeningFloat),
+        openingFloat: args.correctedOpeningFloat,
+      },
+      occurredAt: correctionOccurredAt,
+      actorStaffProfileId: args.actorStaffProfileId,
+      actorUserId: args.actorUserId,
+      correctedOpeningFloat: args.correctedOpeningFloat,
+      previousOpeningFloat,
+      reason,
+    });
+
+    await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
+      registerSessionId: registerSession._id,
+      traceCreated: traceResult.traceCreated,
+      traceId: traceResult.traceId,
+      workflowTraceId: updatedSession?.workflowTraceId,
+    });
+
+    return ok({
+      action: "corrected" as const,
+      correctedOpeningFloat: args.correctedOpeningFloat,
+      previousOpeningFloat,
+      registerSession: updatedSession,
     });
   },
 });

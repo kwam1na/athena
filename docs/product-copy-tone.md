@@ -111,3 +111,25 @@ Examples:
 The POS session flow is the first implementation slice for this guide. That includes cashier sign-in, drawer gating, session controls, product-add failures, checkout completion, and other operator-facing session messaging inside the register workflow.
 
 Future work should extend this guide intentionally to other product areas rather than creating one-off local tone rules.
+
+## Correction Surfaces
+
+Correction copy should preserve trust without implying the original sale disappeared. Lead with what Athena can safely change, then name the path for anything that affects ledger, inventory, or completed-sale facts.
+
+Preferred patterns:
+
+- `Opening float corrected.`
+- `Opening float can only be corrected while the drawer is open.`
+- `Completed sale totals stay locked.`
+- `Customer attribution corrected.`
+- `Payment method corrected.`
+- `Use refund, exchange, or manager review for item, amount, total, or discount corrections.`
+
+Avoid:
+
+- `Edit transaction`
+- `Fix the mistake`
+- `Override sale total`
+- `Force update payment`
+
+When a correction is blocked, explain the state and the next path. Do not expose raw exception text or suggest a direct edit when the safe path is an audited correction event, approval request, refund, exchange, or future workflow.

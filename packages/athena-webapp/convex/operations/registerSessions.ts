@@ -253,6 +253,47 @@ export function buildRegisterSessionDepositPatch(
   };
 }
 
+export function buildRegisterSessionOpeningFloatCorrectionPatch(
+  session: {
+    countedCash?: number;
+    expectedCash: number;
+    openingFloat: number;
+    status: RegisterSessionStatus;
+    variance?: number;
+  },
+  args: {
+    correctedOpeningFloat: number;
+  }
+) {
+  if (!Number.isFinite(args.correctedOpeningFloat) || args.correctedOpeningFloat < 0) {
+    throw new Error("Corrected opening float must be a non-negative amount.");
+  }
+
+  if (session.status !== "open" && session.status !== "active") {
+    throw new Error("Opening float can only be corrected while the register session is open.");
+  }
+
+  if (args.correctedOpeningFloat === session.openingFloat) {
+    return {};
+  }
+
+  const floatDelta = args.correctedOpeningFloat - session.openingFloat;
+  const nextExpectedCash = session.expectedCash + floatDelta;
+
+  if (nextExpectedCash < 0) {
+    throw new Error("Register session expected cash cannot be negative.");
+  }
+
+  return {
+    expectedCash: nextExpectedCash,
+    openingFloat: args.correctedOpeningFloat,
+    variance:
+      session.countedCash !== undefined
+        ? session.countedCash - nextExpectedCash
+        : session.variance,
+  };
+}
+
 export function buildClosedRegisterSessionPatch(
   session: {
     expectedCash: number;
@@ -608,6 +649,36 @@ export const recordRegisterSessionDeposit = internalMutation({
     registerSessionId: v.id("registerSession"),
   },
   handler: (ctx, args) => recordRegisterSessionDepositWithCtx(ctx, args),
+});
+
+export async function correctRegisterSessionOpeningFloatWithCtx(
+  ctx: MutationCtx,
+  args: {
+    correctedOpeningFloat: number;
+    registerSessionId: Id<"registerSession">;
+  }
+) {
+  const session = await ctx.db.get("registerSession", args.registerSessionId);
+
+  if (!session) {
+    throw new Error("Register session not found.");
+  }
+
+  const updates = buildRegisterSessionOpeningFloatCorrectionPatch(session, args);
+
+  if (Object.keys(updates).length > 0) {
+    await ctx.db.patch("registerSession", args.registerSessionId, updates);
+  }
+
+  return ctx.db.get("registerSession", args.registerSessionId);
+}
+
+export const correctRegisterSessionOpeningFloat = internalMutation({
+  args: {
+    correctedOpeningFloat: v.number(),
+    registerSessionId: v.id("registerSession"),
+  },
+  handler: (ctx, args) => correctRegisterSessionOpeningFloatWithCtx(ctx, args),
 });
 
 export const closeRegisterSession = internalMutation({

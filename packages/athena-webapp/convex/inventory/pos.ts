@@ -11,6 +11,8 @@ export {
   getTransactionById,
   voidTransaction,
   createTransactionFromSession,
+  correctTransactionCustomer,
+  correctTransactionPaymentMethod,
   getRecentTransactionsWithCustomers,
   getTodaySummary,
 } from "../pos/public/transactions";

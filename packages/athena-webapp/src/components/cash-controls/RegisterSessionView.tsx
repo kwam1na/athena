@@ -30,7 +30,7 @@ import {
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import { toDisplayAmount } from "~/convex/lib/currency";
-import { userError } from "~/shared/commandResult";
+import { userError, type CommandResult } from "~/shared/commandResult";
 import { formatStaffDisplayName } from "~/shared/staffDisplayName";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
@@ -112,10 +112,20 @@ type RegisterSessionCloseoutReview = {
   variance: number;
 };
 
+type RegisterSessionTimelineEvent = {
+  _id: string;
+  actorStaffName?: string | null;
+  createdAt: number;
+  eventType: string;
+  message?: string | null;
+  reason?: string | null;
+};
+
 export type RegisterSessionSnapshot = {
   closeoutReview: RegisterSessionCloseoutReview | null;
   deposits: RegisterSessionDeposit[];
   registerSession: RegisterSessionDetail;
+  timeline?: RegisterSessionTimelineEvent[];
   transactions?: RegisterSessionTransaction[];
 };
 
@@ -161,6 +171,17 @@ type RegisterCloseoutCommandResult =
 type StaffAuthenticationCommandResult =
   NormalizedCommandResult<StaffAuthenticationResult>;
 
+type CorrectOpeningFloatArgs = {
+  actorStaffProfileId: string;
+  correctedOpeningFloat: number;
+  reason: string;
+  registerSessionId: string;
+};
+
+type CorrectOpeningFloatCommandResult = NormalizedCommandResult<{
+  action?: "corrected" | "duplicate";
+}>;
+
 type StaffAuthenticationRole = "cashier" | "manager";
 
 type RegisterSessionViewContentProps = {
@@ -171,6 +192,9 @@ type RegisterSessionViewContentProps = {
   onRecordDeposit: (
     args: RecordRegisterSessionDepositArgs,
   ) => Promise<RegisterSessionDepositResult>;
+  onCorrectOpeningFloat?: (
+    args: CorrectOpeningFloatArgs,
+  ) => Promise<CorrectOpeningFloatCommandResult>;
   onReviewCloseout: (
     args: RegisterCloseoutReviewArgs,
   ) => Promise<RegisterCloseoutCommandResult>;
@@ -201,6 +225,12 @@ type CloseoutStaffAuthIntent =
       kind: "review";
       registerSessionId: string;
     };
+
+type OpeningFloatCorrectionIntent = {
+  correctedOpeningFloat: number;
+  reason: string;
+  registerSessionId: string;
+};
 
 function trimOptional(value?: string) {
   const nextValue = value?.trim();
@@ -302,6 +332,7 @@ export function RegisterSessionViewContent({
   currency,
   isLoading,
   onAuthenticateStaff,
+  onCorrectOpeningFloat,
   onRecordDeposit,
   onReviewCloseout,
   onSubmitCloseout,
@@ -326,6 +357,19 @@ export function RegisterSessionViewContent({
   >(null);
   const [closeoutStaffAuthIntent, setCloseoutStaffAuthIntent] =
     useState<CloseoutStaffAuthIntent | null>(null);
+  const [isOpeningFloatCorrectionOpen, setIsOpeningFloatCorrectionOpen] =
+    useState(false);
+  const [correctedOpeningFloat, setCorrectedOpeningFloat] = useState("");
+  const [openingFloatCorrectionReason, setOpeningFloatCorrectionReason] =
+    useState("");
+  const [openingFloatCorrectionError, setOpeningFloatCorrectionError] =
+    useState("");
+  const [openingFloatCorrectionSuccess, setOpeningFloatCorrectionSuccess] =
+    useState("");
+  const [openingFloatCorrectionIntent, setOpeningFloatCorrectionIntent] =
+    useState<OpeningFloatCorrectionIntent | null>(null);
+  const [isCorrectingOpeningFloat, setIsCorrectingOpeningFloat] =
+    useState(false);
   const [submissionKey, setSubmissionKey] = useState(() =>
     buildDepositSubmissionKey(registerSession?._id ?? "session"),
   );
@@ -346,6 +390,12 @@ export function RegisterSessionViewContent({
       setCloseoutErrorMessage("");
       setPendingCloseoutAction(null);
       setCloseoutStaffAuthIntent(null);
+      setIsOpeningFloatCorrectionOpen(false);
+      setCorrectedOpeningFloat("");
+      setOpeningFloatCorrectionReason("");
+      setOpeningFloatCorrectionError("");
+      setOpeningFloatCorrectionSuccess("");
+      setOpeningFloatCorrectionIntent(null);
       return;
     }
 
@@ -359,7 +409,19 @@ export function RegisterSessionViewContent({
     setCloseoutErrorMessage("");
     setPendingCloseoutAction(null);
     setCloseoutStaffAuthIntent(null);
-  }, [registerSession?._id, registerSession?.countedCash]);
+    setIsOpeningFloatCorrectionOpen(false);
+    setCorrectedOpeningFloat(
+      formatStoredAmountForInput(registerSession.openingFloat),
+    );
+    setOpeningFloatCorrectionReason("");
+    setOpeningFloatCorrectionError("");
+    setOpeningFloatCorrectionSuccess("");
+    setOpeningFloatCorrectionIntent(null);
+  }, [
+    registerSession?._id,
+    registerSession?.countedCash,
+    registerSession?.openingFloat,
+  ]);
 
   const applyCommandResult = (result: RegisterSessionDepositResult) => {
     if (result.kind === "ok") {
@@ -469,6 +531,43 @@ export function RegisterSessionViewContent({
     });
   }
 
+  async function handleSubmitOpeningFloatCorrection() {
+    if (!registerSession?._id) {
+      setOpeningFloatCorrectionError(
+        "A register session is required before correcting opening float.",
+      );
+      return;
+    }
+
+    if (!["open", "active"].includes(registerSession.status)) {
+      setOpeningFloatCorrectionError(
+        "Opening float can only be corrected while the drawer is open.",
+      );
+      return;
+    }
+
+    const parsedOpeningFloat = parseDisplayAmountInput(correctedOpeningFloat);
+    const trimmedReason = openingFloatCorrectionReason.trim();
+
+    if (parsedOpeningFloat === undefined) {
+      setOpeningFloatCorrectionError("Enter the corrected opening float.");
+      return;
+    }
+
+    if (!trimmedReason) {
+      setOpeningFloatCorrectionError("Add a reason for this correction.");
+      return;
+    }
+
+    setOpeningFloatCorrectionError("");
+    setOpeningFloatCorrectionSuccess("");
+    setOpeningFloatCorrectionIntent({
+      correctedOpeningFloat: parsedOpeningFloat,
+      reason: trimmedReason,
+      registerSessionId: registerSession._id,
+    });
+  }
+
   async function handleAuthenticatedCloseoutStaff(
     result: StaffAuthenticationResult,
   ) {
@@ -513,6 +612,45 @@ export function RegisterSessionViewContent({
     }
   }
 
+  async function handleAuthenticatedOpeningFloatStaff(
+    result: StaffAuthenticationResult,
+  ) {
+    if (!openingFloatCorrectionIntent) {
+      return;
+    }
+
+    const intent = openingFloatCorrectionIntent;
+
+    setOpeningFloatCorrectionError("");
+    setIsCorrectingOpeningFloat(true);
+    setOpeningFloatCorrectionIntent(null);
+
+    try {
+      const commandResult = await (onCorrectOpeningFloat?.({
+        actorStaffProfileId: result.staffProfileId,
+        correctedOpeningFloat: intent.correctedOpeningFloat,
+        reason: intent.reason,
+        registerSessionId: intent.registerSessionId,
+      }) ??
+        userError({
+          code: "unavailable",
+          message:
+            "Opening float correction is not available yet. Try again after the register tools refresh.",
+        }));
+
+      if (commandResult.kind !== "ok") {
+        setOpeningFloatCorrectionError(commandResult.error.message);
+        return;
+      }
+
+      setOpeningFloatCorrectionSuccess("Opening float corrected.");
+      setOpeningFloatCorrectionReason("");
+      setIsOpeningFloatCorrectionOpen(false);
+    } finally {
+      setIsCorrectingOpeningFloat(false);
+    }
+  }
+
   const closeoutStaffAuthCopy =
     closeoutStaffAuthIntent?.kind === "review"
       ? {
@@ -531,6 +669,11 @@ export function RegisterSessionViewContent({
           description: "Enter username and PIN to submit closeout.",
           submitLabel: "Submit closeout",
         };
+  const correctionStaffAuthCopy = {
+    title: "Correction sign-in required",
+    description: "Enter username and PIN to correct opening float.",
+    submitLabel: "Correct opening float",
+  };
 
   const transactions = registerSessionSnapshot?.transactions ?? [];
   const previewTransactions = transactions.slice(
@@ -594,6 +737,20 @@ export function RegisterSessionViewContent({
         ? `By ${formatStaffDisplayName({ fullName: registerSession.closedByStaffName })}`
         : "Staff not recorded"
       : undefined;
+  const canCorrectOpeningFloat =
+    registerSession?.status === "open" || registerSession?.status === "active";
+  const correctedOpeningFloatAmount = parseDisplayAmountInput(
+    correctedOpeningFloat,
+  );
+  const openingFloatDelta =
+    registerSession && correctedOpeningFloatAmount !== undefined
+      ? correctedOpeningFloatAmount - registerSession.openingFloat
+      : null;
+  const correctionTimeline = (registerSessionSnapshot?.timeline ?? []).filter(
+    (event) =>
+      event.eventType.toLowerCase().includes("correction") ||
+      event.message?.toLowerCase().includes("correction"),
+  );
 
   return (
     <View
@@ -666,6 +823,27 @@ export function RegisterSessionViewContent({
         }}
         onDismiss={() => setCloseoutStaffAuthIntent(null)}
         open={Boolean(closeoutStaffAuthIntent)}
+      />
+      <StaffAuthenticationDialog
+        copy={correctionStaffAuthCopy}
+        getSuccessMessage={(result) => {
+          const staffDisplayName = formatStaffDisplayName(result.staffProfile);
+          return staffDisplayName
+            ? `Confirmed as ${staffDisplayName}.`
+            : "Staff credentials confirmed.";
+        }}
+        onAuthenticate={(args) =>
+          onAuthenticateStaff({
+            allowedRoles: ["cashier", "manager"],
+            pinHash: args.pinHash,
+            username: args.username,
+          })
+        }
+        onAuthenticated={(result) => {
+          void handleAuthenticatedOpeningFloatStaff(result);
+        }}
+        onDismiss={() => setOpeningFloatCorrectionIntent(null)}
+        open={Boolean(openingFloatCorrectionIntent)}
       />
       <FadeIn>
         <div className="container mx-auto space-y-6 p-6">
@@ -745,6 +923,30 @@ export function RegisterSessionViewContent({
                           </dd>
                         </div>
                       </div>
+                      <div className="mt-layout-md border-t border-border/70 pt-layout-md">
+                        {canCorrectOpeningFloat ? (
+                          <Button
+                            className="w-full"
+                            onClick={() => {
+                              setIsOpeningFloatCorrectionOpen(
+                                (value) => !value,
+                              );
+                              setOpeningFloatCorrectionError("");
+                              setOpeningFloatCorrectionSuccess("");
+                            }}
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                          >
+                            Correct opening float
+                          </Button>
+                        ) : (
+                          <p className="text-xs leading-relaxed text-muted-foreground">
+                            Opening float corrections are available before
+                            closeout starts.
+                          </p>
+                        )}
+                      </div>
                     </div>
 
                     <div className="rounded-lg border border-border bg-surface-raised p-layout-md">
@@ -818,6 +1020,170 @@ export function RegisterSessionViewContent({
                 </aside>
 
                 <div className="space-y-layout-lg px-layout-lg py-layout-lg">
+                  {registerSession &&
+                  (isOpeningFloatCorrectionOpen ||
+                    openingFloatCorrectionSuccess ||
+                    correctionTimeline.length > 0) ? (
+                    <section className="space-y-4 rounded-lg border border-border bg-surface-raised p-layout-md">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <h2 className="font-display text-xl font-semibold text-foreground">
+                            Opening float correction
+                          </h2>
+                          <p className="text-sm text-muted-foreground">
+                            Correct the starting cash amount without changing
+                            linked sales.
+                          </p>
+                        </div>
+                        <Badge
+                          className="border-border bg-muted text-muted-foreground"
+                          variant="outline"
+                        >
+                          {formatCurrency(
+                            currency,
+                            registerSession.openingFloat,
+                          )}
+                        </Badge>
+                      </div>
+
+                      {isOpeningFloatCorrectionOpen ? (
+                        <div className="space-y-4">
+                          <div className="grid gap-3 text-sm sm:grid-cols-3">
+                            <div className="space-y-1">
+                              <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                                Current
+                              </p>
+                              <p className="font-mono text-foreground">
+                                {formatCurrency(
+                                  currency,
+                                  registerSession.openingFloat,
+                                )}
+                              </p>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                                Corrected
+                              </p>
+                              <p className="font-mono text-foreground">
+                                {correctedOpeningFloatAmount === undefined
+                                  ? "Pending"
+                                  : formatCurrency(
+                                      currency,
+                                      correctedOpeningFloatAmount,
+                                    )}
+                              </p>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                                Drawer impact
+                              </p>
+                              <p className="font-mono text-foreground">
+                                {openingFloatDelta === null
+                                  ? "Pending"
+                                  : formatCurrency(currency, openingFloatDelta)}
+                              </p>
+                            </div>
+                          </div>
+
+                          <label className="block space-y-2">
+                            <span className="text-sm font-medium text-foreground">
+                              Corrected amount
+                            </span>
+                            <Input
+                              aria-label="Corrected opening float"
+                              className="border-input bg-background"
+                              min={0}
+                              onChange={(event) =>
+                                setCorrectedOpeningFloat(event.target.value)
+                              }
+                              step="0.01"
+                              type="number"
+                              value={correctedOpeningFloat}
+                            />
+                          </label>
+
+                          <label className="block space-y-2">
+                            <span className="text-sm font-medium text-foreground">
+                              Reason
+                            </span>
+                            <Textarea
+                              aria-label="Opening float correction reason"
+                              className="min-h-[88px] border-input bg-background"
+                              onChange={(event) =>
+                                setOpeningFloatCorrectionReason(
+                                  event.target.value,
+                                )
+                              }
+                              placeholder="Record why the starting cash amount changed."
+                              value={openingFloatCorrectionReason}
+                            />
+                          </label>
+
+                          {openingFloatCorrectionError ? (
+                            <p
+                              className="text-sm text-destructive"
+                              role="alert"
+                            >
+                              {openingFloatCorrectionError}
+                            </p>
+                          ) : null}
+
+                          <LoadingButton
+                            disabled={isCorrectingOpeningFloat}
+                            isLoading={isCorrectingOpeningFloat}
+                            onClick={() =>
+                              void handleSubmitOpeningFloatCorrection()
+                            }
+                            type="button"
+                          >
+                            Submit correction
+                          </LoadingButton>
+                        </div>
+                      ) : null}
+
+                      {openingFloatCorrectionSuccess ? (
+                        <p
+                          className="text-sm text-[hsl(var(--success))]"
+                          role="status"
+                        >
+                          {openingFloatCorrectionSuccess}
+                        </p>
+                      ) : null}
+
+                      {correctionTimeline.length > 0 ? (
+                        <div className="space-y-2 border-t border-border/70 pt-4">
+                          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                            Correction history
+                          </p>
+                          <div className="space-y-3">
+                            {correctionTimeline.map((event) => (
+                              <div
+                                className="rounded-md border border-border/70 bg-muted/20 p-3"
+                                key={event._id}
+                              >
+                                <p className="text-sm font-medium text-foreground">
+                                  {event.message ??
+                                    formatStatusLabel(event.eventType)}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {formatTimestamp(event.createdAt)}
+                                  {event.actorStaffName
+                                    ? ` by ${formatStaffDisplayName({ fullName: event.actorStaffName })}`
+                                    : ""}
+                                </p>
+                                {event.reason ? (
+                                  <p className="mt-1 text-sm text-muted-foreground">
+                                    {event.reason}
+                                  </p>
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </section>
+                  ) : null}
+
                   <div className="flex flex-wrap items-start justify-between gap-layout-sm">
                     <div className="space-y-1">
                       <h2 className="font-display text-2xl font-semibold text-foreground">
@@ -1475,6 +1841,19 @@ export function RegisterSessionView() {
   const authenticateStaffCredential = useMutation(
     api.operations.staffCredentials.authenticateStaffCredential,
   );
+  const correctOpeningFloatReference = (
+    api as unknown as {
+      cashControls?: {
+        closeouts?: {
+          correctRegisterSessionOpeningFloat?: unknown;
+        };
+      };
+    }
+  ).cashControls?.closeouts?.correctRegisterSessionOpeningFloat;
+  const correctOpeningFloatMutation = useMutation(
+    (correctOpeningFloatReference ??
+      api.operations.staffCredentials.authenticateStaffCredential) as never,
+  );
 
   async function onRecordDeposit(args: RecordRegisterSessionDepositArgs) {
     const result = await runCommand(() =>
@@ -1586,6 +1965,44 @@ export function RegisterSessionView() {
     return result;
   }
 
+  async function onCorrectOpeningFloat(args: CorrectOpeningFloatArgs) {
+    if (!activeStore?._id || !user?._id) {
+      return userError({
+        code: "authentication_failed",
+        message: "You must be logged in to correct opening float.",
+      });
+    }
+
+    if (!correctOpeningFloatReference) {
+      return userError({
+        code: "unavailable",
+        message:
+          "Opening float correction is not available yet. Try again after the register tools refresh.",
+      });
+    }
+
+    const result = (await runCommand(() =>
+      (
+        correctOpeningFloatMutation as unknown as (
+          args: Record<string, unknown>,
+        ) => Promise<CommandResult<{ action?: "corrected" | "duplicate" }>>
+      )({
+        actorStaffProfileId: args.actorStaffProfileId as Id<"staffProfile">,
+        actorUserId: user._id,
+        correctedOpeningFloat: args.correctedOpeningFloat,
+        reason: args.reason,
+        registerSessionId: args.registerSessionId as Id<"registerSession">,
+        storeId: activeStore._id,
+      }),
+    )) as CorrectOpeningFloatCommandResult;
+
+    if (result.kind === "ok") {
+      toast.success("Opening float corrected");
+    }
+
+    return result;
+  }
+
   if (isLoadingAccess) {
     return (
       <View>
@@ -1625,6 +2042,7 @@ export function RegisterSessionView() {
       currency={activeStore.currency || "USD"}
       isLoading={registerSessionSnapshot === undefined}
       onAuthenticateStaff={onAuthenticateStaff}
+      onCorrectOpeningFloat={onCorrectOpeningFloat}
       onRecordDeposit={onRecordDeposit}
       onReviewCloseout={onReviewCloseout}
       onSubmitCloseout={onSubmitCloseout}

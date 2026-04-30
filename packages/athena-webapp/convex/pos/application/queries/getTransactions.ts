@@ -52,6 +52,25 @@ async function loadCustomerProfile(
     : null;
 }
 
+async function loadCorrectionEvents(
+  ctx: QueryCtx,
+  args: {
+    storeId: Id<"store">;
+    transactionId: Id<"posTransaction">;
+  },
+) {
+  // eslint-disable-next-line @convex-dev/no-collect-in-query -- Transaction detail returns complete correction history for one transaction.
+  return ctx.db
+    .query("operationalEvent")
+    .withIndex("by_storeId_subject", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("subjectType", "pos_transaction")
+        .eq("subjectId", args.transactionId),
+    )
+    .collect();
+}
+
 export async function getTransaction(
   ctx: QueryCtx,
   args: {
@@ -156,6 +175,10 @@ export async function getTransactionById(
   const customerProfileId =
     transaction.customerProfileId ?? session?.customerProfileId;
   const customerProfile = await loadCustomerProfile(ctx, customerProfileId);
+  const correctionHistory = await loadCorrectionEvents(ctx, {
+    storeId: transaction.storeId,
+    transactionId: transaction._id,
+  });
 
   return {
     _id: transaction._id,
@@ -201,6 +224,16 @@ export async function getTransactionById(
             }
         : null,
     customerInfo: transaction.customerInfo,
+    correctionHistory: correctionHistory.map((event) => ({
+      _id: event._id,
+      eventType: event.eventType,
+      message: event.message,
+      reason: event.reason,
+      metadata: event.metadata,
+      createdAt: event.createdAt,
+      actorUserId: event.actorUserId,
+      actorStaffProfileId: event.actorStaffProfileId,
+    })),
     items: items.map((item) => ({
       _id: item._id,
       productId: item.productId,

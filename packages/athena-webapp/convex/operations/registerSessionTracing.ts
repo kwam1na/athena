@@ -18,6 +18,7 @@ export type RegisterSessionTraceStage =
   | "sale_recorded"
   | "void_recorded"
   | "deposit_recorded"
+  | "opening_float_corrected"
   | "closeout_submitted"
   | "approval_pending"
   | "closeout_approved"
@@ -52,6 +53,9 @@ type RegisterSessionTraceArgs = {
   actorStaffProfileId?: Id<"staffProfile">;
   actorUserId?: Id<"athenaUser">;
   countedCash?: number;
+  correctedOpeningFloat?: number;
+  previousOpeningFloat?: number;
+  reason?: string;
   variance?: number;
 };
 
@@ -176,7 +180,10 @@ function buildTraceEvent(args: {
         ? String(args.input.approvalRequestId)
         : undefined,
       countedCash: args.input.countedCash ?? args.input.session.countedCash,
+      correctedOpeningFloat: args.input.correctedOpeningFloat,
       expectedCash: args.input.session.expectedCash,
+      previousOpeningFloat: args.input.previousOpeningFloat,
+      reason: args.input.reason,
       registerStatus: args.input.session.status,
       variance: args.input.variance ?? args.input.session.variance,
     }).filter(([, value]) => value !== undefined),
@@ -225,6 +232,16 @@ function buildTraceEvent(args: {
         step: "register_session_deposit_recorded",
         status: "info" as const,
         message: `Recorded cash deposit of ${displayTraceAmount(args.input.amount, args.currency)}.`,
+        occurredAt,
+        details,
+        subjectRefs,
+      };
+    case "opening_float_corrected":
+      return {
+        kind: "system_action" as const,
+        step: "register_session_opening_float_corrected",
+        status: "info" as const,
+        message: `Corrected opening float from ${displayTraceAmount(args.input.previousOpeningFloat, args.currency)} to ${displayTraceAmount(args.input.correctedOpeningFloat, args.currency)}.`,
         occurredAt,
         details,
         subjectRefs,
