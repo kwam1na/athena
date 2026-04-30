@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ProductSkuCard } from "./ProductCard";
+import { currencyFormatter } from "@/lib/utils";
 
 vi.mock("@/hooks/useProductDiscount", () => ({
   useProductDiscount: () => ({
@@ -40,5 +41,22 @@ describe("ProductSkuCard", () => {
       "sizes",
       "(max-width: 768px) 50vw, (max-width: 1280px) 33vw, 25vw",
     );
+  });
+
+  it("renders stored GHS prices with the Athena cedi symbol", () => {
+    render(
+      <ProductSkuCard
+        sku={{
+          _id: "sku_1",
+          productName: "Wigclub Bonnets",
+          price: 6500,
+          quantityAvailable: 4,
+          images: ["https://images.example.com/bonnet.webp"],
+        } as any}
+        currencyFormatter={currencyFormatter("GHS")}
+      />,
+    );
+
+    expect(screen.getByText("GH₵65")).toBeInTheDocument();
   });
 });
