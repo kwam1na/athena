@@ -1,256 +1,129 @@
-import { useState, useEffect, useRef } from "react";
 import { useMutation } from "convex/react";
-import { api } from "~/convex/_generated/api";
-import { Id } from "~/convex/_generated/dataModel";
-import { Button } from "../ui/button";
-import { Input } from "../ui/input";
-import { Label } from "../ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
-import { LoadingButton } from "../ui/loading-button";
-import { toast } from "sonner";
-import { hashPin } from "~/src/lib/security/pinHash";
+
 import {
-  GENERIC_UNEXPECTED_ERROR_MESSAGE,
-  GENERIC_UNEXPECTED_ERROR_TITLE,
-} from "~/shared/commandResult";
-import { presentCommandToast } from "~/src/lib/errors/presentCommandToast";
-import { runCommand } from "~/src/lib/errors/runCommand";
-import { PinInput } from "./PinInput";
+  StaffAuthenticationDialog,
+  type StaffAuthenticationResult,
+  type StaffAuthMode,
+} from "@/components/staff-auth/StaffAuthenticationDialog";
+import { runCommand } from "@/lib/errors/runCommand";
+import { api } from "~/convex/_generated/api";
+import type { Id } from "~/convex/_generated/dataModel";
+import { userError } from "~/shared/commandResult";
 import type { RegisterWorkflowMode } from "~/src/lib/pos/presentation/register/registerUiState";
 
 interface CashierAuthDialogProps {
+  onAuthenticated: (staffProfileId: Id<"staffProfile">) => void;
+  onDismiss: () => void;
   open: boolean;
   storeId: Id<"store">;
   terminalId: Id<"posTerminal">;
   workflowMode?: RegisterWorkflowMode;
-  onAuthenticated: (staffProfileId: Id<"staffProfile">) => void;
-  onDismiss: () => void;
 }
 
-export const CashierAuthDialog = ({
+function getStaffDisplayName(result: StaffAuthenticationResult) {
+  return (
+    result.staffProfile.fullName ||
+    [result.staffProfile.firstName, result.staffProfile.lastName]
+      .filter(Boolean)
+      .join(" ")
+  );
+}
+
+export function CashierAuthDialog({
+  onAuthenticated,
+  onDismiss,
   open,
   storeId,
   terminalId,
   workflowMode = "pos",
-  onAuthenticated,
-  onDismiss,
-}: CashierAuthDialogProps) => {
-  const [username, setUsername] = useState("");
-  const [pin, setPin] = useState("");
-  const [isAuthenticating, setIsAuthenticating] = useState(false);
-  const [state, setState] = useState<"auth" | "signOut">("auth");
-  const usernameInputRef = useRef<HTMLInputElement>(null);
-
+}: CashierAuthDialogProps) {
   const authenticateStaffCredentialForTerminal = useMutation(
     api.operations.staffCredentials.authenticateStaffCredentialForTerminal,
   );
-
   const expireAllSessionsForStaff = useMutation(
     api.inventory.posSessions.expireAllSessionsForStaff,
   );
   const isExpenseWorkflow = workflowMode === "expense";
 
-  // Auto-focus username field when dialog opens
-  useEffect(() => {
-    if (open && usernameInputRef.current) {
-      setTimeout(() => {
-        usernameInputRef.current?.focus();
-      }, 100);
-    }
-  }, [open]);
+  async function authenticateStaff(args: {
+    mode: StaffAuthMode;
+    pinHash: string;
+    username: string;
+  }) {
+    const authenticationResult = await runCommand(() =>
+      authenticateStaffCredentialForTerminal({
+        allowedRoles: ["cashier", "manager"],
+        pinHash: args.pinHash,
+        storeId,
+        terminalId,
+        username: args.username,
+      }),
+    );
 
-  // Auto-submit when PIN is complete
-  useEffect(() => {
-    if (pin.length === 6 && username.trim() && state === "auth") {
-      handleSubmit();
+    if (authenticationResult.kind !== "ok") {
+      return authenticationResult;
     }
-  }, [pin, state]);
 
-  const showUnexpectedAuthFailure = () => {
-    presentCommandToast({
-      kind: "unexpected_error",
-      error: {
-        title: GENERIC_UNEXPECTED_ERROR_TITLE,
-        message: GENERIC_UNEXPECTED_ERROR_MESSAGE,
-      },
+    if (args.mode === "authenticate") {
+      return authenticationResult;
+    }
+
+    const expireResult = await expireAllSessionsForStaff({
+      staffProfileId: authenticationResult.data.staffProfileId,
+      terminalId,
     });
-  };
 
-  const handleSubmit = async () => {
-    if (!username.trim()) {
-      toast.error("Username required. Enter a username to continue.");
-      return;
+    if (!expireResult.success) {
+      return userError({
+        code: "precondition_failed",
+        message: isExpenseWorkflow
+          ? "Other session sign-outs not completed. Try again."
+          : "Other register sign-outs not completed. Try again.",
+      });
     }
 
-    if (pin.length !== 6) {
-      toast.error("PIN required. Enter all 6 digits to continue.");
-      return;
-    }
+    return authenticationResult;
+  }
 
-    setIsAuthenticating(true);
-    try {
-      // Hash the PIN client-side before calling the mutation
-      const hashed = await hashPin(pin);
-
-      const authenticationResult = await runCommand(() =>
-        authenticateStaffCredentialForTerminal({
-          allowedRoles: ["cashier", "manager"],
-          username: username.trim(),
-          pinHash: hashed,
-          storeId,
-          terminalId,
-        }),
-      );
-
-      if (authenticationResult.kind !== "ok") {
-        presentCommandToast(authenticationResult);
-        setPin("");
-        return;
-      }
-
-      const result = authenticationResult.data;
-
-      if (result.staffProfileId) {
-        const staffDisplayName =
-          result.staffProfile.fullName ||
-          [result.staffProfile.firstName, result.staffProfile.lastName]
-            .filter(Boolean)
-            .join(" ");
-
-        if (state === "auth") {
-          toast.success(`Signed in as ${staffDisplayName}.`);
-          onAuthenticated(result.staffProfileId);
-        } else {
-          const expireResult = await expireAllSessionsForStaff({
-            staffProfileId: result.staffProfileId,
-            terminalId,
-          });
-
-          if (expireResult.success) {
-            toast.success(
-              isExpenseWorkflow
-                ? "Signed out from other sessions."
-                : "Signed out from all registers.",
-            );
-          } else {
-            toast.error(
-              isExpenseWorkflow
-                ? "Other session sign-outs not completed. Try again."
-                : "Other register sign-outs not completed. Try again.",
-            );
-            setPin("");
-            return;
-          }
-          onAuthenticated(result.staffProfileId);
-          setState("auth");
-        }
-
-        // Reset form
-        setUsername("");
-        setPin("");
-      }
-    } catch (error) {
-      console.error(error);
-      showUnexpectedAuthFailure();
-      setPin("");
-    } finally {
-      setIsAuthenticating(false);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && username.trim() && pin.length === 6) {
-      handleSubmit();
-    }
-  };
-
-  const header =
-    state === "auth"
-      ? isExpenseWorkflow
-        ? "Start expense session"
-        : "Start register session"
-      : isExpenseWorkflow
-        ? "Sign out from other sessions"
-        : "Sign out from other registers";
-
-  const switchStateButtonText =
-    state === "auth"
-      ? isExpenseWorkflow
-        ? "Sign out from other sessions"
-        : "Sign out from other registers"
-      : isExpenseWorkflow
-        ? "Start expense session"
-        : "Start register session";
-
-  const mainButtonText =
-    state === "auth"
-      ? "Sign in"
-      : isExpenseWorkflow
-        ? "Sign out from other sessions"
-        : "Sign out from all registers";
+  const sessionLabel = isExpenseWorkflow ? "expense session" : "register session";
+  const recoveryLabel = isExpenseWorkflow
+    ? "Sign out from other sessions"
+    : "Sign out from other registers";
 
   return (
-    <Dialog open={open} onOpenChange={onDismiss}>
-      <DialogContent
-        className="w-[620px] max-w-[1024px]"
-        onPointerDownOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
-      >
-        <DialogHeader>
-          <DialogTitle>{header}</DialogTitle>
-        </DialogHeader>
+    <StaffAuthenticationDialog
+      open={open}
+      onDismiss={onDismiss}
+      copy={{
+        title: `Start ${sessionLabel}`,
+        description: `Sign in with staff credentials before this ${sessionLabel} can continue.`,
+        submitLabel: "Sign in",
+      }}
+      alternateCopy={{
+        title: recoveryLabel,
+        description: isExpenseWorkflow
+          ? "Confirm your staff credentials to end other active expense sessions."
+          : "Confirm your staff credentials to end other active register sessions.",
+        submitLabel: isExpenseWorkflow
+          ? "Sign out from other sessions"
+          : "Sign out from all registers",
+      }}
+      alternateTriggerLabel={recoveryLabel}
+      returnTriggerLabel={`Start ${sessionLabel}`}
+      onAuthenticate={authenticateStaff}
+      getSuccessMessage={(result, mode) => {
+        if (mode === "recover") {
+          return isExpenseWorkflow
+            ? "Signed out from other sessions."
+            : "Signed out from all registers.";
+        }
 
-        <div className="space-y-16 p-16">
-          <div className="space-y-8">
-            <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
-              <Input
-                ref={usernameInputRef}
-                id="username"
-                className="w-[240px]"
-                placeholder="Enter your username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                onKeyDown={handleKeyDown}
-                disabled={isAuthenticating}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="pin">PIN</Label>
-              <PinInput
-                value={pin}
-                onChange={setPin}
-                disabled={isAuthenticating}
-                onKeyDown={handleKeyDown}
-                maxLength={6}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <LoadingButton
-              onClick={handleSubmit}
-              className="w-full p-8"
-              variant="ghost"
-              isLoading={isAuthenticating}
-              disabled={!username.trim() || pin.length !== 6}
-            >
-              {mainButtonText}
-            </LoadingButton>
-
-            <Button
-              onClick={() =>
-                setState((prev) => (prev === "auth" ? "signOut" : "auth"))
-              }
-              className="w-full"
-              variant="ghost"
-            >
-              {switchStateButtonText}
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        const staffDisplayName = getStaffDisplayName(result);
+        return staffDisplayName ? `Signed in as ${staffDisplayName}.` : "Signed in.";
+      }}
+      onAuthenticated={(result) => {
+        onAuthenticated(result.staffProfileId);
+      }}
+    />
   );
-};
+}

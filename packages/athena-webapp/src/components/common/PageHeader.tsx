@@ -3,6 +3,7 @@ import { Button } from "../ui/button";
 import { ArrowLeftIcon } from "lucide-react";
 import { useSearch } from "@tanstack/react-router";
 import { cn } from "~/src/lib/utils";
+import { FadeIn } from "./FadeIn";
 
 const PageHeader = ({
   children,
@@ -90,7 +91,7 @@ export const ComposedPageHeader = ({
 
   return (
     <PageHeader width={width} className={className}>
-      <div className="flex min-w-0 flex-1 items-center gap-4">
+      <FadeIn className="flex min-w-0 flex-1 items-center gap-4">
         {o && (
           <Button
             onClick={onNavigateBack ? onNavigateBack : navigateBack}
@@ -102,7 +103,7 @@ export const ComposedPageHeader = ({
           </Button>
         )}
         {leadingContent}
-      </div>
+      </FadeIn>
 
       {trailingContent}
     </PageHeader>

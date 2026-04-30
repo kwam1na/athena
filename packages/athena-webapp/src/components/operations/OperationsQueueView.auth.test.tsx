@@ -20,12 +20,6 @@ vi.mock("@/hooks/useProtectedAdminPageState", () => ({
   useProtectedAdminPageState: mockedHooks.useProtectedAdminPageState,
 }));
 
-vi.mock("../cash-controls/RegisterCloseoutView", () => ({
-  RegisterCloseoutView: () => (
-    <div data-testid="register-closeout-view">Register closeouts stub</div>
-  ),
-}));
-
 const readyProtectedState = {
   activeStore: { _id: "store-1" as Id<"store"> },
   canQueryProtectedData: true,

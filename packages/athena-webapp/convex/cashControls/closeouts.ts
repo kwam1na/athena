@@ -90,7 +90,7 @@ type ReviewRegisterSessionCloseoutArgs = {
   decision: "approved" | "rejected";
   decisionNotes?: string;
   registerSessionId: Id<"registerSession">;
-  reviewedByStaffProfileId?: Id<"staffProfile">;
+  reviewedByStaffProfileId: Id<"staffProfile">;
   reviewedByUserId?: Id<"athenaUser">;
   storeId: Id<"store">;
 };
@@ -319,6 +319,41 @@ async function listStaffNames(
 
   return new Map(
     staffEntries.filter(Boolean) as Array<[Id<"staffProfile">, string]>
+  );
+}
+
+async function staffProfileCanReviewCloseoutVariance(
+  ctx: Pick<MutationCtx, "db">,
+  args: {
+    organizationId: Id<"organization">;
+    staffProfileId: Id<"staffProfile">;
+    storeId: Id<"store">;
+  },
+) {
+  const staffProfile = await ctx.db.get("staffProfile", args.staffProfileId);
+
+  if (
+    !staffProfile ||
+    staffProfile.status !== "active" ||
+    staffProfile.organizationId !== args.organizationId ||
+    staffProfile.storeId !== args.storeId
+  ) {
+    return false;
+  }
+
+  const roleAssignments = await ctx.db
+    .query("staffRoleAssignment")
+    .withIndex("by_staffProfileId", (q) =>
+      q.eq("staffProfileId", args.staffProfileId)
+    )
+    .take(20);
+
+  return roleAssignments.some(
+    (assignment) =>
+      assignment.status === "active" &&
+      assignment.role === "manager" &&
+      assignment.organizationId === args.organizationId &&
+      assignment.storeId === args.storeId,
   );
 }
 
@@ -692,7 +727,7 @@ export const reviewRegisterSessionCloseout = mutation({
     decision: v.union(v.literal("approved"), v.literal("rejected")),
     decisionNotes: v.optional(v.string()),
     registerSessionId: v.id("registerSession"),
-    reviewedByStaffProfileId: v.optional(v.id("staffProfile")),
+    reviewedByStaffProfileId: v.id("staffProfile"),
     reviewedByUserId: v.optional(v.id("athenaUser")),
     storeId: v.id("store"),
   },
@@ -726,6 +761,26 @@ export const reviewRegisterSessionCloseout = mutation({
       return userError({
         code: "precondition_failed",
         message: "Register closeout approval is no longer pending.",
+      });
+    }
+
+    if (!registerSession.organizationId) {
+      return userError({
+        code: "precondition_failed",
+        message: "Register session is missing organization context.",
+      });
+    }
+
+    const canReviewVariance = await staffProfileCanReviewCloseoutVariance(ctx, {
+      organizationId: registerSession.organizationId,
+      staffProfileId: args.reviewedByStaffProfileId,
+      storeId: args.storeId,
+    });
+
+    if (!canReviewVariance) {
+      return userError({
+        code: "authorization_failed",
+        message: "Only managers can approve or reject register variance reviews.",
       });
     }
 

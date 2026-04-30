@@ -1,10 +1,8 @@
-import type { ReactNode } from "react";
 import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
-import { RegisterCloseoutView } from "../cash-controls/RegisterCloseoutView";
 import { EmptyState } from "../states/empty/empty-state";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
@@ -60,7 +58,6 @@ type OperationsQueueViewContentProps = {
   onSubmitStockBatch: (
     args: SubmitStockAdjustmentArgs
   ) => Promise<NormalizedCommandResult<unknown>>;
-  registerCloseoutSection?: ReactNode;
   storeId?: Id<"store">;
   workItems: QueueWorkItem[];
 };
@@ -75,7 +72,6 @@ export function OperationsQueueViewContent({
   isSubmittingStockBatch,
   onDecideApprovalRequest,
   onSubmitStockBatch,
-  registerCloseoutSection,
   storeId,
   workItems,
 }: OperationsQueueViewContentProps) {
@@ -248,8 +244,6 @@ export function OperationsQueueViewContent({
               ))
             )}
           </section>
-
-          {registerCloseoutSection}
         </div>
       </FadeIn>
     </View>
@@ -371,7 +365,6 @@ export function OperationsQueueView() {
       onDecideApprovalRequest={handleDecideApprovalRequest}
       isSubmittingStockBatch={isSubmittingStockBatch}
       onSubmitStockBatch={handleSubmitStockBatch}
-      registerCloseoutSection={<RegisterCloseoutView />}
       storeId={activeStore._id}
       workItems={queue?.workItems ?? []}
     />

@@ -87,6 +87,7 @@ type CashControlRegisterSession = Pick<
   | "openingFloat"
   | "registerNumber"
   | "status"
+  | "terminalId"
   | "variance"
   | "workflowTraceId"
 >;
@@ -193,6 +194,7 @@ function buildRegisterSessionSummary(args: {
   approvalRequest?: CashControlApprovalRequest | null;
   registerSession: CashControlRegisterSession;
   staffNamesById: StaffNameMap;
+  terminalNamesById: Map<Id<"posTerminal">, string>;
   totalDeposited: number;
 }) {
   return {
@@ -202,6 +204,9 @@ function buildRegisterSessionSummary(args: {
       : null,
     openedByStaffName: args.registerSession.openedByStaffProfileId
       ? args.staffNamesById.get(args.registerSession.openedByStaffProfileId) ?? null
+      : null,
+    terminalName: args.registerSession.terminalId
+      ? args.terminalNamesById.get(args.registerSession.terminalId) ?? null
       : null,
     pendingApprovalRequest: args.approvalRequest
       ? {
@@ -222,6 +227,7 @@ export function buildCashControlsDashboardSnapshot(args: {
   deposits: CashControlDepositAllocation[];
   registerSessions: CashControlRegisterSession[];
   staffNamesById: StaffNameMap;
+  terminalNamesById?: Map<Id<"posTerminal">, string>;
 }) {
   const totalDepositedBySessionId = sumDepositsBySession(args.deposits);
   const registerNumberBySessionId = new Map(
@@ -238,6 +244,7 @@ export function buildCashControlsDashboardSnapshot(args: {
         approvalRequest: args.approvalRequestsBySessionId.get(registerSession._id) ?? null,
         registerSession,
         staffNamesById: args.staffNamesById,
+        terminalNamesById: args.terminalNamesById ?? new Map(),
         totalDeposited: totalDepositedBySessionId.get(registerSession._id) ?? 0,
       })
     );
@@ -288,6 +295,23 @@ async function listRegisterSessionsForDashboard(
     .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
     .order("desc")
     .take(SESSION_LIMIT);
+}
+
+async function listTerminalNames(
+  ctx: Pick<QueryCtx, "db">,
+  terminalIds: Set<Id<"posTerminal">>,
+) {
+  const terminalEntries = await Promise.all(
+    Array.from(terminalIds).map(async (terminalId) => {
+      const terminal = await ctx.db.get("posTerminal", terminalId);
+      const terminalName = terminal?.displayName?.trim();
+      return terminalName ? [terminalId, terminalName] : null;
+    })
+  );
+
+  return new Map(
+    terminalEntries.filter(Boolean) as Array<[Id<"posTerminal">, string]>
+  );
 }
 
 async function listStoreDeposits(
@@ -426,12 +450,21 @@ export const getDashboardSnapshot = query({
         registerSessions,
       })
     );
+    const terminalNamesById = await listTerminalNames(
+      ctx,
+      new Set(
+        registerSessions
+          .map((registerSession) => registerSession.terminalId)
+          .filter(Boolean) as Id<"posTerminal">[],
+      ),
+    );
 
     return buildCashControlsDashboardSnapshot({
       approvalRequestsBySessionId,
       deposits,
       registerSessions,
       staffNamesById,
+      terminalNamesById,
     });
   },
 });
@@ -500,6 +533,10 @@ export const getRegisterSessionSnapshot = query({
       ).filter(Boolean) as Array<[Id<"customerProfile">, string | undefined]>
     );
     const totalDeposited = deposits.reduce((sum, deposit) => sum + deposit.amount, 0);
+    const terminalNamesById = await listTerminalNames(
+      ctx,
+      new Set(registerSession.terminalId ? [registerSession.terminalId] : [])
+    );
     const closeoutReview =
       registerSession.countedCash !== undefined
         ? buildRegisterSessionCloseoutReview({
@@ -557,6 +594,7 @@ export const getRegisterSessionSnapshot = query({
           approvalRequest,
           registerSession,
           staffNamesById,
+          terminalNamesById,
           totalDeposited,
         }),
         netExpectedCash: registerSession.expectedCash,
