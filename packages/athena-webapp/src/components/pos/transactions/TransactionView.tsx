@@ -196,10 +196,8 @@ export function TransactionView() {
   const [pendingCorrection, setPendingCorrection] = useState<
     "customer" | "payment_method" | null
   >(null);
-  const [
-    pendingPaymentApproval,
-    setPendingPaymentApproval,
-  ] = useState<ApprovalRequirement | null>(null);
+  const [pendingPaymentApproval, setPendingPaymentApproval] =
+    useState<ApprovalRequirement | null>(null);
   const [correctionHistoryExpanded, setCorrectionHistoryExpanded] =
     useState(false);
   const { activeStore, isAuthenticated } = useProtectedAdminPageState();
@@ -310,12 +308,13 @@ export function TransactionView() {
     : correctionHistory.slice(0, 2);
   const staffAuthenticationDialogCopy = {
     title: "Staff sign-in required",
-    description: "Enter username and PIN to record this update.",
+    description: "Authenticate to record this update.",
     submitLabel: "Confirm",
   };
   const isCompletedTransaction = transaction.status === "completed";
   const hasSinglePayment = (transaction.payments?.length ?? 0) <= 1;
-  const registerSessionIsClosing = transaction.registerSessionStatus === "closing";
+  const registerSessionIsClosing =
+    transaction.registerSessionStatus === "closing";
   const supportsPaymentMethodCorrection =
     hasSinglePayment &&
     (transaction.changeGiven ?? 0) <= 0 &&
@@ -555,17 +554,18 @@ export function TransactionView() {
             } satisfies NormalizedCommandResult<CommandApprovalProofResult>);
           }
 
-          return runCommand(() =>
-            approveCommand({
-              actionKey: args.actionKey,
-              pinHash: args.pinHash,
-              reason: args.reason,
-              requiredRole: args.requiredRole,
-              requestedByStaffProfileId: args.requestedByStaffProfileId,
-              storeId: activeStore._id,
-              subject: args.subject,
-              username: args.username,
-            }) as Promise<CommandResult<CommandApprovalProofResult>>,
+          return runCommand(
+            () =>
+              approveCommand({
+                actionKey: args.actionKey,
+                pinHash: args.pinHash,
+                reason: args.reason,
+                requiredRole: args.requiredRole,
+                requestedByStaffProfileId: args.requestedByStaffProfileId,
+                storeId: activeStore._id,
+                subject: args.subject,
+                username: args.username,
+              }) as Promise<CommandResult<CommandApprovalProofResult>>,
           );
         }}
         onApproved={(result) => {
@@ -719,8 +719,7 @@ export function TransactionView() {
                         </h2>
                         <p className="text-sm leading-6 text-muted-foreground">
                           Update customer attribution or payment labels here.
-                          Use guided workflows for sale totals and item
-                          changes.
+                          Use guided workflows for sale totals and item changes.
                         </p>
                       </div>
                     </div>
@@ -1007,9 +1006,7 @@ export function TransactionView() {
                         {correctionHistoryExpanded
                           ? "Show fewer updates"
                           : `Show ${hiddenCorrectionCount} more ${
-                              hiddenCorrectionCount === 1
-                                ? "update"
-                                : "updates"
+                              hiddenCorrectionCount === 1 ? "update" : "updates"
                             }`}
                       </Button>
                     ) : null}

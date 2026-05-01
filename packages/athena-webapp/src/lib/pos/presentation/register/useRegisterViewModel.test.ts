@@ -404,6 +404,7 @@ describe("useRegisterViewModel", () => {
     expect(result.current.registerInfo.registerLabel).toBe("Front Counter");
     expect(result.current.checkout.payments).toEqual([]);
     expect(result.current.checkout.total).toBe(120);
+    expect(result.current.sessionPanel?.canClearSale).toBe(true);
     expect(result.current.customerPanel.customerInfo.name).toBe("Ama Serwa");
     expect(result.current.cashierCard?.cashierName).toBe("Ama K.");
     expect(result.current.authDialog?.open).toBe(false);
@@ -628,6 +629,9 @@ describe("useRegisterViewModel", () => {
     expect(result.current.sessionPanel?.hasExpiredSession).toBe(false);
     expect(result.current.sessionPanel?.disableNewSession).toBe(false);
     expect(result.current.closeoutControl?.canCloseout).toBe(true);
+    expect(
+      result.current.closeoutControl?.canShowOpeningFloatCorrection,
+    ).toBe(true);
     expect(result.current.closeoutControl?.canCorrectOpeningFloat).toBe(true);
 
     await act(async () => {
@@ -681,6 +685,9 @@ describe("useRegisterViewModel", () => {
       );
     });
 
+    expect(
+      result.current.closeoutControl?.canShowOpeningFloatCorrection,
+    ).toBe(true);
     expect(result.current.closeoutControl?.canCorrectOpeningFloat).toBe(true);
 
     act(() => {
@@ -1006,6 +1013,39 @@ describe("useRegisterViewModel", () => {
     });
   });
 
+  it("marks drawer opening unavailable for non-manager cashier sign-ins", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: {
+        _id: "staff-1",
+        activeRoles: ["cashier"],
+        firstName: "Ama",
+        lastName: "Kusi",
+      },
+      activeRegisterSession: null,
+      activeSession: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    expect(result.current.drawerGate?.mode).toBe("initialSetup");
+    expect(result.current.drawerGate?.canOpenDrawer).toBe(false);
+    expect(
+      result.current.closeoutControl?.canShowOpeningFloatCorrection,
+    ).toBe(false);
+    expect(result.current.closeoutControl?.canCorrectOpeningFloat).toBe(false);
+  });
+
   it("binds a preserved active POS session after drawer recovery without clearing checkout state", async () => {
     mockRegisterState = {
       phase: "active",
@@ -1234,6 +1274,52 @@ describe("useRegisterViewModel", () => {
     expect(mockNavigateBack).toHaveBeenCalled();
   });
 
+  it("does not show the sale-cleared toast when voiding an empty sale", async () => {
+    mockActiveSession = {
+      ...mockActiveSession!,
+      cartItems: [],
+      customer: null,
+    };
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    await act(async () => {
+      await result.current.sessionPanel?.onVoidCurrentSession();
+    });
+
+    expect(mockVoidSession).toHaveBeenCalledWith({
+      sessionId: "session-1" as Id<"posSession">,
+    });
+    expect(toast.success).not.toHaveBeenCalledWith("Sale cleared.");
+  });
+
+  it("shows the sale-cleared toast when voiding a sale with cart items", async () => {
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    await act(async () => {
+      await result.current.sessionPanel?.onVoidCurrentSession();
+    });
+
+    expect(mockVoidSession).toHaveBeenCalledWith({
+      sessionId: "session-1" as Id<"posSession">,
+    });
+    expect(toast.success).toHaveBeenCalledWith("Sale cleared.");
+  });
+
   it("does not void an empty active session before resuming a held one", async () => {
     mockActiveSession = {
       ...mockActiveSession!,
@@ -1296,6 +1382,7 @@ describe("useRegisterViewModel", () => {
     });
 
     expect(result.current.sessionPanel?.canHoldSession).toBe(false);
+    expect(result.current.sessionPanel?.canClearSale).toBe(true);
 
     await act(async () => {
       await result.current.onNavigateBack();
@@ -1306,6 +1393,27 @@ describe("useRegisterViewModel", () => {
       sessionId: "session-1" as Id<"posSession">,
     });
     expect(mockNavigateBack).toHaveBeenCalled();
+  });
+
+  it("does not expose clear sale for an empty active session", async () => {
+    mockActiveSession = {
+      ...mockActiveSession!,
+      cartItems: [],
+      payments: [],
+      customer: null,
+    };
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    expect(result.current.sessionPanel?.canHoldSession).toBe(false);
+    expect(result.current.sessionPanel?.canClearSale).toBe(false);
   });
 
   it("does not require the legacy register store or orchestration hooks", () => {
@@ -1533,6 +1641,37 @@ describe("useRegisterViewModel", () => {
       }),
     );
     expect(result.current.checkout.payments).toEqual([]);
+  });
+
+  it("does not show the sale-cleared toast when clearing an already-empty cart", async () => {
+    mockActiveSession = {
+      ...mockActiveSession!,
+      cartItems: [],
+      payments: [{ method: "cash", amount: 120, timestamp: 1_000 }],
+    };
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    await act(async () => {
+      await result.current.cart.onClearCart();
+    });
+
+    expect(
+      mockReleaseSessionInventoryHoldsAndDeleteItems,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "session-1",
+        staffProfileId: "staff-1",
+      }),
+    );
+    expect(toast.success).not.toHaveBeenCalledWith("Sale cleared.");
   });
 
   it("completes the transaction without a separate checkout-submitted sync round-trip", async () => {

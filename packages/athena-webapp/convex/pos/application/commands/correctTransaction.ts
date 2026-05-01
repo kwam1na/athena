@@ -40,7 +40,8 @@ function buildPaymentMethodCorrectionApprovalRequirement(args: {
       key: PAYMENT_METHOD_CORRECTION_ACTION_KEY,
       label: "Correct payment method",
     },
-    reason: "Manager approval is required to correct a completed transaction payment method.",
+    reason:
+      "Manager approval is required to correct a completed transaction payment method.",
     requiredRole: "manager",
     selfApproval: "allowed",
     subject: {
@@ -51,7 +52,7 @@ function buildPaymentMethodCorrectionApprovalRequirement(args: {
     copy: {
       title: "Manager approval required",
       message:
-        "Enter manager credentials to update this completed transaction payment method.",
+        "Authorization is needed from a manager to update this completed transaction payment method.",
       primaryActionLabel: "Approve update",
       secondaryActionLabel: "Cancel",
     },
@@ -201,11 +202,15 @@ export async function correctTransactionCustomer(
     reason?: string;
   } & CorrectionActor,
 ) {
-  const transaction = await requireCompletedTransaction(ctx, args.transactionId);
+  const transaction = await requireCompletedTransaction(
+    ctx,
+    args.transactionId,
+  );
   const previousCustomerProfileId = transaction.customerProfileId;
-  const customerProfile = args.customerProfileId && ctx.db
-    ? await ctx.db.get("customerProfile", args.customerProfileId)
-    : null;
+  const customerProfile =
+    args.customerProfileId && ctx.db
+      ? await ctx.db.get("customerProfile", args.customerProfileId)
+      : null;
 
   if (args.customerProfileId && ctx.db && !customerProfile) {
     throw new Error("Customer profile not found.");
@@ -260,15 +265,23 @@ export async function correctTransactionPaymentMethod(
     reason?: string;
   } & CorrectionActor,
 ) {
-  const transaction = await requireCompletedTransaction(ctx, args.transactionId);
+  const transaction = await requireCompletedTransaction(
+    ctx,
+    args.transactionId,
+  );
 
   if (transaction.payments.length !== 1) {
     throw new Error("Only single-payment transactions can be corrected.");
   }
 
   const [payment] = transaction.payments;
-  if (payment.amount !== transaction.totalPaid || payment.amount !== transaction.total) {
-    throw new Error("Only same-amount payment method corrections are supported.");
+  if (
+    payment.amount !== transaction.totalPaid ||
+    payment.amount !== transaction.total
+  ) {
+    throw new Error(
+      "Only same-amount payment method corrections are supported.",
+    );
   }
 
   await requireRegisterSessionAllowsPaymentCorrection(ctx, {

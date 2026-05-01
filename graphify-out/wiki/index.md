@@ -7,10 +7,10 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 - [packages/AGENTS.md](../../packages/AGENTS.md) - package router plus the operational guides for each harnessed package
 
 ## Repo Summary
-- Code files discovered: 1542
-- Graph nodes: 4081
-- Graph edges: 3676
-- Communities: 1470
+- Code files discovered: 1545
+- Graph nodes: 4092
+- Graph edges: 3691
+- Communities: 1473
 
 ## Graph Hotspots
 - `harness-inferential-review.ts` (46 edges, Community 0) - [`scripts/harness-inferential-review.ts`](../../scripts/harness-inferential-review.ts)
@@ -20,7 +20,7 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 - `harness-generate.ts` (30 edges, Community 3) - [`scripts/harness-generate.ts`](../../scripts/harness-generate.ts)
 - `harness-scorecard.ts` (27 edges, Community 5) - [`scripts/harness-scorecard.ts`](../../scripts/harness-scorecard.ts)
 - `storeConfigV2.ts` (27 edges, Community 4) - [`packages/athena-webapp/convex/inventory/storeConfigV2.ts`](../../packages/athena-webapp/convex/inventory/storeConfigV2.ts)
-- `harness-behavior.ts` (24 edges, Community 6) - [`scripts/harness-behavior.ts`](../../scripts/harness-behavior.ts)
+- `RegisterSessionView.tsx` (26 edges, Community 6) - [`packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx`](../../packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx)
 
 ## Registered Packages
 - [Athena Webapp](packages/athena-webapp.md)

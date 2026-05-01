@@ -91,6 +91,7 @@ vi.mock("./RegisterActionBar", () => ({
   }: {
     closeoutControl?: {
       canCloseout: boolean;
+      canShowOpeningFloatCorrection: boolean;
       canCorrectOpeningFloat: boolean;
       onRequestCloseout: () => void;
       onRequestOpeningFloatCorrection: () => void;
@@ -100,12 +101,14 @@ vi.mock("./RegisterActionBar", () => ({
       register-action-bar
       {closeoutControl ? (
         <>
-          <button
-            disabled={!closeoutControl.canCorrectOpeningFloat}
-            onClick={closeoutControl.onRequestOpeningFloatCorrection}
-          >
-            float-control
-          </button>
+          {closeoutControl.canShowOpeningFloatCorrection ? (
+            <button
+              disabled={!closeoutControl.canCorrectOpeningFloat}
+              onClick={closeoutControl.onRequestOpeningFloatCorrection}
+            >
+              float-control
+            </button>
+          ) : null}
           <button
             disabled={!closeoutControl.canCloseout}
             onClick={closeoutControl.onRequestCloseout}
@@ -191,6 +194,7 @@ describe("POSRegisterView", () => {
       cashierCard: {},
       closeoutControl: {
         canCloseout: true,
+        canShowOpeningFloatCorrection: true,
         canCorrectOpeningFloat: true,
         onRequestCloseout: vi.fn(),
         onRequestOpeningFloatCorrection: vi.fn(),

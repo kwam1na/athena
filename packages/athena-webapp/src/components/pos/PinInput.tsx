@@ -26,6 +26,7 @@ export const PinInput = ({
       onChange={onChange}
       disabled={disabled}
       onKeyDown={onKeyDown}
+      pushPasswordManagerStrategy="none"
       containerClassName="group flex items-center has-[:disabled]:opacity-30"
       render={({ slots }) => (
         <>
@@ -49,7 +50,7 @@ export const PinInput = ({
 };
 
 const SLOT_SIZE_CLASSES: Record<NonNullable<PinInputProps["size"]>, string> = {
-  sm: "w-12 h-12 text-xl",
+  sm: "h-12 w-[clamp(2rem,10vw,3rem)] text-xl",
   md: "w-16 h-16 text-[2rem]",
   lg: "w-20 h-20 text-[2.5rem]",
 };
@@ -86,7 +87,7 @@ function FakeCaret() {
 // Inspired by Stripe's MFA input.
 function FakeDash() {
   return (
-    <div className="flex w-10 justify-center items-center">
+    <div className="flex w-[clamp(1.5rem,6vw,2.5rem)] justify-center items-center">
       <div className="w-3 h-1 rounded-full bg-border" />
     </div>
   );

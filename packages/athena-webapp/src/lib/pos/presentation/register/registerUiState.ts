@@ -59,6 +59,7 @@ export interface RegisterSessionPanelState {
   activeSessionTraceId?: string | null;
   hasExpiredSession: boolean;
   canHoldSession: boolean;
+  canClearSale: boolean;
   disableNewSession: boolean;
   heldSessions: Array<{
     _id: Id<"posSession">;
@@ -149,6 +150,7 @@ export interface RegisterDrawerGateState {
   closeoutSecondaryActionLabel?: string;
   expectedCash?: number;
   canOpenCashControls?: boolean;
+  canOpenDrawer?: boolean;
   hasPendingCloseoutApproval?: boolean;
   notes?: string;
   errorMessage: string | null;
@@ -172,6 +174,7 @@ export interface RegisterDrawerGateState {
 
 export interface RegisterCloseoutControlState {
   canCloseout: boolean;
+  canShowOpeningFloatCorrection: boolean;
   canCorrectOpeningFloat: boolean;
   onRequestCloseout: () => void;
   onRequestOpeningFloatCorrection: () => void;

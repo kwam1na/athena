@@ -93,6 +93,58 @@ vi.mock("@/components/staff-auth/StaffAuthenticationDialog", () => ({
     ) : null,
 }));
 
+vi.mock("@/components/operations/CommandApprovalDialog", () => ({
+  CommandApprovalDialog: ({
+    approval,
+    onApproved,
+    onAuthenticateForApproval,
+    open,
+  }: {
+    approval: {
+      requiredRole: "manager";
+      subject: { id: string; label?: string; type: string };
+    } | null;
+    onApproved: (result: {
+      approval: unknown;
+      approvalProofId: string;
+      approvedByStaffProfileId: string;
+      expiresAt: number;
+    }) => void;
+    onAuthenticateForApproval: (args: {
+      actionKey: string;
+      pinHash: string;
+      requiredRole: "manager";
+      storeId: string;
+      subject: { id: string; label?: string; type: string };
+      username: string;
+    }) => Promise<unknown>;
+    open: boolean;
+  }) =>
+    open && approval ? (
+      <button
+        type="button"
+        onClick={async () => {
+          await onAuthenticateForApproval({
+            actionKey: "cash_controls.register_session.correct_opening_float",
+            pinHash: "hashed-pin",
+            requiredRole: approval.requiredRole,
+            storeId: "store-1",
+            subject: approval.subject,
+            username: "manager",
+          });
+          onApproved({
+            approval,
+            approvalProofId: "approval-proof-1",
+            approvedByStaffProfileId: "manager-1",
+            expiresAt: Date.now() + 60_000,
+          });
+        }}
+      >
+        Approve correction
+      </button>
+    ) : null,
+}));
+
 const baseSnapshot = {
   closeoutReview: null as {
     hasVariance: boolean;
@@ -469,19 +521,53 @@ describe("RegisterSessionViewContent", () => {
     );
   });
 
-  it("submits an opening float correction after staff authentication", async () => {
+  it("submits an opening float correction after manager command approval", async () => {
     const user = userEvent.setup();
-    const onAuthenticateStaff = vi.fn();
+    const onAuthenticateForApproval = vi
+      .fn()
+      .mockResolvedValue(
+        ok({
+          approvalProofId: "approval-proof-1",
+          approvedByStaffProfileId: "manager-1",
+          expiresAt: Date.now() + 60_000,
+        }),
+      );
     const onCorrectOpeningFloat = vi
       .fn()
-      .mockResolvedValue(ok({ action: "corrected" }));
+      .mockResolvedValueOnce({
+        kind: "approval_required",
+        approval: {
+          action: {
+            key: "cash_controls.register_session.correct_opening_float",
+            label: "Correct opening float",
+          },
+          copy: {
+            title: "Manager approval required",
+            message:
+              "Authorization is needed from a manager to correct this register opening float.",
+            primaryActionLabel: "Approve correction",
+            secondaryActionLabel: "Cancel",
+          },
+          reason:
+            "Manager approval is required to correct the register opening float.",
+          requiredRole: "manager",
+          resolutionModes: [{ kind: "inline_manager_proof" }],
+          subject: {
+            id: "session-1",
+            label: "Register 3",
+            type: "register_session",
+          },
+        },
+      })
+      .mockResolvedValueOnce(ok({ action: "corrected" }));
 
     render(
       <RegisterSessionViewContent
         actorUserId="user-1"
         currency="USD"
         isLoading={false}
-        onAuthenticateStaff={onAuthenticateStaff}
+        onAuthenticateForApproval={onAuthenticateForApproval}
+        onAuthenticateStaff={vi.fn()}
         onCorrectOpeningFloat={onCorrectOpeningFloat}
         onRecordDeposit={vi.fn()}
         onReviewCloseout={vi.fn()}
@@ -513,19 +599,24 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getByText("$10")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Submit" }));
     await user.click(
-      screen.getByRole("button", {
-        name: "Confirm staff for Correct opening float",
-      }),
+      screen.getByRole("button", { name: "Approve correction" }),
     );
 
-    expect(onAuthenticateStaff).toHaveBeenCalledWith({
-      allowedRoles: ["cashier", "manager"],
+    expect(onAuthenticateForApproval).toHaveBeenCalledWith({
+      actionKey: "cash_controls.register_session.correct_opening_float",
       pinHash: "hashed-pin",
-      username: "ato",
+      requiredRole: "manager",
+      storeId: "store-1",
+      subject: {
+        id: "session-1",
+        label: "Register 3",
+        type: "register_session",
+      },
+      username: "manager",
     });
     await waitFor(() =>
-      expect(onCorrectOpeningFloat).toHaveBeenCalledWith({
-        actorStaffProfileId: "staff-1",
+      expect(onCorrectOpeningFloat).toHaveBeenLastCalledWith({
+        approvalProofId: "approval-proof-1",
         correctedOpeningFloat: 6000,
         reason: "Opening cash was recounted.",
         registerSessionId: "session-1",
@@ -639,6 +730,120 @@ describe("RegisterSessionViewContent", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("shows opening float correction before and after amounts", () => {
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="USD"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            openingFloat: 4000,
+            status: "active",
+          },
+          timeline: [
+            {
+              _id: "event-1",
+              actorStaffName: "Kwamina Mensah",
+              createdAt: new Date("2026-05-01T00:27:00.000Z").getTime(),
+              eventType: "register_session_opening_float_corrected",
+              message: "Register session opening float corrected.",
+              metadata: {
+                correctedOpeningFloat: 4000,
+                previousOpeningFloat: 5000,
+              },
+              reason: "miscounted",
+            },
+          ],
+        }}
+        storeId="store-1"
+      />,
+    );
+
+    expect(screen.getByText("Original float")).toBeInTheDocument();
+    expect(screen.getByText("$50")).toBeInTheDocument();
+    expect(screen.getByText("Corrected float")).toBeInTheDocument();
+    expect(screen.getAllByText("$40").length).toBeGreaterThan(0);
+    expect(screen.getByText("Drawer impact")).toBeInTheDocument();
+    expect(screen.getByText("-$10")).toBeInTheDocument();
+    expect(screen.getAllByText("Notes").length).toBeGreaterThan(0);
+    expect(screen.getByText("miscounted")).toBeInTheDocument();
+  });
+
+  it("does not present transaction correction events as register closeout follow-up", () => {
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="USD"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          timeline: [
+            {
+              _id: "event-1",
+              actorStaffName: "Kwamina Mensah",
+              createdAt: new Date("2026-05-01T00:44:00.000Z").getTime(),
+              eventType: "pos_transaction_payment_method_approval_proof_consumed",
+              message:
+                "Manager approval proof consumed for Transaction #245072 payment method correction.",
+              reason: "mistake at checkout",
+            },
+          ],
+        }}
+        storeId="store-1"
+      />,
+    );
+
+    expect(
+      screen.queryByRole("heading", { name: "Closeout correction needed" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Closeout history")).not.toBeInTheDocument();
+  });
+
+  it("does not present historical closeout rejection as an active correction after closure", () => {
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="USD"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            closedAt: new Date("2026-05-01T00:50:00.000Z").getTime(),
+            closedByStaffName: "Kwamina Mensah",
+            status: "closed",
+          },
+          timeline: [
+            {
+              _id: "event-1",
+              actorStaffName: "Kwamina Mensah",
+              createdAt: new Date("2026-05-01T00:44:00.000Z").getTime(),
+              eventType: "register_session_closeout_rejected",
+              message:
+                "Manager rejected the register closeout for recount or correction.",
+            },
+          ],
+        }}
+        storeId="store-1"
+      />,
+    );
+
+    expect(
+      screen.queryByRole("heading", { name: "Closeout correction needed" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Closeout history")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Closed").length).toBeGreaterThan(0);
+  });
+
   it("shows opening float correction command errors inline", async () => {
     const user = userEvent.setup();
     const onCorrectOpeningFloat = vi.fn().mockResolvedValue(
@@ -678,11 +883,6 @@ describe("RegisterSessionViewContent", () => {
       "Correction from counted opening cash.",
     );
     await user.click(screen.getByRole("button", { name: "Submit" }));
-    await user.click(
-      screen.getByRole("button", {
-        name: "Confirm staff for Correct opening float",
-      }),
-    );
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Opening float can only be corrected while the drawer is open.",

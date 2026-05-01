@@ -56,7 +56,7 @@ export type StaffAuthenticationDialogProps = {
   ) => void;
   onDismiss: () => void;
   open: boolean;
-  presentation?: "dialog" | "inline";
+  presentation?: "dialog" | "inline" | "embedded";
   returnTriggerLabel?: string;
 };
 
@@ -165,17 +165,19 @@ export function StaffAuthenticationDialog({
     return null;
   }
 
+  const usesDialogSemantics = presentation === "dialog";
+
   const content = (
-    <div className="space-y-layout-xl p-layout-lg">
+    <div className="flex min-h-0 min-w-0 flex-col gap-layout-xl overflow-x-hidden p-layout-lg">
       <div className="space-y-layout-xs text-left">
-        {presentation === "dialog" ? (
+        {usesDialogSemantics ? (
           <DialogTitle>{activeCopy.title}</DialogTitle>
         ) : (
           <h2 className="text-lg font-semibold tracking-tight">
             {activeCopy.title}
           </h2>
         )}
-        {presentation === "dialog" ? (
+        {usesDialogSemantics ? (
           <DialogDescription className="text-sm text-muted-foreground">
             {activeCopy.description}
           </DialogDescription>
@@ -186,8 +188,8 @@ export function StaffAuthenticationDialog({
         )}
       </div>
 
-      <div className="space-y-layout-lg">
-        <div className="max-w-72 space-y-layout-xs">
+      <div className="min-w-0 space-y-layout-lg">
+        <div className="max-w-72 min-w-0 space-y-layout-xs">
           <Label htmlFor="staff-auth-username">Username</Label>
           <Input
             ref={usernameInputRef}
@@ -253,6 +255,10 @@ export function StaffAuthenticationDialog({
         </div>
       </div>
     );
+  }
+
+  if (presentation === "embedded") {
+    return content;
   }
 
   return (

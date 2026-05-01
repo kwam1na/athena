@@ -48,19 +48,44 @@ vi.mock("@/components/pos/PinInput", () => ({
   ),
 }));
 
-vi.mock("@/components/ui/dialog", () => ({
-  Dialog: ({ children, open }: { children: React.ReactNode; open: boolean }) =>
-    open ? <div>{children}</div> : null,
-  DialogContent: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
-  ),
-  DialogDescription: ({ children }: { children: React.ReactNode }) => (
-    <p>{children}</p>
-  ),
-  DialogTitle: ({ children }: { children: React.ReactNode }) => (
-    <h2>{children}</h2>
-  ),
-}));
+vi.mock("@/components/ui/dialog", () => {
+  let onOpenChange: ((open: boolean) => void) | undefined;
+
+  return {
+    Dialog: ({
+      children,
+      onOpenChange: handleOpenChange,
+      open,
+    }: {
+      children: React.ReactNode;
+      onOpenChange?: (open: boolean) => void;
+      open: boolean;
+    }) => {
+      onOpenChange = handleOpenChange;
+      return open ? <div>{children}</div> : null;
+    },
+    DialogContent: ({
+      children,
+      className,
+    }: {
+      children: React.ReactNode;
+      className?: string;
+    }) => (
+      <div className={className} data-testid="dialog-content">
+        {children}
+        <button type="button" onClick={() => onOpenChange?.(false)}>
+          Close
+        </button>
+      </div>
+    ),
+    DialogDescription: ({ children }: { children: React.ReactNode }) => (
+      <p>{children}</p>
+    ),
+    DialogTitle: ({ children }: { children: React.ReactNode }) => (
+      <h2>{children}</h2>
+    ),
+  };
+});
 
 const storeId = "store-1" as Id<"store">;
 const staffProfileId = "staff-1" as Id<"staffProfile">;
@@ -154,10 +179,15 @@ describe("CommandApprovalDialog", () => {
     expect(
       screen.getByRole("heading", { name: "Manager approval required" }),
     ).toBeInTheDocument();
+    expect(screen.getByTestId("dialog-content")).toHaveClass(
+      "flex",
+      "max-h-[calc(100dvh-2rem)]",
+      "overflow-hidden",
+    );
     expect(
       screen.getByText(/payment method changes need manager approval/i),
     ).toBeInTheDocument();
-    expect(screen.getByText("Subject: Receipt #1001")).toBeInTheDocument();
+    expect(screen.getByText("Receipt #1001")).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Enter manager credentials" }),
     ).toBeInTheDocument();
@@ -192,7 +222,7 @@ describe("CommandApprovalDialog", () => {
     const { user, onApproved, onAuthenticateForApproval, onDismiss } =
       renderDialog();
 
-    await user.click(screen.getByRole("button", { name: "Cancel approval" }));
+    await user.click(screen.getByRole("button", { name: "Close" }));
 
     expect(onDismiss).toHaveBeenCalled();
     expect(onAuthenticateForApproval).not.toHaveBeenCalled();

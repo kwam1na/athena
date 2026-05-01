@@ -218,6 +218,46 @@ describe("cash control closeouts", () => {
     expect(runMutation).not.toHaveBeenCalled();
   });
 
+  it("requires manager approval before changing opening float", async () => {
+    const runMutation = vi.fn();
+    const ctx = {
+      db: {
+        get: vi.fn(async () => ({
+          _id: "session-1",
+          expectedCash: 30000,
+          openingFloat: 30000,
+          openedAt: 1,
+          registerNumber: "A1",
+          status: "open",
+          storeId: "store-1",
+        })),
+      },
+      runMutation,
+    };
+
+    const result = await getHandler(correctRegisterSessionOpeningFloat)(ctx, {
+      correctedOpeningFloat: 20000,
+      reason: "Drawer counted wrong at open.",
+      registerSessionId: "session-1",
+      storeId: "store-1",
+    });
+
+    expect(result).toMatchObject({
+      kind: "approval_required",
+      approval: {
+        action: {
+          key: "cash_controls.register_session.correct_opening_float",
+        },
+        requiredRole: "manager",
+        subject: {
+          id: "session-1",
+          type: "register_session",
+        },
+      },
+    });
+    expect(runMutation).not.toHaveBeenCalled();
+  });
+
   it("returns user_error for closeout sessions without mutating drawer math", async () => {
     const runMutation = vi.fn();
     const ctx = {

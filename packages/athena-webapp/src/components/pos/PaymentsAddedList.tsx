@@ -158,13 +158,13 @@ export const PaymentsAddedList = ({
     : projectedRemainingDue;
   const summaryToneClass = hasProjectedChangeDue
     ? "border-green-200 bg-green-50"
-    : "border-primary/20 bg-primary/5";
+    : "border-signal/20 bg-signal/5";
   const summaryLabelClass = hasProjectedChangeDue
     ? "text-green-700"
-    : "text-primary";
+    : "text-signal";
   const summaryDividerClass = hasProjectedChangeDue
     ? "border-green-200"
-    : "border-primary/10";
+    : "border-signal/10";
   const showSaleSummary = itemCount !== undefined && balanceDue !== undefined;
   const isMinimized = variant === "minimized";
   const editingPayment = payments.find(

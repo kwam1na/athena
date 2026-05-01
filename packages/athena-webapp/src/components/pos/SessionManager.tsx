@@ -57,6 +57,7 @@ export function SessionManager({ sessionPanel }: SessionManagerProps) {
           size="sm"
           className="flex h-10 items-center gap-2 px-4"
           onClick={() => void sessionPanel.onVoidCurrentSession()}
+          disabled={!sessionPanel.canClearSale}
         >
           <Ban className="h-4 w-4 text-destructive" />
           Clear sale
