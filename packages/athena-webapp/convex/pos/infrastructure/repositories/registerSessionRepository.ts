@@ -24,8 +24,11 @@ export function mapRegisterSessionToCashDrawerSummary(
     registerNumber: session.registerNumber,
     openingFloat: session.openingFloat,
     expectedCash: session.expectedCash,
+    countedCash: session.countedCash,
+    managerApprovalRequestId: session.managerApprovalRequestId,
     openedAt: session.openedAt,
     notes: session.notes,
+    variance: session.variance,
     workflowTraceId: session.workflowTraceId,
   };
 }

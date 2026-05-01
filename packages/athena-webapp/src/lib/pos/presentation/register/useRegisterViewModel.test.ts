@@ -41,7 +41,12 @@ let mockRegisterState:
   | {
       phase: "requiresCashier" | "readyToStart" | "resumable" | "active";
       terminal: { _id: string; displayName: string } | null;
-      cashier: { _id: string; firstName: string; lastName: string } | null;
+      cashier: {
+        _id: string;
+        firstName: string;
+        lastName: string;
+        activeRoles?: Array<"manager" | "front_desk" | "stylist" | "technician" | "cashier">;
+      } | null;
       activeRegisterSession: {
         _id: string;
         status: "open" | "active" | "closing" | "closed";
@@ -49,8 +54,11 @@ let mockRegisterState:
         registerNumber?: string;
         openingFloat: number;
         expectedCash: number;
+        countedCash?: number;
+        managerApprovalRequestId?: Id<"approvalRequest">;
         openedAt: number;
         notes?: string;
+        variance?: number;
         workflowTraceId?: string;
       } | null;
       activeSession: { _id: string; sessionNumber: string } | null;
@@ -202,7 +210,12 @@ describe("useRegisterViewModel", () => {
     mockRegisterState = {
       phase: "active",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
-      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
+      cashier: {
+        _id: "staff-1",
+        firstName: "Ama",
+        lastName: "Kusi",
+        activeRoles: ["manager"],
+      },
       activeRegisterSession: {
         _id: "drawer-1",
         status: "open",
@@ -431,7 +444,12 @@ describe("useRegisterViewModel", () => {
     mockRegisterState = {
       phase: "readyToStart",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
-      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
+      cashier: {
+        _id: "staff-1",
+        firstName: "Ama",
+        lastName: "Kusi",
+        activeRoles: ["manager"],
+      },
       activeRegisterSession: null,
       activeSession: null,
       resumableSession: null,
@@ -458,15 +476,23 @@ describe("useRegisterViewModel", () => {
     mockRegisterState = {
       phase: "readyToStart",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
-      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
+      cashier: {
+        _id: "staff-1",
+        firstName: "Ama",
+        lastName: "Kusi",
+        activeRoles: ["manager"],
+      },
       activeRegisterSession: {
         _id: "drawer-1",
         status: "closing",
+        countedCash: 4_500,
+        managerApprovalRequestId: "approval-1" as Id<"approvalRequest">,
         terminalId: "terminal-1",
         registerNumber: "1",
         openingFloat: 5_000,
         expectedCash: 5_000,
         openedAt: Date.now(),
+        variance: -500,
       },
       activeSession: null,
       resumableSession: null,
@@ -493,6 +519,10 @@ describe("useRegisterViewModel", () => {
       expect.any(Function),
     );
     expect(result.current.drawerGate?.expectedCash).toBe(5_000);
+    expect(result.current.drawerGate?.hasPendingCloseoutApproval).toBe(true);
+    expect(result.current.drawerGate?.canOpenCashControls).toBe(true);
+    expect(result.current.drawerGate?.closeoutSubmittedCountedCash).toBe(4_500);
+    expect(result.current.drawerGate?.closeoutSubmittedVariance).toBe(-500);
   });
 
   it("submits closeout from the POS drawer gate with the current cashier", async () => {

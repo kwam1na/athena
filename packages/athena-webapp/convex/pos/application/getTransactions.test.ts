@@ -9,6 +9,7 @@ import {
   getCashierById,
   getPosSessionById,
   getPosTransactionById,
+  getRegisterSessionById,
   listCompletedTransactions,
   listTransactionItems,
 } from "../infrastructure/repositories/transactionRepository";
@@ -17,6 +18,7 @@ vi.mock("../infrastructure/repositories/transactionRepository", () => ({
   getCashierById: vi.fn(),
   getPosSessionById: vi.fn(),
   getPosTransactionById: vi.fn(),
+  getRegisterSessionById: vi.fn(),
   listCompletedTransactions: vi.fn(),
   listCompletedTransactionsForDay: vi.fn(),
   listTransactionItems: vi.fn(),
@@ -25,6 +27,7 @@ vi.mock("../infrastructure/repositories/transactionRepository", () => ({
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(getRegisterSessionById).mockResolvedValue(null as never);
 });
 
 function mockCorrectionHistoryDb(overrides?: {
@@ -379,6 +382,46 @@ describe("getTransactionById", () => {
             metadata: { paymentMethod: "card" },
           }),
         ],
+      }),
+    );
+  });
+
+  it("returns the associated register session status for transaction detail", async () => {
+    vi.mocked(getPosTransactionById).mockResolvedValue({
+      _id: "txn-6" as Id<"posTransaction">,
+      registerSessionId: "register-session-1" as Id<"registerSession">,
+      storeId: "store-1" as Id<"store">,
+      transactionNumber: "POS-666666",
+      subtotal: 1000,
+      tax: 0,
+      total: 1000,
+      paymentMethod: "cash",
+      payments: [{ method: "cash", amount: 1000, timestamp: 1 }],
+      totalPaid: 1000,
+      status: "completed",
+      completedAt: 100,
+    } as never);
+    vi.mocked(getCashierById).mockResolvedValue(null as never);
+    vi.mocked(getPosSessionById).mockResolvedValue(null as never);
+    vi.mocked(getRegisterSessionById).mockResolvedValue({
+      _id: "register-session-1" as Id<"registerSession">,
+      registerNumber: "2",
+      status: "closing",
+    } as never);
+    vi.mocked(listTransactionItems).mockResolvedValue([] as never);
+
+    const result = await getTransactionById(
+      { db: mockCorrectionHistoryDb() } as never,
+      {
+        transactionId: "txn-6" as Id<"posTransaction">,
+      },
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        registerNumber: "2",
+        registerSessionId: "register-session-1",
+        registerSessionStatus: "closing",
       }),
     );
   });

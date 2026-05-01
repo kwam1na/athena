@@ -239,10 +239,10 @@ export function OrderSummary({
     : remainingAfterDraft;
   const balanceDueToneClass = isPaymentAmountOverpaying
     ? "border-green-200 bg-green-50"
-    : "border-primary/20 bg-primary/5";
+    : "border-transaction-signal/20 bg-transaction-signal/5";
   const balanceDueLabelClass = isPaymentAmountOverpaying
     ? "text-green-700"
-    : "text-primary";
+    : "text-transaction-signal";
 
   useEffect(() => {
     if (selectedPaymentMethod === null) {
@@ -824,7 +824,7 @@ export function OrderSummary({
                   setIsSelectingPaymentMethod(false);
                 }}
                 disabled={cartItemsCount === 0}
-                className="flex h-28 flex-col items-start justify-between rounded-xl bg-primary p-4 text-left text-white shadow-md shadow-primary/20 hover:bg-primary/90 hover:text-white"
+                className="flex h-28 flex-col items-start justify-between rounded-xl bg-transaction-signal p-4 text-left text-transaction-signal-foreground shadow-md shadow-transaction-signal/20 hover:bg-transaction-signal/90 hover:text-transaction-signal-foreground"
                 size="lg"
                 variant="outline"
               >

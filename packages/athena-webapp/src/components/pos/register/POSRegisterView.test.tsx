@@ -818,4 +818,130 @@ describe("POSRegisterView", () => {
 
     expect(onSignOut).toHaveBeenCalled();
   });
+
+  it("renders manager approval pending closeout state without closeout inputs", async () => {
+    const onSignOut = vi.fn();
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: false,
+      },
+      registerInfo: {
+        customerName: undefined,
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {},
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      drawerGate: {
+        mode: "closeoutBlocked",
+        isRecovery: false,
+        registerLabel: "Front Counter",
+        registerNumber: "3",
+        currency: "GHS",
+        closeoutSubmittedCountedCash: 300_000,
+        closeoutSubmittedVariance: -568_100,
+        closeoutSecondaryActionLabel: "Reopen register",
+        expectedCash: 868_100,
+        errorMessage: null,
+        canOpenCashControls: true,
+        hasPendingCloseoutApproval: true,
+        isReopeningCloseout: false,
+        onReopenRegister: vi.fn(),
+        onSignOut,
+      },
+      sessionPanel: null,
+      cashierCard: null,
+      authDialog: {
+        open: false,
+      },
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(screen.getByText("Manager approval required")).toBeInTheDocument();
+    expect(
+      screen.getByText("Register 3 closeout submitted"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("GH₵8,681")).toBeInTheDocument();
+    expect(screen.getByText("GH₵3,000")).toBeInTheDocument();
+    expect(screen.getByText("GH₵-5,681")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /cash controls/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /reopen register/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /sign out/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText(/counted cash/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/closeout notes/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /submit closeout/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides cash controls from non-manager pending closeout approval state", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: false,
+      },
+      registerInfo: {
+        customerName: undefined,
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {},
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      drawerGate: {
+        mode: "closeoutBlocked",
+        isRecovery: false,
+        registerLabel: "Front Counter",
+        registerNumber: "3",
+        currency: "GHS",
+        closeoutSubmittedCountedCash: 300_000,
+        closeoutSubmittedVariance: -568_100,
+        closeoutSecondaryActionLabel: "Reopen register",
+        expectedCash: 868_100,
+        errorMessage: null,
+        canOpenCashControls: false,
+        hasPendingCloseoutApproval: true,
+        isReopeningCloseout: false,
+        onReopenRegister: vi.fn(),
+        onSignOut: vi.fn(),
+      },
+      sessionPanel: null,
+      cashierCard: null,
+      authDialog: {
+        open: false,
+      },
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(screen.getByText("Manager approval required")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /cash controls/i }),
+    ).not.toBeInTheDocument();
+  });
 });

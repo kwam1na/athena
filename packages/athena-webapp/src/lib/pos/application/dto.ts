@@ -2,6 +2,13 @@ import type { PosPaymentMethod, PosRegisterPhase } from "@/lib/pos/domain";
 import type { Id } from "~/convex/_generated/dataModel";
 import type { CommandResult } from "~/shared/commandResult";
 
+type PosOperationalRole =
+  | "manager"
+  | "front_desk"
+  | "stylist"
+  | "technician"
+  | "cashier";
+
 export interface PosTerminalDto {
   _id: string;
   displayName: string;
@@ -33,6 +40,7 @@ export interface PosCashierDto {
   _id: string;
   firstName: string;
   lastName: string;
+  activeRoles?: PosOperationalRole[];
   username?: string;
   active?: boolean;
 }
@@ -44,8 +52,11 @@ export interface PosCashDrawerDto {
   registerNumber?: string;
   openingFloat: number;
   expectedCash: number;
+  countedCash?: number;
+  managerApprovalRequestId?: Id<"approvalRequest">;
   openedAt: number;
   notes?: string;
+  variance?: number;
   workflowTraceId?: string;
 }
 

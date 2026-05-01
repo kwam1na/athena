@@ -156,6 +156,7 @@ export const getTransactionById = query({
       sessionTraceId: v.union(v.string(), v.null()),
       registerNumber: v.optional(v.string()),
       registerSessionId: v.optional(v.id("registerSession")),
+      registerSessionStatus: v.optional(v.string()),
       paymentMethod: v.optional(v.string()),
       payments: v.array(paymentValidator),
       totalPaid: v.number(),

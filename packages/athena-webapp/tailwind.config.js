@@ -87,6 +87,10 @@ export default {
           DEFAULT: "hsl(var(--signal))",
           foreground: "hsl(var(--signal-foreground))",
         },
+        "transaction-signal": {
+          DEFAULT: "hsl(var(--transaction-signal))",
+          foreground: "hsl(var(--transaction-signal-foreground))",
+        },
         action: {
           commit: "hsl(var(--action-commit))",
           "commit-foreground": "hsl(var(--action-commit-foreground))",

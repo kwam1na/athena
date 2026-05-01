@@ -47,6 +47,8 @@
     --shell-foreground: 35 42% 95%;
     --signal: 338 62% 43%;
     --signal-foreground: 336 100% 98%;
+    --transaction-signal: 26 73% 48%;
+    --transaction-signal-foreground: 35 100% 97%;
     --action-commit: 338 62% 43%;
     --action-commit-foreground: 336 100% 98%;
     --action-workflow: 232 42% 45%;
@@ -128,6 +130,8 @@
     --shell-foreground: 36 30% 94%;
     --signal: 336 72% 68%;
     --signal-foreground: 222 30% 12%;
+    --transaction-signal: 31 91% 67%;
+    --transaction-signal-foreground: 222 30% 12%;
     --action-commit: 336 72% 68%;
     --action-commit-foreground: 222 30% 12%;
     --action-workflow: 235 64% 72%;

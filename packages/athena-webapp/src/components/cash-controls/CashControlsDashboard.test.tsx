@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CashControlsDashboardContent } from "./CashControlsDashboard";
@@ -375,6 +375,13 @@ describe("CashControlsDashboardContent", () => {
     expect(screen.getAllByText("Register 3").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Back counter").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Needs review").length).toBeGreaterThan(0);
+    expect(screen.getByText("Counted")).toBeInTheDocument();
+    expect(screen.getAllByText("$171").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Deposited").length).toBeGreaterThan(0);
+    const activeDrawerCard = screen
+      .getAllByRole("link", { name: /Register 1/i })
+      .find((link) => within(link).queryByText("Open drawer detail"));
+    expect(activeDrawerCard).not.toHaveTextContent("Variance");
     expect(screen.getByText("Register 4")).toBeInTheDocument();
     expect(screen.getByText(expectedClosedAt)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Register 4" })).toHaveAttribute(
@@ -408,6 +415,70 @@ describe("CashControlsDashboardContent", () => {
     expect(screen.getByText(/Opened .* by Maame S\./)).toBeInTheDocument();
     expect(screen.getByText("Midday safe drop")).toBeInTheDocument();
     expect(screen.getByText("BANK-339")).toBeInTheDocument();
+  });
+
+  it("hides zero deposited value on variance session cards", () => {
+    render(
+      <CashControlsDashboardContent
+        currency="USD"
+        dashboardSnapshot={{
+          ...baseSnapshot,
+          pendingCloseouts: [
+            {
+              _id: "session-zero-deposit",
+              countedCash: 1000,
+              expectedCash: 1500,
+              openedAt: new Date("2026-04-21T07:30:00.000Z").getTime(),
+              openingFloat: 1500,
+              registerNumber: "Register 8",
+              status: "closing",
+              totalDeposited: 0,
+              variance: -500,
+            },
+          ],
+          registerSessions: [
+            {
+              _id: "session-zero-deposit",
+              countedCash: 1000,
+              expectedCash: 1500,
+              openedAt: new Date("2026-04-21T07:30:00.000Z").getTime(),
+              openingFloat: 1500,
+              registerNumber: "Register 8",
+              status: "closing",
+              totalDeposited: 0,
+              variance: -500,
+            },
+          ],
+          unresolvedVariances: [
+            {
+              _id: "session-zero-deposit",
+              countedCash: 1000,
+              expectedCash: 1500,
+              openedAt: new Date("2026-04-21T07:30:00.000Z").getTime(),
+              openingFloat: 1500,
+              registerNumber: "Register 8",
+              status: "closing",
+              totalDeposited: 0,
+              variance: -500,
+            },
+          ],
+        }}
+        isLoading={false}
+        orgUrlSlug="v26"
+        storeUrlSlug="east-legon"
+      />,
+    );
+
+    const zeroDepositCard = screen
+      .getAllByRole("link", { name: /Register 8/i })
+      .find((link) => within(link).queryByText("Review variance"));
+
+    expect(zeroDepositCard).toHaveTextContent("Expected");
+    expect(zeroDepositCard).toHaveTextContent("$15");
+    expect(zeroDepositCard).toHaveTextContent("Counted");
+    expect(zeroDepositCard).toHaveTextContent("$10");
+    expect(zeroDepositCard).toHaveTextContent("Variance");
+    expect(zeroDepositCard).not.toHaveTextContent("Deposited");
   });
 
   it("surfaces a drawer opened from POS in the cash-controls ledgers", () => {

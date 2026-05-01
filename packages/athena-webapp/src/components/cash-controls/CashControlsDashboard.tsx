@@ -448,6 +448,14 @@ function DrawerSessionCard({
   variant?: "primary" | "standard";
 }) {
   const variance = session.variance ?? 0;
+  const showVariance = variance !== 0;
+  const showCountedCash = variance !== 0 && session.countedCash !== undefined;
+  const showDeposited = session.totalDeposited > 0;
+  const metricColumnCount =
+    1 +
+    (showDeposited ? 1 : 0) +
+    (showCountedCash ? 1 : 0) +
+    (showVariance ? 1 : 0);
   const openedLine = getSessionOpenedLine(session);
   const terminalLine = getSessionTerminalLine(session);
 
@@ -499,7 +507,16 @@ function DrawerSessionCard({
         </div>
       </div>
 
-      <dl className="mt-layout-md grid grid-cols-3 gap-layout-sm">
+      <dl
+        className={cn(
+          "mt-layout-md grid gap-layout-sm",
+          metricColumnCount === 4
+            ? "grid-cols-4"
+            : metricColumnCount === 3
+              ? "grid-cols-3"
+              : "grid-cols-2",
+        )}
+      >
         <div>
           <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
             Expected
@@ -508,24 +525,41 @@ function DrawerSessionCard({
             {formatCurrency(currency, session.expectedCash)}
           </dd>
         </div>
-        <div>
-          <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            Deposited
-          </dt>
-          <dd className="mt-1 font-mono text-sm text-foreground">
-            {formatCurrency(currency, session.totalDeposited)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            Variance
-          </dt>
-          <dd
-            className={cn("mt-1 font-mono text-sm", getVarianceTone(variance))}
-          >
-            {formatCurrency(currency, variance)}
-          </dd>
-        </div>
+        {showDeposited ? (
+          <div>
+            <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Deposited
+            </dt>
+            <dd className="mt-1 font-mono text-sm text-foreground">
+              {formatCurrency(currency, session.totalDeposited)}
+            </dd>
+          </div>
+        ) : null}
+        {showCountedCash ? (
+          <div>
+            <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Counted
+            </dt>
+            <dd className="mt-1 font-mono text-sm text-foreground">
+              {formatCurrency(currency, session.countedCash ?? 0)}
+            </dd>
+          </div>
+        ) : null}
+        {showVariance ? (
+          <div>
+            <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Variance
+            </dt>
+            <dd
+              className={cn(
+                "mt-1 font-mono text-sm",
+                getVarianceTone(variance),
+              )}
+            >
+              {formatCurrency(currency, variance)}
+            </dd>
+          </div>
+        ) : null}
       </dl>
 
       <span
