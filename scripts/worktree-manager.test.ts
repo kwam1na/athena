@@ -1,4 +1,4 @@
-import { chmod, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, chmod, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -114,6 +114,9 @@ describe("worktree-manager", () => {
     expect(result.stderr.toString()).toContain(
       "packages/athena-webapp/.env"
     );
+    await expect(
+      access(path.join(rootDir, ".worktrees/codex/missing-env"))
+    ).rejects.toThrow();
   });
 
   it("keeps existing env files when setup is rerun for a worktree", async () => {

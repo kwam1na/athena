@@ -63,6 +63,37 @@ ensure_gitignore() {
 
 ATHENA_WEBAPP_ENV_DIR="packages/athena-webapp"
 
+has_env_files_in_dir() {
+  local relative_dir="$1"
+  local source_dir="$GIT_ROOT"
+  if [[ -n "$relative_dir" ]]; then
+    source_dir="$GIT_ROOT/$relative_dir"
+  fi
+
+  shopt -s nullglob
+  for source in "$source_dir"/.env*; do
+    [[ -f "$source" ]] || continue
+    [[ "$(basename "$source")" == ".env.example" ]] && continue
+    shopt -u nullglob
+    return 0
+  done
+  shopt -u nullglob
+  return 1
+}
+
+require_env_files_available() {
+  local relative_dir="$1" label="$2"
+  local source_dir="$GIT_ROOT/$relative_dir"
+  if has_env_files_in_dir "$relative_dir"; then
+    return
+  fi
+
+  echo "Error: Missing $label env files." >&2
+  echo "Expected at least one local file matching $source_dir/.env* (excluding .env.example)." >&2
+  echo "Create or copy $relative_dir/.env with CONVEX_DEPLOYMENT and VITE_CONVEX_URL before creating agent worktrees." >&2
+  exit 1
+}
+
 # Copy .env* files (except .env.example) from a repo-relative directory into
 # the worktree. Existing destination files are preserved so rerunning setup
 # does not clobber local overrides.
@@ -101,10 +132,7 @@ copy_env_files_from_dir() {
 
   if [[ $copied -eq 0 && $kept -eq 0 ]]; then
     if [[ "$required" == "true" ]]; then
-      echo "Error: Missing $label env files." >&2
-      echo "Expected at least one local file matching $source_dir/.env* (excluding .env.example)." >&2
-      echo "Create or copy $relative_dir/.env with CONVEX_DEPLOYMENT and VITE_CONVEX_URL before creating agent worktrees." >&2
-      exit 1
+      require_env_files_available "$relative_dir" "$label"
     fi
     echo "  No $label .env files"
   fi
@@ -221,6 +249,7 @@ create_worktree() {
     echo "Use 'cd $worktree_path' to switch, or 'git worktree remove' first." >&2
     exit 1
   fi
+  require_env_files_available "$ATHENA_WEBAPP_ENV_DIR" "Athena webapp"
 
   echo "Creating worktree $branch_name from $from_branch"
 
