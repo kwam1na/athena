@@ -22,7 +22,10 @@ import { useEffect, useState } from "react";
 import { z } from "zod";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 
-const REQUEST_NEW_CODE_DELAY_SECONDS = 90;
+const REQUEST_NEW_CODE_DELAY_SECONDS = 59;
+const OTP_SLOT_INDEXES = [0, 1, 2, 3, 4, 5];
+const LOGIN_INPUT_SURFACE_CLASS =
+  "border-border/80 bg-background shadow-[inset_0_1px_0_hsl(var(--background)/0.85)]";
 
 const FormSchema = z.object({
   pin: z.string().min(6, {
@@ -140,16 +143,16 @@ export function InputOTPForm({
 
   return (
     <div className="flex w-full flex-col gap-layout-lg">
-      <div className="space-y-layout-sm">
-        <h2 className="font-display text-2xl font-light uppercase tracking-[0.18em] text-foreground">
+      <div className="space-y-layout-md">
+        <h2 className="font-display text-2xl font-light uppercase tracking-[0.18em] text-foreground bg-background w-fit">
           Enter code
         </h2>
-        <p className="text-sm leading-6 text-muted-foreground">
+        <p className="text-sm leading-6 text-muted-foreground bg-background w-fit">
           Sent to {email}
         </p>
         <button
           type="button"
-          className="group inline-flex items-center gap-layout-xs text-sm text-muted-foreground underline-offset-4 transition-colors duration-standard ease-standard hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="group inline-flex items-center gap-layout-xs text-sm text-muted-foreground underline-offset-4 transition-colors duration-standard ease-standard hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           onClick={onBack}
         >
           <ArrowLeft className="h-3.5 w-3.5 transition-transform duration-standard ease-emphasized group-hover:-translate-x-1 group-focus-visible:-translate-x-1" />
@@ -160,25 +163,26 @@ export function InputOTPForm({
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit(onSubmit)}
-          className="w-full space-y-layout-lg"
+          className="relative w-full space-y-layout-lg overflow-hidden rounded-lg border border-none bg-background p-layout-xs before:pointer-events-none before:absolute"
         >
           <FormField
             control={form.control}
             name="pin"
             render={({ field }) => (
-              <FormItem className="space-y-layout-sm">
+              <FormItem className="relative z-10 space-y-layout-sm">
                 <FormLabel className="text-sm font-medium text-foreground">
                   One-time code
                 </FormLabel>
                 <FormControl>
                   <InputOTP maxLength={6} {...field} onChange={handlePinChange}>
                     <InputOTPGroup>
-                      <InputOTPSlot index={0} />
-                      <InputOTPSlot index={1} />
-                      <InputOTPSlot index={2} />
-                      <InputOTPSlot index={3} />
-                      <InputOTPSlot index={4} />
-                      <InputOTPSlot index={5} />
+                      {OTP_SLOT_INDEXES.map((index) => (
+                        <InputOTPSlot
+                          key={index}
+                          index={index}
+                          className={LOGIN_INPUT_SURFACE_CLASS}
+                        />
+                      ))}
                     </InputOTPGroup>
                   </InputOTP>
                 </FormControl>
@@ -195,13 +199,13 @@ export function InputOTPForm({
           <LoadingButton
             isLoading={isSigningIn}
             type="submit"
-            className="group h-control-standard w-fit px-layout-lg"
+            className="group relative z-10 h-control-standard w-fit px-layout-lg shadow-[0_16px_34px_-22px_hsl(var(--signal)/0.72)]"
           >
             Continue
             <ArrowRight className="h-4 w-4 transition-transform duration-standard ease-emphasized group-hover:translate-x-1 group-focus-visible:translate-x-1" />
           </LoadingButton>
 
-          <div className="pt-layout-xs text-sm text-muted-foreground">
+          <div className="relative z-10 pt-layout-xs text-sm text-muted-foreground">
             {requestDelaySeconds > 0 ? (
               <p>
                 Request a new code in {formatRequestDelay(requestDelaySeconds)}

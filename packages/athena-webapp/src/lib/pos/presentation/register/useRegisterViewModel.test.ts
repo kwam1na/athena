@@ -441,6 +441,72 @@ describe("useRegisterViewModel", () => {
     expect(result.current.cashierCard).toBeNull();
   });
 
+  it("leaves onboarding once terminal and cashier access are configured", async () => {
+    mockUseQuery.mockImplementation(() => [
+      {
+        credentialStatus: "active",
+        primaryRole: "cashier",
+        roles: ["cashier"],
+        status: "active",
+      },
+    ]);
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    expect(result.current.authDialog?.open).toBe(true);
+    expect(result.current.onboarding).toEqual({
+      shouldShow: false,
+      terminalReady: true,
+      cashierSetupReady: true,
+      cashierSignedIn: false,
+      cashierCount: 1,
+      nextStep: "ready",
+    });
+  });
+
+  it("does not flash onboarding while cashier access is still loading", async () => {
+    mockUseQuery.mockImplementation(() => undefined);
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    expect(result.current.authDialog?.open).toBe(true);
+    expect(result.current.onboarding).toEqual({
+      shouldShow: false,
+      terminalReady: true,
+      cashierSetupReady: true,
+      cashierSignedIn: false,
+      cashierCount: 0,
+      nextStep: "ready",
+    });
+  });
+
+  it("does not flash terminal onboarding while terminal lookup is still loading", async () => {
+    mockTerminal = undefined;
+    mockUseQuery.mockImplementation(() => [
+      {
+        credentialStatus: "active",
+        primaryRole: "cashier",
+        roles: ["cashier"],
+        status: "active",
+      },
+    ]);
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    expect(result.current.authDialog).toBeNull();
+    expect(result.current.onboarding).toEqual({
+      shouldShow: false,
+      terminalReady: false,
+      cashierSetupReady: true,
+      cashierSignedIn: false,
+      cashierCount: 1,
+      nextStep: "ready",
+    });
+  });
+
   it("holds bootstrap on a missing drawer and exposes the drawer gate", async () => {
     mockRegisterState = {
       phase: "readyToStart",
@@ -1207,6 +1273,47 @@ describe("useRegisterViewModel", () => {
     expect(result.current.drawerGate).not.toBeNull();
     expect(result.current.drawerGate?.errorMessage).toBe(
       "Drawer already open for this register. Return to the active sale or review it in Cash Controls.",
+    );
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(mockStartSession).not.toHaveBeenCalled();
+  });
+
+  it("shows the register-number conflict when Convex wraps the open-drawer failure", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
+      activeRegisterSession: null,
+      activeSession: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+    mockOpenDrawer.mockRejectedValueOnce(
+      new Error(
+        "Uncaught Error: A register session is already open for this register number.",
+      ),
+    );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.drawerGate?.onOpeningFloatChange?.("50.00");
+    });
+
+    await act(async () => {
+      await result.current.drawerGate?.onSubmit?.();
+    });
+
+    expect(result.current.drawerGate).not.toBeNull();
+    expect(result.current.drawerGate?.errorMessage).toBe(
+      "Drawer already open for this register number. Review it in Cash Controls before opening another drawer.",
     );
     expect(toast.error).not.toHaveBeenCalled();
     expect(mockStartSession).not.toHaveBeenCalled();

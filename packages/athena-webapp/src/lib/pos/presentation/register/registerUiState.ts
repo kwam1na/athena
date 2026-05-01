@@ -191,11 +191,21 @@ export interface RegisterAuthDialogState {
 
 export type RegisterWorkflowMode = "pos" | "expense";
 
+export interface RegisterOnboardingState {
+  shouldShow: boolean;
+  terminalReady: boolean;
+  cashierSetupReady: boolean;
+  cashierSignedIn: boolean;
+  cashierCount: number;
+  nextStep: "terminal" | "cashierSetup" | "ready";
+}
+
 export interface RegisterViewModel {
   workflowMode?: RegisterWorkflowMode;
   hasActiveStore: boolean;
   header: RegisterHeaderState;
   registerInfo: RegisterInfoState;
+  onboarding: RegisterOnboardingState;
   customerPanel: RegisterCustomerPanelState;
   productEntry: RegisterProductEntryState;
   cart: RegisterCartState;

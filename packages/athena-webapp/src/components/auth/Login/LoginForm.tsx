@@ -39,19 +39,19 @@ export function LoginForm({
   return (
     <div className="flex w-full flex-col gap-layout-xl">
       <div>
-        <h2 className="font-display text-2xl font-light uppercase tracking-[0.18em] text-foreground">
-          Log in to athena
+        <h2 className="font-display text-2xl font-light uppercase tracking-[0.18em] text-foreground bg-background">
+          Log in
         </h2>
       </div>
       <form
-        className="flex w-full flex-col items-start gap-layout-md"
+        className="relative flex w-full flex-col items-start gap-layout-md overflow-hidden rounded-lg border border-none bg-background p-layout-xs before:pointer-events-none before:absolute before:inset-0"
         onSubmit={(e) => {
           e.preventDefault();
           e.stopPropagation();
           form.handleSubmit();
         }}
       >
-        <div className="flex w-full flex-col gap-layout-xs">
+        <div className="relative z-10 flex w-full flex-col gap-layout-xs">
           <form.Field
             name="email"
             validators={{
@@ -69,16 +69,15 @@ export function LoginForm({
                 value={field.state.value}
                 onBlur={field.handleBlur}
                 onChange={(e) => field.handleChange(e.target.value)}
-                className={`h-control-standard bg-background ${
-                  field.state.meta?.errors.length > 0 &&
+                className={`h-control-standard border-border/80 bg-background shadow-[inset_0_1px_0_hsl(var(--background)/0.85)] ${field.state.meta?.errors.length > 0 &&
                   "border-destructive focus-visible:ring-destructive"
-                }`}
+                  }`}
               />
             )}
           />
         </div>
 
-        <div className="min-h-5">
+        <div className="relative z-10 min-h-5 px-layout-xs">
           {form.state.fieldMeta.email?.errors.length > 0 && (
             <span className="text-sm text-destructive">
               {form.state.fieldMeta.email?.errors.join(" ")}
@@ -89,7 +88,7 @@ export function LoginForm({
         <LoadingButton
           isLoading={isSubmitting}
           type="submit"
-          className="group h-control-standard w-full"
+          className="group relative z-10 h-control-standard w-fit shadow-[0_16px_34px_-22px_hsl(var(--signal)/0.72)]"
         >
           Continue
           <ArrowRight className="h-4 w-4 transition-transform duration-standard ease-emphasized group-hover:translate-x-1 group-focus-visible:translate-x-1" />

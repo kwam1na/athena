@@ -290,6 +290,442 @@ describe("OrderSummary completed transaction summary", () => {
     });
   });
 
+  it("can hide the payment editor item count when the rail already summarizes the cart", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <OrderSummary
+        cartItems={[
+          {
+            id: "item-1",
+            name: "Hair",
+            barcode: "123456789012",
+            price: 1700,
+            quantity: 2,
+            productId: "product-1",
+            skuId: "sku-1",
+          } as never,
+        ]}
+        total={1700}
+        onPaymentEntryStart={vi.fn()}
+        hidePaymentItemCountSummary
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Cash" }));
+
+    expect(screen.queryByText("Items")).not.toBeInTheDocument();
+    expect(screen.getByText("Balance due")).toBeInTheDocument();
+  });
+
+  it("uses the payments list as the only balance surface after a partial payment", () => {
+    render(
+      <OrderSummary
+        cartItems={[
+          {
+            id: "item-1",
+            name: "Hair",
+            barcode: "123456789012",
+            price: 1700,
+            quantity: 2,
+            productId: "product-1",
+            skuId: "sku-1",
+          } as never,
+        ]}
+        total={1700}
+        payments={[
+          {
+            id: "payment-1",
+            amount: 800,
+            method: "cash",
+            timestamp: 1,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getAllByText("Balance due")).toHaveLength(1);
+    expect(
+      screen.getByRole("button", { name: /show payments \(1\)/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cash" })).toBeInTheDocument();
+  });
+
+  it("shows complete sale instead of payment methods once payments cover the balance", () => {
+    render(
+      <OrderSummary
+        cartItems={[
+          {
+            id: "item-1",
+            name: "Hair",
+            barcode: "123456789012",
+            price: 1700,
+            quantity: 2,
+            productId: "product-1",
+            skuId: "sku-1",
+          } as never,
+        ]}
+        total={1700}
+        payments={[
+          {
+            id: "payment-1",
+            amount: 1700,
+            method: "cash",
+            timestamp: 1,
+          },
+        ]}
+        onCompleteTransaction={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Complete Sale" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Cash" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Card" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Mobile Money" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps balance and payment method controls visible before authentication adds a cart", () => {
+    render(<OrderSummary cartItems={[]} total={0} />);
+
+    expect(screen.getByText("Balance due")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cash" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Card" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Mobile Money" }),
+    ).toBeDisabled();
+    expect(
+      screen.queryByRole("button", { name: "Complete Sale" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps item count out of the payment summary when the cart already owns it", () => {
+    render(
+      <OrderSummary
+        cartItems={[
+          {
+            id: "item-1",
+            name: "Hair",
+            barcode: "123456789012",
+            price: 1700,
+            quantity: 2,
+            productId: "product-1",
+            skuId: "sku-1",
+          } as never,
+        ]}
+        total={1700}
+        payments={[
+          {
+            id: "payment-1",
+            amount: 800,
+            method: "cash",
+            timestamp: 1,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Paid GH₵8")).toHaveClass(
+      "font-semibold",
+      "text-foreground",
+    );
+    expect(screen.queryByText("2 items")).not.toBeInTheDocument();
+  });
+
+  it("reports when the payments list expands and collapses", async () => {
+    const user = userEvent.setup();
+    const onPaymentsExpandedChange = vi.fn();
+
+    render(
+      <OrderSummary
+        cartItems={[
+          {
+            id: "item-1",
+            name: "Hair",
+            barcode: "123456789012",
+            price: 1700,
+            quantity: 2,
+            productId: "product-1",
+            skuId: "sku-1",
+          } as never,
+        ]}
+        total={1700}
+        payments={[
+          {
+            id: "payment-1",
+            amount: 800,
+            method: "cash",
+            timestamp: 1,
+          },
+        ]}
+        onPaymentsExpandedChange={onPaymentsExpandedChange}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /show payments/i }));
+    expect(onPaymentsExpandedChange).toHaveBeenCalledWith(true);
+
+    await user.click(screen.getByRole("button", { name: /hide payments/i }));
+    expect(onPaymentsExpandedChange).toHaveBeenCalledWith(false);
+  });
+
+  it("collapses payment-summary state before removing the final payment", async () => {
+    const user = userEvent.setup();
+    const onPaymentsExpandedChange = vi.fn();
+    const onRemovePayment = vi.fn();
+
+    render(
+      <OrderSummary
+        cartItems={[
+          {
+            id: "item-1",
+            name: "Hair",
+            barcode: "123456789012",
+            price: 1700,
+            quantity: 2,
+            productId: "product-1",
+            skuId: "sku-1",
+          } as never,
+        ]}
+        total={1700}
+        payments={[
+          {
+            id: "payment-1",
+            amount: 800,
+            method: "cash",
+            timestamp: 1,
+          },
+        ]}
+        onRemovePayment={onRemovePayment}
+        onPaymentsExpandedChange={onPaymentsExpandedChange}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /show payments/i }));
+    onPaymentsExpandedChange.mockClear();
+
+    await user.click(
+      screen.getByRole("button", { name: /remove cash payment/i }),
+    );
+
+    expect(onPaymentsExpandedChange).toHaveBeenCalledWith(false);
+    expect(onRemovePayment).toHaveBeenCalledWith("payment-1");
+    expect(
+      onPaymentsExpandedChange.mock.invocationCallOrder[0],
+    ).toBeLessThan(onRemovePayment.mock.invocationCallOrder[0]);
+  });
+
+  it("collapses payment-summary state before clearing all payments", async () => {
+    const user = userEvent.setup();
+    const onPaymentsExpandedChange = vi.fn();
+    const onClearPayments = vi.fn();
+
+    render(
+      <OrderSummary
+        cartItems={[
+          {
+            id: "item-1",
+            name: "Hair",
+            barcode: "123456789012",
+            price: 1700,
+            quantity: 2,
+            productId: "product-1",
+            skuId: "sku-1",
+          } as never,
+        ]}
+        total={1700}
+        payments={[
+          {
+            id: "payment-1",
+            amount: 800,
+            method: "cash",
+            timestamp: 1,
+          },
+          {
+            id: "payment-2",
+            amount: 400,
+            method: "card",
+            timestamp: 2,
+          },
+        ]}
+        onClearPayments={onClearPayments}
+        onPaymentsExpandedChange={onPaymentsExpandedChange}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /show payments/i }));
+    onPaymentsExpandedChange.mockClear();
+
+    await user.click(screen.getByRole("button", { name: /clear all/i }));
+
+    expect(onPaymentsExpandedChange).toHaveBeenCalledWith(false);
+    expect(onClearPayments).toHaveBeenCalled();
+    expect(
+      onPaymentsExpandedChange.mock.invocationCallOrder[0],
+    ).toBeLessThan(onClearPayments.mock.invocationCallOrder[0]);
+  });
+
+  it("reports payment edit mode synchronously when editing starts and ends", async () => {
+    const user = userEvent.setup();
+    const onEditingPaymentChange = vi.fn();
+    const onPaymentFlowChange = vi.fn();
+
+    render(
+      <OrderSummary
+        cartItems={[
+          {
+            id: "item-1",
+            name: "Hair",
+            barcode: "123456789012",
+            price: 1700,
+            quantity: 2,
+            productId: "product-1",
+            skuId: "sku-1",
+          } as never,
+        ]}
+        total={1700}
+        payments={[
+          {
+            id: "payment-1",
+            amount: 800,
+            method: "cash",
+            timestamp: 1,
+          },
+        ]}
+        onUpdatePayment={vi.fn()}
+        onEditingPaymentChange={onEditingPaymentChange}
+        onPaymentFlowChange={onPaymentFlowChange}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /show payments/i }));
+    onEditingPaymentChange.mockClear();
+    onPaymentFlowChange.mockClear();
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    expect(onEditingPaymentChange).toHaveBeenCalledWith(true);
+    expect(onPaymentFlowChange).not.toHaveBeenCalledWith(true);
+    expect(screen.getByText("Edit payment")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Cash" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Card" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Mobile Money" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(onEditingPaymentChange).toHaveBeenCalledWith(false);
+  });
+
+  it("collapses expanded payments before canceling edit when the sale is fully paid", async () => {
+    const user = userEvent.setup();
+    const onEditingPaymentChange = vi.fn();
+    const onPaymentsExpandedChange = vi.fn();
+
+    render(
+      <OrderSummary
+        cartItems={[
+          {
+            id: "item-1",
+            name: "Hair",
+            barcode: "123456789012",
+            price: 1700,
+            quantity: 2,
+            productId: "product-1",
+            skuId: "sku-1",
+          } as never,
+        ]}
+        total={1700}
+        payments={[
+          {
+            id: "payment-1",
+            amount: 1700,
+            method: "cash",
+            timestamp: 1,
+          },
+        ]}
+        onUpdatePayment={vi.fn()}
+        onEditingPaymentChange={onEditingPaymentChange}
+        onPaymentsExpandedChange={onPaymentsExpandedChange}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /show payments/i }));
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    onEditingPaymentChange.mockClear();
+    onPaymentsExpandedChange.mockClear();
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(onPaymentsExpandedChange).toHaveBeenCalledWith(false);
+    expect(onEditingPaymentChange).toHaveBeenCalledWith(false);
+    expect(
+      onPaymentsExpandedChange.mock.invocationCallOrder[0],
+    ).toBeLessThan(onEditingPaymentChange.mock.invocationCallOrder[0]);
+  });
+
+  it("collapses expanded payments before saving an edit that leaves the sale fully paid", async () => {
+    const user = userEvent.setup();
+    const onEditingPaymentChange = vi.fn();
+    const onPaymentsExpandedChange = vi.fn();
+    const onUpdatePayment = vi.fn();
+
+    render(
+      <OrderSummary
+        cartItems={[
+          {
+            id: "item-1",
+            name: "Hair",
+            barcode: "123456789012",
+            price: 1700,
+            quantity: 2,
+            productId: "product-1",
+            skuId: "sku-1",
+          } as never,
+        ]}
+        total={1700}
+        payments={[
+          {
+            id: "payment-1",
+            amount: 1700,
+            method: "cash",
+            timestamp: 1,
+          },
+        ]}
+        onUpdatePayment={onUpdatePayment}
+        onEditingPaymentChange={onEditingPaymentChange}
+        onPaymentsExpandedChange={onPaymentsExpandedChange}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /show payments/i }));
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    onEditingPaymentChange.mockClear();
+    onPaymentsExpandedChange.mockClear();
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onPaymentsExpandedChange).toHaveBeenCalledWith(false);
+    expect(onUpdatePayment).toHaveBeenCalledWith("payment-1", 1700);
+    expect(onEditingPaymentChange).toHaveBeenCalledWith(false);
+    expect(
+      onPaymentsExpandedChange.mock.invocationCallOrder[0],
+    ).toBeLessThan(onUpdatePayment.mock.invocationCallOrder[0]);
+    expect(onUpdatePayment.mock.invocationCallOrder[0]).toBeLessThan(
+      onEditingPaymentChange.mock.invocationCallOrder[0],
+    );
+  });
+
   it.each([
     { method: "cash", label: "Cash" },
     { method: "card", label: "Card" },
@@ -329,6 +765,41 @@ describe("OrderSummary completed transaction summary", () => {
     },
   );
 
+  it("releases the payment workspace while changing the selected payment method", async () => {
+    const user = userEvent.setup();
+    const onPaymentFlowChange = vi.fn();
+
+    render(
+      <OrderSummary
+        cartItems={[
+          {
+            id: "item-1",
+            name: "Hair",
+            barcode: "123456789012",
+            price: 1700,
+            quantity: 2,
+            productId: "product-1",
+            skuId: "sku-1",
+          } as never,
+        ]}
+        total={1700}
+        onPaymentEntryStart={vi.fn()}
+        onPaymentFlowChange={onPaymentFlowChange}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Cash" }));
+    await waitFor(() => expect(onPaymentFlowChange).toHaveBeenCalledWith(true));
+
+    onPaymentFlowChange.mockClear();
+    await user.click(screen.getByRole("button", { name: "Change" }));
+
+    expect(screen.getByRole("button", { name: "Card" })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(onPaymentFlowChange).toHaveBeenCalledWith(false),
+    );
+  });
+
   it("uses transaction signal classes for the balance due panel and cash action", () => {
     render(
       <OrderSummary
@@ -355,6 +826,32 @@ describe("OrderSummary completed transaction summary", () => {
       "bg-transaction-signal",
       "text-transaction-signal-foreground",
     );
+  });
+
+  it("pins the balance and payment method buttons to the bottom of the rail", () => {
+    render(
+      <OrderSummary
+        cartItems={[
+          {
+            id: "item-1",
+            name: "Hair",
+            barcode: "123456789012",
+            price: 1700,
+            quantity: 1,
+            productId: "product-1",
+            skuId: "sku-1",
+          } as never,
+        ]}
+        total={1700}
+      />,
+    );
+
+    const paymentButtonGrid = screen
+      .getByRole("button", { name: "Cash" })
+      .closest(".grid");
+
+    expect(paymentButtonGrid).not.toHaveClass("mt-auto");
+    expect(paymentButtonGrid?.parentElement).toHaveClass("mt-auto");
   });
 
   it("switches to change due when draft cash amount exceeds balance", async () => {

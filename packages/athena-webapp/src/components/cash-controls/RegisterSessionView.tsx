@@ -424,6 +424,8 @@ export function RegisterSessionViewContent({
     useState("");
   const [openingFloatCorrectionError, setOpeningFloatCorrectionError] =
     useState("");
+  const [openingFloatCorrectionInfo, setOpeningFloatCorrectionInfo] =
+    useState("");
   const [openingFloatCorrectionSuccess, setOpeningFloatCorrectionSuccess] =
     useState("");
   const [openingFloatCorrectionIntent, setOpeningFloatCorrectionIntent] =
@@ -456,6 +458,7 @@ export function RegisterSessionViewContent({
       setCorrectedOpeningFloat("");
       setOpeningFloatCorrectionReason("");
       setOpeningFloatCorrectionError("");
+      setOpeningFloatCorrectionInfo("");
       setOpeningFloatCorrectionSuccess("");
       setOpeningFloatCorrectionIntent(null);
       setPendingOpeningFloatApproval(null);
@@ -478,6 +481,7 @@ export function RegisterSessionViewContent({
     );
     setOpeningFloatCorrectionReason("");
     setOpeningFloatCorrectionError("");
+    setOpeningFloatCorrectionInfo("");
     setOpeningFloatCorrectionSuccess("");
     setOpeningFloatCorrectionIntent(null);
     setPendingOpeningFloatApproval(null);
@@ -600,6 +604,7 @@ export function RegisterSessionViewContent({
       setOpeningFloatCorrectionError(
         "A register session is required before correcting opening float.",
       );
+      setOpeningFloatCorrectionInfo("");
       return;
     }
 
@@ -607,6 +612,7 @@ export function RegisterSessionViewContent({
       setOpeningFloatCorrectionError(
         "Opening float can only be corrected while the drawer is open.",
       );
+      setOpeningFloatCorrectionInfo("");
       return;
     }
 
@@ -615,11 +621,24 @@ export function RegisterSessionViewContent({
 
     if (parsedOpeningFloat === undefined) {
       setOpeningFloatCorrectionError("Enter the corrected opening float.");
+      setOpeningFloatCorrectionInfo("");
+      return;
+    }
+
+    if (parsedOpeningFloat === registerSession.openingFloat) {
+      setOpeningFloatCorrectionError("");
+      setOpeningFloatCorrectionInfo(
+        "Corrected amount matches the current opening float. Enter a different amount to submit a correction.",
+      );
+      setOpeningFloatCorrectionSuccess("");
+      setOpeningFloatCorrectionIntent(null);
+      setPendingOpeningFloatApproval(null);
       return;
     }
 
     if (!trimmedReason) {
       setOpeningFloatCorrectionError("Add a reason for this correction.");
+      setOpeningFloatCorrectionInfo("");
       return;
     }
 
@@ -630,6 +649,7 @@ export function RegisterSessionViewContent({
     };
 
     setOpeningFloatCorrectionError("");
+    setOpeningFloatCorrectionInfo("");
     setOpeningFloatCorrectionSuccess("");
     setOpeningFloatCorrectionIntent(intent);
     await runOpeningFloatCorrection(intent);
@@ -697,6 +717,7 @@ export function RegisterSessionViewContent({
     }
 
     setOpeningFloatCorrectionError("");
+    setOpeningFloatCorrectionInfo("");
     setIsCorrectingOpeningFloat(true);
 
     try {
@@ -708,16 +729,19 @@ export function RegisterSessionViewContent({
       });
 
       if (isApprovalRequiredResult(commandResult)) {
+        setOpeningFloatCorrectionInfo("");
         setPendingOpeningFloatApproval(commandResult.approval);
         return;
       }
 
       if (commandResult.kind !== "ok") {
         setOpeningFloatCorrectionError(commandResult.error.message);
+        setOpeningFloatCorrectionInfo("");
         return;
       }
 
       setOpeningFloatCorrectionSuccess("Opening float corrected.");
+      setOpeningFloatCorrectionInfo("");
       setOpeningFloatCorrectionReason("");
       setIsOpeningFloatCorrectionOpen(false);
       setOpeningFloatCorrectionIntent(null);
@@ -734,6 +758,7 @@ export function RegisterSessionViewContent({
       setOpeningFloatCorrectionError(
         "Opening float correction details were not available. Review the amount and submit again.",
       );
+      setOpeningFloatCorrectionInfo("");
       setPendingOpeningFloatApproval(null);
       return;
     }
@@ -1331,9 +1356,10 @@ export function RegisterSessionViewContent({
                               aria-label="Corrected opening float"
                               className="border-input bg-background"
                               min={0}
-                              onChange={(event) =>
-                                setCorrectedOpeningFloat(event.target.value)
-                              }
+                              onChange={(event) => {
+                                setCorrectedOpeningFloat(event.target.value);
+                                setOpeningFloatCorrectionInfo("");
+                              }}
                               step="0.01"
                               type="number"
                               value={correctedOpeningFloat}
@@ -1366,6 +1392,15 @@ export function RegisterSessionViewContent({
                             </p>
                           ) : null}
 
+                          {openingFloatCorrectionInfo ? (
+                            <p
+                              className="text-sm text-muted-foreground"
+                              role="status"
+                            >
+                              {openingFloatCorrectionInfo}
+                            </p>
+                          ) : null}
+
                           <div className="flex flex-wrap items-center gap-3">
                             <LoadingButton
                               disabled={isCorrectingOpeningFloat}
@@ -1382,6 +1417,7 @@ export function RegisterSessionViewContent({
                               onClick={() => {
                                 setIsOpeningFloatCorrectionOpen(false);
                                 setOpeningFloatCorrectionError("");
+                                setOpeningFloatCorrectionInfo("");
                               }}
                               type="button"
                               variant="outline"

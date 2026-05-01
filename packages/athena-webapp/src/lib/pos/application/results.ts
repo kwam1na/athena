@@ -1,6 +1,11 @@
 import type { CommandResult, UserErrorCode } from "~/shared/commandResult";
 import { GENERIC_UNEXPECTED_ERROR_MESSAGE } from "~/shared/commandResult";
 
+const KNOWN_THROWN_USER_MESSAGES = [
+  "A register session is already open for this terminal.",
+  "A register session is already open for this register number.",
+] as const;
+
 export type PosUseCaseErrorCode =
   | UserErrorCode
   | "cashierMismatch"
@@ -95,12 +100,22 @@ export function mapCommandResult<TData>(
 }
 
 export function mapThrownError<TData = never>(
-  _error: unknown,
+  error: unknown,
 ): PosUseCaseResult<TData> {
+  const thrownMessage =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : "";
+  const knownMessage = KNOWN_THROWN_USER_MESSAGES.find((message) =>
+    thrownMessage.includes(message),
+  );
+
   return {
     ok: false,
-    code: "unknown",
-    message: GENERIC_UNEXPECTED_ERROR_MESSAGE,
+    code: knownMessage ? "conflict" : "unknown",
+    message: knownMessage ?? GENERIC_UNEXPECTED_ERROR_MESSAGE,
   };
 }
 

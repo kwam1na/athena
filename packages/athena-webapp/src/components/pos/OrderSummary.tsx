@@ -67,6 +67,10 @@ interface OrderSummaryProps {
   onStartNewTransaction?: () => void;
   onPaymentFlowChange?: (isActive: boolean) => void;
   onPaymentEntryStart?: () => void;
+  onEditingPaymentChange?: (isEditing: boolean) => void;
+  hidePaymentItemCountSummary?: boolean;
+  paymentsExpanded?: boolean;
+  onPaymentsExpandedChange?: (isExpanded: boolean) => void;
 }
 
 export function OrderSummary({
@@ -92,15 +96,17 @@ export function OrderSummary({
   onStartNewTransaction,
   onPaymentFlowChange,
   onPaymentEntryStart,
+  onEditingPaymentChange,
+  hidePaymentItemCountSummary = false,
+  paymentsExpanded,
+  onPaymentsExpandedChange,
 }: OrderSummaryProps) {
   const { activeStore } = useGetActiveStore();
   const formatter = currencyFormatter(activeStore?.currency || "GHS");
   const { printReceipt } = usePrint();
   const [selectedPaymentMethod, setSelectedPaymentMethod] =
     useState<SelectedPaymentMethod | null>(null);
-  const [isSelectingPaymentMethod, setIsSelectingPaymentMethod] =
-    useState(false);
-  const [isEditingPaymentAmount, setIsEditingPaymentAmount] = useState(false);
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
   const [isCompleting, setIsCompleting] = useState(false);
   const [paymentAmountDraft, setPaymentAmountDraft] = useState<
     number | undefined
@@ -147,6 +153,7 @@ export function OrderSummary({
   }, []);
   const showCompletedPaymentBreakdown =
     Boolean(completedTransactionData) && completedPaymentBreakdown.length > 1;
+  const isEditingPaymentAmount = editingPaymentId !== null;
   const cartItemsCount = effectiveCartItems.reduce(
     (sum, item) => sum + item.quantity,
     0,
@@ -215,10 +222,15 @@ export function OrderSummary({
     !isTransactionCompleted &&
     !isEditingPaymentAmount &&
     selectedPaymentMethod === null &&
-    (payments.length === 0 || isSelectingPaymentMethod || remainingDue > 0);
+    (payments.length === 0 || remainingDue > 0);
   const showPaymentEditor =
-    !readOnly && !isTransactionCompleted && !showPaymentButtons;
-  const shouldDockPaymentButtons = payments.length > 0 && showPaymentButtons;
+    !readOnly &&
+    !isTransactionCompleted &&
+    !isEditingPaymentAmount &&
+    !showPaymentButtons;
+  const shouldDockPaymentButtons = showPaymentButtons;
+  const shouldShowPaymentButtonBalance = payments.length === 0;
+  const isPaymentEntryActive = showPaymentEditor;
   const isPaymentFlowActive =
     !readOnly &&
     !isTransactionCompleted &&
@@ -249,12 +261,26 @@ export function OrderSummary({
       setPaymentAmountDraft(undefined);
     }
 
-    onPaymentFlowChange?.(isPaymentFlowActive);
-  }, [isPaymentFlowActive, onPaymentFlowChange, selectedPaymentMethod]);
+    onPaymentFlowChange?.(isPaymentEntryActive);
+  }, [isPaymentEntryActive, onPaymentFlowChange, selectedPaymentMethod]);
 
   useEffect(() => {
     return () => onPaymentFlowChange?.(false);
   }, [onPaymentFlowChange]);
+
+  useEffect(() => {
+    return () => onEditingPaymentChange?.(false);
+  }, [onEditingPaymentChange]);
+
+  useEffect(() => {
+    if (
+      editingPaymentId !== null &&
+      !payments.some((payment) => payment.id === editingPaymentId)
+    ) {
+      setEditingPaymentId(null);
+      onEditingPaymentChange?.(false);
+    }
+  }, [editingPaymentId, onEditingPaymentChange, payments]);
 
   const handleCompleteTransaction = async () => {
     if (!onCompleteTransaction) {
@@ -266,7 +292,7 @@ export function OrderSummary({
       const success = await onCompleteTransaction();
       if (success) {
         setSelectedPaymentMethod(null);
-        setIsSelectingPaymentMethod(false);
+        onPaymentFlowChange?.(false);
       }
     } finally {
       setIsCompleting(false);
@@ -275,8 +301,23 @@ export function OrderSummary({
 
   const handleStartNewTransaction = () => {
     setSelectedPaymentMethod(null);
-    setIsSelectingPaymentMethod(false);
+    onPaymentFlowChange?.(false);
     onStartNewTransaction?.();
+  };
+
+  const handleSelectedPaymentMethodChange = (
+    method: SelectedPaymentMethod | null,
+  ) => {
+    if (method === null) {
+      onPaymentFlowChange?.(false);
+    }
+
+    setSelectedPaymentMethod(method);
+  };
+
+  const handleEditingPaymentIdChange = (paymentId: string | null) => {
+    setEditingPaymentId(paymentId);
+    onEditingPaymentChange?.(paymentId !== null);
   };
 
   const handlePrintReceipt = async () => {
@@ -713,15 +754,22 @@ export function OrderSummary({
         )}
       >
         {showPaymentEditor && payments.length === 0 && (
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Items
-              </p>
-              <p className="mt-2 text-2xl font-semibold leading-none text-gray-950">
-                {cartItemsCount}
-              </p>
-            </div>
+          <div
+            className={cn(
+              "grid gap-3",
+              hidePaymentItemCountSummary ? "grid-cols-1" : "grid-cols-2",
+            )}
+          >
+            {!hidePaymentItemCountSummary && (
+              <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Items
+                </p>
+                <p className="mt-2 text-2xl font-semibold leading-none text-gray-950">
+                  {cartItemsCount}
+                </p>
+              </div>
+            )}
             <div
               className={cn(
                 "rounded-xl border p-4 shadow-sm",
@@ -748,20 +796,23 @@ export function OrderSummary({
             payments={payments}
             formatter={formatter}
             totalAmountDue={total}
-            itemCount={isPaymentFlowActive ? cartItemsCount : undefined}
             balanceDue={isPaymentFlowActive ? remainingDue : undefined}
             selectedPaymentMethod={selectedPaymentMethod}
             paymentAmountDraft={paymentAmountDraft}
             readOnly={readOnly}
             isTransactionCompleted={isTransactionCompleted}
+            editingPaymentId={editingPaymentId}
+            onEditingPaymentIdChange={handleEditingPaymentIdChange}
+            paymentsExpanded={paymentsExpanded}
             onUpdatePayment={onUpdatePayment}
             onRemovePayment={onRemovePayment}
             onClearPayments={() => {
               setSelectedPaymentMethod(null);
-              setIsSelectingPaymentMethod(false);
+              handleEditingPaymentIdChange(null);
+              onPaymentFlowChange?.(false);
               onClearPayments?.();
             }}
-            onEditingPaymentChange={setIsEditingPaymentAmount}
+            onPaymentsExpandedChange={onPaymentsExpandedChange}
             variant={selectedPaymentMethod ? "minimized" : "default"}
           />
         )}
@@ -785,14 +836,15 @@ export function OrderSummary({
           <div
             className={cn(
               shouldDockPaymentButtons
-                ? "flex min-h-0 flex-1 flex-col gap-5"
+                ? "mt-auto flex flex-col gap-5"
                 : "grid grid-cols-2 gap-3",
             )}
           >
-            {!shouldDockPaymentButtons && (
+            {shouldShowPaymentButtonBalance && (
               <div
                 className={cn(
-                  "col-span-2 rounded-xl border p-5",
+                  "rounded-xl border p-5",
+                  !shouldDockPaymentButtons && "col-span-2",
                   balanceDueToneClass,
                 )}
               >
@@ -813,7 +865,6 @@ export function OrderSummary({
             <div
               className={cn(
                 "grid grid-cols-2 gap-3",
-                shouldDockPaymentButtons && "mt-auto",
                 !shouldDockPaymentButtons && "contents",
               )}
             >
@@ -821,7 +872,6 @@ export function OrderSummary({
                 onClick={() => {
                   onPaymentEntryStart?.();
                   setSelectedPaymentMethod("cash");
-                  setIsSelectingPaymentMethod(false);
                 }}
                 disabled={cartItemsCount === 0}
                 className="flex h-28 flex-col items-start justify-between rounded-xl bg-transaction-signal p-4 text-left text-transaction-signal-foreground shadow-md shadow-transaction-signal/20 hover:bg-transaction-signal/90 hover:text-transaction-signal-foreground"
@@ -835,7 +885,6 @@ export function OrderSummary({
                 onClick={() => {
                   onPaymentEntryStart?.();
                   setSelectedPaymentMethod("card");
-                  setIsSelectingPaymentMethod(false);
                 }}
                 disabled={cartItemsCount === 0}
                 variant="outline"
@@ -849,7 +898,6 @@ export function OrderSummary({
                 onClick={() => {
                   onPaymentEntryStart?.();
                   setSelectedPaymentMethod("mobile_money");
-                  setIsSelectingPaymentMethod(false);
                 }}
                 disabled={cartItemsCount === 0}
                 variant="outline"
@@ -876,7 +924,7 @@ export function OrderSummary({
               amountDue={total}
               formatter={formatter}
               selectedPaymentMethod={selectedPaymentMethod}
-              setSelectedPaymentMethod={setSelectedPaymentMethod}
+              setSelectedPaymentMethod={handleSelectedPaymentMethodChange}
               onAddPayment={(method, amount) => onAddPayment?.(method, amount)}
               onPaymentAmountChange={setPaymentAmountDraft}
               onComplete={handleCompleteTransaction}
