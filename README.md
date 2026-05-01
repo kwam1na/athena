@@ -1,8 +1,116 @@
-# athena
+# Athena
+
+Athena is an operating system for a solo business owner. The product goal is to
+put the daily control loop of a business in one place: sell in person,
+sell online, track stock, fulfill orders, manage cash, handle services, assign
+staff work, understand customer behavior, and keep enough operational evidence
+that the owner can trust what happened without becoming a full-time systems
+operator.
+
+## Business OS Audit
+
+Current coverage is closest to a retail and service business OS:
+
+- **Sales and checkout:** POS register, online checkout, orders, refunds,
+  returns/exchanges, reviews, offers, rewards, saved bags, and customer-facing
+  storefront flows are already present.
+- **Inventory and procurement:** Product catalog, SKUs, stock movements,
+  adjustments, purchase orders, receiving, replenishment, vendors, unresolved
+  product cleanup, and bulk operations are represented.
+- **Operations and accountability:** Staff profiles, credentials, register
+  sessions, cash controls, payment allocation, approvals, operational work
+  items, workflow traces, and app logs give the owner a control plane instead
+  of isolated screens.
+- **Service businesses:** Service intake, appointments, active service cases,
+  service catalog management, and service inventory usage are first-class
+  backend and UI surfaces.
+- **Owner visibility:** Analytics, customer behavior timelines, storefront
+  observability, production health checks, generated route/test indexes, and
+  graphify give both product and engineering visibility.
+
+The main gaps before it feels like a complete solo-business OS are:
+
+- **Financial operating picture:** Cash controls and payment allocations exist,
+  but owner-level profit, expense, payout, tax, and reconciliation views are not
+  yet the central cockpit.
+- **Cross-domain command center:** Work items, approvals, traces, services,
+  stock, orders, and POS flows exist, but the owner still needs stronger
+  unified queues and exception views across domains.
+- **Automation and guidance:** The LLM/provider foundation exists, but the OS
+  does not yet consistently turn data into proactive recommendations, next
+  actions, or owner-facing decision support.
+- **External system coverage:** Payments, email, storage, and monitoring are
+  wired, but accounting, banking, payroll, supplier, and broader CRM
+  integrations are still outside the core loop.
+
+## Repo Setup
+
+This is a Bun workspace with three primary packages:
+
+- `packages/athena-webapp`: the authenticated owner/operator app plus the
+  Convex backend.
+- `packages/storefront-webapp`: the customer-facing storefront.
+- `packages/valkey-proxy-server`: local request/response proxy support for
+  Valkey-backed flows.
+
+Install dependencies from the repo root:
+
+```bash
+bun install
+```
+
+Run the main authenticated app:
+
+```bash
+bun run --filter '@athena/webapp' dev
+```
+
+Run the storefront app:
+
+```bash
+bun run --filter '@athena/storefront-webapp' dev
+```
+
+## Backend Shape
+
+The primary backend lives in `packages/athena-webapp/convex`.
+
+- `convex/http.ts` composes the public Hono HTTP boundary.
+- `convex/http/domains/core` contains owner/admin core routes such as
+  organizations, stores, catalog, analytics, and auth.
+- `convex/http/domains/customerChannel` contains customer-facing commerce
+  routes such as bags, checkout, orders, reviews, rewards, offers, and
+  storefront session flows.
+- `convex/http/domains/moneyMovement` contains payment collection and webhook
+  routes.
+- `convex/operations`, `convex/pos`, `convex/cashControls`,
+  `convex/stockOps`, `convex/serviceOps`, `convex/storeFront`, and
+  `convex/workflowTraces` hold the business workflows behind those public
+  boundaries.
 
 ## Harness
 
-This repo uses a docs-first agent harness for `packages/athena-webapp` and `packages/storefront-webapp`.
+The harness is the repo's agent-readiness and delivery safety system. It keeps
+the codebase navigable for agents, turns local changes into reviewable evidence,
+and prevents stale generated docs or graph artifacts from drifting away from
+the code.
+
+At a high level, it does five jobs:
+
+- **Documents the repo shape:** generated route, test, folder, validation, and
+  graph indexes give agents a fast map of what exists before they edit.
+- **Checks implementation health:** package tests, architecture checks, Convex
+  audits, graphify freshness, and harness script tests catch broken contracts
+  before a PR reaches CI.
+- **Reviews changes:** deterministic self-review and inferential review compare
+  a branch against `origin/main` and look for missing tests, stale docs, risky
+  edits, and harness regressions.
+- **Exercises runtime behavior:** behavior scenarios boot representative flows
+  and record structured runtime signals, latency thresholds, and optional
+  videos for browser-based evidence.
+- **Repairs generated artifacts:** pre-commit and pre-push paths regenerate
+  harness docs and graphify artifacts when safe, then stop so the repaired
+  files can be reviewed and committed intentionally.
 
 Key repo-level commands:
 

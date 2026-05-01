@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { storefrontRoutes } from "../../packages/athena-webapp/convex/http/domains/storeFront/routes/storefront";
+import { storefrontRoutes } from "../../packages/athena-webapp/convex/http/domains/customerChannel/routes/storefront";
 import { LOGGED_IN_USER_ID_KEY } from "../../packages/athena-webapp/src/lib/constants";
 
 const port = Number.parseInt(process.env.HARNESS_BEHAVIOR_PORT ?? "4312", 10);

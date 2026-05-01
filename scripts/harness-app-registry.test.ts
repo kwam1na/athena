@@ -674,6 +674,7 @@ describe("HARNESS_APP_REGISTRY", () => {
         "tailwind.config.js",
         "postcss.config.js",
         "package.json",
+        "README.md",
         "eslint.config.js",
         ".gitignore",
       ],

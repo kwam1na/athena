@@ -447,6 +447,7 @@
         "packages/athena-webapp/tailwind.config.js",
         "packages/athena-webapp/postcss.config.js",
         "packages/athena-webapp/package.json",
+        "packages/athena-webapp/README.md",
         "packages/athena-webapp/eslint.config.js",
         "packages/athena-webapp/.gitignore"
       ],

@@ -7948,147 +7948,147 @@
       "weight": 1
     },
     {
-      "_src": "packages_athena_webapp_convex_http_domains_inventory_routes_categories_ts",
+      "_src": "packages_athena_webapp_convex_http_domains_core_routes_categories_ts",
       "_tgt": "categories_removestorefronthiddencategories",
       "confidence": "EXTRACTED",
       "confidence_score": 1,
       "relation": "contains",
-      "source": "packages_athena_webapp_convex_http_domains_inventory_routes_categories_ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/inventory/routes/categories.ts",
+      "source": "packages_athena_webapp_convex_http_domains_core_routes_categories_ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/core/routes/categories.ts",
       "source_location": "L12",
       "target": "categories_removestorefronthiddencategories",
       "weight": 1
     },
     {
-      "_src": "packages_athena_webapp_convex_http_domains_inventory_routes_categories_ts",
+      "_src": "packages_athena_webapp_convex_http_domains_core_routes_categories_ts",
       "_tgt": "categories_removestorefronthiddensubcategories",
       "confidence": "EXTRACTED",
       "confidence_score": 1,
       "relation": "contains",
-      "source": "packages_athena_webapp_convex_http_domains_inventory_routes_categories_ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/inventory/routes/categories.ts",
+      "source": "packages_athena_webapp_convex_http_domains_core_routes_categories_ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/core/routes/categories.ts",
       "source_location": "L21",
       "target": "categories_removestorefronthiddensubcategories",
       "weight": 1
     },
     {
-      "_src": "packages_athena_webapp_convex_http_domains_inventory_routes_subcategories_ts",
+      "_src": "packages_athena_webapp_convex_http_domains_core_routes_subcategories_ts",
       "_tgt": "subcategories_removestorefronthiddensubcategorylist",
       "confidence": "EXTRACTED",
       "confidence_score": 1,
       "relation": "contains",
-      "source": "packages_athena_webapp_convex_http_domains_inventory_routes_subcategories_ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/inventory/routes/subcategories.ts",
+      "source": "packages_athena_webapp_convex_http_domains_core_routes_subcategories_ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/core/routes/subcategories.ts",
       "source_location": "L10",
       "target": "subcategories_removestorefronthiddensubcategorylist",
       "weight": 1
     },
     {
-      "_src": "packages_athena_webapp_convex_http_domains_payments_routes_mtnmomo_ts",
-      "_tgt": "mtnmomo_handlecollectionnotification",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1,
-      "relation": "contains",
-      "source": "packages_athena_webapp_convex_http_domains_payments_routes_mtnmomo_ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/payments/routes/mtnMomo.ts",
-      "source_location": "L10",
-      "target": "mtnmomo_handlecollectionnotification",
-      "weight": 1
-    },
-    {
-      "_src": "packages_athena_webapp_convex_http_domains_storefront_routes_checkout_ts",
+      "_src": "packages_athena_webapp_convex_http_domains_customerchannel_routes_checkout_ts",
       "_tgt": "checkout_hasallvisibilesessionitems",
       "confidence": "EXTRACTED",
       "confidence_score": 1,
       "relation": "contains",
-      "source": "packages_athena_webapp_convex_http_domains_storefront_routes_checkout_ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/checkout.ts",
+      "source": "packages_athena_webapp_convex_http_domains_customerchannel_routes_checkout_ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/checkout.ts",
       "source_location": "L109",
       "target": "checkout_hasallvisibilesessionitems",
       "weight": 1
     },
     {
-      "_src": "packages_athena_webapp_convex_http_domains_storefront_routes_checkout_ts",
+      "_src": "packages_athena_webapp_convex_http_domains_customerchannel_routes_checkout_ts",
       "_tgt": "checkout_hasvalidcanonicalbagitem",
       "confidence": "EXTRACTED",
       "confidence_score": 1,
       "relation": "contains",
-      "source": "packages_athena_webapp_convex_http_domains_storefront_routes_checkout_ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/checkout.ts",
+      "source": "packages_athena_webapp_convex_http_domains_customerchannel_routes_checkout_ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/checkout.ts",
       "source_location": "L84",
       "target": "checkout_hasvalidcanonicalbagitem",
       "weight": 1
     },
     {
-      "_src": "packages_athena_webapp_convex_http_domains_storefront_routes_checkout_ts",
+      "_src": "packages_athena_webapp_convex_http_domains_customerchannel_routes_checkout_ts",
       "_tgt": "checkout_hasvalidsessionitems",
       "confidence": "EXTRACTED",
       "confidence_score": 1,
       "relation": "contains",
-      "source": "packages_athena_webapp_convex_http_domains_storefront_routes_checkout_ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/checkout.ts",
+      "source": "packages_athena_webapp_convex_http_domains_customerchannel_routes_checkout_ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/checkout.ts",
       "source_location": "L95",
       "target": "checkout_hasvalidsessionitems",
       "weight": 1
     },
     {
-      "_src": "packages_athena_webapp_convex_http_domains_storefront_routes_security_ts",
+      "_src": "packages_athena_webapp_convex_http_domains_customerchannel_routes_security_ts",
       "_tgt": "security_buildcanonicalcheckoutproducts",
       "confidence": "EXTRACTED",
       "confidence_score": 1,
       "relation": "contains",
-      "source": "packages_athena_webapp_convex_http_domains_storefront_routes_security_ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/security.ts",
+      "source": "packages_athena_webapp_convex_http_domains_customerchannel_routes_security_ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/security.ts",
       "source_location": "L42",
       "target": "security_buildcanonicalcheckoutproducts",
       "weight": 1
     },
     {
-      "_src": "packages_athena_webapp_convex_http_domains_storefront_routes_security_ts",
+      "_src": "packages_athena_webapp_convex_http_domains_customerchannel_routes_security_ts",
       "_tgt": "security_hasvalidpositivequantity",
       "confidence": "EXTRACTED",
       "confidence_score": 1,
       "relation": "contains",
-      "source": "packages_athena_webapp_convex_http_domains_storefront_routes_security_ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/security.ts",
+      "source": "packages_athena_webapp_convex_http_domains_customerchannel_routes_security_ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/security.ts",
       "source_location": "L27",
       "target": "security_hasvalidpositivequantity",
       "weight": 1
     },
     {
-      "_src": "packages_athena_webapp_convex_http_domains_storefront_routes_security_ts",
+      "_src": "packages_athena_webapp_convex_http_domains_customerchannel_routes_security_ts",
       "_tgt": "security_isamounttampered",
       "confidence": "EXTRACTED",
       "confidence_score": 1,
       "relation": "contains",
-      "source": "packages_athena_webapp_convex_http_domains_storefront_routes_security_ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/security.ts",
+      "source": "packages_athena_webapp_convex_http_domains_customerchannel_routes_security_ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/security.ts",
       "source_location": "L65",
       "target": "security_isamounttampered",
       "weight": 1
     },
     {
-      "_src": "packages_athena_webapp_convex_http_domains_storefront_routes_security_ts",
+      "_src": "packages_athena_webapp_convex_http_domains_customerchannel_routes_security_ts",
       "_tgt": "security_isauthorizedresourceowner",
       "confidence": "EXTRACTED",
       "confidence_score": 1,
       "relation": "contains",
-      "source": "packages_athena_webapp_convex_http_domains_storefront_routes_security_ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/security.ts",
+      "source": "packages_athena_webapp_convex_http_domains_customerchannel_routes_security_ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/security.ts",
       "source_location": "L31",
       "target": "security_isauthorizedresourceowner",
       "weight": 1
     },
     {
-      "_src": "packages_athena_webapp_convex_http_domains_storefront_routes_security_ts",
+      "_src": "packages_athena_webapp_convex_http_domains_customerchannel_routes_security_ts",
       "_tgt": "security_isduplicatechargesuccess",
       "confidence": "EXTRACTED",
       "confidence_score": 1,
       "relation": "contains",
-      "source": "packages_athena_webapp_convex_http_domains_storefront_routes_security_ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/security.ts",
+      "source": "packages_athena_webapp_convex_http_domains_customerchannel_routes_security_ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/security.ts",
       "source_location": "L76",
       "target": "security_isduplicatechargesuccess",
+      "weight": 1
+    },
+    {
+      "_src": "packages_athena_webapp_convex_http_domains_moneymovement_routes_mtnmomo_ts",
+      "_tgt": "mtnmomo_handlecollectionnotification",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1,
+      "relation": "contains",
+      "source": "packages_athena_webapp_convex_http_domains_moneymovement_routes_mtnmomo_ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/moneyMovement/routes/mtnMomo.ts",
+      "source_location": "L10",
+      "target": "mtnmomo_handlecollectionnotification",
       "weight": 1
     },
     {
@@ -36431,7 +36431,7 @@
       "relation": "contains",
       "source": "scripts_harness_app_registry_ts",
       "source_file": "scripts/harness-app-registry.ts",
-      "source_location": "L875",
+      "source_location": "L876",
       "target": "harness_app_registry_getharnesspackageregistration",
       "weight": 1
     },
@@ -46746,10 +46746,10 @@
     {
       "community": 114,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_storefront_routes_security_ts",
+      "id": "packages_athena_webapp_convex_http_domains_customerchannel_routes_security_ts",
       "label": "security.ts",
       "norm_label": "security.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/security.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/security.ts",
       "source_location": "L1"
     },
     {
@@ -46758,7 +46758,7 @@
       "id": "security_buildcanonicalcheckoutproducts",
       "label": "buildCanonicalCheckoutProducts()",
       "norm_label": "buildcanonicalcheckoutproducts()",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/security.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/security.ts",
       "source_location": "L42"
     },
     {
@@ -46767,7 +46767,7 @@
       "id": "security_hasvalidpositivequantity",
       "label": "hasValidPositiveQuantity()",
       "norm_label": "hasvalidpositivequantity()",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/security.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/security.ts",
       "source_location": "L27"
     },
     {
@@ -46776,7 +46776,7 @@
       "id": "security_isamounttampered",
       "label": "isAmountTampered()",
       "norm_label": "isamounttampered()",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/security.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/security.ts",
       "source_location": "L65"
     },
     {
@@ -46785,7 +46785,7 @@
       "id": "security_isauthorizedresourceowner",
       "label": "isAuthorizedResourceOwner()",
       "norm_label": "isauthorizedresourceowner()",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/security.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/security.ts",
       "source_location": "L31"
     },
     {
@@ -46794,7 +46794,7 @@
       "id": "security_isduplicatechargesuccess",
       "label": "isDuplicateChargeSuccess()",
       "norm_label": "isduplicatechargesuccess()",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/security.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/security.ts",
       "source_location": "L76"
     },
     {
@@ -51876,19 +51876,19 @@
     {
       "community": 1458,
       "file_type": "code",
-      "id": "scripts_harness_behavior_fixtures_valkey_runtime_app_test_ts",
-      "label": "valkey-runtime-app.test.ts",
-      "norm_label": "valkey-runtime-app.test.ts",
-      "source_file": "scripts/harness-behavior-fixtures/valkey-runtime-app.test.ts",
+      "id": "scripts_harness_behavior_fixtures_athena_runtime_app_test_ts",
+      "label": "athena-runtime-app.test.ts",
+      "norm_label": "athena-runtime-app.test.ts",
+      "source_file": "scripts/harness-behavior-fixtures/athena-runtime-app.test.ts",
       "source_location": "L1"
     },
     {
       "community": 1459,
       "file_type": "code",
-      "id": "scripts_harness_behavior_scenarios_test_ts",
-      "label": "harness-behavior-scenarios.test.ts",
-      "norm_label": "harness-behavior-scenarios.test.ts",
-      "source_file": "scripts/harness-behavior-scenarios.test.ts",
+      "id": "scripts_harness_behavior_fixtures_valkey_runtime_app_test_ts",
+      "label": "valkey-runtime-app.test.ts",
+      "norm_label": "valkey-runtime-app.test.ts",
+      "source_file": "scripts/harness-behavior-fixtures/valkey-runtime-app.test.ts",
       "source_location": "L1"
     },
     {
@@ -51947,6 +51947,15 @@
     },
     {
       "community": 1460,
+      "file_type": "code",
+      "id": "scripts_harness_behavior_scenarios_test_ts",
+      "label": "harness-behavior-scenarios.test.ts",
+      "norm_label": "harness-behavior-scenarios.test.ts",
+      "source_file": "scripts/harness-behavior-scenarios.test.ts",
+      "source_location": "L1"
+    },
+    {
+      "community": 1461,
       "file_type": "code",
       "id": "scripts_harness_repo_validation_test_ts",
       "label": "harness-repo-validation.test.ts",
@@ -55038,7 +55047,7 @@
       "id": "checkout_hasallvisibilesessionitems",
       "label": "hasAllVisibileSessionItems()",
       "norm_label": "hasallvisibilesessionitems()",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/checkout.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/checkout.ts",
       "source_location": "L109"
     },
     {
@@ -55047,7 +55056,7 @@
       "id": "checkout_hasvalidcanonicalbagitem",
       "label": "hasValidCanonicalBagItem()",
       "norm_label": "hasvalidcanonicalbagitem()",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/checkout.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/checkout.ts",
       "source_location": "L84"
     },
     {
@@ -55056,16 +55065,16 @@
       "id": "checkout_hasvalidsessionitems",
       "label": "hasValidSessionItems()",
       "norm_label": "hasvalidsessionitems()",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/checkout.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/checkout.ts",
       "source_location": "L95"
     },
     {
       "community": 197,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_storefront_routes_checkout_ts",
+      "id": "packages_athena_webapp_convex_http_domains_customerchannel_routes_checkout_ts",
       "label": "checkout.ts",
       "norm_label": "checkout.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/checkout.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/checkout.ts",
       "source_location": "L1"
     },
     {
@@ -59206,7 +59215,7 @@
       "label": "getHarnessPackageRegistration()",
       "norm_label": "getharnesspackageregistration()",
       "source_file": "scripts/harness-app-registry.ts",
-      "source_location": "L875"
+      "source_location": "L876"
     },
     {
       "community": 270,
@@ -59448,7 +59457,7 @@
       "id": "categories_removestorefronthiddencategories",
       "label": "removeStorefrontHiddenCategories()",
       "norm_label": "removestorefronthiddencategories()",
-      "source_file": "packages/athena-webapp/convex/http/domains/inventory/routes/categories.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/core/routes/categories.ts",
       "source_location": "L12"
     },
     {
@@ -59457,16 +59466,16 @@
       "id": "categories_removestorefronthiddensubcategories",
       "label": "removeStorefrontHiddenSubcategories()",
       "norm_label": "removestorefronthiddensubcategories()",
-      "source_file": "packages/athena-webapp/convex/http/domains/inventory/routes/categories.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/core/routes/categories.ts",
       "source_location": "L21"
     },
     {
       "community": 278,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_inventory_routes_categories_ts",
+      "id": "packages_athena_webapp_convex_http_domains_core_routes_categories_ts",
       "label": "categories.ts",
       "norm_label": "categories.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/inventory/routes/categories.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/core/routes/categories.ts",
       "source_location": "L1"
     },
     {
@@ -65808,10 +65817,10 @@
     {
       "community": 428,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_inventory_routes_subcategories_ts",
+      "id": "packages_athena_webapp_convex_http_domains_core_routes_subcategories_ts",
       "label": "subcategories.ts",
       "norm_label": "subcategories.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/inventory/routes/subcategories.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/core/routes/subcategories.ts",
       "source_location": "L1"
     },
     {
@@ -65820,7 +65829,7 @@
       "id": "subcategories_removestorefronthiddensubcategorylist",
       "label": "removeStorefrontHiddenSubcategoryList()",
       "norm_label": "removestorefronthiddensubcategorylist()",
-      "source_file": "packages/athena-webapp/convex/http/domains/inventory/routes/subcategories.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/core/routes/subcategories.ts",
       "source_location": "L10"
     },
     {
@@ -65829,16 +65838,16 @@
       "id": "mtnmomo_handlecollectionnotification",
       "label": "handleCollectionNotification()",
       "norm_label": "handlecollectionnotification()",
-      "source_file": "packages/athena-webapp/convex/http/domains/payments/routes/mtnMomo.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/moneyMovement/routes/mtnMomo.ts",
       "source_location": "L10"
     },
     {
       "community": 429,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_payments_routes_mtnmomo_ts",
+      "id": "packages_athena_webapp_convex_http_domains_moneymovement_routes_mtnmomo_ts",
       "label": "mtnMomo.ts",
       "norm_label": "mtnmomo.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/payments/routes/mtnMomo.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/moneyMovement/routes/mtnMomo.ts",
       "source_location": "L1"
     },
     {
@@ -76518,19 +76527,19 @@
     {
       "community": 808,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_inventory_routes_analytics_ts",
+      "id": "packages_athena_webapp_convex_http_domains_core_routes_analytics_ts",
       "label": "analytics.ts",
       "norm_label": "analytics.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/inventory/routes/analytics.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/core/routes/analytics.ts",
       "source_location": "L1"
     },
     {
       "community": 809,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_inventory_routes_auth_ts",
+      "id": "packages_athena_webapp_convex_http_domains_core_routes_auth_ts",
       "label": "auth.ts",
       "norm_label": "auth.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/inventory/routes/auth.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/core/routes/auth.ts",
       "source_location": "L1"
     },
     {
@@ -76608,91 +76617,91 @@
     {
       "community": 810,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_inventory_routes_bannermessage_ts",
+      "id": "packages_athena_webapp_convex_http_domains_core_routes_bannermessage_ts",
       "label": "bannerMessage.ts",
       "norm_label": "bannermessage.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/inventory/routes/bannerMessage.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/core/routes/bannerMessage.ts",
       "source_location": "L1"
     },
     {
       "community": 811,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_inventory_routes_colors_ts",
+      "id": "packages_athena_webapp_convex_http_domains_core_routes_colors_ts",
       "label": "colors.ts",
       "norm_label": "colors.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/inventory/routes/colors.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/core/routes/colors.ts",
       "source_location": "L1"
     },
     {
       "community": 812,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_inventory_routes_index_ts",
+      "id": "packages_athena_webapp_convex_http_domains_core_routes_index_ts",
       "label": "index.ts",
       "norm_label": "index.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/inventory/routes/index.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/core/routes/index.ts",
       "source_location": "L1"
     },
     {
       "community": 813,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_inventory_routes_organizations_ts",
+      "id": "packages_athena_webapp_convex_http_domains_core_routes_organizations_ts",
       "label": "organizations.ts",
       "norm_label": "organizations.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/inventory/routes/organizations.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/core/routes/organizations.ts",
       "source_location": "L1"
     },
     {
       "community": 814,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_inventory_routes_products_ts",
+      "id": "packages_athena_webapp_convex_http_domains_core_routes_products_ts",
       "label": "products.ts",
       "norm_label": "products.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/inventory/routes/products.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/core/routes/products.ts",
       "source_location": "L1"
     },
     {
       "community": 815,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_inventory_routes_storefronthidden_test_ts",
+      "id": "packages_athena_webapp_convex_http_domains_core_routes_storefronthidden_test_ts",
       "label": "storefrontHidden.test.ts",
       "norm_label": "storefronthidden.test.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/inventory/routes/storefrontHidden.test.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/core/routes/storefrontHidden.test.ts",
       "source_location": "L1"
     },
     {
       "community": 816,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_inventory_routes_stores_ts",
+      "id": "packages_athena_webapp_convex_http_domains_core_routes_stores_ts",
       "label": "stores.ts",
       "norm_label": "stores.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/inventory/routes/stores.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/core/routes/stores.ts",
       "source_location": "L1"
     },
     {
       "community": 817,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_payments_routes_index_ts",
-      "label": "index.ts",
-      "norm_label": "index.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/payments/routes/index.ts",
+      "id": "packages_athena_webapp_convex_http_domains_customerchannel_routes_bag_ts",
+      "label": "bag.ts",
+      "norm_label": "bag.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/bag.ts",
       "source_location": "L1"
     },
     {
       "community": 818,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_storefront_routes_bag_ts",
-      "label": "bag.ts",
-      "norm_label": "bag.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/bag.ts",
+      "id": "packages_athena_webapp_convex_http_domains_customerchannel_routes_guest_ts",
+      "label": "guest.ts",
+      "norm_label": "guest.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/guest.ts",
       "source_location": "L1"
     },
     {
       "community": 819,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_storefront_routes_guest_ts",
-      "label": "guest.ts",
-      "norm_label": "guest.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/guest.ts",
+      "id": "packages_athena_webapp_convex_http_domains_customerchannel_routes_index_ts",
+      "label": "index.ts",
+      "norm_label": "index.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/index.ts",
       "source_location": "L1"
     },
     {
@@ -76770,91 +76779,91 @@
     {
       "community": 820,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_storefront_routes_index_ts",
-      "label": "index.ts",
-      "norm_label": "index.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/index.ts",
+      "id": "packages_athena_webapp_convex_http_domains_customerchannel_routes_me_ts",
+      "label": "me.ts",
+      "norm_label": "me.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/me.ts",
       "source_location": "L1"
     },
     {
       "community": 821,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_storefront_routes_me_ts",
-      "label": "me.ts",
-      "norm_label": "me.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/me.ts",
+      "id": "packages_athena_webapp_convex_http_domains_customerchannel_routes_offers_ts",
+      "label": "offers.ts",
+      "norm_label": "offers.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/offers.ts",
       "source_location": "L1"
     },
     {
       "community": 822,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_storefront_routes_offers_ts",
-      "label": "offers.ts",
-      "norm_label": "offers.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/offers.ts",
+      "id": "packages_athena_webapp_convex_http_domains_customerchannel_routes_onlineorder_ts",
+      "label": "onlineOrder.ts",
+      "norm_label": "onlineorder.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/onlineOrder.ts",
       "source_location": "L1"
     },
     {
       "community": 823,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_storefront_routes_onlineorder_ts",
-      "label": "onlineOrder.ts",
-      "norm_label": "onlineorder.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/onlineOrder.ts",
+      "id": "packages_athena_webapp_convex_http_domains_customerchannel_routes_paystack_ts",
+      "label": "paystack.ts",
+      "norm_label": "paystack.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/paystack.ts",
       "source_location": "L1"
     },
     {
       "community": 824,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_storefront_routes_paystack_ts",
-      "label": "paystack.ts",
-      "norm_label": "paystack.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/paystack.ts",
+      "id": "packages_athena_webapp_convex_http_domains_customerchannel_routes_postransaction_ts",
+      "label": "posTransaction.ts",
+      "norm_label": "postransaction.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/posTransaction.ts",
       "source_location": "L1"
     },
     {
       "community": 825,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_storefront_routes_postransaction_ts",
-      "label": "posTransaction.ts",
-      "norm_label": "postransaction.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/posTransaction.ts",
+      "id": "packages_athena_webapp_convex_http_domains_customerchannel_routes_reviews_ts",
+      "label": "reviews.ts",
+      "norm_label": "reviews.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/reviews.ts",
       "source_location": "L1"
     },
     {
       "community": 826,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_storefront_routes_reviews_ts",
-      "label": "reviews.ts",
-      "norm_label": "reviews.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/reviews.ts",
+      "id": "packages_athena_webapp_convex_http_domains_customerchannel_routes_rewards_ts",
+      "label": "rewards.ts",
+      "norm_label": "rewards.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/rewards.ts",
       "source_location": "L1"
     },
     {
       "community": 827,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_storefront_routes_rewards_ts",
-      "label": "rewards.ts",
-      "norm_label": "rewards.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/rewards.ts",
+      "id": "packages_athena_webapp_convex_http_domains_customerchannel_routes_savedbag_ts",
+      "label": "savedBag.ts",
+      "norm_label": "savedbag.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/savedBag.ts",
       "source_location": "L1"
     },
     {
       "community": 828,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_storefront_routes_savedbag_ts",
-      "label": "savedBag.ts",
-      "norm_label": "savedbag.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/savedBag.ts",
+      "id": "packages_athena_webapp_convex_http_domains_customerchannel_routes_security_test_ts",
+      "label": "security.test.ts",
+      "norm_label": "security.test.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/security.test.ts",
       "source_location": "L1"
     },
     {
       "community": 829,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_storefront_routes_security_test_ts",
-      "label": "security.test.ts",
-      "norm_label": "security.test.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/security.test.ts",
+      "id": "packages_athena_webapp_convex_http_domains_customerchannel_routes_storefront_ts",
+      "label": "storefront.ts",
+      "norm_label": "storefront.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/storefront.ts",
       "source_location": "L1"
     },
     {
@@ -76932,37 +76941,37 @@
     {
       "community": 830,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_storefront_routes_storefront_ts",
-      "label": "storefront.ts",
-      "norm_label": "storefront.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/storefront.ts",
+      "id": "packages_athena_webapp_convex_http_domains_customerchannel_routes_upsells_ts",
+      "label": "upsells.ts",
+      "norm_label": "upsells.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/upsells.ts",
       "source_location": "L1"
     },
     {
       "community": 831,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_storefront_routes_upsells_ts",
-      "label": "upsells.ts",
-      "norm_label": "upsells.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/upsells.ts",
+      "id": "packages_athena_webapp_convex_http_domains_customerchannel_routes_user_ts",
+      "label": "user.ts",
+      "norm_label": "user.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/user.ts",
       "source_location": "L1"
     },
     {
       "community": 832,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_storefront_routes_user_ts",
-      "label": "user.ts",
-      "norm_label": "user.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/user.ts",
+      "id": "packages_athena_webapp_convex_http_domains_customerchannel_routes_useroffers_ts",
+      "label": "userOffers.ts",
+      "norm_label": "useroffers.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/customerChannel/routes/userOffers.ts",
       "source_location": "L1"
     },
     {
       "community": 833,
       "file_type": "code",
-      "id": "packages_athena_webapp_convex_http_domains_storefront_routes_useroffers_ts",
-      "label": "userOffers.ts",
-      "norm_label": "useroffers.ts",
-      "source_file": "packages/athena-webapp/convex/http/domains/storeFront/routes/userOffers.ts",
+      "id": "packages_athena_webapp_convex_http_domains_moneymovement_routes_index_ts",
+      "label": "index.ts",
+      "norm_label": "index.ts",
+      "source_file": "packages/athena-webapp/convex/http/domains/moneyMovement/routes/index.ts",
       "source_location": "L1"
     },
     {
