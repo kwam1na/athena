@@ -35165,13 +35165,13 @@
     },
     {
       "_src": "pre_commit_generated_artifacts_runprecommitgeneratedartifacts",
-      "_tgt": "pre_commit_generated_artifacts_stagetrackedgraphifyartifacts",
+      "_tgt": "pre_commit_generated_artifacts_stagetrackedgeneratedartifacts",
       "confidence": "EXTRACTED",
       "confidence_score": 1,
       "relation": "calls",
-      "source": "pre_commit_generated_artifacts_stagetrackedgraphifyartifacts",
+      "source": "pre_commit_generated_artifacts_stagetrackedgeneratedartifacts",
       "source_file": "scripts/pre-commit-generated-artifacts.ts",
-      "source_location": "L60",
+      "source_location": "L73",
       "target": "pre_commit_generated_artifacts_runprecommitgeneratedartifacts",
       "weight": 1
     },
@@ -40919,7 +40919,7 @@
       "relation": "contains",
       "source": "scripts_pre_commit_generated_artifacts_test_ts",
       "source_file": "scripts/pre-commit-generated-artifacts.test.ts",
-      "source_location": "L69",
+      "source_location": "L105",
       "target": "pre_commit_generated_artifacts_test_log",
       "weight": 1
     },
@@ -40931,7 +40931,7 @@
       "relation": "contains",
       "source": "scripts_pre_commit_generated_artifacts_test_ts",
       "source_file": "scripts/pre-commit-generated-artifacts.test.ts",
-      "source_location": "L62",
+      "source_location": "L91",
       "target": "pre_commit_generated_artifacts_test_spawn",
       "weight": 1
     },
@@ -40943,20 +40943,20 @@
       "relation": "contains",
       "source": "scripts_pre_commit_generated_artifacts_ts",
       "source_file": "scripts/pre-commit-generated-artifacts.ts",
-      "source_location": "L45",
+      "source_location": "L56",
       "target": "pre_commit_generated_artifacts_runprecommitgeneratedartifacts",
       "weight": 1
     },
     {
       "_src": "scripts_pre_commit_generated_artifacts_ts",
-      "_tgt": "pre_commit_generated_artifacts_stagetrackedgraphifyartifacts",
+      "_tgt": "pre_commit_generated_artifacts_stagetrackedgeneratedartifacts",
       "confidence": "EXTRACTED",
       "confidence_score": 1,
       "relation": "contains",
       "source": "scripts_pre_commit_generated_artifacts_ts",
       "source_file": "scripts/pre-commit-generated-artifacts.ts",
-      "source_location": "L20",
-      "target": "pre_commit_generated_artifacts_stagetrackedgraphifyartifacts",
+      "source_location": "L29",
+      "target": "pre_commit_generated_artifacts_stagetrackedgeneratedartifacts",
       "weight": 1
     },
     {
@@ -67030,7 +67030,7 @@
       "label": "log()",
       "norm_label": "log()",
       "source_file": "scripts/pre-commit-generated-artifacts.test.ts",
-      "source_location": "L26"
+      "source_location": "L30"
     },
     {
       "community": 427,
@@ -67039,7 +67039,7 @@
       "label": "spawn()",
       "norm_label": "spawn()",
       "source_file": "scripts/pre-commit-generated-artifacts.test.ts",
-      "source_location": "L18"
+      "source_location": "L22"
     },
     {
       "community": 427,
@@ -67057,16 +67057,16 @@
       "label": "runPreCommitGeneratedArtifacts()",
       "norm_label": "runprecommitgeneratedartifacts()",
       "source_file": "scripts/pre-commit-generated-artifacts.ts",
-      "source_location": "L45"
+      "source_location": "L56"
     },
     {
       "community": 428,
       "file_type": "code",
-      "id": "pre_commit_generated_artifacts_stagetrackedgraphifyartifacts",
-      "label": "stageTrackedGraphifyArtifacts()",
-      "norm_label": "stagetrackedgraphifyartifacts()",
+      "id": "pre_commit_generated_artifacts_stagetrackedgeneratedartifacts",
+      "label": "stageTrackedGeneratedArtifacts()",
+      "norm_label": "stagetrackedgeneratedartifacts()",
       "source_file": "scripts/pre-commit-generated-artifacts.ts",
-      "source_location": "L20"
+      "source_location": "L29"
     },
     {
       "community": 428,

@@ -145,7 +145,8 @@ It targets repo-root `scripts/*.test.ts` files only (excluding cloned worktree t
 Use `bun run harness:test -- --dry-run` to print the selected files without executing tests.
 The repo pins Bun via `package.json` (`bun@1.1.29` today), and GitHub Actions reads that same repo-declared version so CI and local harness runs stay aligned.
 
-`pre-commit:generated-artifacts` automatically runs `bun run graphify:rebuild` and stages the tracked graphify outputs before the commit is finalized, so the pushed ref includes the refreshed graph artifacts.
+`pre-commit:generated-artifacts` automatically runs `bun run harness:generate` and `bun run graphify:rebuild`, then stages the tracked generated harness docs and graphify outputs before the commit is finalized, so the pushed ref includes refreshed generated artifacts.
+`bun run pr:athena` starts with that same generated-artifact repair step before the blocking harness checks, so deterministic generated-doc drift is repaired locally instead of failing as stale docs.
 `pre-push:review` starts with `bun run graphify:check` before the rest of the local validation suite. If tracked graphify artifacts are stale, the hook runs `bun run graphify:rebuild` once, reruns `bun run graphify:check`, and then stops so you can review and commit the repaired graphify artifacts before pushing again.
 If `harness:self-review` or `harness:review` gets blocked by stale generated harness docs, the hook runs `bun run harness:generate` once, retries the blocked step on the repaired tree, and:
 - Blocks so you can review, commit, and push the repaired generated docs instead of sending a stale ref to CI.
@@ -222,7 +223,7 @@ Use [the packages agent router](./packages/AGENTS.md) plus each package's `AGENT
 
 Use `bun run graphify:check` as the freshness gate for tracked graphify artifacts.
 
-Use `bun run graphify:rebuild` as the repair path when the check reports stale artifacts. The rebuild command uses the interpreter recorded in `.graphify_python` (default `python3` in this repo). Local `pre-commit:generated-artifacts` runs this repair step and stages the tracked graphify outputs before the commit is finalized. `pre-push:review` can also run this repair once for stale tracked graphify artifacts, reruns `bun run graphify:check`, and then blocks until you commit the repaired tracked artifacts.
+Use `bun run graphify:rebuild` as the repair path when the check reports stale artifacts. The rebuild command uses the interpreter recorded in `.graphify_python` (default `python3` in this repo). Local `pre-commit:generated-artifacts` runs this repair step with `bun run harness:generate` and stages the tracked graphify outputs plus generated harness docs before the commit is finalized. `pre-push:review` can also run this repair once for stale tracked graphify artifacts, reruns `bun run graphify:check`, and then blocks until you commit the repaired tracked artifacts.
 
 If you need to repair the local graphify setup, install the repo-pinned runtime with `python3 -m pip install -r .graphify-requirements.txt`.
 

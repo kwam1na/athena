@@ -3224,7 +3224,7 @@ Nodes (0):
 
 ### Community 428 - "Community 428"
 Cohesion: 1.0
-Nodes (2): runPreCommitGeneratedArtifacts(), stageTrackedGraphifyArtifacts()
+Nodes (2): runPreCommitGeneratedArtifacts(), stageTrackedGeneratedArtifacts()
 
 ### Community 429 - "Community 429"
 Cohesion: 1.0
