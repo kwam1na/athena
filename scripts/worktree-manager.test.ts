@@ -34,7 +34,12 @@ async function createFixtureRepo() {
 }
 
 async function runGit(cwd: string, ...args: string[]) {
-  const result = Bun.spawnSync(["git", ...args], { cwd, stderr: "pipe", stdout: "pipe" });
+  const result = Bun.spawnSync(["git", ...args], {
+    cwd,
+    env: fixtureEnv(),
+    stderr: "pipe",
+    stdout: "pipe",
+  });
   if (result.exitCode !== 0) {
     throw new Error(
       `git ${args.join(" ")} failed\n${result.stderr.toString()}\n${result.stdout.toString()}`
@@ -45,9 +50,16 @@ async function runGit(cwd: string, ...args: string[]) {
 function runWorktreeManager(cwd: string, ...args: string[]) {
   return Bun.spawnSync(["bash", "scripts/worktree-manager.sh", ...args], {
     cwd,
+    env: fixtureEnv(),
     stderr: "pipe",
     stdout: "pipe",
   });
+}
+
+function fixtureEnv() {
+  return Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_"))
+  ) as Record<string, string>;
 }
 
 afterEach(async () => {
