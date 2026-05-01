@@ -9,6 +9,7 @@
 #   3. Ensures .worktrees is gitignored (via `git check-ignore`)
 #
 # List / remove / switch operations are NOT provided here. Use git directly:
+#   scripts/worktree-manager.sh setup-env <worktree-path>
 #   git worktree list
 #   git worktree remove <path>
 #   cd <worktree-path>   # switching is just `cd`
@@ -27,10 +28,15 @@ WORKTREE_DIR="$GIT_ROOT/.worktrees"
 
 usage() {
   cat <<'EOF'
-Usage: worktree-manager.sh create <branch-name> [from-branch]
+Usage:
+  worktree-manager.sh create <branch-name> [from-branch]
+  worktree-manager.sh setup-env <worktree-path>
 
 Creates .worktrees/<branch-name> with <branch-name> branched from
 [from-branch] (default: origin's default branch, or main).
+
+setup-env copies missing local env files into an existing worktree without
+overwriting existing destination files.
 
 The main repo checkout is not modified; from-branch is fetched but
 not checked out.
@@ -55,33 +61,87 @@ ensure_gitignore() {
   echo "Added .worktrees to .gitignore"
 }
 
-# Copy .env* files (except .env.example) from main repo to worktree.
-# Backs up any pre-existing destination file.
-copy_env_files() {
-  local worktree_path="$1"
-  local copied=0
+ATHENA_WEBAPP_ENV_DIR="packages/athena-webapp"
+
+has_env_files_in_dir() {
+  local relative_dir="$1"
+  local source_dir="$GIT_ROOT"
+  if [[ -n "$relative_dir" ]]; then
+    source_dir="$GIT_ROOT/$relative_dir"
+  fi
 
   shopt -s nullglob
-  for source in "$GIT_ROOT"/.env*; do
+  for source in "$source_dir"/.env*; do
+    [[ -f "$source" ]] || continue
+    [[ "$(basename "$source")" == ".env.example" ]] && continue
+    shopt -u nullglob
+    return 0
+  done
+  shopt -u nullglob
+  return 1
+}
+
+require_env_files_available() {
+  local relative_dir="$1" label="$2"
+  local source_dir="$GIT_ROOT/$relative_dir"
+  if has_env_files_in_dir "$relative_dir"; then
+    return
+  fi
+
+  echo "Error: Missing $label env files." >&2
+  echo "Expected at least one local file matching $source_dir/.env* (excluding .env.example)." >&2
+  echo "Create or copy $relative_dir/.env with CONVEX_DEPLOYMENT and VITE_CONVEX_URL before creating agent worktrees." >&2
+  exit 1
+}
+
+# Copy .env* files (except .env.example) from a repo-relative directory into
+# the worktree. Existing destination files are preserved so rerunning setup
+# does not clobber local overrides.
+copy_env_files_from_dir() {
+  local worktree_path="$1" relative_dir="$2" label="$3" required="$4"
+  local copied=0
+  local kept=0
+  local source_dir="$GIT_ROOT"
+  if [[ -n "$relative_dir" ]]; then
+    source_dir="$GIT_ROOT/$relative_dir"
+  fi
+
+  shopt -s nullglob
+  for source in "$source_dir"/.env*; do
     [[ -f "$source" ]] || continue
     local name
     name=$(basename "$source")
     [[ "$name" == ".env.example" ]] && continue
 
-    local dest="$worktree_path/$name"
+    local dest_dir="$worktree_path"
+    if [[ -n "$relative_dir" ]]; then
+      dest_dir="$worktree_path/$relative_dir"
+    fi
+    mkdir -p "$dest_dir"
+    local dest="$dest_dir/$name"
     if [[ -f "$dest" ]]; then
-      cp "$dest" "${dest}.backup"
-      echo "  Backed up existing $name to ${name}.backup"
+      echo "  Kept existing ${relative_dir:+$relative_dir/}$name"
+      kept=$((kept + 1))
+      continue
     fi
     cp "$source" "$dest"
-    echo "  Copied $name"
+    echo "  Copied ${relative_dir:+$relative_dir/}$name"
     copied=$((copied + 1))
   done
   shopt -u nullglob
 
-  if [[ $copied -eq 0 ]]; then
-    echo "  No .env files in main repo"
+  if [[ $copied -eq 0 && $kept -eq 0 ]]; then
+    if [[ "$required" == "true" ]]; then
+      require_env_files_available "$relative_dir" "$label"
+    fi
+    echo "  No $label .env files"
   fi
+}
+
+copy_env_files() {
+  local worktree_path="$1"
+  copy_env_files_from_dir "$worktree_path" "" "repo root" "false"
+  copy_env_files_from_dir "$worktree_path" "$ATHENA_WEBAPP_ENV_DIR" "Athena webapp" "true"
 }
 
 get_default_branch() {
@@ -189,6 +249,7 @@ create_worktree() {
     echo "Use 'cd $worktree_path' to switch, or 'git worktree remove' first." >&2
     exit 1
   fi
+  require_env_files_available "$ATHENA_WEBAPP_ENV_DIR" "Athena webapp"
 
   echo "Creating worktree $branch_name from $from_branch"
 
@@ -208,8 +269,7 @@ create_worktree() {
 
   git worktree add -b "$branch_name" "$worktree_path" "$base_ref"
 
-  echo "Environment files:"
-  copy_env_files "$worktree_path"
+  setup_env "$worktree_path"
 
   echo "Dev tool trust:"
   local trust_branch="$default_branch"
@@ -238,11 +298,28 @@ create_worktree() {
   echo "Switch with: cd $worktree_path"
 }
 
+setup_env() {
+  local worktree_path="${1:-}"
+  if [[ -z "$worktree_path" ]]; then
+    echo "Error: worktree path required" >&2
+    usage >&2
+    exit 1
+  fi
+  if [[ ! -d "$worktree_path" ]]; then
+    echo "Error: worktree path does not exist: $worktree_path" >&2
+    exit 1
+  fi
+
+  echo "Environment files:"
+  copy_env_files "$worktree_path"
+}
+
 main() {
   local command="${1:-}"
   shift || true
   case "$command" in
     create) create_worktree "$@" ;;
+    setup-env) setup_env "$@" ;;
     ""|help|-h|--help) usage ;;
     *)
       echo "Error: unknown command '$command'" >&2
