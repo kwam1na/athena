@@ -18,6 +18,7 @@ One paragraph describing the problem and target outcome.
 2. Invalid or tampered input path.
 3. Authorization or ownership path when relevant.
 4. Replay or idempotency path when events or webhooks are involved.
+5. Audit or trace path when the work mutates durable state, changes workflow status, crosses an approval/authorization boundary, touches money/inventory/customer-impacting records, or creates asynchronous/background work.
 
 ## Execution Posture
 One of:
@@ -25,10 +26,16 @@ One of:
 - `characterization-first` for legacy, unclear, or fragile behavior that must be captured before changing.
 - `sensor-only` for pure docs, generated artifacts, configuration, or mechanical changes with no behavior.
 
+## Observability / Audit
+1. Operational audit events, history records, metrics/logging, or workflow trace milestones expected.
+2. Existing observability rail to reuse.
+3. `None -- [reason]` when no audit or trace behavior is needed.
+
 ## Expected Sensors
 1. Targeted test or characterization command.
 2. Broader suite, typecheck, build, lint, harness/review command, runtime scenario, or CI-equivalent command.
-3. Repair path for deterministic drift, if known.
+3. Audit/trace verification sensor when observability behavior is expected.
+4. Repair path for deterministic drift, if known.
 
 ## Compounding Opportunity
 Name likely reusable learning, missing sensor, reviewer gap, skill update, or `None expected`.
