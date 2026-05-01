@@ -42,23 +42,25 @@ Use this resolution order before asking the user for context:
 - If the user is mixing planning, ticket creation, and implementation, finish ticket creation first and then hand off to `$execute-linear-ticket`.
 
 2. Produce a concrete plan.
-- Prefer `superpowers:writing-plans`.
+- Prefer `$ce-plan`.
 - If it is unavailable, use `references/atomic-plan-template.md`.
 - The output should be a checklist of concrete implementation outcomes.
 - Include the execution posture for each behavior-bearing task: `test-first`, `characterization-first`, or `sensor-only`.
+- Include the observability posture for each behavior-bearing task: operational audit events, workflow traces, metrics/logging, or an explicit `None -- [reason]`.
 - Include the repo sensors expected to prove the task: targeted tests, broader suites, typecheck/build/lint, harness or review commands, runtime scenarios, CI-equivalent checks, or other project-specific sensors.
 
 3. Convert the plan into ticket candidates.
 - Default to one actionable checklist item per ticket.
 - Merge only when implementation and validation are inseparable.
 - Split whenever outcomes can be shipped and tested independently.
-- Preserve execution posture, test scenarios, expected sensors, and compounding opportunities from the plan in each ticket candidate.
+- Preserve execution posture, observability posture, test scenarios, expected sensors, and compounding opportunities from the plan in each ticket candidate.
 
 4. Enforce atomicity.
 - Each ticket should have one shippable outcome.
 - Each ticket should be independently mergeable and testable.
 - Record dependencies only for true blockers.
 - Do not force frontend/backend splits unless the work naturally separates that way.
+- If auditing or tracing is independently shippable, split it into its own ticket; if the behavior would be incomplete or unsafe without it, keep it in the same ticket and make the audit/trace acceptance criteria explicit.
 - If a feature materially changes what the repo does, create a ticket to refresh the repo docs and agent docs so they capture the repo's new standing after the feature lands.
 - Atomic tickets do not require one PR per ticket. If several tickets will all touch the same generated or derived artifacts, keep the tickets separate in Linear but mark them as a coordinated execution batch that can land through one integration PR.
 
@@ -69,8 +71,10 @@ Use this resolution order before asking the user for context:
 
 6. Build deterministic ticket bodies.
 - Use `references/atomic-ticket-template.md`.
-- Every ticket should include `Scope`, `Acceptance Criteria`, `Test Scenarios`, `Execution Posture`, `Expected Sensors`, and `Compounding Opportunity`.
+- Every ticket should include `Scope`, `Acceptance Criteria`, `Test Scenarios`, `Execution Posture`, `Observability / Audit`, `Expected Sensors`, and `Compounding Opportunity`.
 - Add security, authorization, or idempotency scenarios only when the work actually touches those areas.
+- Add audit, trace, or event scenarios whenever the work mutates durable state, crosses an approval/authorization boundary, changes workflow status, handles money/inventory/customer-impacting records, or creates asynchronous/background work.
+- If no audit or trace behavior is needed, write `None -- [reason]` in `Observability / Audit` instead of leaving it implicit.
 - `Execution Posture` must default to `test-first` for new behavior and bug fixes, `characterization-first` for unclear legacy behavior, and `sensor-only` only for pure docs, generated artifacts, configuration, or mechanical changes with no behavior.
 - `Expected Sensors` should name the project checks the executor should run; keep them project-specific when known, but do not invent repo commands that have not been discovered.
 - `Compounding Opportunity` should name likely reusable learnings, missing sensors, or skill updates; write `None expected` when there is no meaningful opportunity.
@@ -95,6 +99,7 @@ Use this resolution order before asking the user for context:
 - `Execution Plan`: `Can Start Now` and `Blocked`
 - `Integration Strategy`: `One PR per ticket` or `Single integration PR after parallel execution`
 - `Delivery Posture`: execution posture and expected sensors by issue
+- `Observability Posture`: audit/tracing expectation by behavior-bearing issue, including explicit `None -- [reason]` entries
 - `Compound Notes`: likely learning, skill, or follow-up sensor opportunities
 - `Assumptions`: scope splits, label mappings, or context clarifications
 
@@ -105,6 +110,8 @@ Use this resolution order before asking the user for context:
 - Do not create umbrella tickets when the plan yields separable implementation outcomes.
 - Avoid implementation detail that does not help define the ticket.
 - Treat repo and agent documentation refresh as required follow-up work when a feature changes capabilities, workflows, architecture, or other durable repo behavior; keep the repo honest about its standing behavior.
+- Do not let durable state changes, authorization-sensitive actions, approval workflows, money/inventory/customer-impacting records, or asynchronous work omit an explicit audit/tracing decision.
+- Prefer existing observability rails over inventing new ones: operational events for audit history, domain workflow traces only when the domain already has a trace lifecycle, and metrics/logging only when the repo already uses them for that class of work.
 - Prefer a single integration PR when separate ticket PRs would mostly fight over regenerated artifacts rather than represent meaningful review boundaries.
 - Do not make Linear tickets into implementation scripts. Capture outcomes, tests, sensors, posture, and boundaries; let execution skills choose the detailed path.
 - Do not let a ticket omit tests for behavior-bearing work unless the posture explains why characterization or sensor-only validation is more appropriate.

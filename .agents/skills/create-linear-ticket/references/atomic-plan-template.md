@@ -4,9 +4,14 @@
 Single sentence describing the desired end state.
 
 ## Task Checklist
-- [ ] Task 1: concrete outcome with code area. Posture: `test-first` / `characterization-first` / `sensor-only`.
-- [ ] Task 2: concrete outcome with code area. Posture: `test-first` / `characterization-first` / `sensor-only`.
-- [ ] Task 3: concrete outcome with code area. Posture: `test-first` / `characterization-first` / `sensor-only`.
+- [ ] Task 1: concrete outcome with code area. Posture: `test-first` / `characterization-first` / `sensor-only`. Observability: audit events / workflow trace / metrics or logs / `None -- [reason]`.
+- [ ] Task 2: concrete outcome with code area. Posture: `test-first` / `characterization-first` / `sensor-only`. Observability: audit events / workflow trace / metrics or logs / `None -- [reason]`.
+- [ ] Task 3: concrete outcome with code area. Posture: `test-first` / `characterization-first` / `sensor-only`. Observability: audit events / workflow trace / metrics or logs / `None -- [reason]`.
+
+## Observability Decisions
+1. Durable state changes: expected audit events, history records, or explicit reason none are needed.
+2. Workflow state changes: expected domain trace milestones when the domain already has a trace lifecycle.
+3. Authorization, approval, money, inventory, customer-impacting, background, or asynchronous work: expected audit/tracing behavior and replay/idempotency considerations.
 
 ## Expected Sensors
 1. Targeted tests or characterization tests.
@@ -20,7 +25,8 @@ Single sentence describing the desired end state.
 ## Atomicity Checks
 1. Can each task be implemented and merged independently?
 2. Can each task be validated with targeted tests?
-3. Is any task too broad and should be split?
+3. Is audit/tracing inseparable from the behavior, or should it be split into a separate ticket?
+4. Is any task too broad and should be split?
 
 ## Dependency Map
 1. Task A -> blocked by Task B (only when required).
