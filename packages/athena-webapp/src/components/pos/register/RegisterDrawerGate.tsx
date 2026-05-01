@@ -71,8 +71,117 @@ export function RegisterDrawerGate({
     event.preventDefault();
     void drawerGate.onSubmitCloseout?.();
   };
+  const handleOpeningFloatCorrectionSubmit = (
+    event: FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
+    void drawerGate.onSubmitOpeningFloatCorrection?.();
+  };
   const isCloseoutBlocked = drawerGate.mode === "closeoutBlocked";
+  const isOpeningFloatCorrection = drawerGate.mode === "openingFloatCorrection";
   const isRecovery = drawerGate.mode === "recovery";
+
+  if (isOpeningFloatCorrection) {
+    const currency = drawerGate.currency ?? "GHS";
+
+    return (
+      <div className="mx-auto max-w-2xl rounded-lg border border-stone-200 bg-white p-8 shadow-sm">
+        <div className="space-y-1">
+          <h2 className="text-2xl font-semibold text-stone-900">
+            Correct opening float
+          </h2>
+          <p className="text-sm text-stone-600">
+            Update the starting cash for register {drawerGate.registerNumber}.
+            This adjusts expected cash and records an audit event.
+          </p>
+        </div>
+
+        <form
+          className="mt-8 space-y-5"
+          onSubmit={handleOpeningFloatCorrectionSubmit}
+        >
+          <div className="rounded-lg border border-stone-200 bg-stone-50/70 p-4">
+            <dl className="grid grid-cols-2 gap-3 text-sm">
+              <div className="space-y-1">
+                <dt className="text-[11px] uppercase tracking-[0.16em] text-stone-500">
+                  Current float
+                </dt>
+                <dd className="font-mono text-stone-900">
+                  {formatCurrency(currency, drawerGate.currentOpeningFloat)}
+                </dd>
+              </div>
+              <div className="space-y-1">
+                <dt className="text-[11px] uppercase tracking-[0.16em] text-stone-500">
+                  Expected cash
+                </dt>
+                <dd className="font-mono text-stone-900">
+                  {formatCurrency(currency, drawerGate.expectedCash)}
+                </dd>
+              </div>
+            </dl>
+          </div>
+
+          <label className="block space-y-2">
+            <span className="text-sm font-medium text-stone-700">
+              Corrected opening float ({currencyDisplaySymbol(currency)})
+            </span>
+            <Input
+              autoFocus
+              disabled={drawerGate.isCorrectingOpeningFloat}
+              inputMode="decimal"
+              onChange={(event) =>
+                drawerGate.onCorrectedOpeningFloatChange?.(event.target.value)
+              }
+              placeholder="0.00"
+              value={drawerGate.correctedOpeningFloat ?? ""}
+            />
+          </label>
+
+          <label className="block space-y-2">
+            <span className="text-sm font-medium text-stone-700">Reason</span>
+            <Textarea
+              disabled={drawerGate.isCorrectingOpeningFloat}
+              onChange={(event) =>
+                drawerGate.onCorrectionReasonChange?.(event.target.value)
+              }
+              placeholder="Add why the opening float is being corrected."
+              rows={3}
+              value={drawerGate.correctionReason ?? ""}
+            />
+          </label>
+
+          {drawerGate.errorMessage ? (
+            <p className="text-sm text-red-600" role="alert">
+              {drawerGate.errorMessage}
+            </p>
+          ) : null}
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <LoadingButton
+              className="w-full sm:w-auto"
+              disabled={Boolean(drawerGate.isCorrectingOpeningFloat)}
+              isLoading={Boolean(drawerGate.isCorrectingOpeningFloat)}
+              type="submit"
+            >
+              Save correction
+            </LoadingButton>
+
+            <Button
+              className="w-full sm:w-auto"
+              disabled={drawerGate.isCorrectingOpeningFloat}
+              onClick={drawerGate.onCancelOpeningFloatCorrection}
+              type="button"
+              variant="outline"
+            >
+              Return to sale
+            </Button>
+
+            <CashControlsButton className="w-full sm:w-auto" />
+          </div>
+        </form>
+      </div>
+    );
+  }
 
   if (isCloseoutBlocked) {
     const currency = drawerGate.currency ?? "GHS";
@@ -108,7 +217,10 @@ export function RegisterDrawerGate({
                 >
                   {drawerGate.closeoutDraftVariance === undefined
                     ? "Pending count"
-                    : formatCurrency(currency, drawerGate.closeoutDraftVariance)}
+                    : formatCurrency(
+                        currency,
+                        drawerGate.closeoutDraftVariance,
+                      )}
                 </dd>
               </div>
             </dl>
@@ -165,7 +277,7 @@ export function RegisterDrawerGate({
               className="w-full sm:w-auto"
               disabled={Boolean(
                 drawerGate.isCloseoutSubmitting ||
-                  drawerGate.isReopeningCloseout,
+                drawerGate.isReopeningCloseout,
               )}
               isLoading={Boolean(drawerGate.isReopeningCloseout)}
               onClick={() => void drawerGate.onReopenRegister?.()}
@@ -224,7 +336,8 @@ export function RegisterDrawerGate({
       <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
         <label className="block space-y-2">
           <span className="text-sm font-medium text-stone-700">
-            Opening float ({currencyDisplaySymbol(drawerGate.currency ?? "GHS")})
+            Opening float ({currencyDisplaySymbol(drawerGate.currency ?? "GHS")}
+            )
           </span>
           <Input
             autoFocus

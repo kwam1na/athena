@@ -497,6 +497,7 @@ export async function authenticateStaffCredentialForTerminalWithCtx(
   ctx: Pick<MutationCtx, "db">,
   args: {
     allowedRoles?: OperationalRole[];
+    allowActiveSessionsOnOtherTerminals?: boolean;
     pinHash: string;
     storeId: Id<"store">;
     terminalId: Id<"posTerminal">;
@@ -506,6 +507,10 @@ export async function authenticateStaffCredentialForTerminalWithCtx(
   const authentication = await authenticateStaffCredentialWithCtx(ctx, args);
 
   if (authentication.kind === "user_error") {
+    return authentication;
+  }
+
+  if (args.allowActiveSessionsOnOtherTerminals) {
     return authentication;
   }
 
@@ -679,6 +684,7 @@ export const authenticateStaffCredential = mutation({
 export const authenticateStaffCredentialForTerminal = mutation({
   args: {
     allowedRoles: v.optional(v.array(operationalRoleValidator)),
+    allowActiveSessionsOnOtherTerminals: v.optional(v.boolean()),
     pinHash: v.string(),
     storeId: v.id("store"),
     terminalId: v.id("posTerminal"),

@@ -239,6 +239,58 @@ async function listPosSessionsForStoreStatus(
   return sessions;
 }
 
+async function expirePosSessionNow(
+  ctx: MutationCtx,
+  session: Awaited<ReturnType<typeof listPosSessionsByStatusBefore>>[number],
+  now: number,
+) {
+  const items = await ctx.db
+    .query("posSessionItem")
+    .withIndex("by_sessionId", (q) => q.eq("sessionId", session._id))
+    .take(MAX_SESSION_ITEMS);
+
+  const heldQuantities = new Map<Id<"productSku">, number>();
+  for (const item of items) {
+    const currentQty = heldQuantities.get(item.productSkuId) || 0;
+    heldQuantities.set(item.productSkuId, currentQty + item.quantity);
+  }
+
+  const releaseItems = Array.from(heldQuantities.entries()).map(
+    ([skuId, quantity]) => ({
+      skuId,
+      quantity,
+    }),
+  );
+
+  await releaseInventoryHoldsBatch(ctx.db, releaseItems);
+
+  const wasVoided = session.status === "void";
+  const expirationNote = wasVoided
+    ? session.notes
+    : "Session expired - inventory holds released";
+
+  await ctx.db.patch("posSession", session._id, {
+    status: "expired",
+    expiresAt: now,
+    updatedAt: now,
+    notes: expirationNote,
+  });
+
+  if (!wasVoided) {
+    await recordSessionLifecycleTraceBestEffort(ctx, {
+      stage: "expired",
+      session: {
+        ...session,
+        status: "expired",
+        expiresAt: now,
+        updatedAt: now,
+        notes: expirationNote,
+      },
+      occurredAt: now,
+    });
+  }
+}
+
 async function persistSessionWorkflowTraceIdBestEffort(
   ctx: MutationCtx,
   args: {
@@ -1184,59 +1236,7 @@ export const releasePosSessionItems = internalMutation({
     // Process each expired session
     for (const session of expiredSessions) {
       try {
-        // Query all items for this session from posSessionItem table
-        const items = await ctx.db
-          .query("posSessionItem")
-          .withIndex("by_sessionId", (q) => q.eq("sessionId", session._id))
-          .take(MAX_SESSION_ITEMS);
-
-        // Calculate total quantities held per SKU
-        const heldQuantities = new Map<Id<"productSku">, number>();
-        for (const item of items) {
-          const currentQty = heldQuantities.get(item.productSkuId) || 0;
-          heldQuantities.set(item.productSkuId, currentQty + item.quantity);
-        }
-
-        // Use batch helper to release all inventory holds
-        const releaseItems = Array.from(heldQuantities.entries()).map(
-          ([skuId, quantity]) => ({
-            skuId,
-            quantity,
-          }),
-        );
-
-        await releaseInventoryHoldsBatch(ctx.db, releaseItems);
-        console.log(
-          `[POS] Released inventory holds for ${releaseItems.length} SKUs`,
-        );
-
-        // Keep items for record-keeping - don't delete them
-        // Items remain associated with expired session for audit trail
-        const wasVoided = session.status === "void";
-        const expirationNote = wasVoided
-          ? session.notes
-          : "Session expired - inventory holds released";
-
-        // Mark session as expired
-        await ctx.db.patch("posSession", session._id, {
-          status: "expired",
-          updatedAt: now,
-          notes: expirationNote,
-        });
-
-        if (!wasVoided) {
-          await recordSessionLifecycleTraceBestEffort(ctx, {
-            stage: "expired",
-            session: {
-              ...session,
-              status: "expired",
-              updatedAt: now,
-              notes: expirationNote,
-            },
-            occurredAt: now,
-          });
-        }
-
+        await expirePosSessionNow(ctx, session, now);
         releasedSessionIds.push(session._id);
         console.log(
           `[POS] Released inventory holds for session ${session.sessionNumber}`,
@@ -1316,9 +1316,7 @@ export const expireAllSessionsForStaff = mutation({
     await Promise.all(
       sessions
         .filter((session) => session.terminalId !== args.terminalId)
-        .map((session) =>
-          ctx.db.patch("posSession", session._id, { expiresAt: now }),
-        ),
+        .map((session) => expirePosSessionNow(ctx, session, now)),
     );
 
     return {

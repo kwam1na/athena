@@ -27,6 +27,7 @@ vi.mock("../pos/application/commands/posSessionTracing", () => ({
 
 import {
   completeSession,
+  expireAllSessionsForStaff,
   releaseSessionInventoryHoldsAndDeleteItems,
   releasePosSessionItems,
   syncSessionCheckoutState,
@@ -84,6 +85,7 @@ type RegisterSessionRecord = {
 type QueryBuilderFilters = {
   status?: string;
   expiresBefore?: number;
+  staffProfileId?: string;
   sessionId?: string;
 };
 
@@ -156,6 +158,9 @@ function createMutationCtx(seed?: {
             if (field === "status") {
               filters.status = String(value);
             }
+            if (field === "staffProfileId") {
+              filters.staffProfileId = String(value);
+            }
             if (field === "sessionId") {
               filters.sessionId = String(value);
             }
@@ -206,6 +211,21 @@ function createMutationCtx(seed?: {
 
         if (tableName === "posSessionItem" && indexName === "by_sessionId") {
           const page = items.filter((item) => item.sessionId === filters.sessionId);
+
+          return {
+            take: async () => page,
+          };
+        }
+
+        if (
+          tableName === "posSession" &&
+          indexName === "by_staffProfileId_and_status"
+        ) {
+          const page = sessions.filter(
+            (session) =>
+              session.staffProfileId === filters.staffProfileId &&
+              session.status === filters.status,
+          );
 
           return {
             take: async () => page,
@@ -1585,5 +1605,107 @@ describe("pos session lifecycle trace handlers", () => {
       notes: "Session expired - inventory holds released",
     });
     expect(mocks.traceRecord).toHaveBeenCalledTimes(1);
+  });
+
+  it("expires other-terminal sessions immediately during cashier recovery", async () => {
+    const ctx = createMutationCtx({
+      sessions: [
+        buildSession({
+          _id: "session-current",
+          terminalId: "terminal-1",
+          status: "active",
+        }),
+        buildSession({
+          _id: "session-other-active",
+          sessionNumber: "SES-OTHER-ACTIVE",
+          terminalId: "terminal-2",
+          status: "active",
+        }),
+        buildSession({
+          _id: "session-other-held",
+          sessionNumber: "SES-OTHER-HELD",
+          terminalId: "terminal-3",
+          status: "held",
+        }),
+      ],
+      items: [
+        {
+          _id: "item-current",
+          sessionId: "session-current",
+          productSkuId: "sku-current",
+          quantity: 1,
+        },
+        {
+          _id: "item-other-active",
+          sessionId: "session-other-active",
+          productSkuId: "sku-active",
+          quantity: 3,
+        },
+        {
+          _id: "item-other-held",
+          sessionId: "session-other-held",
+          productSkuId: "sku-held",
+          quantity: 2,
+        },
+      ],
+    });
+
+    const result = await getHandler(expireAllSessionsForStaff)(ctx as never, {
+      staffProfileId: "cashier-1",
+      terminalId: "terminal-1",
+    });
+
+    expect(result).toEqual({
+      success: true,
+      data: { staffProfileId: "cashier-1" },
+    });
+    expect(ctx.sessions.find((session) => session._id === "session-current")).toEqual(
+      expect.objectContaining({
+        status: "active",
+        terminalId: "terminal-1",
+      }),
+    );
+    expect(
+      ctx.sessions.find((session) => session._id === "session-other-active"),
+    ).toEqual(
+      expect.objectContaining({
+        status: "expired",
+        notes: "Session expired - inventory holds released",
+      }),
+    );
+    expect(
+      ctx.sessions.find((session) => session._id === "session-other-held"),
+    ).toEqual(
+      expect.objectContaining({
+        status: "expired",
+        notes: "Session expired - inventory holds released",
+      }),
+    );
+    expect(mocks.releaseInventoryHoldsBatch.mock.calls).toEqual(
+      expect.arrayContaining([
+        [ctx.db, [{ skuId: "sku-active", quantity: 3 }]],
+        [ctx.db, [{ skuId: "sku-held", quantity: 2 }]],
+      ]),
+    );
+    expect(mocks.releaseInventoryHoldsBatch).toHaveBeenCalledTimes(2);
+    expect(mocks.traceRecord).toHaveBeenCalledTimes(2);
+    expect(mocks.traceRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stage: "expired",
+        session: expect.objectContaining({
+          _id: "session-other-active",
+          status: "expired",
+        }),
+      }),
+    );
+    expect(mocks.traceRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stage: "expired",
+        session: expect.objectContaining({
+          _id: "session-other-held",
+          status: "expired",
+        }),
+      }),
+    );
   });
 });

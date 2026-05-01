@@ -87,6 +87,16 @@ export default {
           DEFAULT: "hsl(var(--signal))",
           foreground: "hsl(var(--signal-foreground))",
         },
+        action: {
+          commit: "hsl(var(--action-commit))",
+          "commit-foreground": "hsl(var(--action-commit-foreground))",
+          workflow: "hsl(var(--action-workflow))",
+          "workflow-foreground": "hsl(var(--action-workflow-foreground))",
+          "workflow-soft": "hsl(var(--action-workflow-soft))",
+          "workflow-border": "hsl(var(--action-workflow-border))",
+          neutral: "hsl(var(--action-neutral))",
+          "neutral-soft": "hsl(var(--action-neutral-soft))",
+        },
         success: {
           DEFAULT: "hsl(var(--success))",
           foreground: "hsl(var(--success-foreground))",

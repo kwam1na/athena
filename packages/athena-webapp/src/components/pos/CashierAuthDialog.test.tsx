@@ -286,6 +286,16 @@ describe("CashierAuthDialog", () => {
     );
 
     await waitFor(() =>
+      expect(authenticateMutation).toHaveBeenCalledWith({
+        allowedRoles: ["cashier", "manager"],
+        allowActiveSessionsOnOtherTerminals: true,
+        pinHash: "hashed:123456",
+        storeId,
+        terminalId,
+        username: "frontdesk",
+      }),
+    );
+    await waitFor(() =>
       expect(expireMutation).toHaveBeenCalledWith({
         staffProfileId,
         terminalId,

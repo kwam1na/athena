@@ -71,6 +71,23 @@ async function loadCorrectionEvents(
     .collect();
 }
 
+async function listStaffNames(
+  ctx: QueryCtx,
+  staffProfileIds: Set<Id<"staffProfile">>,
+) {
+  const staffEntries = await Promise.all(
+    Array.from(staffProfileIds).map(async (staffProfileId) => {
+      const staffProfile = await ctx.db.get("staffProfile", staffProfileId);
+      const staffName = formatStaffDisplayName(staffProfile);
+      return staffName ? [staffProfileId, staffName] : null;
+    }),
+  );
+
+  return new Map(
+    staffEntries.filter(Boolean) as Array<[Id<"staffProfile">, string]>,
+  );
+}
+
 export async function getTransaction(
   ctx: QueryCtx,
   args: {
@@ -179,6 +196,14 @@ export async function getTransactionById(
     storeId: transaction.storeId,
     transactionId: transaction._id,
   });
+  const actorStaffNamesById = await listStaffNames(
+    ctx,
+    new Set(
+      correctionHistory.flatMap((event) =>
+        event.actorStaffProfileId ? [event.actorStaffProfileId] : [],
+      ),
+    ),
+  );
 
   return {
     _id: transaction._id,
@@ -233,6 +258,9 @@ export async function getTransactionById(
       createdAt: event.createdAt,
       actorUserId: event.actorUserId,
       actorStaffProfileId: event.actorStaffProfileId,
+      actorStaffName: event.actorStaffProfileId
+        ? actorStaffNamesById.get(event.actorStaffProfileId) ?? null
+        : null,
     })),
     items: items.map((item) => ({
       _id: item._id,

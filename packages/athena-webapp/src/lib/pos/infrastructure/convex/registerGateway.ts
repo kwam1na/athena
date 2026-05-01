@@ -20,6 +20,9 @@ export function mapRegisterStateDto(
       ? { ...dto.activeRegisterSession }
       : null,
     activeSession: dto.activeSession ? { ...dto.activeSession } : null,
+    activeSessionConflict: dto.activeSessionConflict
+      ? { ...dto.activeSessionConflict }
+      : null,
     resumableSession: dto.resumableSession ? { ...dto.resumableSession } : null,
   };
 }

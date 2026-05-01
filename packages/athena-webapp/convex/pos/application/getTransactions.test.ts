@@ -340,7 +340,16 @@ describe("getTransactionById", () => {
     ]);
     const ctx = {
       db: {
-        get: vi.fn().mockResolvedValue(null),
+        get: vi.fn((table, id) => {
+          if (table === "staffProfile" && id === "staff-1") {
+            return Promise.resolve({
+              _id: "staff-1",
+              fullName: "Ama Mensah",
+            });
+          }
+
+          return Promise.resolve(null);
+        }),
         query: vi.fn(() => ({
           withIndex: vi.fn((_indexName, callback) => {
             callback({
@@ -366,6 +375,7 @@ describe("getTransactionById", () => {
           expect.objectContaining({
             _id: "event-1",
             eventType: "pos_transaction_payment_method_corrected",
+            actorStaffName: "Ama M.",
             metadata: { paymentMethod: "card" },
           }),
         ],

@@ -28,6 +28,9 @@ function ControlsShowcase() {
         <div className="grid gap-4">
           <div className="flex flex-wrap gap-2">
             <Button>Primary</Button>
+            <Button variant="workflow">Workflow</Button>
+            <Button variant="workflow-soft">Selected workflow</Button>
+            <Button variant="utility">Utility</Button>
             <Button variant="secondary">Secondary</Button>
             <Button variant="outline">Outline</Button>
             <Button variant="ghost">Ghost</Button>

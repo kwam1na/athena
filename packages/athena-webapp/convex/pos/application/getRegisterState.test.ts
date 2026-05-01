@@ -79,6 +79,28 @@ describe("buildRegisterState", () => {
     expect(result.phase).toBe("readyToStart");
   });
 
+  it("carries active-session terminal conflicts alongside ready state", () => {
+    const result = buildRegisterState({
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "cashier-1", firstName: "Ama", lastName: "K" },
+      activeRegisterSession: null,
+      activeSession: null,
+      activeSessionConflict: {
+        kind: "activeOnOtherTerminal",
+        message: "A session is active for this cashier on a different terminal",
+        terminalId: "terminal-2",
+      },
+      heldSessions: [],
+    });
+
+    expect(result.phase).toBe("readyToStart");
+    expect(result.activeSessionConflict).toEqual({
+      kind: "activeOnOtherTerminal",
+      message: "A session is active for this cashier on a different terminal",
+      terminalId: "terminal-2",
+    });
+  });
+
   it("keeps the visible drawer in readyToStart state", () => {
     const result = buildRegisterState({
       terminal: { _id: "terminal-1", displayName: "Front Counter" },

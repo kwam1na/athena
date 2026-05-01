@@ -492,6 +492,10 @@ describe("RegisterSessionViewContent", () => {
     await user.click(
       screen.getByRole("button", { name: "Correct opening float" }),
     );
+    expect(
+      screen.getByRole("button", { name: "Correct opening float" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
     await user.clear(screen.getByLabelText("Corrected opening float"));
     await user.type(screen.getByLabelText("Corrected opening float"), "60");
     await user.type(
@@ -499,7 +503,7 @@ describe("RegisterSessionViewContent", () => {
       "Opening cash was recounted.",
     );
     expect(screen.getByText("$10")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Submit correction" }));
+    await user.click(screen.getByRole("button", { name: "Submit" }));
     await user.click(
       screen.getByRole("button", {
         name: "Confirm staff for Correct opening float",
@@ -522,6 +526,49 @@ describe("RegisterSessionViewContent", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(
       "Opening float corrected.",
     );
+  });
+
+  it("exits the opening float correction workflow without submitting", async () => {
+    const user = userEvent.setup();
+    const onCorrectOpeningFloat = vi.fn();
+
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="USD"
+        isLoading={false}
+        onAuthenticateStaff={vi.fn()}
+        onCorrectOpeningFloat={onCorrectOpeningFloat}
+        onRecordDeposit={vi.fn()}
+        onReviewCloseout={vi.fn()}
+        onSubmitCloseout={vi.fn()}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            status: "active",
+          },
+        }}
+        storeId="store-1"
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Correct opening float" }),
+    );
+    await user.type(
+      screen.getByLabelText("Opening float correction reason"),
+      "Wrong till count.",
+    );
+    expect(
+      screen.getByRole("button", { name: "Correct opening float" }),
+    ).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(
+      screen.queryByLabelText("Opening float correction reason"),
+    ).not.toBeInTheDocument();
+    expect(onCorrectOpeningFloat).not.toHaveBeenCalled();
   });
 
   it("does not offer opening float correction once closeout has started", () => {
@@ -585,7 +632,7 @@ describe("RegisterSessionViewContent", () => {
       screen.getByLabelText("Opening float correction reason"),
       "Correction from counted opening cash.",
     );
-    await user.click(screen.getByRole("button", { name: "Submit correction" }));
+    await user.click(screen.getByRole("button", { name: "Submit" }));
     await user.click(
       screen.getByRole("button", {
         name: "Confirm staff for Correct opening float",

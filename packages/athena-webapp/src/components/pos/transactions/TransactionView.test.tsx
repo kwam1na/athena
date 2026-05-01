@@ -38,7 +38,18 @@ vi.mock("../../common/FadeIn", () => ({
 }));
 
 vi.mock("../../common/PageHeader", () => ({
-  SimplePageHeader: ({ title }: { title: string }) => <h1>{title}</h1>,
+  ComposedPageHeader: ({
+    leadingContent,
+    trailingContent,
+  }: {
+    leadingContent: React.ReactNode;
+    trailingContent?: React.ReactNode;
+  }) => (
+    <header>
+      {leadingContent}
+      <div data-testid="header-trailing">{trailingContent}</div>
+    </header>
+  ),
 }));
 
 vi.mock("../../ui/badge", () => ({
@@ -63,6 +74,42 @@ vi.mock("../../ui/card", () => ({
 vi.mock("../../ui/input", () => ({
   Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => (
     <input {...props} />
+  ),
+}));
+
+vi.mock("../../ui/select", () => ({
+  Select: ({
+    children,
+    onValueChange,
+    value,
+  }: {
+    children?: React.ReactNode;
+    onValueChange?: (value: string) => void;
+    value?: string;
+  }) => (
+    <select
+      aria-label="Corrected payment method"
+      onChange={(event) => onValueChange?.(event.target.value)}
+      value={value}
+    >
+      {children}
+    </select>
+  ),
+  SelectContent: ({ children }: { children?: React.ReactNode }) => (
+    <>{children}</>
+  ),
+  SelectItem: ({
+    children,
+    value,
+  }: {
+    children?: React.ReactNode;
+    value: string;
+  }) => <option value={value}>{children}</option>,
+  SelectTrigger: ({ children }: { children?: React.ReactNode }) => (
+    <>{children}</>
+  ),
+  SelectValue: ({ placeholder }: { placeholder?: string }) => (
+    <option value="">{placeholder}</option>
   ),
 }));
 
@@ -102,6 +149,24 @@ vi.mock("../../traces/WorkflowTraceRouteLink", () => ({
       {children ? `:${children}` : ""}
     </span>
   ),
+}));
+
+vi.mock("../../ui/button", () => ({
+  Button: ({
+    asChild,
+    children,
+    ...props
+  }: {
+    asChild?: boolean;
+    children?: React.ReactNode;
+  } & React.ButtonHTMLAttributes<HTMLButtonElement>) =>
+    asChild ? (
+      <>{children}</>
+    ) : (
+      <button type="button" {...props}>
+        {children}
+      </button>
+    ),
 }));
 
 describe("TransactionView", () => {
@@ -155,8 +220,11 @@ describe("TransactionView", () => {
 
     render(<TransactionView />);
 
+    expect(screen.getByTestId("header-trailing")).toContainElement(
+      screen.getByTestId("session-trace-link"),
+    );
     expect(screen.getByTestId("session-trace-link")).toHaveTextContent(
-      "pos_session:ses-001:Session trace",
+      "pos_session:ses-001:View trace",
     );
   });
 
@@ -326,6 +394,29 @@ describe("TransactionView", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("uses a select for same-amount payment method corrections", async () => {
+    const user = userEvent.setup();
+    useParamsMock.mockReturnValue({ transactionId: "txn_8" });
+    useQueryMock.mockReturnValue(baseTransaction);
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Correct" }));
+    await user.click(screen.getByRole("button", { name: "Payment method" }));
+
+    const paymentMethodSelect = screen.getByLabelText(
+      "Corrected payment method",
+    );
+    expect(paymentMethodSelect.tagName).toBe("SELECT");
+
+    await user.selectOptions(paymentMethodSelect, "card");
+
+    expect(paymentMethodSelect).toHaveValue("card");
+    expect(
+      screen.queryByPlaceholderText("cash, card, mobile_money..."),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders correction history when operational events are present", () => {
     useParamsMock.mockReturnValue({ transactionId: "txn_8" });
     useQueryMock.mockReturnValue({
@@ -352,6 +443,31 @@ describe("TransactionView", () => {
       screen.getByText("Customer called with receipt."),
     ).toBeInTheDocument();
     expect(screen.getByText(/by Ama M\./)).toBeInTheDocument();
+  });
+
+  it("tightens payment correction history labels", () => {
+    useParamsMock.mockReturnValue({ transactionId: "txn_10" });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      correctionHistory: [
+        {
+          _id: "event-1",
+          actorStaffName: "Kwamina Mensah",
+          createdAt: Date.now() - 60_000,
+          eventType: "pos_transaction_payment_method_corrected",
+          message: "Corrected payment method for Transaction #754489.",
+          reason: "Wrong method selected.",
+        },
+      ],
+    });
+
+    render(<TransactionView />);
+
+    expect(screen.getByText("Payment method corrected")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Corrected payment method for Transaction #754489."),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText(/by Kwamina M\./)).toBeInTheDocument();
   });
 
   it("omits correction history when no events are present", () => {

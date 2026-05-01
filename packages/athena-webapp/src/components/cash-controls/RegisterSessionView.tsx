@@ -927,6 +927,7 @@ export function RegisterSessionViewContent({
                         {canCorrectOpeningFloat ? (
                           <Button
                             className="w-full"
+                            disabled={isOpeningFloatCorrectionOpen}
                             onClick={() => {
                               setIsOpeningFloatCorrectionOpen(
                                 (value) => !value,
@@ -1128,16 +1129,29 @@ export function RegisterSessionViewContent({
                             </p>
                           ) : null}
 
-                          <LoadingButton
-                            disabled={isCorrectingOpeningFloat}
-                            isLoading={isCorrectingOpeningFloat}
-                            onClick={() =>
-                              void handleSubmitOpeningFloatCorrection()
-                            }
-                            type="button"
-                          >
-                            Submit correction
-                          </LoadingButton>
+                          <div className="flex flex-wrap items-center gap-3">
+                            <LoadingButton
+                              disabled={isCorrectingOpeningFloat}
+                              isLoading={isCorrectingOpeningFloat}
+                              onClick={() =>
+                                void handleSubmitOpeningFloatCorrection()
+                              }
+                              type="button"
+                            >
+                              Submit
+                            </LoadingButton>
+                            <Button
+                              disabled={isCorrectingOpeningFloat}
+                              onClick={() => {
+                                setIsOpeningFloatCorrectionOpen(false);
+                                setOpeningFloatCorrectionError("");
+                              }}
+                              type="button"
+                              variant="outline"
+                            >
+                              Cancel
+                            </Button>
+                          </div>
                         </div>
                       ) : null}
 

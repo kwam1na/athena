@@ -25,6 +25,7 @@ const mockRemoveItem = vi.fn();
 const mockBindSessionToRegisterSession = vi.fn();
 const mockSubmitRegisterSessionCloseout = vi.fn();
 const mockReopenRegisterSessionCloseout = vi.fn();
+const mockCorrectRegisterSessionOpeningFloat = vi.fn();
 const mockNavigateBack = vi.fn();
 
 let mockActiveStore: { _id: Id<"store">; currency: string } | null;
@@ -53,6 +54,11 @@ let mockRegisterState:
         workflowTraceId?: string;
       } | null;
       activeSession: { _id: string; sessionNumber: string } | null;
+      activeSessionConflict?: {
+        kind: "activeOnOtherTerminal";
+        message: string;
+        terminalId?: string;
+      } | null;
       resumableSession: { _id: string; sessionNumber: string } | null;
     }
   | undefined;
@@ -209,6 +215,7 @@ describe("useRegisterViewModel", () => {
         workflowTraceId: "register_session:drawer-1",
       },
       activeSession: { _id: "session-1", sessionNumber: "POS-0001" },
+      activeSessionConflict: null,
       resumableSession: null,
     };
     mockActiveSession = {
@@ -250,12 +257,17 @@ describe("useRegisterViewModel", () => {
 
     mockUseQuery.mockImplementation(() => mockCashier);
     mockUseMutation.mockReset();
-    mockUseMutation.mockImplementation(() => {
-      const callIndex = mockUseMutation.mock.calls.length;
-      return callIndex % 2 === 1
-        ? mockSubmitRegisterSessionCloseout
-        : mockReopenRegisterSessionCloseout;
-    });
+    mockUseMutation.mockImplementation(
+      () => (args: Record<string, unknown>) => {
+        if ("countedCash" in args) {
+          return mockSubmitRegisterSessionCloseout(args);
+        }
+        if ("correctedOpeningFloat" in args) {
+          return mockCorrectRegisterSessionOpeningFloat(args);
+        }
+        return mockReopenRegisterSessionCloseout(args);
+      },
+    );
     mockSubmitRegisterSessionCloseout.mockReset();
     mockSubmitRegisterSessionCloseout.mockResolvedValue(
       ok({
@@ -266,6 +278,12 @@ describe("useRegisterViewModel", () => {
     mockReopenRegisterSessionCloseout.mockResolvedValue(
       ok({
         action: "reopened",
+      }),
+    );
+    mockCorrectRegisterSessionOpeningFloat.mockReset();
+    mockCorrectRegisterSessionOpeningFloat.mockResolvedValue(
+      ok({
+        action: "corrected",
       }),
     );
     mockStartSession.mockReset();
@@ -554,6 +572,114 @@ describe("useRegisterViewModel", () => {
       "Return to sale",
     );
     expect(result.current.productEntry.disabled).toBe(true);
+  });
+
+  it("routes register actions through the active-terminal conflict gate", async () => {
+    mockActiveSession = null;
+    mockRegisterState = {
+      ...mockRegisterState!,
+      activeSession: null,
+      activeSessionConflict: {
+        kind: "activeOnOtherTerminal",
+        message: "A session is active for this cashier on a different terminal",
+        terminalId: "terminal-2",
+      },
+    };
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    expect(result.current.sessionPanel?.hasExpiredSession).toBe(false);
+    expect(result.current.sessionPanel?.disableNewSession).toBe(false);
+    expect(result.current.closeoutControl?.canCloseout).toBe(true);
+    expect(result.current.closeoutControl?.canCorrectOpeningFloat).toBe(true);
+
+    await act(async () => {
+      await result.current.sessionPanel?.onStartNewSession();
+      result.current.closeoutControl?.onRequestCloseout();
+      result.current.closeoutControl?.onRequestOpeningFloatCorrection();
+    });
+
+    expect(result.current.drawerGate).toBeNull();
+    expect(toast.error).toHaveBeenCalledWith(
+      "Cashier already has an active session on another terminal.",
+    );
+  });
+
+  it("starts a new active sale after other-terminal sessions have expired", async () => {
+    mockActiveSession = null;
+    mockRegisterState = {
+      ...mockRegisterState!,
+      phase: "readyToStart",
+      activeSession: null,
+      activeSessionConflict: null,
+    };
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    await waitFor(() => {
+      expect(mockStartSession).toHaveBeenCalledWith({
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        staffProfileId: "staff-1",
+        registerNumber: "1",
+        registerSessionId: "drawer-1",
+      });
+    });
+    expect(result.current.sessionPanel?.hasExpiredSession).toBe(false);
+  });
+
+  it("corrects the opening float from the active POS register", async () => {
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    expect(result.current.closeoutControl?.canCorrectOpeningFloat).toBe(true);
+
+    act(() => {
+      result.current.closeoutControl?.onRequestOpeningFloatCorrection();
+    });
+
+    expect(result.current.drawerGate?.mode).toBe("openingFloatCorrection");
+    expect(result.current.drawerGate?.currentOpeningFloat).toBe(5_000);
+    expect(result.current.drawerGate?.correctedOpeningFloat).toBe("50");
+    expect(result.current.productEntry.disabled).toBe(true);
+
+    act(() => {
+      result.current.drawerGate?.onCorrectedOpeningFloatChange?.("45.00");
+      result.current.drawerGate?.onCorrectionReasonChange?.("Cashier typo");
+    });
+
+    await act(async () => {
+      await result.current.drawerGate?.onSubmitOpeningFloatCorrection?.();
+    });
+
+    expect(mockCorrectRegisterSessionOpeningFloat).toHaveBeenCalledWith({
+      actorStaffProfileId: "staff-1",
+      actorUserId: "user-1",
+      correctedOpeningFloat: 4_500,
+      reason: "Cashier typo",
+      registerSessionId: "drawer-1",
+      storeId: "store-1",
+    });
+    expect(toast.success).toHaveBeenCalledWith("Opening float corrected");
   });
 
   it("reopens a closing register session from the POS drawer gate", async () => {
@@ -1291,15 +1417,15 @@ describe("useRegisterViewModel", () => {
         "item-1" as Id<"posSessionItem">,
         2,
       );
-      await result.current.cart.onRemoveItem(
-        "item-1" as Id<"posSessionItem">,
-      );
+      await result.current.cart.onRemoveItem("item-1" as Id<"posSessionItem">);
       await result.current.cart.onClearCart();
     });
 
     expect(mockAddItem).not.toHaveBeenCalled();
     expect(mockRemoveItem).not.toHaveBeenCalled();
-    expect(mockReleaseSessionInventoryHoldsAndDeleteItems).not.toHaveBeenCalled();
+    expect(
+      mockReleaseSessionInventoryHoldsAndDeleteItems,
+    ).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalledWith(
       "Drawer closed. Open the drawer before updating this sale.",
     );

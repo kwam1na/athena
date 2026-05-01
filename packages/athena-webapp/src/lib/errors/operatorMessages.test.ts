@@ -40,6 +40,10 @@ describe("toOperatorMessage", () => {
       "This sale is already assigned to a different cash drawer.",
       "Sale assigned to a different drawer. Open that drawer before continuing.",
     ],
+    [
+      "A session is active for this cashier on a different terminal",
+      "Cashier already has an active session on another terminal.",
+    ],
   ])("normalizes POS drawer command copy: %s", (backendMessage, operatorCopy) => {
     expect(toOperatorMessage(backendMessage)).toBe(operatorCopy);
   });

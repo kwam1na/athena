@@ -55,5 +55,8 @@ describe("AthenaFoundationsPage", () => {
     expect(indexCss).toContain("--sidebar-border: 220 16% 88%;");
     expect(indexCss).toContain("--border: 220 16% 88%;");
     expect(indexCss).toContain("--input: 220 16% 88%;");
+    expect(indexCss).toContain("--action-commit: 338 62% 43%;");
+    expect(indexCss).toContain("--action-workflow: 232 42% 45%;");
+    expect(indexCss).toContain("--action-workflow-soft: 232 58% 96%;");
   });
 });

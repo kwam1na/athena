@@ -63,12 +63,19 @@ export interface PosRegisterSessionDto {
   workflowTraceId?: string;
 }
 
+export interface PosActiveSessionConflictDto {
+  kind: "activeOnOtherTerminal";
+  message: string;
+  terminalId?: string;
+}
+
 export interface PosRegisterStateDto {
   phase: PosRegisterPhase;
   terminal: PosTerminalDto | null;
   cashier: PosCashierDto | null;
   activeRegisterSession: PosCashDrawerDto | null;
   activeSession: PosRegisterSessionDto | null;
+  activeSessionConflict: PosActiveSessionConflictDto | null;
   resumableSession: PosRegisterSessionDto | null;
 }
 
@@ -80,6 +87,7 @@ export interface PosRegisterBootstrapDto {
   cashier: PosCashierDto | null;
   activeRegisterSession: PosCashDrawerDto | null;
   activeSession: PosRegisterSessionDto | null;
+  activeSessionConflict: PosActiveSessionConflictDto | null;
   resumableSession: PosRegisterSessionDto | null;
 }
 

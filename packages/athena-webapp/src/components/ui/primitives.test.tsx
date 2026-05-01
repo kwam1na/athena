@@ -39,7 +39,7 @@ describe("primitive sizing and token semantics", () => {
     expect(card).toHaveClass("shadow-surface")
   })
 
-  it("uses the signal token for primary actions and badges", () => {
+  it("uses action tokens for primary actions and signal tokens for badges", () => {
     render(
       <>
         <Button>Save sale</Button>
@@ -48,8 +48,8 @@ describe("primitive sizing and token semantics", () => {
     )
 
     expect(screen.getByRole("button", { name: "Save sale" })).toHaveClass(
-      "bg-signal",
-      "text-signal-foreground",
+      "bg-action-commit",
+      "text-action-commit-foreground",
     )
     expect(screen.getByText("Ready")).toHaveClass(
       "bg-signal",

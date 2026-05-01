@@ -94,7 +94,7 @@ export function RegisterSessionsViewContent({
         _id: session._id,
         closedAtLabel: session.closedAt
           ? formatTimestamp(session.closedAt)
-          : "Not closed",
+          : "-",
         countedCashLabel: formatCurrency(currency, session.countedCash),
         depositedLabel: formatCurrency(currency, session.totalDeposited),
         expectedCashLabel: formatCurrency(currency, session.expectedCash),

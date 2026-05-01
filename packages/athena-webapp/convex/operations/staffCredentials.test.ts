@@ -663,6 +663,23 @@ describe("staff credential operations", () => {
     await expect(
       authenticateStaffCredentialForTerminalWithCtx(ctx, {
         allowedRoles: ["cashier"],
+        allowActiveSessionsOnOtherTerminals: true,
+        pinHash: "hash-1",
+        storeId: "store_1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        username: "frontdesk",
+      })
+    ).resolves.toEqual({
+      kind: "ok",
+      data: expect.objectContaining({
+        staffProfileId: "staff_profile_1",
+        activeRoles: ["cashier"],
+      }),
+    });
+
+    await expect(
+      authenticateStaffCredentialForTerminalWithCtx(ctx, {
+        allowedRoles: ["cashier"],
         pinHash: "hash-1",
         storeId: "store_1" as Id<"store">,
         terminalId: "terminal-2" as Id<"posTerminal">,
