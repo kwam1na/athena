@@ -191,6 +191,7 @@ export const getTransactionById = query({
           createdAt: v.number(),
           actorUserId: v.optional(v.id("athenaUser")),
           actorStaffProfileId: v.optional(v.id("staffProfile")),
+          actorStaffName: v.union(v.string(), v.null()),
         }),
       ),
       items: v.array(

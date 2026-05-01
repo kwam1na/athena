@@ -128,12 +128,19 @@ export interface RegisterCashierCardState {
 }
 
 export interface RegisterDrawerGateState {
-  mode: "initialSetup" | "recovery" | "closeoutBlocked";
+  mode:
+    | "initialSetup"
+    | "recovery"
+    | "closeoutBlocked"
+    | "openingFloatCorrection";
   isRecovery?: boolean;
   registerLabel: string;
   registerNumber: string;
   currency?: string;
+  currentOpeningFloat?: number;
   openingFloat?: string;
+  correctedOpeningFloat?: string;
+  correctionReason?: string;
   closeoutCountedCash?: string;
   closeoutDraftVariance?: number;
   closeoutNotes?: string;
@@ -142,12 +149,17 @@ export interface RegisterDrawerGateState {
   notes?: string;
   errorMessage: string | null;
   isCloseoutSubmitting?: boolean;
+  isCorrectingOpeningFloat?: boolean;
   isReopeningCloseout?: boolean;
   isSubmitting?: boolean;
   onCloseoutCountedCashChange?: (value: string) => void;
   onCloseoutNotesChange?: (value: string) => void;
+  onCorrectedOpeningFloatChange?: (value: string) => void;
+  onCorrectionReasonChange?: (value: string) => void;
   onOpeningFloatChange?: (value: string) => void;
   onNotesChange?: (value: string) => void;
+  onCancelOpeningFloatCorrection?: () => void;
+  onSubmitOpeningFloatCorrection?: () => Promise<void>;
   onSubmitCloseout?: () => Promise<void>;
   onReopenRegister?: () => Promise<void>;
   onSubmit?: () => Promise<void>;
@@ -156,7 +168,9 @@ export interface RegisterDrawerGateState {
 
 export interface RegisterCloseoutControlState {
   canCloseout: boolean;
+  canCorrectOpeningFloat: boolean;
   onRequestCloseout: () => void;
+  onRequestOpeningFloatCorrection: () => void;
 }
 
 export interface RegisterAuthDialogState {

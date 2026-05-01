@@ -29,6 +29,7 @@ function state(
     cashier,
     activeRegisterSession: null,
     activeSession: null,
+    activeSessionConflict: null,
     resumableSession: null,
     ...overrides,
   };
@@ -43,6 +44,7 @@ describe("bootstrapRegister", () => {
         cashier: null,
         activeRegisterSession: null,
         activeSession: null,
+        activeSessionConflict: null,
         resumableSession: null,
       },
     });

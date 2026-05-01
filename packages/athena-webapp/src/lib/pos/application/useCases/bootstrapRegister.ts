@@ -26,6 +26,7 @@ export function bootstrapRegister(input: {
     cashier: registerState.cashier,
     activeRegisterSession: registerState.activeRegisterSession,
     activeSession: registerState.activeSession,
+    activeSessionConflict: registerState.activeSessionConflict,
     resumableSession: registerState.resumableSession,
   };
 }

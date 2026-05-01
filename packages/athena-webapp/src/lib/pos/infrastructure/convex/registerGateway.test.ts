@@ -10,6 +10,7 @@ describe("mapRegisterStateDto", () => {
       cashier: { _id: "cashier-1", firstName: "Ama", lastName: "K" },
       activeRegisterSession: null,
       activeSession: null,
+      activeSessionConflict: null,
       resumableSession: null,
     });
 
@@ -31,6 +32,7 @@ describe("mapRegisterStateDto", () => {
         openedAt: 1710000000000,
       },
       activeSession: null,
+      activeSessionConflict: null,
       resumableSession: {
         _id: "session-1",
         sessionNumber: "POS-001",

@@ -1,5 +1,6 @@
 import type { Id } from "../../_generated/dataModel";
 import type {
+  PosActiveSessionConflict,
   PosCashDrawerSummary,
   PosCashierSummary,
   PosRegisterSessionSummary,
@@ -20,5 +21,6 @@ export interface RegisterStateDto {
   cashier: PosCashierSummary | null;
   activeRegisterSession: PosCashDrawerSummary | null;
   activeSession: PosRegisterSessionSummary | null;
+  activeSessionConflict: PosActiveSessionConflict | null;
   resumableSession: PosRegisterSessionSummary | null;
 }

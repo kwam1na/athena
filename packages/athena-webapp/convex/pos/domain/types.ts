@@ -43,6 +43,12 @@ export interface PosRegisterSessionSummary {
   workflowTraceId?: string;
 }
 
+export interface PosActiveSessionConflict {
+  kind: "activeOnOtherTerminal";
+  message: string;
+  terminalId?: string;
+}
+
 export interface PosCashDrawerSummary {
   _id: Id<"registerSession">;
   status: "open" | "active" | "closing" | "closed";
@@ -67,5 +73,6 @@ export interface PosRegisterStateInput {
   cashier: PosCashierSummary | null;
   activeRegisterSession: PosCashDrawerSummary | null;
   activeSession: PosRegisterSessionSummary | null;
+  activeSessionConflict?: PosActiveSessionConflict | null;
   heldSessions: PosRegisterSessionSummary[];
 }

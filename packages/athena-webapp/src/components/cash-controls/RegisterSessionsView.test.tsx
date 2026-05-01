@@ -81,7 +81,9 @@ describe("RegisterSessionsViewContent", () => {
     );
 
     expect(screen.getByText("Register sessions")).toBeInTheDocument();
-    expect(screen.getByText("Open, closing, and closed drawers.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Open, closing, and closed drawers."),
+    ).toBeInTheDocument();
     expect(screen.getByText("2 sessions")).toBeInTheDocument();
     expect(screen.getByText("Register 3")).toBeInTheDocument();
     expect(screen.getByText("Register 2")).toBeInTheDocument();
@@ -91,8 +93,12 @@ describe("RegisterSessionsViewContent", () => {
     expect(screen.getByText("Ato K.")).toBeInTheDocument();
     expect(screen.getByText("GH₵9,690")).toBeInTheDocument();
     expect(screen.getByText("GH₵-200")).toBeInTheDocument();
+    expect(screen.getByText("-")).toBeInTheDocument();
+    expect(screen.queryByText("Not closed")).not.toBeInTheDocument();
     expect(screen.getByText(expectedClosedAt)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Register 3 ACTIVE/i })).toHaveAttribute(
+    expect(
+      screen.getByRole("link", { name: /Register 3 ACTIVE/i }),
+    ).toHaveAttribute(
       "href",
       "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId?o=%252F",
     );

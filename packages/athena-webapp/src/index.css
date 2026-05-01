@@ -26,8 +26,8 @@
     --card-foreground: 222 28% 16%;
     --popover: 40 42% 99%;
     --popover-foreground: 222 28% 16%;
-    --primary: 26 73% 48%;
-    --primary-foreground: 35 100% 97%;
+    --primary: 338 62% 43%;
+    --primary-foreground: 336 100% 98%;
     --secondary: 210 21% 92%;
     --secondary-foreground: 222 28% 16%;
     --muted: 36 30% 91%;
@@ -45,8 +45,16 @@
     --surface-raised: 0 0% 100%;
     --shell: 223 34% 14%;
     --shell-foreground: 35 42% 95%;
-    --signal: 26 73% 48%;
-    --signal-foreground: 35 100% 97%;
+    --signal: 338 62% 43%;
+    --signal-foreground: 336 100% 98%;
+    --action-commit: 338 62% 43%;
+    --action-commit-foreground: 336 100% 98%;
+    --action-workflow: 232 42% 45%;
+    --action-workflow-foreground: 232 100% 98%;
+    --action-workflow-soft: 232 58% 96%;
+    --action-workflow-border: 232 38% 82%;
+    --action-neutral: 225 18% 35%;
+    --action-neutral-soft: 225 20% 96%;
     --success: 151 42% 34%;
     --success-foreground: 145 60% 96%;
     --warning: 35 79% 52%;
@@ -54,8 +62,8 @@
     --danger: 4 71% 54%;
     --danger-foreground: 0 0% 98%;
 
-    --chart-1: 26 73% 48%;
-    --chart-2: 205 56% 38%;
+    --chart-1: 338 62% 43%;
+    --chart-2: 232 42% 45%;
     --chart-3: 156 40% 34%;
     --chart-4: 37 82% 59%;
     --chart-5: 278 34% 48%;
@@ -99,7 +107,7 @@
     --card-foreground: 36 34% 95%;
     --popover: 223 24% 14%;
     --popover-foreground: 36 34% 95%;
-    --primary: 31 91% 67%;
+    --primary: 336 72% 68%;
     --primary-foreground: 222 30% 12%;
     --secondary: 223 19% 18%;
     --secondary-foreground: 36 34% 95%;
@@ -118,8 +126,16 @@
     --surface-raised: 223 20% 17%;
     --shell: 222 38% 8%;
     --shell-foreground: 36 30% 94%;
-    --signal: 31 91% 67%;
+    --signal: 336 72% 68%;
     --signal-foreground: 222 30% 12%;
+    --action-commit: 336 72% 68%;
+    --action-commit-foreground: 222 30% 12%;
+    --action-workflow: 235 64% 72%;
+    --action-workflow-foreground: 222 30% 12%;
+    --action-workflow-soft: 232 24% 22%;
+    --action-workflow-border: 233 36% 44%;
+    --action-neutral: 225 18% 76%;
+    --action-neutral-soft: 225 17% 22%;
     --success: 151 44% 42%;
     --success-foreground: 145 56% 94%;
     --warning: 38 92% 61%;
@@ -127,8 +143,8 @@
     --danger: 6 79% 64%;
     --danger-foreground: 0 0% 98%;
 
-    --chart-1: 31 91% 67%;
-    --chart-2: 194 64% 63%;
+    --chart-1: 336 72% 68%;
+    --chart-2: 235 64% 72%;
     --chart-3: 157 43% 46%;
     --chart-4: 40 94% 66%;
     --chart-5: 281 58% 70%;

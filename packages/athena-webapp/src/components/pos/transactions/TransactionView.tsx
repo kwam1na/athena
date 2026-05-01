@@ -6,6 +6,7 @@ import {
   Banknote,
   CheckCircle2,
   CreditCard,
+  ShieldAlert,
   WalletCards,
   Smartphone,
   User,
@@ -13,7 +14,7 @@ import {
 
 import View from "../../View";
 import { FadeIn } from "../../common/FadeIn";
-import { SimplePageHeader } from "../../common/PageHeader";
+import { ComposedPageHeader } from "../../common/PageHeader";
 import { api } from "~/convex/_generated/api";
 import { Badge } from "../../ui/badge";
 import { getRelativeTime } from "~/src/lib/utils";
@@ -29,6 +30,13 @@ import config from "~/src/config";
 import { formatStaffDisplayName } from "~/shared/staffDisplayName";
 import { Textarea } from "../../ui/textarea";
 import { Input } from "../../ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../ui/select";
 import { runCommand } from "~/src/lib/errors/runCommand";
 import type { CommandResult } from "~/shared/commandResult";
 import {
@@ -52,10 +60,37 @@ type CorrectionEvent = {
   reason?: string | null;
 };
 
+const PAYMENT_METHOD_OPTIONS = [
+  { label: "Cash", value: "cash" },
+  { label: "Card", value: "card" },
+  { label: "Mobile Money", value: "mobile_money" },
+] satisfies Array<{ label: string; value: PosPaymentMethod }>;
+
 function formatCorrectionEventType(eventType: string) {
   return eventType
     .replaceAll("_", " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatCorrectionHistoryTitle(event: CorrectionEvent) {
+  switch (event.eventType) {
+    case "pos_transaction_payment_method_corrected":
+      return "Payment method corrected";
+    case "transaction_customer_corrected":
+    case "pos_transaction_customer_corrected":
+      return "Customer attribution corrected";
+    default:
+      return event.message ?? formatCorrectionEventType(event.eventType);
+  }
+}
+
+function formatCorrectionHistoryMeta(event: CorrectionEvent) {
+  const timestamp = getRelativeTime(event.createdAt);
+  const actorName = event.actorStaffName
+    ? formatStaffDisplayName({ fullName: event.actorStaffName })
+    : null;
+
+  return actorName ? `${timestamp} by ${actorName}` : timestamp;
 }
 
 function getTransactionCorrectionHistory(transaction: {
@@ -92,7 +127,9 @@ export function TransactionView() {
   const correctAuth = useMutation(
     api.operations.staffCredentials.authenticateStaffCredential,
   );
-  const correctCustomer = useMutation(api.inventory.pos.correctTransactionCustomer);
+  const correctCustomer = useMutation(
+    api.inventory.pos.correctTransactionCustomer,
+  );
   const correctPaymentMethod = useMutation(
     api.inventory.pos.correctTransactionPaymentMethod,
   );
@@ -228,15 +265,16 @@ export function TransactionView() {
 
     setCorrectionSubmitting(true);
     setCorrectionError(null);
-    const result = await runCommand(() =>
-      correctCustomer({
-        actorStaffProfileId: staff.staffProfileId,
-        customerProfileId: customerProfileIdInput.trim()
-          ? (customerProfileIdInput.trim() as Id<"customerProfile">)
-          : undefined,
-        reason,
-        transactionId: transactionId as Id<"posTransaction">,
-      }) as Promise<CommandResult<unknown>>,
+    const result = await runCommand(
+      () =>
+        correctCustomer({
+          actorStaffProfileId: staff.staffProfileId,
+          customerProfileId: customerProfileIdInput.trim()
+            ? (customerProfileIdInput.trim() as Id<"customerProfile">)
+            : undefined,
+          reason,
+          transactionId: transactionId as Id<"posTransaction">,
+        }) as Promise<CommandResult<unknown>>,
     );
     setCorrectionSubmitting(false);
 
@@ -256,7 +294,7 @@ export function TransactionView() {
       return;
     }
 
-    const paymentMethod = paymentMethodInput.trim();
+    const paymentMethod = paymentMethodInput as PosPaymentMethod;
     const reason = paymentCorrectionReason.trim();
     if (!paymentMethod) {
       setCorrectionError("Choose the corrected payment method.");
@@ -269,13 +307,14 @@ export function TransactionView() {
 
     setCorrectionSubmitting(true);
     setCorrectionError(null);
-    const result = await runCommand(() =>
-      correctPaymentMethod({
-        actorStaffProfileId: staff.staffProfileId,
-        paymentMethod,
-        reason,
-        transactionId: transactionId as Id<"posTransaction">,
-      }) as Promise<CommandResult<unknown>>,
+    const result = await runCommand(
+      () =>
+        correctPaymentMethod({
+          actorStaffProfileId: staff.staffProfileId,
+          paymentMethod,
+          reason,
+          transactionId: transactionId as Id<"posTransaction">,
+        }) as Promise<CommandResult<unknown>>,
     );
     setCorrectionSubmitting(false);
 
@@ -315,8 +354,21 @@ export function TransactionView() {
   return (
     <View
       header={
-        <SimplePageHeader
-          title={`Transaction #${transaction.transactionNumber}`}
+        <ComposedPageHeader
+          leadingContent={
+            <p className="text-sm">
+              Transaction #{transaction.transactionNumber}
+            </p>
+          }
+          trailingContent={
+            transaction.sessionTraceId ? (
+              <Button asChild size="sm" type="button" variant="ghost">
+                <WorkflowTraceRouteLink traceId={transaction.sessionTraceId}>
+                  View trace
+                </WorkflowTraceRouteLink>
+              </Button>
+            ) : null
+          }
         />
       }
     >
@@ -351,9 +403,9 @@ export function TransactionView() {
         open={Boolean(pendingCorrection)}
       />
       <FadeIn className="h-full">
-        <div className="container mx-auto h-full min-h-0 p-6">
+        <div className="container mx-auto h-full min-h-0 px-6 pb-16 pt-6">
           <div className="grid h-full min-h-0 gap-8 xl:grid-cols-[380px,minmax(0,1fr)]">
-            <div className="space-y-6">
+            <div className="space-y-6 pb-16">
               <section className="overflow-hidden rounded-[calc(var(--radius)*1.35)] border border-border/80 bg-surface-raised shadow-surface">
                 <CardHeader className="space-y-4 pb-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
@@ -367,60 +419,87 @@ export function TransactionView() {
                         {getRelativeTime(transaction.completedAt)}
                       </p>
                     </Badge>
-                    {transaction.sessionTraceId ? (
-                      <div className="flex flex-wrap items-center gap-3">
-                        <WorkflowTraceRouteLink
-                          traceId={transaction.sessionTraceId}
-                        >
-                          Session trace
-                        </WorkflowTraceRouteLink>
-                      </div>
-                    ) : null}
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-4 border-t border-border/70 pt-4 text-sm">
-                  {isCompletedTransaction ? (
-                    <Button
-                      className="w-full"
-                      onClick={() => {
-                        setCorrectionPanelOpen((value) => !value);
-                        setSelectedCorrection(null);
-                      }}
-                      type="button"
-                      variant="outline"
-                    >
-                      Correct
-                    </Button>
-                  ) : null}
+                <CardContent className="border-t border-border/70 p-0 text-sm">
+                  <dl className="divide-y divide-border/70">
+                    {transaction.cashier ? (
+                      <div className="flex items-center gap-3 px-6 py-4">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[calc(var(--radius)*0.85)] bg-muted text-muted-foreground">
+                          <User className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <dt className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                            Cashier
+                          </dt>
+                          <dd className="mt-1 truncate font-medium text-foreground">
+                            {formatStaffDisplayName(transaction.cashier)}
+                          </dd>
+                        </div>
+                      </div>
+                    ) : null}
 
-                  {transaction.cashier && (
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 px-6 py-4">
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[calc(var(--radius)*0.85)] bg-muted text-muted-foreground">
-                        <User className="w-4 h-4" />
+                        <PaymentIcon className="w-4 h-4" />
                       </div>
-                      <div>
-                        <p className="font-medium">
-                          {formatStaffDisplayName(transaction.cashier)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">Cashier</p>
+                      <div className="min-w-0 flex-1">
+                        <dt className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                          Payment
+                        </dt>
+                        <dd className="mt-1 truncate font-medium capitalize text-foreground">
+                          {paymentMethodLabel}
+                        </dd>
                       </div>
                     </div>
-                  )}
 
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[calc(var(--radius)*0.85)] bg-muted text-muted-foreground">
-                      <PaymentIcon className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="font-medium capitalize">
-                        {paymentMethodLabel}
-                      </p>
-                    </div>
-                  </div>
+                    {(transaction.customer || transaction.customerInfo) && (
+                      <div className="px-6 py-4">
+                        <dt className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                          Customer
+                        </dt>
+                        <dd className="mt-1 font-medium text-foreground">
+                          {transaction.customer?.name ||
+                            transaction.customerInfo?.name ||
+                            "Walk-in customer"}
+                        </dd>
+                        {(transaction.customer?.email ||
+                          transaction.customer?.phone ||
+                          transaction.customerInfo?.email ||
+                          transaction.customerInfo?.phone) && (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {transaction.customer?.email ||
+                              transaction.customerInfo?.email}
+                            {(transaction.customer?.email ||
+                              transaction.customerInfo?.email) &&
+                            (transaction.customer?.phone ||
+                              transaction.customerInfo?.phone)
+                              ? " • "
+                              : ""}
+                            {transaction.customer?.phone ||
+                              transaction.customerInfo?.phone}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </dl>
 
-                  <div>
+                  <div className="grid gap-3 border-t border-border/70 bg-muted/20 p-6 sm:grid-cols-2">
+                    {isCompletedTransaction ? (
+                      <Button
+                        className="w-full"
+                        onClick={() => {
+                          setCorrectionPanelOpen((value) => !value);
+                          setSelectedCorrection(null);
+                        }}
+                        type="button"
+                        variant={correctionPanelOpen ? "workflow" : "outline"}
+                      >
+                        Correct
+                      </Button>
+                    ) : null}
+
                     <Button
-                      variant="outline"
                       className="w-full"
                       onClick={() =>
                         window.open(
@@ -429,38 +508,11 @@ export function TransactionView() {
                           "noreferrer",
                         )
                       }
+                      variant="outline"
                     >
                       View receipt
                     </Button>
                   </div>
-
-                  {(transaction.customer || transaction.customerInfo) && (
-                    <div className="flex flex-col gap-1">
-                      <p className="font-medium">Customer</p>
-                      <p className="text-sm">
-                        {transaction.customer?.name ||
-                          transaction.customerInfo?.name ||
-                          "Walk-in customer"}
-                      </p>
-                      {(transaction.customer?.email ||
-                        transaction.customer?.phone ||
-                        transaction.customerInfo?.email ||
-                        transaction.customerInfo?.phone) && (
-                        <p className="text-xs text-muted-foreground">
-                          {transaction.customer?.email ||
-                            transaction.customerInfo?.email}
-                          {(transaction.customer?.email ||
-                            transaction.customerInfo?.email) &&
-                          (transaction.customer?.phone ||
-                            transaction.customerInfo?.phone)
-                            ? " • "
-                            : ""}
-                          {transaction.customer?.phone ||
-                            transaction.customerInfo?.phone}
-                        </p>
-                      )}
-                    </div>
-                  )}
 
                   {/* {transaction.notes && (
                     <div className="space-y-1">
@@ -474,171 +526,233 @@ export function TransactionView() {
               </section>
 
               {correctionPanelOpen ? (
-                <section className="space-y-4 overflow-hidden rounded-[calc(var(--radius)*1.35)] border border-border/80 bg-surface-raised p-4 shadow-surface">
-                  <div className="space-y-1">
-                    <h2 className="font-display text-xl font-semibold text-foreground">
-                      Transaction correction
-                    </h2>
-                    <p className="text-sm text-muted-foreground">
-                      Choose the correction type. Completed sale totals stay
-                      locked.
-                    </p>
+                <section className="overflow-hidden rounded-[calc(var(--radius)*1.35)] border border-border/80 bg-surface-raised shadow-surface">
+                  <div className="border-b border-border/70 px-5 py-4">
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[calc(var(--radius)*0.85)] bg-muted text-muted-foreground">
+                        <ShieldAlert className="h-4 w-4" />
+                      </div>
+                      <div className="space-y-1">
+                        <h2 className="font-display text-lg font-semibold text-foreground">
+                          Transaction correction
+                        </h2>
+                        <p className="text-sm leading-6 text-muted-foreground">
+                          Correct metadata or payment labels here. Use guided
+                          workflows for sale totals and item changes.
+                        </p>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="grid gap-2">
-                    <Button
-                      className="justify-start"
-                      onClick={() => setSelectedCorrection("customer")}
-                      type="button"
-                      variant={
-                        selectedCorrection === "customer"
-                          ? "default"
-                          : "outline"
-                      }
-                    >
-                      Customer attribution
-                    </Button>
-                    <Button
-                      className="justify-start"
-                      onClick={() => setSelectedCorrection("payment_method")}
-                      type="button"
-                      variant={
-                        selectedCorrection === "payment_method"
-                          ? "default"
-                          : "outline"
-                      }
-                    >
-                      Payment method
-                    </Button>
-                    <Button
-                      className="justify-start"
-                      onClick={() => setSelectedCorrection("line_items")}
-                      type="button"
-                      variant={
-                        selectedCorrection === "line_items"
-                          ? "default"
-                          : "outline"
-                      }
-                    >
-                      Items or quantities
-                    </Button>
-                    <Button
-                      className="justify-start"
-                      onClick={() => setSelectedCorrection("amounts")}
-                      type="button"
-                      variant={
-                        selectedCorrection === "amounts" ? "default" : "outline"
-                      }
-                    >
-                      Amounts or totals
-                    </Button>
-                    <Button
-                      className="justify-start"
-                      onClick={() => setSelectedCorrection("discounts")}
-                      type="button"
-                      variant={
-                        selectedCorrection === "discounts"
-                          ? "default"
-                          : "outline"
-                      }
-                    >
-                      Discounts
-                    </Button>
-                  </div>
+                  <div className="space-y-5 p-5">
+                    <div className="space-y-2">
+                      <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                        Direct corrections
+                      </p>
+                      <div className="grid gap-2">
+                        <Button
+                          aria-label="Customer attribution"
+                          className="h-auto justify-start whitespace-normal px-3 py-3 text-left"
+                          onClick={() => setSelectedCorrection("customer")}
+                          type="button"
+                          variant={
+                            selectedCorrection === "customer"
+                              ? "workflow-soft"
+                              : "outline"
+                          }
+                        >
+                          <span className="grid gap-1">
+                            <span>Customer attribution</span>
+                            <span className="text-xs font-normal opacity-75">
+                              Change walk-in or customer assignment.
+                            </span>
+                          </span>
+                        </Button>
+                        {selectedCorrection === "customer" ? (
+                          <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
+                            <p className="text-sm font-medium text-foreground">
+                              Customer correction
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              Staff sign-in and customer lookup will update
+                              attribution only.
+                            </p>
+                            <Input
+                              aria-label="Corrected customer profile ID"
+                              className="border-input bg-background"
+                              onChange={(event) =>
+                                setCustomerProfileIdInput(event.target.value)
+                              }
+                              placeholder="Customer profile ID, or leave blank for walk-in."
+                              value={customerProfileIdInput}
+                            />
+                            <Textarea
+                              aria-label="Customer correction reason"
+                              className="min-h-[80px] border-input bg-background"
+                              onChange={(event) =>
+                                setCustomerCorrectionReason(event.target.value)
+                              }
+                              placeholder="Reason for customer attribution correction."
+                              value={customerCorrectionReason}
+                            />
+                            <Button
+                              disabled={correctionSubmitting}
+                              onClick={() =>
+                                requestCorrectionSubmit("customer")
+                              }
+                              type="button"
+                            >
+                              Submit customer correction
+                            </Button>
+                          </div>
+                        ) : null}
+                        <Button
+                          aria-label="Payment method"
+                          className="h-auto justify-start whitespace-normal px-3 py-3 text-left"
+                          onClick={() =>
+                            setSelectedCorrection("payment_method")
+                          }
+                          type="button"
+                          variant={
+                            selectedCorrection === "payment_method"
+                              ? "workflow-soft"
+                              : "outline"
+                          }
+                        >
+                          <span className="grid gap-1">
+                            <span>Payment method</span>
+                            <span className="text-xs font-normal opacity-75">
+                              Same-amount method correction only.
+                            </span>
+                          </span>
+                        </Button>
+                        {showPaymentMethodDirectFlow ? (
+                          <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
+                            <p className="text-sm font-medium text-foreground">
+                              Same-amount payment method correction
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              Staff sign-in will keep the paid amount unchanged
+                              and update the method history.
+                            </p>
+                            <Select
+                              onValueChange={(value) =>
+                                setPaymentMethodInput(value)
+                              }
+                              value={paymentMethodInput}
+                            >
+                              <SelectTrigger
+                                aria-label="Corrected payment method"
+                                className="border-input bg-background"
+                              >
+                                <SelectValue placeholder="Choose payment method" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {PAYMENT_METHOD_OPTIONS.map((option) => (
+                                  <SelectItem
+                                    key={option.value}
+                                    value={option.value}
+                                  >
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Textarea
+                              aria-label="Payment method correction reason"
+                              className="min-h-[80px] border-input bg-background"
+                              onChange={(event) =>
+                                setPaymentCorrectionReason(event.target.value)
+                              }
+                              placeholder="Reason for payment method correction."
+                              value={paymentCorrectionReason}
+                            />
+                            <Button
+                              disabled={correctionSubmitting}
+                              onClick={() =>
+                                requestCorrectionSubmit("payment_method")
+                              }
+                              type="button"
+                            >
+                              Submit payment correction
+                            </Button>
+                          </div>
+                        ) : selectedCorrection === "payment_method" ? (
+                          <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-4 text-sm text-muted-foreground">
+                            Multi-payment corrections need review before
+                            editing payment records.
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
 
-                  {selectedCorrection === "customer" ? (
-                    <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
-                      <p className="text-sm font-medium text-foreground">
-                        Customer correction
+                    <div className="space-y-2 border-t border-border/70 pt-4">
+                      <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                        Guided routes
                       </p>
-                      <p className="text-sm text-muted-foreground">
-                        Staff sign-in and customer lookup will update
-                        attribution only.
+                      <div className="grid gap-2">
+                        <Button
+                          aria-label="Items or quantities"
+                          className="h-auto justify-start whitespace-normal px-3 py-2.5 text-left"
+                          onClick={() => setSelectedCorrection("line_items")}
+                          type="button"
+                          variant={
+                            selectedCorrection === "line_items"
+                              ? "workflow-soft"
+                              : "outline"
+                          }
+                        >
+                          Items or quantities
+                        </Button>
+                        <Button
+                          aria-label="Amounts or totals"
+                          className="h-auto justify-start whitespace-normal px-3 py-2.5 text-left"
+                          onClick={() => setSelectedCorrection("amounts")}
+                          type="button"
+                          variant={
+                            selectedCorrection === "amounts"
+                              ? "workflow-soft"
+                              : "outline"
+                          }
+                        >
+                          Amounts or totals
+                        </Button>
+                        <Button
+                          aria-label="Discounts"
+                          className="h-auto justify-start whitespace-normal px-3 py-2.5 text-left"
+                          onClick={() => setSelectedCorrection("discounts")}
+                          type="button"
+                          variant={
+                            selectedCorrection === "discounts"
+                              ? "workflow-soft"
+                              : "outline"
+                          }
+                        >
+                          Discounts
+                        </Button>
+                      </div>
+                    </div>
+
+                    {selectedCorrection &&
+                    !["customer", "payment_method"].includes(
+                      selectedCorrection,
+                    ) ? (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-4 text-sm text-muted-foreground">
+                        Use refund, exchange, or manager review for item,
+                        amount, total, or discount corrections.
+                      </div>
+                    ) : null}
+                    {correctionError ? (
+                      <p className="text-sm text-destructive">
+                        {correctionError}
                       </p>
-                      <Input
-                        aria-label="Corrected customer profile ID"
-                        className="border-input bg-background"
-                        onChange={(event) =>
-                          setCustomerProfileIdInput(event.target.value)
-                        }
-                        placeholder="Customer profile ID, or leave blank for walk-in."
-                        value={customerProfileIdInput}
-                      />
-                      <Textarea
-                        aria-label="Customer correction reason"
-                        className="min-h-[80px] border-input bg-background"
-                        onChange={(event) =>
-                          setCustomerCorrectionReason(event.target.value)
-                        }
-                        placeholder="Reason for customer attribution correction."
-                        value={customerCorrectionReason}
-                      />
-                      <Button
-                        disabled={correctionSubmitting}
-                        onClick={() => requestCorrectionSubmit("customer")}
-                        type="button"
-                      >
-                        Submit customer correction
-                      </Button>
-                    </div>
-                  ) : showPaymentMethodDirectFlow ? (
-                    <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
-                      <p className="text-sm font-medium text-foreground">
-                        Same-amount payment method correction
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Staff sign-in will keep the paid amount unchanged and
-                        update the method history.
-                      </p>
-                      <Input
-                        aria-label="Corrected payment method"
-                        className="border-input bg-background"
-                        onChange={(event) =>
-                          setPaymentMethodInput(event.target.value)
-                        }
-                        placeholder="cash, card, mobile_money..."
-                        value={paymentMethodInput}
-                      />
-                      <Textarea
-                        aria-label="Payment method correction reason"
-                        className="min-h-[80px] border-input bg-background"
-                        onChange={(event) =>
-                          setPaymentCorrectionReason(event.target.value)
-                        }
-                        placeholder="Reason for payment method correction."
-                        value={paymentCorrectionReason}
-                      />
-                      <Button
-                        disabled={correctionSubmitting}
-                        onClick={() =>
-                          requestCorrectionSubmit("payment_method")
-                        }
-                        type="button"
-                      >
-                        Submit payment correction
-                      </Button>
-                    </div>
-                  ) : selectedCorrection === "payment_method" ? (
-                    <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-4 text-sm text-muted-foreground">
-                      Multi-payment corrections need review before editing
-                      payment records.
-                    </div>
-                  ) : selectedCorrection ? (
-                    <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-4 text-sm text-muted-foreground">
-                      Use refund, exchange, or manager review for item, amount,
-                      total, or discount corrections.
-                    </div>
-                  ) : null}
-                  {correctionError ? (
-                    <p className="text-sm text-destructive">
-                      {correctionError}
-                    </p>
-                  ) : null}
+                    ) : null}
+                  </div>
                 </section>
               ) : null}
 
               {correctionHistory.length > 0 ? (
-                <section className="space-y-3 overflow-hidden rounded-[calc(var(--radius)*1.35)] border border-border/80 bg-surface-raised p-4 shadow-surface">
+                <section className="space-y-4 overflow-hidden rounded-[calc(var(--radius)*1.35)] border border-border/80 bg-surface-raised p-5 shadow-surface">
                   <div className="space-y-1">
                     <h2 className="font-display text-xl font-semibold text-foreground">
                       Correction history
@@ -650,21 +764,19 @@ export function TransactionView() {
                   <div className="space-y-3">
                     {correctionHistory.map((event) => (
                       <div
-                        className="rounded-lg border border-border bg-muted/20 p-3"
+                        className="space-y-2 rounded-lg border border-border bg-muted/20 p-4"
                         key={event._id}
                       >
-                        <p className="text-sm font-medium text-foreground">
-                          {event.message ??
-                            formatCorrectionEventType(event.eventType)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {getRelativeTime(event.createdAt)}
-                          {event.actorStaffName
-                            ? ` by ${formatStaffDisplayName({ fullName: event.actorStaffName })}`
-                            : ""}
-                        </p>
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium leading-5 text-foreground">
+                            {formatCorrectionHistoryTitle(event)}
+                          </p>
+                          <p className="text-xs leading-4 text-muted-foreground">
+                            {formatCorrectionHistoryMeta(event)}
+                          </p>
+                        </div>
                         {event.reason ? (
-                          <p className="mt-1 text-sm text-muted-foreground">
+                          <p className="border-t border-border/70 pt-3 text-sm leading-5 text-muted-foreground">
                             {event.reason}
                           </p>
                         ) : null}

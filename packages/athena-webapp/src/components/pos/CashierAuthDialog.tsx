@@ -55,6 +55,7 @@ export function CashierAuthDialog({
     const authenticationResult = await runCommand(() =>
       authenticateStaffCredentialForTerminal({
         allowedRoles: ["cashier", "manager"],
+        allowActiveSessionsOnOtherTerminals: args.mode === "recover",
         pinHash: args.pinHash,
         storeId,
         terminalId,
@@ -93,7 +94,7 @@ export function CashierAuthDialog({
         description: "Enter username and PIN before recording expenses.",
       }
     : {
-        title: "Register sign-in required",
+        title: "Sign in required",
         description: "Enter username and PIN before adding items.",
       };
   const recoveryLabel = isExpenseWorkflow
@@ -130,7 +131,9 @@ export function CashierAuthDialog({
         }
 
         const staffDisplayName = getStaffDisplayName(result);
-        return staffDisplayName ? `Signed in as ${staffDisplayName}.` : "Signed in.";
+        return staffDisplayName
+          ? `Signed in as ${staffDisplayName}.`
+          : "Signed in.";
       }}
       onAuthenticated={(result) => {
         onAuthenticated(result.staffProfileId);

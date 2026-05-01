@@ -1,4 +1,4 @@
-import { ArrowRightIcon, LockKeyhole } from "lucide-react";
+import { ArrowRightIcon, BanknoteIcon, LockKeyhole } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 
 import type {
@@ -40,16 +40,28 @@ export function RegisterActionBar({
           hasTerminal={registerInfo.hasTerminal}
         />
         {closeoutControl ? (
-          <Button
-            className="h-10"
-            disabled={!closeoutControl.canCloseout}
-            onClick={closeoutControl.onRequestCloseout}
-            type="button"
-            variant="outline"
-          >
-            <LockKeyhole className="mr-2 h-4 w-4" />
-            Closeout
-          </Button>
+          <>
+            <Button
+              className="h-10"
+              disabled={!closeoutControl.canCorrectOpeningFloat}
+              onClick={closeoutControl.onRequestOpeningFloatCorrection}
+              type="button"
+              variant="outline"
+            >
+              <BanknoteIcon className="mr-2 h-4 w-4" />
+              Float
+            </Button>
+            <Button
+              className="h-10"
+              disabled={!closeoutControl.canCloseout}
+              onClick={closeoutControl.onRequestCloseout}
+              type="button"
+              variant="outline"
+            >
+              <LockKeyhole className="mr-2 h-4 w-4" />
+              Closeout
+            </Button>
+          </>
         ) : null}
         {!registerInfo.hasTerminal && (
           <Link
