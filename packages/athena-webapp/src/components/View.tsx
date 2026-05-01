@@ -57,15 +57,16 @@ export default function View({
       className={cn(
         width === "full"
           ? "w-full max-w-none px-4 sm:px-6 lg:px-8"
-          : "container mx-auto",
+          : "container mx-auto w-full min-w-0 px-4 sm:px-6 lg:px-8",
         fullHeight &&
           "h-[calc(100dvh-2.5rem)] max-h-[calc(100dvh-2.5rem)] min-h-0",
+        "overflow-x-hidden",
         className,
       )}
     >
       <div
         className={cn(
-          "h-full min-h-0 flex flex-col rounded-lg",
+          "h-full min-h-0 flex flex-col rounded-lg min-w-0 overflow-x-hidden",
           fullHeight && "min-h-0 overflow-hidden",
           !hideBorder && "border",
           contentClassName,
