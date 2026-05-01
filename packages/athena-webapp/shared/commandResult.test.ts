@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  approvalRequired,
   GENERIC_UNEXPECTED_ERROR_MESSAGE,
   GENERIC_UNEXPECTED_ERROR_TITLE,
+  isApprovalRequiredResult,
   isUserErrorResult,
   ok,
   userError,
@@ -38,6 +40,68 @@ describe("command result helpers", () => {
     });
 
     expect(isUserErrorResult(result)).toBe(true);
+  });
+
+  it("wraps approval requirements with action, subject, role, copy, and resolution modes", () => {
+    const result = approvalRequired({
+      action: {
+        key: "pos.transaction.payment_method.correct",
+        label: "Correct payment method",
+      },
+      subject: {
+        type: "pos_transaction",
+        id: "transaction-1",
+        label: "Receipt 1001",
+      },
+      requiredRole: "manager",
+      reason: "Completed transactions require manager approval.",
+      copy: {
+        title: "Manager approval required",
+        message: "Ask a manager to approve this correction.",
+      },
+      resolutionModes: [
+        {
+          kind: "inline_manager_proof",
+          proofTtlMs: 300_000,
+        },
+        {
+          kind: "async_request",
+          requestType: "payment_method_correction",
+        },
+      ],
+    });
+
+    expect(result).toEqual({
+      kind: "approval_required",
+      approval: {
+        action: {
+          key: "pos.transaction.payment_method.correct",
+          label: "Correct payment method",
+        },
+        subject: {
+          type: "pos_transaction",
+          id: "transaction-1",
+          label: "Receipt 1001",
+        },
+        requiredRole: "manager",
+        reason: "Completed transactions require manager approval.",
+        copy: {
+          title: "Manager approval required",
+          message: "Ask a manager to approve this correction.",
+        },
+        resolutionModes: [
+          {
+            kind: "inline_manager_proof",
+            proofTtlMs: 300_000,
+          },
+          {
+            kind: "async_request",
+            requestType: "payment_method_correction",
+          },
+        ],
+      },
+    });
+    expect(isApprovalRequiredResult(result)).toBe(true);
   });
 
   it("exports the generic fallback copy for unexpected faults", () => {

@@ -1,3 +1,5 @@
+import type { ApprovalRequirement } from "./approvalPolicy";
+
 export const USER_ERROR_CODES = [
   "validation_failed",
   "authentication_failed",
@@ -31,6 +33,15 @@ export type CommandResult<T> =
       error: UserError;
     };
 
+export type ApprovalRequiredResult = {
+  kind: "approval_required";
+  approval: ApprovalRequirement;
+};
+
+export type ApprovalCommandResult<T> =
+  | CommandResult<T>
+  | ApprovalRequiredResult;
+
 export const GENERIC_UNEXPECTED_ERROR_TITLE = "Something went wrong";
 export const GENERIC_UNEXPECTED_ERROR_MESSAGE = "Please try again.";
 
@@ -48,8 +59,23 @@ export function userError(error: UserError): CommandResult<never> {
   };
 }
 
+export function approvalRequired(
+  approval: ApprovalRequirement,
+): ApprovalRequiredResult {
+  return {
+    kind: "approval_required",
+    approval,
+  };
+}
+
 export function isUserErrorResult<T>(
   result: CommandResult<T>,
 ): result is Extract<CommandResult<T>, { kind: "user_error" }> {
   return result.kind === "user_error";
+}
+
+export function isApprovalRequiredResult<T>(
+  result: ApprovalCommandResult<T>,
+): result is ApprovalRequiredResult {
+  return result.kind === "approval_required";
 }

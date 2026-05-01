@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import {
   buildRegisterSessionCloseoutReview,
+  buildRegisterSessionVarianceApprovalRequirement,
   correctRegisterSessionOpeningFloat,
   getCashControlsConfig,
 } from "./closeouts";
@@ -65,6 +66,43 @@ describe("cash control closeouts", () => {
     });
   });
 
+  it("normalizes variance review as an async approval requirement", () => {
+    const closeoutReview = buildRegisterSessionCloseoutReview({
+      config: getCashControlsConfig(),
+      countedCash: 16050,
+      expectedCash: 10000,
+    });
+
+    expect(
+      buildRegisterSessionVarianceApprovalRequirement({
+        approvalRequestId: "approval-1" as never,
+        closeoutReview,
+        countedCash: 16050,
+        expectedCash: 10000,
+        registerSession: {
+          _id: "session-1",
+          registerNumber: "Register 3",
+        } as never,
+      }),
+    ).toEqual({
+      actionKey: "cash_controls.register_session.review_variance",
+      approvalRequestId: "approval-1",
+      context: {
+        countedCash: 16050,
+        expectedCash: 10000,
+        variance: 6050,
+      },
+      mode: "async_approval",
+      reason: "Variance of 6050 exceeded the closeout approval threshold.",
+      requiredRole: "manager",
+      subject: {
+        id: "session-1",
+        label: "Register 3",
+        type: "register_session",
+      },
+    });
+  });
+
   it("supports configured manager signoff for specific variance directions", () => {
     expect(
       buildRegisterSessionCloseoutReview({
@@ -99,10 +137,14 @@ describe("cash control closeouts", () => {
     const source = getSource("./closeouts.ts");
 
     expect(source).toContain("buildApprovalRequest");
+    expect(source).toContain("buildRegisterSessionVarianceApprovalRequirement");
     expect(source).toContain("recordOperationalEventWithCtx");
+    expect(source).toContain("consumeApprovalProofWithCtx");
     expect(source).toContain("beginRegisterSessionCloseout");
     expect(source).toContain("closeRegisterSession");
     expect(source).toContain("decideApprovalRequest");
+    expect(source).toContain("approvalRequirement");
+    expect(source).toContain("cash_controls.register_session.review_variance");
   });
 
   it("exposes opening float correction as a command-result mutation with audit rails", () => {

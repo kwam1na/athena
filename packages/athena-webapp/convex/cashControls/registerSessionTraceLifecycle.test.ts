@@ -60,6 +60,21 @@ type ApprovalRequestRecord = {
   status: "pending" | "approved" | "rejected" | "cancelled";
 };
 
+type ApprovalProofRecord = {
+  _id: Id<"approvalProof">;
+  actionKey: string;
+  approvedByCredentialId: Id<"staffCredential">;
+  approvedByStaffProfileId: Id<"staffProfile">;
+  consumedAt?: number;
+  createdAt: number;
+  expiresAt: number;
+  requiredRole: "manager" | "cashier";
+  storeId: Id<"store">;
+  subjectId: string;
+  subjectLabel?: string;
+  subjectType: string;
+};
+
 type StaffProfileRecord = {
   _id: Id<"staffProfile">;
   organizationId: Id<"organization">;
@@ -93,11 +108,13 @@ function buildRegisterSession(
 }
 
 function createMutationCtx(seed?: {
+  approvalProofs?: ApprovalProofRecord[];
   approvalRequests?: ApprovalRequestRecord[];
   registerSessions?: RegisterSessionRecord[];
   staffProfiles?: StaffProfileRecord[];
   staffRoleAssignments?: StaffRoleAssignmentRecord[];
 }) {
+  const approvalProofs = [...(seed?.approvalProofs ?? [])];
   const approvalRequests = [...(seed?.approvalRequests ?? [])];
   const registerSessions = [...(seed?.registerSessions ?? [])];
   const staffProfiles = [
@@ -133,6 +150,10 @@ function createMutationCtx(seed?: {
         return approvalRequests.find((request) => request._id === id) ?? null;
       }
 
+      if (table === "approvalProof") {
+        return approvalProofs.find((proof) => proof._id === id) ?? null;
+      }
+
       if (table === "staffProfile") {
         return staffProfiles.find((staffProfile) => staffProfile._id === id) ?? null;
       }
@@ -155,6 +176,14 @@ function createMutationCtx(seed?: {
       return request._id;
     }),
     patch: vi.fn(async (table: string, id: string, patch: Record<string, unknown>) => {
+      if (table === "approvalProof") {
+        const proof = approvalProofs.find((entry) => entry._id === id);
+        if (proof) {
+          Object.assign(proof, patch);
+        }
+        return;
+      }
+
       if (table !== "registerSession") {
         return;
       }
@@ -257,6 +286,25 @@ function createMutationCtx(seed?: {
     runMutation,
     runQuery,
     registerSessions,
+  };
+}
+
+function buildApprovalProof(
+  overrides?: Partial<ApprovalProofRecord>,
+): ApprovalProofRecord {
+  return {
+    _id: "proof-1" as Id<"approvalProof">,
+    actionKey: "cash_controls.register_session.review_variance",
+    approvedByCredentialId: "credential-1" as Id<"staffCredential">,
+    approvedByStaffProfileId: "staff-2" as Id<"staffProfile">,
+    createdAt: 222,
+    expiresAt: Date.now() + 60_000,
+    requiredRole: "manager",
+    storeId: "store-1" as Id<"store">,
+    subjectId: "session-1",
+    subjectLabel: "A1",
+    subjectType: "register_session",
+    ...overrides,
   };
 }
 
@@ -446,6 +494,7 @@ describe("register session trace lifecycle handlers", () => {
 
   it("records approval and final closed trace milestones after manager approval", async () => {
     const ctx = createMutationCtx({
+      approvalProofs: [buildApprovalProof()],
       approvalRequests: [
         {
           _id: "approval-1" as Id<"approvalRequest">,
@@ -465,10 +514,10 @@ describe("register session trace lifecycle handlers", () => {
     });
 
     const result = await getHandler(reviewRegisterSessionCloseout)(ctx as never, {
+      approvalProofId: "proof-1",
       decision: "approved",
       decisionNotes: "Approved after recount",
       registerSessionId: "session-1",
-      reviewedByStaffProfileId: "staff-2",
       reviewedByUserId: "user-2",
       storeId: "store-1",
     });
@@ -511,6 +560,11 @@ describe("register session trace lifecycle handlers", () => {
 
   it("rejects variance review actions from non-manager staff", async () => {
     const ctx = createMutationCtx({
+      approvalProofs: [
+        buildApprovalProof({
+          approvedByStaffProfileId: "staff-3" as Id<"staffProfile">,
+        }),
+      ],
       approvalRequests: [
         {
           _id: "approval-1" as Id<"approvalRequest">,
@@ -548,10 +602,10 @@ describe("register session trace lifecycle handlers", () => {
     });
 
     const result = await getHandler(reviewRegisterSessionCloseout)(ctx as never, {
+      approvalProofId: "proof-1",
       decision: "approved",
       decisionNotes: "Approved after recount",
       registerSessionId: "session-1",
-      reviewedByStaffProfileId: "staff-3",
       reviewedByUserId: "user-2",
       storeId: "store-1",
     });
@@ -569,6 +623,7 @@ describe("register session trace lifecycle handlers", () => {
 
   it("records a rejected closeout trace milestone when manager review fails", async () => {
     const ctx = createMutationCtx({
+      approvalProofs: [buildApprovalProof()],
       approvalRequests: [
         {
           _id: "approval-1" as Id<"approvalRequest">,
@@ -588,10 +643,10 @@ describe("register session trace lifecycle handlers", () => {
     });
 
     const result = await getHandler(reviewRegisterSessionCloseout)(ctx as never, {
+      approvalProofId: "proof-1",
       decision: "rejected",
       decisionNotes: "Recount required",
       registerSessionId: "session-1",
-      reviewedByStaffProfileId: "staff-2",
       reviewedByUserId: "user-2",
       storeId: "store-1",
     });

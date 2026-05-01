@@ -17,6 +17,7 @@ import {
   StaffAuthenticationDialog,
   type StaffAuthenticationResult,
 } from "@/components/staff-auth/StaffAuthenticationDialog";
+import type { CommandApprovalProofResult } from "@/components/operations/CommandApprovalDialog";
 import {
   type NormalizedCommandResult,
   runCommand,
@@ -155,14 +156,21 @@ type RegisterCloseoutSubmitArgs = {
 };
 
 type RegisterCloseoutReviewArgs = {
+  approvalProofId: string;
   decision: "approved" | "rejected";
   decisionNotes?: string;
   registerSessionId: string;
-  reviewedByStaffProfileId: string;
 };
 
 type RegisterCloseoutCommandPayload = {
   action?: "approval_required" | "closed" | "approved" | "rejected";
+  approvalRequirement?: {
+    actionKey: "cash_controls.register_session.review_variance";
+    approvalRequestId?: string;
+    mode: "async_approval";
+    reason: string;
+    requiredRole: "manager";
+  };
 };
 
 type RegisterCloseoutCommandResult =
@@ -170,6 +178,13 @@ type RegisterCloseoutCommandResult =
 
 type StaffAuthenticationCommandResult =
   NormalizedCommandResult<StaffAuthenticationResult>;
+
+type CloseoutApprovalAuthenticationResult = StaffAuthenticationResult & {
+  approvalProofId?: string;
+};
+
+type CloseoutApprovalAuthenticationCommandResult =
+  NormalizedCommandResult<CloseoutApprovalAuthenticationResult>;
 
 type CorrectOpeningFloatArgs = {
   actorStaffProfileId: string;
@@ -203,6 +218,12 @@ type RegisterSessionViewContentProps = {
     pinHash: string;
     username: string;
   }) => Promise<StaffAuthenticationCommandResult>;
+  onAuthenticateCloseoutReviewApproval?: (args: {
+    pinHash: string;
+    reason?: string;
+    registerSessionId: string;
+    username: string;
+  }) => Promise<CloseoutApprovalAuthenticationCommandResult>;
   onSubmitCloseout: (
     args: RegisterCloseoutSubmitArgs,
   ) => Promise<RegisterCloseoutCommandResult>;
@@ -343,6 +364,7 @@ export function RegisterSessionViewContent({
   currency,
   isLoading,
   onAuthenticateStaff,
+  onAuthenticateCloseoutReviewApproval,
   onCorrectOpeningFloat,
   onRecordDeposit,
   onReviewCloseout,
@@ -580,7 +602,7 @@ export function RegisterSessionViewContent({
   }
 
   async function handleAuthenticatedCloseoutStaff(
-    result: StaffAuthenticationResult,
+    result: CloseoutApprovalAuthenticationResult,
   ) {
     if (!closeoutStaffAuthIntent) {
       return;
@@ -602,12 +624,18 @@ export function RegisterSessionViewContent({
               notes: intent.notes,
               registerSessionId: intent.registerSessionId,
             })
-          : await onReviewCloseout({
-              decision: intent.decision,
-              decisionNotes: intent.decisionNotes,
-              registerSessionId: intent.registerSessionId,
-              reviewedByStaffProfileId: result.staffProfileId,
-            });
+          : result.approvalProofId
+            ? await onReviewCloseout({
+                approvalProofId: result.approvalProofId,
+                decision: intent.decision,
+                decisionNotes: intent.decisionNotes,
+                registerSessionId: intent.registerSessionId,
+              })
+            : userError({
+                code: "authentication_failed",
+                message:
+                  "Manager approval could not be verified. Confirm manager credentials again.",
+              });
 
       if (!applyCloseoutCommandResult(commandResult)) {
         return;
@@ -945,16 +973,28 @@ export function RegisterSessionViewContent({
             ? `Confirmed as ${staffDisplayName}.`
             : "Staff credentials confirmed.";
         }}
-        onAuthenticate={(args) =>
-          onAuthenticateStaff({
+        onAuthenticate={(args) => {
+          if (
+            closeoutStaffAuthIntent?.kind === "review" &&
+            onAuthenticateCloseoutReviewApproval
+          ) {
+            return onAuthenticateCloseoutReviewApproval({
+              pinHash: args.pinHash,
+              reason: closeoutStaffAuthIntent.decisionNotes,
+              registerSessionId: closeoutStaffAuthIntent.registerSessionId,
+              username: args.username,
+            });
+          }
+
+          return onAuthenticateStaff({
             allowedRoles:
               closeoutStaffAuthIntent?.kind === "review"
                 ? ["manager"]
                 : ["cashier", "manager"],
             pinHash: args.pinHash,
             username: args.username,
-          })
-        }
+          });
+        }}
         onAuthenticated={(result) => {
           void handleAuthenticatedCloseoutStaff(result);
         }}
@@ -1907,6 +1947,9 @@ export function RegisterSessionView() {
   const authenticateStaffCredential = useMutation(
     api.operations.staffCredentials.authenticateStaffCredential,
   );
+  const authenticateStaffCredentialForApproval = useMutation(
+    api.operations.staffCredentials.authenticateStaffCredentialForApproval,
+  );
   const correctOpeningFloatReference = (
     api as unknown as {
       cashControls?: {
@@ -2000,6 +2043,50 @@ export function RegisterSessionView() {
     );
   }
 
+  async function onAuthenticateCloseoutReviewApproval(args: {
+    pinHash: string;
+    reason?: string;
+    registerSessionId: string;
+    username: string;
+  }): Promise<CloseoutApprovalAuthenticationCommandResult> {
+    if (!activeStore?._id) {
+      return userError({
+        code: "authentication_failed",
+        message: "Select a store before confirming manager approval.",
+      });
+    }
+
+    const session = registerSessionSnapshot?.registerSession;
+    const result = await runCommand(() =>
+      authenticateStaffCredentialForApproval({
+        actionKey: "cash_controls.register_session.review_variance",
+        pinHash: args.pinHash,
+        reason: args.reason,
+        requiredRole: "manager",
+        storeId: activeStore._id,
+        subject: {
+          id: args.registerSessionId,
+          label: session?.registerNumber ?? undefined,
+          type: "register_session",
+        },
+        username: args.username,
+      }) as Promise<CommandResult<CommandApprovalProofResult>>,
+    );
+
+    if (result.kind !== "ok") {
+      return result;
+    }
+
+    return {
+      kind: "ok",
+      data: {
+        approvalProofId: result.data.approvalProofId,
+        staffProfile: {},
+        staffProfileId: result.data.approvedByStaffProfileId,
+      },
+    };
+  }
+
   async function onReviewCloseout(args: RegisterCloseoutReviewArgs) {
     if (!activeStore?._id || !user?._id) {
       return userError({
@@ -2010,11 +2097,10 @@ export function RegisterSessionView() {
 
     const result = await runCommand(() =>
       reviewRegisterSessionCloseout({
+        approvalProofId: args.approvalProofId as Id<"approvalProof">,
         decision: args.decision,
         decisionNotes: args.decisionNotes,
         registerSessionId: args.registerSessionId as Id<"registerSession">,
-        reviewedByStaffProfileId:
-          args.reviewedByStaffProfileId as Id<"staffProfile">,
         reviewedByUserId: user._id,
         storeId: activeStore._id,
       }),
@@ -2107,6 +2193,9 @@ export function RegisterSessionView() {
       actorUserId={user?._id}
       currency={activeStore.currency || "USD"}
       isLoading={registerSessionSnapshot === undefined}
+      onAuthenticateCloseoutReviewApproval={
+        onAuthenticateCloseoutReviewApproval
+      }
       onAuthenticateStaff={onAuthenticateStaff}
       onCorrectOpeningFloat={onCorrectOpeningFloat}
       onRecordDeposit={onRecordDeposit}

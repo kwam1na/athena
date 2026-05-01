@@ -39,13 +39,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../ui/select";
-import { runCommand } from "~/src/lib/errors/runCommand";
-import type { CommandResult } from "~/shared/commandResult";
+import {
+  isApprovalRequiredResult,
+  runCommand,
+  type NormalizedCommandResult,
+} from "~/src/lib/errors/runCommand";
+import type {
+  ApprovalCommandResult,
+  CommandResult,
+} from "~/shared/commandResult";
 import {
   StaffAuthenticationDialog,
   type StaffAuthenticationResult,
 } from "../../staff-auth/StaffAuthenticationDialog";
 import { useProtectedAdminPageState } from "~/src/hooks/useProtectedAdminPageState";
+import {
+  CommandApprovalDialog,
+  type CommandApprovalProofResult,
+} from "../../operations/CommandApprovalDialog";
+import type { ApprovalRequirement } from "~/shared/approvalPolicy";
 
 type RouteParams =
   | {
@@ -61,6 +73,11 @@ type CorrectionEvent = {
   message?: string | null;
   metadata?: Record<string, unknown>;
   reason?: string | null;
+};
+
+type PaymentMethodCorrectionResultData = {
+  approvalProofId: Id<"approvalProof">;
+  approverStaffProfileId: Id<"staffProfile">;
 };
 
 const PAYMENT_METHOD_OPTIONS = [
@@ -179,11 +196,18 @@ export function TransactionView() {
   const [pendingCorrection, setPendingCorrection] = useState<
     "customer" | "payment_method" | null
   >(null);
+  const [
+    pendingPaymentApproval,
+    setPendingPaymentApproval,
+  ] = useState<ApprovalRequirement | null>(null);
   const [correctionHistoryExpanded, setCorrectionHistoryExpanded] =
     useState(false);
   const { activeStore, isAuthenticated } = useProtectedAdminPageState();
   const correctAuth = useMutation(
     api.operations.staffCredentials.authenticateStaffCredential,
+  );
+  const approveCommand = useMutation(
+    api.operations.staffCredentials.authenticateStaffCredentialForApproval,
   );
   const correctCustomer = useMutation(
     api.inventory.pos.correctTransactionCustomer,
@@ -284,19 +308,11 @@ export function TransactionView() {
   const visibleCorrectionHistory = correctionHistoryExpanded
     ? correctionHistory
     : correctionHistory.slice(0, 2);
-  const staffAuthenticationDialogCopy =
-    pendingCorrection === "payment_method"
-      ? {
-          title: "Manager approval required",
-          description:
-            "Enter manager username and PIN to update this payment method.",
-          submitLabel: "Confirm",
-        }
-      : {
-          title: "Staff sign-in required",
-          description: "Enter username and PIN to record this update.",
-          submitLabel: "Confirm",
-        };
+  const staffAuthenticationDialogCopy = {
+    title: "Staff sign-in required",
+    description: "Enter username and PIN to record this update.",
+    submitLabel: "Confirm",
+  };
   const isCompletedTransaction = transaction.status === "completed";
   const hasSinglePayment = (transaction.payments?.length ?? 0) <= 1;
   const registerSessionIsClosing = transaction.registerSessionStatus === "closing";
@@ -352,6 +368,7 @@ export function TransactionView() {
     setCorrectionPanelOpen(false);
     setSelectedCorrection(null);
     setPendingCorrection(null);
+    setPendingPaymentApproval(null);
     setCorrectionError(null);
   }
 
@@ -393,7 +410,10 @@ export function TransactionView() {
     setCorrectionError(result.error.message);
   }
 
-  async function runPaymentMethodCorrection(staff: StaffAuthenticationResult) {
+  async function runPaymentMethodCorrection(args?: {
+    approvalProofId?: Id<"approvalProof">;
+    staffProfileId?: Id<"staffProfile">;
+  }) {
     if (!isAuthenticated) {
       setCorrectionError("Sign in again before updating this transaction.");
       return;
@@ -419,13 +439,19 @@ export function TransactionView() {
     const result = await runCommand(
       () =>
         correctPaymentMethod({
-          actorStaffProfileId: staff.staffProfileId,
+          actorStaffProfileId: args?.staffProfileId,
+          approvalProofId: args?.approvalProofId,
           paymentMethod,
           reason,
           transactionId: transactionId as Id<"posTransaction">,
-        }) as Promise<CommandResult<unknown>>,
+        }) as Promise<ApprovalCommandResult<PaymentMethodCorrectionResultData>>,
     );
     setCorrectionSubmitting(false);
+
+    if (isApprovalRequiredResult(result)) {
+      setPendingPaymentApproval(result.approval);
+      return;
+    }
 
     if (result.kind === "ok") {
       setPaymentCorrectionReason("");
@@ -460,6 +486,11 @@ export function TransactionView() {
         setCorrectionError("Add a reason for this update.");
         return;
       }
+    }
+
+    if (kind === "payment_method") {
+      void runPaymentMethodCorrection();
+      return;
     }
 
     setPendingCorrection(kind);
@@ -506,12 +537,46 @@ export function TransactionView() {
           setPendingCorrection(null);
           if (correction === "customer") {
             void runCustomerCorrection(result);
-          } else if (correction === "payment_method") {
-            void runPaymentMethodCorrection(result);
           }
         }}
         onDismiss={() => setPendingCorrection(null)}
-        open={Boolean(pendingCorrection)}
+        open={pendingCorrection === "customer"}
+      />
+      <CommandApprovalDialog
+        approval={pendingPaymentApproval}
+        onAuthenticateForApproval={(args) => {
+          if (!activeStore?._id) {
+            return Promise.resolve({
+              kind: "user_error",
+              error: {
+                code: "authentication_failed",
+                message: "Select a store before approving this command.",
+              },
+            } satisfies NormalizedCommandResult<CommandApprovalProofResult>);
+          }
+
+          return runCommand(() =>
+            approveCommand({
+              actionKey: args.actionKey,
+              pinHash: args.pinHash,
+              reason: args.reason,
+              requiredRole: args.requiredRole,
+              requestedByStaffProfileId: args.requestedByStaffProfileId,
+              storeId: activeStore._id,
+              subject: args.subject,
+              username: args.username,
+            }) as Promise<CommandResult<CommandApprovalProofResult>>,
+          );
+        }}
+        onApproved={(result) => {
+          setPendingPaymentApproval(null);
+          void runPaymentMethodCorrection({
+            approvalProofId: result.approvalProofId,
+          });
+        }}
+        onDismiss={() => setPendingPaymentApproval(null)}
+        open={Boolean(pendingPaymentApproval)}
+        storeId={activeStore?._id ?? ("missing-store" as Id<"store">)}
       />
       <FadeIn className="h-full">
         <div className="container mx-auto h-full min-h-0 px-6 pb-16 pt-6">

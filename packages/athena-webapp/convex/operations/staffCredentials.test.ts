@@ -3,6 +3,7 @@ import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import {
   authenticateStaffCredential,
+  authenticateStaffCredentialForApprovalWithCtx,
   authenticateStaffCredentialForTerminal,
   authenticateStaffCredentialWithCtx,
   authenticateStaffCredentialForTerminalWithCtx,
@@ -13,7 +14,9 @@ import {
 } from "./staffCredentials";
 
 type TableName =
+  | "approvalProof"
   | "expenseSession"
+  | "operationalEvent"
   | "posSession"
   | "staffCredential"
   | "staffProfile"
@@ -21,15 +24,23 @@ type TableName =
 type Row = Record<string, unknown> & { _id: string };
 
 function createStaffCredentialsMutationCtx(seed?: {
+  approvalProofs?: Row[];
   expenseSessions?: Row[];
+  operationalEvents?: Row[];
   posSessions?: Row[];
   credentials?: Row[];
   profiles?: Row[];
   roles?: Row[];
 }) {
   const tables: Record<TableName, Map<string, Row>> = {
+    approvalProof: new Map(
+      (seed?.approvalProofs ?? []).map((row) => [row._id, row])
+    ),
     expenseSession: new Map(
       (seed?.expenseSessions ?? []).map((row) => [row._id, row])
+    ),
+    operationalEvent: new Map(
+      (seed?.operationalEvents ?? []).map((row) => [row._id, row])
     ),
     posSession: new Map((seed?.posSessions ?? []).map((row) => [row._id, row])),
     staffCredential: new Map(
@@ -41,7 +52,9 @@ function createStaffCredentialsMutationCtx(seed?: {
     ),
   };
   const insertCounters: Record<TableName, number> = {
+    approvalProof: 0,
     expenseSession: 0,
+    operationalEvent: 0,
     posSession: 0,
     staffCredential: 0,
     staffProfile: 0,
@@ -859,6 +872,138 @@ describe("staff credential operations", () => {
         message: "Staff profile is not authorized for this subsystem.",
       },
     });
+  });
+
+  it("creates an approval proof after fresh manager credential authentication", async () => {
+    const { ctx, tables } = createStaffCredentialsMutationCtx({
+      credentials: [
+        {
+          _id: "credential-1",
+          staffProfileId: "manager-1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          username: "manager",
+          pinHash: "hash-1",
+          status: "active",
+        },
+      ],
+      profiles: [
+        {
+          _id: "manager-1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Ari Mensah",
+        },
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          staffProfileId: "manager-1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "manager",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+      ],
+    });
+
+    const result = await authenticateStaffCredentialForApprovalWithCtx(ctx, {
+      actionKey: "pos.transaction.payment_method.correct",
+      pinHash: "hash-1",
+      reason: "Completed transactions require manager approval.",
+      requiredRole: "manager",
+      requestedByStaffProfileId: "cashier-1" as Id<"staffProfile">,
+      storeId: "store_1" as Id<"store">,
+      subject: {
+        type: "pos_transaction",
+        id: "transaction-1",
+        label: "Receipt 1001",
+      },
+      username: "manager",
+    });
+
+    expect(result).toEqual({
+      kind: "ok",
+      data: expect.objectContaining({
+        approvalProofId: "approvalProof-1",
+        approvedByStaffProfileId: "manager-1",
+      }),
+    });
+    expect(tables.staffCredential.get("credential-1")?.lastAuthenticatedAt).toEqual(
+      expect.any(Number)
+    );
+    expect(tables.approvalProof.get("approvalProof-1")).toMatchObject({
+      actionKey: "pos.transaction.payment_method.correct",
+      approvedByCredentialId: "credential-1",
+      approvedByStaffProfileId: "manager-1",
+      requiredRole: "manager",
+      requestedByStaffProfileId: "cashier-1",
+      storeId: "store_1",
+      subjectId: "transaction-1",
+      subjectType: "pos_transaction",
+    });
+  });
+
+  it("does not create an approval proof for cashier-only credentials", async () => {
+    const { ctx, tables } = createStaffCredentialsMutationCtx({
+      credentials: [
+        {
+          _id: "credential-1",
+          staffProfileId: "cashier-1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          username: "cashier",
+          pinHash: "hash-1",
+          status: "active",
+        },
+      ],
+      profiles: [
+        {
+          _id: "cashier-1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Ari Mensah",
+        },
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          staffProfileId: "cashier-1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "cashier",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+      ],
+    });
+
+    await expect(
+      authenticateStaffCredentialForApprovalWithCtx(ctx, {
+        actionKey: "pos.transaction.payment_method.correct",
+        pinHash: "hash-1",
+        reason: "Completed transactions require manager approval.",
+        requiredRole: "manager",
+        storeId: "store_1" as Id<"store">,
+        subject: {
+          type: "pos_transaction",
+          id: "transaction-1",
+        },
+        username: "cashier",
+      })
+    ).resolves.toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "Staff profile is not authorized for this subsystem.",
+      },
+    });
+    expect(tables.approvalProof.size).toBe(0);
   });
 
   it("still throws when multiple active credentials match the same username", async () => {
