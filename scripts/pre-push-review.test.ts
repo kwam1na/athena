@@ -768,6 +768,9 @@ describe("repo harness ergonomics", () => {
       scripts?: Record<string, string>;
     };
 
+    expect(packageJson.scripts?.["pr:athena"]).toContain(
+      "bun run pre-commit:generated-artifacts"
+    );
     expect(packageJson.scripts?.["pr:athena"]).toContain("bun run harness:test");
     expect(packageJson.scripts?.["pr:athena"]).toContain(
       "bun run harness:review --base origin/main"
@@ -793,7 +796,10 @@ describe("repo harness ergonomics", () => {
     const readme = await readFile(path.join(ROOT_DIR, "README.md"), "utf8");
 
     expect(readme).toContain(
-      "`pre-commit:generated-artifacts` automatically runs `bun run graphify:rebuild`"
+      "`pre-commit:generated-artifacts` automatically runs `bun run harness:generate` and `bun run graphify:rebuild`"
+    );
+    expect(readme).toContain(
+      "`bun run pr:athena` starts with that same generated-artifact repair step"
     );
     expect(readme).toContain(
       "If `harness:self-review` or `harness:review` gets blocked by stale generated harness docs"
@@ -807,6 +813,7 @@ describe("repo harness ergonomics", () => {
     );
     expect(readme).toContain("bun run graphify:check");
     expect(readme).toContain("bun run graphify:rebuild");
+    expect(readme).toContain("bun run harness:generate");
     expect(readme).toContain(".graphify_python");
     expect(readme).toContain(".graphify-requirements.txt");
     expect(readme).toContain("graphify-out/GRAPH_REPORT.md");
