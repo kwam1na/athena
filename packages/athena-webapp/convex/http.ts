@@ -12,7 +12,7 @@ import {
   productRoutes,
   storeRoutes,
   subcategoryRoutes,
-} from "./http/domains/inventory/routes";
+} from "./http/domains/core/routes";
 import {
   onlineOrderRoutes,
   userRoutes,
@@ -27,11 +27,11 @@ import {
   offersRoutes,
   userOffersRoutes,
   posTransactionRoutes,
-} from "./http/domains/storeFront/routes";
-import { guestRoutes } from "./http/domains/storeFront/routes/guest";
-import { colorRoutes } from "./http/domains/inventory/routes/colors";
-import { savedBagRoutes } from "./http/domains/storeFront/routes/savedBag";
-import { mtnMomoRoutes } from "./http/domains/payments/routes";
+} from "./http/domains/customerChannel/routes";
+import { guestRoutes } from "./http/domains/customerChannel/routes/guest";
+import { colorRoutes } from "./http/domains/core/routes/colors";
+import { savedBagRoutes } from "./http/domains/customerChannel/routes/savedBag";
+import { mtnMomoRoutes } from "./http/domains/moneyMovement/routes";
 
 const app: HonoWithConvex<ActionCtx> = new Hono();
 

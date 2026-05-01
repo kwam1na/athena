@@ -1,31 +1,55 @@
-# webapp
+# Athena Webapp
 
-To install dependencies:
+The Athena webapp is the owner/operator console for the solo-business OS. It
+combines the authenticated React app with the Convex backend that runs the core
+business workflows.
+
+## Main Surfaces
+
+- `src/routes`: TanStack Router entrypoints for the authenticated shell,
+  organization/store routing, login, and feature routes.
+- `src/components`: owner/operator UI for POS, products, orders, cash controls,
+  operations, procurement, services, staff, analytics, reviews, and
+  configuration.
+- `src/lib` and `shared`: browser-safe helpers, presentation state, command
+  result handling, money formatting, and shared contracts.
+- `convex`: backend functions, schema, HTTP routing, workflow traces, POS,
+  stock operations, service operations, cash controls, storefront commerce, and
+  integrations.
+
+## Run Locally
+
+Install dependencies from the repo root:
 
 ```bash
 bun install
 ```
 
-To run:
+Start the app:
 
 ```bash
-bun run index.ts
+bun run --filter '@athena/webapp' dev
 ```
-
-This project was created using `bun init` in bun v1.1.29. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
 
 ## Testing
 
-Install dependencies, then run:
+Run the package test suite:
 
 ```bash
-bun run test
+bun run --filter '@athena/webapp' test
 ```
 
 For watch mode:
 
 ```bash
-bun run test:watch
+bun run --filter '@athena/webapp' test:watch
+```
+
+Common backend validation:
+
+```bash
+bun run --filter '@athena/webapp' audit:convex
+bun run --filter '@athena/webapp' lint:convex:changed
 ```
 
 ## LLM Providers
