@@ -59,6 +59,10 @@ function getBalanceDueLabel() {
   });
 }
 
+function getBalanceDuePanel() {
+  return getBalanceDueLabel().closest("div");
+}
+
 describe("OrderSummary completed transaction summary", () => {
   beforeEach(() => {
     vi.mocked(renderEmail).mockClear();
@@ -324,6 +328,34 @@ describe("OrderSummary completed transaction summary", () => {
       });
     },
   );
+
+  it("uses transaction signal classes for the balance due panel and cash action", () => {
+    render(
+      <OrderSummary
+        cartItems={[
+          {
+            id: "item-1",
+            name: "Hair",
+            barcode: "123456789012",
+            price: 1700,
+            quantity: 1,
+            productId: "product-1",
+            skuId: "sku-1",
+          } as never,
+        ]}
+        total={1700}
+      />,
+    );
+
+    expect(getBalanceDuePanel()).toHaveClass(
+      "border-transaction-signal/20",
+      "bg-transaction-signal/5",
+    );
+    expect(screen.getByRole("button", { name: "Cash" })).toHaveClass(
+      "bg-transaction-signal",
+      "text-transaction-signal-foreground",
+    );
+  });
 
   it("switches to change due when draft cash amount exceeds balance", async () => {
     const user = userEvent.setup();

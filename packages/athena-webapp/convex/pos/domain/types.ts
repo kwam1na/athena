@@ -1,4 +1,5 @@
 import type { Id } from "../../_generated/dataModel";
+import type { OperationalRole } from "../../operations/staffRoles";
 
 export type PosServerPhase =
   | "requiresTerminal"
@@ -26,6 +27,7 @@ export interface PosCashierSummary {
   _id: string;
   firstName: string;
   lastName: string;
+  activeRoles?: OperationalRole[];
   username?: string;
   active?: boolean;
 }
@@ -56,8 +58,11 @@ export interface PosCashDrawerSummary {
   registerNumber?: string;
   openingFloat: number;
   expectedCash: number;
+  countedCash?: number;
+  managerApprovalRequestId?: Id<"approvalRequest">;
   openedAt: number;
   notes?: string;
+  variance?: number;
   workflowTraceId?: string;
 }
 

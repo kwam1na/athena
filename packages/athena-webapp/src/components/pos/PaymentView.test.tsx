@@ -10,6 +10,29 @@ const formatter = new Intl.NumberFormat("en-US", {
 });
 
 describe("PaymentView", () => {
+  it("uses transaction signal classes for the selected cash payment action", () => {
+    render(
+      <PaymentView
+        cartItemCount={1}
+        totalPaid={0}
+        remainingDue={5000}
+        amountDue={10_000}
+        formatter={formatter}
+        selectedPaymentMethod="cash"
+        setSelectedPaymentMethod={vi.fn()}
+        onAddPayment={vi.fn()}
+        onComplete={vi.fn()}
+      />,
+    );
+
+    const cashPaymentAction = screen.getByText("Cash").closest("div");
+
+    expect(cashPaymentAction).toHaveClass(
+      "bg-transaction-signal",
+      "text-transaction-signal-foreground",
+    );
+  });
+
   describe.each([
     { method: "cash" as const, expectedAmount: 5000 },
     { method: "card" as const, expectedAmount: 5000 },

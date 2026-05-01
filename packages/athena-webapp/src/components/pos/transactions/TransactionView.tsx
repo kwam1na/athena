@@ -6,10 +6,12 @@ import {
   Banknote,
   CheckCircle2,
   CreditCard,
+  MoveRight,
   ShieldAlert,
   WalletCards,
   Smartphone,
   User,
+  RefreshCw,
 } from "lucide-react";
 
 import View from "../../View";
@@ -57,6 +59,7 @@ type CorrectionEvent = {
   createdAt: number;
   eventType: string;
   message?: string | null;
+  metadata?: Record<string, unknown>;
   reason?: string | null;
 };
 
@@ -75,10 +78,10 @@ function formatCorrectionEventType(eventType: string) {
 function formatCorrectionHistoryTitle(event: CorrectionEvent) {
   switch (event.eventType) {
     case "pos_transaction_payment_method_corrected":
-      return "Payment method corrected";
+      return "Payment method updated";
     case "transaction_customer_corrected":
     case "pos_transaction_customer_corrected":
-      return "Customer attribution corrected";
+      return "Customer attribution updated";
     default:
       return event.message ?? formatCorrectionEventType(event.eventType);
   }
@@ -93,11 +96,64 @@ function formatCorrectionHistoryMeta(event: CorrectionEvent) {
   return actorName ? `${timestamp} by ${actorName}` : timestamp;
 }
 
+function formatPaymentMethodLabel(method: unknown) {
+  if (typeof method !== "string" || !method.trim()) {
+    return null;
+  }
+
+  return method
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatCorrectionHistoryChange(event: CorrectionEvent) {
+  if (event.eventType !== "pos_transaction_payment_method_corrected") {
+    return null;
+  }
+
+  const previousPaymentMethod = formatPaymentMethodLabel(
+    event.metadata?.previousPaymentMethod,
+  );
+  const paymentMethod = formatPaymentMethodLabel(event.metadata?.paymentMethod);
+
+  if (previousPaymentMethod && paymentMethod) {
+    return `Changed from ${previousPaymentMethod} to ${paymentMethod}`;
+  }
+
+  if (paymentMethod) {
+    return `Changed to ${paymentMethod}`;
+  }
+
+  return null;
+}
+
+function getCorrectionHistoryChangeParts(event: CorrectionEvent) {
+  if (event.eventType !== "pos_transaction_payment_method_corrected") {
+    return null;
+  }
+
+  const previousPaymentMethod = formatPaymentMethodLabel(
+    event.metadata?.previousPaymentMethod,
+  );
+  const paymentMethod = formatPaymentMethodLabel(event.metadata?.paymentMethod);
+
+  if (!paymentMethod) {
+    return null;
+  }
+
+  return {
+    paymentMethod,
+    previousPaymentMethod,
+  };
+}
+
 function getTransactionCorrectionHistory(transaction: {
   correctionHistory?: CorrectionEvent[];
   timeline?: CorrectionEvent[];
 }) {
-  return transaction.correctionHistory ?? transaction.timeline ?? [];
+  return [
+    ...(transaction.correctionHistory ?? transaction.timeline ?? []),
+  ].sort((first, second) => second.createdAt - first.createdAt);
 }
 
 export function TransactionView() {
@@ -123,6 +179,8 @@ export function TransactionView() {
   const [pendingCorrection, setPendingCorrection] = useState<
     "customer" | "payment_method" | null
   >(null);
+  const [correctionHistoryExpanded, setCorrectionHistoryExpanded] =
+    useState(false);
   const { activeStore, isAuthenticated } = useProtectedAdminPageState();
   const correctAuth = useMutation(
     api.operations.staffCredentials.authenticateStaffCredential,
@@ -222,12 +280,48 @@ export function TransactionView() {
     "",
   )}/shop/receipt/${transactionId}`;
   const correctionHistory = getTransactionCorrectionHistory(transaction);
+  const hiddenCorrectionCount = Math.max(0, correctionHistory.length - 2);
+  const visibleCorrectionHistory = correctionHistoryExpanded
+    ? correctionHistory
+    : correctionHistory.slice(0, 2);
+  const staffAuthenticationDialogCopy =
+    pendingCorrection === "payment_method"
+      ? {
+          title: "Manager approval required",
+          description:
+            "Enter manager username and PIN to update this payment method.",
+          submitLabel: "Confirm",
+        }
+      : {
+          title: "Staff sign-in required",
+          description: "Enter username and PIN to record this update.",
+          submitLabel: "Confirm",
+        };
   const isCompletedTransaction = transaction.status === "completed";
   const hasSinglePayment = (transaction.payments?.length ?? 0) <= 1;
+  const registerSessionIsClosing = transaction.registerSessionStatus === "closing";
+  const supportsPaymentMethodCorrection =
+    hasSinglePayment &&
+    (transaction.changeGiven ?? 0) <= 0 &&
+    !registerSessionIsClosing;
+  const paymentMethodCorrectionUnavailableMessage = registerSessionIsClosing
+    ? `Reopen ${
+        transaction.registerNumber
+          ? `Register ${transaction.registerNumber}`
+          : "this transaction's register"
+      } to update payment details.`
+    : "Only same-amount payment method updates are supported.";
+  const currentPaymentMethod = (transaction.payments?.[0]?.method ??
+    transaction.paymentMethod ??
+    null) as PosPaymentMethod | null;
+  const correctionPaymentMethodOptions = PAYMENT_METHOD_OPTIONS.filter(
+    (option) => option.value !== currentPaymentMethod,
+  );
   const showPaymentMethodDirectFlow =
-    selectedCorrection === "payment_method" && hasSinglePayment;
+    selectedCorrection === "payment_method" && supportsPaymentMethodCorrection;
 
   async function authenticateCorrectionStaff(args: {
+    correction: "customer" | "payment_method" | null;
     pinHash: string;
     username: string;
   }) {
@@ -243,7 +337,10 @@ export function TransactionView() {
 
     return runCommand(() =>
       correctAuth({
-        allowedRoles: ["cashier", "manager"],
+        allowedRoles:
+          args.correction === "payment_method"
+            ? ["manager"]
+            : ["cashier", "manager"],
         pinHash: args.pinHash,
         storeId: activeStore._id,
         username: args.username,
@@ -251,15 +348,22 @@ export function TransactionView() {
     );
   }
 
+  function exitCorrectionWorkflow() {
+    setCorrectionPanelOpen(false);
+    setSelectedCorrection(null);
+    setPendingCorrection(null);
+    setCorrectionError(null);
+  }
+
   async function runCustomerCorrection(staff: StaffAuthenticationResult) {
     if (!isAuthenticated) {
-      setCorrectionError("Sign in again before correcting this transaction.");
+      setCorrectionError("Sign in again before updating this transaction.");
       return;
     }
 
     const reason = customerCorrectionReason.trim();
     if (!reason) {
-      setCorrectionError("Add a reason for this correction.");
+      setCorrectionError("Add a reason for this update.");
       return;
     }
 
@@ -281,7 +385,8 @@ export function TransactionView() {
     if (result.kind === "ok") {
       setCustomerCorrectionReason("");
       setCustomerProfileIdInput("");
-      toast.success("Customer attribution corrected");
+      exitCorrectionWorkflow();
+      toast.success("Customer attribution updated");
       return;
     }
 
@@ -290,18 +395,22 @@ export function TransactionView() {
 
   async function runPaymentMethodCorrection(staff: StaffAuthenticationResult) {
     if (!isAuthenticated) {
-      setCorrectionError("Sign in again before correcting this transaction.");
+      setCorrectionError("Sign in again before updating this transaction.");
       return;
     }
 
     const paymentMethod = paymentMethodInput as PosPaymentMethod;
     const reason = paymentCorrectionReason.trim();
     if (!paymentMethod) {
-      setCorrectionError("Choose the corrected payment method.");
+      setCorrectionError("Choose the updated payment method.");
+      return;
+    }
+    if (paymentMethod === currentPaymentMethod) {
+      setCorrectionError("Choose a different payment method.");
       return;
     }
     if (!reason) {
-      setCorrectionError("Add a reason for this correction.");
+      setCorrectionError("Add a reason for this update.");
       return;
     }
 
@@ -321,7 +430,8 @@ export function TransactionView() {
     if (result.kind === "ok") {
       setPaymentCorrectionReason("");
       setPaymentMethodInput("");
-      toast.success("Payment method corrected");
+      exitCorrectionWorkflow();
+      toast.success("Payment method updated");
       return;
     }
 
@@ -332,18 +442,22 @@ export function TransactionView() {
     setCorrectionError(null);
 
     if (kind === "customer" && !customerCorrectionReason.trim()) {
-      setCorrectionError("Add a reason for this correction.");
+      setCorrectionError("Add a reason for this update.");
       return;
     }
 
     if (kind === "payment_method") {
       if (!paymentMethodInput.trim()) {
-        setCorrectionError("Choose the corrected payment method.");
+        setCorrectionError("Choose the updated payment method.");
+        return;
+      }
+      if (paymentMethodInput === currentPaymentMethod) {
+        setCorrectionError("Choose a different payment method.");
         return;
       }
 
       if (!paymentCorrectionReason.trim()) {
-        setCorrectionError("Add a reason for this correction.");
+        setCorrectionError("Add a reason for this update.");
         return;
       }
     }
@@ -373,11 +487,7 @@ export function TransactionView() {
       }
     >
       <StaffAuthenticationDialog
-        copy={{
-          title: "Staff sign-in required",
-          description: "Enter username and PIN to record this correction.",
-          submitLabel: "Confirm staff",
-        }}
+        copy={staffAuthenticationDialogCopy}
         getSuccessMessage={(result) => {
           const staffDisplayName = formatStaffDisplayName(result.staffProfile);
           return staffDisplayName
@@ -386,6 +496,7 @@ export function TransactionView() {
         }}
         onAuthenticate={(args) =>
           authenticateCorrectionStaff({
+            correction: pendingCorrection,
             pinHash: args.pinHash,
             username: args.username,
           })
@@ -489,13 +600,18 @@ export function TransactionView() {
                       <Button
                         className="w-full"
                         onClick={() => {
-                          setCorrectionPanelOpen((value) => !value);
-                          setSelectedCorrection(null);
+                          if (correctionPanelOpen) {
+                            exitCorrectionWorkflow();
+                            return;
+                          }
+
+                          setCorrectionPanelOpen(true);
+                          setCorrectionError(null);
                         }}
                         type="button"
                         variant={correctionPanelOpen ? "workflow" : "outline"}
                       >
-                        Correct
+                        Update
                       </Button>
                     ) : null}
 
@@ -530,15 +646,16 @@ export function TransactionView() {
                   <div className="border-b border-border/70 px-5 py-4">
                     <div className="flex items-start gap-3">
                       <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[calc(var(--radius)*0.85)] bg-muted text-muted-foreground">
-                        <ShieldAlert className="h-4 w-4" />
+                        <RefreshCw className="h-4 w-4" />
                       </div>
                       <div className="space-y-1">
                         <h2 className="font-display text-lg font-semibold text-foreground">
-                          Transaction correction
+                          Transaction updates
                         </h2>
                         <p className="text-sm leading-6 text-muted-foreground">
-                          Correct metadata or payment labels here. Use guided
-                          workflows for sale totals and item changes.
+                          Update customer attribution or payment labels here.
+                          Use guided workflows for sale totals and item
+                          changes.
                         </p>
                       </div>
                     </div>
@@ -547,7 +664,7 @@ export function TransactionView() {
                   <div className="space-y-5 p-5">
                     <div className="space-y-2">
                       <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                        Direct corrections
+                        Direct updates
                       </p>
                       <div className="grid gap-2">
                         <Button
@@ -571,14 +688,14 @@ export function TransactionView() {
                         {selectedCorrection === "customer" ? (
                           <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
                             <p className="text-sm font-medium text-foreground">
-                              Customer correction
+                              Customer attribution update
                             </p>
                             <p className="text-sm text-muted-foreground">
                               Staff sign-in and customer lookup will update
                               attribution only.
                             </p>
                             <Input
-                              aria-label="Corrected customer profile ID"
+                              aria-label="Updated customer profile ID"
                               className="border-input bg-background"
                               onChange={(event) =>
                                 setCustomerProfileIdInput(event.target.value)
@@ -587,12 +704,12 @@ export function TransactionView() {
                               value={customerProfileIdInput}
                             />
                             <Textarea
-                              aria-label="Customer correction reason"
+                              aria-label="Customer update reason"
                               className="min-h-[80px] border-input bg-background"
                               onChange={(event) =>
                                 setCustomerCorrectionReason(event.target.value)
                               }
-                              placeholder="Reason for customer attribution correction."
+                              placeholder="Reason for customer attribution update."
                               value={customerCorrectionReason}
                             />
                             <Button
@@ -602,16 +719,19 @@ export function TransactionView() {
                               }
                               type="button"
                             >
-                              Submit customer correction
+                              Submit customer update
                             </Button>
                           </div>
                         ) : null}
                         <Button
                           aria-label="Payment method"
                           className="h-auto justify-start whitespace-normal px-3 py-3 text-left"
-                          onClick={() =>
-                            setSelectedCorrection("payment_method")
-                          }
+                          disabled={!supportsPaymentMethodCorrection}
+                          onClick={() => {
+                            if (supportsPaymentMethodCorrection) {
+                              setSelectedCorrection("payment_method");
+                            }
+                          }}
                           type="button"
                           variant={
                             selectedCorrection === "payment_method"
@@ -622,14 +742,19 @@ export function TransactionView() {
                           <span className="grid gap-1">
                             <span>Payment method</span>
                             <span className="text-xs font-normal opacity-75">
-                              Same-amount method correction only.
+                              Same-amount method update only.
                             </span>
                           </span>
                         </Button>
+                        {!supportsPaymentMethodCorrection ? (
+                          <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-4 text-sm text-muted-foreground">
+                            {paymentMethodCorrectionUnavailableMessage}
+                          </div>
+                        ) : null}
                         {showPaymentMethodDirectFlow ? (
                           <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
                             <p className="text-sm font-medium text-foreground">
-                              Same-amount payment method correction
+                              Same-amount payment method update
                             </p>
                             <p className="text-sm text-muted-foreground">
                               Staff sign-in will keep the paid amount unchanged
@@ -642,29 +767,31 @@ export function TransactionView() {
                               value={paymentMethodInput}
                             >
                               <SelectTrigger
-                                aria-label="Corrected payment method"
+                                aria-label="Updated payment method"
                                 className="border-input bg-background"
                               >
                                 <SelectValue placeholder="Choose payment method" />
                               </SelectTrigger>
                               <SelectContent>
-                                {PAYMENT_METHOD_OPTIONS.map((option) => (
-                                  <SelectItem
-                                    key={option.value}
-                                    value={option.value}
-                                  >
-                                    {option.label}
-                                  </SelectItem>
-                                ))}
+                                {correctionPaymentMethodOptions.map(
+                                  (option) => (
+                                    <SelectItem
+                                      key={option.value}
+                                      value={option.value}
+                                    >
+                                      {option.label}
+                                    </SelectItem>
+                                  ),
+                                )}
                               </SelectContent>
                             </Select>
                             <Textarea
-                              aria-label="Payment method correction reason"
+                              aria-label="Payment method update reason"
                               className="min-h-[80px] border-input bg-background"
                               onChange={(event) =>
                                 setPaymentCorrectionReason(event.target.value)
                               }
-                              placeholder="Reason for payment method correction."
+                              placeholder="Reason for payment method update."
                               value={paymentCorrectionReason}
                             />
                             <Button
@@ -674,13 +801,8 @@ export function TransactionView() {
                               }
                               type="button"
                             >
-                              Submit payment correction
+                              Submit payment update
                             </Button>
-                          </div>
-                        ) : selectedCorrection === "payment_method" ? (
-                          <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-4 text-sm text-muted-foreground">
-                            Multi-payment corrections need review before
-                            editing payment records.
                           </div>
                         ) : null}
                       </div>
@@ -739,7 +861,7 @@ export function TransactionView() {
                     ) ? (
                       <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-4 text-sm text-muted-foreground">
                         Use refund, exchange, or manager review for item,
-                        amount, total, or discount corrections.
+                        amount, total, or discount updates.
                       </div>
                     ) : null}
                     {correctionError ? (
@@ -755,33 +877,77 @@ export function TransactionView() {
                 <section className="space-y-4 overflow-hidden rounded-[calc(var(--radius)*1.35)] border border-border/80 bg-surface-raised p-5 shadow-surface">
                   <div className="space-y-1">
                     <h2 className="font-display text-xl font-semibold text-foreground">
-                      Correction history
+                      Update history
                     </h2>
                     <p className="text-sm text-muted-foreground">
-                      Operational corrections recorded for this transaction.
+                      Operational updates recorded for this transaction.
                     </p>
                   </div>
                   <div className="space-y-3">
-                    {correctionHistory.map((event) => (
-                      <div
-                        className="space-y-2 rounded-lg border border-border bg-muted/20 p-4"
-                        key={event._id}
-                      >
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium leading-5 text-foreground">
-                            {formatCorrectionHistoryTitle(event)}
-                          </p>
-                          <p className="text-xs leading-4 text-muted-foreground">
-                            {formatCorrectionHistoryMeta(event)}
-                          </p>
+                    {visibleCorrectionHistory.map((event) => {
+                      const changeParts =
+                        getCorrectionHistoryChangeParts(event);
+
+                      return (
+                        <div
+                          className="space-y-3 rounded-lg border border-border bg-muted/20 p-4"
+                          key={event._id}
+                        >
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium leading-5 text-foreground">
+                              {formatCorrectionHistoryTitle(event)}
+                            </p>
+                            <p className="text-xs leading-4 text-muted-foreground">
+                              {formatCorrectionHistoryMeta(event)}
+                            </p>
+                          </div>
+                          {changeParts ? (
+                            <div
+                              aria-label={
+                                formatCorrectionHistoryChange(event) ??
+                                undefined
+                              }
+                              className="flex min-w-0 items-center gap-2 rounded-md py-2 text-sm"
+                            >
+                              <span className="min-w-0 truncate text-muted-foreground">
+                                {changeParts.previousPaymentMethod ??
+                                  "Previous method"}
+                              </span>
+                              <MoveRight
+                                aria-hidden="true"
+                                className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                              />
+                              <span className="min-w-0 truncate font-medium text-foreground">
+                                {changeParts.paymentMethod}
+                              </span>
+                            </div>
+                          ) : null}
+                          {event.reason ? (
+                            <p className="border-t border-border/70 pt-3 text-sm leading-5 text-muted-foreground">
+                              {event.reason}
+                            </p>
+                          ) : null}
                         </div>
-                        {event.reason ? (
-                          <p className="border-t border-border/70 pt-3 text-sm leading-5 text-muted-foreground">
-                            {event.reason}
-                          </p>
-                        ) : null}
-                      </div>
-                    ))}
+                      );
+                    })}
+                    {hiddenCorrectionCount > 0 ? (
+                      <Button
+                        className="w-full"
+                        onClick={() =>
+                          setCorrectionHistoryExpanded((value) => !value)
+                        }
+                        type="button"
+                        variant="outline"
+                      >
+                        {correctionHistoryExpanded
+                          ? "Show fewer updates"
+                          : `Show ${hiddenCorrectionCount} more ${
+                              hiddenCorrectionCount === 1
+                                ? "update"
+                                : "updates"
+                            }`}
+                      </Button>
+                    ) : null}
                   </div>
                 </section>
               ) : null}

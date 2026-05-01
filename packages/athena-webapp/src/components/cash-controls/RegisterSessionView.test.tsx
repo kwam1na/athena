@@ -290,6 +290,11 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getAllByText("Closed").length).toBeGreaterThan(0);
     expect(screen.getByText(expectedClosedAt)).toBeInTheDocument();
     expect(screen.getByText("By Kojo M.")).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Opening float corrections are available before closeout starts.",
+      ),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps closed metadata structured when closer staff is missing", () => {
@@ -594,6 +599,43 @@ describe("RegisterSessionViewContent", () => {
     ).toBeInTheDocument();
   });
 
+  it("labels closeout rejection history as closeout follow-up", () => {
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="USD"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          timeline: [
+            {
+              _id: "event-1",
+              actorStaffName: "Kwamina Mensah",
+              createdAt: new Date("2026-05-01T00:44:00.000Z").getTime(),
+              eventType: "register_session_closeout_rejected",
+              message:
+                "Manager rejected the register closeout for recount or correction.",
+            },
+          ],
+        }}
+        storeId="store-1"
+      />,
+    );
+
+    expect(screen.getByText("Closeout correction needed")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Review the rejected closeout, then recount or correct the drawer.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Closeout history")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Opening float correction" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows opening float correction command errors inline", async () => {
     const user = userEvent.setup();
     const onCorrectOpeningFloat = vi.fn().mockResolvedValue(
@@ -684,10 +726,26 @@ describe("RegisterSessionViewContent", () => {
       />,
     );
 
-    expect(screen.getByText("Manager review required")).toBeInTheDocument();
+    expect(screen.getByText("Manager approval required")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Review closeout variance" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Manager approval pending")).toBeInTheDocument();
+    expect(screen.queryByText("Closeout workflow")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Review the variance in the main workspace before this drawer can be closed.",
+      ),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("Requested by Ama M.")).toBeInTheDocument();
     expect(screen.getAllByText("Expected").length).toBeGreaterThan(0);
     expect(screen.getAllByText("GH₵176").length).toBeGreaterThan(1);
+    expect(
+      screen
+        .getByText("Review closeout variance")
+        .compareDocumentPosition(screen.getByText("Linked transactions")) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
 
     await user.type(
       screen.getByLabelText("Manager closeout notes"),

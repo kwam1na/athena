@@ -1986,11 +1986,18 @@ export function useRegisterViewModel(): RegisterViewModel {
                   ? parsedCloseoutCountedCash -
                     activeCloseoutRegisterSession.expectedCash
                   : undefined,
+              closeoutSubmittedCountedCash:
+                activeCloseoutRegisterSession?.countedCash,
+              closeoutSubmittedVariance: activeCloseoutRegisterSession?.variance,
               closeoutNotes,
               closeoutSecondaryActionLabel: closeoutBlockedRegisterSession
                 ? "Reopen register"
                 : "Return to sale",
               expectedCash: activeCloseoutRegisterSession?.expectedCash,
+              canOpenCashControls: cashier?.activeRoles?.includes("manager"),
+              hasPendingCloseoutApproval: Boolean(
+                activeCloseoutRegisterSession?.managerApprovalRequestId,
+              ),
               errorMessage: drawerErrorMessage,
               isCloseoutSubmitting: isSubmittingCloseout,
               isReopeningCloseout,

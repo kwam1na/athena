@@ -139,10 +139,10 @@ export const PaymentView = ({
 
   const paymentMethodStylesMap = {
     cash: {
-      bg: "bg-primary",
-      text: "text-white",
-      hoverBg: "hover:bg-primary/90",
-      hoverText: "hover:text-white",
+      bg: "bg-transaction-signal",
+      text: "text-transaction-signal-foreground",
+      hoverBg: "hover:bg-transaction-signal/90",
+      hoverText: "hover:text-transaction-signal-foreground",
     },
     mobile_money: {
       bg: "bg-yellow-200",

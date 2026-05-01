@@ -258,7 +258,7 @@ export function StaffAuthenticationDialog({
   return (
     <Dialog open={open} onOpenChange={onDismiss}>
       <DialogContent
-        className="w-[min(calc(100vw-2rem),34rem)] gap-0 p-0"
+        className="w-[min(calc(100vw-2rem),34rem)] gap-0 p-0 outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0"
         onPointerDownOutside={(event) => event.preventDefault()}
         onEscapeKeyDown={(event) => event.preventDefault()}
       >

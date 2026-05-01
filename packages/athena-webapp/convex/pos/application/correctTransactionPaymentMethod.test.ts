@@ -27,6 +27,15 @@ beforeEach(() => {
 });
 
 describe("correctTransactionPaymentMethod", () => {
+  function createMutationCtx() {
+    return {
+      db: {
+        get: vi.fn(),
+        patch: vi.fn(),
+      },
+    };
+  }
+
   it("patches the single same-amount payment and matching allocation", async () => {
     vi.mocked(getPosTransactionById).mockResolvedValue({
       _id: "txn-1" as Id<"posTransaction">,
@@ -86,6 +95,130 @@ describe("correctTransactionPaymentMethod", () => {
         operationalEventId: "event-1",
       }),
     );
+  });
+
+  it("subtracts cash from the register session when correcting cash to non-cash", async () => {
+    const ctx = createMutationCtx();
+    vi.mocked(ctx.db.get).mockResolvedValue({
+      _id: "register-session-1",
+      countedCash: 9000,
+      expectedCash: 7000,
+      storeId: "store-1",
+    } as never);
+    vi.mocked(getPosTransactionById).mockResolvedValue({
+      _id: "txn-1" as Id<"posTransaction">,
+      registerSessionId: "register-session-1" as Id<"registerSession">,
+      storeId: "store-1" as Id<"store">,
+      transactionNumber: "POS-111111",
+      status: "completed",
+      total: 1000,
+      totalPaid: 1000,
+      paymentMethod: "cash",
+      payments: [{ method: "cash", amount: 1000, timestamp: 1 }],
+    } as never);
+    vi.mocked(correctSameAmountSinglePaymentAllocationWithCtx).mockResolvedValue({
+      _id: "allocation-1" as Id<"paymentAllocation">,
+    } as never);
+    vi.mocked(recordOperationalEventWithCtx).mockResolvedValue({
+      _id: "event-1" as Id<"operationalEvent">,
+    } as never);
+
+    await correctTransactionPaymentMethod(ctx as never, {
+      transactionId: "txn-1" as Id<"posTransaction">,
+      paymentMethod: "card",
+      reason: "Till entry correction",
+    });
+
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "registerSession",
+      "register-session-1",
+      {
+        expectedCash: 6000,
+        variance: 3000,
+      },
+    );
+    expect(recordOperationalEventWithCtx).toHaveBeenCalledWith(
+      ctx as never,
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          registerSessionExpectedCashDelta: -1000,
+        }),
+      }),
+    );
+  });
+
+  it("adds cash to the register session when correcting non-cash to cash", async () => {
+    const ctx = createMutationCtx();
+    vi.mocked(ctx.db.get).mockResolvedValue({
+      _id: "register-session-1",
+      expectedCash: 7000,
+      storeId: "store-1",
+    } as never);
+    vi.mocked(getPosTransactionById).mockResolvedValue({
+      _id: "txn-1" as Id<"posTransaction">,
+      registerSessionId: "register-session-1" as Id<"registerSession">,
+      storeId: "store-1" as Id<"store">,
+      transactionNumber: "POS-111111",
+      status: "completed",
+      total: 1000,
+      totalPaid: 1000,
+      paymentMethod: "card",
+      payments: [{ method: "card", amount: 1000, timestamp: 1 }],
+    } as never);
+    vi.mocked(correctSameAmountSinglePaymentAllocationWithCtx).mockResolvedValue({
+      _id: "allocation-1" as Id<"paymentAllocation">,
+    } as never);
+    vi.mocked(recordOperationalEventWithCtx).mockResolvedValue({
+      _id: "event-1" as Id<"operationalEvent">,
+    } as never);
+
+    await correctTransactionPaymentMethod(ctx as never, {
+      transactionId: "txn-1" as Id<"posTransaction">,
+      paymentMethod: "cash",
+      reason: "Till entry correction",
+    });
+
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "registerSession",
+      "register-session-1",
+      {
+        expectedCash: 8000,
+      },
+    );
+  });
+
+  it("rejects payment method corrections while the register session is closing", async () => {
+    const ctx = createMutationCtx();
+    vi.mocked(ctx.db.get).mockResolvedValue({
+      _id: "register-session-1",
+      expectedCash: 7000,
+      status: "closing",
+      storeId: "store-1",
+    } as never);
+    vi.mocked(getPosTransactionById).mockResolvedValue({
+      _id: "txn-1" as Id<"posTransaction">,
+      registerSessionId: "register-session-1" as Id<"registerSession">,
+      storeId: "store-1" as Id<"store">,
+      transactionNumber: "POS-111111",
+      status: "completed",
+      total: 1000,
+      totalPaid: 1000,
+      paymentMethod: "card",
+      payments: [{ method: "card", amount: 1000, timestamp: 1 }],
+    } as never);
+
+    await expect(
+      correctTransactionPaymentMethod(ctx as never, {
+        transactionId: "txn-1" as Id<"posTransaction">,
+        paymentMethod: "cash",
+        reason: "Till entry correction",
+      }),
+    ).rejects.toThrow(
+      "Register closeout is under review. Reopen the register before updating payment details.",
+    );
+    expect(correctSameAmountSinglePaymentAllocationWithCtx).not.toHaveBeenCalled();
+    expect(patchPosTransaction).not.toHaveBeenCalled();
+    expect(ctx.db.patch).not.toHaveBeenCalled();
   });
 
   it("rejects split payments", async () => {

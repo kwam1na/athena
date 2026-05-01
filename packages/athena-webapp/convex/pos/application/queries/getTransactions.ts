@@ -215,6 +215,7 @@ export async function getTransactionById(
     sessionTraceId,
     registerNumber,
     registerSessionId,
+    registerSessionStatus: registerSession?.status,
     paymentMethod: transaction.paymentMethod,
     payments: transaction.payments,
     totalPaid: transaction.totalPaid ?? transaction.total,

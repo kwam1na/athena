@@ -143,9 +143,13 @@ export interface RegisterDrawerGateState {
   correctionReason?: string;
   closeoutCountedCash?: string;
   closeoutDraftVariance?: number;
+  closeoutSubmittedCountedCash?: number;
+  closeoutSubmittedVariance?: number;
   closeoutNotes?: string;
   closeoutSecondaryActionLabel?: string;
   expectedCash?: number;
+  canOpenCashControls?: boolean;
+  hasPendingCloseoutApproval?: boolean;
   notes?: string;
   errorMessage: string | null;
   isCloseoutSubmitting?: boolean;

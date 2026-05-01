@@ -264,6 +264,17 @@ function formatStatusLabel(status: string) {
   return capitalizeWords(status.replaceAll("_", " "));
 }
 
+function isCloseoutRejectionEvent(event: RegisterSessionTimelineEvent) {
+  return event.eventType === "register_session_closeout_rejected";
+}
+
+function isOpeningFloatCorrectionEvent(event: RegisterSessionTimelineEvent) {
+  return (
+    event.eventType.toLowerCase().includes("opening_float") ||
+    event.message?.toLowerCase().includes("opening float")
+  );
+}
+
 function formatPaymentMethod(method?: string | null) {
   if (!method) {
     return "Unknown";
@@ -739,6 +750,10 @@ export function RegisterSessionViewContent({
       : undefined;
   const canCorrectOpeningFloat =
     registerSession?.status === "open" || registerSession?.status === "active";
+  const showOpeningFloatCorrectionUnavailable =
+    registerSession &&
+    !canCorrectOpeningFloat &&
+    registerSession.status !== "closed";
   const correctedOpeningFloatAmount = parseDisplayAmountInput(
     correctedOpeningFloat,
   );
@@ -751,6 +766,128 @@ export function RegisterSessionViewContent({
       event.eventType.toLowerCase().includes("correction") ||
       event.message?.toLowerCase().includes("correction"),
   );
+  const hasCloseoutRejectionHistory = correctionTimeline.some(
+    isCloseoutRejectionEvent,
+  );
+  const hasOpeningFloatCorrectionHistory = correctionTimeline.some(
+    isOpeningFloatCorrectionEvent,
+  );
+  const openingFloatCorrectionCardTitle =
+    hasCloseoutRejectionHistory &&
+    !isOpeningFloatCorrectionOpen &&
+    !openingFloatCorrectionSuccess &&
+    !hasOpeningFloatCorrectionHistory
+      ? "Closeout correction needed"
+      : "Opening float correction";
+  const openingFloatCorrectionCardDescription =
+    hasCloseoutRejectionHistory &&
+    !isOpeningFloatCorrectionOpen &&
+    !openingFloatCorrectionSuccess &&
+    !hasOpeningFloatCorrectionHistory
+      ? "Review the rejected closeout, then recount or correct the drawer."
+      : "Correct the starting cash amount without changing linked sales.";
+  const shouldShowOpeningFloatBadge =
+    isOpeningFloatCorrectionOpen ||
+    Boolean(openingFloatCorrectionSuccess) ||
+    hasOpeningFloatCorrectionHistory;
+  const correctionHistoryLabel = hasCloseoutRejectionHistory
+    ? "Closeout history"
+    : "Correction history";
+  const pendingCloseoutApprovalPanel =
+    registerSession && hasPendingCloseoutApproval ? (
+      <section className="space-y-4 rounded-[calc(var(--radius)*1.2)] border border-amber-200 bg-amber-50/40 p-layout-lg shadow-surface">
+        <div className="space-y-2">
+          <div className="space-y-2">
+            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-amber-800">
+              Manager approval required
+            </p>
+            <div className="space-y-1">
+              <h2 className="font-display text-2xl font-semibold text-foreground">
+                Review closeout variance
+              </h2>
+              <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+                {formattedApprovalReason ??
+                  formattedCloseoutReviewReason ??
+                  "Review the submitted count before closing this drawer."}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-amber-200/80 bg-background/70 p-4">
+          <div className="grid gap-4 text-sm sm:grid-cols-3">
+            <div className="space-y-1">
+              <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                Expected
+              </p>
+              <p className="font-mono text-base text-foreground">
+                {formatCurrency(currency, expectedCash)}
+              </p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                Counted
+              </p>
+              <p className="font-mono text-base text-foreground">
+                {formatCurrency(currency, registerSession.countedCash)}
+              </p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                Variance
+              </p>
+              <p
+                className={`font-mono text-base ${getVarianceTone(registerSession.variance)}`}
+              >
+                {formatCurrency(currency, registerSession.variance ?? 0)}
+              </p>
+            </div>
+          </div>
+          <p className="mt-4 border-t border-amber-200/70 pt-3 text-xs text-muted-foreground">
+            Requested by{" "}
+            {registerSession.pendingApprovalRequest?.requestedByStaffName
+              ? formatStaffDisplayName({
+                  fullName:
+                    registerSession.pendingApprovalRequest.requestedByStaffName,
+                })
+              : "staff not recorded"}
+          </p>
+        </div>
+
+        <label className="block w-[480px] space-y-2">
+          <span className="text-sm font-medium text-foreground">
+            Manager notes
+          </span>
+          <Textarea
+            aria-label="Manager closeout notes"
+            className="min-h-[112px] w-full border-input bg-background"
+            onChange={(event) => setManagerNotes(event.target.value)}
+            placeholder="Add approval or rejection notes."
+            value={managerNotes}
+          />
+        </label>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <LoadingButton
+            disabled={Boolean(pendingCloseoutAction)}
+            isLoading={pendingCloseoutAction === "approved"}
+            onClick={() => void handleReviewCloseout("approved")}
+            type="button"
+          >
+            Approve variance
+          </LoadingButton>
+          <LoadingButton
+            disabled={Boolean(pendingCloseoutAction)}
+            isLoading={pendingCloseoutAction === "rejected"}
+            onClick={() => void handleReviewCloseout("rejected")}
+            type="button"
+            variant="outline"
+          >
+            Reject variance
+          </LoadingButton>
+        </div>
+      </section>
+    ) : null;
 
   return (
     <View
@@ -923,31 +1060,34 @@ export function RegisterSessionViewContent({
                           </dd>
                         </div>
                       </div>
-                      <div className="mt-layout-md border-t border-border/70 pt-layout-md">
-                        {canCorrectOpeningFloat ? (
-                          <Button
-                            className="w-full"
-                            disabled={isOpeningFloatCorrectionOpen}
-                            onClick={() => {
-                              setIsOpeningFloatCorrectionOpen(
-                                (value) => !value,
-                              );
-                              setOpeningFloatCorrectionError("");
-                              setOpeningFloatCorrectionSuccess("");
-                            }}
-                            size="sm"
-                            type="button"
-                            variant="outline"
-                          >
-                            Correct opening float
-                          </Button>
-                        ) : (
-                          <p className="text-xs leading-relaxed text-muted-foreground">
-                            Opening float corrections are available before
-                            closeout starts.
-                          </p>
-                        )}
-                      </div>
+                      {canCorrectOpeningFloat ||
+                      showOpeningFloatCorrectionUnavailable ? (
+                        <div className="mt-layout-md border-t border-border/70 pt-layout-md">
+                          {canCorrectOpeningFloat ? (
+                            <Button
+                              className="w-full"
+                              disabled={isOpeningFloatCorrectionOpen}
+                              onClick={() => {
+                                setIsOpeningFloatCorrectionOpen(
+                                  (value) => !value,
+                                );
+                                setOpeningFloatCorrectionError("");
+                                setOpeningFloatCorrectionSuccess("");
+                              }}
+                              size="sm"
+                              type="button"
+                              variant="outline"
+                            >
+                              Correct opening float
+                            </Button>
+                          ) : (
+                            <p className="text-xs leading-relaxed text-muted-foreground">
+                              Opening float corrections are available before
+                              closeout starts.
+                            </p>
+                          )}
+                        </div>
+                      ) : null}
                     </div>
 
                     <div className="rounded-lg border border-border bg-surface-raised p-layout-md">
@@ -1021,6 +1161,8 @@ export function RegisterSessionViewContent({
                 </aside>
 
                 <div className="space-y-layout-lg px-layout-lg py-layout-lg">
+                  {pendingCloseoutApprovalPanel}
+
                   {registerSession &&
                   (isOpeningFloatCorrectionOpen ||
                     openingFloatCorrectionSuccess ||
@@ -1029,22 +1171,23 @@ export function RegisterSessionViewContent({
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="space-y-1">
                           <h2 className="font-display text-xl font-semibold text-foreground">
-                            Opening float correction
+                            {openingFloatCorrectionCardTitle}
                           </h2>
                           <p className="text-sm text-muted-foreground">
-                            Correct the starting cash amount without changing
-                            linked sales.
+                            {openingFloatCorrectionCardDescription}
                           </p>
                         </div>
-                        <Badge
-                          className="border-border bg-muted text-muted-foreground"
-                          variant="outline"
-                        >
-                          {formatCurrency(
-                            currency,
-                            registerSession.openingFloat,
-                          )}
-                        </Badge>
+                        {shouldShowOpeningFloatBadge ? (
+                          <Badge
+                            className="border-border bg-muted text-muted-foreground"
+                            variant="outline"
+                          >
+                            {formatCurrency(
+                              currency,
+                              registerSession.openingFloat,
+                            )}
+                          </Badge>
+                        ) : null}
                       </div>
 
                       {isOpeningFloatCorrectionOpen ? (
@@ -1167,26 +1310,28 @@ export function RegisterSessionViewContent({
                       {correctionTimeline.length > 0 ? (
                         <div className="space-y-2 border-t border-border/70 pt-4">
                           <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                            Correction history
+                            {correctionHistoryLabel}
                           </p>
                           <div className="space-y-3">
                             {correctionTimeline.map((event) => (
                               <div
-                                className="rounded-md border border-border/70 bg-muted/20 p-3"
+                                className="space-y-3 rounded-md border border-border/70 bg-muted/20 p-4"
                                 key={event._id}
                               >
-                                <p className="text-sm font-medium text-foreground">
-                                  {event.message ??
-                                    formatStatusLabel(event.eventType)}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  {formatTimestamp(event.createdAt)}
-                                  {event.actorStaffName
-                                    ? ` by ${formatStaffDisplayName({ fullName: event.actorStaffName })}`
-                                    : ""}
-                                </p>
+                                <div className="space-y-1.5">
+                                  <p className="text-sm font-medium leading-6 text-foreground">
+                                    {event.message ??
+                                      formatStatusLabel(event.eventType)}
+                                  </p>
+                                  <p className="text-xs leading-5 text-muted-foreground">
+                                    {formatTimestamp(event.createdAt)}
+                                    {event.actorStaffName
+                                      ? ` by ${formatStaffDisplayName({ fullName: event.actorStaffName })}`
+                                      : ""}
+                                  </p>
+                                </div>
                                 {event.reason ? (
-                                  <p className="mt-1 text-sm text-muted-foreground">
+                                  <p className="border-t border-border/70 pt-3 text-sm leading-6 text-muted-foreground">
                                     {event.reason}
                                   </p>
                                 ) : null}
@@ -1198,7 +1343,9 @@ export function RegisterSessionViewContent({
                     </section>
                   ) : null}
 
-                  <div className="flex flex-wrap items-start justify-between gap-layout-sm">
+                  <div
+                    className={`flex flex-wrap items-start justify-between gap-layout-sm ${hasPendingCloseoutApproval ? "pt-4" : ""}`}
+                  >
                     <div className="space-y-1">
                       <h2 className="font-display text-2xl font-semibold text-foreground">
                         Linked transactions
@@ -1464,22 +1611,23 @@ export function RegisterSessionViewContent({
             </section>
 
             <aside className="space-y-6 rounded-[calc(var(--radius)*1.25)] border border-border bg-surface px-layout-lg py-layout-lg shadow-surface">
-              <div className="space-y-4">
-                <div className="space-y-1">
-                  <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-                    Closeout workflow
-                  </p>
-                  <h2 className="font-display text-xl font-semibold text-foreground">
-                    Count and close drawer
-                  </h2>
-                  <p className="text-sm text-muted-foreground">
-                    Submit the cash count, then resolve any variance approval
-                    before closing.
-                  </p>
-                </div>
+              {!hasPendingCloseoutApproval ? (
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                      Closeout workflow
+                    </p>
+                    <h2 className="font-display text-xl font-semibold text-foreground">
+                      Count and close drawer
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      Submit the cash count, then resolve any variance approval
+                      before closing.
+                    </p>
+                  </div>
 
-                {registerSession?.status === "closed" ? (
-                  <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
+                  {registerSession?.status === "closed" ? (
+                    <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-sm font-medium text-foreground">
                         Closeout complete
@@ -1526,112 +1674,9 @@ export function RegisterSessionViewContent({
                         </dd>
                       </div>
                     </dl>
-                  </div>
-                ) : hasPendingCloseoutApproval ? (
-                  <div className="space-y-4 rounded-lg border border-amber-200 bg-amber-50/40 p-4">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-medium text-foreground">
-                          Manager review required
-                        </p>
-                        <Badge
-                          className="border-amber-200 bg-amber-100/70 text-amber-800"
-                          size="sm"
-                          variant="outline"
-                        >
-                          Pending
-                        </Badge>
-                      </div>
-                      <p className="max-w-full overflow-hidden break-words text-sm leading-relaxed text-muted-foreground">
-                        {formattedApprovalReason ??
-                          formattedCloseoutReviewReason ??
-                          "Review the submitted count before closing this drawer."}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Requested by{" "}
-                        {registerSession.pendingApprovalRequest
-                          ?.requestedByStaffName
-                          ? formatStaffDisplayName({
-                              fullName:
-                                registerSession.pendingApprovalRequest
-                                  .requestedByStaffName,
-                            })
-                          : "staff not recorded"}
-                      </p>
                     </div>
-
-                    <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
-                      <div className="space-y-1">
-                        <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                          Expected
-                        </dt>
-                        <dd className="font-mono text-foreground">
-                          {formatCurrency(currency, expectedCash)}
-                        </dd>
-                      </div>
-                      <div className="space-y-1">
-                        <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                          Counted
-                        </dt>
-                        <dd className="font-mono text-foreground">
-                          {formatCurrency(
-                            currency,
-                            registerSession.countedCash,
-                          )}
-                        </dd>
-                      </div>
-                      <div className="space-y-1">
-                        <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                          Variance
-                        </dt>
-                        <dd
-                          className={`font-mono ${getVarianceTone(registerSession.variance)}`}
-                        >
-                          {formatCurrency(
-                            currency,
-                            registerSession.variance ?? 0,
-                          )}
-                        </dd>
-                      </div>
-                    </dl>
-
-                    <label className="block space-y-2">
-                      <span className="text-sm font-medium text-foreground">
-                        Manager notes
-                      </span>
-                      <Textarea
-                        aria-label="Manager closeout notes"
-                        className="min-h-[96px] border-input bg-background"
-                        onChange={(event) =>
-                          setManagerNotes(event.target.value)
-                        }
-                        placeholder="Add approval or rejection notes."
-                        value={managerNotes}
-                      />
-                    </label>
-
-                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-                      <LoadingButton
-                        disabled={Boolean(pendingCloseoutAction)}
-                        isLoading={pendingCloseoutAction === "approved"}
-                        onClick={() => void handleReviewCloseout("approved")}
-                        type="button"
-                      >
-                        Approve variance
-                      </LoadingButton>
-                      <LoadingButton
-                        disabled={Boolean(pendingCloseoutAction)}
-                        isLoading={pendingCloseoutAction === "rejected"}
-                        onClick={() => void handleReviewCloseout("rejected")}
-                        type="button"
-                        variant="outline"
-                      >
-                        Reject variance
-                      </LoadingButton>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
+                  ) : (
+                    <div className="space-y-4">
                     {registerSessionSnapshot?.closeoutReview ? (
                       <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-4">
                         <div className="flex items-start justify-between gap-3">
@@ -1725,17 +1770,24 @@ export function RegisterSessionViewContent({
                     >
                       Submit closeout
                     </LoadingButton>
-                  </div>
-                )}
+                    </div>
+                  )}
 
-                {closeoutErrorMessage ? (
-                  <p className="text-sm text-destructive" role="alert">
-                    {closeoutErrorMessage}
-                  </p>
-                ) : null}
-              </div>
+                  {closeoutErrorMessage ? (
+                    <p className="text-sm text-destructive" role="alert">
+                      {closeoutErrorMessage}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
 
-              <div className="border-t border-border/70 pt-6">
+              <div
+                className={
+                  hasPendingCloseoutApproval
+                    ? ""
+                    : "border-t border-border/70 pt-6"
+                }
+              >
                 <div className="space-y-1">
                   <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
                     Action

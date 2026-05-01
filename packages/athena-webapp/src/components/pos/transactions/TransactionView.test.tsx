@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -88,7 +88,7 @@ vi.mock("../../ui/select", () => ({
     value?: string;
   }) => (
     <select
-      aria-label="Corrected payment method"
+      aria-label="Updated payment method"
       onChange={(event) => onValueChange?.(event.target.value)}
       value={value}
     >
@@ -118,8 +118,48 @@ vi.mock("~/src/hooks/useProtectedAdminPageState", () => ({
 }));
 
 vi.mock("../../staff-auth/StaffAuthenticationDialog", () => ({
-  StaffAuthenticationDialog: ({ open }: { open: boolean }) =>
-    open ? <div data-testid="staff-auth-dialog" /> : null,
+  StaffAuthenticationDialog: ({
+    copy,
+    onAuthenticate,
+    onAuthenticated,
+    open,
+  }: {
+    copy: {
+      description: string;
+      submitLabel: string;
+      title: string;
+    };
+    onAuthenticate: (args: {
+      pinHash: string;
+      username: string;
+    }) => Promise<unknown>;
+    onAuthenticated: (result: {
+      staffProfile: { firstName: string; lastName: string };
+      staffProfileId: string;
+    }) => void;
+    open: boolean;
+  }) =>
+    open ? (
+      <div data-testid="staff-auth-dialog">
+        <h2>{copy.title}</h2>
+        <p>{copy.description}</p>
+        <button
+          onClick={async () => {
+            await onAuthenticate({
+              pinHash: "123456",
+              username: "manager",
+            });
+            onAuthenticated({
+              staffProfile: { firstName: "Kwamina", lastName: "Mensah" },
+              staffProfileId: "staff_1",
+            });
+          }}
+          type="button"
+        >
+          {copy.submitLabel}
+        </button>
+      </div>
+    ) : null,
 }));
 
 vi.mock("sonner", () => ({
@@ -190,7 +230,10 @@ describe("TransactionView", () => {
   };
 
   beforeEach(() => {
+    useMutationMock.mockReset();
     useMutationMock.mockReturnValue(vi.fn());
+    useQueryMock.mockReset();
+    useParamsMock.mockReset();
     useProtectedAdminPageStateMock.mockReturnValue({
       activeStore: { _id: "store_1" },
       isAuthenticated: true,
@@ -352,7 +395,7 @@ describe("TransactionView", () => {
 
     render(<TransactionView />);
 
-    await user.click(screen.getByRole("button", { name: "Correct" }));
+    await user.click(screen.getByRole("button", { name: "Update" }));
 
     expect(
       screen.getByRole("button", { name: "Customer attribution" }),
@@ -368,9 +411,9 @@ describe("TransactionView", () => {
       screen.getByRole("button", { name: "Customer attribution" }),
     );
 
-    expect(screen.getByText("Customer correction")).toBeInTheDocument();
+    expect(screen.getByText("Customer attribution update")).toBeInTheDocument();
     expect(
-      screen.getByLabelText("Customer correction reason"),
+      screen.getByLabelText("Customer update reason"),
     ).toBeInTheDocument();
   });
 
@@ -381,17 +424,118 @@ describe("TransactionView", () => {
 
     render(<TransactionView />);
 
-    await user.click(screen.getByRole("button", { name: "Correct" }));
+    await user.click(screen.getByRole("button", { name: "Update" }));
     await user.click(screen.getByRole("button", { name: "Amounts or totals" }));
 
     expect(
       screen.getByText(
-        "Use refund, exchange, or manager review for item, amount, total, or discount corrections.",
+        "Use refund, exchange, or manager review for item, amount, total, or discount updates.",
       ),
     ).toBeInTheDocument();
     expect(
-      screen.queryByLabelText("Payment method correction reason"),
+      screen.queryByLabelText("Payment method update reason"),
     ).not.toBeInTheDocument();
+  });
+
+  it("clears correction errors when closing the correction workflow", async () => {
+    const user = userEvent.setup();
+    useParamsMock.mockReturnValue({ transactionId: "txn_16" });
+    useQueryMock.mockReturnValue(baseTransaction);
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Update" }));
+    await user.click(
+      screen.getByRole("button", { name: "Customer attribution" }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Submit customer update" }),
+    );
+
+    expect(
+      screen.getByText("Add a reason for this update."),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Update" }));
+    await user.click(screen.getByRole("button", { name: "Update" }));
+
+    expect(
+      screen.queryByText("Add a reason for this update."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("disables payment method correction when the transaction is not same-amount eligible", async () => {
+    const user = userEvent.setup();
+    useParamsMock.mockReturnValue({ transactionId: "txn_14" });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      payments: [
+        { method: "cash", amount: 800, timestamp: 1 },
+        { method: "card", amount: 200, timestamp: 2 },
+      ],
+    });
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Update" }));
+
+    expect(
+      screen.getByRole("button", { name: "Payment method" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByText(
+        "Only same-amount payment method updates are supported.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Payment method update reason"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("disables payment method correction when change was given", async () => {
+    const user = userEvent.setup();
+    useParamsMock.mockReturnValue({ transactionId: "txn_15" });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      changeGiven: 100,
+      totalPaid: 1100,
+    });
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Update" }));
+
+    expect(
+      screen.getByRole("button", { name: "Payment method" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByText(
+        "Only same-amount payment method updates are supported.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("disables payment method correction while the register session is closing", async () => {
+    const user = userEvent.setup();
+    useParamsMock.mockReturnValue({ transactionId: "txn_18" });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      registerNumber: "3",
+      registerSessionStatus: "closing",
+    });
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Update" }));
+
+    expect(
+      screen.getByRole("button", { name: "Payment method" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByText(
+        "Reopen Register 3 to update payment details.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("uses a select for same-amount payment method corrections", async () => {
@@ -401,11 +545,11 @@ describe("TransactionView", () => {
 
     render(<TransactionView />);
 
-    await user.click(screen.getByRole("button", { name: "Correct" }));
+    await user.click(screen.getByRole("button", { name: "Update" }));
     await user.click(screen.getByRole("button", { name: "Payment method" }));
 
     const paymentMethodSelect = screen.getByLabelText(
-      "Corrected payment method",
+      "Updated payment method",
     );
     expect(paymentMethodSelect.tagName).toBe("SELECT");
 
@@ -414,6 +558,103 @@ describe("TransactionView", () => {
     expect(paymentMethodSelect).toHaveValue("card");
     expect(
       screen.queryByPlaceholderText("cash, card, mobile_money..."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("filters the current payment method from correction options", async () => {
+    const user = userEvent.setup();
+    useParamsMock.mockReturnValue({ transactionId: "txn_17" });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      paymentMethod: "card",
+      payments: [{ method: "card", amount: 1000, timestamp: 123 }],
+    });
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Update" }));
+    await user.click(screen.getByRole("button", { name: "Payment method" }));
+
+    const paymentMethodSelect = screen.getByLabelText(
+      "Updated payment method",
+    );
+    expect(paymentMethodSelect).not.toHaveTextContent("Card");
+    expect(paymentMethodSelect).toHaveTextContent("Cash");
+    expect(paymentMethodSelect).toHaveTextContent("Mobile Money");
+  });
+
+  it("communicates manager approval before authenticating payment corrections", async () => {
+    const user = userEvent.setup();
+    useParamsMock.mockReturnValue({ transactionId: "txn_13" });
+    useQueryMock.mockReturnValue(baseTransaction);
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Update" }));
+    await user.click(screen.getByRole("button", { name: "Payment method" }));
+    await user.selectOptions(
+      screen.getByLabelText("Updated payment method"),
+      "card",
+    );
+    await user.type(
+      screen.getByLabelText("Payment method update reason"),
+      "Wrong tender selected.",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Submit payment update" }),
+    );
+
+    expect(screen.getByText("Manager approval required")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Enter manager username and PIN to update this payment method.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Confirm" }),
+    ).toBeInTheDocument();
+  });
+
+  it("exits the correction workflow after a payment correction succeeds", async () => {
+    const user = userEvent.setup();
+    const commandMutation = vi.fn().mockResolvedValue({ kind: "ok" });
+    useMutationMock.mockReturnValue(commandMutation);
+    useParamsMock.mockReturnValue({ transactionId: "txn_11" });
+    useQueryMock.mockReturnValue(baseTransaction);
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Update" }));
+    await user.click(screen.getByRole("button", { name: "Payment method" }));
+    await user.selectOptions(
+      screen.getByLabelText("Updated payment method"),
+      "card",
+    );
+    await user.type(
+      screen.getByLabelText("Payment method update reason"),
+      "Wrong tender selected.",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Submit payment update" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+
+    await waitFor(() => {
+      expect(commandMutation).toHaveBeenCalledWith({
+        allowedRoles: ["manager"],
+        pinHash: "123456",
+        storeId: "store_1",
+        username: "manager",
+      });
+      expect(commandMutation).toHaveBeenCalledWith({
+        actorStaffProfileId: "staff_1",
+        paymentMethod: "card",
+        reason: "Wrong tender selected.",
+        transactionId: "txn_11",
+      });
+    });
+    expect(
+      screen.queryByText("Transaction updates"),
     ).not.toBeInTheDocument();
   });
 
@@ -427,7 +668,7 @@ describe("TransactionView", () => {
           actorStaffName: "Ama Mensah",
           createdAt: Date.now() - 60_000,
           eventType: "transaction_customer_corrected",
-          message: "Customer attribution corrected",
+          message: "Customer attribution updated",
           reason: "Customer called with receipt.",
         },
       ],
@@ -435,14 +676,95 @@ describe("TransactionView", () => {
 
     render(<TransactionView />);
 
-    expect(screen.getByText("Correction history")).toBeInTheDocument();
+    expect(screen.getByText("Update history")).toBeInTheDocument();
     expect(
-      screen.getByText("Customer attribution corrected"),
+      screen.getByText("Customer attribution updated"),
     ).toBeInTheDocument();
     expect(
       screen.getByText("Customer called with receipt."),
     ).toBeInTheDocument();
     expect(screen.getByText(/by Ama M\./)).toBeInTheDocument();
+  });
+
+  it("shows two correction history entries before expanding newest-first history", async () => {
+    const user = userEvent.setup();
+    useParamsMock.mockReturnValue({ transactionId: "txn_12" });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      correctionHistory: [
+        {
+          _id: "event-old",
+          actorStaffName: "Ama Mensah",
+          createdAt: 100,
+          eventType: "pos_transaction_payment_method_corrected",
+          metadata: {
+            paymentMethod: "cash",
+            previousPaymentMethod: "mobile_money",
+          },
+          reason: "Old update.",
+        },
+        {
+          _id: "event-new",
+          actorStaffName: "Kwamina Mensah",
+          createdAt: 300,
+          eventType: "pos_transaction_payment_method_corrected",
+          metadata: {
+            paymentMethod: "cash",
+            previousPaymentMethod: "card",
+          },
+          reason: "New update.",
+        },
+        {
+          _id: "event-middle",
+          actorStaffName: "Boy Wonder",
+          createdAt: 200,
+          eventType: "pos_transaction_payment_method_corrected",
+          metadata: {
+            paymentMethod: "mobile_money",
+            previousPaymentMethod: "cash",
+          },
+          reason: "Middle update.",
+        },
+      ],
+    });
+
+    render(<TransactionView />);
+
+    expect(screen.getByText("New update.")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Changed from Card to Cash"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Middle update.")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Changed from Cash to Mobile Money"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Old update.")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Changed from Mobile Money to Cash"),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Show 1 more update" }),
+    );
+
+    const updateReasons = screen
+      .getAllByText(/update\./)
+      .map((element) => element.textContent);
+
+    expect(updateReasons).toEqual([
+      "New update.",
+      "Middle update.",
+      "Old update.",
+    ]);
+    expect(
+      screen.getByLabelText("Changed from Mobile Money to Cash"),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Show fewer updates" }),
+    );
+
+    expect(screen.queryByText("Old update.")).not.toBeInTheDocument();
   });
 
   it("tightens payment correction history labels", () => {
@@ -455,7 +777,11 @@ describe("TransactionView", () => {
           actorStaffName: "Kwamina Mensah",
           createdAt: Date.now() - 60_000,
           eventType: "pos_transaction_payment_method_corrected",
-          message: "Corrected payment method for Transaction #754489.",
+          message: "Updated payment method for Transaction #754489.",
+          metadata: {
+            paymentMethod: "card",
+            previousPaymentMethod: "cash",
+          },
           reason: "Wrong method selected.",
         },
       ],
@@ -463,10 +789,13 @@ describe("TransactionView", () => {
 
     render(<TransactionView />);
 
-    expect(screen.getByText("Payment method corrected")).toBeInTheDocument();
+    expect(screen.getByText("Payment method updated")).toBeInTheDocument();
     expect(
-      screen.queryByText("Corrected payment method for Transaction #754489."),
+      screen.queryByText("Updated payment method for Transaction #754489."),
     ).not.toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Changed from Cash to Card"),
+    ).toBeInTheDocument();
     expect(screen.getByText(/by Kwamina M\./)).toBeInTheDocument();
   });
 
@@ -476,6 +805,6 @@ describe("TransactionView", () => {
 
     render(<TransactionView />);
 
-    expect(screen.queryByText("Correction history")).not.toBeInTheDocument();
+    expect(screen.queryByText("Update history")).not.toBeInTheDocument();
   });
 });

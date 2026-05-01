@@ -33,6 +33,87 @@ async function requireCompletedTransaction(
   return transaction;
 }
 
+function getPaymentMethodCashContribution(payment: {
+  amount: number;
+  method: string;
+}) {
+  return payment.method === "cash" ? payment.amount : 0;
+}
+
+const CLOSING_REGISTER_PAYMENT_UPDATE_MESSAGE =
+  "Register closeout is under review. Reopen the register before updating payment details.";
+
+async function requireRegisterSessionAllowsPaymentCorrection(
+  ctx: MutationCtx,
+  args: {
+    registerSessionId?: Id<"registerSession">;
+    storeId: Id<"store">;
+  },
+) {
+  if (!args.registerSessionId) {
+    return;
+  }
+
+  const registerSession = await ctx.db.get(
+    "registerSession",
+    args.registerSessionId,
+  );
+
+  if (!registerSession || registerSession.storeId !== args.storeId) {
+    throw new Error("Register session not found for this transaction.");
+  }
+
+  if (registerSession.status === "closing") {
+    throw new Error(CLOSING_REGISTER_PAYMENT_UPDATE_MESSAGE);
+  }
+}
+
+async function adjustRegisterSessionExpectedCashForPaymentCorrection(
+  ctx: MutationCtx,
+  args: {
+    nextPayment: { amount: number; method: string };
+    previousPayment: { amount: number; method: string };
+    registerSessionId?: Id<"registerSession">;
+    storeId: Id<"store">;
+  },
+) {
+  if (!args.registerSessionId) {
+    return 0;
+  }
+
+  const expectedCashDelta =
+    getPaymentMethodCashContribution(args.nextPayment) -
+    getPaymentMethodCashContribution(args.previousPayment);
+
+  if (expectedCashDelta === 0) {
+    return 0;
+  }
+
+  const registerSession = await ctx.db.get(
+    "registerSession",
+    args.registerSessionId,
+  );
+
+  if (!registerSession || registerSession.storeId !== args.storeId) {
+    throw new Error("Register session not found for this transaction.");
+  }
+
+  const nextExpectedCash = registerSession.expectedCash + expectedCashDelta;
+
+  if (nextExpectedCash < 0) {
+    throw new Error("Register session expected cash cannot be negative.");
+  }
+
+  await ctx.db.patch("registerSession", args.registerSessionId, {
+    expectedCash: nextExpectedCash,
+    ...(registerSession.countedCash !== undefined
+      ? { variance: registerSession.countedCash - nextExpectedCash }
+      : {}),
+  });
+
+  return expectedCashDelta;
+}
+
 export async function correctTransactionCustomer(
   ctx: MutationCtx,
   args: {
@@ -110,6 +191,11 @@ export async function correctTransactionPaymentMethod(
     throw new Error("Only same-amount payment method corrections are supported.");
   }
 
+  await requireRegisterSessionAllowsPaymentCorrection(ctx, {
+    registerSessionId: transaction.registerSessionId,
+    storeId: transaction.storeId,
+  });
+
   const correctedAllocation =
     await correctSameAmountSinglePaymentAllocationWithCtx(ctx, {
       storeId: transaction.storeId,
@@ -132,6 +218,16 @@ export async function correctTransactionPaymentMethod(
       },
     ],
   });
+  const registerSessionExpectedCashDelta =
+    await adjustRegisterSessionExpectedCashForPaymentCorrection(ctx, {
+      nextPayment: {
+        amount: payment.amount,
+        method: args.paymentMethod,
+      },
+      previousPayment: payment,
+      registerSessionId: transaction.registerSessionId,
+      storeId: transaction.storeId,
+    });
 
   const event = await recordOperationalEventWithCtx(ctx, {
     storeId: transaction.storeId,
@@ -146,6 +242,7 @@ export async function correctTransactionPaymentMethod(
       previousPaymentMethod: payment.method,
       paymentMethod: args.paymentMethod,
       amount: payment.amount,
+      registerSessionExpectedCashDelta,
       representation: "patch_single_same_amount_payment_and_allocation",
     },
     actorUserId: args.actorUserId,
