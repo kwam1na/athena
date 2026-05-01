@@ -606,6 +606,7 @@ export const getRegisterSessionSnapshot = query({
           : null,
         createdAt: event.createdAt,
         eventType: event.eventType,
+        metadata: event.metadata ?? null,
         message: event.message,
         reason: event.reason,
       })),

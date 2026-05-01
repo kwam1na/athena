@@ -25,6 +25,13 @@ const activeStaffProfile = {
   storeId: "store-1" as Id<"store">,
   status: "active",
 };
+const managerRoleAssignment = {
+  _id: "role-1",
+  role: "manager",
+  staffProfileId: "staff-1" as Id<"staffProfile">,
+  status: "active",
+  storeId: "store-1" as Id<"store">,
+};
 
 function createDbGetMock({
   terminalOverride,
@@ -61,6 +68,44 @@ function createDbGetMock({
   );
 }
 
+function createDbQueryMock({
+  roleAssignments = [managerRoleAssignment],
+}: {
+  roleAssignments?: Array<Partial<typeof managerRoleAssignment>>;
+} = {}) {
+  return vi.fn((tableName: string) => {
+    if (tableName !== "staffRoleAssignment") {
+      throw new Error(`Unexpected query table: ${tableName}`);
+    }
+
+    return {
+      withIndex: vi.fn((_indexName: string, buildQuery) => {
+        const q = {
+          eq: vi.fn(() => q),
+        };
+        buildQuery(q);
+
+        return {
+          take: vi.fn(async () => roleAssignments),
+        };
+      }),
+    };
+  });
+}
+
+function createDbMock(
+  options: Parameters<typeof createDbGetMock>[0] & {
+    roleAssignments?: Array<Partial<typeof managerRoleAssignment>>;
+  } = {},
+) {
+  return {
+    get: createDbGetMock(options),
+    query: createDbQueryMock({
+      roleAssignments: options.roleAssignments,
+    }),
+  };
+}
+
 describe("openDrawer", () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -86,9 +131,7 @@ describe("openDrawer", () => {
         terminalId: "terminal-1" as Id<"posTerminal">,
         workflowTraceId: "register_session:a1",
       }),
-      db: {
-        get: createDbGetMock(),
-      },
+      db: createDbMock(),
     } as unknown as MutationCtx;
 
     const result = await openDrawer(ctx, {
@@ -152,11 +195,9 @@ describe("openDrawer", () => {
         terminalId: "terminal-1" as Id<"posTerminal">,
         workflowTraceId: "register_session:b2",
       }),
-      db: {
-        get: createDbGetMock({
-          terminalOverride: { registerNumber: "B2" },
-        }),
-      },
+      db: createDbMock({
+        terminalOverride: { registerNumber: "B2" },
+      }),
     } as unknown as MutationCtx;
 
     const result = await openDrawer(ctx, {
@@ -197,7 +238,7 @@ describe("openDrawer", () => {
 
     const ctx = {
       runQuery: vi.fn().mockResolvedValue(null),
-      db: { get: vi.fn() },
+      db: { get: vi.fn(), query: vi.fn() },
       runMutation: vi.fn(),
     } as unknown as MutationCtx;
 
@@ -218,6 +259,43 @@ describe("openDrawer", () => {
     expect(ctx.runMutation).not.toHaveBeenCalled();
   });
 
+  it("requires a manager role before opening a drawer", async () => {
+    authMocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
+      _id: "user-1" as Id<"athenaUser">,
+    });
+
+    const ctx = {
+      runQuery: vi.fn().mockResolvedValue({
+        _id: "store-1" as Id<"store">,
+        organizationId: "org-1" as Id<"organization">,
+      }),
+      db: createDbMock({
+        roleAssignments: [
+          {
+            ...managerRoleAssignment,
+            role: "cashier",
+          },
+        ],
+      }),
+      runMutation: vi.fn(),
+    } as unknown as MutationCtx;
+
+    await expect(
+      openDrawer(ctx, {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        staffProfileId: "staff-1" as Id<"staffProfile">,
+        openingFloat: 5000,
+      }),
+    ).resolves.toEqual(
+      userError({
+        code: "authorization_failed",
+        message: "Manager sign-in required to open this drawer.",
+      }),
+    );
+    expect(ctx.runMutation).not.toHaveBeenCalled();
+  });
+
   it("returns a conflict user_error for duplicate-drawer rejections", async () => {
     authMocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
       _id: "user-1" as Id<"athenaUser">,
@@ -228,9 +306,7 @@ describe("openDrawer", () => {
         _id: "store-1" as Id<"store">,
         organizationId: "org-1" as Id<"organization">,
       }),
-      db: {
-        get: createDbGetMock(),
-      },
+      db: createDbMock(),
       runMutation: vi
         .fn()
         .mockRejectedValue(
@@ -263,9 +339,7 @@ describe("openDrawer", () => {
         _id: "store-1" as Id<"store">,
         organizationId: "org-1" as Id<"organization">,
       }),
-      db: {
-        get: createDbGetMock(),
-      },
+      db: createDbMock(),
       runMutation: vi
         .fn()
         .mockRejectedValue(
@@ -295,11 +369,9 @@ describe("openDrawer", () => {
         _id: "store-1" as Id<"store">,
         organizationId: "org-1" as Id<"organization">,
       }),
-      db: {
-        get: createDbGetMock({
-          terminalOverride: { registerNumber: "B1" },
-        }),
-      },
+      db: createDbMock({
+        terminalOverride: { registerNumber: "B1" },
+      }),
       runMutation: vi.fn(),
     } as unknown as MutationCtx;
 
@@ -325,11 +397,9 @@ describe("openDrawer", () => {
         _id: "store-1" as Id<"store">,
         organizationId: "org-1" as Id<"organization">,
       }),
-      db: {
-        get: createDbGetMock({
-          terminalOverride: { registerNumber: undefined },
-        }),
-      },
+      db: createDbMock({
+        terminalOverride: { registerNumber: undefined },
+      }),
       runMutation: vi.fn(),
     } as unknown as MutationCtx;
 

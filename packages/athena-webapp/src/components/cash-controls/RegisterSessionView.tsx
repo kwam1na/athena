@@ -17,9 +17,16 @@ import {
   StaffAuthenticationDialog,
   type StaffAuthenticationResult,
 } from "@/components/staff-auth/StaffAuthenticationDialog";
-import type { CommandApprovalProofResult } from "@/components/operations/CommandApprovalDialog";
 import {
+  CommandApprovalDialog,
+  type CommandApprovalDialogProps,
+  CommandApprovalApprovedResult,
+  CommandApprovalProofResult,
+} from "@/components/operations/CommandApprovalDialog";
+import {
+  isApprovalRequiredResult,
   type NormalizedCommandResult,
+  type NormalizedApprovalCommandResult,
   runCommand,
 } from "@/lib/errors/runCommand";
 import { getOrigin } from "@/lib/navigationUtils";
@@ -32,6 +39,7 @@ import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import { toDisplayAmount } from "~/convex/lib/currency";
 import { userError, type CommandResult } from "~/shared/commandResult";
+import type { ApprovalRequirement } from "~/shared/approvalPolicy";
 import { formatStaffDisplayName } from "~/shared/staffDisplayName";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
@@ -118,6 +126,7 @@ type RegisterSessionTimelineEvent = {
   actorStaffName?: string | null;
   createdAt: number;
   eventType: string;
+  metadata?: Record<string, unknown> | null;
   message?: string | null;
   reason?: string | null;
 };
@@ -187,13 +196,14 @@ type CloseoutApprovalAuthenticationCommandResult =
   NormalizedCommandResult<CloseoutApprovalAuthenticationResult>;
 
 type CorrectOpeningFloatArgs = {
-  actorStaffProfileId: string;
+  actorStaffProfileId?: string;
+  approvalProofId?: string;
   correctedOpeningFloat: number;
   reason: string;
   registerSessionId: string;
 };
 
-type CorrectOpeningFloatCommandResult = NormalizedCommandResult<{
+type CorrectOpeningFloatCommandResult = NormalizedApprovalCommandResult<{
   action?: "corrected" | "duplicate";
 }>;
 
@@ -224,6 +234,7 @@ type RegisterSessionViewContentProps = {
     registerSessionId: string;
     username: string;
   }) => Promise<CloseoutApprovalAuthenticationCommandResult>;
+  onAuthenticateForApproval?: CommandApprovalDialogProps["onAuthenticateForApproval"];
   onSubmitCloseout: (
     args: RegisterCloseoutSubmitArgs,
   ) => Promise<RegisterCloseoutCommandResult>;
@@ -296,6 +307,21 @@ function isOpeningFloatCorrectionEvent(event: RegisterSessionTimelineEvent) {
   );
 }
 
+function getNumericEventMetadata(
+  event: RegisterSessionTimelineEvent,
+  key: string,
+) {
+  const value = event.metadata?.[key];
+
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function isRegisterSessionCorrectionEvent(event: RegisterSessionTimelineEvent) {
+  return (
+    isCloseoutRejectionEvent(event) || isOpeningFloatCorrectionEvent(event)
+  );
+}
+
 function formatPaymentMethod(method?: string | null) {
   if (!method) {
     return "Unknown";
@@ -363,6 +389,7 @@ export function RegisterSessionViewContent({
   actorUserId,
   currency,
   isLoading,
+  onAuthenticateForApproval,
   onAuthenticateStaff,
   onAuthenticateCloseoutReviewApproval,
   onCorrectOpeningFloat,
@@ -401,6 +428,8 @@ export function RegisterSessionViewContent({
     useState("");
   const [openingFloatCorrectionIntent, setOpeningFloatCorrectionIntent] =
     useState<OpeningFloatCorrectionIntent | null>(null);
+  const [pendingOpeningFloatApproval, setPendingOpeningFloatApproval] =
+    useState<ApprovalRequirement | null>(null);
   const [isCorrectingOpeningFloat, setIsCorrectingOpeningFloat] =
     useState(false);
   const [submissionKey, setSubmissionKey] = useState(() =>
@@ -429,6 +458,7 @@ export function RegisterSessionViewContent({
       setOpeningFloatCorrectionError("");
       setOpeningFloatCorrectionSuccess("");
       setOpeningFloatCorrectionIntent(null);
+      setPendingOpeningFloatApproval(null);
       return;
     }
 
@@ -450,6 +480,7 @@ export function RegisterSessionViewContent({
     setOpeningFloatCorrectionError("");
     setOpeningFloatCorrectionSuccess("");
     setOpeningFloatCorrectionIntent(null);
+    setPendingOpeningFloatApproval(null);
   }, [
     registerSession?._id,
     registerSession?.countedCash,
@@ -592,13 +623,16 @@ export function RegisterSessionViewContent({
       return;
     }
 
-    setOpeningFloatCorrectionError("");
-    setOpeningFloatCorrectionSuccess("");
-    setOpeningFloatCorrectionIntent({
+    const intent = {
       correctedOpeningFloat: parsedOpeningFloat,
       reason: trimmedReason,
       registerSessionId: registerSession._id,
-    });
+    };
+
+    setOpeningFloatCorrectionError("");
+    setOpeningFloatCorrectionSuccess("");
+    setOpeningFloatCorrectionIntent(intent);
+    await runOpeningFloatCorrection(intent);
   }
 
   async function handleAuthenticatedCloseoutStaff(
@@ -651,31 +685,32 @@ export function RegisterSessionViewContent({
     }
   }
 
-  async function handleAuthenticatedOpeningFloatStaff(
-    result: StaffAuthenticationResult,
+  async function runOpeningFloatCorrection(
+    intent: OpeningFloatCorrectionIntent,
+    args?: { approvalProofId?: string },
   ) {
-    if (!openingFloatCorrectionIntent) {
+    if (!onCorrectOpeningFloat) {
+      setOpeningFloatCorrectionError(
+        "Opening float correction is not available yet. Try again after the register tools refresh.",
+      );
       return;
     }
 
-    const intent = openingFloatCorrectionIntent;
-
     setOpeningFloatCorrectionError("");
     setIsCorrectingOpeningFloat(true);
-    setOpeningFloatCorrectionIntent(null);
 
     try {
-      const commandResult = await (onCorrectOpeningFloat?.({
-        actorStaffProfileId: result.staffProfileId,
+      const commandResult = await onCorrectOpeningFloat({
+        approvalProofId: args?.approvalProofId,
         correctedOpeningFloat: intent.correctedOpeningFloat,
         reason: intent.reason,
         registerSessionId: intent.registerSessionId,
-      }) ??
-        userError({
-          code: "unavailable",
-          message:
-            "Opening float correction is not available yet. Try again after the register tools refresh.",
-        }));
+      });
+
+      if (isApprovalRequiredResult(commandResult)) {
+        setPendingOpeningFloatApproval(commandResult.approval);
+        return;
+      }
 
       if (commandResult.kind !== "ok") {
         setOpeningFloatCorrectionError(commandResult.error.message);
@@ -685,9 +720,28 @@ export function RegisterSessionViewContent({
       setOpeningFloatCorrectionSuccess("Opening float corrected.");
       setOpeningFloatCorrectionReason("");
       setIsOpeningFloatCorrectionOpen(false);
+      setOpeningFloatCorrectionIntent(null);
+      setPendingOpeningFloatApproval(null);
     } finally {
       setIsCorrectingOpeningFloat(false);
     }
+  }
+
+  function handleOpeningFloatApprovalApproved(
+    result: CommandApprovalApprovedResult,
+  ) {
+    if (!openingFloatCorrectionIntent) {
+      setOpeningFloatCorrectionError(
+        "Opening float correction details were not available. Review the amount and submit again.",
+      );
+      setPendingOpeningFloatApproval(null);
+      return;
+    }
+
+    setPendingOpeningFloatApproval(null);
+    void runOpeningFloatCorrection(openingFloatCorrectionIntent, {
+      approvalProofId: result.approvalProofId,
+    });
   }
 
   const closeoutStaffAuthCopy =
@@ -696,8 +750,8 @@ export function RegisterSessionViewContent({
           title: "Manager sign-in required",
           description:
             closeoutStaffAuthIntent.decision === "approved"
-              ? "Enter username and PIN to approve variance."
-              : "Enter username and PIN to reject variance.",
+              ? "Authenticate to approve variance."
+              : "Authenticate to reject variance.",
           submitLabel:
             closeoutStaffAuthIntent.decision === "approved"
               ? "Approve variance"
@@ -705,15 +759,9 @@ export function RegisterSessionViewContent({
         }
       : {
           title: "Closeout sign-in required",
-          description: "Enter username and PIN to submit closeout.",
+          description: "Authenticate to submit closeout.",
           submitLabel: "Submit closeout",
         };
-  const correctionStaffAuthCopy = {
-    title: "Correction sign-in required",
-    description: "Enter username and PIN to correct opening float.",
-    submitLabel: "Correct opening float",
-  };
-
   const transactions = registerSessionSnapshot?.transactions ?? [];
   const previewTransactions = transactions.slice(
     0,
@@ -789,10 +837,9 @@ export function RegisterSessionViewContent({
     registerSession && correctedOpeningFloatAmount !== undefined
       ? correctedOpeningFloatAmount - registerSession.openingFloat
       : null;
+  const isClosedRegisterSession = registerSession?.status === "closed";
   const correctionTimeline = (registerSessionSnapshot?.timeline ?? []).filter(
-    (event) =>
-      event.eventType.toLowerCase().includes("correction") ||
-      event.message?.toLowerCase().includes("correction"),
+    isRegisterSessionCorrectionEvent,
   );
   const hasCloseoutRejectionHistory = correctionTimeline.some(
     isCloseoutRejectionEvent,
@@ -802,6 +849,7 @@ export function RegisterSessionViewContent({
   );
   const openingFloatCorrectionCardTitle =
     hasCloseoutRejectionHistory &&
+    !isClosedRegisterSession &&
     !isOpeningFloatCorrectionOpen &&
     !openingFloatCorrectionSuccess &&
     !hasOpeningFloatCorrectionHistory
@@ -809,6 +857,7 @@ export function RegisterSessionViewContent({
       : "Opening float correction";
   const openingFloatCorrectionCardDescription =
     hasCloseoutRejectionHistory &&
+    !isClosedRegisterSession &&
     !isOpeningFloatCorrectionOpen &&
     !openingFloatCorrectionSuccess &&
     !hasOpeningFloatCorrectionHistory
@@ -821,6 +870,11 @@ export function RegisterSessionViewContent({
   const correctionHistoryLabel = hasCloseoutRejectionHistory
     ? "Closeout history"
     : "Correction history";
+  const shouldShowProminentCorrectionPanel =
+    Boolean(registerSession) &&
+    (isOpeningFloatCorrectionOpen ||
+      Boolean(openingFloatCorrectionSuccess) ||
+      (correctionTimeline.length > 0 && !isClosedRegisterSession));
   const pendingCloseoutApprovalPanel =
     registerSession && hasPendingCloseoutApproval ? (
       <section className="space-y-4 rounded-[calc(var(--radius)*1.2)] border border-amber-200 bg-amber-50/40 p-layout-lg shadow-surface">
@@ -1001,26 +1055,29 @@ export function RegisterSessionViewContent({
         onDismiss={() => setCloseoutStaffAuthIntent(null)}
         open={Boolean(closeoutStaffAuthIntent)}
       />
-      <StaffAuthenticationDialog
-        copy={correctionStaffAuthCopy}
-        getSuccessMessage={(result) => {
-          const staffDisplayName = formatStaffDisplayName(result.staffProfile);
-          return staffDisplayName
-            ? `Confirmed as ${staffDisplayName}.`
-            : "Staff credentials confirmed.";
-        }}
-        onAuthenticate={(args) =>
-          onAuthenticateStaff({
-            allowedRoles: ["cashier", "manager"],
-            pinHash: args.pinHash,
-            username: args.username,
-          })
+      <CommandApprovalDialog
+        approval={pendingOpeningFloatApproval}
+        onAuthenticateForApproval={
+          onAuthenticateForApproval ??
+          (() =>
+            Promise.resolve(
+              userError({
+                code: "unavailable",
+                message:
+                  "Manager approval is not available yet. Try again after the register tools refresh.",
+              }),
+            ))
         }
-        onAuthenticated={(result) => {
-          void handleAuthenticatedOpeningFloatStaff(result);
+        onApproved={handleOpeningFloatApprovalApproved}
+        onDismiss={() => {
+          setPendingOpeningFloatApproval(null);
+          setOpeningFloatCorrectionIntent(null);
         }}
-        onDismiss={() => setOpeningFloatCorrectionIntent(null)}
-        open={Boolean(openingFloatCorrectionIntent)}
+        open={Boolean(pendingOpeningFloatApproval)}
+        requestedByStaffProfileId={
+          actorStaffProfileId as Id<"staffProfile"> | undefined
+        }
+        storeId={(storeId ?? "missing-store") as Id<"store">}
       />
       <FadeIn>
         <div className="container mx-auto space-y-6 p-6">
@@ -1203,10 +1260,7 @@ export function RegisterSessionViewContent({
                 <div className="space-y-layout-lg px-layout-lg py-layout-lg">
                   {pendingCloseoutApprovalPanel}
 
-                  {registerSession &&
-                  (isOpeningFloatCorrectionOpen ||
-                    openingFloatCorrectionSuccess ||
-                    correctionTimeline.length > 0) ? (
+                  {shouldShowProminentCorrectionPanel ? (
                     <section className="space-y-4 rounded-lg border border-border bg-surface-raised p-layout-md">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="space-y-1">
@@ -1353,30 +1407,93 @@ export function RegisterSessionViewContent({
                             {correctionHistoryLabel}
                           </p>
                           <div className="space-y-3">
-                            {correctionTimeline.map((event) => (
-                              <div
-                                className="space-y-3 rounded-md border border-border/70 bg-muted/20 p-4"
-                                key={event._id}
-                              >
-                                <div className="space-y-1.5">
-                                  <p className="text-sm font-medium leading-6 text-foreground">
-                                    {event.message ??
-                                      formatStatusLabel(event.eventType)}
-                                  </p>
-                                  <p className="text-xs leading-5 text-muted-foreground">
-                                    {formatTimestamp(event.createdAt)}
-                                    {event.actorStaffName
-                                      ? ` by ${formatStaffDisplayName({ fullName: event.actorStaffName })}`
-                                      : ""}
-                                  </p>
+                            {correctionTimeline.map((event) => {
+                              const previousOpeningFloat =
+                                getNumericEventMetadata(
+                                  event,
+                                  "previousOpeningFloat",
+                                );
+                              const correctedOpeningFloat =
+                                getNumericEventMetadata(
+                                  event,
+                                  "correctedOpeningFloat",
+                                );
+                              const openingFloatDelta =
+                                previousOpeningFloat !== null &&
+                                correctedOpeningFloat !== null
+                                  ? correctedOpeningFloat - previousOpeningFloat
+                                  : null;
+
+                              return (
+                                <div
+                                  className="space-y-3 rounded-md border border-border/70 bg-muted/20 p-4"
+                                  key={event._id}
+                                >
+                                  <div className="space-y-1.5">
+                                    <p className="text-sm font-medium leading-6 text-foreground">
+                                      {event.message ??
+                                        formatStatusLabel(event.eventType)}
+                                    </p>
+                                    <p className="text-xs leading-5 text-muted-foreground">
+                                      {formatTimestamp(event.createdAt)}
+                                      {event.actorStaffName
+                                        ? ` by ${formatStaffDisplayName({ fullName: event.actorStaffName })}`
+                                        : ""}
+                                    </p>
+                                  </div>
+                                  {previousOpeningFloat !== null &&
+                                  correctedOpeningFloat !== null ? (
+                                    <dl className="grid gap-3 border-t border-border/70 pt-3 text-sm sm:grid-cols-3">
+                                      <div className="space-y-1">
+                                        <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                                          Original float
+                                        </dt>
+                                        <dd className="font-mono text-foreground">
+                                          {formatCurrency(
+                                            currency,
+                                            previousOpeningFloat,
+                                          )}
+                                        </dd>
+                                      </div>
+                                      <div className="space-y-1">
+                                        <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                                          Corrected float
+                                        </dt>
+                                        <dd className="font-mono text-foreground">
+                                          {formatCurrency(
+                                            currency,
+                                            correctedOpeningFloat,
+                                          )}
+                                        </dd>
+                                      </div>
+                                      <div className="space-y-1">
+                                        <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                                          Drawer impact
+                                        </dt>
+                                        <dd className="font-mono text-foreground">
+                                          {openingFloatDelta === null
+                                            ? "Not recorded"
+                                            : formatCurrency(
+                                                currency,
+                                                openingFloatDelta,
+                                              )}
+                                        </dd>
+                                      </div>
+                                    </dl>
+                                  ) : null}
+                                  {event.reason ? (
+                                    <div className="space-y-1 border-t border-border/70 pt-3">
+                                      <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                                        Notes
+                                      </p>
+                                      <p className="text-sm leading-6 text-muted-foreground">
+                                        {event.reason}
+                                      </p>
+                                    </div>
+                                  ) : null}
                                 </div>
-                                {event.reason ? (
-                                  <p className="border-t border-border/70 pt-3 text-sm leading-6 text-muted-foreground">
-                                    {event.reason}
-                                  </p>
-                                ) : null}
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
                       ) : null}
@@ -1668,102 +1785,19 @@ export function RegisterSessionViewContent({
 
                   {registerSession?.status === "closed" ? (
                     <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-medium text-foreground">
-                        Closeout complete
-                      </p>
-                      <Badge
-                        className="border-border bg-muted text-muted-foreground"
-                        size="sm"
-                        variant="outline"
-                      >
-                        Closed
-                      </Badge>
-                    </div>
-                    <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
-                      <div className="space-y-1">
-                        <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                          Expected
-                        </dt>
-                        <dd className="font-mono text-foreground">
-                          {formatCurrency(currency, expectedCash)}
-                        </dd>
-                      </div>
-                      <div className="space-y-1">
-                        <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                          Counted
-                        </dt>
-                        <dd className="font-mono text-foreground">
-                          {formatCurrency(
-                            currency,
-                            registerSession.countedCash,
-                          )}
-                        </dd>
-                      </div>
-                      <div className="space-y-1">
-                        <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                          Variance
-                        </dt>
-                        <dd
-                          className={`font-mono ${getVarianceTone(registerSession.variance)}`}
-                        >
-                          {formatCurrency(
-                            currency,
-                            registerSession.variance ?? 0,
-                          )}
-                        </dd>
-                      </div>
-                    </dl>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                    {registerSessionSnapshot?.closeoutReview ? (
-                      <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <p className="text-sm font-medium text-foreground">
-                            Submitted count
-                          </p>
-                          <p
-                            className={`font-mono text-lg ${getVarianceTone(registerSessionSnapshot.closeoutReview.variance)}`}
-                          >
-                            {formatCurrency(
-                              currency,
-                              registerSessionSnapshot.closeoutReview.variance,
-                            )}
-                          </p>
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          Approval required:{" "}
-                          {registerSessionSnapshot.closeoutReview
-                            .requiresApproval
-                            ? "Yes"
-                            : "No"}
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-medium text-foreground">
+                          Closeout complete
                         </p>
-                        {formattedCloseoutReviewReason ? (
-                          <p className="max-w-full overflow-hidden break-words text-sm leading-relaxed text-foreground">
-                            {formattedCloseoutReviewReason}
-                          </p>
-                        ) : null}
+                        <Badge
+                          className="border-border bg-muted text-muted-foreground"
+                          size="sm"
+                          variant="outline"
+                        >
+                          Closed
+                        </Badge>
                       </div>
-                    ) : null}
-
-                    <label className="block space-y-2">
-                      <span className="text-sm font-medium text-foreground">
-                        Counted cash
-                      </span>
-                      <Input
-                        aria-label="Closeout counted cash"
-                        className="border-input bg-background"
-                        min={0}
-                        onChange={(event) => setCountedCash(event.target.value)}
-                        step="0.01"
-                        type="number"
-                        value={countedCash}
-                      />
-                    </label>
-
-                    <div className="rounded-lg border border-border bg-muted/20 p-4">
-                      <dl className="grid grid-cols-2 gap-3 text-sm">
+                      <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
                         <div className="space-y-1">
                           <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                             Expected
@@ -1774,42 +1808,127 @@ export function RegisterSessionViewContent({
                         </div>
                         <div className="space-y-1">
                           <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                            Draft variance
+                            Counted
+                          </dt>
+                          <dd className="font-mono text-foreground">
+                            {formatCurrency(
+                              currency,
+                              registerSession.countedCash,
+                            )}
+                          </dd>
+                        </div>
+                        <div className="space-y-1">
+                          <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                            Variance
                           </dt>
                           <dd
-                            className={`font-mono ${getVarianceTone(draftVariance ?? undefined)}`}
+                            className={`font-mono ${getVarianceTone(registerSession.variance)}`}
                           >
-                            {draftVariance === null
-                              ? "Pending count"
-                              : formatCurrency(currency, draftVariance)}
+                            {formatCurrency(
+                              currency,
+                              registerSession.variance ?? 0,
+                            )}
                           </dd>
                         </div>
                       </dl>
                     </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {registerSessionSnapshot?.closeoutReview ? (
+                        <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <p className="text-sm font-medium text-foreground">
+                              Submitted count
+                            </p>
+                            <p
+                              className={`font-mono text-lg ${getVarianceTone(registerSessionSnapshot.closeoutReview.variance)}`}
+                            >
+                              {formatCurrency(
+                                currency,
+                                registerSessionSnapshot.closeoutReview.variance,
+                              )}
+                            </p>
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            Approval required:{" "}
+                            {registerSessionSnapshot.closeoutReview
+                              .requiresApproval
+                              ? "Yes"
+                              : "No"}
+                          </p>
+                          {formattedCloseoutReviewReason ? (
+                            <p className="max-w-full overflow-hidden break-words text-sm leading-relaxed text-foreground">
+                              {formattedCloseoutReviewReason}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : null}
 
-                    <label className="block space-y-2">
-                      <span className="text-sm font-medium text-foreground">
-                        Closeout notes
-                      </span>
-                      <Textarea
-                        aria-label="Closeout notes"
-                        className="min-h-[96px] border-input bg-background"
-                        onChange={(event) =>
-                          setCloseoutNotes(event.target.value)
-                        }
-                        placeholder="Add drawer notes if anything needs follow-up."
-                        value={closeoutNotes}
-                      />
-                    </label>
+                      <label className="block space-y-2">
+                        <span className="text-sm font-medium text-foreground">
+                          Counted cash
+                        </span>
+                        <Input
+                          aria-label="Closeout counted cash"
+                          className="border-input bg-background"
+                          min={0}
+                          onChange={(event) =>
+                            setCountedCash(event.target.value)
+                          }
+                          step="0.01"
+                          type="number"
+                          value={countedCash}
+                        />
+                      </label>
 
-                    <LoadingButton
-                      disabled={pendingCloseoutAction === "submit"}
-                      isLoading={pendingCloseoutAction === "submit"}
-                      onClick={() => void handleSubmitCloseout()}
-                      type="button"
-                    >
-                      Submit closeout
-                    </LoadingButton>
+                      <div className="rounded-lg border border-border bg-muted/20 p-4">
+                        <dl className="grid grid-cols-2 gap-3 text-sm">
+                          <div className="space-y-1">
+                            <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                              Expected
+                            </dt>
+                            <dd className="font-mono text-foreground">
+                              {formatCurrency(currency, expectedCash)}
+                            </dd>
+                          </div>
+                          <div className="space-y-1">
+                            <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                              Draft variance
+                            </dt>
+                            <dd
+                              className={`font-mono ${getVarianceTone(draftVariance ?? undefined)}`}
+                            >
+                              {draftVariance === null
+                                ? "Pending count"
+                                : formatCurrency(currency, draftVariance)}
+                            </dd>
+                          </div>
+                        </dl>
+                      </div>
+
+                      <label className="block space-y-2">
+                        <span className="text-sm font-medium text-foreground">
+                          Closeout notes
+                        </span>
+                        <Textarea
+                          aria-label="Closeout notes"
+                          className="min-h-[96px] border-input bg-background"
+                          onChange={(event) =>
+                            setCloseoutNotes(event.target.value)
+                          }
+                          placeholder="Add drawer notes if anything needs follow-up."
+                          value={closeoutNotes}
+                        />
+                      </label>
+
+                      <LoadingButton
+                        disabled={pendingCloseoutAction === "submit"}
+                        isLoading={pendingCloseoutAction === "submit"}
+                        onClick={() => void handleSubmitCloseout()}
+                        type="button"
+                      >
+                        Submit closeout
+                      </LoadingButton>
                     </div>
                   )}
 
@@ -2057,20 +2176,21 @@ export function RegisterSessionView() {
     }
 
     const session = registerSessionSnapshot?.registerSession;
-    const result = await runCommand(() =>
-      authenticateStaffCredentialForApproval({
-        actionKey: "cash_controls.register_session.review_variance",
-        pinHash: args.pinHash,
-        reason: args.reason,
-        requiredRole: "manager",
-        storeId: activeStore._id,
-        subject: {
-          id: args.registerSessionId,
-          label: session?.registerNumber ?? undefined,
-          type: "register_session",
-        },
-        username: args.username,
-      }) as Promise<CommandResult<CommandApprovalProofResult>>,
+    const result = await runCommand(
+      () =>
+        authenticateStaffCredentialForApproval({
+          actionKey: "cash_controls.register_session.review_variance",
+          pinHash: args.pinHash,
+          reason: args.reason,
+          requiredRole: "manager",
+          storeId: activeStore._id,
+          subject: {
+            id: args.registerSessionId,
+            label: session?.registerNumber ?? undefined,
+            type: "register_session",
+          },
+          username: args.username,
+        }) as Promise<CommandResult<CommandApprovalProofResult>>,
     );
 
     if (result.kind !== "ok") {
@@ -2085,6 +2205,33 @@ export function RegisterSessionView() {
         staffProfileId: result.data.approvedByStaffProfileId,
       },
     };
+  }
+
+  async function onAuthenticateForApproval(
+    args: Parameters<
+      NonNullable<RegisterSessionViewContentProps["onAuthenticateForApproval"]>
+    >[0],
+  ) {
+    if (!activeStore?._id) {
+      return userError({
+        code: "authentication_failed",
+        message: "Select a store before confirming manager approval.",
+      });
+    }
+
+    return runCommand(
+      () =>
+        authenticateStaffCredentialForApproval({
+          actionKey: args.actionKey,
+          pinHash: args.pinHash,
+          reason: args.reason,
+          requiredRole: args.requiredRole,
+          requestedByStaffProfileId: args.requestedByStaffProfileId,
+          storeId: activeStore._id,
+          subject: args.subject,
+          username: args.username,
+        }) as Promise<CommandResult<CommandApprovalProofResult>>,
+    );
   }
 
   async function onReviewCloseout(args: RegisterCloseoutReviewArgs) {
@@ -2137,10 +2284,16 @@ export function RegisterSessionView() {
       (
         correctOpeningFloatMutation as unknown as (
           args: Record<string, unknown>,
-        ) => Promise<CommandResult<{ action?: "corrected" | "duplicate" }>>
+        ) => Promise<
+          | CommandResult<{ action?: "corrected" | "duplicate" }>
+          | { kind: "approval_required"; approval: ApprovalRequirement }
+        >
       )({
         actorStaffProfileId: args.actorStaffProfileId as Id<"staffProfile">,
         actorUserId: user._id,
+        approvalProofId: args.approvalProofId as
+          | Id<"approvalProof">
+          | undefined,
         correctedOpeningFloat: args.correctedOpeningFloat,
         reason: args.reason,
         registerSessionId: args.registerSessionId as Id<"registerSession">,
@@ -2193,6 +2346,7 @@ export function RegisterSessionView() {
       actorUserId={user?._id}
       currency={activeStore.currency || "USD"}
       isLoading={registerSessionSnapshot === undefined}
+      onAuthenticateForApproval={onAuthenticateForApproval}
       onAuthenticateCloseoutReviewApproval={
         onAuthenticateCloseoutReviewApproval
       }

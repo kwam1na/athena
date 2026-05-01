@@ -65,6 +65,9 @@ export function RegisterDrawerGate({
 }) {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (drawerGate.canOpenDrawer === false) {
+      return;
+    }
     void drawerGate.onSubmit?.();
   };
   const handleCloseoutSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -475,12 +478,18 @@ export function RegisterDrawerGate({
           <p className="text-sm text-red-600" role="alert">
             {drawerGate.errorMessage}
           </p>
+        ) : drawerGate.canOpenDrawer === false ? (
+          <p className="text-sm text-stone-600">
+            Manager sign-in required to open this drawer.
+          </p>
         ) : null}
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <Button
             className="w-full sm:w-auto"
-            disabled={drawerGate.isSubmitting}
+            disabled={
+              drawerGate.isSubmitting || drawerGate.canOpenDrawer === false
+            }
             type="submit"
           >
             {drawerGate.isSubmitting ? "Opening drawer" : "Open drawer"}

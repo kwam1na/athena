@@ -90,12 +90,12 @@ export function CashierAuthDialog({
 
   const primaryCopy = isExpenseWorkflow
     ? {
-        title: "Expense sign-in required",
-        description: "Enter username and PIN before recording expenses.",
+        title: "Sign in required",
+        description: "Authenticate to record expenses.",
       }
     : {
         title: "Sign in required",
-        description: "Enter username and PIN before adding items.",
+        description: "Authenticate to add items.",
       };
   const recoveryLabel = isExpenseWorkflow
     ? "Sign out from other sessions"

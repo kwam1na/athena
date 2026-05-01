@@ -18,6 +18,8 @@ const OPEN_DRAWER_REGISTER_NUMBER_MISMATCH_MESSAGE =
   "The terminal is configured with a different register number.";
 const OPEN_DRAWER_MISSING_REGISTER_NUMBER_MESSAGE =
   "This terminal is not configured with a register number.";
+const OPEN_DRAWER_MANAGER_REQUIRED_MESSAGE =
+  "Manager sign-in required to open this drawer.";
 
 type OpenDrawerResult = CommandResult<PosCashDrawerSummary | null>;
 
@@ -91,6 +93,26 @@ export async function openDrawer(
     return userError({
       code: "validation_failed",
       message: "Register sign-in required. Sign in before opening the drawer.",
+    });
+  }
+
+  const activeRoleAssignments = await ctx.db
+    .query("staffRoleAssignment")
+    .withIndex("by_staffProfileId", (q) =>
+      q.eq("staffProfileId", args.staffProfileId),
+    )
+    .take(25);
+  const hasManagerRole = activeRoleAssignments.some(
+    (assignment) =>
+      assignment.storeId === args.storeId &&
+      assignment.status === "active" &&
+      assignment.role === "manager",
+  );
+
+  if (!hasManagerRole) {
+    return userError({
+      code: "authorization_failed",
+      message: OPEN_DRAWER_MANAGER_REQUIRED_MESSAGE,
     });
   }
 

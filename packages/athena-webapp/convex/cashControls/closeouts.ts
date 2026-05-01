@@ -7,13 +7,21 @@ import { consumeApprovalProofWithCtx } from "../operations/approvalProofs";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { recordRegisterSessionTraceBestEffort } from "../operations/registerSessionTracing";
 import { commandResultValidator } from "../lib/commandResultValidators";
-import { ok, userError, type CommandResult } from "../../shared/commandResult";
+import {
+  approvalRequired,
+  ok,
+  userError,
+  type ApprovalCommandResult,
+  type CommandResult,
+} from "../../shared/commandResult";
 import { formatStaffDisplayName } from "../../shared/staffDisplayName";
 
 const CLOSEOUT_SESSION_LIMIT = 100;
 const DEFAULT_VARIANCE_APPROVAL_THRESHOLD = 5000;
 const REGISTER_VARIANCE_REVIEW_ACTION_KEY =
   "cash_controls.register_session.review_variance";
+const REGISTER_OPENING_FLOAT_CORRECTION_ACTION_KEY =
+  "cash_controls.register_session.correct_opening_float";
 
 const userErrorValidator = v.object({
   code: v.union(
@@ -139,11 +147,48 @@ type ReopenRegisterSessionResult = {
 type CorrectRegisterSessionOpeningFloatArgs = {
   actorStaffProfileId?: Id<"staffProfile">;
   actorUserId?: Id<"athenaUser">;
+  approvalProofId?: Id<"approvalProof">;
   correctedOpeningFloat: number;
   reason: string;
   registerSessionId: Id<"registerSession">;
   storeId: Id<"store">;
 };
+
+function buildOpeningFloatCorrectionApprovalRequirement(args: {
+  correctedOpeningFloat: number;
+  previousOpeningFloat: number;
+  reason: string;
+  registerSession: Doc<"registerSession">;
+}) {
+  return {
+    action: {
+      key: REGISTER_OPENING_FLOAT_CORRECTION_ACTION_KEY,
+      label: "Correct opening float",
+    },
+    reason:
+      "Manager approval is required to correct the register opening float.",
+    requiredRole: "manager" as const,
+    selfApproval: "allowed" as const,
+    subject: {
+      id: args.registerSession._id,
+      label: args.registerSession.registerNumber,
+      type: "register_session",
+    },
+    copy: {
+      title: "Manager approval required",
+      message:
+        "Authorization is needed from a manager to correct this register opening float.",
+      primaryActionLabel: "Approve correction",
+      secondaryActionLabel: "Cancel",
+    },
+    resolutionModes: [{ kind: "inline_manager_proof" as const }],
+    metadata: {
+      correctedOpeningFloat: args.correctedOpeningFloat,
+      previousOpeningFloat: args.previousOpeningFloat,
+      reason: args.reason,
+    },
+  };
+}
 
 type CorrectRegisterSessionOpeningFloatResult = {
   action: "corrected" | "unchanged";
@@ -921,6 +966,7 @@ export const correctRegisterSessionOpeningFloat = mutation({
   args: {
     actorStaffProfileId: v.optional(v.id("staffProfile")),
     actorUserId: v.optional(v.id("athenaUser")),
+    approvalProofId: v.optional(v.id("approvalProof")),
     correctedOpeningFloat: v.number(),
     reason: v.string(),
     registerSessionId: v.id("registerSession"),
@@ -930,7 +976,7 @@ export const correctRegisterSessionOpeningFloat = mutation({
   handler: async (
     ctx: MutationCtx,
     args: CorrectRegisterSessionOpeningFloatArgs
-  ): Promise<CommandResult<CorrectRegisterSessionOpeningFloatResult>> => {
+  ): Promise<ApprovalCommandResult<CorrectRegisterSessionOpeningFloatResult>> => {
     const reason = trimOptional(args.reason);
 
     if (!Number.isFinite(args.correctedOpeningFloat) || args.correctedOpeningFloat < 0) {
@@ -976,6 +1022,34 @@ export const correctRegisterSessionOpeningFloat = mutation({
     }
 
     const previousOpeningFloat = registerSession.openingFloat;
+
+    if (!args.approvalProofId) {
+      return approvalRequired(
+        buildOpeningFloatCorrectionApprovalRequirement({
+          correctedOpeningFloat: args.correctedOpeningFloat,
+          previousOpeningFloat,
+          reason,
+          registerSession,
+        }),
+      );
+    }
+
+    const approvalProof = await consumeApprovalProofWithCtx(ctx, {
+      actionKey: REGISTER_OPENING_FLOAT_CORRECTION_ACTION_KEY,
+      approvalProofId: args.approvalProofId,
+      requiredRole: "manager",
+      storeId: args.storeId,
+      subject: {
+        type: "register_session",
+        id: registerSession._id,
+        label: registerSession.registerNumber,
+      },
+    });
+
+    if (approvalProof.kind !== "ok") {
+      return approvalProof;
+    }
+
     const updatedSession = await ctx.runMutation(
       internal.operations.registerSessions.correctRegisterSessionOpeningFloat,
       {
@@ -986,11 +1060,12 @@ export const correctRegisterSessionOpeningFloat = mutation({
     const correctionOccurredAt = Date.now();
 
     await recordOperationalEventWithCtx(ctx, {
-      actorStaffProfileId: args.actorStaffProfileId,
+      actorStaffProfileId: approvalProof.data.approvedByStaffProfileId,
       actorUserId: args.actorUserId,
       eventType: "register_session_opening_float_corrected",
       message: "Register session opening float corrected.",
       metadata: {
+        approvalProofId: args.approvalProofId,
         correctedOpeningFloat: args.correctedOpeningFloat,
         expectedCash: updatedSession?.expectedCash,
         previousOpeningFloat,
@@ -1015,7 +1090,7 @@ export const correctRegisterSessionOpeningFloat = mutation({
         openingFloat: args.correctedOpeningFloat,
       },
       occurredAt: correctionOccurredAt,
-      actorStaffProfileId: args.actorStaffProfileId,
+      actorStaffProfileId: approvalProof.data.approvedByStaffProfileId,
       actorUserId: args.actorUserId,
       correctedOpeningFloat: args.correctedOpeningFloat,
       previousOpeningFloat,

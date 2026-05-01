@@ -37,6 +37,11 @@ function getSummaryAmount() {
   return summaryAmount?.textContent ?? "";
 }
 
+function getSummaryPanel() {
+  const label = getSummaryLabel();
+  return label.closest(".rounded-xl");
+}
+
 describe("PaymentsAddedList", () => {
   const basePayments: Payment[] = [
     {
@@ -71,6 +76,11 @@ describe("PaymentsAddedList", () => {
       expect(stripWhitespace(getSummaryAmount())).toBe(
         stripWhitespace(currencyFormatter.format(0)),
       );
+      expect(getSummaryPanel()).toHaveClass(
+        "border-signal/20",
+        "bg-signal/5",
+      );
+      expect(label).toHaveClass("text-signal");
     },
   );
 

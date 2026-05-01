@@ -41,16 +41,18 @@ export function RegisterActionBar({
         />
         {closeoutControl ? (
           <>
-            <Button
-              className="h-10"
-              disabled={!closeoutControl.canCorrectOpeningFloat}
-              onClick={closeoutControl.onRequestOpeningFloatCorrection}
-              type="button"
-              variant="outline"
-            >
-              <BanknoteIcon className="mr-2 h-4 w-4" />
-              Float
-            </Button>
+            {closeoutControl.canShowOpeningFloatCorrection ? (
+              <Button
+                className="h-10"
+                disabled={!closeoutControl.canCorrectOpeningFloat}
+                onClick={closeoutControl.onRequestOpeningFloatCorrection}
+                type="button"
+                variant="outline"
+              >
+                <BanknoteIcon className="mr-2 h-4 w-4" />
+                Float
+              </Button>
+            ) : null}
             <Button
               className="h-10"
               disabled={!closeoutControl.canCloseout}

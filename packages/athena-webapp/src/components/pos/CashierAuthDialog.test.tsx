@@ -193,7 +193,7 @@ describe("CashierAuthDialog", () => {
     renderDialog({ authenticateMutation, workflowMode: "expense" });
 
     expect(
-      screen.getByRole("heading", { name: "Expense sign-in required" }),
+      screen.getByRole("heading", { name: "Sign in required" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Sign out from other sessions" }),

@@ -36,7 +36,7 @@ import {
 } from "@/lib/pos/constants";
 import { parseDisplayAmountInput } from "@/lib/pos/displayAmounts";
 import { toOperatorMessage } from "@/lib/errors/operatorMessages";
-import { runCommand } from "@/lib/errors/runCommand";
+import { isApprovalRequiredResult, runCommand } from "@/lib/errors/runCommand";
 import { logger } from "@/lib/logger";
 import { useConvexCommandGateway } from "@/lib/pos/infrastructure/convex/commandGateway";
 import { useConvexRegisterState } from "@/lib/pos/infrastructure/convex/registerGateway";
@@ -225,6 +225,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     limit: 10,
   });
   const cashier = registerState?.cashier ?? null;
+  const isCashierManager = Boolean(cashier?.activeRoles?.includes("manager"));
   const activeSessionConflict = registerState?.activeSessionConflict ?? null;
 
   const {
@@ -267,6 +268,10 @@ export function useRegisterViewModel(): RegisterViewModel {
   );
   const hasActiveCustomerDetails = hasCustomerDetails(customerInfo);
   const hasActiveCartDraft = activeCartItems.length > 0;
+  const hasClearableSaleState = Boolean(
+    operableActiveSession &&
+      (hasActiveCartDraft || hasActiveCustomerDetails || payments.length > 0),
+  );
   const hasActivePosSession = Boolean(operableActiveSession?._id);
   const activeSessionNeedsRegisterBinding = Boolean(
     operableActiveSession?._id && !operableActiveSession.registerSessionId,
@@ -778,10 +783,14 @@ export function useRegisterViewModel(): RegisterViewModel {
       return false;
     }
 
+    const hadCartItems = operableActiveSession.cartItems.length > 0;
+
     resetDraftState({
       keepCashier: true,
     });
-    toast.success("Sale cleared.");
+    if (hadCartItems) {
+      toast.success("Sale cleared.");
+    }
     return true;
   }, [operableActiveSession, resetDraftState, voidSession]);
 
@@ -1127,6 +1136,11 @@ export function useRegisterViewModel(): RegisterViewModel {
     );
 
     setIsCorrectingOpeningFloat(false);
+
+    if (isApprovalRequiredResult(result)) {
+      setDrawerErrorMessage(toOperatorMessage(result.approval.copy.message));
+      return;
+    }
 
     if (result.kind !== "ok") {
       setDrawerErrorMessage(toOperatorMessage(result.error.message));
@@ -1495,8 +1509,12 @@ export function useRegisterViewModel(): RegisterViewModel {
       return;
     }
 
+    const hadCartItems = operableActiveSession.cartItems.length > 0;
+
     setPaymentState([]);
-    toast.success("Sale cleared.");
+    if (hadCartItems) {
+      toast.success("Sale cleared.");
+    }
   }, [
     operableActiveSession,
     activeSessionHasBlockedRegisterBinding,
@@ -1881,6 +1899,7 @@ export function useRegisterViewModel(): RegisterViewModel {
           activeSessionTraceId: operableActiveSession?.workflowTraceId ?? null,
           hasExpiredSession: false,
           canHoldSession: Boolean(operableActiveSession) && hasActiveCartDraft,
+          canClearSale: hasClearableSaleState,
           disableNewSession: Boolean(
             operableActiveSession?.status === "active",
           ),
@@ -1994,7 +2013,7 @@ export function useRegisterViewModel(): RegisterViewModel {
                 ? "Reopen register"
                 : "Return to sale",
               expectedCash: activeCloseoutRegisterSession?.expectedCash,
-              canOpenCashControls: cashier?.activeRoles?.includes("manager"),
+              canOpenCashControls: isCashierManager,
               hasPendingCloseoutApproval: Boolean(
                 activeCloseoutRegisterSession?.managerApprovalRequestId,
               ),
@@ -2018,6 +2037,7 @@ export function useRegisterViewModel(): RegisterViewModel {
               registerLabel: terminal.displayName,
               registerNumber,
               currency: activeStore.currency,
+              canOpenDrawer: isCashierManager,
               openingFloat: drawerOpeningFloat,
               notes: drawerNotes,
               errorMessage:
@@ -2049,8 +2069,10 @@ export function useRegisterViewModel(): RegisterViewModel {
             payments.length === 0 &&
             !isTransactionCompleted,
           ),
+          canShowOpeningFloatCorrection: isCashierManager,
           canCorrectOpeningFloat: Boolean(
             usableActiveRegisterSession &&
+            isCashierManager &&
             !requiresDrawerGate &&
             !isCloseoutRequested &&
             !isTransactionCompleted,

@@ -66,6 +66,7 @@ describe("SessionManager", () => {
           activeSessionTraceId: "pos_session:ses-001",
           hasExpiredSession: false,
           canHoldSession: true,
+          canClearSale: true,
           disableNewSession: false,
           heldSessions: [],
           onHoldCurrentSession: vi.fn(),
@@ -94,6 +95,7 @@ describe("SessionManager", () => {
           activeSessionTraceId: null,
           hasExpiredSession: false,
           canHoldSession: true,
+          canClearSale: true,
           disableNewSession: false,
           heldSessions: [],
           onHoldCurrentSession: vi.fn(),
@@ -121,6 +123,7 @@ describe("SessionManager", () => {
           activeSessionTraceId: null,
           hasExpiredSession: false,
           canHoldSession: false,
+          canClearSale: false,
           disableNewSession: true,
           heldSessions: [],
           onHoldCurrentSession,
@@ -145,6 +148,39 @@ describe("SessionManager", () => {
     expect(onStartNewSession).not.toHaveBeenCalled();
   });
 
+  it("disables clear sale when the current sale has nothing to clear", async () => {
+    const onVoidCurrentSession = vi.fn();
+
+    render(
+      <SessionManager
+        sessionPanel={{
+          activeSessionNumber: "SES-001",
+          activeSessionTraceId: null,
+          hasExpiredSession: false,
+          canHoldSession: false,
+          canClearSale: false,
+          disableNewSession: true,
+          heldSessions: [],
+          onHoldCurrentSession: vi.fn(),
+          onVoidCurrentSession,
+          onResumeSession: vi.fn(),
+          onVoidHeldSession: vi.fn(),
+          onStartNewSession: vi.fn(),
+        }}
+      />,
+    );
+
+    const clearSaleButton = screen.getByRole("button", {
+      name: /clear sale/i,
+    });
+
+    expect(clearSaleButton).toBeDisabled();
+
+    await userEvent.click(clearSaleButton);
+
+    expect(onVoidCurrentSession).not.toHaveBeenCalled();
+  });
+
   it("keeps held-sale resume controls hidden when no held sessions exist", () => {
     render(
       <SessionManager
@@ -153,6 +189,7 @@ describe("SessionManager", () => {
           activeSessionTraceId: null,
           hasExpiredSession: false,
           canHoldSession: false,
+          canClearSale: false,
           disableNewSession: false,
           heldSessions: [],
           onHoldCurrentSession: vi.fn(),

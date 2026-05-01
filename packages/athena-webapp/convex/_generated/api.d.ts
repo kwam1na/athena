@@ -40,8 +40,6 @@ import type * as http_domains_core_routes_organizations from "../http/domains/co
 import type * as http_domains_core_routes_products from "../http/domains/core/routes/products.js";
 import type * as http_domains_core_routes_stores from "../http/domains/core/routes/stores.js";
 import type * as http_domains_core_routes_subcategories from "../http/domains/core/routes/subcategories.js";
-import type * as http_domains_moneyMovement_routes_index from "../http/domains/moneyMovement/routes/index.js";
-import type * as http_domains_moneyMovement_routes_mtnMomo from "../http/domains/moneyMovement/routes/mtnMomo.js";
 import type * as http_domains_customerChannel_routes_bag from "../http/domains/customerChannel/routes/bag.js";
 import type * as http_domains_customerChannel_routes_checkout from "../http/domains/customerChannel/routes/checkout.js";
 import type * as http_domains_customerChannel_routes_guest from "../http/domains/customerChannel/routes/guest.js";
@@ -59,6 +57,8 @@ import type * as http_domains_customerChannel_routes_storefront from "../http/do
 import type * as http_domains_customerChannel_routes_upsells from "../http/domains/customerChannel/routes/upsells.js";
 import type * as http_domains_customerChannel_routes_user from "../http/domains/customerChannel/routes/user.js";
 import type * as http_domains_customerChannel_routes_userOffers from "../http/domains/customerChannel/routes/userOffers.js";
+import type * as http_domains_moneyMovement_routes_index from "../http/domains/moneyMovement/routes/index.js";
+import type * as http_domains_moneyMovement_routes_mtnMomo from "../http/domains/moneyMovement/routes/mtnMomo.js";
 import type * as http_utils from "../http/utils.js";
 import type * as inventory_athenaUser from "../inventory/athenaUser.js";
 import type * as inventory_auth from "../inventory/auth.js";
@@ -110,6 +110,8 @@ import type * as mtn_collections from "../mtn/collections.js";
 import type * as mtn_config from "../mtn/config.js";
 import type * as mtn_normalize from "../mtn/normalize.js";
 import type * as mtn_types from "../mtn/types.js";
+import type * as operations_approvalAuditEvents from "../operations/approvalAuditEvents.js";
+import type * as operations_approvalProofs from "../operations/approvalProofs.js";
 import type * as operations_approvalRequestHelpers from "../operations/approvalRequestHelpers.js";
 import type * as operations_approvalRequests from "../operations/approvalRequests.js";
 import type * as operations_customerProfiles from "../operations/customerProfiles.js";
@@ -329,8 +331,6 @@ declare const fullApi: ApiFromModules<{
   "http/domains/core/routes/products": typeof http_domains_core_routes_products;
   "http/domains/core/routes/stores": typeof http_domains_core_routes_stores;
   "http/domains/core/routes/subcategories": typeof http_domains_core_routes_subcategories;
-  "http/domains/moneyMovement/routes/index": typeof http_domains_moneyMovement_routes_index;
-  "http/domains/moneyMovement/routes/mtnMomo": typeof http_domains_moneyMovement_routes_mtnMomo;
   "http/domains/customerChannel/routes/bag": typeof http_domains_customerChannel_routes_bag;
   "http/domains/customerChannel/routes/checkout": typeof http_domains_customerChannel_routes_checkout;
   "http/domains/customerChannel/routes/guest": typeof http_domains_customerChannel_routes_guest;
@@ -348,6 +348,8 @@ declare const fullApi: ApiFromModules<{
   "http/domains/customerChannel/routes/upsells": typeof http_domains_customerChannel_routes_upsells;
   "http/domains/customerChannel/routes/user": typeof http_domains_customerChannel_routes_user;
   "http/domains/customerChannel/routes/userOffers": typeof http_domains_customerChannel_routes_userOffers;
+  "http/domains/moneyMovement/routes/index": typeof http_domains_moneyMovement_routes_index;
+  "http/domains/moneyMovement/routes/mtnMomo": typeof http_domains_moneyMovement_routes_mtnMomo;
   "http/utils": typeof http_utils;
   "inventory/athenaUser": typeof inventory_athenaUser;
   "inventory/auth": typeof inventory_auth;
@@ -399,6 +401,8 @@ declare const fullApi: ApiFromModules<{
   "mtn/config": typeof mtn_config;
   "mtn/normalize": typeof mtn_normalize;
   "mtn/types": typeof mtn_types;
+  "operations/approvalAuditEvents": typeof operations_approvalAuditEvents;
+  "operations/approvalProofs": typeof operations_approvalProofs;
   "operations/approvalRequestHelpers": typeof operations_approvalRequestHelpers;
   "operations/approvalRequests": typeof operations_approvalRequests;
   "operations/customerProfiles": typeof operations_customerProfiles;
