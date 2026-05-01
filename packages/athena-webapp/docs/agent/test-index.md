@@ -107,6 +107,7 @@ This index enumerates the current automated test files and ties them back to the
 
 ## Section `src`
 
+- [`src/components/View.test.tsx`](../../src/components/View.test.tsx)
 - [`src/components/auth/DefaultCatchBoundary.test.tsx`](../../src/components/auth/DefaultCatchBoundary.test.tsx)
 - [`src/components/auth/Login/InputOTP.test.tsx`](../../src/components/auth/Login/InputOTP.test.tsx)
 - [`src/components/auth/Login/LoginForm.test.tsx`](../../src/components/auth/Login/LoginForm.test.tsx)
@@ -164,6 +165,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/ui/primitives.test.tsx`](../../src/components/ui/primitives.test.tsx)
 - [`src/components/users/TimelineEventCard.test.tsx`](../../src/components/users/TimelineEventCard.test.tsx)
 - [`src/design-system-build-config.test.ts`](../../src/design-system-build-config.test.ts)
+- [`src/hooks/use-mobile.test.tsx`](../../src/hooks/use-mobile.test.tsx)
 - [`src/hooks/useAuth.test.tsx`](../../src/hooks/useAuth.test.tsx)
 - [`src/hooks/useBulkOperations.test.ts`](../../src/hooks/useBulkOperations.test.ts)
 - [`src/hooks/useExpenseSessions.test.ts`](../../src/hooks/useExpenseSessions.test.ts)
