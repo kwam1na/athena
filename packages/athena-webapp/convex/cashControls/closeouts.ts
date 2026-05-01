@@ -3,6 +3,7 @@ import { Doc, Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import { v } from "convex/values";
 import { buildApprovalRequest } from "../operations/approvalRequestHelpers";
+import { consumeApprovalProofWithCtx } from "../operations/approvalProofs";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { recordRegisterSessionTraceBestEffort } from "../operations/registerSessionTracing";
 import { commandResultValidator } from "../lib/commandResultValidators";
@@ -11,6 +12,8 @@ import { formatStaffDisplayName } from "../../shared/staffDisplayName";
 
 const CLOSEOUT_SESSION_LIMIT = 100;
 const DEFAULT_VARIANCE_APPROVAL_THRESHOLD = 5000;
+const REGISTER_VARIANCE_REVIEW_ACTION_KEY =
+  "cash_controls.register_session.review_variance";
 
 const userErrorValidator = v.object({
   code: v.union(
@@ -53,6 +56,24 @@ type CloseoutApprovalRequestSummary = {
 
 type RegisterSessionCloseoutReview = ReturnType<typeof buildRegisterSessionCloseoutReview>;
 
+type RegisterSessionVarianceApprovalRequirement = {
+  actionKey: typeof REGISTER_VARIANCE_REVIEW_ACTION_KEY;
+  approvalRequestId?: Id<"approvalRequest">;
+  mode: "async_approval";
+  reason: string;
+  requiredRole: "manager";
+  subject: {
+    id: Id<"registerSession">;
+    label?: string;
+    type: "register_session";
+  };
+  context: {
+    countedCash: number;
+    expectedCash: number;
+    variance: number;
+  };
+};
+
 type CloseoutSnapshot = {
   config: CashControlsConfig;
   registerSessions: Array<
@@ -77,6 +98,7 @@ type SubmitRegisterSessionCloseoutArgs = {
 type SubmitRegisterSessionCloseoutResult =
   | {
       action: "approval_required";
+      approvalRequirement: RegisterSessionVarianceApprovalRequirement;
       approvalRequest: Doc<"approvalRequest"> | null;
       closeoutReview: RegisterSessionCloseoutReview;
       registerSession: Doc<"registerSession"> | null;
@@ -88,10 +110,10 @@ type SubmitRegisterSessionCloseoutResult =
     };
 
 type ReviewRegisterSessionCloseoutArgs = {
+  approvalProofId: Id<"approvalProof">;
   decision: "approved" | "rejected";
   decisionNotes?: string;
   registerSessionId: Id<"registerSession">;
-  reviewedByStaffProfileId: Id<"staffProfile">;
   reviewedByUserId?: Id<"athenaUser">;
   storeId: Id<"store">;
 };
@@ -137,12 +159,31 @@ const closeoutReviewValidator = v.object({
   variance: v.number(),
 });
 
+const registerSessionVarianceApprovalRequirementValidator = v.object({
+  actionKey: v.literal("cash_controls.register_session.review_variance"),
+  approvalRequestId: v.optional(v.id("approvalRequest")),
+  context: v.object({
+    countedCash: v.number(),
+    expectedCash: v.number(),
+    variance: v.number(),
+  }),
+  mode: v.literal("async_approval"),
+  reason: v.string(),
+  requiredRole: v.literal("manager"),
+  subject: v.object({
+    id: v.id("registerSession"),
+    label: v.optional(v.string()),
+    type: v.literal("register_session"),
+  }),
+});
+
 const submitRegisterSessionCloseoutResultValidator = v.union(
   v.object({
     kind: v.literal("ok"),
     data: v.union(
       v.object({
         action: v.literal("approval_required"),
+        approvalRequirement: registerSessionVarianceApprovalRequirementValidator,
         approvalRequest: v.union(v.null(), v.any()),
         closeoutReview: closeoutReviewValidator,
         registerSession: v.union(v.null(), v.any()),
@@ -319,6 +360,34 @@ export function buildRegisterSessionCloseoutReview(args: {
       : `Manager signoff is required for register shortages (${variance}).`,
     requiresApproval: true as const,
     variance,
+  };
+}
+
+export function buildRegisterSessionVarianceApprovalRequirement(args: {
+  approvalRequestId?: Id<"approvalRequest">;
+  closeoutReview: RegisterSessionCloseoutReview;
+  countedCash: number;
+  expectedCash: number;
+  registerSession: Pick<Doc<"registerSession">, "_id" | "registerNumber">;
+}): RegisterSessionVarianceApprovalRequirement {
+  return {
+    actionKey: REGISTER_VARIANCE_REVIEW_ACTION_KEY,
+    approvalRequestId: args.approvalRequestId,
+    mode: "async_approval",
+    reason:
+      args.closeoutReview.reason ??
+      "Manager approval is required before this register session can close.",
+    requiredRole: "manager",
+    subject: {
+      id: args.registerSession._id,
+      label: args.registerSession.registerNumber,
+      type: "register_session",
+    },
+    context: {
+      countedCash: args.countedCash,
+      expectedCash: args.expectedCash,
+      variance: args.closeoutReview.variance,
+    },
   };
 }
 
@@ -640,6 +709,14 @@ export const submitRegisterSessionCloseout = mutation({
         })
       );
       const approvalRequest = await ctx.db.get("approvalRequest", approvalRequestId);
+      const approvalRequirement =
+        buildRegisterSessionVarianceApprovalRequirement({
+          approvalRequestId,
+          closeoutReview,
+          countedCash: args.countedCash,
+          expectedCash: registerSession.expectedCash,
+          registerSession,
+        });
 
       await ctx.db.patch("registerSession", registerSession._id, {
         managerApprovalRequestId: approvalRequestId,
@@ -654,8 +731,12 @@ export const submitRegisterSessionCloseout = mutation({
           closeoutReview.reason ??
           "Register closeout submitted for manager variance review.",
         metadata: {
+          actionKey: REGISTER_VARIANCE_REVIEW_ACTION_KEY,
+          approvalMode: "async_approval",
+          approvalRequestId,
           countedCash: args.countedCash,
           expectedCash: registerSession.expectedCash,
+          requiredRole: "manager",
           variance: closeoutReview.variance,
         },
         organizationId: registerSession.organizationId,
@@ -702,6 +783,7 @@ export const submitRegisterSessionCloseout = mutation({
 
       return ok({
         action: "approval_required" as const,
+        approvalRequirement,
         approvalRequest,
         closeoutReview,
         registerSession: approvalPendingSession,
@@ -958,10 +1040,10 @@ export const correctRegisterSessionOpeningFloat = mutation({
 
 export const reviewRegisterSessionCloseout = mutation({
   args: {
+    approvalProofId: v.id("approvalProof"),
     decision: v.union(v.literal("approved"), v.literal("rejected")),
     decisionNotes: v.optional(v.string()),
     registerSessionId: v.id("registerSession"),
-    reviewedByStaffProfileId: v.id("staffProfile"),
     reviewedByUserId: v.optional(v.id("athenaUser")),
     storeId: v.id("store"),
   },
@@ -1005,9 +1087,27 @@ export const reviewRegisterSessionCloseout = mutation({
       });
     }
 
+    const proof = await consumeApprovalProofWithCtx(ctx, {
+      actionKey: REGISTER_VARIANCE_REVIEW_ACTION_KEY,
+      approvalProofId: args.approvalProofId,
+      requiredRole: "manager",
+      storeId: args.storeId,
+      subject: {
+        type: "register_session",
+        id: registerSession._id,
+        label: registerSession.registerNumber,
+      },
+    });
+
+    if (proof.kind !== "ok") {
+      return proof;
+    }
+
+    const reviewedByStaffProfileId = proof.data.approvedByStaffProfileId;
+
     const canReviewVariance = await staffProfileCanReviewCloseoutVariance(ctx, {
       organizationId: registerSession.organizationId,
-      staffProfileId: args.reviewedByStaffProfileId,
+      staffProfileId: reviewedByStaffProfileId,
       storeId: args.storeId,
     });
 
@@ -1024,7 +1124,7 @@ export const reviewRegisterSessionCloseout = mutation({
         approvalRequestId: approvalRequest._id,
         decision: args.decision,
         decisionNotes: trimOptional(args.decisionNotes),
-        reviewedByStaffProfileId: args.reviewedByStaffProfileId,
+        reviewedByStaffProfileId,
         reviewedByUserId: args.reviewedByUserId,
       }
     );
@@ -1040,7 +1140,7 @@ export const reviewRegisterSessionCloseout = mutation({
       const closedSession = await ctx.runMutation(
         internal.operations.registerSessions.closeRegisterSession,
         {
-          closedByStaffProfileId: args.reviewedByStaffProfileId,
+          closedByStaffProfileId: reviewedByStaffProfileId,
           closedByUserId: args.reviewedByUserId,
           countedCash: registerSession.countedCash,
           registerSessionId: registerSession._id,
@@ -1048,11 +1148,19 @@ export const reviewRegisterSessionCloseout = mutation({
       );
 
       await recordOperationalEventWithCtx(ctx, {
-        actorStaffProfileId: args.reviewedByStaffProfileId,
+        actorStaffProfileId: reviewedByStaffProfileId,
         actorUserId: args.reviewedByUserId,
         approvalRequestId: approvalRequest._id,
         eventType: "register_session_closeout_approved",
         message: "Manager approved the register closeout.",
+        metadata: {
+          actionKey: REGISTER_VARIANCE_REVIEW_ACTION_KEY,
+          approvalProofId: args.approvalProofId,
+          approvalRequestId: approvalRequest._id,
+          decision: "approved",
+          requiredRole: "manager",
+          variance: registerSession.variance,
+        },
         organizationId: registerSession.organizationId,
         reason: trimOptional(args.decisionNotes),
         registerSessionId: registerSession._id,
@@ -1066,7 +1174,7 @@ export const reviewRegisterSessionCloseout = mutation({
         stage: "closeout_approved",
         session: closedSession ?? registerSession,
         occurredAt: closedSession?.closedAt,
-        actorStaffProfileId: args.reviewedByStaffProfileId,
+        actorStaffProfileId: reviewedByStaffProfileId,
         actorUserId: args.reviewedByUserId,
         approvalRequestId: approvalRequest._id,
         countedCash: registerSession.countedCash,
@@ -1084,7 +1192,7 @@ export const reviewRegisterSessionCloseout = mutation({
         stage: "closed",
         session: closedSession ?? registerSession,
         occurredAt: closedSession?.closedAt,
-        actorStaffProfileId: args.reviewedByStaffProfileId,
+        actorStaffProfileId: reviewedByStaffProfileId,
         actorUserId: args.reviewedByUserId,
         countedCash: registerSession.countedCash,
         variance: registerSession.variance,
@@ -1105,11 +1213,19 @@ export const reviewRegisterSessionCloseout = mutation({
     }
 
     await recordOperationalEventWithCtx(ctx, {
-      actorStaffProfileId: args.reviewedByStaffProfileId,
+      actorStaffProfileId: reviewedByStaffProfileId,
       actorUserId: args.reviewedByUserId,
       approvalRequestId: approvalRequest._id,
       eventType: "register_session_closeout_rejected",
       message: "Manager rejected the register closeout for recount or correction.",
+      metadata: {
+        actionKey: REGISTER_VARIANCE_REVIEW_ACTION_KEY,
+        approvalProofId: args.approvalProofId,
+        approvalRequestId: approvalRequest._id,
+        decision: "rejected",
+        requiredRole: "manager",
+        variance: registerSession.variance,
+      },
       organizationId: registerSession.organizationId,
       reason: trimOptional(args.decisionNotes),
       registerSessionId: registerSession._id,
@@ -1125,7 +1241,7 @@ export const reviewRegisterSessionCloseout = mutation({
       stage: "closeout_rejected",
       session: rejectedSession ?? registerSession,
       occurredAt: rejectionOccurredAt,
-      actorStaffProfileId: args.reviewedByStaffProfileId,
+      actorStaffProfileId: reviewedByStaffProfileId,
       actorUserId: args.reviewedByUserId,
       approvalRequestId: approvalRequest._id,
       countedCash: registerSession.countedCash,

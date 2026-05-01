@@ -66,6 +66,7 @@ vi.mock("@/components/staff-auth/StaffAuthenticationDialog", () => ({
       username: string;
     }) => Promise<unknown>;
     onAuthenticated: (result: {
+      approvalProofId?: string;
       staffProfile: { fullName: string };
       staffProfileId: string;
     }) => void;
@@ -81,6 +82,7 @@ vi.mock("@/components/staff-auth/StaffAuthenticationDialog", () => ({
             username: "ato",
           });
           onAuthenticated({
+            approvalProofId: "approval-proof-1",
             staffProfile: { fullName: "Ato Kofi" },
             staffProfileId: "staff-1",
           });
@@ -144,6 +146,7 @@ describe("RegisterSessionViewContent", () => {
   });
 
   const closeoutHandlers = {
+    onAuthenticateCloseoutReviewApproval: vi.fn(),
     onAuthenticateStaff: vi.fn(),
     onCorrectOpeningFloat: vi.fn(),
     onReviewCloseout: vi.fn(),
@@ -689,6 +692,15 @@ describe("RegisterSessionViewContent", () => {
   it("reviews a pending closeout approval from the register detail page", async () => {
     const user = userEvent.setup();
     const onAuthenticateStaff = vi.fn();
+    const onAuthenticateCloseoutReviewApproval = vi
+      .fn()
+      .mockResolvedValue(
+        ok({
+          approvalProofId: "approval-proof-1",
+          staffProfile: { fullName: "Ato Kofi" },
+          staffProfileId: "staff-1",
+        }),
+      );
     const onReviewCloseout = vi
       .fn()
       .mockResolvedValue(ok({ action: "approved" }));
@@ -698,6 +710,9 @@ describe("RegisterSessionViewContent", () => {
         actorUserId="user-1"
         currency="GHS"
         isLoading={false}
+        onAuthenticateCloseoutReviewApproval={
+          onAuthenticateCloseoutReviewApproval
+        }
         onAuthenticateStaff={onAuthenticateStaff}
         onRecordDeposit={vi.fn()}
         onReviewCloseout={onReviewCloseout}
@@ -758,17 +773,19 @@ describe("RegisterSessionViewContent", () => {
       }),
     );
 
-    expect(onAuthenticateStaff).toHaveBeenCalledWith({
-      allowedRoles: ["manager"],
+    expect(onAuthenticateCloseoutReviewApproval).toHaveBeenCalledWith({
       pinHash: "hashed-pin",
+      reason: "Deposit variance approved.",
+      registerSessionId: "session-1",
       username: "ato",
     });
+    expect(onAuthenticateStaff).not.toHaveBeenCalled();
     await waitFor(() =>
       expect(onReviewCloseout).toHaveBeenCalledWith({
+        approvalProofId: "approval-proof-1",
         decision: "approved",
         decisionNotes: "Deposit variance approved.",
         registerSessionId: "session-1",
-        reviewedByStaffProfileId: "staff-1",
       }),
     );
   });

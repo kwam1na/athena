@@ -1,4 +1,5 @@
 import { defineSchema, defineTable } from "convex/server";
+import { v } from "convex/values";
 import { authTables } from "@convex-dev/auth/server";
 import {
   appVerificationCodeSchema,
@@ -108,6 +109,37 @@ const schema = defineSchema({
     .index("by_storeId_subject", ["storeId", "subjectType", "subjectId"])
     .index("by_workItemId", ["workItemId"])
     .index("by_registerSessionId", ["registerSessionId"]),
+  approvalProof: defineTable(
+    v.object({
+      storeId: v.id("store"),
+      organizationId: v.optional(v.id("organization")),
+      actionKey: v.string(),
+      subjectType: v.string(),
+      subjectId: v.string(),
+      subjectLabel: v.optional(v.string()),
+      requiredRole: v.union(
+        v.literal("manager"),
+        v.literal("front_desk"),
+        v.literal("stylist"),
+        v.literal("technician"),
+        v.literal("cashier"),
+      ),
+      requestedByStaffProfileId: v.optional(v.id("staffProfile")),
+      approvedByStaffProfileId: v.id("staffProfile"),
+      approvedByCredentialId: v.id("staffCredential"),
+      reason: v.optional(v.string()),
+      createdAt: v.number(),
+      expiresAt: v.number(),
+      consumedAt: v.optional(v.number()),
+    }),
+  )
+    .index("by_storeId_action_subject", [
+      "storeId",
+      "actionKey",
+      "subjectType",
+      "subjectId",
+    ])
+    .index("by_expiresAt", ["expiresAt"]),
   athenaUser: defineTable(athenaUserSchema),
   bag: defineTable(bagSchema)
     .index("by_storeId", ["storeId"])

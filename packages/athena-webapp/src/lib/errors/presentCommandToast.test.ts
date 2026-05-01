@@ -56,4 +56,33 @@ describe("presentCommandToast", () => {
 
     expect(mocks.toastError).toHaveBeenCalledWith("Please try again.");
   });
+
+  it("shows approval guidance instead of generic failure copy", () => {
+    presentCommandToast({
+      kind: "approval_required",
+      approval: {
+        action: {
+          key: "transaction.payment_method_correction",
+          label: "Update payment method",
+        },
+        copy: {
+          title: "Approval unavailable",
+          message:
+            "This correction cannot be approved here. Use refund or exchange instead.",
+        },
+        reason: "Multi-payment corrections are not supported.",
+        requiredRole: "manager",
+        resolutionModes: [],
+        subject: {
+          id: "transaction-1",
+          type: "transaction",
+        },
+      },
+    });
+
+    expect(mocks.toastError).toHaveBeenCalledWith(
+      "This correction cannot be approved here. Use refund or exchange instead.",
+    );
+    expect(mocks.toastError).not.toHaveBeenCalledWith("Please try again.");
+  });
 });

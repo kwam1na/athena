@@ -9,6 +9,8 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { operationalRoleValidator, type OperationalRole } from "./staffRoles";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
+import type { ApprovalSubjectIdentity } from "../../shared/approvalPolicy";
+import { createApprovalProofWithCtx } from "./approvalProofs";
 
 export const STAFF_CREDENTIAL_STATUS = v.union(
   v.literal("pending"),
@@ -33,6 +35,13 @@ type StaffCredentialAuthenticationData = {
 
 type StaffCredentialAuthenticationResult =
   CommandResult<StaffCredentialAuthenticationData>;
+
+type StaffCredentialApprovalAuthenticationData = {
+  approvalProofId: Id<"approvalProof">;
+  approvedByStaffProfileId: Id<"staffProfile">;
+  expiresAt: number;
+  requestedByStaffProfileId?: Id<"staffProfile">;
+};
 
 const ACTIVE_STAFF_SESSION_LOOKUP_LIMIT = 100;
 
@@ -554,6 +563,43 @@ export async function authenticateStaffCredentialForTerminalWithCtx(
   return authentication;
 }
 
+export async function authenticateStaffCredentialForApprovalWithCtx(
+  ctx: Pick<MutationCtx, "db">,
+  args: {
+    actionKey: string;
+    pinHash: string;
+    reason?: string;
+    requiredRole: OperationalRole;
+    requestedByStaffProfileId?: Id<"staffProfile">;
+    storeId: Id<"store">;
+    subject: ApprovalSubjectIdentity;
+    username: string;
+  },
+): Promise<CommandResult<StaffCredentialApprovalAuthenticationData>> {
+  const authentication = await authenticateStaffCredentialWithCtx(ctx, {
+    allowedRoles: [args.requiredRole],
+    pinHash: args.pinHash,
+    storeId: args.storeId,
+    username: args.username,
+  });
+
+  if (authentication.kind !== "ok") {
+    return authentication;
+  }
+
+  return createApprovalProofWithCtx(ctx as MutationCtx, {
+    actionKey: args.actionKey,
+    approvedByCredentialId: authentication.data.credentialId,
+    approvedByStaffProfileId: authentication.data.staffProfileId,
+    organizationId: authentication.data.staffProfile.organizationId,
+    reason: args.reason,
+    requiredRole: args.requiredRole,
+    requestedByStaffProfileId: args.requestedByStaffProfileId,
+    storeId: args.storeId,
+    subject: args.subject,
+  });
+}
+
 export const getStaffCredentialUsernameAvailability = query({
   args: {
     storeId: v.id("store"),
@@ -692,4 +738,31 @@ export const authenticateStaffCredentialForTerminal = mutation({
   },
   handler: (ctx, args) =>
     authenticateStaffCredentialForTerminalWithCtx(ctx, args),
+});
+
+export const authenticateStaffCredentialForApproval = mutation({
+  args: {
+    actionKey: v.string(),
+    pinHash: v.string(),
+    reason: v.optional(v.string()),
+    requiredRole: operationalRoleValidator,
+    requestedByStaffProfileId: v.optional(v.id("staffProfile")),
+    storeId: v.id("store"),
+    subject: v.object({
+      type: v.string(),
+      id: v.string(),
+      label: v.optional(v.string()),
+    }),
+    username: v.string(),
+  },
+  returns: commandResultValidator(
+    v.object({
+      approvalProofId: v.id("approvalProof"),
+      approvedByStaffProfileId: v.id("staffProfile"),
+      expiresAt: v.number(),
+      requestedByStaffProfileId: v.optional(v.id("staffProfile")),
+    }),
+  ),
+  handler: (ctx, args) =>
+    authenticateStaffCredentialForApprovalWithCtx(ctx, args),
 });

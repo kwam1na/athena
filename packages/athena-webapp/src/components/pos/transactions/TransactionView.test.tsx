@@ -134,6 +134,7 @@ vi.mock("../../staff-auth/StaffAuthenticationDialog", () => ({
       username: string;
     }) => Promise<unknown>;
     onAuthenticated: (result: {
+      approvalProofId?: string;
       staffProfile: { firstName: string; lastName: string };
       staffProfileId: string;
     }) => void;
@@ -150,6 +151,7 @@ vi.mock("../../staff-auth/StaffAuthenticationDialog", () => ({
               username: "manager",
             });
             onAuthenticated({
+              approvalProofId: "proof-1",
               staffProfile: { firstName: "Kwamina", lastName: "Mensah" },
               staffProfileId: "staff_1",
             });
@@ -157,6 +159,75 @@ vi.mock("../../staff-auth/StaffAuthenticationDialog", () => ({
           type="button"
         >
           {copy.submitLabel}
+        </button>
+      </div>
+    ) : null,
+}));
+
+vi.mock("../../operations/CommandApprovalDialog", () => ({
+  CommandApprovalDialog: ({
+    approval,
+    onAuthenticateForApproval,
+    onApproved,
+    open,
+  }: {
+    approval: {
+      action: { key: string };
+      copy: { message: string; primaryActionLabel?: string; title: string };
+      reason: string;
+      requiredRole: "manager";
+      subject: { id: string; label?: string; type: string };
+    } | null;
+    onAuthenticateForApproval: (args: {
+      actionKey: string;
+      pinHash: string;
+      reason?: string;
+      requiredRole: "manager";
+      storeId: string;
+      subject: { id: string; label?: string; type: string };
+      username: string;
+    }) => Promise<{
+      kind: "ok" | "user_error";
+      data?: {
+        approvalProofId: string;
+        approvedByStaffProfileId: string;
+        expiresAt: number;
+      };
+    }>;
+    onApproved: (result: {
+      approvalProofId: string;
+      approvedByStaffProfileId: string;
+      expiresAt: number;
+    }) => void;
+    open: boolean;
+  }) =>
+    open && approval ? (
+      <div data-testid="command-approval-dialog">
+        <h2>{approval.copy.title}</h2>
+        <p>{approval.copy.message}</p>
+        <button
+          onClick={async () => {
+            const result = await onAuthenticateForApproval({
+              actionKey: approval.action.key,
+              pinHash: "123456",
+              reason: approval.reason,
+              requiredRole: approval.requiredRole,
+              storeId: "store_1",
+              subject: approval.subject,
+              username: "manager",
+            });
+
+            if (result.kind === "ok" && result.data) {
+              onApproved({
+                approvalProofId: result.data.approvalProofId,
+                approvedByStaffProfileId: result.data.approvedByStaffProfileId,
+                expiresAt: result.data.expiresAt,
+              });
+            }
+          }}
+          type="button"
+        >
+          {approval.copy.primaryActionLabel ?? "Approve update"}
         </button>
       </div>
     ) : null,
@@ -239,6 +310,24 @@ describe("TransactionView", () => {
       isAuthenticated: true,
     });
   });
+
+  function mockTransactionMutations(
+    authMutation: ReturnType<typeof vi.fn>,
+    customerMutation: ReturnType<typeof vi.fn>,
+    paymentMutation: ReturnType<typeof vi.fn>,
+    approvalMutation: ReturnType<typeof vi.fn> = vi.fn(),
+  ) {
+    const mutations = [
+      authMutation,
+      approvalMutation,
+      customerMutation,
+      paymentMutation,
+    ];
+    let mutationIndex = 0;
+    useMutationMock.mockImplementation(
+      () => mutations[mutationIndex++ % mutations.length],
+    );
+  }
 
   it("renders the session trace link when the transaction has a session trace", () => {
     useParamsMock.mockReturnValue({ transactionId: "txn_1" });
@@ -585,6 +674,43 @@ describe("TransactionView", () => {
 
   it("communicates manager approval before authenticating payment corrections", async () => {
     const user = userEvent.setup();
+    const authMutation = vi.fn().mockResolvedValue({ kind: "ok" });
+    const approvalMutation = vi.fn().mockResolvedValue({
+      kind: "ok",
+      data: {
+        approvalProofId: "proof-1",
+        approvedByStaffProfileId: "staff_1",
+        expiresAt: 2,
+      },
+    });
+    const customerMutation = vi.fn();
+    const paymentMutation = vi.fn().mockResolvedValue({
+      kind: "approval_required",
+      approval: {
+        action: { key: "pos.transaction.correct_payment_method" },
+        copy: {
+          title: "Manager approval required",
+          message:
+            "Enter manager credentials to update this completed transaction payment method.",
+          primaryActionLabel: "Approve update",
+        },
+        reason:
+          "Manager approval is required to correct a completed transaction payment method.",
+        requiredRole: "manager",
+        resolutionModes: [{ kind: "inline_manager_proof" }],
+        subject: {
+          id: "txn_13",
+          label: "Transaction #754489",
+          type: "pos_transaction",
+        },
+      },
+    });
+    mockTransactionMutations(
+      authMutation,
+      customerMutation,
+      paymentMutation,
+      approvalMutation,
+    );
     useParamsMock.mockReturnValue({ transactionId: "txn_13" });
     useQueryMock.mockReturnValue(baseTransaction);
 
@@ -604,21 +730,68 @@ describe("TransactionView", () => {
       screen.getByRole("button", { name: "Submit payment update" }),
     );
 
-    expect(screen.getByText("Manager approval required")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Manager approval required"),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Enter manager username and PIN to update this payment method.",
+        "Enter manager credentials to update this completed transaction payment method.",
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Confirm" }),
+      screen.getByRole("button", { name: "Approve update" }),
     ).toBeInTheDocument();
+    expect(paymentMutation).toHaveBeenCalledWith({
+      actorStaffProfileId: undefined,
+      approvalProofId: undefined,
+      paymentMethod: "card",
+      reason: "Wrong tender selected.",
+      transactionId: "txn_13",
+    });
   });
 
   it("exits the correction workflow after a payment correction succeeds", async () => {
     const user = userEvent.setup();
-    const commandMutation = vi.fn().mockResolvedValue({ kind: "ok" });
-    useMutationMock.mockReturnValue(commandMutation);
+    const authMutation = vi.fn().mockResolvedValue({ kind: "ok" });
+    const approvalMutation = vi.fn().mockResolvedValue({
+      kind: "ok",
+      data: {
+        approvalProofId: "proof-1",
+        approvedByStaffProfileId: "staff_1",
+        expiresAt: 2,
+      },
+    });
+    const customerMutation = vi.fn();
+    const paymentMutation = vi
+      .fn()
+      .mockResolvedValueOnce({
+        kind: "approval_required",
+        approval: {
+          action: { key: "pos.transaction.correct_payment_method" },
+          copy: {
+            title: "Manager approval required",
+            message:
+              "Enter manager credentials to update this completed transaction payment method.",
+            primaryActionLabel: "Approve update",
+          },
+          reason:
+            "Manager approval is required to correct a completed transaction payment method.",
+          requiredRole: "manager",
+          resolutionModes: [{ kind: "inline_manager_proof" }],
+          subject: {
+            id: "txn_11",
+            label: "Transaction #754489",
+            type: "pos_transaction",
+          },
+        },
+      })
+      .mockResolvedValueOnce({ kind: "ok" });
+    mockTransactionMutations(
+      authMutation,
+      customerMutation,
+      paymentMutation,
+      approvalMutation,
+    );
     useParamsMock.mockReturnValue({ transactionId: "txn_11" });
     useQueryMock.mockReturnValue(baseTransaction);
 
@@ -637,17 +810,35 @@ describe("TransactionView", () => {
     await user.click(
       screen.getByRole("button", { name: "Submit payment update" }),
     );
-    await user.click(screen.getByRole("button", { name: "Confirm" }));
+    await screen.findByRole("button", { name: "Approve update" });
+    await user.click(screen.getByRole("button", { name: "Approve update" }));
 
     await waitFor(() => {
-      expect(commandMutation).toHaveBeenCalledWith({
-        allowedRoles: ["manager"],
+      expect(approvalMutation).toHaveBeenCalledWith({
+        actionKey: "pos.transaction.correct_payment_method",
         pinHash: "123456",
+        reason:
+          "Manager approval is required to correct a completed transaction payment method.",
+        requiredRole: "manager",
+        requestedByStaffProfileId: undefined,
         storeId: "store_1",
+        subject: {
+          id: "txn_11",
+          label: "Transaction #754489",
+          type: "pos_transaction",
+        },
         username: "manager",
       });
-      expect(commandMutation).toHaveBeenCalledWith({
-        actorStaffProfileId: "staff_1",
+      expect(paymentMutation).toHaveBeenNthCalledWith(1, {
+        actorStaffProfileId: undefined,
+        approvalProofId: undefined,
+        paymentMethod: "card",
+        reason: "Wrong tender selected.",
+        transactionId: "txn_11",
+      });
+      expect(paymentMutation).toHaveBeenNthCalledWith(2, {
+        actorStaffProfileId: undefined,
+        approvalProofId: "proof-1",
         paymentMethod: "card",
         reason: "Wrong tender selected.",
         transactionId: "txn_11",

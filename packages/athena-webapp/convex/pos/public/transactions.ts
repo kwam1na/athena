@@ -1,8 +1,15 @@
 import { v } from "convex/values";
 
 import { mutation, query } from "../../_generated/server";
-import { commandResultValidator } from "../../lib/commandResultValidators";
-import { ok, userError, type CommandResult } from "../../../shared/commandResult";
+import {
+  commandResultValidator,
+} from "../../lib/commandResultValidators";
+import {
+  approvalRequired,
+  ok,
+  userError,
+  type CommandResult,
+} from "../../../shared/commandResult";
 import {
   correctTransactionCustomer as correctTransactionCustomerCommand,
   correctTransactionPaymentMethod as correctTransactionPaymentMethodCommand,
@@ -34,6 +41,19 @@ const customerInfoValidator = v.object({
   phone: v.optional(v.string()),
 });
 
+const correctTransactionPaymentMethodResultValidator = commandResultValidator(
+  v.object({
+    approvalProofId: v.id("approvalProof"),
+    approvalOperationalEventId: v.optional(v.id("operationalEvent")),
+    approverStaffProfileId: v.id("staffProfile"),
+    transactionId: v.id("posTransaction"),
+    previousPaymentMethod: v.string(),
+    paymentMethod: v.string(),
+    paymentAllocationId: v.id("paymentAllocation"),
+    operationalEventId: v.optional(v.id("operationalEvent")),
+  }),
+);
+
 function mapCorrectionError(error: unknown): CommandResult<never> | null {
   const message = error instanceof Error ? error.message : "";
 
@@ -49,7 +69,11 @@ function mapCorrectionError(error: unknown): CommandResult<never> | null {
     message === "Only completed transactions can be corrected." ||
     message === "Only single-payment transactions can be corrected." ||
     message === "Only same-amount payment method corrections are supported." ||
-    message === "Payment allocation must be a same-amount single payment."
+    message === "Payment allocation must be a same-amount single payment." ||
+    message === "Manager approval proof is required." ||
+    message === "Manager approval proof is invalid or expired." ||
+    message === "Approval proof validation is not available." ||
+    message.startsWith("Approval proof ")
   ) {
     return userError({ code: "precondition_failed", message });
   }
@@ -288,29 +312,15 @@ export const correctTransactionCustomer = mutation({
 
 export const correctTransactionPaymentMethod = mutation({
   args: {
+    approvalProofId: v.optional(v.id("approvalProof")),
     transactionId: v.id("posTransaction"),
     paymentMethod: v.string(),
     reason: v.string(),
     actorUserId: v.optional(v.id("athenaUser")),
     actorStaffProfileId: v.optional(v.id("staffProfile")),
   },
-  returns: commandResultValidator(
-    v.object({
-      transactionId: v.id("posTransaction"),
-      previousPaymentMethod: v.string(),
-      paymentMethod: v.string(),
-      paymentAllocationId: v.id("paymentAllocation"),
-      operationalEventId: v.optional(v.id("operationalEvent")),
-    }),
-  ),
+  returns: correctTransactionPaymentMethodResultValidator,
   handler: async (ctx, args) => {
-    if (!args.actorStaffProfileId) {
-      return userError({
-        code: "authentication_failed",
-        message: "Staff sign-in is required before correcting payment method.",
-      });
-    }
-
     if (!args.reason.trim()) {
       return userError({
         code: "validation_failed",
@@ -319,7 +329,13 @@ export const correctTransactionPaymentMethod = mutation({
     }
 
     try {
-      return ok(await correctTransactionPaymentMethodCommand(ctx, args));
+      const result = await correctTransactionPaymentMethodCommand(ctx, args);
+
+      if ("action" in result && result.action === "approval_required") {
+        return approvalRequired(result.approval);
+      }
+
+      return ok(result);
     } catch (error) {
       const mappedError = mapCorrectionError(error);
       if (mappedError) {

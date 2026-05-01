@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  correctTransactionPaymentMethod,
   getCompletedTransactions,
   getTransactionById,
 } from "./transactions";
@@ -19,6 +20,14 @@ function parseValidator(validator: unknown): SerializedValidator {
 }
 
 describe("POS public transaction query validators", () => {
+  it("allows payment correction to return inline approval requirements", () => {
+    const validator = parseValidator(exportReturns(correctTransactionPaymentMethod));
+
+    expect(validator.type).toBe("union");
+    expect(JSON.stringify(validator)).toContain("approval_required");
+    expect(JSON.stringify(validator)).toContain("inline_manager_proof");
+  });
+
   it("exposes session trace ids for completed transaction lists", () => {
     const validator = parseValidator(exportReturns(getCompletedTransactions));
 
