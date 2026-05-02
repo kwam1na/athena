@@ -15,6 +15,7 @@ PROD_CONVEX_CLOUD="${PROD_CONVEX_CLOUD:-https://colorless-cardinal-870.convex.cl
 PROD_CONVEX_SITE="${PROD_CONVEX_SITE:-https://colorless-cardinal-870.convex.site}"
 DEV_CONVEX_CLOUD="${DEV_CONVEX_CLOUD:-https://jovial-wildebeest-179.convex.cloud}"
 DEV_CONVEX_SITE="${DEV_CONVEX_SITE:-https://jovial-wildebeest-179.convex.site}"
+DEV_API_URL="${DEV_API_URL:-https://dev.wigclub.store}"
 STOREFRONT_URL="${STOREFRONT_URL:-https://wigclub.store}"
 
 usage() {
@@ -361,12 +362,12 @@ REMOTE_SCRIPT
 deploy_storefront_qa() {
   configure_storefront_qa_nginx
 
-  remote_script "$REMOTE_SOURCE_DIR" "$STOREFRONT_QA_PORT" "$DEV_CONVEX_SITE" "$STOREFRONT_QA_HOST" <<'REMOTE_SCRIPT'
+  remote_script "$REMOTE_SOURCE_DIR" "$STOREFRONT_QA_PORT" "$DEV_API_URL" "$STOREFRONT_QA_HOST" <<'REMOTE_SCRIPT'
 set -euo pipefail
 
 REMOTE_SOURCE_DIR="$1"
 STOREFRONT_QA_PORT="$2"
-DEV_CONVEX_SITE="$3"
+DEV_API_URL="$3"
 STOREFRONT_QA_HOST="$4"
 
 export BUN_INSTALL="${BUN_INSTALL:-/root/.bun}"
@@ -378,7 +379,7 @@ if pm2 describe storefront-qa >/dev/null 2>&1; then
   pm2 delete storefront-qa
 fi
 
-VITE_API_URL="$DEV_CONVEX_SITE" \
+VITE_API_URL="$DEV_API_URL" \
 STOREFRONT_QA_HOST="$STOREFRONT_QA_HOST" \
   pm2 start bun --name storefront-qa -- run dev -- --host 127.0.0.1 --port "$STOREFRONT_QA_PORT" --strictPort
 

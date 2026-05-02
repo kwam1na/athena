@@ -36,7 +36,13 @@ describe("VPS QA deploy contract", () => {
     expect(deployScript).toContain("pm2 delete storefront-qa");
     expect(deployScript).toContain("pm2 start bun --name athena-qa");
     expect(deployScript).toContain("pm2 start bun --name storefront-qa");
-    expect(deployScript).toContain('VITE_API_URL="$DEV_CONVEX_SITE"');
+    expect(deployScript).toContain('DEV_API_URL="${DEV_API_URL:-https://dev.wigclub.store}"');
+    expect(deployScript).toContain(
+      'remote_script "$REMOTE_SOURCE_DIR" "$STOREFRONT_QA_PORT" "$DEV_API_URL" "$STOREFRONT_QA_HOST"',
+    );
+    expect(deployScript).toContain('DEV_API_URL="$3"');
+    expect(deployScript).toContain('VITE_API_URL="$DEV_API_URL"');
+    expect(deployScript).not.toContain('VITE_API_URL="$DEV_CONVEX_SITE"');
     expect(deployScript).toContain('STOREFRONT_QA_HOST="$STOREFRONT_QA_HOST"');
     expect(deployScript).not.toContain('VITE_STOREFRONT_URL="$STOREFRONT_URL"');
   });
