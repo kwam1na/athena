@@ -35,18 +35,25 @@ describe("design system build config", () => {
     expect(indexHtml).not.toContain('type="text/tailwindcss"');
   });
 
-  it("lets the deployment helper build the active checkout", () => {
+  it("routes deployment helpers through the active checkout", () => {
     const repoRoot = path.resolve(packageDir, "../..");
-    const deployScript = fs.readFileSync(
+    const interactiveDeployScript = fs.readFileSync(
       path.join(repoRoot, "manage-athena-versions.sh"),
       "utf8",
     );
-
-    expect(deployScript).toContain('git -C "$PWD" rev-parse --show-toplevel');
-    expect(deployScript).toContain(
-      'ATHENA_WEBAPP_DIR="$REPO_ROOT/packages/athena-webapp"',
+    const authoritativeDeployScript = fs.readFileSync(
+      path.join(repoRoot, "scripts/deploy-vps.sh"),
+      "utf8",
     );
-    expect(deployScript).not.toContain(
+
+    expect(interactiveDeployScript).toContain(
+      'git -C "$PWD" rev-parse --show-toplevel',
+    );
+    expect(interactiveDeployScript).toContain(
+      '"$DEPLOY_VPS_SCRIPT" "$@"',
+    );
+    expect(authoritativeDeployScript).toContain('"packages/athena-webapp"');
+    expect(authoritativeDeployScript).not.toContain(
       'ATHENA_WEBAPP_DIR="$HOME/athena/packages/athena-webapp"',
     );
   });

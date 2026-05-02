@@ -1,7 +1,13 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { createApp, createHandlers, serializeRedisValue } = require("./app");
+const {
+  createApp,
+  createHandlers,
+  createRedisClient,
+  serializeRedisValue,
+  startServer,
+} = require("./app");
 
 function createResponseRecorder() {
   return {
@@ -49,6 +55,57 @@ function createInMemoryRedis() {
     },
   };
 }
+
+test("createRedisClient uses standalone local Valkey by default", () => {
+  const calls = [];
+  class StandaloneRedis {
+    constructor(options) {
+      calls.push(options);
+    }
+  }
+
+  createRedisClient({
+    RedisClient: StandaloneRedis,
+    env: {
+      VALKEY_HOST: "127.0.0.1",
+      VALKEY_PORT: "6379",
+    },
+  });
+
+  assert.deepEqual(calls, [
+    {
+      host: "127.0.0.1",
+      port: 6379,
+    },
+  ]);
+});
+
+test("createRedisClient can opt into Valkey cluster mode", () => {
+  const calls = [];
+  class ClusterRedis {
+    constructor(nodes, options) {
+      calls.push({ nodes, options });
+    }
+  }
+
+  createRedisClient({
+    Cluster: ClusterRedis,
+    env: {
+      VALKEY_CLUSTER: "true",
+      VALKEY_HOST: "cache.example.internal",
+      VALKEY_PORT: "6380",
+    },
+  });
+
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].nodes, [
+    {
+      host: "cache.example.internal",
+      port: 6380,
+    },
+  ]);
+  assert.equal(calls[0].options.redisOptions.tls.servername, undefined);
+});
 
 test("serializeRedisValue preserves strings and stringifies objects", () => {
   assert.equal(serializeRedisValue("plain"), "plain");
@@ -184,4 +241,29 @@ test("createApp serves a local round trip without live Valkey credentials", asyn
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
+});
+
+test("startServer binds to loopback by default", () => {
+  const calls = [];
+  const messages = [];
+  const app = {
+    listen(port, host, callback) {
+      calls.push({ port, host });
+      callback();
+      return { close() {} };
+    },
+  };
+
+  startServer({
+    app,
+    port: 0,
+    logger: {
+      log(message) {
+        messages.push(message);
+      },
+    },
+  });
+
+  assert.deepEqual(calls, [{ port: 0, host: "127.0.0.1" }]);
+  assert.deepEqual(messages, ["Valkey proxy listening on 127.0.0.1:0"]);
 });
