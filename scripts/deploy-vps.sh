@@ -94,7 +94,7 @@ fi
 if [ ! -d "$REMOTE_SOURCE_DIR/.git" ]; then
   rm -rf "$REMOTE_SOURCE_DIR"
   mkdir -p "$(dirname "$REMOTE_SOURCE_DIR")"
-  if ! ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -T git@github.com >/tmp/athena-github-ssh-check.log 2>&1; then
+  if ! git ls-remote "$REMOTE_REPO" HEAD >/tmp/athena-github-ssh-check.log 2>&1; then
     cat /tmp/athena-github-ssh-check.log >&2
     cat >&2 <<'MESSAGE'
 
@@ -115,10 +115,13 @@ REMOTE_SCRIPT
 }
 
 check_git() {
-  remote_script <<'REMOTE_SCRIPT'
+  remote_script "$REMOTE_REPO" <<'REMOTE_SCRIPT'
 set -euo pipefail
 
-if ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -T git@github.com >/tmp/athena-github-ssh-check.log 2>&1; then
+REMOTE_REPO="$1"
+
+if git ls-remote "$REMOTE_REPO" HEAD >/tmp/athena-github-ssh-check.log 2>&1; then
+  printf 'The VPS can read %s over SSH.\n' "$REMOTE_REPO"
   cat /tmp/athena-github-ssh-check.log
   exit 0
 fi
