@@ -43,6 +43,32 @@ type QueueApprovalRequest = {
   workItemTitle?: string | null;
 };
 
+function getApprovalRequestCopy(requestType: string) {
+  if (requestType === "inventory_adjustment_review") {
+    return {
+      approveLabel: "Approve batch",
+      approvedToast: "Stock adjustment approved",
+      description:
+        "Manager approval applies the queued inventory movement. Reject it to keep stock unchanged.",
+      rejectedToast: "Stock adjustment rejected",
+      rejectLabel: "Reject batch",
+    };
+  }
+
+  if (requestType === "payment_method_correction") {
+    return {
+      approveLabel: "Approve update",
+      approvedToast: "Payment method update approved",
+      description:
+        "Manager approval applies the queued payment method update. Reject it to leave the completed transaction unchanged.",
+      rejectedToast: "Payment method update rejected",
+      rejectLabel: "Reject update",
+    };
+  }
+
+  return null;
+}
+
 type OperationsQueueViewContentProps = {
   approvalRequests: QueueApprovalRequest[];
   hasFullAdminAccess: boolean;
@@ -185,63 +211,74 @@ export function OperationsQueueViewContent({
                 title="No pending approvals"
               />
             ) : (
-              approvalRequests.map((request) => (
-                <article className="rounded-xl border border-border/80 p-3" key={request._id}>
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="font-medium">
-                        {request.workItemTitle ?? request.requestType}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {request.requestedByStaffName ?? "Requested by admin flow"}
-                      </p>
-                    </div>
-                    <p className="text-xs uppercase text-muted-foreground">
-                      {request.status}
-                    </p>
-                  </div>
-                  {request.requestType === "inventory_adjustment_review" ? (
-                    <div className="mt-3 space-y-3 rounded-xl border border-amber-200/80 bg-amber-50/70 px-3 py-3">
-                      <p className="text-sm text-amber-950">
-                        Manager approval applies the queued inventory movement. Reject
-                        it to keep stock unchanged.
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        <LoadingButton
-                          className="bg-amber-500 text-amber-950 hover:bg-amber-500/90"
-                          disabled={Boolean(
-                            isDecidingApprovalRequestId &&
-                              isDecidingApprovalRequestId !== request._id
-                          )}
-                          isLoading={isDecidingApprovalRequestId === request._id}
-                          onClick={() =>
-                            onDecideApprovalRequest({
-                              approvalRequestId: request._id,
-                              decision: "approved",
-                            })
-                          }
-                          size="sm"
-                        >
-                          Approve batch
-                        </LoadingButton>
-                        <Button
-                          disabled={Boolean(isDecidingApprovalRequestId)}
-                          onClick={() =>
-                            onDecideApprovalRequest({
-                              approvalRequestId: request._id,
-                              decision: "rejected",
-                            })
-                          }
-                          size="sm"
-                          variant="outline"
-                        >
-                          Reject batch
-                        </Button>
+              approvalRequests.map((request) => {
+                const approvalCopy = getApprovalRequestCopy(
+                  request.requestType
+                );
+
+                return (
+                  <article
+                    className="rounded-xl border border-border/80 p-3"
+                    key={request._id}
+                  >
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="font-medium">
+                          {request.workItemTitle ?? request.requestType}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {request.requestedByStaffName ??
+                            "Requested by admin flow"}
+                        </p>
                       </div>
+                      <p className="text-xs uppercase text-muted-foreground">
+                        {request.status}
+                      </p>
                     </div>
-                  ) : null}
-                </article>
-              ))
+                    {approvalCopy ? (
+                      <div className="mt-3 space-y-3 rounded-xl border border-amber-200/80 bg-amber-50/70 px-3 py-3">
+                        <p className="text-sm text-amber-950">
+                          {approvalCopy.description}
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <LoadingButton
+                            className="bg-amber-500 text-amber-950 hover:bg-amber-500/90"
+                            disabled={Boolean(
+                              isDecidingApprovalRequestId &&
+                                isDecidingApprovalRequestId !== request._id
+                            )}
+                            isLoading={
+                              isDecidingApprovalRequestId === request._id
+                            }
+                            onClick={() =>
+                              onDecideApprovalRequest({
+                                approvalRequestId: request._id,
+                                decision: "approved",
+                              })
+                            }
+                            size="sm"
+                          >
+                            {approvalCopy.approveLabel}
+                          </LoadingButton>
+                          <Button
+                            disabled={Boolean(isDecidingApprovalRequestId)}
+                            onClick={() =>
+                              onDecideApprovalRequest({
+                                approvalRequestId: request._id,
+                                decision: "rejected",
+                              })
+                            }
+                            size="sm"
+                            variant="outline"
+                          >
+                            {approvalCopy.rejectLabel}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </article>
+                );
+              })
             )}
           </section>
         </div>
@@ -311,10 +348,17 @@ export function OperationsQueueView() {
         return;
       }
 
+      const request = queue?.approvalRequests.find(
+        (approvalRequest) => approvalRequest._id === args.approvalRequestId
+      );
+      const approvalCopy = request
+        ? getApprovalRequestCopy(request.requestType)
+        : null;
+
       toast.success(
         args.decision === "approved"
-          ? "Stock adjustment approved"
-          : "Stock adjustment rejected"
+          ? (approvalCopy?.approvedToast ?? "Approval request approved")
+          : (approvalCopy?.rejectedToast ?? "Approval request rejected")
       );
     } finally {
       setDecisioningApprovalRequestId(null);

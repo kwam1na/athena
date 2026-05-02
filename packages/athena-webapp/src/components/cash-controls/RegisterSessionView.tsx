@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import {
   ArrowUpRight,
   Banknote,
+  ChevronDown,
   CreditCard,
   Receipt,
   Smartphone,
@@ -888,10 +889,6 @@ export function RegisterSessionViewContent({
     !hasOpeningFloatCorrectionHistory
       ? "Review the rejected closeout, then recount or correct the drawer."
       : "Correct the starting cash amount without changing linked sales.";
-  const shouldShowOpeningFloatBadge =
-    isOpeningFloatCorrectionOpen ||
-    Boolean(openingFloatCorrectionSuccess) ||
-    hasOpeningFloatCorrectionHistory;
   const correctionHistoryLabel = hasCloseoutRejectionHistory
     ? "Closeout history"
     : "Correction history";
@@ -1282,31 +1279,41 @@ export function RegisterSessionViewContent({
                   ) : null}
                 </aside>
 
-                <div className="space-y-layout-lg px-layout-lg py-layout-lg">
+                <div className="flex flex-col gap-layout-lg px-layout-lg py-layout-lg">
                   {pendingCloseoutApprovalPanel}
 
                   {shouldShowProminentCorrectionPanel ? (
-                    <section className="space-y-4 rounded-lg border border-border bg-surface-raised p-layout-md">
+                    <section
+                      className={
+                        isOpeningFloatCorrectionOpen ||
+                        openingFloatCorrectionSuccess
+                          ? "order-3 space-y-4 rounded-lg border border-border bg-surface-raised p-layout-md"
+                          : "order-3 space-y-3 rounded-lg border border-border bg-muted/20 px-layout-md py-3"
+                      }
+                    >
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="space-y-1">
-                          <h2 className="font-display text-xl font-semibold text-foreground">
+                          <h2
+                            className={
+                              isOpeningFloatCorrectionOpen ||
+                              openingFloatCorrectionSuccess
+                                ? "font-display text-xl font-semibold text-foreground"
+                                : "font-display text-base font-semibold text-foreground"
+                            }
+                          >
                             {openingFloatCorrectionCardTitle}
                           </h2>
-                          <p className="text-sm text-muted-foreground">
+                          <p
+                            className={
+                              isOpeningFloatCorrectionOpen ||
+                              openingFloatCorrectionSuccess
+                                ? "text-sm text-muted-foreground"
+                                : "text-xs text-muted-foreground"
+                            }
+                          >
                             {openingFloatCorrectionCardDescription}
                           </p>
                         </div>
-                        {shouldShowOpeningFloatBadge ? (
-                          <Badge
-                            className="border-border bg-muted text-muted-foreground"
-                            variant="outline"
-                          >
-                            {formatCurrency(
-                              currency,
-                              registerSession.openingFloat,
-                            )}
-                          </Badge>
-                        ) : null}
                       </div>
 
                       {isOpeningFloatCorrectionOpen ? (
@@ -1438,11 +1445,18 @@ export function RegisterSessionViewContent({
                       ) : null}
 
                       {correctionTimeline.length > 0 ? (
-                        <div className="space-y-2 border-t border-border/70 pt-4">
-                          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                            {correctionHistoryLabel}
-                          </p>
-                          <div className="space-y-3">
+                        <details className="group border-t border-border/70 pt-3">
+                          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-md py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                            <span>{correctionHistoryLabel}</span>
+                            <span className="inline-flex items-center gap-2">
+                              {correctionTimeline.length}{" "}
+                              {correctionTimeline.length === 1
+                                ? "entry"
+                                : "entries"}
+                              <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+                            </span>
+                          </summary>
+                          <div className="space-y-3 pt-3">
                             {correctionTimeline.map((event) => {
                               const previousOpeningFloat =
                                 getNumericEventMetadata(
@@ -1531,13 +1545,13 @@ export function RegisterSessionViewContent({
                               );
                             })}
                           </div>
-                        </div>
+                        </details>
                       ) : null}
                     </section>
                   ) : null}
 
                   <div
-                    className={`flex flex-wrap items-start justify-between gap-layout-sm ${hasPendingCloseoutApproval ? "pt-4" : ""}`}
+                    className={`order-2 flex flex-wrap items-start justify-between gap-layout-sm ${hasPendingCloseoutApproval ? "pt-4" : ""}`}
                   >
                     <div className="space-y-1">
                       <h2 className="font-display text-2xl font-semibold text-foreground">
@@ -1557,7 +1571,7 @@ export function RegisterSessionViewContent({
                   </div>
 
                   {transactions.length === 0 ? (
-                    <div className="flex min-h-[260px] items-center justify-center rounded-lg border border-dashed border-border bg-muted/25">
+                    <div className="order-2 flex min-h-[260px] items-center justify-center rounded-lg border border-dashed border-border bg-muted/25">
                       <EmptyState
                         icon={
                           <Receipt className="h-12 w-12 text-muted-foreground" />
@@ -1567,7 +1581,7 @@ export function RegisterSessionViewContent({
                       />
                     </div>
                   ) : (
-                    <div className="overflow-hidden rounded-lg border border-border bg-surface-raised">
+                    <div className="order-2 overflow-hidden rounded-lg border border-border bg-surface-raised">
                       <Table>
                         <TableHeader>
                           <TableRow className="border-b border-border hover:bg-transparent">

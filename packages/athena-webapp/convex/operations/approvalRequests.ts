@@ -2,6 +2,7 @@ import { internalMutation, mutation, type MutationCtx } from "../_generated/serv
 import type { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { resolveStockAdjustmentApprovalDecisionWithCtx } from "../stockOps/adjustments";
+import { resolvePaymentMethodCorrectionApprovalDecisionWithCtx } from "../pos/application/commands/correctTransaction";
 import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
@@ -61,6 +62,13 @@ export async function decideApprovalRequestWithCtx(
     approvalRequest.subjectType === "stock_adjustment_batch"
   ) {
     await resolveStockAdjustmentApprovalDecisionWithCtx(ctx, args);
+  }
+
+  if (
+    approvalRequest.requestType === "payment_method_correction" &&
+    approvalRequest.subjectType === "pos_transaction"
+  ) {
+    await resolvePaymentMethodCorrectionApprovalDecisionWithCtx(ctx, args);
   }
 
   await ctx.db.patch("approvalRequest", args.approvalRequestId, {
@@ -134,7 +142,9 @@ function mapDecideApprovalRequestError(
 
   if (
     message === "Inventory adjustment approval request not found." ||
-    message === "Stock adjustment batch not found for this approval request."
+    message === "Stock adjustment batch not found for this approval request." ||
+    message === "Payment method approval request not found." ||
+    message === "Transaction not found."
   ) {
     return userError({
       code: "not_found",
@@ -144,7 +154,12 @@ function mapDecideApprovalRequestError(
 
   if (
     message === "Approval request has already been decided." ||
-    message === "Stock adjustment batch has already been resolved."
+    message === "Stock adjustment batch has already been resolved." ||
+    message === "Payment method approval request is missing correction details." ||
+    message === "Payment method approval request does not match this store." ||
+    message === "Only single-payment transactions can be corrected." ||
+    message === "Only same-amount payment method corrections are supported." ||
+    message === "Payment allocation must be a same-amount single payment."
   ) {
     return userError({
       code: "precondition_failed",

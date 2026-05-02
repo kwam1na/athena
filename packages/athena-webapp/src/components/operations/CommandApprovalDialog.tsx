@@ -121,13 +121,6 @@ export function CommandApprovalDialog({
             <DialogDescription>{approval.copy.message}</DialogDescription>
           </div>
 
-          {asyncResolution?.approvalRequestId ? (
-            <p className="rounded-md border border-border bg-surface p-layout-sm text-sm text-muted-foreground">
-              Approval request {asyncResolution.approvalRequestId} is pending in
-              the review queue.
-            </p>
-          ) : null}
-
           <div className="flex justify-end">
             <Button type="button" variant="utility" onClick={onDismiss}>
               {approval.copy.secondaryActionLabel ?? "Got it"}

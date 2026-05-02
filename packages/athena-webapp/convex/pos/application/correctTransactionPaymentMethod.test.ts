@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Id } from "../../_generated/dataModel";
-import { correctTransactionPaymentMethod } from "./commands/correctTransaction";
+import {
+  correctTransactionPaymentMethod,
+  resolvePaymentMethodCorrectionApprovalDecisionWithCtx,
+} from "./commands/correctTransaction";
 import { consumeApprovalProofWithCtx } from "../../operations/approvalProofs";
 import { recordOperationalEventWithCtx } from "../../operations/operationalEvents";
 import { correctSameAmountSinglePaymentAllocationWithCtx } from "../../operations/paymentAllocations";
@@ -36,13 +39,22 @@ describe("correctTransactionPaymentMethod", () => {
     return {
       db: {
         get: vi.fn(),
+        insert: vi.fn(),
         patch: vi.fn(),
       },
       runMutation: vi.fn(),
     };
   }
 
-  it("returns an inline manager approval requirement before mutating", async () => {
+  it("creates an async manager approval request before mutating", async () => {
+    const ctx = createMutationCtx();
+    vi.mocked(ctx.db.get).mockResolvedValue({
+      _id: "store-1",
+      organizationId: "org-1",
+    } as never);
+    vi.mocked(ctx.db.insert).mockResolvedValue(
+      "approval-1" as Id<"approvalRequest">,
+    );
     vi.mocked(getPosTransactionById).mockResolvedValue({
       _id: "txn-1" as Id<"posTransaction">,
       storeId: "store-1" as Id<"store">,
@@ -54,7 +66,11 @@ describe("correctTransactionPaymentMethod", () => {
       payments: [{ method: "cash", amount: 1000, timestamp: 1 }],
     } as never);
 
-    const result = await correctTransactionPaymentMethod({} as never, {
+    vi.mocked(recordOperationalEventWithCtx).mockResolvedValue({
+      _id: "request-event-1" as Id<"operationalEvent">,
+    } as never);
+
+    const result = await correctTransactionPaymentMethod(ctx as never, {
       actorStaffProfileId: "cashier-1" as Id<"staffProfile">,
       transactionId: "txn-1" as Id<"posTransaction">,
       paymentMethod: "card",
@@ -72,14 +88,43 @@ describe("correctTransactionPaymentMethod", () => {
           id: "txn-1",
           type: "pos_transaction",
         },
+        resolutionModes: [
+          {
+            kind: "async_request",
+            requestType: "payment_method_correction",
+            approvalRequestId: "approval-1",
+          },
+        ],
       },
       previousPaymentMethod: "cash",
       paymentMethod: "card",
       transactionId: "txn-1",
     });
+    expect(ctx.db.insert).toHaveBeenCalledWith(
+      "approvalRequest",
+      expect.objectContaining({
+        organizationId: "org-1",
+        requestType: "payment_method_correction",
+        requestedByStaffProfileId: "cashier-1",
+        status: "pending",
+        subjectId: "txn-1",
+        subjectType: "pos_transaction",
+        metadata: expect.objectContaining({
+          actionKey: "pos.transaction.correct_payment_method",
+          paymentMethod: "card",
+          previousPaymentMethod: "cash",
+        }),
+      }),
+    );
     expect(correctSameAmountSinglePaymentAllocationWithCtx).not.toHaveBeenCalled();
     expect(patchPosTransaction).not.toHaveBeenCalled();
-    expect(recordOperationalEventWithCtx).not.toHaveBeenCalled();
+    expect(recordOperationalEventWithCtx).toHaveBeenCalledWith(
+      ctx as never,
+      expect.objectContaining({
+        approvalRequestId: "approval-1",
+        eventType: "pos_transaction_payment_method_approval_requested",
+      }),
+    );
   });
 
   it("patches the single same-amount payment and matching allocation after consuming a matching proof", async () => {
@@ -174,6 +219,88 @@ describe("correctTransactionPaymentMethod", () => {
         approverStaffProfileId: "manager-1",
         paymentAllocationId: "allocation-1",
         operationalEventId: "event-1",
+      }),
+    );
+  });
+
+  it("applies the queued payment correction when the async request is approved", async () => {
+    const ctx = createMutationCtx();
+    vi.mocked(ctx.db.get).mockResolvedValue({
+      _id: "approval-1",
+      requestType: "payment_method_correction",
+      subjectType: "pos_transaction",
+      subjectId: "txn-1",
+      storeId: "store-1",
+      requestedByStaffProfileId: "cashier-1",
+      notes: "Till entry correction",
+      metadata: {
+        paymentMethod: "card",
+      },
+    } as never);
+    vi.mocked(getPosTransactionById).mockResolvedValue({
+      _id: "txn-1" as Id<"posTransaction">,
+      storeId: "store-1" as Id<"store">,
+      transactionNumber: "POS-111111",
+      status: "completed",
+      total: 1000,
+      totalPaid: 1000,
+      paymentMethod: "cash",
+      payments: [{ method: "cash", amount: 1000, timestamp: 1 }],
+    } as never);
+    vi.mocked(correctSameAmountSinglePaymentAllocationWithCtx).mockResolvedValue({
+      _id: "allocation-1" as Id<"paymentAllocation">,
+    } as never);
+    vi.mocked(recordOperationalEventWithCtx)
+      .mockResolvedValueOnce({
+        _id: "approval-event-1" as Id<"operationalEvent">,
+      } as never)
+      .mockResolvedValueOnce({
+        _id: "event-1" as Id<"operationalEvent">,
+      } as never);
+
+    const result = await resolvePaymentMethodCorrectionApprovalDecisionWithCtx(
+      ctx as never,
+      {
+        approvalRequestId: "approval-1" as Id<"approvalRequest">,
+        decision: "approved",
+        reviewedByStaffProfileId: "manager-1" as Id<"staffProfile">,
+      },
+    );
+
+    expect(correctSameAmountSinglePaymentAllocationWithCtx).toHaveBeenCalledWith(
+      ctx as never,
+      {
+        storeId: "store-1",
+        targetType: "pos_transaction",
+        targetId: "txn-1",
+        amount: 1000,
+        method: "card",
+      },
+    );
+    expect(patchPosTransaction).toHaveBeenCalledWith(ctx as never, "txn-1", {
+      paymentMethod: "card",
+      payments: [{ method: "card", amount: 1000, timestamp: 1 }],
+    });
+    expect(recordOperationalEventWithCtx).toHaveBeenNthCalledWith(
+      2,
+      ctx as never,
+      expect.objectContaining({
+        approvalRequestId: "approval-1",
+        eventType: "pos_transaction_payment_method_corrected",
+        metadata: expect.objectContaining({
+          approvalRequestId: "approval-1",
+          approvalOperationalEventId: "approval-event-1",
+          approverStaffProfileId: "manager-1",
+          paymentMethod: "card",
+          previousPaymentMethod: "cash",
+        }),
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        approvalRequestId: "approval-1",
+        paymentMethod: "card",
+        previousPaymentMethod: "cash",
       }),
     );
   });

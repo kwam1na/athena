@@ -24,6 +24,42 @@ vi.mock("~/src/lib/security/pinHash", () => ({
   hashPin: vi.fn(async (pin: string) => `hashed:${pin}`),
 }));
 
+vi.mock("../ui/select", () => ({
+  Select: ({
+    children,
+    onValueChange,
+    value,
+  }: {
+    children?: React.ReactNode;
+    onValueChange?: (value: string) => void;
+    value?: string;
+  }) => (
+    <select
+      aria-label="Role"
+      onChange={(event) => onValueChange?.(event.target.value)}
+      value={value}
+    >
+      {children}
+    </select>
+  ),
+  SelectContent: ({ children }: { children?: React.ReactNode }) => (
+    <>{children}</>
+  ),
+  SelectItem: ({
+    children,
+    value,
+  }: {
+    children?: React.ReactNode;
+    value: string;
+  }) => <option value={value}>{children}</option>,
+  SelectTrigger: ({ children }: { children?: React.ReactNode }) => (
+    <>{children}</>
+  ),
+  SelectValue: ({ placeholder }: { placeholder?: string }) => (
+    <option value="">{placeholder}</option>
+  ),
+}));
+
 vi.mock("../pos/PinInput", () => ({
   PinInput: ({
     disabled,
@@ -128,8 +164,11 @@ async function chooseRole(
   user: ReturnType<typeof userEvent.setup>,
   role: RegExp,
 ) {
-  await user.click(screen.getByRole("combobox", { name: /role/i }));
-  await user.click(await screen.findByRole("option", { name: role }));
+  const roleOption = screen.getByRole("option", { name: role });
+  await user.selectOptions(
+    screen.getByRole("combobox", { name: /role/i }),
+    roleOption,
+  );
 }
 
 describe("StaffManagement", () => {
