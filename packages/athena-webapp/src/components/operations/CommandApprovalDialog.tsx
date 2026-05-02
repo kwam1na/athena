@@ -6,6 +6,7 @@ import {
   type StaffAuthenticationResult,
 } from "@/components/staff-auth/StaffAuthenticationDialog";
 import { Button } from "@/components/ui/button";
+import { formatReviewReason } from "@/components/cash-controls/formatReviewReason";
 import {
   Dialog,
   DialogContent,
@@ -23,6 +24,7 @@ import {
   GENERIC_UNEXPECTED_ERROR_MESSAGE,
   GENERIC_UNEXPECTED_ERROR_TITLE,
 } from "~/shared/commandResult";
+import { currencyFormatter } from "~/shared/currencyFormatter";
 
 type InlineManagerResolutionMode = Extract<
   ApprovalResolutionMode,
@@ -105,6 +107,9 @@ export function CommandApprovalDialog({
   }
 
   const inlineResolution = getInlineManagerResolution(approval);
+  const approvalMessage =
+    formatReviewReason(currencyFormatter("GHS"), approval.copy.message) ??
+    approval.copy.message;
 
   if (!inlineResolution) {
     const asyncResolution = getAsyncResolution(approval);
@@ -118,7 +123,7 @@ export function CommandApprovalDialog({
                 ? "Manager review required"
                 : approval.copy.title}
             </DialogTitle>
-            <DialogDescription>{approval.copy.message}</DialogDescription>
+            <DialogDescription>{approvalMessage}</DialogDescription>
           </div>
 
           <div className="flex justify-end">
@@ -137,7 +142,7 @@ export function CommandApprovalDialog({
         <div className="flex shrink-0 flex-col gap-layout-md border-b border-border/80 px-layout-lg pb-layout-md pt-layout-lg sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 space-y-layout-xs">
             <DialogTitle>{approval.copy.title}</DialogTitle>
-            <DialogDescription>{approval.copy.message}</DialogDescription>
+            <DialogDescription>{approvalMessage}</DialogDescription>
           </div>
         </div>
 

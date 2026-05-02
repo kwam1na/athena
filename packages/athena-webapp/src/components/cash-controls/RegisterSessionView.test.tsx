@@ -1208,6 +1208,7 @@ describe("RegisterSessionViewContent", () => {
             ...baseSnapshot.registerSession,
             pendingApprovalRequest: {
               _id: "approval-1",
+              notes: "Counted twice before handoff.",
               reason:
                 "Variance of -500 exceeded the closeout approval threshold.",
               requestedByStaffName: "Ama Mensah",
@@ -1224,6 +1225,10 @@ describe("RegisterSessionViewContent", () => {
       screen.getByRole("heading", { name: "Review closeout variance" }),
     ).toBeInTheDocument();
     expect(screen.getByText("Manager approval pending")).toBeInTheDocument();
+    expect(screen.getByText("Request notes")).toBeInTheDocument();
+    expect(
+      screen.getByText("Counted twice before handoff."),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Closeout workflow")).not.toBeInTheDocument();
     expect(
       screen.queryByText(

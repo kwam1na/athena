@@ -17,9 +17,35 @@ vi.mock("@/components/ui/sidebar", () => ({
 }));
 
 vi.mock("@tanstack/react-router", () => ({
-  Link: ({ children, to }: { children: ReactNode; to: string }) => (
-    <a href={to}>{children}</a>
-  ),
+  Link: ({
+    children,
+    params,
+    search,
+    to,
+  }: {
+    children: ReactNode;
+    params?:
+      | ((params: Record<string, string>) => Record<string, string>)
+      | Record<string, string>;
+    search?: Record<string, string>;
+    to: string;
+  }) => {
+    const resolvedParams =
+      typeof params === "function"
+        ? params({
+            orgUrlSlug: "$orgUrlSlug",
+            sessionId: "$sessionId",
+            storeUrlSlug: "$storeUrlSlug",
+          })
+        : params;
+    const href = to.replace(
+      "$sessionId",
+      resolvedParams?.sessionId ?? "$sessionId",
+    );
+    const query = search ? `?${new URLSearchParams(search)}` : "";
+
+    return <a href={`${href}${query}`}>{children}</a>;
+  },
 }));
 
 vi.mock("@/components/View", () => ({
@@ -290,7 +316,10 @@ describe("POSRegisterView", () => {
     expect(screen.getByText("Set up this register")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /open register setup/i }),
-    ).toHaveAttribute("href", "/$orgUrlSlug/store/$storeUrlSlug/pos/settings");
+    ).toHaveAttribute(
+      "href",
+      "/$orgUrlSlug/store/$storeUrlSlug/pos/settings?o=%252F",
+    );
     expect(screen.queryByText("product-search-input")).not.toBeInTheDocument();
     expect(
       screen.queryByText("register-checkout-panel"),
@@ -1124,6 +1153,7 @@ describe("POSRegisterView", () => {
         registerLabel: "Front Counter",
         registerNumber: "1",
         currency: "GHS",
+        canOpenCashControls: false,
         openingFloat: "50.00",
         notes: "",
         errorMessage: null,
@@ -1159,6 +1189,9 @@ describe("POSRegisterView", () => {
     expect(screen.getByText("cart-items")).toBeInTheDocument();
     expect(screen.getByText("register-checkout-panel")).toBeInTheDocument();
     expect(screen.queryByText("register-action-bar")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /cash controls/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("renders recovery copy, inline errors, and escape actions in the product lookup space", async () => {
@@ -1187,6 +1220,7 @@ describe("POSRegisterView", () => {
         registerLabel: "Front Counter",
         registerNumber: "1",
         currency: "GHS",
+        canOpenCashControls: true,
         openingFloat: "50.00",
         notes: "",
         errorMessage:
@@ -1225,7 +1259,10 @@ describe("POSRegisterView", () => {
     expect(screen.queryByText("register-action-bar")).not.toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /cash controls/i }),
-    ).toHaveAttribute("href", "/$orgUrlSlug/store/$storeUrlSlug/cash-controls");
+    ).toHaveAttribute(
+      "href",
+      "/$orgUrlSlug/store/$storeUrlSlug/cash-controls?o=%252F",
+    );
 
     await userEvent.click(screen.getByRole("button", { name: /sign out/i }));
 
@@ -1259,6 +1296,8 @@ describe("POSRegisterView", () => {
         registerLabel: "Front Counter",
         registerNumber: "1",
         currency: "GHS",
+        canOpenCashControls: true,
+        cashControlsRegisterSessionId: "drawer-1",
         closeoutCountedCash: "",
         closeoutDraftVariance: -500,
         closeoutNotes: "",
@@ -1293,7 +1332,10 @@ describe("POSRegisterView", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /cash controls/i }),
-    ).toBeInTheDocument();
+    ).toHaveAttribute(
+      "href",
+      "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/drawer-1?o=%252F",
+    );
     expect(screen.getByText("Expected")).toBeInTheDocument();
     expect(screen.getByText("GH₵50")).toBeInTheDocument();
     expect(screen.getByText("GH₵-5")).toBeInTheDocument();
@@ -1359,6 +1401,7 @@ describe("POSRegisterView", () => {
         expectedCash: 868_100,
         errorMessage: null,
         canOpenCashControls: true,
+        cashControlsRegisterSessionId: "drawer-1",
         hasPendingCloseoutApproval: true,
         isReopeningCloseout: false,
         onReopenRegister: vi.fn(),
@@ -1384,7 +1427,10 @@ describe("POSRegisterView", () => {
     expect(screen.getByText("GH₵-5,681")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /cash controls/i }),
-    ).toBeInTheDocument();
+    ).toHaveAttribute(
+      "href",
+      "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/drawer-1?o=%252F",
+    );
     expect(
       screen.getByRole("button", { name: /reopen register/i }),
     ).toBeInTheDocument();

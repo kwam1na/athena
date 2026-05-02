@@ -600,6 +600,9 @@ describe("useRegisterViewModel", () => {
     expect(result.current.drawerGate?.expectedCash).toBe(5_000);
     expect(result.current.drawerGate?.hasPendingCloseoutApproval).toBe(true);
     expect(result.current.drawerGate?.canOpenCashControls).toBe(true);
+    expect(result.current.drawerGate?.cashControlsRegisterSessionId).toBe(
+      "drawer-1",
+    );
     expect(result.current.drawerGate?.closeoutSubmittedCountedCash).toBe(4_500);
     expect(result.current.drawerGate?.closeoutSubmittedVariance).toBe(-500);
   });
@@ -719,36 +722,11 @@ describe("useRegisterViewModel", () => {
       resumableSession: null,
     };
     mockActiveSession = null;
-    mockSubmitRegisterSessionCloseout
-      .mockResolvedValueOnce({
-        kind: "approval_required",
-        approval: {
-          action: {
-            key: "cash_controls.register_session.review_variance",
-            label: "Review register closeout variance",
-          },
-          copy: {
-            title: "Manager approval required",
-            message:
-              "Enter manager credentials to approve this register closeout variance.",
-            primaryActionLabel: "Approve closeout",
-            secondaryActionLabel: "Cancel",
-          },
-          reason: "End of shift count",
-          requiredRole: "manager",
-          resolutionModes: [{ kind: "inline_manager_proof" }],
-          subject: {
-            id: "drawer-1",
-            label: "Register 1",
-            type: "register_session",
-          },
-        },
-      })
-      .mockResolvedValueOnce(
-        ok({
-          action: "closed",
-        }),
-      );
+    mockSubmitRegisterSessionCloseout.mockResolvedValueOnce(
+      ok({
+        action: "closed",
+      }),
+    );
 
     const { useRegisterViewModel } = await import("./useRegisterViewModel");
     const { result } = renderHook(() => useRegisterViewModel());
@@ -768,18 +746,13 @@ describe("useRegisterViewModel", () => {
       await result.current.drawerGate?.onSubmitCloseout?.();
     });
 
-    expect(mockSubmitRegisterSessionCloseout).toHaveBeenCalledWith({
-      actorStaffProfileId: "staff-1",
-      actorUserId: "user-1",
-      approvalProofId: undefined,
-      countedCash: 4_800,
-      notes: "End of shift count",
-      registerSessionId: "drawer-1",
-      storeId: "store-1",
-    });
+    expect(mockSubmitRegisterSessionCloseout).not.toHaveBeenCalled();
     expect(result.current.closeoutApprovalDialog?.open).toBe(true);
     expect(result.current.closeoutApprovalDialog?.approval?.action.key).toBe(
       "cash_controls.register_session.review_variance",
+    );
+    expect(result.current.closeoutApprovalDialog?.approval?.reason).toBe(
+      "End of shift count",
     );
 
     await act(async () => {
@@ -791,11 +764,7 @@ describe("useRegisterViewModel", () => {
           requiredRole: "manager",
           requestedByStaffProfileId: "staff-1" as Id<"staffProfile">,
           storeId: "store-1" as Id<"store">,
-          subject: {
-            id: "drawer-1",
-            label: "Register 1",
-            type: "register_session",
-          },
+          subject: result.current.closeoutApprovalDialog.approval!.subject,
           username: "ama",
         });
 
@@ -818,7 +787,7 @@ describe("useRegisterViewModel", () => {
       storeId: "store-1",
       subject: {
         id: "drawer-1",
-        label: "Register 1",
+        label: "1",
         type: "register_session",
       },
       username: "ama",
@@ -969,6 +938,91 @@ describe("useRegisterViewModel", () => {
     expect(mockCorrectRegisterSessionOpeningFloat).toHaveBeenCalledWith({
       actorStaffProfileId: "staff-1",
       actorUserId: "user-1",
+      approvalProofId: undefined,
+      correctedOpeningFloat: 4_500,
+      reason: "Cashier typo",
+      registerSessionId: "drawer-1",
+      storeId: "store-1",
+    });
+    expect(toast.success).toHaveBeenCalledWith("Opening float corrected");
+  });
+
+  it("opens manager re-auth when opening float correction requires approval", async () => {
+    mockCorrectRegisterSessionOpeningFloat
+      .mockResolvedValueOnce({
+        kind: "approval_required",
+        approval: {
+          action: {
+            key: "cash_controls.register_session.correct_opening_float",
+            label: "Correct opening float",
+          },
+          copy: {
+            title: "Manager approval required",
+            message:
+              "Authorization is needed from a manager to correct this register opening float.",
+            primaryActionLabel: "Approve correction",
+            secondaryActionLabel: "Cancel",
+          },
+          reason:
+            "Manager approval is required to correct the register opening float.",
+          requiredRole: "manager",
+          resolutionModes: [{ kind: "inline_manager_proof" }],
+          selfApproval: "allowed",
+          subject: {
+            id: "drawer-1",
+            label: "1",
+            type: "register_session",
+          },
+        },
+      })
+      .mockResolvedValueOnce(
+        ok({
+          action: "corrected",
+        }),
+      );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.closeoutControl?.onRequestOpeningFloatCorrection();
+    });
+
+    act(() => {
+      result.current.drawerGate?.onCorrectedOpeningFloatChange?.("45.00");
+      result.current.drawerGate?.onCorrectionReasonChange?.("Cashier typo");
+    });
+
+    await act(async () => {
+      await result.current.drawerGate?.onSubmitOpeningFloatCorrection?.();
+    });
+
+    expect(result.current.drawerGate?.errorMessage).toBeNull();
+    expect(result.current.closeoutApprovalDialog?.open).toBe(true);
+    expect(result.current.closeoutApprovalDialog?.approval?.action.key).toBe(
+      "cash_controls.register_session.correct_opening_float",
+    );
+
+    await act(async () => {
+      const approval = result.current.closeoutApprovalDialog!.approval!;
+      await result.current.closeoutApprovalDialog?.onApproved({
+        approval,
+        approvalProofId: "proof-1" as Id<"approvalProof">,
+        approvedByStaffProfileId: "staff-1" as Id<"staffProfile">,
+        expiresAt: Date.now() + 60_000,
+      });
+    });
+
+    expect(mockCorrectRegisterSessionOpeningFloat).toHaveBeenLastCalledWith({
+      actorStaffProfileId: "staff-1",
+      actorUserId: "user-1",
+      approvalProofId: "proof-1",
       correctedOpeningFloat: 4_500,
       reason: "Cashier typo",
       registerSessionId: "drawer-1",
@@ -1305,6 +1359,7 @@ describe("useRegisterViewModel", () => {
 
     expect(result.current.drawerGate?.mode).toBe("initialSetup");
     expect(result.current.drawerGate?.canOpenDrawer).toBe(false);
+    expect(result.current.drawerGate?.canOpenCashControls).toBe(false);
     expect(
       result.current.closeoutControl?.canShowOpeningFloatCorrection,
     ).toBe(false);

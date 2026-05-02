@@ -175,6 +175,7 @@ describe("cash control closeouts", () => {
     expect(source).toContain("internal.operations.registerSessions.correctRegisterSessionOpeningFloat");
     expect(source).toContain("register_session_opening_float_corrected");
     expect(source).toContain("opening_float_corrected");
+    expect(source).toContain("requestedByStaffProfileId: args.actorStaffProfileId");
   });
 
   it("returns user_error for invalid opening float corrections without mutating", async () => {

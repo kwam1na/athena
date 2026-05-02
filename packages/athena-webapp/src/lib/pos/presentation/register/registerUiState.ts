@@ -151,6 +151,7 @@ export interface RegisterDrawerGateState {
   closeoutSecondaryActionLabel?: string;
   expectedCash?: number;
   canOpenCashControls?: boolean;
+  cashControlsRegisterSessionId?: Id<"registerSession">;
   canOpenDrawer?: boolean;
   hasPendingCloseoutApproval?: boolean;
   notes?: string;

@@ -120,7 +120,11 @@ function formatPaymentMethodLabel(method: unknown) {
 }
 
 function requiresInlineManagerProof(approval: ApprovalRequirement) {
-  return approval.resolutionModes.some(
+  const hasAsyncApprovalRequest = approval.resolutionModes.some(
+    (mode) => mode.kind === "async_request" && Boolean(mode.approvalRequestId),
+  );
+
+  return !hasAsyncApprovalRequest && approval.resolutionModes.some(
     (mode) => mode.kind === "inline_manager_proof",
   );
 }

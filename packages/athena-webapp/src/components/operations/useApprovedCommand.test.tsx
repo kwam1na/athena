@@ -258,6 +258,7 @@ describe("useApprovedCommand", () => {
       kind: "approval_required",
       approval: asyncApproval,
     });
-    expect(result.current.approvalDialog?.approval).toEqual(asyncApproval);
+    expect(result.current.approvalDialog).toBeNull();
+    expect(result.current.pendingApproval).toBeNull();
   });
 });

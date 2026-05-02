@@ -59,7 +59,7 @@ type StaffNameMap = Map<Id<"staffProfile">, string>;
 
 type CashControlApprovalRequest = Pick<
   Doc<"approvalRequest">,
-  "_id" | "reason" | "requestedByStaffProfileId" | "status"
+  "_id" | "notes" | "reason" | "requestedByStaffProfileId" | "status"
 >;
 
 type CashControlDepositAllocation = Pick<
@@ -211,6 +211,7 @@ function buildRegisterSessionSummary(args: {
     pendingApprovalRequest: args.approvalRequest
       ? {
           _id: args.approvalRequest._id,
+          notes: args.approvalRequest.notes,
           reason: args.approvalRequest.reason,
           requestedByStaffName: args.approvalRequest.requestedByStaffProfileId
             ? args.staffNamesById.get(args.approvalRequest.requestedByStaffProfileId) ?? null
