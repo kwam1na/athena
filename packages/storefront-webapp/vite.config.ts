@@ -4,11 +4,14 @@ import react from "@vitejs/plugin-react";
 import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
 import { visualizer } from "rollup-plugin-visualizer";
 
+const storefrontQaHost = process.env.STOREFRONT_QA_HOST ?? "qa.wigclub.store";
+
 export default defineConfig({
   base: "/",
   server: {
     host: "127.0.0.1",
     port: 5174,
+    allowedHosts: [storefrontQaHost],
   },
   build: {
     rollupOptions: {

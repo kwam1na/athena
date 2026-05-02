@@ -18,7 +18,7 @@ This runbook captures the production VPS shape for `wigclub.store` and the steps
 | `wigclub.store` | nginx static storefront |
 | `www.wigclub.store` | nginx static storefront |
 | `athena.wigclub.store` | nginx static Athena admin app |
-| `qa.wigclub.store` | reserved QA endpoint; nginx returns `204` |
+| `qa.wigclub.store` | nginx reverse proxy to storefront Vite dev server on `127.0.0.1:5176` |
 | `athena-qa.wigclub.store` | nginx reverse proxy to Athena Vite dev server on `127.0.0.1:5175` |
 | `api.wigclub.store` | nginx reverse proxy to prod Convex HTTP |
 | `dev.wigclub.store` | nginx reverse proxy to dev Convex HTTP |
@@ -60,7 +60,7 @@ The generated server blocks are:
 | --- | --- |
 | `wigclub.store www.wigclub.store` | Serves `/root/athena/storefront/current` with SPA fallback |
 | `athena.wigclub.store` | Serves `/root/athena/athena-webapp/current` with SPA fallback |
-| `qa.wigclub.store` | Reserved endpoint that returns `204` |
+| `qa.wigclub.store` | Proxies to the storefront QA Vite dev server at `127.0.0.1:5176`, including websocket upgrade headers |
 | `athena-qa.wigclub.store` | Proxies to the QA Vite dev server at `127.0.0.1:5175`, including websocket upgrade headers |
 | `api.wigclub.store` | Proxies to the production Convex HTTP site with CORS handling |
 | `dev.wigclub.store` | Proxies to the dev Convex HTTP site with CORS handling |
@@ -264,7 +264,7 @@ The production rollback workflow needs these GitHub environment or repository se
 
 ## QA Dev Server
 
-`athena-qa.wigclub.store` is a remotely hosted Athena dev frontend pointed at the shared dev Convex deployment. `qa.wigclub.store` remains reserved for the broader QA endpoint namespace and should not serve the Athena dev server.
+`athena-qa.wigclub.store` is a remotely hosted Athena dev frontend pointed at the shared dev Convex deployment. `qa.wigclub.store` is the matching storefront dev frontend, also pointed at the shared dev Convex HTTP site.
 
 ```text
 athena-qa.wigclub.store
@@ -272,15 +272,23 @@ athena-qa.wigclub.store
   -> nginx
   -> 127.0.0.1:5175 Vite dev server
   -> https://jovial-wildebeest-179.convex.cloud / .site
+
+qa.wigclub.store
+  -> Cloudflare Tunnel
+  -> nginx
+  -> 127.0.0.1:5176 Vite dev server
+  -> https://jovial-wildebeest-179.convex.site
 ```
 
 Deploy or refresh QA:
 
 ```bash
 scripts/deploy-vps.sh qa
+scripts/deploy-vps.sh qa-athena
+scripts/deploy-vps.sh qa-storefront
 ```
 
-The script refreshes `/root/athena/repo`, installs Bun if needed, runs `bun install --ignore-scripts`, and starts the Athena webapp through PM2 as `athena-qa`.
+The script refreshes `/root/athena/repo`, installs Bun if needed, runs `bun install --ignore-scripts`, and starts the dev servers through PM2. `qa` refreshes both QA services; `qa-athena` refreshes only `athena-qa`; `qa-storefront` refreshes only `storefront-qa` and reconciles the `qa.wigclub.store` nginx block before restarting PM2.
 
 Expected PM2 command shape:
 
@@ -289,18 +297,23 @@ VITE_CONVEX_URL=https://jovial-wildebeest-179.convex.cloud \
 VITE_API_GATEWAY_URL=https://jovial-wildebeest-179.convex.site \
 VITE_STOREFRONT_URL=https://wigclub.store \
 pm2 start bun --name athena-qa -- run dev -- --host 127.0.0.1 --port 5175 --strictPort
+
+VITE_API_URL=https://jovial-wildebeest-179.convex.site \
+STOREFRONT_QA_HOST=qa.wigclub.store \
+pm2 start bun --name storefront-qa -- run dev -- --host 127.0.0.1 --port 5176 --strictPort
 ```
 
-Because this exposes a Vite dev server through a public hostname, protect `athena-qa.wigclub.store` with Cloudflare Access or equivalent edge auth before sharing it broadly.
+Because this exposes Vite dev servers through public hostnames, protect `athena-qa.wigclub.store` and `qa.wigclub.store` with Cloudflare Access or equivalent edge auth before sharing them broadly.
 
 ## Automatic QA Deploys
 
-`.github/workflows/athena-qa-deploy.yml` deploys QA automatically on every push to `main`. In normal use that means merged PRs refresh `athena-qa.wigclub.store` without an operator running the deploy script locally.
+`.github/workflows/athena-qa-deploy.yml` deploys QA automatically on every push to `main`. In normal use that means merged PRs refresh `athena-qa.wigclub.store` without an operator running the deploy script locally. When a merge touches `packages/storefront-webapp/**` or the shared QA deployment scripts/workflow, it also refreshes `qa.wigclub.store`.
 
 The workflow intentionally delegates to the same authoritative deploy path:
 
 ```bash
-DEPLOY_REF="$GITHUB_SHA" REMOTE=athena-qa-vps scripts/deploy-vps.sh qa
+DEPLOY_REF="$GITHUB_SHA" REMOTE=athena-qa-vps scripts/deploy-vps.sh qa-athena
+DEPLOY_REF="$GITHUB_SHA" REMOTE=athena-qa-vps scripts/deploy-vps.sh qa-storefront
 ```
 
 Configure these GitHub environment or repository secrets before relying on the workflow:
@@ -319,9 +332,12 @@ The workflow smoke check runs against nginx on the VPS:
 
 ```bash
 curl -fsS -I -H "Host: athena-qa.wigclub.store" http://127.0.0.1/
+curl -fsS -o /tmp/storefront-qa-smoke.html -w "%{http_code}" -H "Host: qa.wigclub.store" http://127.0.0.1/
+grep -q "<title>Wigclub</title>" /tmp/storefront-qa-smoke.html
+grep -q "/src/main.tsx" /tmp/storefront-qa-smoke.html
 ```
 
-That keeps the deploy check independent of Cloudflare DNS propagation and Cloudflare Access policy.
+That keeps the deploy check independent of Cloudflare DNS propagation and Cloudflare Access policy. The storefront check requires a `200` response and storefront Vite index content so the old placeholder `204` route cannot pass.
 
 ## Hardening Checks
 
@@ -349,8 +365,9 @@ pm2 list
 For QA, verify:
 
 ```bash
-ss -tulpn | grep ':5175'
+ss -tulpn | grep -E ':(5175|5176)\b'
 curl -sS -I -H 'Host: qa.wigclub.store' http://127.0.0.1/
 curl -sS -I -H 'Host: athena-qa.wigclub.store' http://127.0.0.1/
 pm2 describe athena-qa
+pm2 describe storefront-qa
 ```
