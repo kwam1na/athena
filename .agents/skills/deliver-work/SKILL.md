@@ -13,8 +13,8 @@ Always apply `$compound-delivery-kernel`. The kernel owns the reusable delivery 
 
 ## Route First
 
-- If the work is already tracked in Linear, use `$execute-linear-ticket`.
-- If approved work needs tickets, use `$create-linear-ticket`.
+- If the work is already tracked in Linear, use `$execute`.
+- If approved work needs tickets, use `$track`.
 - If requirements are fuzzy or product shape is unresolved, use `compound-engineering:ce-brainstorm` when available.
 - If the user asks for an implementation plan or the work is multi-step with unclear sequencing, use `compound-engineering:ce-plan` when available.
 - If the request is a bug with unknown root cause, use a systematic debugging skill before planning the fix.

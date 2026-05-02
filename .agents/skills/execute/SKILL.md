@@ -1,11 +1,11 @@
 ---
-name: execute-linear-ticket
+name: execute
 description: Use when work already exists in Linear and the user wants implementation rather than new planning.
 ---
 
-# Executing Linear Tickets
+# Execute
 
-Use this skill to carry an existing Linear issue through implementation, review, merge, and ticket closure. Use `$create-linear-ticket` first if the work is not yet ticketed or still needs decomposition.
+Use this skill to carry an existing Linear issue through implementation, review, merge, and ticket closure. Use `$track` first if the work is not yet ticketed or still needs decomposition.
 
 ## Delivery Posture
 

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Track"
+  short_description: "Track atomic Linear work with test posture, expected sensors, and compounding hooks"
+  default_prompt: "Use $track to resolve team/project context from the issue, explicit user input, or the current working directory and then create atomic, parallelizable tickets with execution posture, test scenarios, expected sensors, and compounding opportunities."
