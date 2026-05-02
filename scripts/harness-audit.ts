@@ -113,6 +113,16 @@ function addGroupedError(
   groupedErrors.set(group, [error]);
 }
 
+function formatMissingValidationPathError(
+  validationMapPath: string,
+  pathPrefix: string
+) {
+  return [
+    `Stale validation surface: ${validationMapPath} references missing path "${pathPrefix}".`,
+    `Fixture drift: add "${pathPrefix}" to the harness audit fixture, or repo drift: remove or update the stale validation-map path.`,
+  ].join(" ");
+}
+
 function inferGroupFromError(error: string) {
   const match = error.match(/packages\/([^/]+)\//);
   return match?.[1] ?? "repo";
@@ -271,7 +281,7 @@ async function loadAuditTarget(
         addGroupedError(
           groupedErrors,
           target.appName,
-          `Stale validation surface: ${pathPrefix}`
+          formatMissingValidationPathError(target.validationMapPath, pathPrefix)
         );
       }
     }
