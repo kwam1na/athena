@@ -119,6 +119,21 @@ describe("HARNESS_APP_REGISTRY", () => {
             "bunx tsc --noEmit -p packages/storefront-webapp/tsconfig.json",
         },
       ],
+      behaviorScenarios: ["storefront-backend-first-load"],
+    });
+  });
+
+  it("selects storefront backend first-load validation for API and deploy-surface edits", () => {
+    const storefront = HARNESS_APP_REGISTRY.find(
+      (entry) => entry.appName === "storefront-webapp"
+    );
+    const apiScenario = storefront?.validationScenarios.find(
+      (scenario) => scenario.title === "Shared-lib, utility, or API-wrapper edits"
+    );
+
+    expect(apiScenario).toMatchObject({
+      touchedPaths: ["src/lib", "src/utils", "src/api"],
+      behaviorScenarios: ["storefront-backend-first-load"],
     });
   });
 

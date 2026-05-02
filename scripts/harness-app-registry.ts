@@ -746,6 +746,7 @@ export const HARNESS_APP_REGISTRY = [
               "bunx tsc --noEmit -p packages/storefront-webapp/tsconfig.json",
           },
         ],
+        behaviorScenarios: ["storefront-backend-first-load"],
         note: "Use this when the Vite browser bootstrap, package manifest, generated router state, or TypeScript/build wiring changes.",
       },
       {
@@ -759,6 +760,7 @@ export const HARNESS_APP_REGISTRY = [
               "bunx tsc --noEmit -p packages/storefront-webapp/tsconfig.json",
           },
         ],
+        behaviorScenarios: ["storefront-backend-first-load"],
         note: "These surfaces fan out widely across the app, so pair the default suite with a typecheck when shared helpers change.",
       },
       {

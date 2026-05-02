@@ -1,4 +1,5 @@
 type StorefrontBehaviorMode =
+  | "backend-first-load"
   | "checkout-bootstrap"
   | "validation-blocker"
   | "verification-recovery";
@@ -7,6 +8,7 @@ const API_PORT = Number.parseInt(process.env.HARNESS_STOREFRONT_API_PORT ?? "431
 const mode = process.env.HARNESS_STOREFRONT_BEHAVIOR_MODE;
 
 const SUPPORTED_MODES = new Set<StorefrontBehaviorMode>([
+  "backend-first-load",
   "checkout-bootstrap",
   "validation-blocker",
   "verification-recovery",
@@ -96,6 +98,19 @@ const checkoutItem = {
   colorName: "Natural Black",
   size: "M",
   length: 16,
+};
+
+const bestSeller = {
+  _id: "best_seller_harness",
+  rank: 1,
+  productSku: checkoutItem,
+};
+
+const featuredItem = {
+  _id: "featured_harness",
+  rank: 1,
+  type: "regular",
+  productSku: checkoutItem,
 };
 
 const bootstrapSession = {
@@ -257,6 +272,10 @@ const server = Bun.serve({
     }
 
     if (pathname === "/storefront") {
+      if (behaviorMode === "backend-first-load") {
+        emitSignal("storefront-backend-first-load");
+      }
+
       return jsonResponse(request, sharedStore);
     }
 
@@ -300,6 +319,14 @@ const server = Bun.serve({
       return jsonResponse(request, {
         bannerMessage: null,
       });
+    }
+
+    if (pathname === "/bestSellers") {
+      return jsonResponse(request, [bestSeller]);
+    }
+
+    if (pathname === "/featured") {
+      return jsonResponse(request, [featuredItem]);
     }
 
     if (pathname === "/bags/active") {
