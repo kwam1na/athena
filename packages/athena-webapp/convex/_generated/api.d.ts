@@ -110,6 +110,7 @@ import type * as mtn_collections from "../mtn/collections.js";
 import type * as mtn_config from "../mtn/config.js";
 import type * as mtn_normalize from "../mtn/normalize.js";
 import type * as mtn_types from "../mtn/types.js";
+import type * as operations_approvalActions from "../operations/approvalActions.js";
 import type * as operations_approvalAuditEvents from "../operations/approvalAuditEvents.js";
 import type * as operations_approvalProofs from "../operations/approvalProofs.js";
 import type * as operations_approvalRequestHelpers from "../operations/approvalRequestHelpers.js";
@@ -401,6 +402,7 @@ declare const fullApi: ApiFromModules<{
   "mtn/config": typeof mtn_config;
   "mtn/normalize": typeof mtn_normalize;
   "mtn/types": typeof mtn_types;
+  "operations/approvalActions": typeof operations_approvalActions;
   "operations/approvalAuditEvents": typeof operations_approvalAuditEvents;
   "operations/approvalProofs": typeof operations_approvalProofs;
   "operations/approvalRequestHelpers": typeof operations_approvalRequestHelpers;
