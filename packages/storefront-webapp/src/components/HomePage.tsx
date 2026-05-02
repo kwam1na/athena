@@ -49,7 +49,7 @@ export default function HomePage({
   const footerRef = useRef<HTMLDivElement>(null);
   const hasTrackedLandingPageView = useRef(false);
 
-  const { store } = useStoreContext();
+  const { store, userId } = useStoreContext();
   const storeConfig = getStoreConfigV2(store);
   const { track } = useStorefrontObservability();
 
@@ -174,13 +174,14 @@ export default function HomePage({
 
   useEffect(() => {
     if (hasTrackedLandingPageView.current) return;
+    if (!userId) return;
 
     hasTrackedLandingPageView.current = true;
 
     void track(createLandingPageViewedEvent()).catch((error) => {
       console.error("Failed to track landing page view:", error);
     });
-  }, [track]);
+  }, [track, userId]);
 
   const handleClickOnLeaveReviewButton = async () => {
     openLeaveReviewModal();

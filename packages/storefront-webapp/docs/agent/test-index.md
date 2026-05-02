@@ -33,6 +33,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/product-page/ProductPage.test.tsx`](../../src/components/product-page/ProductPage.test.tsx)
 - [`src/components/shopping-bag/ShoppingBag.test.tsx`](../../src/components/shopping-bag/ShoppingBag.test.tsx)
 - [`src/components/states/maintenance/Maintenance.test.tsx`](../../src/components/states/maintenance/Maintenance.test.tsx)
+- [`src/hooks/useQueryEnabled.test.ts`](../../src/hooks/useQueryEnabled.test.ts)
 - [`src/lib/feeUtils.test.ts`](../../src/lib/feeUtils.test.ts)
 - [`src/lib/maintenanceUtils.test.ts`](../../src/lib/maintenanceUtils.test.ts)
 - [`src/lib/storeConfig.test.ts`](../../src/lib/storeConfig.test.ts)
