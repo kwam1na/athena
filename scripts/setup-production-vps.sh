@@ -7,9 +7,10 @@ DEV_CONVEX_SITE="${DEV_CONVEX_SITE:-https://jovial-wildebeest-179.convex.site}"
 STOREFRONT_HOST="${STOREFRONT_HOST:-wigclub.store}"
 STOREFRONT_WWW_HOST="${STOREFRONT_WWW_HOST:-www.wigclub.store}"
 ATHENA_HOST="${ATHENA_HOST:-athena.wigclub.store}"
-QA_HOST="${QA_HOST:-qa.wigclub.store}"
+STOREFRONT_QA_HOST="${STOREFRONT_QA_HOST:-qa.wigclub.store}"
 ATHENA_QA_HOST="${ATHENA_QA_HOST:-athena-qa.wigclub.store}"
-QA_PORT="${QA_PORT:-5175}"
+ATHENA_QA_PORT="${ATHENA_QA_PORT:-${QA_PORT:-5175}}"
+STOREFRONT_QA_PORT="${STOREFRONT_QA_PORT:-5176}"
 API_HOST="${API_HOST:-api.wigclub.store}"
 DEV_API_HOST="${DEV_API_HOST:-dev.wigclub.store}"
 
@@ -71,10 +72,19 @@ server {
 
 server {
     listen 80;
-    server_name $QA_HOST;
+    server_name $STOREFRONT_QA_HOST;
 
     location / {
-        return 204;
+        proxy_pass http://127.0.0.1:$STOREFRONT_QA_PORT;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
     }
 }
 
@@ -83,7 +93,7 @@ server {
     server_name $ATHENA_QA_HOST;
 
     location / {
-        proxy_pass http://127.0.0.1:$QA_PORT;
+        proxy_pass http://127.0.0.1:$ATHENA_QA_PORT;
         proxy_http_version 1.1;
 
         proxy_set_header Host \$host;

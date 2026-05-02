@@ -6,8 +6,10 @@ REMOTE_REPO="${REMOTE_REPO:-git@github.com:kwam1na/athena.git}"
 REMOTE_SOURCE_DIR="${REMOTE_SOURCE_DIR:-/root/athena/repo}"
 DEPLOY_REF="${DEPLOY_REF:-origin/main}"
 ATHENA_ROOT="${ATHENA_ROOT:-/root/athena}"
-QA_PORT="${QA_PORT:-5175}"
-QA_HOST="${QA_HOST:-athena-qa.wigclub.store}"
+ATHENA_QA_PORT="${ATHENA_QA_PORT:-${QA_PORT:-5175}}"
+STOREFRONT_QA_PORT="${STOREFRONT_QA_PORT:-5176}"
+ATHENA_QA_HOST="${ATHENA_QA_HOST:-${QA_HOST:-athena-qa.wigclub.store}}"
+STOREFRONT_QA_HOST="${STOREFRONT_QA_HOST:-qa.wigclub.store}"
 
 PROD_CONVEX_CLOUD="${PROD_CONVEX_CLOUD:-https://colorless-cardinal-870.convex.cloud}"
 PROD_CONVEX_SITE="${PROD_CONVEX_SITE:-https://colorless-cardinal-870.convex.site}"
@@ -25,7 +27,9 @@ Commands:
   athena            Build and deploy the production Athena admin app.
   storefront        Build and deploy the production storefront.
   valkey-proxy      Install and restart the Valkey proxy from the remote checkout.
-  qa                Refresh the QA dev server from the remote checkout.
+  qa                Refresh both QA dev servers from the remote checkout.
+  qa-athena         Refresh the Athena admin QA dev server.
+  qa-storefront     Refresh the storefront QA dev server.
   convex-prod       Deploy Convex from the local checkout.
   full-prod         Deploy Convex, Athena admin, storefront, and Valkey proxy.
   all               Deploy full-prod and refresh QA.
@@ -231,15 +235,16 @@ pm2 save
 REMOTE_SCRIPT
 }
 
-deploy_qa() {
-  remote_script "$REMOTE_SOURCE_DIR" "$QA_PORT" "$DEV_CONVEX_CLOUD" "$DEV_CONVEX_SITE" "$STOREFRONT_URL" <<'REMOTE_SCRIPT'
+deploy_athena_qa() {
+  remote_script "$REMOTE_SOURCE_DIR" "$ATHENA_QA_PORT" "$DEV_CONVEX_CLOUD" "$DEV_CONVEX_SITE" "$STOREFRONT_URL" "$ATHENA_QA_HOST" <<'REMOTE_SCRIPT'
 set -euo pipefail
 
 REMOTE_SOURCE_DIR="$1"
-QA_PORT="$2"
+ATHENA_QA_PORT="$2"
 DEV_CONVEX_CLOUD="$3"
 DEV_CONVEX_SITE="$4"
 STOREFRONT_URL="$5"
+ATHENA_QA_HOST="$6"
 
 export BUN_INSTALL="${BUN_INSTALL:-/root/.bun}"
 export PATH="$BUN_INSTALL/bin:$PATH"
@@ -253,16 +258,44 @@ fi
 VITE_CONVEX_URL="$DEV_CONVEX_CLOUD" \
 VITE_API_GATEWAY_URL="$DEV_CONVEX_SITE" \
 VITE_STOREFRONT_URL="$STOREFRONT_URL" \
-  pm2 start bun --name athena-qa -- run dev -- --host 127.0.0.1 --port "$QA_PORT" --strictPort
+  pm2 start bun --name athena-qa -- run dev -- --host 127.0.0.1 --port "$ATHENA_QA_PORT" --strictPort
 
 pm2 save
 
-cat >&2 <<'MESSAGE'
-
-QA is a Vite dev server exposed through athena-qa.wigclub.store.
-Protect it with Cloudflare Access or equivalent edge auth before sharing it broadly.
-MESSAGE
+printf '\nAthena QA is a Vite dev server exposed through %s.\nProtect it with Cloudflare Access or equivalent edge auth before sharing it broadly.\n' "$ATHENA_QA_HOST" >&2
 REMOTE_SCRIPT
+}
+
+deploy_storefront_qa() {
+  remote_script "$REMOTE_SOURCE_DIR" "$STOREFRONT_QA_PORT" "$DEV_CONVEX_SITE" "$STOREFRONT_QA_HOST" <<'REMOTE_SCRIPT'
+set -euo pipefail
+
+REMOTE_SOURCE_DIR="$1"
+STOREFRONT_QA_PORT="$2"
+DEV_CONVEX_SITE="$3"
+STOREFRONT_QA_HOST="$4"
+
+export BUN_INSTALL="${BUN_INSTALL:-/root/.bun}"
+export PATH="$BUN_INSTALL/bin:$PATH"
+
+cd "$REMOTE_SOURCE_DIR/packages/storefront-webapp"
+
+if pm2 describe storefront-qa >/dev/null 2>&1; then
+  pm2 delete storefront-qa
+fi
+
+VITE_API_URL="$DEV_CONVEX_SITE" \
+  pm2 start bun --name storefront-qa -- run dev -- --host 127.0.0.1 --port "$STOREFRONT_QA_PORT" --strictPort
+
+pm2 save
+
+printf '\nStorefront QA is a Vite dev server exposed through %s.\nProtect it with Cloudflare Access or equivalent edge auth before sharing it broadly.\n' "$STOREFRONT_QA_HOST" >&2
+REMOTE_SCRIPT
+}
+
+deploy_qa() {
+  deploy_athena_qa
+  deploy_storefront_qa
 }
 
 deploy_convex_prod() {
@@ -435,7 +468,7 @@ systemctl is-active nginx cloudflared valkey-server || true
 pm2 list
 
 printf '%s\n' '--- listeners ---'
-ss -tulpn | grep -E ':(80|3000|5175)\b' || true
+ss -tulpn | grep -E ':(80|3000|5175|5176)\b' || true
 REMOTE_SCRIPT
 }
 
@@ -465,7 +498,15 @@ case "$command" in
     ;;
   qa)
     require_remote_source "$REMOTE_REPO" "$REMOTE_SOURCE_DIR" "$DEPLOY_REF"
-    deploy_qa "$REMOTE_SOURCE_DIR" "$QA_PORT" "$DEV_CONVEX_CLOUD" "$DEV_CONVEX_SITE" "$STOREFRONT_URL"
+    deploy_qa
+    ;;
+  qa-athena)
+    require_remote_source "$REMOTE_REPO" "$REMOTE_SOURCE_DIR" "$DEPLOY_REF"
+    deploy_athena_qa
+    ;;
+  qa-storefront)
+    require_remote_source "$REMOTE_REPO" "$REMOTE_SOURCE_DIR" "$DEPLOY_REF"
+    deploy_storefront_qa
     ;;
   convex-prod)
     deploy_convex_prod
@@ -483,7 +524,7 @@ case "$command" in
     deploy_athena "$REMOTE_SOURCE_DIR" "$ATHENA_ROOT"
     deploy_storefront "$REMOTE_SOURCE_DIR" "$ATHENA_ROOT"
     deploy_valkey_proxy "$REMOTE_SOURCE_DIR" "$ATHENA_ROOT"
-    deploy_qa "$REMOTE_SOURCE_DIR" "$QA_PORT" "$DEV_CONVEX_CLOUD" "$DEV_CONVEX_SITE" "$STOREFRONT_URL"
+    deploy_qa
     ;;
   rollback)
     rollback_static_app "${2:-}" "${3:-}"

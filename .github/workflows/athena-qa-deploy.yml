@@ -23,9 +23,42 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
 
       - name: Validate deploy scripts
         run: bash -n scripts/deploy-vps.sh scripts/deploy-qa-vps.sh
+
+      - name: Determine QA deploy targets
+        id: qa-targets
+        run: |
+          set -euo pipefail
+
+          echo "athena=true" >> "$GITHUB_OUTPUT"
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "storefront=true" >> "$GITHUB_OUTPUT"
+            echo "shared=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if git rev-parse HEAD^ >/dev/null 2>&1; then
+            changed_files="$(git diff --name-only HEAD^ HEAD)"
+          else
+            changed_files="$(git show --pretty='' --name-only HEAD)"
+          fi
+
+          if printf '%s\n' "$changed_files" | grep -E '^(scripts/deploy-vps\.sh|scripts/deploy-qa-vps\.sh|scripts/setup-production-vps\.sh|\.github/workflows/athena-qa-deploy\.yml)$' >/dev/null; then
+            echo "storefront=true" >> "$GITHUB_OUTPUT"
+            echo "shared=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if printf '%s\n' "$changed_files" | grep -E '^packages/storefront-webapp/' >/dev/null; then
+            echo "storefront=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "storefront=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Configure SSH
         env:
@@ -68,18 +101,38 @@ jobs:
       - name: Check VPS access
         run: ssh athena-qa-vps 'true'
 
-      - name: Deploy QA
+      - name: Deploy Athena QA
         env:
           DEPLOY_REF: ${{ github.sha }}
           REMOTE: athena-qa-vps
-        run: scripts/deploy-vps.sh qa
+        run: scripts/deploy-vps.sh qa-athena
 
-      - name: Smoke check QA nginx route
+      - name: Deploy Storefront QA
+        if: steps.qa-targets.outputs.storefront == 'true' || steps.qa-targets.outputs.shared == 'true'
+        env:
+          DEPLOY_REF: ${{ github.sha }}
+          REMOTE: athena-qa-vps
+        run: scripts/deploy-vps.sh qa-storefront
+
+      - name: Smoke check Athena QA nginx route
         run: |
           set -euo pipefail
           ssh athena-qa-vps 'for attempt in $(seq 1 12); do
             if curl -fsS -I -H "Host: athena-qa.wigclub.store" http://127.0.0.1/ >/tmp/athena-qa-smoke.headers; then
               head -n 1 /tmp/athena-qa-smoke.headers
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1'
+
+      - name: Smoke check storefront QA nginx route
+        if: steps.qa-targets.outputs.storefront == 'true' || steps.qa-targets.outputs.shared == 'true'
+        run: |
+          set -euo pipefail
+          ssh athena-qa-vps 'for attempt in $(seq 1 12); do
+            if curl -fsS -I -H "Host: qa.wigclub.store" http://127.0.0.1/ >/tmp/storefront-qa-smoke.headers; then
+              head -n 1 /tmp/storefront-qa-smoke.headers
               exit 0
             fi
             sleep 5
