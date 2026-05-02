@@ -65,6 +65,7 @@ async function createFixtureRepo() {
       "- `athena-convex-storefront-composition`",
       "- `athena-convex-storefront-failure-visibility`",
       "- `valkey-proxy-local-request-response`",
+      "- `storefront-backend-first-load`",
       "- `storefront-checkout-bootstrap`",
       "- `storefront-checkout-validation-blocker`",
       "- `storefront-checkout-verification-recovery`",
@@ -188,6 +189,7 @@ async function createFixtureRepo() {
         "- `athena-convex-storefront-composition`",
         "- `athena-convex-storefront-failure-visibility`",
         "- `valkey-proxy-local-request-response`",
+        "- `storefront-backend-first-load`",
         "- `storefront-checkout-bootstrap`",
         "- `storefront-checkout-validation-blocker`",
         "- `storefront-checkout-verification-recovery`",
@@ -361,6 +363,7 @@ async function createFixtureRepo() {
       "- `athena-convex-storefront-composition`",
       "- `athena-convex-storefront-failure-visibility`",
       "- `valkey-proxy-local-request-response`",
+      "- `storefront-backend-first-load`",
       "- `storefront-checkout-bootstrap`",
       "- `storefront-checkout-validation-blocker`",
       "- `storefront-checkout-verification-recovery`",
@@ -600,6 +603,7 @@ describe("validateHarnessDocs", () => {
       "- `athena-convex-storefront-composition`",
       "- `athena-convex-storefront-failure-visibility`",
       "- `valkey-proxy-local-request-response`",
+      "- `storefront-backend-first-load`",
       "- `storefront-checkout-bootstrap`",
       "- `storefront-checkout-validation-blocker`",
       "- `storefront-checkout-verification-recovery`",
@@ -837,7 +841,7 @@ describe("validateHarnessDocs", () => {
     );
 
     await expect(validateHarnessDocs(rootDir)).resolves.toContain(
-      "Runtime behavior scenario docs drift in packages/athena-webapp/docs/agent/testing.md: missing `athena-admin-shell-boot`, `athena-convex-storefront-composition`, `athena-convex-storefront-failure-visibility`, `storefront-checkout-bootstrap`, `storefront-checkout-validation-blocker`, `storefront-checkout-verification-recovery`, `valkey-proxy-local-request-response`. Run `bun run harness:behavior --list` and sync this list to scripts/harness-behavior-scenarios.ts."
+      "Runtime behavior scenario docs drift in packages/athena-webapp/docs/agent/testing.md: missing `athena-admin-shell-boot`, `athena-convex-storefront-composition`, `athena-convex-storefront-failure-visibility`, `storefront-backend-first-load`, `storefront-checkout-bootstrap`, `storefront-checkout-validation-blocker`, `storefront-checkout-verification-recovery`, `valkey-proxy-local-request-response`. Run `bun run harness:behavior --list` and sync this list to scripts/harness-behavior-scenarios.ts."
     );
   });
 });

@@ -87,6 +87,7 @@ export type HarnessBehaviorPlaywrightFlowOptions<TStepResult> = {
   env?: NodeJS.ProcessEnv;
   playwrightModule?: HarnessBehaviorPlaywrightModule;
   installChromium?: () => Promise<void>;
+  setupPage?: (context: { page: HarnessBehaviorPlaywrightPage }) => Promise<void> | void;
   steps: (context: { page: HarnessBehaviorPlaywrightPage }) => Promise<TStepResult>;
 };
 
@@ -853,7 +854,39 @@ export type HarnessBehaviorPlaywrightPage = {
     url: string,
     options?: { waitUntil?: "load" | "domcontentloaded" | "networkidle"; timeout?: number }
   ) => Promise<unknown>;
-  on: (event: "console", handler: (message: { text: () => string }) => void) => void;
+  on: (
+    event: "console",
+    handler: (message: { text: () => string }) => void
+  ) => void;
+  on: (
+    event: "request",
+    handler: (request: {
+      url: () => string;
+      method: () => string;
+      resourceType: () => string;
+      failure: () => { errorText: string } | null;
+    }) => void
+  ) => void;
+  on: (
+    event: "requestfailed",
+    handler: (request: {
+      url: () => string;
+      method: () => string;
+      resourceType: () => string;
+      failure: () => { errorText: string } | null;
+    }) => void
+  ) => void;
+  on: (
+    event: "response",
+    handler: (response: {
+      url: () => string;
+      status: () => number;
+      request: () => {
+        method: () => string;
+        resourceType: () => string;
+      };
+    }) => void
+  ) => void;
   getByRole: (
     role: string,
     options: { name: string | RegExp }
@@ -863,6 +896,10 @@ export type HarnessBehaviorPlaywrightPage = {
     options?: { timeout?: number }
   ) => Promise<unknown>;
   textContent: (selector: string) => Promise<string | null>;
+  waitForResponse: (
+    predicate: (response: { url: () => string; status: () => number }) => boolean,
+    options?: { timeout?: number }
+  ) => Promise<unknown>;
   video: () =>
     | {
         path: () => Promise<string>;
@@ -995,6 +1032,7 @@ export async function runPlaywrightFlow<TStepResult>(
     page.on("console", (message) => {
       consoleMessages.push(message.text());
     });
+    await options.setupPage?.({ page });
     await page.goto(options.url, {
       waitUntil: "networkidle",
     });

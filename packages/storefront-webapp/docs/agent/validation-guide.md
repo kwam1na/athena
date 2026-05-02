@@ -24,6 +24,10 @@ Run:
 - `bun run --filter '@athena/storefront-webapp' build`
 - `bunx tsc --noEmit -p packages/storefront-webapp/tsconfig.json`
 
+Behavior scenarios:
+
+- `storefront-backend-first-load`
+
 Use this when the Vite browser bootstrap, package manifest, generated router state, or TypeScript/build wiring changes.
 
 ## Shared-lib, utility, or API-wrapper edits
@@ -34,6 +38,10 @@ Run:
 
 - `bun run --filter '@athena/storefront-webapp' test`
 - `bunx tsc --noEmit -p packages/storefront-webapp/tsconfig.json`
+
+Behavior scenarios:
+
+- `storefront-backend-first-load`
 
 These surfaces fan out widely across the app, so pair the default suite with a typecheck when shared helpers change.
 

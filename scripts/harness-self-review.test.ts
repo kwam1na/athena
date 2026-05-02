@@ -100,6 +100,7 @@ async function createFixtureRepo() {
       "- `athena-convex-storefront-composition`",
       "- `athena-convex-storefront-failure-visibility`",
       "- `valkey-proxy-local-request-response`",
+      "- `storefront-backend-first-load`",
       "- `storefront-checkout-bootstrap`",
       "- `storefront-checkout-validation-blocker`",
       "- `storefront-checkout-verification-recovery`",
@@ -272,6 +273,7 @@ async function createFixtureRepo() {
       "Behavior scenarios:",
       "",
       "- `valkey-proxy-local-request-response`",
+      "- `storefront-backend-first-load`",
     ].join("\n"),
     rootDir
   );
