@@ -38,6 +38,7 @@ describe("VPS QA deploy contract", () => {
     expect(deployScript).toContain("pm2 start bun --name storefront-qa");
     expect(deployScript).toContain('VITE_API_URL="$DEV_CONVEX_SITE"');
     expect(deployScript).toContain('STOREFRONT_QA_HOST="$STOREFRONT_QA_HOST"');
+    expect(deployScript).not.toContain('VITE_STOREFRONT_URL="$STOREFRONT_URL"');
   });
 
   it("deploys storefront QA only for storefront changes and both QA surfaces for shared deploy changes", async () => {

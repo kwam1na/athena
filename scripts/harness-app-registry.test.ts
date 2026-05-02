@@ -219,6 +219,7 @@ describe("HARNESS_APP_REGISTRY", () => {
     expect(routeScenario?.note).toBe(
       "Use this for authenticated dashboard flows, service-management screens, route trees, and UI behavior changes that stay inside the frontend shell."
     );
+    expect(routeScenario?.touchedPaths).toContain("src/config.test.ts");
   });
 
   it("documents cash-controls workflow validation coverage in Athena harness docs", () => {

@@ -165,6 +165,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/ui/calendar.test.tsx`](../../src/components/ui/calendar.test.tsx)
 - [`src/components/ui/primitives.test.tsx`](../../src/components/ui/primitives.test.tsx)
 - [`src/components/users/TimelineEventCard.test.tsx`](../../src/components/users/TimelineEventCard.test.tsx)
+- [`src/config.test.ts`](../../src/config.test.ts)
 - [`src/design-system-build-config.test.ts`](../../src/design-system-build-config.test.ts)
 - [`src/hooks/useAuth.test.tsx`](../../src/hooks/useAuth.test.tsx)
 - [`src/hooks/useBulkOperations.test.ts`](../../src/hooks/useBulkOperations.test.ts)

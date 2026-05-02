@@ -269,6 +269,7 @@ export const HARNESS_APP_REGISTRY = [
         touchedPaths: [
           "src/assets",
           "src/config.ts",
+          "src/config.test.ts",
           "src/routes",
           "src/components",
           "src/hooks",
