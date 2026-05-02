@@ -56,6 +56,18 @@ npm install
 npm run dev
 ```
 
+## Production Binding
+
+The proxy binds to `127.0.0.1` by default so cache mutation endpoints are not exposed on the VPS public network interface. Cloudflare Tunnel can still reach the service through `http://localhost:3000`.
+
+Use `VALKEY_PROXY_HOST` only when a deployment intentionally needs a different bind address:
+
+```bash
+VALKEY_PROXY_HOST=127.0.0.1 PORT=3000 npm start
+```
+
+The default Redis client mode is standalone local Valkey, which matches the VPS setup. Set `VALKEY_CLUSTER=true` only when the target cache is a Valkey/Redis cluster.
+
 ## Troubleshooting
 
 1. Run `npm test` first to verify the local handler layer still behaves correctly.

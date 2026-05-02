@@ -1,11 +1,11 @@
 const {
   attachRedisLogging,
   createApp,
-  createRedisCluster,
+  createRedisClient,
   startServer,
 } = require("./app");
 
-const redis = attachRedisLogging(createRedisCluster());
+const redis = attachRedisLogging(createRedisClient());
 const app = createApp({ redis, logger: console });
 
 if (require.main === module) {

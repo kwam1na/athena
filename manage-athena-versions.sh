@@ -17,6 +17,7 @@ REMOTE="$REMOTE_USER@$REMOTE_HOST"
 
 # Local paths
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEPLOY_VPS_SCRIPT="$SCRIPT_DIR/scripts/deploy-vps.sh"
 
 resolve_repo_root() {
   if [ -n "$ATHENA_REPO_ROOT" ]; then
@@ -37,10 +38,6 @@ resolve_repo_root() {
 }
 
 REPO_ROOT="$(resolve_repo_root)"
-ATHENA_WEBAPP_DIR="$REPO_ROOT/packages/athena-webapp"
-STOREFRONT_DIR="$REPO_ROOT/packages/storefront-webapp"
-VALKEY_PROXY_DIR="$REPO_ROOT/packages/valkey-proxy-server"
-
 # =============================================
 # Helper Functions
 # =============================================
@@ -105,92 +102,17 @@ extract_version() {
   fi
 }
 
-# Generate a random fun name for deployments
-generate_fun_name() {
-  local adjectives=(brave clever happy quick silent wild gentle proud tiny wise)
-  local nouns=(tiger eagle panda fox whale lion wolf bear owl dolphin)
-  local verbs=(jumps runs flies swims roars climbs glides prowls soars dashes)
-  local adj=${adjectives[$RANDOM % ${#adjectives[@]}]}
-  local noun=${nouns[$RANDOM % ${#nouns[@]}]}
-  local verb=${verbs[$RANDOM % ${#verbs[@]}]}
-  echo "$adj-$noun-$verb"
-}
-
-# Deploy a specific app
-deploy_app() {
-  local app_name="$1"
-  local app_dir="$2"
-  local env_vars="$3"
-  
-  echo "Building and deploying $app_name..."
-  
-  # Generate deployment info
-  local timestamp=$(date +%Y%m%d%H%M%S)
-  local fun_name=$(generate_fun_name)
-  local version_path="/root/athena/$app_name/versions/$timestamp"
-  local symlink_path="/root/athena/$app_name/current"
-  
-  # Build the app
-  echo "Building $app_name..."
-  cd "$app_dir" || { echo "Failed to change to $app_dir"; return 1; }
-  local git_branch=$(git -C "$app_dir" branch --show-current 2>/dev/null || echo "unknown")
-  local git_commit=$(git -C "$app_dir" rev-parse --short HEAD 2>/dev/null || echo "unknown")
-  echo "Build source: $app_dir ($git_branch@$git_commit)"
-  eval "$env_vars bun run build" || { echo "Build failed"; return 1; }
-  
-  # Deploy to server
-  echo "Deploying to server..."
-  ssh "$REMOTE" "mkdir -p $version_path && echo '$fun_name' > $version_path/fun-name.txt" || return 1
-  scp -r dist/* "$REMOTE:$version_path" || return 1
-  ssh "$REMOTE" "ln -sfn $version_path $symlink_path" || return 1
-  
-  echo "✅ Deployed $app_name version: $fun_name ($timestamp)"
-}
-
-# Copy valkey proxy server to remote server
-copy_valkey_proxy() {
-  echo "Deploying valkey-proxy-server to server..."
-  
-  if [ ! -d "$VALKEY_PROXY_DIR" ]; then
-    echo "Error: valkey-proxy-server directory not found at $VALKEY_PROXY_DIR"
-    return 1
-  fi
-  
-  scp -r "$VALKEY_PROXY_DIR" "$REMOTE:/root/"
-  
-  if [ $? -eq 0 ]; then
-    echo "✅ Successfully deployed valkey-proxy-server to server"
-  else
-    echo "❌ Failed to deploy valkey-proxy-server to server"
-    return 1
-  fi
-}
-
 # =============================================
 # Deployment Functions
 # =============================================
 
-deploy_convex() {
-  echo "Deploying Convex backend..."
-  npx convex deploy || { echo "Convex deployment failed"; return 1; }
-  echo "✅ Convex backend deployed successfully"
-}
+deploy_vps() {
+  if [ ! -x "$DEPLOY_VPS_SCRIPT" ]; then
+    echo "Error: authoritative deploy script not found or not executable at $DEPLOY_VPS_SCRIPT"
+    return 1
+  fi
 
-deploy_athena() {
-  local env_vars="VITE_CONVEX_URL=https://colorless-cardinal-870.convex.cloud \
-    VITE_API_GATEWAY_URL='https://colorless-cardinal-870.convex.site' \
-    VITE_STOREFRONT_URL='https://wigclub.store'"
-  deploy_app "athena-webapp" "$ATHENA_WEBAPP_DIR" "$env_vars"
-}
-
-deploy_storefront() {
-  local env_vars="VITE_API_URL='https://api.wigclub.store'"
-  deploy_app "storefront" "$STOREFRONT_DIR" "$env_vars"
-}
-
-full_deploy_athena() {
-  deploy_convex || return 1
-  deploy_athena
+  "$DEPLOY_VPS_SCRIPT" "$@"
 }
 
 # =============================================
@@ -213,7 +135,7 @@ fi
 # Handle deployment operations
 if [ "$OPERATION" = "deploy" ]; then
   # Select app to deploy
-  APP=$(printf "athena-webapp\nstorefront\nconvex\nfull-deploy\nvalkey-proxy" | fzf --prompt="Select app to deploy: ")
+  APP=$(printf "athena-webapp\nstorefront\nconvex\nfull-deploy\nvalkey-proxy\nqa\nall" | fzf --prompt="Select app to deploy: ")
   if [ -z "$APP" ]; then
     echo "No app selected. Aborting."
     exit 1
@@ -221,19 +143,25 @@ if [ "$OPERATION" = "deploy" ]; then
 
   case "$APP" in
     "athena-webapp")
-      deploy_athena
+      deploy_vps athena
       ;;
     "storefront")
-      deploy_storefront
+      deploy_vps storefront
       ;;
     "convex")
-      deploy_convex
+      deploy_vps convex-prod
       ;;
     "full-deploy")
-      full_deploy_athena
+      deploy_vps full-prod
       ;;
     "valkey-proxy")
-      copy_valkey_proxy
+      deploy_vps valkey-proxy
+      ;;
+    "qa")
+      deploy_vps qa
+      ;;
+    "all")
+      deploy_vps all
       ;;
   esac
   exit 0
@@ -272,8 +200,8 @@ if [ "$OPERATION" = "rollback" ]; then
   
   echo "Rolling back $APP from version $CURRENT_VERSION${CURRENT_FUN_NAME:+ ($CURRENT_FUN_NAME)} to version $SELECTED_VERSION..."
 
-  # Perform rollback
-  ssh "$REMOTE" "ln -sfn $VERSIONS_DIR/$SELECTED_VERSION $SYMLINK_PATH"
+  # Perform rollback through the authoritative deploy script.
+  deploy_vps rollback "$APP" "$SELECTED_VERSION"
 
   # Get selected version's fun name for success message
   SELECTED_FUN_NAME=$(get_fun_name "$SELECTED_VERSION")

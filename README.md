@@ -71,6 +71,57 @@ Run the storefront app:
 bun run --filter '@athena/storefront-webapp' dev
 ```
 
+## VPS Agent Readiness
+
+For a remote deployment, point the agent at
+[docs/deployment/vps-production.md](./docs/deployment/vps-production.md) as the
+authoritative runbook. Before the agent starts, the VPS and external accounts
+need the small amount of access that cannot be created from inside the repo:
+
+- **Root SSH access:** the agent must be able to reach the VPS as `root`, either
+  through an SSH alias such as `ssh-do` or a direct `ssh root@<vps-ip>` target.
+- **Ubuntu with `apt`:** the bootstrap script assumes a fresh Ubuntu-style VPS.
+  It installs nginx, git, Node.js 22, PM2, Valkey, rsync, and related packages.
+- **Cloudflare Tunnel credential or token:** provide either the tunnel
+  credential JSON for `/etc/cloudflared/` or the Cloudflare dashboard's tunnel
+  install token. These secrets must stay out of the repo.
+- **Cloudflare DNS and tunnel permissions:** the agent needs account access if
+  it should create or update hostname routes such as `athena-qa.wigclub.store`.
+  Otherwise, create those routes before handing over.
+- **GitHub deploy key registration:** the agent can generate the VPS SSH key,
+  but a human or GitHub-authorized agent must add the public key to the
+  `kwam1na/athena` repo as a deploy key before `scripts/deploy-vps.sh check-git`
+  can pass.
+- **Convex deploy auth, if needed:** only required when the agent should run
+  `scripts/deploy-vps.sh convex-prod`. Static app deploys and QA can point at
+  existing Convex deployments.
+
+Once those prerequisites are in place, the agent should follow the deployment
+runbook, starting with:
+
+```bash
+scripts/setup-production-vps.sh
+scripts/deploy-vps.sh check-git
+scripts/deploy-vps.sh all
+```
+
+The setup script owns the nginx bootstrap. It writes the Athena config to
+`/etc/nginx/conf.d/wigclub.conf`, disables Ubuntu's default enabled site, and
+the runbook includes the nginx verification commands the agent should run before
+checking Cloudflare.
+
+QA deploys are automatic after merges to `main` through the
+`Athena QA Deploy` GitHub Actions workflow. The workflow uses the same
+`scripts/deploy-vps.sh qa` path and requires the QA VPS SSH secrets documented
+in the deployment runbook.
+
+Production static app rollback is also script-backed. Use
+`scripts/deploy-vps.sh rollback athena previous` or
+`scripts/deploy-vps.sh rollback storefront <version>` locally, or run the
+manual `Athena Production Rollback` GitHub Actions workflow. New static
+deployments keep timestamped version directories and write `deploy.json`
+metadata with the Git SHA and deployment time for rollback auditability.
+
 ## Backend Shape
 
 The primary backend lives in `packages/athena-webapp/convex`.

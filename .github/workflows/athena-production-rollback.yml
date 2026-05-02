@@ -1,0 +1,107 @@
+name: Athena Production Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: Static app to roll back.
+        required: true
+        type: choice
+        options:
+          - athena
+          - storefront
+      version:
+        description: Version timestamp to restore, or "previous".
+        required: true
+        type: string
+        default: previous
+
+permissions:
+  contents: read
+
+concurrency:
+  group: athena-production-rollback-${{ inputs.app }}
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    name: Roll Back ${{ inputs.app }}
+    if: github.repository == 'kwam1na/athena'
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate deploy script
+        run: bash -n scripts/deploy-vps.sh
+
+      - name: Configure SSH
+        env:
+          ATHENA_VPS_HOST: ${{ secrets.ATHENA_VPS_HOST }}
+          ATHENA_VPS_USER: ${{ secrets.ATHENA_VPS_USER }}
+          ATHENA_VPS_SSH_PRIVATE_KEY: ${{ secrets.ATHENA_VPS_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${ATHENA_VPS_HOST:-}" ]; then
+            echo "Missing ATHENA_VPS_HOST secret." >&2
+            exit 1
+          fi
+
+          if [ -z "${ATHENA_VPS_SSH_PRIVATE_KEY:-}" ]; then
+            echo "Missing ATHENA_VPS_SSH_PRIVATE_KEY secret." >&2
+            exit 1
+          fi
+
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+
+          printf '%s\n' "$ATHENA_VPS_SSH_PRIVATE_KEY" > "$HOME/.ssh/athena_vps_deploy"
+          chmod 600 "$HOME/.ssh/athena_vps_deploy"
+
+          ssh-keyscan -H "$ATHENA_VPS_HOST" >> "$HOME/.ssh/known_hosts"
+
+          cat > "$HOME/.ssh/config" <<SSH_CONFIG
+          Host athena-vps
+            HostName $ATHENA_VPS_HOST
+            User ${ATHENA_VPS_USER:-root}
+            IdentityFile $HOME/.ssh/athena_vps_deploy
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            BatchMode yes
+          SSH_CONFIG
+
+          chmod 600 "$HOME/.ssh/config"
+
+      - name: Show available versions
+        env:
+          REMOTE: athena-vps
+        run: scripts/deploy-vps.sh versions "${{ inputs.app }}"
+
+      - name: Roll back static app
+        env:
+          REMOTE: athena-vps
+        run: scripts/deploy-vps.sh rollback "${{ inputs.app }}" "${{ inputs.version }}"
+
+      - name: Smoke check rolled back app
+        env:
+          APP: ${{ inputs.app }}
+        run: |
+          set -euo pipefail
+
+          case "$APP" in
+            athena)
+              host="athena.wigclub.store"
+              ;;
+            storefront)
+              host="wigclub.store"
+              ;;
+            *)
+              echo "Unsupported app: $APP" >&2
+              exit 1
+              ;;
+          esac
+
+          ssh athena-vps "curl -fsS -I -H \"Host: $host\" http://127.0.0.1/ | head -n 1"
