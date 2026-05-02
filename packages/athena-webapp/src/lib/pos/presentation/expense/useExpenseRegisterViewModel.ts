@@ -611,7 +611,7 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
             onDismiss: handleNavigateBack,
           }
         : null,
-    closeoutApprovalDialog: null,
+    commandApprovalDialog: null,
     onNavigateBack: handleNavigateBack,
   };
 }

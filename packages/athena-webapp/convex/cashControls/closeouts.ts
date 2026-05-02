@@ -385,16 +385,22 @@ export function buildRegisterSessionVarianceApprovalRequirement(args: {
       args.closeoutReview.reason ??
       "Manager approval is required before this register session can close.",
     requiredRole: "manager",
-    resolutionModes: [
-      {
-        kind: "inline_manager_proof",
-      },
-      {
-        approvalRequestId: args.approvalRequestId,
-        kind: "async_request",
-        requestType: "variance_review",
-      },
-    ],
+    resolutionModes: args.approvalRequestId
+      ? [
+          {
+            kind: "inline_manager_proof",
+          },
+          {
+            approvalRequestId: args.approvalRequestId,
+            kind: "async_request",
+            requestType: "variance_review",
+          },
+        ]
+      : [
+          {
+            kind: "inline_manager_proof",
+          },
+        ],
     selfApproval: "allowed",
     subject: {
       id: args.registerSession._id,
@@ -703,6 +709,33 @@ export const submitRegisterSessionCloseout = mutation({
       }
 
       approvedByStaffProfileId = proof.data.approvedByStaffProfileId;
+    }
+
+    if (
+      closeoutReview.requiresApproval &&
+      !args.approvalProofId &&
+      args.actorStaffProfileId &&
+      registerSession.organizationId
+    ) {
+      const actorCanReviewVariance = await staffProfileCanReviewCloseoutVariance(
+        ctx,
+        {
+          organizationId: registerSession.organizationId,
+          staffProfileId: args.actorStaffProfileId,
+          storeId: args.storeId,
+        },
+      );
+
+      if (actorCanReviewVariance) {
+        return approvalRequired(
+          buildRegisterSessionVarianceApprovalRequirement({
+            closeoutReview,
+            countedCash: args.countedCash,
+            expectedCash: registerSession.expectedCash,
+            registerSession,
+          }),
+        );
+      }
     }
 
     const closingSession = await ctx.runMutation(

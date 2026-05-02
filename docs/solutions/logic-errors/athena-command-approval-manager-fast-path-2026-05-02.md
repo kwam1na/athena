@@ -27,9 +27,10 @@ If proof minting succeeds, the runner retries the same command with `approvalPro
 - Do not store or reuse PIN hashes. Pass the current modal submission credentials directly into one immediate proof attempt.
 - Do not replace `CommandApprovalDialog`. It remains the fallback when the same-submission fast path is unavailable.
 - Keep audit and trace behavior server-owned through approval proof creation/consumption and the domain command.
+- For POS register closeout, manager actors should receive an inline-only server-returned requirement before async approval request creation. Non-manager actors should continue through the async approval request rail.
 
 ## Current Consumers
 
 - Transaction payment-method correction uses the same staff-auth submission to resolve the returned payment correction approval requirement.
 - Cash-controls register-session closeout uses the shared runner instead of bespoke manager variance logic.
-- POS register closeout routes through the same coordinator contract and can fast-path only when fresh closeout credentials are available.
+- POS register closeout submits to the command first, then opens `CommandApprovalDialog` from the server-returned inline requirement for manager actors.

@@ -191,7 +191,7 @@ export interface RegisterAuthDialogState {
   onDismiss: () => void;
 }
 
-export interface RegisterCloseoutApprovalDialogState {
+export interface RegisterCommandApprovalDialogState {
   approval: CommandApprovalDialogProps["approval"];
   onApproved: CommandApprovalDialogProps["onApproved"];
   onAuthenticateForApproval: CommandApprovalDialogProps["onAuthenticateForApproval"];
@@ -227,7 +227,7 @@ export interface RegisterViewModel {
   drawerGate: RegisterDrawerGateState | null;
   closeoutControl: RegisterCloseoutControlState | null;
   authDialog: RegisterAuthDialogState | null;
-  closeoutApprovalDialog: RegisterCloseoutApprovalDialogState | null;
+  commandApprovalDialog: RegisterCommandApprovalDialogState | null;
   onNavigateBack: () => Promise<void>;
 }
 
