@@ -8531,7 +8531,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_inventory_expensesessions_test_ts",
       "source_file": "packages/athena-webapp/convex/inventory/expenseSessions.test.ts",
-      "source_location": "L145",
+      "source_location": "L149",
       "target": "expensesessions_test_buildsession",
       "weight": 1
     },
@@ -8543,7 +8543,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_inventory_expensesessions_test_ts",
       "source_file": "packages/athena-webapp/convex/inventory/expenseSessions.test.ts",
-      "source_location": "L35",
+      "source_location": "L39",
       "target": "expensesessions_test_createmutationctx",
       "weight": 1
     },
@@ -8555,7 +8555,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_inventory_expensesessions_test_ts",
       "source_file": "packages/athena-webapp/convex/inventory/expenseSessions.test.ts",
-      "source_location": "L160",
+      "source_location": "L164",
       "target": "expensesessions_test_gethandler",
       "weight": 1
     },
@@ -8975,7 +8975,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_inventory_helpers_sessionvalidation_ts",
       "source_file": "packages/athena-webapp/convex/inventory/helpers/sessionValidation.ts",
-      "source_location": "L303",
+      "source_location": "L301",
       "target": "sessionvalidation_isvalidemail",
       "weight": 1
     },
@@ -8987,7 +8987,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_inventory_helpers_sessionvalidation_ts",
       "source_file": "packages/athena-webapp/convex/inventory/helpers/sessionValidation.ts",
-      "source_location": "L191",
+      "source_location": "L189",
       "target": "sessionvalidation_validatecartitems",
       "weight": 1
     },
@@ -8999,7 +8999,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_inventory_helpers_sessionvalidation_ts",
       "source_file": "packages/athena-webapp/convex/inventory/helpers/sessionValidation.ts",
-      "source_location": "L275",
+      "source_location": "L273",
       "target": "sessionvalidation_validatecustomerinfo",
       "weight": 1
     },
@@ -9011,7 +9011,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_inventory_helpers_sessionvalidation_ts",
       "source_file": "packages/athena-webapp/convex/inventory/helpers/sessionValidation.ts",
-      "source_location": "L248",
+      "source_location": "L246",
       "target": "sessionvalidation_validateitembelongstosession",
       "weight": 1
     },
@@ -9023,7 +9023,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_inventory_helpers_sessionvalidation_ts",
       "source_file": "packages/athena-webapp/convex/inventory/helpers/sessionValidation.ts",
-      "source_location": "L311",
+      "source_location": "L309",
       "target": "sessionvalidation_validatepaymentdetails",
       "weight": 1
     },
@@ -9059,7 +9059,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_inventory_helpers_sessionvalidation_ts",
       "source_file": "packages/athena-webapp/convex/inventory/helpers/sessionValidation.ts",
-      "source_location": "L95",
+      "source_location": "L93",
       "target": "sessionvalidation_validatesessionmodifiable",
       "weight": 1
     },
@@ -9071,7 +9071,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_inventory_helpers_sessionvalidation_ts",
       "source_file": "packages/athena-webapp/convex/inventory/helpers/sessionValidation.ts",
-      "source_location": "L140",
+      "source_location": "L138",
       "target": "sessionvalidation_validatesessionownership",
       "weight": 1
     },
@@ -13643,7 +13643,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_application_sessioncommands_test_ts",
       "source_file": "packages/athena-webapp/convex/pos/application/sessionCommands.test.ts",
-      "source_location": "L2348",
+      "source_location": "L2359",
       "target": "sessioncommands_test_builditem",
       "weight": 1
     },
@@ -13655,7 +13655,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_application_sessioncommands_test_ts",
       "source_file": "packages/athena-webapp/convex/pos/application/sessionCommands.test.ts",
-      "source_location": "L2342",
+      "source_location": "L2353",
       "target": "sessioncommands_test_buildregistersession",
       "weight": 1
     },
@@ -13667,7 +13667,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_application_sessioncommands_test_ts",
       "source_file": "packages/athena-webapp/convex/pos/application/sessionCommands.test.ts",
-      "source_location": "L2338",
+      "source_location": "L2349",
       "target": "sessioncommands_test_buildsession",
       "weight": 1
     },
@@ -13679,7 +13679,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_application_sessioncommands_test_ts",
       "source_file": "packages/athena-webapp/convex/pos/application/sessionCommands.test.ts",
-      "source_location": "L2358",
+      "source_location": "L2369",
       "target": "sessioncommands_test_createcommandservice",
       "weight": 1
     },
@@ -13691,7 +13691,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_application_sessioncommands_test_ts",
       "source_file": "packages/athena-webapp/convex/pos/application/sessionCommands.test.ts",
-      "source_location": "L2104",
+      "source_location": "L2115",
       "target": "sessioncommands_test_createdependencies",
       "weight": 1
     },
@@ -13703,7 +13703,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_application_sessioncommands_test_ts",
       "source_file": "packages/athena-webapp/convex/pos/application/sessionCommands.test.ts",
-      "source_location": "L2194",
+      "source_location": "L2205",
       "target": "sessioncommands_test_createfakerepository",
       "weight": 1
     },
@@ -13715,7 +13715,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_pos_application_sessioncommands_test_ts",
       "source_file": "packages/athena-webapp/convex/pos/application/sessionCommands.test.ts",
-      "source_location": "L2086",
+      "source_location": "L2097",
       "target": "sessioncommands_test_loadcommandservice",
       "weight": 1
     },
@@ -42191,7 +42191,7 @@
       "relation": "calls",
       "source": "sessionvalidation_validatecustomerinfo",
       "source_file": "packages/athena-webapp/convex/inventory/helpers/sessionValidation.ts",
-      "source_location": "L290",
+      "source_location": "L288",
       "target": "sessionvalidation_isvalidemail",
       "weight": 1
     },
@@ -57475,7 +57475,7 @@
       "label": "buildSession()",
       "norm_label": "buildsession()",
       "source_file": "packages/athena-webapp/convex/inventory/expenseSessions.test.ts",
-      "source_location": "L145"
+      "source_location": "L149"
     },
     {
       "community": 204,
@@ -57484,7 +57484,7 @@
       "label": "createMutationCtx()",
       "norm_label": "createmutationctx()",
       "source_file": "packages/athena-webapp/convex/inventory/expenseSessions.test.ts",
-      "source_location": "L35"
+      "source_location": "L39"
     },
     {
       "community": 204,
@@ -57493,7 +57493,7 @@
       "label": "getHandler()",
       "norm_label": "gethandler()",
       "source_file": "packages/athena-webapp/convex/inventory/expenseSessions.test.ts",
-      "source_location": "L160"
+      "source_location": "L164"
     },
     {
       "community": 204,
@@ -70858,7 +70858,7 @@
       "label": "isValidEmail()",
       "norm_label": "isvalidemail()",
       "source_file": "packages/athena-webapp/convex/inventory/helpers/sessionValidation.ts",
-      "source_location": "L303"
+      "source_location": "L301"
     },
     {
       "community": 53,
@@ -70867,7 +70867,7 @@
       "label": "validateCartItems()",
       "norm_label": "validatecartitems()",
       "source_file": "packages/athena-webapp/convex/inventory/helpers/sessionValidation.ts",
-      "source_location": "L191"
+      "source_location": "L189"
     },
     {
       "community": 53,
@@ -70876,7 +70876,7 @@
       "label": "validateCustomerInfo()",
       "norm_label": "validatecustomerinfo()",
       "source_file": "packages/athena-webapp/convex/inventory/helpers/sessionValidation.ts",
-      "source_location": "L275"
+      "source_location": "L273"
     },
     {
       "community": 53,
@@ -70885,7 +70885,7 @@
       "label": "validateItemBelongsToSession()",
       "norm_label": "validateitembelongstosession()",
       "source_file": "packages/athena-webapp/convex/inventory/helpers/sessionValidation.ts",
-      "source_location": "L248"
+      "source_location": "L246"
     },
     {
       "community": 53,
@@ -70894,7 +70894,7 @@
       "label": "validatePaymentDetails()",
       "norm_label": "validatepaymentdetails()",
       "source_file": "packages/athena-webapp/convex/inventory/helpers/sessionValidation.ts",
-      "source_location": "L311"
+      "source_location": "L309"
     },
     {
       "community": 53,
@@ -70921,7 +70921,7 @@
       "label": "validateSessionModifiable()",
       "norm_label": "validatesessionmodifiable()",
       "source_file": "packages/athena-webapp/convex/inventory/helpers/sessionValidation.ts",
-      "source_location": "L95"
+      "source_location": "L93"
     },
     {
       "community": 53,
@@ -70930,7 +70930,7 @@
       "label": "validateSessionOwnership()",
       "norm_label": "validatesessionownership()",
       "source_file": "packages/athena-webapp/convex/inventory/helpers/sessionValidation.ts",
-      "source_location": "L140"
+      "source_location": "L138"
     },
     {
       "community": 530,
@@ -78112,7 +78112,7 @@
       "label": "buildItem()",
       "norm_label": "builditem()",
       "source_file": "packages/athena-webapp/convex/pos/application/sessionCommands.test.ts",
-      "source_location": "L2348"
+      "source_location": "L2359"
     },
     {
       "community": 79,
@@ -78121,7 +78121,7 @@
       "label": "buildRegisterSession()",
       "norm_label": "buildregistersession()",
       "source_file": "packages/athena-webapp/convex/pos/application/sessionCommands.test.ts",
-      "source_location": "L2342"
+      "source_location": "L2353"
     },
     {
       "community": 79,
@@ -78130,7 +78130,7 @@
       "label": "buildSession()",
       "norm_label": "buildsession()",
       "source_file": "packages/athena-webapp/convex/pos/application/sessionCommands.test.ts",
-      "source_location": "L2338"
+      "source_location": "L2349"
     },
     {
       "community": 79,
@@ -78139,7 +78139,7 @@
       "label": "createCommandService()",
       "norm_label": "createcommandservice()",
       "source_file": "packages/athena-webapp/convex/pos/application/sessionCommands.test.ts",
-      "source_location": "L2358"
+      "source_location": "L2369"
     },
     {
       "community": 79,
@@ -78148,7 +78148,7 @@
       "label": "createDependencies()",
       "norm_label": "createdependencies()",
       "source_file": "packages/athena-webapp/convex/pos/application/sessionCommands.test.ts",
-      "source_location": "L2104"
+      "source_location": "L2115"
     },
     {
       "community": 79,
@@ -78157,7 +78157,7 @@
       "label": "createFakeRepository()",
       "norm_label": "createfakerepository()",
       "source_file": "packages/athena-webapp/convex/pos/application/sessionCommands.test.ts",
-      "source_location": "L2194"
+      "source_location": "L2205"
     },
     {
       "community": 79,
@@ -78166,7 +78166,7 @@
       "label": "loadCommandService()",
       "norm_label": "loadcommandservice()",
       "source_file": "packages/athena-webapp/convex/pos/application/sessionCommands.test.ts",
-      "source_location": "L2086"
+      "source_location": "L2097"
     },
     {
       "community": 790,

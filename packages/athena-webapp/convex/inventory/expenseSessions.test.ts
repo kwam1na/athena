@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ok } from "../../shared/commandResult";
 
 const mocks = vi.hoisted(() => ({
@@ -16,6 +16,10 @@ import {
   releaseExpenseSessionInventoryHoldsAndDeleteItems,
   updateExpenseSession,
 } from "./expenseSessions";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 type SessionRecord = {
   _id: string;
@@ -262,6 +266,7 @@ describe("expense session command results", () => {
   });
 
   it("treats stale completed session note updates as a no-op for the owning staff member", async () => {
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const ctx = createMutationCtx({
       sessions: [
         buildSession({
@@ -287,6 +292,9 @@ describe("expense session command results", () => {
       },
     });
     expect(ctx.db.patch).not.toHaveBeenCalled();
+    expect(consoleWarn).toHaveBeenCalledWith(
+      "Attempted to update completed expense session expense-session-1. Ignoring update.",
+    );
   });
 
   it("returns a user_error when clearing holds for a missing expense session", async () => {

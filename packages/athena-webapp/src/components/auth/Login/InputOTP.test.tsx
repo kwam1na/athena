@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { forwardRef } from "react";
 
 import { InputOTPForm } from "./InputOTP";
 import { PENDING_ATHENA_AUTH_SYNC_KEY } from "~/src/lib/constants";
@@ -17,13 +18,14 @@ vi.mock("@convex-dev/auth/react", () => ({
 }));
 
 vi.mock("@/components/ui/input-otp", () => ({
-  InputOTP: (props: any) => (
+  InputOTP: forwardRef<HTMLInputElement, any>((props, ref) => (
     <input
       aria-label="Verification code"
+      ref={ref}
       onChange={(event) => props.onChange?.(event.target.value)}
       value={props.value ?? ""}
     />
-  ),
+  )),
   InputOTPGroup: ({ children }: any) => <div>{children}</div>,
   InputOTPSlot: () => null,
 }));

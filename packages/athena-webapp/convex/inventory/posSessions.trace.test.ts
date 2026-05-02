@@ -1473,6 +1473,9 @@ describe("pos session lifecycle trace handlers", () => {
   });
 
   it("keeps checkout-state sync successful when trace recording fails", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
     const ctx = createMutationCtx({
       sessions: [
         buildSession({
@@ -1503,9 +1506,14 @@ describe("pos session lifecycle trace handlers", () => {
     expect(
       ctx.sessions.find((session) => session._id === "session-trace-failure")?.payments,
     ).toEqual([{ method: "cash", amount: 115, timestamp: 1_000 }]);
+    expect(consoleError).toHaveBeenCalledWith(
+      "[workflow-trace] pos.session.lifecycle.paymentAdded",
+      expect.any(Error),
+    );
   });
 
   it("does not overwrite a voided session trace when cron expires old sessions", async () => {
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
     const ctx = createMutationCtx({
       sessions: [
         buildSession({
@@ -1571,9 +1579,13 @@ describe("pos session lifecycle trace handlers", () => {
     expect(ctx.sessions.find((session) => session._id === "session-void")?.notes).toBe(
       "Cashier voided this session",
     );
+    expect(consoleLog).toHaveBeenCalledWith(
+      "[POS] Found 2 expired sessions to process",
+    );
   });
 
   it("releases expired held sessions through cron", async () => {
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
     const ctx = createMutationCtx({
       sessions: [
         buildSession({
@@ -1605,6 +1617,9 @@ describe("pos session lifecycle trace handlers", () => {
       notes: "Session expired - inventory holds released",
     });
     expect(mocks.traceRecord).toHaveBeenCalledTimes(1);
+    expect(consoleLog).toHaveBeenCalledWith(
+      "[POS] Found 1 expired sessions to process",
+    );
   });
 
   it("expires other-terminal sessions immediately during cashier recovery", async () => {

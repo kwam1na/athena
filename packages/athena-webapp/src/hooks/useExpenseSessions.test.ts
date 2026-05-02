@@ -1,5 +1,5 @@
 import { renderHook } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useMutation } from "convex/react";
 
 import { useExpenseSessionCreate } from "./useExpenseSessions";
@@ -18,6 +18,10 @@ vi.mock("../lib/logger", () => ({
 
 const mockedUseMutation = vi.mocked(useMutation);
 const createExpenseSessionMutation = vi.fn();
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("useExpenseSessionCreate", () => {
   beforeEach(() => {
@@ -46,6 +50,9 @@ describe("useExpenseSessionCreate", () => {
   });
 
   it("collapses unexpected failures to the shared generic fallback message", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
     createExpenseSessionMutation.mockRejectedValue(new Error("database offline"));
 
     const { result } = renderHook(() => useExpenseSessionCreate());
@@ -57,5 +64,9 @@ describe("useExpenseSessionCreate", () => {
         "staff-1" as never,
       ),
     ).rejects.toThrow("Please try again.");
+    expect(consoleError).toHaveBeenCalledWith(
+      "Unexpected command failure",
+      expect.any(Error),
+    );
   });
 });

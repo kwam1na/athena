@@ -163,6 +163,9 @@ describe("recordRegisterSessionTraceBestEffort", () => {
   });
 
   it("falls back to GHS when the store currency is invalid", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
     vi.mocked(createWorkflowTraceWithCtx).mockResolvedValue("trace-1" as never);
     vi.mocked(registerWorkflowTraceLookupWithCtx).mockResolvedValue(
       "lookup-1" as never,
@@ -186,6 +189,13 @@ describe("recordRegisterSessionTraceBestEffort", () => {
         message: `Recorded sale cash movement of ${formatStoredTraceAmount("GHS", 12_345)}.`,
         occurredAt: 222,
         step: "register_session_sale_recorded",
+      }),
+    );
+    expect(consoleError).toHaveBeenCalledWith(
+      "[workflow-trace] register.session.trace.currency-format",
+      expect.objectContaining({
+        currency: "not-a-currency",
+        error: expect.any(RangeError),
       }),
     );
   });
@@ -293,6 +303,9 @@ describe("recordRegisterSessionTraceBestEffort", () => {
   });
 
   it("reports traceCreated false when the trace row write fails", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
     vi.mocked(createWorkflowTraceWithCtx).mockRejectedValue(
       new Error("trace unavailable"),
     );
@@ -315,5 +328,9 @@ describe("recordRegisterSessionTraceBestEffort", () => {
       traceCreated: false,
       traceId: "register_session:session-1",
     });
+    expect(consoleError).toHaveBeenCalledWith(
+      "[workflow-trace] register.session.trace.create",
+      expect.any(Error),
+    );
   });
 });
