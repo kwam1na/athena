@@ -96,6 +96,128 @@ describe("useApprovedCommand", () => {
     expect(result.current.pendingApproval).toBeNull();
   });
 
+  it("uses a same-submission manager proof before opening approval UI", async () => {
+    const onResult = vi.fn();
+    const onAuthenticateForApproval = vi.fn().mockResolvedValue(
+      ok({
+        approvalProofId: "proof-1" as Id<"approvalProof">,
+        approvedByStaffProfileId: "manager-1" as Id<"staffProfile">,
+        expiresAt: 123,
+      }),
+    );
+    const execute = vi
+      .fn()
+      .mockResolvedValueOnce({ kind: "approval_required", approval })
+      .mockResolvedValueOnce(ok({ action: "closed" }));
+    const { result } = renderHook(() =>
+      useApprovedCommand({
+        storeId,
+        onAuthenticateForApproval,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.run({
+        execute,
+        onResult,
+        requestedByStaffProfileId: requesterId,
+        sameSubmissionApproval: {
+          canAttemptInlineManagerProof: true,
+          pinHash: "pin-hash",
+          requestedByStaffProfileId: requesterId,
+          username: "manager",
+        },
+      });
+    });
+
+    expect(onAuthenticateForApproval).toHaveBeenCalledWith({
+      actionKey: approval.action.key,
+      pinHash: "pin-hash",
+      reason: approval.reason,
+      requiredRole: approval.requiredRole,
+      requestedByStaffProfileId: requesterId,
+      storeId,
+      subject: approval.subject,
+      username: "manager",
+    });
+    expect(execute).toHaveBeenLastCalledWith({
+      approvalProofId: "proof-1",
+    });
+    expect(onResult).toHaveBeenCalledWith(ok({ action: "closed" }));
+    expect(result.current.pendingApproval).toBeNull();
+    expect(result.current.approvalDialog).toBeNull();
+  });
+
+  it("falls back to approval UI when same-submission staff cannot approve", async () => {
+    const onResult = vi.fn();
+    const onAuthenticateForApproval = vi.fn();
+    const execute = vi
+      .fn()
+      .mockResolvedValueOnce({ kind: "approval_required", approval });
+    const { result } = renderHook(() =>
+      useApprovedCommand({
+        storeId,
+        onAuthenticateForApproval,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.run({
+        execute,
+        onResult,
+        requestedByStaffProfileId: requesterId,
+        sameSubmissionApproval: {
+          canAttemptInlineManagerProof: false,
+          pinHash: "pin-hash",
+          requestedByStaffProfileId: requesterId,
+          username: "cashier",
+        },
+      });
+    });
+
+    expect(onAuthenticateForApproval).not.toHaveBeenCalled();
+    expect(result.current.approvalDialog).toMatchObject({
+      approval,
+      requestedByStaffProfileId: requesterId,
+      storeId,
+    });
+  });
+
+  it("surfaces same-submission proof failures without retrying", async () => {
+    const proofError = userError({
+      code: "authentication_failed",
+      message: "Manager credentials required.",
+    });
+    const onResult = vi.fn();
+    const execute = vi
+      .fn()
+      .mockResolvedValueOnce({ kind: "approval_required", approval });
+    const { result } = renderHook(() =>
+      useApprovedCommand({
+        storeId,
+        onAuthenticateForApproval: vi.fn().mockResolvedValue(proofError),
+      }),
+    );
+
+    await act(async () => {
+      await result.current.run({
+        execute,
+        onResult,
+        requestedByStaffProfileId: requesterId,
+        sameSubmissionApproval: {
+          canAttemptInlineManagerProof: true,
+          pinHash: "pin-hash",
+          requestedByStaffProfileId: requesterId,
+          username: "cashier",
+        },
+      });
+    });
+
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(onResult).toHaveBeenCalledWith(proofError);
+    expect(result.current.pendingApproval).toBeNull();
+  });
+
   it("reports async approval requirements without authenticating inline", async () => {
     const asyncApproval = {
       ...approval,

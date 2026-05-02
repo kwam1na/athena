@@ -24,6 +24,7 @@ import {
   CommandApprovalApprovedResult,
   CommandApprovalProofResult,
 } from "@/components/operations/CommandApprovalDialog";
+import { useApprovedCommand } from "@/components/operations/useApprovedCommand";
 import {
   isApprovalRequiredResult,
   type NormalizedCommandResult,
@@ -435,6 +436,19 @@ export function RegisterSessionViewContent({
     useState<ApprovalRequirement | null>(null);
   const [isCorrectingOpeningFloat, setIsCorrectingOpeningFloat] =
     useState(false);
+  const closeoutApprovalRunner = useApprovedCommand({
+    storeId: storeId as Id<"store"> | undefined,
+    onAuthenticateForApproval:
+      onAuthenticateForApproval ??
+      (() =>
+        Promise.resolve(
+          userError({
+            code: "unavailable",
+            message:
+              "Manager approval is not available yet. Try again after the register tools refresh.",
+          }),
+        )),
+  });
   const [submissionKey, setSubmissionKey] = useState(() =>
     buildDepositSubmissionKey(registerSession?._id ?? "session"),
   );
@@ -674,6 +688,7 @@ export function RegisterSessionViewContent({
 
   async function handleAuthenticatedCloseoutStaff(
     result: CloseoutApprovalAuthenticationResult,
+    credentials?: { pinHash: string; username: string },
   ) {
     if (!closeoutStaffAuthIntent) {
       return;
@@ -689,12 +704,28 @@ export function RegisterSessionViewContent({
     try {
       const commandResult =
         intent.kind === "submit"
-          ? await onSubmitCloseout({
-              actorStaffProfileId: result.staffProfileId,
-              approvalProofId: result.approvalProofId,
-              countedCash: intent.countedCash,
-              notes: intent.notes,
-              registerSessionId: intent.registerSessionId,
+          ? await closeoutApprovalRunner.run({
+              requestedByStaffProfileId:
+                result.staffProfileId as Id<"staffProfile">,
+              sameSubmissionApproval: credentials
+                ? {
+                    canAttemptInlineManagerProof: isManagerStaff(result),
+                    pinHash: credentials.pinHash,
+                    requestedByStaffProfileId:
+                      result.staffProfileId as Id<"staffProfile">,
+                    username: credentials.username,
+                  }
+                : undefined,
+              execute: (approvalArgs) =>
+                onSubmitCloseout({
+                  actorStaffProfileId: result.staffProfileId,
+                  approvalProofId:
+                    approvalArgs.approvalProofId ?? result.approvalProofId,
+                  countedCash: intent.countedCash,
+                  notes: intent.notes,
+                  registerSessionId: intent.registerSessionId,
+                }),
+              onResult: () => undefined,
             })
           : result.approvalProofId
             ? await onReviewCloseout({
@@ -1100,57 +1131,15 @@ export function RegisterSessionViewContent({
               pinHash: args.pinHash,
               username: args.username,
             }),
-          ).then(async (staffResult) => {
-            if (
-              !staffResult ||
-              closeoutStaffAuthIntent?.kind !== "submit" ||
-              staffResult.kind !== "ok" ||
-              !isManagerStaff(staffResult.data) ||
-              !onAuthenticateCloseoutReviewApproval
-            ) {
-              return staffResult;
-            }
-
-            const expectedCloseoutCash =
-              registerSession?.netExpectedCash ?? registerSession?.expectedCash;
-
-            if (
-              expectedCloseoutCash === undefined ||
-              closeoutStaffAuthIntent.countedCash === expectedCloseoutCash
-            ) {
-              return staffResult;
-            }
-
-            const approvalResult = await onAuthenticateCloseoutReviewApproval({
-              pinHash: args.pinHash,
-              reason: closeoutStaffAuthIntent.notes,
-              registerSessionId: closeoutStaffAuthIntent.registerSessionId,
-              requestedByStaffProfileId: staffResult.data.staffProfileId,
-              username: args.username,
-            });
-
-            if (approvalResult.kind !== "ok") {
-              return approvalResult;
-            }
-
-            return {
-              kind: "ok" as const,
-              data: {
-                ...staffResult.data,
-                approvalProofId: approvalResult.data.approvalProofId,
-                approvedByStaffProfileId:
-                  approvalResult.data.approvedByStaffProfileId,
-                expiresAt: approvalResult.data.expiresAt,
-              },
-            };
-          });
+          );
         }}
-        onAuthenticated={(result) => {
-          void handleAuthenticatedCloseoutStaff(result);
+        onAuthenticated={(result, _mode, credentials) => {
+          void handleAuthenticatedCloseoutStaff(result, credentials);
         }}
         onDismiss={() => setCloseoutStaffAuthIntent(null)}
         open={Boolean(closeoutStaffAuthIntent)}
       />
+      {closeoutApprovalRunner.dialog}
       <CommandApprovalDialog
         approval={pendingOpeningFloatApproval}
         onAuthenticateForApproval={

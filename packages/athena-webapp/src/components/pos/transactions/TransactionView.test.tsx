@@ -133,14 +133,18 @@ vi.mock("../../staff-auth/StaffAuthenticationDialog", () => ({
       pinHash: string;
       username: string;
     }) => Promise<unknown>;
-    onAuthenticated: (result: {
-      activeRoles?: string[];
-      approvalProofId?: string;
-      approvedByStaffProfileId?: string;
-      expiresAt?: number;
-      staffProfile: { firstName: string; lastName: string };
-      staffProfileId: string;
-    }) => void;
+    onAuthenticated: (
+      result: {
+        activeRoles?: string[];
+        approvalProofId?: string;
+        approvedByStaffProfileId?: string;
+        expiresAt?: number;
+        staffProfile: { firstName: string; lastName: string };
+        staffProfileId: string;
+      },
+      mode: "authenticate",
+      credentials: { pinHash: string; username: string },
+    ) => void;
     open: boolean;
   }) =>
     open ? (
@@ -160,7 +164,10 @@ vi.mock("../../staff-auth/StaffAuthenticationDialog", () => ({
               result.kind === "ok" &&
               "data" in result
             ) {
-              onAuthenticated(result.data as never);
+              onAuthenticated(result.data as never, "authenticate", {
+                pinHash: "123456",
+                username: "manager",
+              });
             }
           }}
           type="button"
@@ -880,7 +887,6 @@ describe("TransactionView", () => {
       screen.getByRole("button", { name: "Submit payment update" }),
     );
     await user.click(screen.getByRole("button", { name: "Confirm" }));
-    await user.click(await screen.findByRole("button", { name: "Approve update" }));
 
     await waitFor(() => {
       expect(approvalMutation).toHaveBeenCalledWith({

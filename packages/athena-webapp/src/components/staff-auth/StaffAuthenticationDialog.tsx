@@ -57,6 +57,7 @@ export type StaffAuthenticationDialogProps = {
   onAuthenticated: (
     result: StaffAuthenticationResult,
     mode: StaffAuthMode,
+    credentials: { pinHash: string; username: string },
   ) => void;
   onDismiss: () => void;
   open: boolean;
@@ -120,14 +121,16 @@ export function StaffAuthenticationDialog({
     setIsAuthenticating(true);
 
     let result: NormalizedCommandResult<StaffAuthenticationResult>;
+    let submittedPinHash = "";
+    let submittedUsername = username.trim();
 
     try {
-      const pinHash = await hashPin(pin);
+      submittedPinHash = await hashPin(pin);
 
       result = await onAuthenticate({
         mode,
-        pinHash,
-        username: username.trim(),
+        pinHash: submittedPinHash,
+        username: submittedUsername,
       });
     } catch (error) {
       console.error(error);
@@ -153,7 +156,10 @@ export function StaffAuthenticationDialog({
       toast.success(successMessage);
     }
 
-    onAuthenticated(result.data, mode);
+    onAuthenticated(result.data, mode, {
+      pinHash: submittedPinHash,
+      username: submittedUsername,
+    });
     setUsername("");
     setPin("");
     setMode("authenticate");
