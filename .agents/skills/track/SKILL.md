@@ -1,11 +1,11 @@
 ---
-name: create-linear-ticket
+name: track
 description: Use when approved work needs to be split into atomic, parallelizable Linear tickets.
 ---
 
-# Creating Linear Tickets
+# Track
 
-Turn approved work into Linear issues that are small enough to ship independently and clear enough to hand straight to execution. If the tickets already exist and the user wants implementation, stop and use `$execute-linear-ticket`.
+Turn approved work into Linear issues that are small enough to ship independently and clear enough to hand straight to execution. If the tickets already exist and the user wants implementation, stop and use `$execute`.
 
 ## Delivery Posture
 
@@ -38,8 +38,8 @@ Use this resolution order before asking the user for context:
 ## Workflow
 
 1. Confirm intent.
-- If the issues already exist, stop and use `$execute-linear-ticket`.
-- If the user is mixing planning, ticket creation, and implementation, finish ticket creation first and then hand off to `$execute-linear-ticket`.
+- If the issues already exist, stop and use `$execute`.
+- If the user is mixing planning, ticket creation, and implementation, finish ticket creation first and then hand off to `$execute`.
 
 2. Produce a concrete plan.
 - Prefer `$ce-plan`.
@@ -89,7 +89,7 @@ Use this resolution order before asking the user for context:
 8. Return the execution handoff.
 - Include resolved context, created issues, dependency map, and assumptions.
 - If the tickets form a coordinated generated-artifact batch, say so directly and recommend a single integration PR after parallel ticket execution.
-- If implementation is next, say `Use $execute-linear-ticket for implementation.`
+- If implementation is next, say `Use $execute for implementation.`
 
 ## Output
 
