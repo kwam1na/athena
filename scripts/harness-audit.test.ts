@@ -568,6 +568,11 @@ async function createFixtureRepo() {
   await write("packages/athena-webapp/src/main.tsx", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/assets/placeholder.png", "", rootDir);
   await write("packages/athena-webapp/src/config.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/src/config.test.ts",
+    "export {};\n",
+    rootDir
+  );
   await write("packages/athena-webapp/src/index.css", "body {}\n", rootDir);
   await write("packages/athena-webapp/src/routeTree.gen.ts", "export {};\n", rootDir);
   await write(
