@@ -9,6 +9,7 @@ const DEFAULT_READY_TIMEOUT_MS = 30_000;
 const DEFAULT_HTTP_TIMEOUT_MS = 30_000;
 const DEFAULT_HTTP_INTERVAL_MS = 250;
 const DEFAULT_STOP_TIMEOUT_MS = 5_000;
+const PLAYWRIGHT_CHROMIUM_REPAIR_COMMAND = "bunx playwright install chromium";
 
 type LineSource = "stdout" | "stderr";
 
@@ -83,6 +84,9 @@ export type HarnessBehaviorPlaywrightFlowOptions<TStepResult> = {
     width: number;
     height: number;
   };
+  env?: NodeJS.ProcessEnv;
+  playwrightModule?: HarnessBehaviorPlaywrightModule;
+  installChromium?: () => Promise<void>;
   steps: (context: { page: HarnessBehaviorPlaywrightPage }) => Promise<TStepResult>;
 };
 
@@ -601,6 +605,28 @@ function spawnCommand(
   };
 }
 
+async function runShellCommand(command: string, cwd: string) {
+  const subprocess = spawnCommand(command, cwd, undefined);
+  const outputLines: ProcessOutputLine[] = [];
+  const appendOutputLine = (source: LineSource, line: string) => {
+    outputLines.push({ source, line });
+  };
+
+  const stdoutPump = consumeLines(subprocess.stdout, "stdout", appendOutputLine);
+  const stderrPump = consumeLines(subprocess.stderr, "stderr", appendOutputLine);
+  const exitCode = await subprocess.exited;
+  await Promise.all([stdoutPump, stderrPump]);
+
+  if (exitCode !== 0) {
+    const output = outputLines.map((entry) => entry.line).join("\n").trim();
+    throw new Error(
+      output
+        ? `Command failed (${exitCode}): ${command}\n${output}`
+        : `Command failed (${exitCode}): ${command}`
+    );
+  }
+}
+
 export function resolveHarnessBehaviorShell(options: {
   env?: NodeJS.ProcessEnv;
   fileExists?: (filePath: string) => boolean;
@@ -850,6 +876,69 @@ type HarnessBehaviorPlaywrightModule = {
   };
 };
 
+function isMissingPlaywrightChromiumError(error: unknown) {
+  const message = formatError(error);
+  return (
+    message.includes("Executable doesn't exist") &&
+    message.includes("ms-playwright") &&
+    message.includes("chromium")
+  );
+}
+
+function shouldAutoInstallPlaywrightChromium(env: NodeJS.ProcessEnv) {
+  return env.CI !== "true";
+}
+
+function missingPlaywrightChromiumDiagnostic(error: unknown) {
+  return [
+    formatError(error),
+    "",
+    "Athena harness repair: Playwright Chromium is not installed for this machine.",
+    `Run \`${PLAYWRIGHT_CHROMIUM_REPAIR_COMMAND}\` and rerun the blocked validation.`,
+  ].join("\n");
+}
+
+async function installPlaywrightChromium() {
+  await runShellCommand(PLAYWRIGHT_CHROMIUM_REPAIR_COMMAND, process.cwd());
+}
+
+async function launchPlaywrightChromium(
+  playwright: HarnessBehaviorPlaywrightModule,
+  options: HarnessBehaviorPlaywrightFlowOptions<unknown>
+) {
+  const launchOptions = {
+    headless: options.headless ?? true,
+  };
+
+  try {
+    return await playwright.chromium.launch(launchOptions);
+  } catch (error) {
+    if (!isMissingPlaywrightChromiumError(error)) {
+      throw error;
+    }
+
+    const env = options.env ?? process.env;
+    if (!shouldAutoInstallPlaywrightChromium(env)) {
+      throw new Error(missingPlaywrightChromiumDiagnostic(error));
+    }
+
+    const installChromium = options.installChromium ?? installPlaywrightChromium;
+    try {
+      await installChromium();
+    } catch (installError) {
+      throw new Error(
+        [
+          missingPlaywrightChromiumDiagnostic(error),
+          "",
+          `Automatic repair failed: ${formatError(installError)}`,
+        ].join("\n")
+      );
+    }
+
+    return playwright.chromium.launch(launchOptions);
+  }
+}
+
 export async function runPlaywrightFlow<TStepResult>(
   options: HarnessBehaviorPlaywrightFlowOptions<TStepResult>
 ) {
@@ -868,9 +957,9 @@ export async function runPlaywrightFlow<TStepResult>(
   let flowError: unknown = null;
 
   try {
-    const playwright = (await import(
-      "@playwright/test"
-    )) as unknown as HarnessBehaviorPlaywrightModule;
+    const playwright =
+      options.playwrightModule ??
+      ((await import("@playwright/test")) as unknown as HarnessBehaviorPlaywrightModule);
 
     let contextRecordVideoOptions:
       | {
@@ -897,9 +986,7 @@ export async function runPlaywrightFlow<TStepResult>(
       };
     }
 
-    browser = await playwright.chromium.launch({
-      headless: options.headless ?? true,
-    });
+    browser = await launchPlaywrightChromium(playwright, options);
     browserContext = await browser.newContext({
       recordVideo: contextRecordVideoOptions,
     });
