@@ -359,8 +359,55 @@ systemctl reload nginx
 REMOTE_SCRIPT
 }
 
+configure_api_gateway_cors() {
+  remote_script "$STOREFRONT_QA_HOST" <<'REMOTE_SCRIPT'
+set -euo pipefail
+
+STOREFRONT_QA_HOST="$1"
+config_file="/etc/nginx/conf.d/wigclub.conf"
+
+if [ ! -f "$config_file" ]; then
+  printf 'Missing %s. Run scripts/setup-production-vps.sh first.\n' "$config_file" >&2
+  exit 1
+fi
+
+if ! command -v python3 >/dev/null 2>&1; then
+  apt-get update
+  apt-get install -y python3
+fi
+
+python3 - "$config_file" "https://$STOREFRONT_QA_HOST" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+config_path = Path(sys.argv[1])
+origin = sys.argv[2]
+text = config_path.read_text()
+entry = f'    "{origin}" "{origin}";'
+map_match = re.search(
+    r"map\s+\$http_origin\s+\$cors_allow_origin\s*\{(?P<body>.*?)\n\}",
+    text,
+    re.DOTALL,
+)
+
+if not map_match:
+    raise SystemExit("Could not find the nginx CORS origin map.")
+
+if entry not in map_match.group("body"):
+    insert_at = map_match.end("body")
+    text = text[:insert_at] + "\n" + entry + text[insert_at:]
+    config_path.write_text(text)
+PY
+
+nginx -t
+systemctl reload nginx
+REMOTE_SCRIPT
+}
+
 deploy_storefront_qa() {
   configure_storefront_qa_nginx
+  configure_api_gateway_cors
 
   remote_script "$REMOTE_SOURCE_DIR" "$STOREFRONT_QA_PORT" "$DEV_API_URL" "$STOREFRONT_QA_HOST" <<'REMOTE_SCRIPT'
 set -euo pipefail

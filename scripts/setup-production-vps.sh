@@ -44,6 +44,7 @@ map \$http_origin \$cors_allow_origin {
     "http://localhost:5174" "http://localhost:5174";
     "https://$STOREFRONT_HOST" "https://$STOREFRONT_HOST";
     "https://$STOREFRONT_WWW_HOST" "https://$STOREFRONT_WWW_HOST";
+    "https://$STOREFRONT_QA_HOST" "https://$STOREFRONT_QA_HOST";
 }
 
 resolver 127.0.0.53 valid=300s ipv6=off;
