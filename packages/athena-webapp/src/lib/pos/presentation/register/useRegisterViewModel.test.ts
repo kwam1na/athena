@@ -699,7 +699,7 @@ describe("useRegisterViewModel", () => {
     );
   });
 
-  it("reauthenticates a manager before applying closeout variance approval from POS", async () => {
+  it("reauthenticates a manager from the server-returned closeout approval requirement", async () => {
     mockRegisterState = {
       phase: "readyToStart",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
@@ -722,11 +722,36 @@ describe("useRegisterViewModel", () => {
       resumableSession: null,
     };
     mockActiveSession = null;
-    mockSubmitRegisterSessionCloseout.mockResolvedValueOnce(
-      ok({
-        action: "closed",
-      }),
-    );
+    mockSubmitRegisterSessionCloseout
+      .mockResolvedValueOnce({
+        kind: "approval_required",
+        approval: {
+          action: {
+            key: "cash_controls.register_session.review_variance",
+            label: "Review register closeout variance",
+          },
+          copy: {
+            title: "Manager approval required",
+            message: "Variance requires manager approval.",
+            primaryActionLabel: "Approve closeout",
+            secondaryActionLabel: "Cancel",
+          },
+          reason: "Variance requires manager approval.",
+          requiredRole: "manager",
+          resolutionModes: [{ kind: "inline_manager_proof" }],
+          selfApproval: "allowed",
+          subject: {
+            id: "drawer-1",
+            label: "1",
+            type: "register_session",
+          },
+        },
+      })
+      .mockResolvedValueOnce(
+        ok({
+          action: "closed",
+        }),
+      );
 
     const { useRegisterViewModel } = await import("./useRegisterViewModel");
     const { result } = renderHook(() => useRegisterViewModel());
@@ -746,32 +771,40 @@ describe("useRegisterViewModel", () => {
       await result.current.drawerGate?.onSubmitCloseout?.();
     });
 
-    expect(mockSubmitRegisterSessionCloseout).not.toHaveBeenCalled();
-    expect(result.current.closeoutApprovalDialog?.open).toBe(true);
-    expect(result.current.closeoutApprovalDialog?.approval?.action.key).toBe(
+    expect(mockSubmitRegisterSessionCloseout).toHaveBeenCalledWith({
+      actorStaffProfileId: "staff-1",
+      actorUserId: "user-1",
+      approvalProofId: undefined,
+      countedCash: 4_800,
+      notes: "End of shift count",
+      registerSessionId: "drawer-1",
+      storeId: "store-1",
+    });
+    expect(result.current.commandApprovalDialog?.open).toBe(true);
+    expect(result.current.commandApprovalDialog?.approval?.action.key).toBe(
       "cash_controls.register_session.review_variance",
     );
-    expect(result.current.closeoutApprovalDialog?.approval?.reason).toBe(
-      "End of shift count",
+    expect(result.current.commandApprovalDialog?.approval?.reason).toBe(
+      "Variance requires manager approval.",
     );
 
     await act(async () => {
       const proofResult =
-        await result.current.closeoutApprovalDialog?.onAuthenticateForApproval({
+        await result.current.commandApprovalDialog?.onAuthenticateForApproval({
           actionKey: "cash_controls.register_session.review_variance",
           pinHash: "pin-hash",
-          reason: "End of shift count",
+          reason: "Variance requires manager approval.",
           requiredRole: "manager",
           requestedByStaffProfileId: "staff-1" as Id<"staffProfile">,
           storeId: "store-1" as Id<"store">,
-          subject: result.current.closeoutApprovalDialog.approval!.subject,
+          subject: result.current.commandApprovalDialog.approval!.subject,
           username: "ama",
         });
 
       expect(proofResult?.kind).toBe("ok");
 
-      result.current.closeoutApprovalDialog?.onApproved({
-        approval: result.current.closeoutApprovalDialog.approval!,
+      result.current.commandApprovalDialog?.onApproved({
+        approval: result.current.commandApprovalDialog.approval!,
         approvalProofId: "proof-1" as Id<"approvalProof">,
         approvedByStaffProfileId: "staff-1" as Id<"staffProfile">,
         expiresAt: Date.now() + 60_000,
@@ -781,7 +814,7 @@ describe("useRegisterViewModel", () => {
     expect(mockAuthenticateStaffCredentialForApproval).toHaveBeenCalledWith({
       actionKey: "cash_controls.register_session.review_variance",
       pinHash: "pin-hash",
-      reason: "End of shift count",
+      reason: "Variance requires manager approval.",
       requiredRole: "manager",
       requestedByStaffProfileId: "staff-1",
       storeId: "store-1",
@@ -1004,14 +1037,14 @@ describe("useRegisterViewModel", () => {
     });
 
     expect(result.current.drawerGate?.errorMessage).toBeNull();
-    expect(result.current.closeoutApprovalDialog?.open).toBe(true);
-    expect(result.current.closeoutApprovalDialog?.approval?.action.key).toBe(
+    expect(result.current.commandApprovalDialog?.open).toBe(true);
+    expect(result.current.commandApprovalDialog?.approval?.action.key).toBe(
       "cash_controls.register_session.correct_opening_float",
     );
 
     await act(async () => {
-      const approval = result.current.closeoutApprovalDialog!.approval!;
-      await result.current.closeoutApprovalDialog?.onApproved({
+      const approval = result.current.commandApprovalDialog!.approval!;
+      await result.current.commandApprovalDialog?.onApproved({
         approval,
         approvalProofId: "proof-1" as Id<"approvalProof">,
         approvedByStaffProfileId: "staff-1" as Id<"staffProfile">,

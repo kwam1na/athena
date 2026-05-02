@@ -736,19 +736,19 @@ export function POSRegisterView({
         />
       )}
 
-      {viewModel.closeoutApprovalDialog ? (
+      {viewModel.commandApprovalDialog ? (
         <CommandApprovalDialog
-          approval={viewModel.closeoutApprovalDialog.approval}
-          onApproved={viewModel.closeoutApprovalDialog.onApproved}
+          approval={viewModel.commandApprovalDialog.approval}
+          onApproved={viewModel.commandApprovalDialog.onApproved}
           onAuthenticateForApproval={
-            viewModel.closeoutApprovalDialog.onAuthenticateForApproval
+            viewModel.commandApprovalDialog.onAuthenticateForApproval
           }
-          onDismiss={viewModel.closeoutApprovalDialog.onDismiss}
-          open={viewModel.closeoutApprovalDialog.open}
+          onDismiss={viewModel.commandApprovalDialog.onDismiss}
+          open={viewModel.commandApprovalDialog.open}
           requestedByStaffProfileId={
-            viewModel.closeoutApprovalDialog.requestedByStaffProfileId
+            viewModel.commandApprovalDialog.requestedByStaffProfileId
           }
-          storeId={viewModel.closeoutApprovalDialog.storeId}
+          storeId={viewModel.commandApprovalDialog.storeId}
         />
       ) : null}
     </View>

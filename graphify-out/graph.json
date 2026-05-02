@@ -7931,7 +7931,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_cashcontrols_closeouts_ts",
       "source_file": "packages/athena-webapp/convex/cashControls/closeouts.ts",
-      "source_location": "L489",
+      "source_location": "L495",
       "target": "closeouts_cancelpendingapprovalifneeded",
       "weight": 1
     },
@@ -7955,7 +7955,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_cashcontrols_closeouts_ts",
       "source_file": "packages/athena-webapp/convex/cashControls/closeouts.ts",
-      "source_location": "L407",
+      "source_location": "L413",
       "target": "closeouts_listregistersessionsforcloseout",
       "weight": 1
     },
@@ -7967,7 +7967,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_cashcontrols_closeouts_ts",
       "source_file": "packages/athena-webapp/convex/cashControls/closeouts.ts",
-      "source_location": "L437",
+      "source_location": "L443",
       "target": "closeouts_liststaffnames",
       "weight": 1
     },
@@ -7991,7 +7991,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_cashcontrols_closeouts_ts",
       "source_file": "packages/athena-webapp/convex/cashControls/closeouts.ts",
-      "source_location": "L454",
+      "source_location": "L460",
       "target": "closeouts_staffprofilecanreviewcloseoutvariance",
       "weight": 1
     },
@@ -27719,7 +27719,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_lib_pos_presentation_register_useregisterviewmodel_ts",
       "source_file": "packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts",
-      "source_location": "L160",
+      "source_location": "L148",
       "target": "useregisterviewmodel_canoperateregister",
       "weight": 1
     },
@@ -27803,7 +27803,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_lib_pos_presentation_register_useregisterviewmodel_ts",
       "source_file": "packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts",
-      "source_location": "L169",
+      "source_location": "L157",
       "target": "useregisterviewmodel_useregisterviewmodel",
       "weight": 1
     },
@@ -45047,7 +45047,7 @@
       "relation": "calls",
       "source": "useregisterviewmodel_hascustomerdetails",
       "source_file": "packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts",
-      "source_location": "L368",
+      "source_location": "L354",
       "target": "useregisterviewmodel_useregisterviewmodel",
       "weight": 1
     },
@@ -45059,7 +45059,7 @@
       "relation": "calls",
       "source": "useregisterviewmodel_trimoptional",
       "source_file": "packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts",
-      "source_location": "L177",
+      "source_location": "L165",
       "target": "useregisterviewmodel_useregisterviewmodel",
       "weight": 1
     },
@@ -64561,7 +64561,7 @@
       "label": "cancelPendingApprovalIfNeeded()",
       "norm_label": "cancelpendingapprovalifneeded()",
       "source_file": "packages/athena-webapp/convex/cashControls/closeouts.ts",
-      "source_location": "L489"
+      "source_location": "L495"
     },
     {
       "community": 34,
@@ -64579,7 +64579,7 @@
       "label": "listRegisterSessionsForCloseout()",
       "norm_label": "listregistersessionsforcloseout()",
       "source_file": "packages/athena-webapp/convex/cashControls/closeouts.ts",
-      "source_location": "L407"
+      "source_location": "L413"
     },
     {
       "community": 34,
@@ -64588,7 +64588,7 @@
       "label": "listStaffNames()",
       "norm_label": "liststaffnames()",
       "source_file": "packages/athena-webapp/convex/cashControls/closeouts.ts",
-      "source_location": "L437"
+      "source_location": "L443"
     },
     {
       "community": 34,
@@ -64606,7 +64606,7 @@
       "label": "staffProfileCanReviewCloseoutVariance()",
       "norm_label": "staffprofilecanreviewcloseoutvariance()",
       "source_file": "packages/athena-webapp/convex/cashControls/closeouts.ts",
-      "source_location": "L454"
+      "source_location": "L460"
     },
     {
       "community": 34,
@@ -75649,7 +75649,7 @@
       "label": "canOperateRegister()",
       "norm_label": "canoperateregister()",
       "source_file": "packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts",
-      "source_location": "L160"
+      "source_location": "L148"
     },
     {
       "community": 68,
@@ -75712,7 +75712,7 @@
       "label": "useRegisterViewModel()",
       "norm_label": "useregisterviewmodel()",
       "source_file": "packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts",
-      "source_location": "L169"
+      "source_location": "L157"
     },
     {
       "community": 680,
