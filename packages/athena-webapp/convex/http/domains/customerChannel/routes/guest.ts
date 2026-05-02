@@ -51,8 +51,6 @@ guestRoutes.get("/", async (c) => {
           maxAge: 90 * 24 * 60 * 60, // 90 days in seconds
         });
 
-        c.header("Access-Control-Allow-Origin", "https://wigclub.store");
-        c.header("Access-Control-Allow-Credentials", "true");
       }
 
       return c.json(guest);

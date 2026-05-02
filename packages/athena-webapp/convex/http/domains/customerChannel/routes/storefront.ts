@@ -69,9 +69,6 @@ storefrontRoutes.get("/", async (c) => {
     });
   }
 
-  c.header("Access-Control-Allow-Origin", "https://wigclub.store");
-  c.header("Access-Control-Allow-Credentials", "true");
-
   return c.json(store);
 });
 
