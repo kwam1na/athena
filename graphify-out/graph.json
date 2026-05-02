@@ -31679,7 +31679,7 @@
       "relation": "contains",
       "source": "packages_storefront_webapp_src_components_homepage_tsx",
       "source_file": "packages/storefront-webapp/src/components/HomePage.tsx",
-      "source_location": "L185",
+      "source_location": "L186",
       "target": "homepage_handleclickonleavereviewbutton",
       "weight": 1
     },
@@ -33383,7 +33383,7 @@
       "relation": "contains",
       "source": "packages_storefront_webapp_src_hooks_usequeryenabled_ts",
       "source_file": "packages/storefront-webapp/src/hooks/useQueryEnabled.ts",
-      "source_location": "L4",
+      "source_location": "L3",
       "target": "usequeryenabled_usequeryenabled",
       "weight": 1
     },
@@ -53601,6 +53601,15 @@
     {
       "community": 1436,
       "file_type": "code",
+      "id": "packages_storefront_webapp_src_hooks_usequeryenabled_test_ts",
+      "label": "useQueryEnabled.test.ts",
+      "norm_label": "usequeryenabled.test.ts",
+      "source_file": "packages/storefront-webapp/src/hooks/useQueryEnabled.test.ts",
+      "source_location": "L1"
+    },
+    {
+      "community": 1437,
+      "file_type": "code",
       "id": "packages_storefront_webapp_src_hooks_usestorefrontobservability_ts",
       "label": "useStorefrontObservability.ts",
       "norm_label": "usestorefrontobservability.ts",
@@ -53608,7 +53617,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1437,
+      "community": 1438,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_constants_ts",
       "label": "constants.ts",
@@ -53617,21 +53626,12 @@
       "source_location": "L1"
     },
     {
-      "community": 1438,
+      "community": 1439,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_countries_ts",
       "label": "countries.ts",
       "norm_label": "countries.ts",
       "source_file": "packages/storefront-webapp/src/lib/countries.ts",
-      "source_location": "L1"
-    },
-    {
-      "community": 1439,
-      "file_type": "code",
-      "id": "packages_storefront_webapp_src_lib_feeutils_test_ts",
-      "label": "feeUtils.test.ts",
-      "norm_label": "feeutils.test.ts",
-      "source_file": "packages/storefront-webapp/src/lib/feeUtils.test.ts",
       "source_location": "L1"
     },
     {
@@ -53691,6 +53691,15 @@
     {
       "community": 1440,
       "file_type": "code",
+      "id": "packages_storefront_webapp_src_lib_feeutils_test_ts",
+      "label": "feeUtils.test.ts",
+      "norm_label": "feeutils.test.ts",
+      "source_file": "packages/storefront-webapp/src/lib/feeUtils.test.ts",
+      "source_location": "L1"
+    },
+    {
+      "community": 1441,
+      "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_ghana_ts",
       "label": "ghana.ts",
       "norm_label": "ghana.ts",
@@ -53698,7 +53707,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1441,
+      "community": 1442,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_ghanaregions_ts",
       "label": "ghanaRegions.ts",
@@ -53707,7 +53716,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1442,
+      "community": 1443,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_maintenanceutils_test_ts",
       "label": "maintenanceUtils.test.ts",
@@ -53716,7 +53725,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1443,
+      "community": 1444,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_mutations_ts_index_ts",
       "label": "index.ts",
@@ -53725,7 +53734,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1444,
+      "community": 1445,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_queries_store_ts",
       "label": "store.ts",
@@ -53734,7 +53743,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1445,
+      "community": 1446,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_schemas_bag_ts",
       "label": "bag.ts",
@@ -53743,7 +53752,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1446,
+      "community": 1447,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_schemas_bagitem_ts",
       "label": "bagItem.ts",
@@ -53752,7 +53761,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1447,
+      "community": 1448,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_schemas_category_ts",
       "label": "category.ts",
@@ -53761,21 +53770,12 @@
       "source_location": "L1"
     },
     {
-      "community": 1448,
+      "community": 1449,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_schemas_organization_ts",
       "label": "organization.ts",
       "norm_label": "organization.ts",
       "source_file": "packages/storefront-webapp/src/lib/schemas/organization.ts",
-      "source_location": "L1"
-    },
-    {
-      "community": 1449,
-      "file_type": "code",
-      "id": "packages_storefront_webapp_src_lib_schemas_product_ts",
-      "label": "product.ts",
-      "norm_label": "product.ts",
-      "source_file": "packages/storefront-webapp/src/lib/schemas/product.ts",
       "source_location": "L1"
     },
     {
@@ -53835,6 +53835,15 @@
     {
       "community": 1450,
       "file_type": "code",
+      "id": "packages_storefront_webapp_src_lib_schemas_product_ts",
+      "label": "product.ts",
+      "norm_label": "product.ts",
+      "source_file": "packages/storefront-webapp/src/lib/schemas/product.ts",
+      "source_location": "L1"
+    },
+    {
+      "community": 1451,
+      "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_schemas_store_ts",
       "label": "store.ts",
       "norm_label": "store.ts",
@@ -53842,7 +53851,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1451,
+      "community": 1452,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_schemas_subcategory_ts",
       "label": "subcategory.ts",
@@ -53851,7 +53860,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1452,
+      "community": 1453,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_schemas_user_ts",
       "label": "user.ts",
@@ -53860,7 +53869,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1453,
+      "community": 1454,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_states_ts",
       "label": "states.ts",
@@ -53869,7 +53878,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1454,
+      "community": 1455,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_storefrontfailureobservability_test_ts",
       "label": "storefrontFailureObservability.test.ts",
@@ -53878,7 +53887,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1455,
+      "community": 1456,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_storefrontjourneyevents_test_ts",
       "label": "storefrontJourneyEvents.test.ts",
@@ -53887,7 +53896,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1456,
+      "community": 1457,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_lib_utils_test_ts",
       "label": "utils.test.ts",
@@ -53896,7 +53905,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1457,
+      "community": 1458,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routetree_gen_ts",
       "label": "routeTree.gen.ts",
@@ -53905,21 +53914,12 @@
       "source_location": "L1"
     },
     {
-      "community": 1458,
+      "community": 1459,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_homepageloader_test_ts",
       "label": "-homePageLoader.test.ts",
       "norm_label": "-homepageloader.test.ts",
       "source_file": "packages/storefront-webapp/src/routes/-homePageLoader.test.ts",
-      "source_location": "L1"
-    },
-    {
-      "community": 1459,
-      "file_type": "code",
-      "id": "packages_storefront_webapp_src_routes_root_tsx",
-      "label": "__root.tsx",
-      "norm_label": "__root.tsx",
-      "source_file": "packages/storefront-webapp/src/routes/__root.tsx",
       "source_location": "L1"
     },
     {
@@ -53979,6 +53979,15 @@
     {
       "community": 1460,
       "file_type": "code",
+      "id": "packages_storefront_webapp_src_routes_root_tsx",
+      "label": "__root.tsx",
+      "norm_label": "__root.tsx",
+      "source_file": "packages/storefront-webapp/src/routes/__root.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 1461,
+      "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_layout_orderslayout_shop_orders_orderid_orderitemid_review_tsx",
       "label": "$orderItemId.review.tsx",
       "norm_label": "$orderitemid.review.tsx",
@@ -53986,7 +53995,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1461,
+      "community": 1462,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_layout_orderslayout_shop_orders_index_tsx",
       "label": "index.tsx",
@@ -53995,7 +54004,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1462,
+      "community": 1463,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_layout_shoplayout_shop_categoryslug_subcategoryslug_tsx",
       "label": "$subcategorySlug.tsx",
@@ -54004,7 +54013,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1463,
+      "community": 1464,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_layout_shoplayout_shop_categoryslug_index_tsx",
       "label": "index.tsx",
@@ -54013,7 +54022,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1464,
+      "community": 1465,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_layout_rewards_index_tsx",
       "label": "rewards.index.tsx",
@@ -54022,7 +54031,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1465,
+      "community": 1466,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_layout_shop_saved_index_tsx",
       "label": "shop.saved.index.tsx",
@@ -54031,7 +54040,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1466,
+      "community": 1467,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_shop_bag_index_tsx",
       "label": "bag.index.tsx",
@@ -54040,7 +54049,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1467,
+      "community": 1468,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_shop_checkout_sessionidslug_complete_tsx",
       "label": "complete.tsx",
@@ -54049,21 +54058,12 @@
       "source_location": "L1"
     },
     {
-      "community": 1468,
+      "community": 1469,
       "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_shop_checkout_sessionidslug_incomplete_tsx",
       "label": "incomplete.tsx",
       "norm_label": "incomplete.tsx",
       "source_file": "packages/storefront-webapp/src/routes/shop/checkout/$sessionIdSlug/incomplete.tsx",
-      "source_location": "L1"
-    },
-    {
-      "community": 1469,
-      "file_type": "code",
-      "id": "packages_storefront_webapp_src_routes_shop_checkout_index_tsx",
-      "label": "index.tsx",
-      "norm_label": "index.tsx",
-      "source_file": "packages/storefront-webapp/src/routes/shop/checkout/index.tsx",
       "source_location": "L1"
     },
     {
@@ -54123,6 +54123,15 @@
     {
       "community": 1470,
       "file_type": "code",
+      "id": "packages_storefront_webapp_src_routes_shop_checkout_index_tsx",
+      "label": "index.tsx",
+      "norm_label": "index.tsx",
+      "source_file": "packages/storefront-webapp/src/routes/shop/checkout/index.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 1471,
+      "file_type": "code",
       "id": "packages_storefront_webapp_src_routes_shop_checkout_pending_tsx",
       "label": "pending.tsx",
       "norm_label": "pending.tsx",
@@ -54130,7 +54139,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1471,
+      "community": 1472,
       "file_type": "code",
       "id": "packages_storefront_webapp_tailwind_config_js",
       "label": "tailwind.config.js",
@@ -54139,7 +54148,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1472,
+      "community": 1473,
       "file_type": "code",
       "id": "packages_storefront_webapp_vitest_config_ts",
       "label": "vitest.config.ts",
@@ -54148,7 +54157,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1473,
+      "community": 1474,
       "file_type": "code",
       "id": "packages_storefront_webapp_vitest_setup_ts",
       "label": "vitest.setup.ts",
@@ -54157,7 +54166,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1474,
+      "community": 1475,
       "file_type": "code",
       "id": "packages_valkey_proxy_server_index_js",
       "label": "index.js",
@@ -54166,7 +54175,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1475,
+      "community": 1476,
       "file_type": "code",
       "id": "scripts_harness_app_registry_test_ts",
       "label": "harness-app-registry.test.ts",
@@ -54175,7 +54184,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1476,
+      "community": 1477,
       "file_type": "code",
       "id": "scripts_harness_behavior_fixtures_athena_runtime_app_test_ts",
       "label": "athena-runtime-app.test.ts",
@@ -54184,7 +54193,7 @@
       "source_location": "L1"
     },
     {
-      "community": 1477,
+      "community": 1478,
       "file_type": "code",
       "id": "scripts_harness_behavior_fixtures_valkey_runtime_app_test_ts",
       "label": "valkey-runtime-app.test.ts",
@@ -54193,21 +54202,12 @@
       "source_location": "L1"
     },
     {
-      "community": 1478,
+      "community": 1479,
       "file_type": "code",
       "id": "scripts_harness_behavior_scenarios_test_ts",
       "label": "harness-behavior-scenarios.test.ts",
       "norm_label": "harness-behavior-scenarios.test.ts",
       "source_file": "scripts/harness-behavior-scenarios.test.ts",
-      "source_location": "L1"
-    },
-    {
-      "community": 1479,
-      "file_type": "code",
-      "id": "scripts_harness_repo_validation_test_ts",
-      "label": "harness-repo-validation.test.ts",
-      "norm_label": "harness-repo-validation.test.ts",
-      "source_file": "scripts/harness-repo-validation.test.ts",
       "source_location": "L1"
     },
     {
@@ -54262,6 +54262,15 @@
       "label": "CheckoutExpired.tsx",
       "norm_label": "checkoutexpired.tsx",
       "source_file": "packages/storefront-webapp/src/components/states/checkout-expired/CheckoutExpired.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 1480,
+      "file_type": "code",
+      "id": "scripts_harness_repo_validation_test_ts",
+      "label": "harness-repo-validation.test.ts",
+      "norm_label": "harness-repo-validation.test.ts",
+      "source_file": "scripts/harness-repo-validation.test.ts",
       "source_location": "L1"
     },
     {
@@ -57412,7 +57421,7 @@
       "label": "handleClickOnLeaveReviewButton()",
       "norm_label": "handleclickonleavereviewbutton()",
       "source_file": "packages/storefront-webapp/src/components/HomePage.tsx",
-      "source_location": "L185"
+      "source_location": "L186"
     },
     {
       "community": 199,
@@ -78121,7 +78130,7 @@
       "label": "useQueryEnabled()",
       "norm_label": "usequeryenabled()",
       "source_file": "packages/storefront-webapp/src/hooks/useQueryEnabled.ts",
-      "source_location": "L4"
+      "source_location": "L3"
     },
     {
       "community": 76,
