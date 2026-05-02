@@ -75,6 +75,7 @@ const STOREFRONT_RUNTIME_LATENCY_THRESHOLDS = {
 } satisfies HarnessBehaviorScenario["thresholds"];
 
 type StorefrontBehaviorMode =
+  | "backend-first-load"
   | "checkout-bootstrap"
   | "validation-blocker"
   | "verification-recovery";
@@ -103,6 +104,19 @@ type AthenaConvexFailureBrowserResult = {
 };
 type StorefrontScenarioBrowserResult = {
   observedText: string;
+  consoleMessages: string[];
+};
+type StorefrontBackendRequestObservation = {
+  url: string;
+  method: string;
+  resourceType: string;
+  status?: number;
+  failureReason?: string;
+};
+type StorefrontBackendFirstLoadBrowserResult = {
+  observedText: string;
+  backendRequests: StorefrontBackendRequestObservation[];
+  diagnostics: StorefrontBackendRequestDiagnostic[];
   consoleMessages: string[];
 };
 type ValkeyScenarioBrowserResult = {
@@ -166,6 +180,124 @@ function createStorefrontRuntimeProcesses(mode: StorefrontBehaviorMode) {
       },
     },
   ] satisfies HarnessBehaviorScenario["processes"];
+}
+
+export type StorefrontBackendRequestDiagnostic = {
+  kind: "direct-convex-target" | "cors-preflight" | "request-failure" | "non-2xx-api-response";
+  url: string;
+  method: string;
+  status?: number;
+  failureReason?: string;
+};
+
+const SUPPORTED_STOREFRONT_FIRST_LOAD_PATHS = [
+  "/storefront",
+  "/users/me",
+  "/guests",
+  "/categories",
+  "/subcategories",
+  "/stores/promoCodes",
+  "/stores/promoCodeItems",
+  "/stores/redeemedPromoCodes",
+  "/banner-message",
+  "/bestSellers",
+  "/featured",
+] as const;
+
+function isStorefrontBackendRequest(url: string) {
+  try {
+    const parsedUrl = new URL(url);
+    return SUPPORTED_STOREFRONT_FIRST_LOAD_PATHS.some((pathname) =>
+      parsedUrl.pathname.startsWith(pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function diagnoseStorefrontBackendRequests(
+  requests: StorefrontBackendRequestObservation[],
+  consoleMessages: string[] = []
+): StorefrontBackendRequestDiagnostic[] {
+  const diagnostics: StorefrontBackendRequestDiagnostic[] = [];
+  const hasCorsConsoleEvidence = consoleMessages.some((message) =>
+    /\b(cors|preflight|access-control-allow-origin)\b/i.test(message)
+  );
+
+  for (const request of requests) {
+    const hostname = new URL(request.url).hostname;
+    const isDirectConvexTarget = hostname.endsWith(".convex.site");
+    const hasCorsRequestEvidence =
+      request.failureReason?.toLowerCase().includes("cors") ||
+      request.failureReason?.toLowerCase().includes("preflight") ||
+      request.failureReason?.toLowerCase().includes("access-control-allow-origin");
+    const isCorsPreflight =
+      hasCorsRequestEvidence ||
+      (request.method === "OPTIONS" &&
+        (hasCorsConsoleEvidence ||
+          request.status === 0 ||
+          request.status === 403 ||
+          request.status === 405));
+
+    if (isDirectConvexTarget) {
+      diagnostics.push({
+        kind: "direct-convex-target",
+        url: request.url,
+        method: request.method,
+        status: request.status,
+        failureReason: request.failureReason,
+      });
+    }
+
+    if (isCorsPreflight) {
+      diagnostics.push({
+        kind: "cors-preflight",
+        url: request.url,
+        method: request.method,
+        status: request.status,
+        failureReason:
+          request.failureReason ??
+          (hasCorsConsoleEvidence ? "CORS/preflight console failure" : "CORS preflight failed"),
+      });
+      continue;
+    }
+
+    if (request.failureReason) {
+      diagnostics.push({
+        kind: "request-failure",
+        url: request.url,
+        method: request.method,
+        status: request.status,
+        failureReason: request.failureReason,
+      });
+      continue;
+    }
+
+    if (request.status !== undefined && (request.status < 200 || request.status >= 300)) {
+      diagnostics.push({
+        kind: "non-2xx-api-response",
+        url: request.url,
+        method: request.method,
+        status: request.status,
+      });
+    }
+  }
+
+  return diagnostics;
+}
+
+function formatStorefrontBackendDiagnostic(
+  diagnostic: StorefrontBackendRequestDiagnostic
+) {
+  const details = [
+    `kind=${diagnostic.kind}`,
+    `url=${diagnostic.url}`,
+    `method=${diagnostic.method}`,
+    diagnostic.status === undefined ? undefined : `status=${diagnostic.status}`,
+    diagnostic.failureReason ? `reason=${diagnostic.failureReason}` : undefined,
+  ].filter(Boolean);
+
+  return details.join(" ");
 }
 
 const STOREFRONT_RUNTIME_READINESS_CHECKS: HarnessBehaviorScenario["readiness"] = [
@@ -653,6 +785,143 @@ export const STOREFRONT_CHECKOUT_BOOTSTRAP_SCENARIO: HarnessBehaviorScenario<Sto
     },
   };
 
+export const STOREFRONT_BACKEND_FIRST_LOAD_SCENARIO: HarnessBehaviorScenario<StorefrontBackendFirstLoadBrowserResult> =
+  {
+    name: "storefront-backend-first-load",
+    description:
+      "Boots the storefront with a realistic API target, records first-load backend requests, and fails on direct Convex browser traffic, CORS/preflight failures, request failures, or non-2xx API responses.",
+    processes: createStorefrontRuntimeProcesses("backend-first-load"),
+    readiness: STOREFRONT_RUNTIME_READINESS_CHECKS,
+    browser: async ({ runPlaywrightFlow }) => {
+      const backendRequests = new Map<string, StorefrontBackendRequestObservation>();
+
+      const flowResult = await runPlaywrightFlow({
+        url: `http://127.0.0.1:${STOREFRONT_RUNTIME_APP_PORT}/`,
+        setupPage: ({ page }) => {
+          page.on("request", (request) => {
+            const url = request.url();
+            if (!isStorefrontBackendRequest(url)) {
+              return;
+            }
+
+            backendRequests.set(`${request.method()} ${url}`, {
+              url,
+              method: request.method(),
+              resourceType: request.resourceType(),
+            });
+          });
+
+          page.on("response", (response) => {
+            const request = response.request();
+            const url = response.url();
+            if (!isStorefrontBackendRequest(url)) {
+              return;
+            }
+
+            const key = `${request.method()} ${url}`;
+            const existing = backendRequests.get(key);
+            backendRequests.set(key, {
+              url,
+              method: request.method(),
+              resourceType: request.resourceType(),
+              ...existing,
+              status: response.status(),
+            });
+          });
+
+          page.on("requestfailed", (request) => {
+            const url = request.url();
+            if (!isStorefrontBackendRequest(url)) {
+              return;
+            }
+
+            const key = `${request.method()} ${url}`;
+            const existing = backendRequests.get(key);
+            backendRequests.set(key, {
+              url,
+              method: request.method(),
+              resourceType: request.resourceType(),
+              ...existing,
+              failureReason: request.failure()?.errorText ?? "request failed",
+            });
+          });
+        },
+        steps: async ({ page }) => {
+          await page.waitForSelector("text=Harness Storefront", {
+            timeout: 30_000,
+          });
+
+          const observedText =
+            (await page.textContent("text=Harness Storefront"))?.trim() ?? "";
+          const requests = [...backendRequests.values()];
+
+          return {
+            observedText,
+            backendRequests: requests,
+            diagnostics: [],
+          };
+        },
+      });
+
+      const diagnostics = diagnoseStorefrontBackendRequests(
+        flowResult.stepResult.backendRequests,
+        flowResult.consoleMessages
+      );
+
+      return {
+        observedText: flowResult.stepResult.observedText,
+        backendRequests: flowResult.stepResult.backendRequests,
+        diagnostics,
+        consoleMessages: flowResult.consoleMessages,
+      };
+    },
+    runtimeSignals: [
+      {
+        name: "storefront-backend-first-load",
+        processId: "storefront-api",
+        source: "stdout",
+        pattern: "RUNTIME_SIGNAL:storefront-backend-first-load",
+        minMatches: 1,
+      },
+      {
+        name: "storefront-runtime-api-errors",
+        processId: "storefront-api",
+        source: "combined",
+        pattern: "Unhandled fixture route",
+        minMatches: 0,
+        maxMatches: 0,
+      },
+    ],
+    thresholds: STOREFRONT_RUNTIME_LATENCY_THRESHOLDS,
+    assert: async ({ browserResult, runtimeSignals }) => {
+      if (!browserResult.observedText.toLowerCase().includes("harness storefront")) {
+        throw new Error(
+          `Expected storefront first load to render "Harness Storefront", received "${browserResult.observedText}".`
+        );
+      }
+
+      if (browserResult.backendRequests.length < 1) {
+        throw new Error("Expected storefront first load to issue backend requests.");
+      }
+
+      if (browserResult.diagnostics.length > 0) {
+        throw new Error(
+          [
+            "Storefront first-load backend request validation failed:",
+            ...browserResult.diagnostics.map(formatStorefrontBackendDiagnostic),
+          ].join("\n")
+        );
+      }
+
+      const firstLoadSignal = runtimeSignals["storefront-backend-first-load"];
+      if (!firstLoadSignal || firstLoadSignal.matchCount < 1) {
+        throw new Error(
+          "Expected storefront backend first-load runtime signal in fixture API logs."
+        );
+      }
+    },
+  };
+
 export const STOREFRONT_CHECKOUT_VALIDATION_BLOCKER_SCENARIO: HarnessBehaviorScenario<StorefrontScenarioBrowserResult> =
   {
     name: "storefront-checkout-validation-blocker",
@@ -931,6 +1200,7 @@ export const HARNESS_BEHAVIOR_SCENARIOS: HarnessBehaviorScenario[] = [
   ATHENA_CONVEX_COMPOSITION_SCENARIO,
   ATHENA_CONVEX_FAILURE_VISIBILITY_SCENARIO,
   VALKEY_PROXY_LOCAL_REQUEST_RESPONSE_SCENARIO,
+  STOREFRONT_BACKEND_FIRST_LOAD_SCENARIO,
   STOREFRONT_CHECKOUT_BOOTSTRAP_SCENARIO,
   STOREFRONT_CHECKOUT_VALIDATION_BLOCKER_SCENARIO,
   STOREFRONT_CHECKOUT_VERIFICATION_RECOVERY_SCENARIO,

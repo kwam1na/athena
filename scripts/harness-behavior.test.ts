@@ -49,7 +49,7 @@ function createPlaywrightModule(launch: () => Promise<unknown>) {
   };
 }
 
-function createBrowser() {
+function createBrowser(overrides: Record<string, unknown> = {}) {
   const page = {
     goto: async () => {},
     on: () => {},
@@ -58,7 +58,9 @@ function createBrowser() {
     }),
     waitForSelector: async () => {},
     textContent: async () => null,
+    waitForResponse: async () => {},
     video: () => null,
+    ...overrides,
   };
 
   return {
@@ -452,6 +454,33 @@ describe("runPlaywrightFlow", () => {
     expect(result.stepResult).toEqual({ loaded: true });
     expect(launchCount).toBe(2);
     expect(installCount).toBe(1);
+  });
+
+  it("runs page setup before navigation so scenarios can capture first-load network requests", async () => {
+    const events: string[] = [];
+    const browser = createBrowser({
+      on: (event: string) => {
+        events.push(`on:${event}`);
+      },
+      goto: async () => {
+        events.push("goto");
+      },
+    });
+
+    await runPlaywrightFlow({
+      url: "http://127.0.0.1:4173",
+      playwrightModule: createPlaywrightModule(async () => browser),
+      setupPage: async ({ page }) => {
+        page.on("request", () => {});
+        events.push("setup");
+      },
+      steps: async () => {
+        events.push("steps");
+        return { loaded: true };
+      },
+    });
+
+    expect(events).toEqual(["on:console", "on:request", "setup", "goto", "steps"]);
   });
 
   it("does not auto-install missing Chromium in CI", async () => {

@@ -46,7 +46,9 @@
           "command": "bunx tsc --noEmit -p packages/storefront-webapp/tsconfig.json"
         }
       ],
-      "behaviorScenarios": []
+      "behaviorScenarios": [
+        "storefront-backend-first-load"
+      ]
     },
     {
       "name": "shared-lib-utility-or-api-wrapper-edits",
@@ -65,7 +67,9 @@
           "command": "bunx tsc --noEmit -p packages/storefront-webapp/tsconfig.json"
         }
       ],
-      "behaviorScenarios": []
+      "behaviorScenarios": [
+        "storefront-backend-first-load"
+      ]
     },
     {
       "name": "checkout-or-auth-route-boundary-edits",

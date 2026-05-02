@@ -1,0 +1,4 @@
+interface:
+  display_name: "Execute"
+  short_description: "Execute tracked Linear work end-to-end with test-first delivery, sensor validation, review, and compounding"
+  default_prompt: "Use $execute to resolve team/project context from the issue, explicit user input, or the current working directory and deliver an existing ticket autonomously end-to-end through test-first or characterization-first implementation, repo sensor validation, review, merge, Linear closure, and a compounding decision."

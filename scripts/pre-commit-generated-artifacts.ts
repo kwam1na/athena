@@ -53,6 +53,31 @@ async function stageTrackedGeneratedArtifacts(
   );
 }
 
+async function stageTrackedWorkingTreeChanges(
+  rootDir: string,
+  spawn: NonNullable<PreCommitGeneratedArtifactsOptions["spawn"]>
+) {
+  const command = ["git", "add", "--update", "--", "."];
+  const proc = spawn(command, {
+    cwd: rootDir,
+    stdout: "inherit",
+    stderr: "pipe",
+  });
+  const exitCode = await proc.exited;
+
+  if (exitCode === 0) {
+    return;
+  }
+
+  const stderr = proc.stderr
+    ? (await new Response(proc.stderr).text()).trim()
+    : "";
+  throw new Error(
+    stderr ||
+      `Failed to stage tracked working-tree changes (exit ${exitCode}): ${command.join(" ")}`
+  );
+}
+
 export async function runPreCommitGeneratedArtifacts(
   rootDir: string,
   options: PreCommitGeneratedArtifactsOptions = {}
@@ -85,6 +110,9 @@ export async function runPreCommitGeneratedArtifacts(
     TRACKED_GRAPHIFY_ARTIFACTS,
     "graphify"
   );
+
+  logger.log("[pre-commit] Staging tracked working-tree changes...");
+  await stageTrackedWorkingTreeChanges(rootDir, spawn);
 }
 
 export { TRACKED_GENERATED_HARNESS_DOCS, TRACKED_GRAPHIFY_ARTIFACTS };

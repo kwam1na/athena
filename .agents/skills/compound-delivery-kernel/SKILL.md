@@ -70,7 +70,7 @@ Agents may proactively create follow-up tickets when the work is concrete, scope
 Good reasons:
 - A repo sensor, validation map, local parity check, reviewer, or runtime scenario is missing or misleading.
 - Review or CI exposed a real gap that is not required to complete the current ticket.
-- A commit, push, pre-push, or repo harness gate blocked delivery and the agent had to do extra investigative or corrective work beyond running the documented repair once. Use `$create-linear-ticket` so the repo can later decide whether the failure class should be auto-repaired by the harness or reported with a more targeted diagnostic.
+- A commit, push, pre-push, or repo harness gate blocked delivery and the agent had to do extra investigative or corrective work beyond running the documented repair once. Use `$track` so the repo can later decide whether the failure class should be auto-repaired by the harness or reported with a more targeted diagnostic.
 - Implementation uncovered adjacent work that has a clear outcome but would expand current scope.
 - The compound decision identified a durable system improvement that needs implementation.
 
