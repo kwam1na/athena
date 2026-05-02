@@ -1204,7 +1204,34 @@ describe("runHarnessAudit", () => {
     );
 
     await expect(runHarnessAudit(rootDir)).rejects.toThrow(
-      /athena-webapp[\s\S]*Stale validation surface: packages\/athena-webapp\/src\/missing-runtime\//
+      /athena-webapp[\s\S]*Stale validation surface: packages\/athena-webapp\/docs\/agent\/validation-map\.json references missing path "packages\/athena-webapp\/src\/missing-runtime\//
+    );
+  });
+
+  it("reports app, validation map, and next action for stale mapped paths", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/docs/agent/validation-map.json",
+      JSON.stringify(
+        {
+          workspace: "@athena/webapp",
+          packageDir: "packages/athena-webapp",
+          surfaces: [
+            {
+              name: "config-runtime",
+              pathPrefixes: ["packages/athena-webapp/src/missing-validation-map-path.test.ts"],
+              commands: [{ kind: "script", script: "test" }],
+            },
+          ],
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+
+    await expect(runHarnessAudit(rootDir)).rejects.toThrow(
+      /athena-webapp[\s\S]*Stale validation surface: packages\/athena-webapp\/docs\/agent\/validation-map\.json references missing path "packages\/athena-webapp\/src\/missing-validation-map-path\.test\.ts"[\s\S]*Fixture drift: add "packages\/athena-webapp\/src\/missing-validation-map-path\.test\.ts" to the harness audit fixture, or repo drift: remove or update the stale validation-map path/
     );
   });
 
