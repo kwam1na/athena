@@ -3,6 +3,10 @@ import { Doc, Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import { v } from "convex/values";
 import { buildApprovalRequest } from "../operations/approvalRequestHelpers";
+import {
+  APPROVAL_ACTIONS,
+  consumeCommandApprovalProofWithCtx,
+} from "../operations/approvalActions";
 import { consumeApprovalProofWithCtx } from "../operations/approvalProofs";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { recordRegisterSessionTraceBestEffort } from "../operations/registerSessionTracing";
@@ -14,14 +18,18 @@ import {
   type ApprovalCommandResult,
   type CommandResult,
 } from "../../shared/commandResult";
+import type { ApprovalRequirement } from "../../shared/approvalPolicy";
 import { formatStaffDisplayName } from "../../shared/staffDisplayName";
 
 const CLOSEOUT_SESSION_LIMIT = 100;
 const DEFAULT_VARIANCE_APPROVAL_THRESHOLD = 5000;
-const REGISTER_VARIANCE_REVIEW_ACTION_KEY =
-  "cash_controls.register_session.review_variance";
+const REGISTER_VARIANCE_REVIEW_ACTION =
+  APPROVAL_ACTIONS.registerSessionVarianceReview;
+const REGISTER_VARIANCE_REVIEW_ACTION_KEY = REGISTER_VARIANCE_REVIEW_ACTION.key;
+const REGISTER_OPENING_FLOAT_CORRECTION_ACTION =
+  APPROVAL_ACTIONS.registerSessionOpeningFloatCorrection;
 const REGISTER_OPENING_FLOAT_CORRECTION_ACTION_KEY =
-  "cash_controls.register_session.correct_opening_float";
+  REGISTER_OPENING_FLOAT_CORRECTION_ACTION.key;
 
 const userErrorValidator = v.object({
   code: v.union(
@@ -64,24 +72,6 @@ type CloseoutApprovalRequestSummary = {
 
 type RegisterSessionCloseoutReview = ReturnType<typeof buildRegisterSessionCloseoutReview>;
 
-type RegisterSessionVarianceApprovalRequirement = {
-  actionKey: typeof REGISTER_VARIANCE_REVIEW_ACTION_KEY;
-  approvalRequestId?: Id<"approvalRequest">;
-  mode: "async_approval";
-  reason: string;
-  requiredRole: "manager";
-  subject: {
-    id: Id<"registerSession">;
-    label?: string;
-    type: "register_session";
-  };
-  context: {
-    countedCash: number;
-    expectedCash: number;
-    variance: number;
-  };
-};
-
 type CloseoutSnapshot = {
   config: CashControlsConfig;
   registerSessions: Array<
@@ -97,6 +87,7 @@ type CloseoutSnapshot = {
 type SubmitRegisterSessionCloseoutArgs = {
   actorStaffProfileId?: Id<"staffProfile">;
   actorUserId?: Id<"athenaUser">;
+  approvalProofId?: Id<"approvalProof">;
   countedCash: number;
   notes?: string;
   registerSessionId: Id<"registerSession">;
@@ -104,18 +95,11 @@ type SubmitRegisterSessionCloseoutArgs = {
 };
 
 type SubmitRegisterSessionCloseoutResult =
-  | {
-      action: "approval_required";
-      approvalRequirement: RegisterSessionVarianceApprovalRequirement;
-      approvalRequest: Doc<"approvalRequest"> | null;
-      closeoutReview: RegisterSessionCloseoutReview;
-      registerSession: Doc<"registerSession"> | null;
-    }
-  | {
-      action: "closed";
-      closeoutReview: RegisterSessionCloseoutReview;
-      registerSession: Doc<"registerSession"> | null;
-    };
+  {
+    action: "closed";
+    closeoutReview: RegisterSessionCloseoutReview;
+    registerSession: Doc<"registerSession"> | null;
+  };
 
 type ReviewRegisterSessionCloseoutArgs = {
   approvalProofId: Id<"approvalProof">;
@@ -204,45 +188,11 @@ const closeoutReviewValidator = v.object({
   variance: v.number(),
 });
 
-const registerSessionVarianceApprovalRequirementValidator = v.object({
-  actionKey: v.literal("cash_controls.register_session.review_variance"),
-  approvalRequestId: v.optional(v.id("approvalRequest")),
-  context: v.object({
-    countedCash: v.number(),
-    expectedCash: v.number(),
-    variance: v.number(),
-  }),
-  mode: v.literal("async_approval"),
-  reason: v.string(),
-  requiredRole: v.literal("manager"),
-  subject: v.object({
-    id: v.id("registerSession"),
-    label: v.optional(v.string()),
-    type: v.literal("register_session"),
-  }),
-});
-
-const submitRegisterSessionCloseoutResultValidator = v.union(
+const submitRegisterSessionCloseoutResultValidator = commandResultValidator(
   v.object({
-    kind: v.literal("ok"),
-    data: v.union(
-      v.object({
-        action: v.literal("approval_required"),
-        approvalRequirement: registerSessionVarianceApprovalRequirementValidator,
-        approvalRequest: v.union(v.null(), v.any()),
-        closeoutReview: closeoutReviewValidator,
-        registerSession: v.union(v.null(), v.any()),
-      }),
-      v.object({
-        action: v.literal("closed"),
-        closeoutReview: closeoutReviewValidator,
-        registerSession: v.union(v.null(), v.any()),
-      }),
-    ),
-  }),
-  v.object({
-    kind: v.literal("user_error"),
-    error: userErrorValidator,
+    action: v.literal("closed"),
+    closeoutReview: closeoutReviewValidator,
+    registerSession: v.union(v.null(), v.any()),
   }),
 );
 
@@ -414,24 +364,41 @@ export function buildRegisterSessionVarianceApprovalRequirement(args: {
   countedCash: number;
   expectedCash: number;
   registerSession: Pick<Doc<"registerSession">, "_id" | "registerNumber">;
-}): RegisterSessionVarianceApprovalRequirement {
+}): ApprovalRequirement {
   return {
-    actionKey: REGISTER_VARIANCE_REVIEW_ACTION_KEY,
-    approvalRequestId: args.approvalRequestId,
-    mode: "async_approval",
+    action: REGISTER_VARIANCE_REVIEW_ACTION,
+    copy: {
+      title: "Manager approval required",
+      message:
+        args.closeoutReview.reason ??
+        "Manager review is required before this register session can close.",
+      primaryActionLabel: "Approve closeout",
+      secondaryActionLabel: "Got it",
+    },
+    metadata: {
+      countedCash: args.countedCash,
+      expectedCash: args.expectedCash,
+      variance: args.closeoutReview.variance,
+    },
     reason:
       args.closeoutReview.reason ??
       "Manager approval is required before this register session can close.",
     requiredRole: "manager",
+    resolutionModes: [
+      {
+        kind: "inline_manager_proof",
+      },
+      {
+        approvalRequestId: args.approvalRequestId,
+        kind: "async_request",
+        requestType: "variance_review",
+      },
+    ],
+    selfApproval: "allowed",
     subject: {
       id: args.registerSession._id,
       label: args.registerSession.registerNumber,
       type: "register_session",
-    },
-    context: {
-      countedCash: args.countedCash,
-      expectedCash: args.expectedCash,
-      variance: args.closeoutReview.variance,
     },
   };
 }
@@ -646,6 +613,7 @@ export const submitRegisterSessionCloseout = mutation({
   args: {
     actorStaffProfileId: v.optional(v.id("staffProfile")),
     actorUserId: v.optional(v.id("athenaUser")),
+    approvalProofId: v.optional(v.id("approvalProof")),
     countedCash: v.number(),
     notes: v.optional(v.string()),
     registerSessionId: v.id("registerSession"),
@@ -655,7 +623,7 @@ export const submitRegisterSessionCloseout = mutation({
   handler: async (
     ctx: MutationCtx,
     args: SubmitRegisterSessionCloseoutArgs
-  ): Promise<CommandResult<SubmitRegisterSessionCloseoutResult>> => {
+  ): Promise<ApprovalCommandResult<SubmitRegisterSessionCloseoutResult>> => {
     if (args.countedCash < 0) {
       return userError({
         code: "validation_failed",
@@ -688,6 +656,48 @@ export const submitRegisterSessionCloseout = mutation({
       config,
       expectedCash: registerSession.expectedCash,
     });
+    let approvedByStaffProfileId: Id<"staffProfile"> | undefined;
+
+    if (closeoutReview.requiresApproval && args.approvalProofId) {
+      if (!registerSession.organizationId) {
+        return userError({
+          code: "precondition_failed",
+          message: "Register session is missing organization context.",
+        });
+      }
+
+      const proof = await consumeCommandApprovalProofWithCtx(ctx, {
+        action: REGISTER_VARIANCE_REVIEW_ACTION,
+        approvalProofId: args.approvalProofId,
+        requiredRole: "manager",
+        requestedByStaffProfileId: args.actorStaffProfileId,
+        storeId: args.storeId,
+        subject: {
+          type: "register_session",
+          id: registerSession._id,
+          label: registerSession.registerNumber,
+        },
+      });
+
+      if (proof.kind !== "ok") {
+        return proof;
+      }
+
+      const canReviewVariance = await staffProfileCanReviewCloseoutVariance(ctx, {
+        organizationId: registerSession.organizationId,
+        staffProfileId: proof.data.approvedByStaffProfileId,
+        storeId: args.storeId,
+      });
+
+      if (!canReviewVariance) {
+        return userError({
+          code: "authorization_failed",
+          message: "Only managers can approve or reject register variance reviews.",
+        });
+      }
+
+      approvedByStaffProfileId = proof.data.approvedByStaffProfileId;
+    }
 
     const closingSession = await ctx.runMutation(
       internal.operations.registerSessions.beginRegisterSessionCloseout,
@@ -732,6 +742,82 @@ export const submitRegisterSessionCloseout = mutation({
         reviewedByStaffProfileId: args.actorStaffProfileId,
         reviewedByUserId: args.actorUserId,
       });
+
+      if (approvedByStaffProfileId) {
+        const closedSession = await ctx.runMutation(
+          internal.operations.registerSessions.closeRegisterSession,
+          {
+            closedByStaffProfileId: approvedByStaffProfileId,
+            closedByUserId: args.actorUserId,
+            countedCash: args.countedCash,
+            registerSessionId: args.registerSessionId,
+          }
+        );
+
+        await recordOperationalEventWithCtx(ctx, {
+          actorStaffProfileId: approvedByStaffProfileId,
+          actorUserId: args.actorUserId,
+          eventType: "register_session_closeout_approved",
+          message: "Manager approved the register closeout.",
+          metadata: {
+            actionKey: REGISTER_VARIANCE_REVIEW_ACTION_KEY,
+            approvalMode: "inline_manager_proof",
+            approvalProofId: args.approvalProofId,
+            countedCash: args.countedCash,
+            decision: "approved",
+            expectedCash: registerSession.expectedCash,
+            requiredRole: "manager",
+            variance: closeoutReview.variance,
+          },
+          organizationId: registerSession.organizationId,
+          reason: trimOptional(args.notes),
+          registerSessionId: registerSession._id,
+          storeId: args.storeId,
+          subjectId: registerSession._id,
+          subjectLabel: registerSession.registerNumber,
+          subjectType: "register_session",
+        });
+
+        const approvalTraceResult = await recordRegisterSessionTraceBestEffort(ctx, {
+          stage: "closeout_approved",
+          session: closedSession ?? registerSession,
+          occurredAt: closedSession?.closedAt,
+          actorStaffProfileId: approvedByStaffProfileId,
+          actorUserId: args.actorUserId,
+          countedCash: args.countedCash,
+          variance: closeoutReview.variance,
+        });
+
+        await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
+          registerSessionId: registerSession._id,
+          traceCreated: approvalTraceResult.traceCreated,
+          traceId: approvalTraceResult.traceId,
+          workflowTraceId: closedSession?.workflowTraceId,
+        });
+
+        const closedTraceResult = await recordRegisterSessionTraceBestEffort(ctx, {
+          stage: "closed",
+          session: closedSession ?? registerSession,
+          occurredAt: closedSession?.closedAt,
+          actorStaffProfileId: approvedByStaffProfileId,
+          actorUserId: args.actorUserId,
+          countedCash: args.countedCash,
+          variance: closeoutReview.variance,
+        });
+
+        await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
+          registerSessionId: registerSession._id,
+          traceCreated: closedTraceResult.traceCreated,
+          traceId: closedTraceResult.traceId,
+          workflowTraceId: closedSession?.workflowTraceId,
+        });
+
+        return ok({
+          action: "closed" as const,
+          closeoutReview,
+          registerSession: closedSession,
+        });
+      }
 
       const approvalRequestId = await ctx.db.insert(
         "approvalRequest",
@@ -826,13 +912,7 @@ export const submitRegisterSessionCloseout = mutation({
         workflowTraceId: approvalPendingSession?.workflowTraceId,
       });
 
-      return ok({
-        action: "approval_required" as const,
-        approvalRequirement,
-        approvalRequest,
-        closeoutReview,
-        registerSession: approvalPendingSession,
-      });
+      return approvalRequired(approvalRequirement);
     }
 
     await cancelPendingApprovalIfNeeded({
@@ -1025,8 +1105,8 @@ export const correctRegisterSessionOpeningFloat = mutation({
       );
     }
 
-    const approvalProof = await consumeApprovalProofWithCtx(ctx, {
-      actionKey: REGISTER_OPENING_FLOAT_CORRECTION_ACTION_KEY,
+    const approvalProof = await consumeCommandApprovalProofWithCtx(ctx, {
+      action: REGISTER_OPENING_FLOAT_CORRECTION_ACTION,
       approvalProofId: args.approvalProofId,
       requiredRole: "manager",
       storeId: args.storeId,

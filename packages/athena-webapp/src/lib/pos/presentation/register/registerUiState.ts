@@ -1,5 +1,6 @@
 import type { FormEvent } from "react";
 
+import type { CommandApprovalDialogProps } from "@/components/operations/CommandApprovalDialog";
 import type {
   CustomerInfo,
   CartItem,
@@ -189,6 +190,16 @@ export interface RegisterAuthDialogState {
   onDismiss: () => void;
 }
 
+export interface RegisterCloseoutApprovalDialogState {
+  approval: CommandApprovalDialogProps["approval"];
+  onApproved: CommandApprovalDialogProps["onApproved"];
+  onAuthenticateForApproval: CommandApprovalDialogProps["onAuthenticateForApproval"];
+  onDismiss: () => void;
+  open: boolean;
+  requestedByStaffProfileId?: Id<"staffProfile">;
+  storeId: Id<"store">;
+}
+
 export type RegisterWorkflowMode = "pos" | "expense";
 
 export interface RegisterOnboardingState {
@@ -215,6 +226,7 @@ export interface RegisterViewModel {
   drawerGate: RegisterDrawerGateState | null;
   closeoutControl: RegisterCloseoutControlState | null;
   authDialog: RegisterAuthDialogState | null;
+  closeoutApprovalDialog: RegisterCloseoutApprovalDialogState | null;
   onNavigateBack: () => Promise<void>;
 }
 

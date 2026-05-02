@@ -7,9 +7,9 @@ This key-folder index highlights the main directories agents are likely to need 
 ## Core app surfaces
 
 - [`src/routes`](../../src/routes) — TanStack route entrypoints and authenticated shells. Currently 70 file(s); key children: __root.tsx, _authed, _authed.test.tsx, _authed.tsx, index.test.tsx.
-- [`src/components`](../../src/components) — UI components, views, and package-local feature widgets. Currently 521 file(s); key children: GenericComboBox.tsx, Navbar.tsx, OrganizationView.tsx, OrganizationsView.tsx, PermissionGate.tsx.
+- [`src/components`](../../src/components) — UI components, views, and package-local feature widgets. Currently 523 file(s); key children: GenericComboBox.tsx, Navbar.tsx, OrganizationView.tsx, OrganizationsView.tsx, PermissionGate.tsx.
 - [`src/components/traces`](../../src/components/traces) — Shared workflow trace screens, ordered timelines, and trace detail primitives. Currently 3 file(s); key children: WorkflowTraceRouteLink.tsx, WorkflowTraceView.test.tsx, WorkflowTraceView.tsx.
-- [`src/components/operations`](../../src/components/operations) — Manager-queue and stock-adjustment workflows that share approval rails with other operational surfaces. Currently 7 file(s); key children: CommandApprovalDialog.test.tsx, CommandApprovalDialog.tsx, OperationsQueueView.auth.test.tsx, OperationsQueueView.test.tsx, OperationsQueueView.tsx.
+- [`src/components/operations`](../../src/components/operations) — Manager-queue and stock-adjustment workflows that share approval rails with other operational surfaces. Currently 9 file(s); key children: CommandApprovalDialog.test.tsx, CommandApprovalDialog.tsx, OperationsQueueView.auth.test.tsx, OperationsQueueView.test.tsx, OperationsQueueView.tsx.
 - [`src/components/procurement`](../../src/components/procurement) — Procurement planning and receiving views for replenishment pressure and purchase-order execution. Currently 4 file(s); key children: ProcurementView.test.tsx, ProcurementView.tsx, ReceivingView.test.tsx, ReceivingView.tsx.
 - [`src/hooks`](../../src/hooks) — React hooks that fan out auth, shell, and feature state. Currently 40 file(s); key children: use-image-upload.ts, use-mobile.tsx, use-navigate-back.ts, use-navigation-keyboard-shortcuts.ts, use-pagination-persistence.ts.
 - [`src/contexts`](../../src/contexts) — Context providers for app-wide state and wiring. Currently 5 file(s); key children: OnlineOrderContext.tsx, PermissionsContext.tsx, ProductContext.tsx, ThemeContext.tsx, UserContext.tsx.
@@ -22,7 +22,7 @@ This key-folder index highlights the main directories agents are likely to need 
 - [`convex/stockOps`](../../convex/stockOps) — Stock-adjustment, procurement, replenishment, receiving, and vendor flows layered over inventory state. Currently 12 file(s); key children: access.test.ts, access.ts, adjustments.test.ts, adjustments.ts, purchaseOrders.test.ts.
 - [`convex/serviceOps`](../../convex/serviceOps) — Service catalog, appointment, and service-case workflows layered on operational work items. Currently 6 file(s); key children: appointments.ts, catalog.ts, catalogAppointments.test.ts, moduleWiring.test.ts, serviceCases.test.ts.
 - [`convex/workflowTraces`](../../convex/workflowTraces) — Shared workflow trace creation, lookup, presentation, and adapter helpers. Currently 11 file(s); key children: adapters, core.ts, presentation.test.ts, presentation.ts, public.ts.
-- [`convex`](../../convex) — Convex functions, HTTP composition, schemas, and backend tests. Currently 376 file(s); key children: README.md, _generated, app.ts, auth.config.js, auth.ts.
+- [`convex`](../../convex) — Convex functions, HTTP composition, schemas, and backend tests. Currently 377 file(s); key children: README.md, _generated, app.ts, auth.config.js, auth.ts.
 - [`src/tests`](../../src/tests) — Focused browser-facing regression tests. Currently 6 file(s); key children: README.md, SUMMARY.md, pos.
 - [`src/test`](../../src/test) — Package test harness helpers and setup. Currently 1 file(s); key children: setup.ts.
 

@@ -177,6 +177,7 @@ vi.mock("../../operations/CommandApprovalDialog", () => ({
     onAuthenticateForApproval,
     onApproved,
     open,
+    requestedByStaffProfileId,
   }: {
     approval: {
       action: { key: string };
@@ -195,6 +196,7 @@ vi.mock("../../operations/CommandApprovalDialog", () => ({
       pinHash: string;
       reason?: string;
       requiredRole: "manager";
+      requestedByStaffProfileId?: string;
       storeId: string;
       subject: { id: string; label?: string; type: string };
       username: string;
@@ -212,6 +214,7 @@ vi.mock("../../operations/CommandApprovalDialog", () => ({
       expiresAt: number;
     }) => void;
     open: boolean;
+    requestedByStaffProfileId?: string;
   }) =>
     open && approval ? (
       <div data-testid="command-approval-dialog">
@@ -227,6 +230,7 @@ vi.mock("../../operations/CommandApprovalDialog", () => ({
                 pinHash: "123456",
                 reason: approval.reason,
                 requiredRole: approval.requiredRole,
+                requestedByStaffProfileId,
                 storeId: "store_1",
                 subject: approval.subject,
                 username: "manager",
@@ -323,6 +327,34 @@ describe("TransactionView", () => {
     customerInfo: undefined,
     items: [],
   };
+
+  function paymentApprovalRequirement(transactionId = "txn_19") {
+    return {
+      action: { key: "pos.transaction.correct_payment_method" },
+      copy: {
+        title: "Manager approval required",
+        message:
+          "A manager needs to review this completed transaction payment method update before it is applied.",
+        primaryActionLabel: "Approve update",
+      },
+      reason:
+        "Manager approval is required to correct a completed transaction payment method.",
+      requiredRole: "manager" as const,
+      resolutionModes: [
+        { kind: "inline_manager_proof" },
+        {
+          approvalRequestId: "approval-1",
+          kind: "async_request",
+          requestType: "payment_method_correction",
+        },
+      ],
+      subject: {
+        id: transactionId,
+        label: "Transaction #POS-123456",
+        type: "pos_transaction",
+      },
+    };
+  }
 
   beforeEach(() => {
     useMutationMock.mockReset();
@@ -816,7 +848,13 @@ describe("TransactionView", () => {
       },
     });
     const customerMutation = vi.fn();
-    const paymentMutation = vi.fn().mockResolvedValue({ kind: "ok" });
+    const paymentMutation = vi
+      .fn()
+      .mockResolvedValueOnce({
+        kind: "approval_required",
+        approval: paymentApprovalRequirement("txn_19"),
+      })
+      .mockResolvedValueOnce({ kind: "ok" });
     mockTransactionMutations(
       authMutation,
       customerMutation,
@@ -842,6 +880,7 @@ describe("TransactionView", () => {
       screen.getByRole("button", { name: "Submit payment update" }),
     );
     await user.click(screen.getByRole("button", { name: "Confirm" }));
+    await user.click(await screen.findByRole("button", { name: "Approve update" }));
 
     await waitFor(() => {
       expect(approvalMutation).toHaveBeenCalledWith({

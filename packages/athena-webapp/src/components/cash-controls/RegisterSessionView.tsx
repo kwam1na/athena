@@ -41,6 +41,7 @@ import type { Id } from "~/convex/_generated/dataModel";
 import { toDisplayAmount } from "~/convex/lib/currency";
 import { userError, type CommandResult } from "~/shared/commandResult";
 import type { ApprovalRequirement } from "~/shared/approvalPolicy";
+import { currencyDisplaySymbol } from "~/shared/currencyFormatter";
 import { formatStaffDisplayName } from "~/shared/staffDisplayName";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
@@ -160,6 +161,7 @@ type RegisterSessionDepositResult =
 
 type RegisterCloseoutSubmitArgs = {
   actorStaffProfileId: string;
+  approvalProofId?: string;
   countedCash: number;
   notes?: string;
   registerSessionId: string;
@@ -173,18 +175,11 @@ type RegisterCloseoutReviewArgs = {
 };
 
 type RegisterCloseoutCommandPayload = {
-  action?: "approval_required" | "closed" | "approved" | "rejected";
-  approvalRequirement?: {
-    actionKey: "cash_controls.register_session.review_variance";
-    approvalRequestId?: string;
-    mode: "async_approval";
-    reason: string;
-    requiredRole: "manager";
-  };
+  action?: "closed" | "approved" | "rejected";
 };
 
 type RegisterCloseoutCommandResult =
-  NormalizedCommandResult<RegisterCloseoutCommandPayload>;
+  NormalizedApprovalCommandResult<RegisterCloseoutCommandPayload>;
 
 type StaffAuthenticationCommandResult =
   NormalizedCommandResult<StaffAuthenticationResult>;
@@ -233,6 +228,7 @@ type RegisterSessionViewContentProps = {
     pinHash: string;
     reason?: string;
     registerSessionId: string;
+    requestedByStaffProfileId?: Id<"staffProfile">;
     username: string;
   }) => Promise<CloseoutApprovalAuthenticationCommandResult>;
   onAuthenticateForApproval?: CommandApprovalDialogProps["onAuthenticateForApproval"];
@@ -268,6 +264,10 @@ type OpeningFloatCorrectionIntent = {
 function trimOptional(value?: string) {
   const nextValue = value?.trim();
   return nextValue ? nextValue : undefined;
+}
+
+function isManagerStaff(staff: StaffAuthenticationResult) {
+  return staff.activeRoles?.includes("manager") ?? false;
 }
 
 function buildDepositSubmissionKey(registerSessionId: string) {
@@ -505,6 +505,11 @@ export function RegisterSessionViewContent({
   const applyCloseoutCommandResult = (
     result: RegisterCloseoutCommandResult,
   ) => {
+    if (isApprovalRequiredResult(result)) {
+      setCloseoutErrorMessage("");
+      return true;
+    }
+
     if (result.kind === "ok") {
       setCloseoutErrorMessage("");
       return true;
@@ -574,11 +579,22 @@ export function RegisterSessionViewContent({
       return;
     }
 
+    const trimmedCloseoutNotes = trimOptional(closeoutNotes);
+    const expectedCloseoutCash =
+      registerSession.netExpectedCash ?? registerSession.expectedCash;
+
+    if (parsedCountedCash !== expectedCloseoutCash && !trimmedCloseoutNotes) {
+      setCloseoutErrorMessage(
+        "Add closeout notes before submitting a count with variance.",
+      );
+      return;
+    }
+
     setCloseoutErrorMessage("");
     setCloseoutStaffAuthIntent({
       kind: "submit",
       countedCash: parsedCountedCash,
-      notes: trimOptional(closeoutNotes),
+      notes: trimmedCloseoutNotes,
       registerSessionId: registerSession._id,
     });
   }
@@ -675,6 +691,7 @@ export function RegisterSessionViewContent({
         intent.kind === "submit"
           ? await onSubmitCloseout({
               actorStaffProfileId: result.staffProfileId,
+              approvalProofId: result.approvalProofId,
               countedCash: intent.countedCash,
               notes: intent.notes,
               registerSessionId: intent.registerSessionId,
@@ -802,11 +819,13 @@ export function RegisterSessionViewContent({
   const expectedCash =
     registerSession?.netExpectedCash ?? registerSession?.expectedCash ?? 0;
   const reviewReasonFormatter = currencyFormatter(currency);
+  const formattedCurrency = currencyDisplaySymbol(currency);
   const parsedCountedCash = parseDisplayAmountInput(countedCash);
   const draftVariance =
     registerSession && parsedCountedCash !== undefined
       ? parsedCountedCash - expectedCash
       : (registerSession?.variance ?? null);
+  const closeoutNotesRequired = draftVariance !== null && draftVariance !== 0;
   const hasPendingCloseoutApproval =
     registerSession?.pendingApprovalRequest?.status === "pending";
   const formattedApprovalReason = formatReviewReason(
@@ -817,6 +836,18 @@ export function RegisterSessionViewContent({
     reviewReasonFormatter,
     registerSessionSnapshot?.closeoutReview?.reason,
   );
+  const correctionTimeline = (registerSessionSnapshot?.timeline ?? []).filter(
+    isRegisterSessionCorrectionEvent,
+  );
+  const hasCloseoutRejectionHistory = correctionTimeline.some(
+    isCloseoutRejectionEvent,
+  );
+  const isClosedRegisterSession = registerSession?.status === "closed";
+  const hasRejectedCloseoutApproval =
+    registerSession?.pendingApprovalRequest?.status === "rejected";
+  const needsCloseoutCorrection =
+    !isClosedRegisterSession &&
+    (hasRejectedCloseoutApproval || hasCloseoutRejectionHistory);
   const headerTitle = registerSession
     ? formatRegisterHeaderName(registerSession.registerNumber)
     : "Register detail";
@@ -835,9 +866,11 @@ export function RegisterSessionViewContent({
     registerSession?.status === "closed"
       ? "Closed"
       : registerSession?.status === "closing"
-        ? registerSession.pendingApprovalRequest
-          ? "Manager approval pending"
-          : "Closeout in progress"
+        ? needsCloseoutCorrection
+          ? "Closeout rejected"
+          : hasPendingCloseoutApproval
+            ? "Manager approval pending"
+            : "Closeout in progress"
         : undefined;
   const shouldShowCloseoutSummary = Boolean(closeoutState);
   const closeoutTimestamp =
@@ -863,13 +896,6 @@ export function RegisterSessionViewContent({
     registerSession && correctedOpeningFloatAmount !== undefined
       ? correctedOpeningFloatAmount - registerSession.openingFloat
       : null;
-  const isClosedRegisterSession = registerSession?.status === "closed";
-  const correctionTimeline = (registerSessionSnapshot?.timeline ?? []).filter(
-    isRegisterSessionCorrectionEvent,
-  );
-  const hasCloseoutRejectionHistory = correctionTimeline.some(
-    isCloseoutRejectionEvent,
-  );
   const hasOpeningFloatCorrectionHistory = correctionTimeline.some(
     isOpeningFloatCorrectionEvent,
   );
@@ -892,6 +918,9 @@ export function RegisterSessionViewContent({
   const correctionHistoryLabel = hasCloseoutRejectionHistory
     ? "Closeout history"
     : "Correction history";
+  const closeoutFollowUpMessage = needsCloseoutCorrection
+    ? "Manager rejected this closeout. Recount or correct the drawer before submitting again."
+    : formattedApprovalReason;
   const shouldShowProminentCorrectionPanel =
     Boolean(registerSession) &&
     (isOpeningFloatCorrectionOpen ||
@@ -1062,13 +1091,58 @@ export function RegisterSessionViewContent({
             });
           }
 
-          return onAuthenticateStaff({
-            allowedRoles:
-              closeoutStaffAuthIntent?.kind === "review"
-                ? ["manager"]
-                : ["cashier", "manager"],
-            pinHash: args.pinHash,
-            username: args.username,
+          return Promise.resolve(
+            onAuthenticateStaff({
+              allowedRoles:
+                closeoutStaffAuthIntent?.kind === "review"
+                  ? ["manager"]
+                  : ["cashier", "manager"],
+              pinHash: args.pinHash,
+              username: args.username,
+            }),
+          ).then(async (staffResult) => {
+            if (
+              !staffResult ||
+              closeoutStaffAuthIntent?.kind !== "submit" ||
+              staffResult.kind !== "ok" ||
+              !isManagerStaff(staffResult.data) ||
+              !onAuthenticateCloseoutReviewApproval
+            ) {
+              return staffResult;
+            }
+
+            const expectedCloseoutCash =
+              registerSession?.netExpectedCash ?? registerSession?.expectedCash;
+
+            if (
+              expectedCloseoutCash === undefined ||
+              closeoutStaffAuthIntent.countedCash === expectedCloseoutCash
+            ) {
+              return staffResult;
+            }
+
+            const approvalResult = await onAuthenticateCloseoutReviewApproval({
+              pinHash: args.pinHash,
+              reason: closeoutStaffAuthIntent.notes,
+              registerSessionId: closeoutStaffAuthIntent.registerSessionId,
+              requestedByStaffProfileId: staffResult.data.staffProfileId,
+              username: args.username,
+            });
+
+            if (approvalResult.kind !== "ok") {
+              return approvalResult;
+            }
+
+            return {
+              kind: "ok" as const,
+              data: {
+                ...staffResult.data,
+                approvalProofId: approvalResult.data.approvalProofId,
+                approvedByStaffProfileId:
+                  approvalResult.data.approvedByStaffProfileId,
+                expiresAt: approvalResult.data.expiresAt,
+              },
+            };
           });
         }}
         onAuthenticated={(result) => {
@@ -1267,13 +1341,13 @@ export function RegisterSessionViewContent({
                     </div>
                   </dl>
 
-                  {formattedApprovalReason ? (
+                  {closeoutFollowUpMessage ? (
                     <div className="mt-layout-lg border-t border-border/70 pt-layout-lg">
                       <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
                         Manager follow-up
                       </p>
                       <p className="mt-2 text-sm text-foreground">
-                        {formattedApprovalReason}
+                        {closeoutFollowUpMessage}
                       </p>
                     </div>
                   ) : null}
@@ -1820,7 +1894,7 @@ export function RegisterSessionViewContent({
             <aside className="space-y-6 rounded-[calc(var(--radius)*1.25)] border border-border bg-surface px-layout-lg py-layout-lg shadow-surface">
               {!hasPendingCloseoutApproval ? (
                 <div className="space-y-4">
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
                       Closeout workflow
                     </p>
@@ -1916,7 +1990,7 @@ export function RegisterSessionViewContent({
 
                       <label className="block space-y-2">
                         <span className="text-sm font-medium text-foreground">
-                          Counted cash
+                          Counted cash ({formattedCurrency})
                         </span>
                         <Input
                           aria-label="Closeout counted cash"
@@ -1962,13 +2036,20 @@ export function RegisterSessionViewContent({
                         </span>
                         <Textarea
                           aria-label="Closeout notes"
+                          aria-required={closeoutNotesRequired}
                           className="min-h-[96px] border-input bg-background"
                           onChange={(event) =>
                             setCloseoutNotes(event.target.value)
                           }
                           placeholder="Add drawer notes if anything needs follow-up."
+                          required={closeoutNotesRequired}
                           value={closeoutNotes}
                         />
+                        {closeoutNotesRequired ? (
+                          <p className="text-xs text-muted-foreground">
+                            Notes are required when the count has variance.
+                          </p>
+                        ) : null}
                       </label>
 
                       <LoadingButton
@@ -2172,6 +2253,9 @@ export function RegisterSessionView() {
       submitRegisterSessionCloseout({
         actorStaffProfileId: args.actorStaffProfileId as Id<"staffProfile">,
         actorUserId: user._id,
+        approvalProofId: args.approvalProofId as
+          | Id<"approvalProof">
+          | undefined,
         countedCash: args.countedCash,
         notes: args.notes,
         registerSessionId: args.registerSessionId as Id<"registerSession">,
@@ -2180,11 +2264,7 @@ export function RegisterSessionView() {
     );
 
     if (result.kind === "ok") {
-      toast.success(
-        result.data?.action === "approval_required"
-          ? "Closeout submitted for manager review"
-          : "Register session closed",
-      );
+      toast.success("Register session closed");
     }
 
     return result;
@@ -2216,6 +2296,7 @@ export function RegisterSessionView() {
     pinHash: string;
     reason?: string;
     registerSessionId: string;
+    requestedByStaffProfileId?: Id<"staffProfile">;
     username: string;
   }): Promise<CloseoutApprovalAuthenticationCommandResult> {
     if (!activeStore?._id) {
@@ -2233,6 +2314,7 @@ export function RegisterSessionView() {
           pinHash: args.pinHash,
           reason: args.reason,
           requiredRole: "manager",
+          requestedByStaffProfileId: args.requestedByStaffProfileId,
           storeId: activeStore._id,
           subject: {
             id: args.registerSessionId,

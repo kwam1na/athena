@@ -42,7 +42,6 @@ import {
 import {
   isApprovalRequiredResult,
   runCommand,
-  type NormalizedCommandResult,
 } from "~/src/lib/errors/runCommand";
 import type {
   ApprovalCommandResult,
@@ -53,10 +52,7 @@ import {
   type StaffAuthenticationResult,
 } from "../../staff-auth/StaffAuthenticationDialog";
 import { useProtectedAdminPageState } from "~/src/hooks/useProtectedAdminPageState";
-import {
-  CommandApprovalDialog,
-  type CommandApprovalProofResult,
-} from "../../operations/CommandApprovalDialog";
+import { useApprovedCommand } from "../../operations/useApprovedCommand";
 import type { ApprovalRequirement } from "~/shared/approvalPolicy";
 
 type RouteParams =
@@ -79,11 +75,6 @@ type PaymentMethodCorrectionResultData = {
   approvalProofId: Id<"approvalProof">;
   approverStaffProfileId: Id<"staffProfile">;
 };
-
-const PAYMENT_METHOD_CORRECTION_ACTION_KEY =
-  "pos.transaction.correct_payment_method";
-const PAYMENT_METHOD_CORRECTION_APPROVAL_REASON =
-  "Manager approval is required to correct a completed transaction payment method.";
 
 const PAYMENT_METHOD_OPTIONS = [
   { label: "Cash", value: "cash" },
@@ -132,10 +123,6 @@ function requiresInlineManagerProof(approval: ApprovalRequirement) {
   return approval.resolutionModes.some(
     (mode) => mode.kind === "inline_manager_proof",
   );
-}
-
-function isManagerStaff(staff: StaffAuthenticationResult) {
-  return staff.activeRoles?.includes("manager") ?? false;
 }
 
 function formatCorrectionHistoryChange(event: CorrectionEvent) {
@@ -211,8 +198,6 @@ export function TransactionView() {
   const [pendingCorrection, setPendingCorrection] = useState<
     "customer" | "payment_method" | null
   >(null);
-  const [pendingPaymentApproval, setPendingPaymentApproval] =
-    useState<ApprovalRequirement | null>(null);
   const [correctionHistoryExpanded, setCorrectionHistoryExpanded] =
     useState(false);
   const { activeStore, isAuthenticated } = useProtectedAdminPageState();
@@ -228,6 +213,39 @@ export function TransactionView() {
   const correctPaymentMethod = useMutation(
     api.inventory.pos.correctTransactionPaymentMethod,
   );
+  const paymentApprovalRunner = useApprovedCommand({
+    storeId: activeStore?._id,
+    onAuthenticateForApproval: (args) => {
+      if (!activeStore?._id) {
+        return Promise.resolve({
+          kind: "user_error",
+          error: {
+            code: "authentication_failed",
+            message: "Select a store before approving this command.",
+          },
+        });
+      }
+
+      return runCommand(
+        () =>
+          approveCommand({
+            actionKey: args.actionKey,
+            pinHash: args.pinHash,
+            reason: args.reason,
+            requiredRole: args.requiredRole,
+            requestedByStaffProfileId: args.requestedByStaffProfileId,
+            storeId: activeStore._id,
+            subject: args.subject,
+            username: args.username,
+          }) as Promise<CommandResult<{
+            approvalProofId: Id<"approvalProof">;
+            approvedByStaffProfileId: Id<"staffProfile">;
+            expiresAt: number;
+            requestedByStaffProfileId?: Id<"staffProfile">;
+          }>>,
+      );
+    },
+  });
 
   const transaction = useQuery(
     api.inventory.pos.getTransactionById,
@@ -379,7 +397,6 @@ export function TransactionView() {
     setCorrectionPanelOpen(false);
     setSelectedCorrection(null);
     setPendingCorrection(null);
-    setPendingPaymentApproval(null);
     setCorrectionError(null);
   }
 
@@ -445,42 +462,50 @@ export function TransactionView() {
       return;
     }
 
-    setCorrectionSubmitting(true);
     setCorrectionError(null);
-    const result = await runCommand(
-      () =>
-        correctPaymentMethod({
-          actorStaffProfileId: args?.staffProfileId,
-          approvalProofId: args?.approvalProofId,
-          paymentMethod,
-          reason,
-          transactionId: transactionId as Id<"posTransaction">,
-        }) as Promise<ApprovalCommandResult<PaymentMethodCorrectionResultData>>,
-    );
-    setCorrectionSubmitting(false);
+    await paymentApprovalRunner.run({
+      requestedByStaffProfileId: args?.staffProfileId,
+      execute: async (approvalArgs) => {
+        setCorrectionSubmitting(true);
+        const result = await runCommand(
+          () =>
+            correctPaymentMethod({
+              actorStaffProfileId: args?.staffProfileId,
+              approvalProofId: approvalArgs.approvalProofId ?? args?.approvalProofId,
+              paymentMethod,
+              reason,
+              transactionId: transactionId as Id<"posTransaction">,
+            }) as Promise<ApprovalCommandResult<PaymentMethodCorrectionResultData>>,
+        );
+        setCorrectionSubmitting(false);
+        return result;
+      },
+      onApprovalRequired: (approval) => {
+        if (!requiresInlineManagerProof(approval)) {
+          setPaymentCorrectionReason("");
+          setPaymentMethodInput("");
+          setCorrectionPanelOpen(false);
+          setSelectedCorrection(null);
+          setPendingCorrection(null);
+          setCorrectionError(null);
+        }
+      },
+      onResult: (result) => {
+        if (isApprovalRequiredResult(result)) {
+          return;
+        }
 
-    if (isApprovalRequiredResult(result)) {
-      setPendingPaymentApproval(result.approval);
-      if (!requiresInlineManagerProof(result.approval)) {
-        setPaymentCorrectionReason("");
-        setPaymentMethodInput("");
-        setCorrectionPanelOpen(false);
-        setSelectedCorrection(null);
-        setPendingCorrection(null);
-        setCorrectionError(null);
-      }
-      return;
-    }
+        if (result.kind === "ok") {
+          setPaymentCorrectionReason("");
+          setPaymentMethodInput("");
+          exitCorrectionWorkflow();
+          toast.success("Payment method updated");
+          return;
+        }
 
-    if (result.kind === "ok") {
-      setPaymentCorrectionReason("");
-      setPaymentMethodInput("");
-      exitCorrectionWorkflow();
-      toast.success("Payment method updated");
-      return;
-    }
-
-    setCorrectionError(result.error.message);
+        setCorrectionError(result.error.message);
+      },
+    });
   }
 
   function requestCorrectionSubmit(kind: "customer" | "payment_method") {
@@ -549,47 +574,6 @@ export function TransactionView() {
             correction: pendingCorrection,
             pinHash: args.pinHash,
             username: args.username,
-          }).then(async (staffResult) => {
-            if (
-              pendingCorrection !== "payment_method" ||
-              staffResult.kind !== "ok" ||
-              !isManagerStaff(staffResult.data)
-            ) {
-              return staffResult;
-            }
-
-            const approvalResult = await runCommand(
-              () =>
-                approveCommand({
-                  actionKey: PAYMENT_METHOD_CORRECTION_ACTION_KEY,
-                  pinHash: args.pinHash,
-                  reason: PAYMENT_METHOD_CORRECTION_APPROVAL_REASON,
-                  requiredRole: "manager",
-                  requestedByStaffProfileId: staffResult.data.staffProfileId,
-                  storeId: activeStore!._id,
-                  subject: {
-                    id: transactionId as Id<"posTransaction">,
-                    label: `Transaction #${transaction.transactionNumber}`,
-                    type: "pos_transaction",
-                  },
-                  username: args.username,
-                }) as Promise<CommandResult<CommandApprovalProofResult>>,
-            );
-
-            if (approvalResult.kind !== "ok") {
-              return approvalResult;
-            }
-
-            return {
-              kind: "ok" as const,
-              data: {
-                ...staffResult.data,
-                approvalProofId: approvalResult.data.approvalProofId,
-                approvedByStaffProfileId:
-                  approvalResult.data.approvedByStaffProfileId,
-                expiresAt: approvalResult.data.expiresAt,
-              },
-            };
           })
         }
         onAuthenticated={(result) => {
@@ -600,7 +584,6 @@ export function TransactionView() {
           }
           if (correction === "payment_method") {
             void runPaymentMethodCorrection({
-              approvalProofId: result.approvalProofId,
               staffProfileId: result.staffProfileId,
             });
           }
@@ -611,43 +594,7 @@ export function TransactionView() {
           pendingCorrection === "payment_method"
         }
       />
-      <CommandApprovalDialog
-        approval={pendingPaymentApproval}
-        onAuthenticateForApproval={(args) => {
-          if (!activeStore?._id) {
-            return Promise.resolve({
-              kind: "user_error",
-              error: {
-                code: "authentication_failed",
-                message: "Select a store before approving this command.",
-              },
-            } satisfies NormalizedCommandResult<CommandApprovalProofResult>);
-          }
-
-          return runCommand(
-            () =>
-              approveCommand({
-                actionKey: args.actionKey,
-                pinHash: args.pinHash,
-                reason: args.reason,
-                requiredRole: args.requiredRole,
-                requestedByStaffProfileId: args.requestedByStaffProfileId,
-                storeId: activeStore._id,
-                subject: args.subject,
-                username: args.username,
-              }) as Promise<CommandResult<CommandApprovalProofResult>>,
-          );
-        }}
-        onApproved={(result) => {
-          setPendingPaymentApproval(null);
-          void runPaymentMethodCorrection({
-            approvalProofId: result.approvalProofId,
-          });
-        }}
-        onDismiss={() => setPendingPaymentApproval(null)}
-        open={Boolean(pendingPaymentApproval)}
-        storeId={activeStore?._id ?? ("missing-store" as Id<"store">)}
-      />
+      {paymentApprovalRunner.dialog}
       <FadeIn className="h-full">
         <div className="container mx-auto h-full min-h-0 px-6 pb-16 pt-6">
           <div className="grid h-full min-h-0 gap-8 xl:grid-cols-[380px,minmax(0,1fr)]">

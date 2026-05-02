@@ -24,6 +24,7 @@ const mockReleaseSessionInventoryHoldsAndDeleteItems = vi.fn();
 const mockRemoveItem = vi.fn();
 const mockBindSessionToRegisterSession = vi.fn();
 const mockSubmitRegisterSessionCloseout = vi.fn();
+const mockAuthenticateStaffCredentialForApproval = vi.fn();
 const mockReopenRegisterSessionCloseout = vi.fn();
 const mockCorrectRegisterSessionOpeningFloat = vi.fn();
 const mockNavigateBack = vi.fn();
@@ -272,6 +273,9 @@ describe("useRegisterViewModel", () => {
     mockUseMutation.mockReset();
     mockUseMutation.mockImplementation(
       () => (args: Record<string, unknown>) => {
+        if ("actionKey" in args) {
+          return mockAuthenticateStaffCredentialForApproval(args);
+        }
         if ("countedCash" in args) {
           return mockSubmitRegisterSessionCloseout(args);
         }
@@ -285,6 +289,14 @@ describe("useRegisterViewModel", () => {
     mockSubmitRegisterSessionCloseout.mockResolvedValue(
       ok({
         action: "closed",
+      }),
+    );
+    mockAuthenticateStaffCredentialForApproval.mockReset();
+    mockAuthenticateStaffCredentialForApproval.mockResolvedValue(
+      ok({
+        approvalProofId: "proof-1" as Id<"approvalProof">,
+        approvedByStaffProfileId: "staff-1" as Id<"staffProfile">,
+        expiresAt: Date.now() + 60_000,
       }),
     );
     mockReopenRegisterSessionCloseout.mockReset();
@@ -640,6 +652,186 @@ describe("useRegisterViewModel", () => {
       storeId: "store-1",
     });
     expect(toast.success).toHaveBeenCalledWith("Register session closed");
+  });
+
+  it("requires closeout notes for POS closeout variance", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
+      activeRegisterSession: {
+        _id: "drawer-1",
+        status: "closing",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        openingFloat: 5_000,
+        expectedCash: 5_000,
+        openedAt: Date.now(),
+      },
+      activeSession: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.drawerGate?.onCloseoutCountedCashChange?.("48.00");
+    });
+
+    await act(async () => {
+      await result.current.drawerGate?.onSubmitCloseout?.();
+    });
+
+    expect(mockSubmitRegisterSessionCloseout).not.toHaveBeenCalled();
+    expect(result.current.drawerGate?.errorMessage).toBe(
+      "Closeout notes required. Add notes before submitting a count with variance.",
+    );
+  });
+
+  it("reauthenticates a manager before applying closeout variance approval from POS", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: {
+        _id: "staff-1",
+        firstName: "Ama",
+        lastName: "Kusi",
+        activeRoles: ["manager"],
+      },
+      activeRegisterSession: {
+        _id: "drawer-1",
+        status: "closing",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        openingFloat: 5_000,
+        expectedCash: 5_000,
+        openedAt: Date.now(),
+      },
+      activeSession: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+    mockSubmitRegisterSessionCloseout
+      .mockResolvedValueOnce({
+        kind: "approval_required",
+        approval: {
+          action: {
+            key: "cash_controls.register_session.review_variance",
+            label: "Review register closeout variance",
+          },
+          copy: {
+            title: "Manager approval required",
+            message:
+              "Enter manager credentials to approve this register closeout variance.",
+            primaryActionLabel: "Approve closeout",
+            secondaryActionLabel: "Cancel",
+          },
+          reason: "End of shift count",
+          requiredRole: "manager",
+          resolutionModes: [{ kind: "inline_manager_proof" }],
+          subject: {
+            id: "drawer-1",
+            label: "Register 1",
+            type: "register_session",
+          },
+        },
+      })
+      .mockResolvedValueOnce(
+        ok({
+          action: "closed",
+        }),
+      );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.drawerGate?.onCloseoutCountedCashChange?.("48.00");
+      result.current.drawerGate?.onCloseoutNotesChange?.("End of shift count");
+    });
+
+    await act(async () => {
+      await result.current.drawerGate?.onSubmitCloseout?.();
+    });
+
+    expect(mockSubmitRegisterSessionCloseout).toHaveBeenCalledWith({
+      actorStaffProfileId: "staff-1",
+      actorUserId: "user-1",
+      approvalProofId: undefined,
+      countedCash: 4_800,
+      notes: "End of shift count",
+      registerSessionId: "drawer-1",
+      storeId: "store-1",
+    });
+    expect(result.current.closeoutApprovalDialog?.open).toBe(true);
+    expect(result.current.closeoutApprovalDialog?.approval?.action.key).toBe(
+      "cash_controls.register_session.review_variance",
+    );
+
+    await act(async () => {
+      const proofResult =
+        await result.current.closeoutApprovalDialog?.onAuthenticateForApproval({
+          actionKey: "cash_controls.register_session.review_variance",
+          pinHash: "pin-hash",
+          reason: "End of shift count",
+          requiredRole: "manager",
+          requestedByStaffProfileId: "staff-1" as Id<"staffProfile">,
+          storeId: "store-1" as Id<"store">,
+          subject: {
+            id: "drawer-1",
+            label: "Register 1",
+            type: "register_session",
+          },
+          username: "ama",
+        });
+
+      expect(proofResult?.kind).toBe("ok");
+
+      result.current.closeoutApprovalDialog?.onApproved({
+        approval: result.current.closeoutApprovalDialog.approval!,
+        approvalProofId: "proof-1" as Id<"approvalProof">,
+        approvedByStaffProfileId: "staff-1" as Id<"staffProfile">,
+        expiresAt: Date.now() + 60_000,
+      });
+    });
+
+    expect(mockAuthenticateStaffCredentialForApproval).toHaveBeenCalledWith({
+      actionKey: "cash_controls.register_session.review_variance",
+      pinHash: "pin-hash",
+      reason: "End of shift count",
+      requiredRole: "manager",
+      requestedByStaffProfileId: "staff-1",
+      storeId: "store-1",
+      subject: {
+        id: "drawer-1",
+        label: "Register 1",
+        type: "register_session",
+      },
+      username: "ama",
+    });
+    expect(mockSubmitRegisterSessionCloseout).toHaveBeenCalledWith({
+      actorStaffProfileId: "staff-1",
+      actorUserId: "user-1",
+      approvalProofId: "proof-1",
+      countedCash: 4_800,
+      notes: "End of shift count",
+      registerSessionId: "drawer-1",
+      storeId: "store-1",
+    });
   });
 
   it("opens the closeout drawer gate from an active empty register", async () => {

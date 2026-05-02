@@ -2,7 +2,10 @@ import type { Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
 import type { ApprovalRequirement } from "../../../../shared/approvalPolicy";
 import { buildApprovalRequest } from "../../../operations/approvalRequestHelpers";
-import { consumeApprovalProofWithCtx } from "../../../operations/approvalProofs";
+import {
+  APPROVAL_ACTIONS,
+  consumeCommandApprovalProofWithCtx,
+} from "../../../operations/approvalActions";
 import { recordOperationalEventWithCtx } from "../../../operations/operationalEvents";
 import { correctSameAmountSinglePaymentAllocationWithCtx } from "../../../operations/paymentAllocations";
 import {
@@ -15,8 +18,9 @@ type CorrectionActor = {
   actorStaffProfileId?: Id<"staffProfile">;
 };
 
-const PAYMENT_METHOD_CORRECTION_ACTION_KEY =
-  "pos.transaction.correct_payment_method";
+const PAYMENT_METHOD_CORRECTION_ACTION =
+  APPROVAL_ACTIONS.transactionPaymentMethodCorrection;
+const PAYMENT_METHOD_CORRECTION_ACTION_KEY = PAYMENT_METHOD_CORRECTION_ACTION.key;
 const PAYMENT_METHOD_CORRECTION_REQUEST_TYPE = "payment_method_correction";
 
 type PaymentMethodCorrectionApprovalProof = {
@@ -60,6 +64,9 @@ function buildPaymentMethodCorrectionApprovalRequirement(args: {
       secondaryActionLabel: "Got it",
     },
     resolutionModes: [
+      {
+        kind: "inline_manager_proof",
+      },
       {
         kind: "async_request",
         requestType: PAYMENT_METHOD_CORRECTION_REQUEST_TYPE,
@@ -250,8 +257,8 @@ async function consumePaymentMethodCorrectionApprovalProof(
     transactionId: Id<"posTransaction">;
   },
 ): Promise<PaymentMethodCorrectionApprovalProof> {
-  const proof = await consumeApprovalProofWithCtx(ctx, {
-    actionKey: PAYMENT_METHOD_CORRECTION_ACTION_KEY,
+  const proof = await consumeCommandApprovalProofWithCtx(ctx, {
+    action: PAYMENT_METHOD_CORRECTION_ACTION,
     approvalProofId: args.approvalProofId,
     requiredRole: "manager",
     requestedByStaffProfileId: args.actorStaffProfileId,
