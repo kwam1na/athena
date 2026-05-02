@@ -36,10 +36,11 @@ describe("runPreCommitGeneratedArtifacts", () => {
       `git add -- ${TRACKED_GENERATED_HARNESS_DOCS.join(" ")}`,
       "graphify:rebuild",
       `git add -- ${TRACKED_GRAPHIFY_ARTIFACTS.join(" ")}`,
+      "git add --update -- .",
     ]);
   });
 
-  it("stages only tracked generated artifacts", async () => {
+  it("stages generated artifacts before staging the tracked working tree", async () => {
     const commands: string[][] = [];
 
     await runPreCommitGeneratedArtifacts("/repo", {
@@ -60,7 +61,52 @@ describe("runPreCommitGeneratedArtifacts", () => {
     expect(commands).toEqual([
       ["git", "add", "--", ...TRACKED_GENERATED_HARNESS_DOCS],
       ["git", "add", "--", ...TRACKED_GRAPHIFY_ARTIFACTS],
+      ["git", "add", "--update", "--", "."],
     ]);
+  });
+
+  it("stages tracked source changes after generated artifacts are refreshed", async () => {
+    const commands: string[][] = [];
+
+    await runPreCommitGeneratedArtifacts("/repo", {
+      runHarnessGenerate: async () => {},
+      runGraphifyRebuild: async () => {},
+      spawn(command) {
+        commands.push(command);
+        return {
+          exited: Promise.resolve(0),
+          stderr: new Response("").body,
+        };
+      },
+      logger: {
+        log() {},
+      },
+    });
+
+    expect(commands.at(-1)).toEqual(["git", "add", "--update", "--", "."]);
+  });
+
+  it("uses tracked-only staging so untracked local files are left out", async () => {
+    const commands: string[][] = [];
+
+    await runPreCommitGeneratedArtifacts("/repo", {
+      runHarnessGenerate: async () => {},
+      runGraphifyRebuild: async () => {},
+      spawn(command) {
+        commands.push(command);
+        return {
+          exited: Promise.resolve(0),
+          stderr: new Response("").body,
+        };
+      },
+      logger: {
+        log() {},
+      },
+    });
+
+    expect(commands).not.toContainEqual(["git", "add", "--", "."]);
+    expect(commands).not.toContainEqual(["git", "add", "-A", "--", "."]);
+    expect(commands).toContainEqual(["git", "add", "--update", "--", "."]);
   });
 
   it("fails clearly when staging repaired harness docs fails", async () => {
@@ -106,6 +152,62 @@ describe("runPreCommitGeneratedArtifacts", () => {
         },
       })
     ).rejects.toThrow("git add failed");
+  });
+
+  it("fails clearly when staging tracked working-tree changes fails", async () => {
+    let spawnCount = 0;
+
+    await expect(
+      runPreCommitGeneratedArtifacts("/repo", {
+        runHarnessGenerate: async () => {},
+        runGraphifyRebuild: async () => {},
+        spawn() {
+          spawnCount += 1;
+          if (spawnCount < 3) {
+            return {
+              exited: Promise.resolve(0),
+              stderr: new Response("").body,
+            };
+          }
+          return {
+            exited: Promise.resolve(1),
+            stderr: new Response("git add --update failed").body,
+          };
+        },
+        logger: {
+          log() {},
+        },
+      })
+    ).rejects.toThrow("git add --update failed");
+  });
+
+  it("includes the tracked working-tree staging command when git fails without stderr", async () => {
+    let spawnCount = 0;
+
+    await expect(
+      runPreCommitGeneratedArtifacts("/repo", {
+        runHarnessGenerate: async () => {},
+        runGraphifyRebuild: async () => {},
+        spawn() {
+          spawnCount += 1;
+          if (spawnCount < 3) {
+            return {
+              exited: Promise.resolve(0),
+              stderr: new Response("").body,
+            };
+          }
+          return {
+            exited: Promise.resolve(1),
+            stderr: new Response("").body,
+          };
+        },
+        logger: {
+          log() {},
+        },
+      })
+    ).rejects.toThrow(
+      "Failed to stage tracked working-tree changes (exit 1): git add --update -- ."
+    );
   });
 
   it("keeps the tracked graphify artifact list aligned with repo outputs", () => {
