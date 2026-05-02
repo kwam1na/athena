@@ -17,6 +17,13 @@ type ApprovalRetryArgs = {
   approvalProofId?: Id<"approvalProof">;
 };
 
+type SameSubmissionApprovalArgs = {
+  canAttemptInlineManagerProof: boolean;
+  pinHash: string;
+  requestedByStaffProfileId?: Id<"staffProfile">;
+  username: string;
+};
+
 type PendingApproval<T> = {
   approval: ApprovalRequirement;
   execute: (args: ApprovalRetryArgs) => Promise<NormalizedApprovalCommandResult<T>>;
@@ -34,6 +41,7 @@ type RunApprovedCommandArgs<T> = {
   onApprovalRequired?: (approval: ApprovalRequirement) => void;
   onResult: (result: NormalizedApprovalCommandResult<T>) => void | Promise<void>;
   requestedByStaffProfileId?: Id<"staffProfile">;
+  sameSubmissionApproval?: SameSubmissionApprovalArgs;
 };
 
 type UseApprovedCommandArgs = {
@@ -88,9 +96,41 @@ export function useApprovedCommand({ onAuthenticateForApproval, storeId }: UseAp
   const run = useCallback(
     async <T,>(args: RunApprovedCommandArgs<T>) => {
       const result = await args.execute({});
+      if (
+        isApprovalRequiredResult(result) &&
+        storeId &&
+        args.sameSubmissionApproval?.canAttemptInlineManagerProof &&
+        hasInlineManagerProof(result.approval)
+      ) {
+        const approvalResult = await onAuthenticateForApproval({
+          actionKey: result.approval.action.key,
+          pinHash: args.sameSubmissionApproval.pinHash,
+          reason: result.approval.reason,
+          requiredRole: result.approval.requiredRole,
+          requestedByStaffProfileId:
+            args.sameSubmissionApproval.requestedByStaffProfileId ??
+            args.requestedByStaffProfileId,
+          storeId,
+          subject: result.approval.subject,
+          username: args.sameSubmissionApproval.username,
+        });
+
+        if (approvalResult.kind !== "ok") {
+          await args.onResult(
+            approvalResult as NormalizedApprovalCommandResult<T>,
+          );
+          return approvalResult as NormalizedApprovalCommandResult<T>;
+        }
+
+        const retryResult = await args.execute({
+          approvalProofId: approvalResult.data.approvalProofId,
+        });
+        return handleResult(retryResult, args);
+      }
+
       return handleResult(result, args);
     },
-    [handleResult],
+    [handleResult, onAuthenticateForApproval, storeId],
   );
 
   const approvalDialog = useMemo(() => {

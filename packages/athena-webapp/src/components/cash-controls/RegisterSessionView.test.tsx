@@ -65,11 +65,16 @@ vi.mock("@/components/staff-auth/StaffAuthenticationDialog", () => ({
       pinHash: string;
       username: string;
     }) => Promise<unknown>;
-    onAuthenticated: (result: {
-      approvalProofId?: string;
-      staffProfile: { fullName: string };
-      staffProfileId: string;
-    }) => void;
+    onAuthenticated: (
+      result: {
+        activeRoles?: string[];
+        approvalProofId?: string;
+        staffProfile: { fullName: string };
+        staffProfileId: string;
+      },
+      mode: "authenticate",
+      credentials: { pinHash: string; username: string },
+    ) => void;
     open: boolean;
   }) =>
     open ? (
@@ -88,6 +93,7 @@ vi.mock("@/components/staff-auth/StaffAuthenticationDialog", () => ({
             result.kind === "ok" &&
             "data" in result
               ? (result.data as {
+                  activeRoles?: string[];
                   approvalProofId?: string;
                   staffProfile: { fullName: string };
                   staffProfileId: string;
@@ -96,7 +102,10 @@ vi.mock("@/components/staff-auth/StaffAuthenticationDialog", () => ({
                   staffProfile: { fullName: "Ato Kofi" },
                   staffProfileId: "staff-1",
                 };
-          onAuthenticated(authenticatedResult);
+          onAuthenticated(authenticatedResult, "authenticate", {
+            pinHash: "hashed-pin",
+            username: "ato",
+          });
         }}
       >
         Confirm staff for {copy.submitLabel}
@@ -591,15 +600,37 @@ describe("RegisterSessionViewContent", () => {
         staffProfileId: "staff-1",
       }),
     );
-    const onAuthenticateCloseoutReviewApproval = vi.fn().mockResolvedValue(
+    const onAuthenticateForApproval = vi.fn().mockResolvedValue(
       ok({
         approvalProofId: "approval-proof-1",
-        staffProfile: { fullName: "Ato Kofi" },
-        staffProfileId: "staff-1",
+        approvedByStaffProfileId: "staff-1",
+        expiresAt: Date.now() + 60_000,
       }),
     );
     const onSubmitCloseout = vi
       .fn()
+      .mockResolvedValueOnce({
+        kind: "approval_required",
+        approval: {
+          action: {
+            key: "cash_controls.register_session.review_variance",
+            label: "Review register closeout variance",
+          },
+          copy: {
+            title: "Manager approval required",
+            message: "Manager approval is required.",
+            primaryActionLabel: "Approve",
+          },
+          reason: "Manager counted the overage.",
+          requiredRole: "manager",
+          resolutionModes: [{ kind: "inline_manager_proof" }],
+          subject: {
+            id: "session-1",
+            label: "Register 3",
+            type: "register_session",
+          },
+        },
+      })
       .mockResolvedValue(ok({ action: "closed" }));
 
     render(
@@ -607,9 +638,7 @@ describe("RegisterSessionViewContent", () => {
         actorUserId="user-1"
         currency="GHS"
         isLoading={false}
-        onAuthenticateCloseoutReviewApproval={
-          onAuthenticateCloseoutReviewApproval
-        }
+        onAuthenticateForApproval={onAuthenticateForApproval}
         onAuthenticateStaff={onAuthenticateStaff}
         onRecordDeposit={vi.fn()}
         onReviewCloseout={vi.fn()}
@@ -635,15 +664,22 @@ describe("RegisterSessionViewContent", () => {
       pinHash: "hashed-pin",
       username: "ato",
     });
-    expect(onAuthenticateCloseoutReviewApproval).toHaveBeenCalledWith({
+    expect(onAuthenticateForApproval).toHaveBeenCalledWith({
+      actionKey: "cash_controls.register_session.review_variance",
       pinHash: "hashed-pin",
       reason: "Manager counted the overage.",
-      registerSessionId: "session-1",
+      requiredRole: "manager",
       requestedByStaffProfileId: "staff-1",
+      storeId: "store-1",
+      subject: {
+        id: "session-1",
+        label: "Register 3",
+        type: "register_session",
+      },
       username: "ato",
     });
     await waitFor(() =>
-      expect(onSubmitCloseout).toHaveBeenCalledWith({
+      expect(onSubmitCloseout).toHaveBeenLastCalledWith({
         actorStaffProfileId: "staff-1",
         approvalProofId: "approval-proof-1",
         countedCash: 18000,

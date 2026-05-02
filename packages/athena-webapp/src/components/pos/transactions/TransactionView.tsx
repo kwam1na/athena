@@ -125,6 +125,10 @@ function requiresInlineManagerProof(approval: ApprovalRequirement) {
   );
 }
 
+function isManagerStaff(staff: StaffAuthenticationResult) {
+  return staff.activeRoles?.includes("manager") ?? false;
+}
+
 function formatCorrectionHistoryChange(event: CorrectionEvent) {
   if (event.eventType !== "pos_transaction_payment_method_corrected") {
     return null;
@@ -440,6 +444,11 @@ export function TransactionView() {
 
   async function runPaymentMethodCorrection(args?: {
     approvalProofId?: Id<"approvalProof">;
+    sameSubmissionApproval?: {
+      pinHash: string;
+      username: string;
+    };
+    staff?: StaffAuthenticationResult;
     staffProfileId?: Id<"staffProfile">;
   }) {
     if (!isAuthenticated) {
@@ -480,6 +489,16 @@ export function TransactionView() {
         setCorrectionSubmitting(false);
         return result;
       },
+      sameSubmissionApproval:
+        args?.sameSubmissionApproval && args.staff
+          ? {
+              canAttemptInlineManagerProof: isManagerStaff(args.staff),
+              pinHash: args.sameSubmissionApproval.pinHash,
+              requestedByStaffProfileId:
+                args.staffProfileId ?? args.staff.staffProfileId,
+              username: args.sameSubmissionApproval.username,
+            }
+          : undefined,
       onApprovalRequired: (approval) => {
         if (!requiresInlineManagerProof(approval)) {
           setPaymentCorrectionReason("");
@@ -576,7 +595,7 @@ export function TransactionView() {
             username: args.username,
           })
         }
-        onAuthenticated={(result) => {
+        onAuthenticated={(result, _mode, credentials) => {
           const correction = pendingCorrection;
           setPendingCorrection(null);
           if (correction === "customer") {
@@ -584,6 +603,8 @@ export function TransactionView() {
           }
           if (correction === "payment_method") {
             void runPaymentMethodCorrection({
+              sameSubmissionApproval: credentials,
+              staff: result,
               staffProfileId: result.staffProfileId,
             });
           }

@@ -1036,6 +1036,10 @@ export function useRegisterViewModel(): RegisterViewModel {
       countedCash: number;
       notes?: string;
       registerSessionId: Id<"registerSession">;
+      sameSubmissionApproval?: {
+        pinHash: string;
+        username: string;
+      };
     }) => {
       if (!activeStore?._id || !user?._id || !staffProfileId) {
         setDrawerErrorMessage(
@@ -1047,6 +1051,14 @@ export function useRegisterViewModel(): RegisterViewModel {
       setDrawerErrorMessage(null);
       await closeoutApprovalRunner.run({
         requestedByStaffProfileId: staffProfileId,
+        sameSubmissionApproval: args.sameSubmissionApproval
+          ? {
+              canAttemptInlineManagerProof: isCashierManager,
+              pinHash: args.sameSubmissionApproval.pinHash,
+              requestedByStaffProfileId: staffProfileId,
+              username: args.sameSubmissionApproval.username,
+            }
+          : undefined,
         execute: async (approvalArgs) => {
           setIsSubmittingCloseout(true);
           const result = await runCommand(() =>
@@ -1090,6 +1102,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     [
       activeStore?._id,
       closeoutApprovalRunner,
+      isCashierManager,
       requestBootstrap,
       staffProfileId,
       submitRegisterSessionCloseout,
