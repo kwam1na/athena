@@ -288,7 +288,7 @@ scripts/deploy-vps.sh qa-athena
 scripts/deploy-vps.sh qa-storefront
 ```
 
-The script refreshes `/root/athena/repo`, installs Bun if needed, runs `bun install --ignore-scripts`, and starts the dev servers through PM2. `qa` refreshes both QA services; `qa-athena` refreshes only `athena-qa`; `qa-storefront` refreshes only `storefront-qa`.
+The script refreshes `/root/athena/repo`, installs Bun if needed, runs `bun install --ignore-scripts`, and starts the dev servers through PM2. `qa` refreshes both QA services; `qa-athena` refreshes only `athena-qa`; `qa-storefront` refreshes only `storefront-qa` and reconciles the `qa.wigclub.store` nginx block before restarting PM2.
 
 Expected PM2 command shape:
 
@@ -299,6 +299,7 @@ VITE_STOREFRONT_URL=https://wigclub.store \
 pm2 start bun --name athena-qa -- run dev -- --host 127.0.0.1 --port 5175 --strictPort
 
 VITE_API_URL=https://jovial-wildebeest-179.convex.site \
+STOREFRONT_QA_HOST=qa.wigclub.store \
 pm2 start bun --name storefront-qa -- run dev -- --host 127.0.0.1 --port 5176 --strictPort
 ```
 
@@ -331,10 +332,12 @@ The workflow smoke check runs against nginx on the VPS:
 
 ```bash
 curl -fsS -I -H "Host: athena-qa.wigclub.store" http://127.0.0.1/
-curl -fsS -I -H "Host: qa.wigclub.store" http://127.0.0.1/
+curl -fsS -o /tmp/storefront-qa-smoke.html -w "%{http_code}" -H "Host: qa.wigclub.store" http://127.0.0.1/
+grep -q "<title>Wigclub</title>" /tmp/storefront-qa-smoke.html
+grep -q "/src/main.tsx" /tmp/storefront-qa-smoke.html
 ```
 
-That keeps the deploy check independent of Cloudflare DNS propagation and Cloudflare Access policy.
+That keeps the deploy check independent of Cloudflare DNS propagation and Cloudflare Access policy. The storefront check requires a `200` response and storefront Vite index content so the old placeholder `204` route cannot pass.
 
 ## Hardening Checks
 

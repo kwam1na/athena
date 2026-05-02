@@ -24,7 +24,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
       - name: Validate deploy scripts
         run: bash -n scripts/deploy-vps.sh scripts/deploy-qa-vps.sh
@@ -42,7 +42,12 @@ jobs:
             exit 0
           fi
 
-          if git rev-parse HEAD^ >/dev/null 2>&1; then
+          before="${{ github.event.before }}"
+          after="${{ github.sha }}"
+
+          if [ -n "$before" ] && ! printf '%s' "$before" | grep -Eq '^0+$' && git cat-file -e "$before^{commit}"; then
+            changed_files="$(git diff --name-only "$before" "$after")"
+          elif git rev-parse HEAD^ >/dev/null 2>&1; then
             changed_files="$(git diff --name-only HEAD^ HEAD)"
           else
             changed_files="$(git show --pretty='' --name-only HEAD)"
@@ -131,8 +136,9 @@ jobs:
         run: |
           set -euo pipefail
           ssh athena-qa-vps 'for attempt in $(seq 1 12); do
-            if curl -fsS -I -H "Host: qa.wigclub.store" http://127.0.0.1/ >/tmp/storefront-qa-smoke.headers; then
-              head -n 1 /tmp/storefront-qa-smoke.headers
+            status="$(curl -fsS -o /tmp/storefront-qa-smoke.html -w "%{http_code}" -H "Host: qa.wigclub.store" http://127.0.0.1/ || true)"
+            if [ "$status" = "200" ] && grep -q "<title>Wigclub</title>" /tmp/storefront-qa-smoke.html && grep -q "/src/main.tsx" /tmp/storefront-qa-smoke.html; then
+              printf "HTTP %s\n" "$status"
               exit 0
             fi
             sleep 5

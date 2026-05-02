@@ -28,16 +28,24 @@ describe("VPS QA deploy contract", () => {
     expect(deployScript).toContain('STOREFRONT_QA_PORT="${STOREFRONT_QA_PORT:-5176}"');
     expect(deployScript).toContain("deploy_athena_qa()");
     expect(deployScript).toContain("deploy_storefront_qa()");
+    expect(deployScript).toContain("configure_storefront_qa_nginx()");
+    expect(deployScript).toContain("/etc/nginx/conf.d/wigclub.conf");
+    expect(deployScript).toContain("nginx -t");
+    expect(deployScript).toContain("systemctl reload nginx");
     expect(deployScript).toContain("pm2 delete athena-qa");
     expect(deployScript).toContain("pm2 delete storefront-qa");
     expect(deployScript).toContain("pm2 start bun --name athena-qa");
     expect(deployScript).toContain("pm2 start bun --name storefront-qa");
     expect(deployScript).toContain('VITE_API_URL="$DEV_CONVEX_SITE"');
+    expect(deployScript).toContain('STOREFRONT_QA_HOST="$STOREFRONT_QA_HOST"');
   });
 
   it("deploys storefront QA only for storefront changes and both QA surfaces for shared deploy changes", async () => {
     const workflow = await readRepoFile(".github/workflows/athena-qa-deploy.yml");
 
+    expect(workflow).toContain("fetch-depth: 0");
+    expect(workflow).toContain("github.event.before");
+    expect(workflow).toContain("github.sha");
     expect(workflow).toContain("packages/storefront-webapp/");
     expect(workflow).toContain('echo "storefront=true" >> "$GITHUB_OUTPUT"');
     expect(workflow).toContain('echo "athena=true" >> "$GITHUB_OUTPUT"');
@@ -46,5 +54,8 @@ describe("VPS QA deploy contract", () => {
     expect(workflow).toContain("scripts/deploy-vps.sh qa-athena");
     expect(workflow).toContain('Host: qa.wigclub.store');
     expect(workflow).toContain('Host: athena-qa.wigclub.store');
+    expect(workflow).toContain('%{http_code}');
+    expect(workflow).toContain('<title>Wigclub</title>');
+    expect(workflow).toContain('/src/main.tsx');
   });
 });

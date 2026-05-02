@@ -266,7 +266,103 @@ printf '\nAthena QA is a Vite dev server exposed through %s.\nProtect it with Cl
 REMOTE_SCRIPT
 }
 
+configure_storefront_qa_nginx() {
+  remote_script "$STOREFRONT_QA_HOST" "$STOREFRONT_QA_PORT" <<'REMOTE_SCRIPT'
+set -euo pipefail
+
+STOREFRONT_QA_HOST="$1"
+STOREFRONT_QA_PORT="$2"
+config_file="/etc/nginx/conf.d/wigclub.conf"
+
+if [ ! -f "$config_file" ]; then
+  printf 'Missing %s. Run scripts/setup-production-vps.sh first.\n' "$config_file" >&2
+  exit 1
+fi
+
+if ! command -v python3 >/dev/null 2>&1; then
+  apt-get update
+  apt-get install -y python3
+fi
+
+python3 - "$config_file" "$STOREFRONT_QA_HOST" "$STOREFRONT_QA_PORT" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+config_path = Path(sys.argv[1])
+host = sys.argv[2]
+port = sys.argv[3]
+text = config_path.read_text()
+replacement = f"""server {{
+    listen 80;
+    server_name {host};
+
+    location / {{
+        proxy_pass http://127.0.0.1:{port};
+        proxy_http_version 1.1;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }}
+}}
+"""
+
+
+def server_blocks(source):
+    position = 0
+    pattern = re.compile(r"\bserver\s*\{")
+
+    while True:
+        match = pattern.search(source, position)
+        if not match:
+            return
+
+        start = match.start()
+        brace = source.find("{", match.start())
+        depth = 0
+
+        for index in range(brace, len(source)):
+            char = source[index]
+            if char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    yield start, index + 1, source[start : index + 1]
+                    position = index + 1
+                    break
+        else:
+            raise SystemExit("Could not parse nginx server block.")
+
+
+host_pattern = re.compile(
+    r"^\s*server_name\s+[^;]*\b" + re.escape(host) + r"\b[^;]*;",
+    re.MULTILINE,
+)
+
+for start, end, block in server_blocks(text):
+    if host_pattern.search(block):
+        text = text[:start] + replacement + text[end:]
+        break
+else:
+    text = text.rstrip() + "\n\n" + replacement
+
+config_path.write_text(text)
+PY
+
+nginx -t
+systemctl reload nginx
+REMOTE_SCRIPT
+}
+
 deploy_storefront_qa() {
+  configure_storefront_qa_nginx
+
   remote_script "$REMOTE_SOURCE_DIR" "$STOREFRONT_QA_PORT" "$DEV_CONVEX_SITE" "$STOREFRONT_QA_HOST" <<'REMOTE_SCRIPT'
 set -euo pipefail
 
@@ -285,6 +381,7 @@ if pm2 describe storefront-qa >/dev/null 2>&1; then
 fi
 
 VITE_API_URL="$DEV_CONVEX_SITE" \
+STOREFRONT_QA_HOST="$STOREFRONT_QA_HOST" \
   pm2 start bun --name storefront-qa -- run dev -- --host 127.0.0.1 --port "$STOREFRONT_QA_PORT" --strictPort
 
 pm2 save

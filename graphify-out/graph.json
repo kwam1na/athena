@@ -35243,7 +35243,7 @@
       "relation": "contains",
       "source": "vite_config_manualchunks",
       "source_file": "packages/storefront-webapp/vite.config.ts",
-      "source_location": "L24",
+      "source_location": "L26",
       "target": "packages_storefront_webapp_vite_config_ts",
       "weight": 1
     },
@@ -66472,7 +66472,7 @@
       "label": "manualChunks()",
       "norm_label": "manualchunks()",
       "source_file": "packages/storefront-webapp/vite.config.ts",
-      "source_location": "L24"
+      "source_location": "L26"
     },
     {
       "community": 389,
