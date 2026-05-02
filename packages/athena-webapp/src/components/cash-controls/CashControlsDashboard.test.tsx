@@ -351,14 +351,6 @@ describe("CashControlsDashboardContent", () => {
     expect(screen.getAllByText("$5").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Recent deposits").length).toBeGreaterThan(0);
     expect(screen.queryByText("Review closeouts")).not.toBeInTheDocument();
-    expect(screen.getByText("Cashroom workflow")).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Move drawers from live cash to reviewed closeout, with exceptions surfaced only when action is needed.",
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Ready for action")).toBeInTheDocument();
-    expect(screen.getAllByText("1 drawer").length).toBeGreaterThan(0);
     expect(screen.getByText("Needs action")).toBeInTheDocument();
     expect(screen.getByText("Live drawers")).toBeInTheDocument();
     expect(screen.getByText("Closed sessions")).toBeInTheDocument();
@@ -574,15 +566,13 @@ describe("CashControlsDashboardContent", () => {
     expect(
       screen.queryByText("Register 2 is ready for review or deposit entry."),
     ).not.toBeInTheDocument();
-    expect(
-      screen.getAllByText("No live drawers are open right now.").length,
-    ).toBeGreaterThan(0);
+    expect(screen.getByText("No drawers in cashroom flow")).toBeInTheDocument();
     expect(screen.queryByText("Needs action")).not.toBeInTheDocument();
     expect(screen.queryByText("Live drawers")).not.toBeInTheDocument();
     expect(
       screen.queryByText("No drawer needs closeout or variance review."),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("No open sessions")).toBeInTheDocument();
+    expect(screen.getByText("Closed sessions")).toBeInTheDocument();
   });
 
   it("links register session cards to the session route", () => {

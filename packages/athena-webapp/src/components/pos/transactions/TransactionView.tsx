@@ -80,6 +80,11 @@ type PaymentMethodCorrectionResultData = {
   approverStaffProfileId: Id<"staffProfile">;
 };
 
+const PAYMENT_METHOD_CORRECTION_ACTION_KEY =
+  "pos.transaction.correct_payment_method";
+const PAYMENT_METHOD_CORRECTION_APPROVAL_REASON =
+  "Manager approval is required to correct a completed transaction payment method.";
+
 const PAYMENT_METHOD_OPTIONS = [
   { label: "Cash", value: "cash" },
   { label: "Card", value: "card" },
@@ -121,6 +126,16 @@ function formatPaymentMethodLabel(method: unknown) {
   return method
     .replaceAll("_", " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function requiresInlineManagerProof(approval: ApprovalRequirement) {
+  return approval.resolutionModes.some(
+    (mode) => mode.kind === "inline_manager_proof",
+  );
+}
+
+function isManagerStaff(staff: StaffAuthenticationResult) {
+  return staff.activeRoles?.includes("manager") ?? false;
 }
 
 function formatCorrectionHistoryChange(event: CorrectionEvent) {
@@ -352,10 +367,7 @@ export function TransactionView() {
 
     return runCommand(() =>
       correctAuth({
-        allowedRoles:
-          args.correction === "payment_method"
-            ? ["manager"]
-            : ["cashier", "manager"],
+        allowedRoles: ["cashier", "manager"],
         pinHash: args.pinHash,
         storeId: activeStore._id,
         username: args.username,
@@ -449,6 +461,14 @@ export function TransactionView() {
 
     if (isApprovalRequiredResult(result)) {
       setPendingPaymentApproval(result.approval);
+      if (!requiresInlineManagerProof(result.approval)) {
+        setPaymentCorrectionReason("");
+        setPaymentMethodInput("");
+        setCorrectionPanelOpen(false);
+        setSelectedCorrection(null);
+        setPendingCorrection(null);
+        setCorrectionError(null);
+      }
       return;
     }
 
@@ -488,7 +508,7 @@ export function TransactionView() {
     }
 
     if (kind === "payment_method") {
-      void runPaymentMethodCorrection();
+      setPendingCorrection(kind);
       return;
     }
 
@@ -529,6 +549,47 @@ export function TransactionView() {
             correction: pendingCorrection,
             pinHash: args.pinHash,
             username: args.username,
+          }).then(async (staffResult) => {
+            if (
+              pendingCorrection !== "payment_method" ||
+              staffResult.kind !== "ok" ||
+              !isManagerStaff(staffResult.data)
+            ) {
+              return staffResult;
+            }
+
+            const approvalResult = await runCommand(
+              () =>
+                approveCommand({
+                  actionKey: PAYMENT_METHOD_CORRECTION_ACTION_KEY,
+                  pinHash: args.pinHash,
+                  reason: PAYMENT_METHOD_CORRECTION_APPROVAL_REASON,
+                  requiredRole: "manager",
+                  requestedByStaffProfileId: staffResult.data.staffProfileId,
+                  storeId: activeStore!._id,
+                  subject: {
+                    id: transactionId as Id<"posTransaction">,
+                    label: `Transaction #${transaction.transactionNumber}`,
+                    type: "pos_transaction",
+                  },
+                  username: args.username,
+                }) as Promise<CommandResult<CommandApprovalProofResult>>,
+            );
+
+            if (approvalResult.kind !== "ok") {
+              return approvalResult;
+            }
+
+            return {
+              kind: "ok" as const,
+              data: {
+                ...staffResult.data,
+                approvalProofId: approvalResult.data.approvalProofId,
+                approvedByStaffProfileId:
+                  approvalResult.data.approvedByStaffProfileId,
+                expiresAt: approvalResult.data.expiresAt,
+              },
+            };
           })
         }
         onAuthenticated={(result) => {
@@ -537,9 +598,18 @@ export function TransactionView() {
           if (correction === "customer") {
             void runCustomerCorrection(result);
           }
+          if (correction === "payment_method") {
+            void runPaymentMethodCorrection({
+              approvalProofId: result.approvalProofId,
+              staffProfileId: result.staffProfileId,
+            });
+          }
         }}
         onDismiss={() => setPendingCorrection(null)}
-        open={pendingCorrection === "customer"}
+        open={
+          pendingCorrection === "customer" ||
+          pendingCorrection === "payment_method"
+        }
       />
       <CommandApprovalDialog
         approval={pendingPaymentApproval}

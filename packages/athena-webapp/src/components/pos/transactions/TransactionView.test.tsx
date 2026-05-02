@@ -134,7 +134,10 @@ vi.mock("../../staff-auth/StaffAuthenticationDialog", () => ({
       username: string;
     }) => Promise<unknown>;
     onAuthenticated: (result: {
+      activeRoles?: string[];
       approvalProofId?: string;
+      approvedByStaffProfileId?: string;
+      expiresAt?: number;
       staffProfile: { firstName: string; lastName: string };
       staffProfileId: string;
     }) => void;
@@ -146,15 +149,19 @@ vi.mock("../../staff-auth/StaffAuthenticationDialog", () => ({
         <p>{copy.description}</p>
         <button
           onClick={async () => {
-            await onAuthenticate({
+            const result = await onAuthenticate({
               pinHash: "123456",
               username: "manager",
             });
-            onAuthenticated({
-              approvalProofId: "proof-1",
-              staffProfile: { firstName: "Kwamina", lastName: "Mensah" },
-              staffProfileId: "staff_1",
-            });
+            if (
+              result &&
+              typeof result === "object" &&
+              "kind" in result &&
+              result.kind === "ok" &&
+              "data" in result
+            ) {
+              onAuthenticated(result.data as never);
+            }
           }}
           type="button"
         >
@@ -176,6 +183,11 @@ vi.mock("../../operations/CommandApprovalDialog", () => ({
       copy: { message: string; primaryActionLabel?: string; title: string };
       reason: string;
       requiredRole: "manager";
+      resolutionModes: Array<{
+        kind: string;
+        approvalRequestId?: string;
+        requestType?: string;
+      }>;
       subject: { id: string; label?: string; type: string };
     } | null;
     onAuthenticateForApproval: (args: {
@@ -205,30 +217,42 @@ vi.mock("../../operations/CommandApprovalDialog", () => ({
       <div data-testid="command-approval-dialog">
         <h2>{approval.copy.title}</h2>
         <p>{approval.copy.message}</p>
-        <button
-          onClick={async () => {
-            const result = await onAuthenticateForApproval({
-              actionKey: approval.action.key,
-              pinHash: "123456",
-              reason: approval.reason,
-              requiredRole: approval.requiredRole,
-              storeId: "store_1",
-              subject: approval.subject,
-              username: "manager",
-            });
-
-            if (result.kind === "ok" && result.data) {
-              onApproved({
-                approvalProofId: result.data.approvalProofId,
-                approvedByStaffProfileId: result.data.approvedByStaffProfileId,
-                expiresAt: result.data.expiresAt,
+        {approval.resolutionModes.some(
+          (mode) => mode.kind === "inline_manager_proof",
+        ) ? (
+          <button
+            onClick={async () => {
+              const result = await onAuthenticateForApproval({
+                actionKey: approval.action.key,
+                pinHash: "123456",
+                reason: approval.reason,
+                requiredRole: approval.requiredRole,
+                storeId: "store_1",
+                subject: approval.subject,
+                username: "manager",
               });
-            }
-          }}
-          type="button"
-        >
-          {approval.copy.primaryActionLabel ?? "Approve update"}
-        </button>
+
+              if (result.kind === "ok" && result.data) {
+                onApproved({
+                  approvalProofId: result.data.approvalProofId,
+                  approvedByStaffProfileId: result.data.approvedByStaffProfileId,
+                  expiresAt: result.data.expiresAt,
+                });
+              }
+            }}
+            type="button"
+          >
+            {approval.copy.primaryActionLabel ?? "Approve update"}
+          </button>
+        ) : (
+          <p>
+            Approval request{" "}
+            {approval.resolutionModes.find(
+              (mode) => mode.kind === "async_request",
+            )?.approvalRequestId ?? "approval-1"}{" "}
+            is pending in the review queue.
+          </p>
+        )}
       </div>
     ) : null,
 }));
@@ -672,9 +696,16 @@ describe("TransactionView", () => {
     expect(paymentMethodSelect).toHaveTextContent("Mobile Money");
   });
 
-  it("communicates manager approval before authenticating payment corrections", async () => {
+  it("queues async manager approval for payment corrections", async () => {
     const user = userEvent.setup();
-    const authMutation = vi.fn().mockResolvedValue({ kind: "ok" });
+    const authMutation = vi.fn().mockResolvedValue({
+      kind: "ok",
+      data: {
+        activeRoles: ["cashier"],
+        staffProfile: { firstName: "Kwamina", lastName: "Mensah" },
+        staffProfileId: "staff_1",
+      },
+    });
     const approvalMutation = vi.fn().mockResolvedValue({
       kind: "ok",
       data: {
@@ -691,13 +722,19 @@ describe("TransactionView", () => {
         copy: {
           title: "Manager approval required",
           message:
-            "Enter manager credentials to update this completed transaction payment method.",
-          primaryActionLabel: "Approve update",
+            "A manager needs to review this completed transaction payment method update before it is applied.",
+          primaryActionLabel: "Request approval",
         },
         reason:
           "Manager approval is required to correct a completed transaction payment method.",
         requiredRole: "manager",
-        resolutionModes: [{ kind: "inline_manager_proof" }],
+        resolutionModes: [
+          {
+            kind: "async_request",
+            requestType: "payment_method_correction",
+            approvalRequestId: "approval-1",
+          },
+        ],
         subject: {
           id: "txn_13",
           label: "Transaction #754489",
@@ -729,20 +766,30 @@ describe("TransactionView", () => {
     await user.click(
       screen.getByRole("button", { name: "Submit payment update" }),
     );
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
 
     expect(
       await screen.findByText("Manager approval required"),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Enter manager credentials to update this completed transaction payment method.",
+        "A manager needs to review this completed transaction payment method update before it is applied.",
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Approve update" }),
+      screen.getByText(
+        "Approval request approval-1 is pending in the review queue.",
+      ),
     ).toBeInTheDocument();
+    expect(approvalMutation).not.toHaveBeenCalled();
+    expect(authMutation).toHaveBeenCalledWith({
+      allowedRoles: ["cashier", "manager"],
+      pinHash: "123456",
+      storeId: "store_1",
+      username: "manager",
+    });
     expect(paymentMutation).toHaveBeenCalledWith({
-      actorStaffProfileId: undefined,
+      actorStaffProfileId: "staff_1",
       approvalProofId: undefined,
       paymentMethod: "card",
       reason: "Wrong tender selected.",
@@ -750,9 +797,89 @@ describe("TransactionView", () => {
     });
   });
 
-  it("exits the correction workflow after a payment correction succeeds", async () => {
+  it("chains inline manager approval when the requester is a manager", async () => {
     const user = userEvent.setup();
-    const authMutation = vi.fn().mockResolvedValue({ kind: "ok" });
+    const authMutation = vi.fn().mockResolvedValue({
+      kind: "ok",
+      data: {
+        activeRoles: ["manager"],
+        staffProfile: { firstName: "Kwamina", lastName: "Mensah" },
+        staffProfileId: "staff_1",
+      },
+    });
+    const approvalMutation = vi.fn().mockResolvedValue({
+      kind: "ok",
+      data: {
+        approvalProofId: "proof-1",
+        approvedByStaffProfileId: "staff_1",
+        expiresAt: 2,
+      },
+    });
+    const customerMutation = vi.fn();
+    const paymentMutation = vi.fn().mockResolvedValue({ kind: "ok" });
+    mockTransactionMutations(
+      authMutation,
+      customerMutation,
+      paymentMutation,
+      approvalMutation,
+    );
+    useParamsMock.mockReturnValue({ transactionId: "txn_19" });
+    useQueryMock.mockReturnValue(baseTransaction);
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Update" }));
+    await user.click(screen.getByRole("button", { name: "Payment method" }));
+    await user.selectOptions(
+      screen.getByLabelText("Updated payment method"),
+      "card",
+    );
+    await user.type(
+      screen.getByLabelText("Payment method update reason"),
+      "Wrong tender selected.",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Submit payment update" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+
+    await waitFor(() => {
+      expect(approvalMutation).toHaveBeenCalledWith({
+        actionKey: "pos.transaction.correct_payment_method",
+        pinHash: "123456",
+        reason:
+          "Manager approval is required to correct a completed transaction payment method.",
+        requiredRole: "manager",
+        requestedByStaffProfileId: "staff_1",
+        storeId: "store_1",
+        subject: {
+          id: "txn_19",
+          label: "Transaction #POS-123456",
+          type: "pos_transaction",
+        },
+        username: "manager",
+      });
+      expect(paymentMutation).toHaveBeenCalledWith({
+        actorStaffProfileId: "staff_1",
+        approvalProofId: "proof-1",
+        paymentMethod: "card",
+        reason: "Wrong tender selected.",
+        transactionId: "txn_19",
+      });
+    });
+    expect(screen.queryByText("Manager approval required")).not.toBeInTheDocument();
+  });
+
+  it("exits the correction workflow after an async payment correction request is queued", async () => {
+    const user = userEvent.setup();
+    const authMutation = vi.fn().mockResolvedValue({
+      kind: "ok",
+      data: {
+        activeRoles: ["cashier"],
+        staffProfile: { firstName: "Kwamina", lastName: "Mensah" },
+        staffProfileId: "staff_1",
+      },
+    });
     const approvalMutation = vi.fn().mockResolvedValue({
       kind: "ok",
       data: {
@@ -771,21 +898,26 @@ describe("TransactionView", () => {
           copy: {
             title: "Manager approval required",
             message:
-              "Enter manager credentials to update this completed transaction payment method.",
-            primaryActionLabel: "Approve update",
+              "A manager needs to review this completed transaction payment method update before it is applied.",
+            primaryActionLabel: "Request approval",
           },
           reason:
             "Manager approval is required to correct a completed transaction payment method.",
           requiredRole: "manager",
-          resolutionModes: [{ kind: "inline_manager_proof" }],
+          resolutionModes: [
+            {
+              kind: "async_request",
+              requestType: "payment_method_correction",
+              approvalRequestId: "approval-1",
+            },
+          ],
           subject: {
             id: "txn_11",
             label: "Transaction #754489",
             type: "pos_transaction",
           },
         },
-      })
-      .mockResolvedValueOnce({ kind: "ok" });
+      });
     mockTransactionMutations(
       authMutation,
       customerMutation,
@@ -810,35 +942,16 @@ describe("TransactionView", () => {
     await user.click(
       screen.getByRole("button", { name: "Submit payment update" }),
     );
-    await screen.findByRole("button", { name: "Approve update" });
-    await user.click(screen.getByRole("button", { name: "Approve update" }));
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+    await screen.findByText(
+      "Approval request approval-1 is pending in the review queue.",
+    );
 
     await waitFor(() => {
-      expect(approvalMutation).toHaveBeenCalledWith({
-        actionKey: "pos.transaction.correct_payment_method",
-        pinHash: "123456",
-        reason:
-          "Manager approval is required to correct a completed transaction payment method.",
-        requiredRole: "manager",
-        requestedByStaffProfileId: undefined,
-        storeId: "store_1",
-        subject: {
-          id: "txn_11",
-          label: "Transaction #754489",
-          type: "pos_transaction",
-        },
-        username: "manager",
-      });
+      expect(approvalMutation).not.toHaveBeenCalled();
       expect(paymentMutation).toHaveBeenNthCalledWith(1, {
-        actorStaffProfileId: undefined,
+        actorStaffProfileId: "staff_1",
         approvalProofId: undefined,
-        paymentMethod: "card",
-        reason: "Wrong tender selected.",
-        transactionId: "txn_11",
-      });
-      expect(paymentMutation).toHaveBeenNthCalledWith(2, {
-        actorStaffProfileId: undefined,
-        approvalProofId: "proof-1",
         paymentMethod: "card",
         reason: "Wrong tender selected.",
         transactionId: "txn_11",

@@ -281,7 +281,9 @@ describe("CommandApprovalDialog", () => {
         "Manager review is required before this closeout can finish.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText(/approval request approval-1/i)).toBeInTheDocument();
+    expect(
+      screen.queryByText(/approval request approval-1/i),
+    ).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/username/i)).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Got it" }));

@@ -1,6 +1,7 @@
 import type { Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
 import type { ApprovalRequirement } from "../../../../shared/approvalPolicy";
+import { buildApprovalRequest } from "../../../operations/approvalRequestHelpers";
 import { consumeApprovalProofWithCtx } from "../../../operations/approvalProofs";
 import { recordOperationalEventWithCtx } from "../../../operations/operationalEvents";
 import { correctSameAmountSinglePaymentAllocationWithCtx } from "../../../operations/paymentAllocations";
@@ -16,6 +17,7 @@ type CorrectionActor = {
 
 const PAYMENT_METHOD_CORRECTION_ACTION_KEY =
   "pos.transaction.correct_payment_method";
+const PAYMENT_METHOD_CORRECTION_REQUEST_TYPE = "payment_method_correction";
 
 type PaymentMethodCorrectionApprovalProof = {
   approvalProofId: Id<"approvalProof">;
@@ -27,6 +29,7 @@ function transactionLabel(transaction: { transactionNumber: string }) {
 }
 
 function buildPaymentMethodCorrectionApprovalRequirement(args: {
+  approvalRequestId?: Id<"approvalRequest">;
   amount: number;
   paymentMethod: string;
   previousPaymentMethod: string;
@@ -52,17 +55,92 @@ function buildPaymentMethodCorrectionApprovalRequirement(args: {
     copy: {
       title: "Manager approval required",
       message:
-        "Authorization is needed from a manager to update this completed transaction payment method.",
-      primaryActionLabel: "Approve update",
-      secondaryActionLabel: "Cancel",
+        "A manager needs to review this completed transaction payment method update before it is applied.",
+      primaryActionLabel: "Request approval",
+      secondaryActionLabel: "Got it",
     },
-    resolutionModes: [{ kind: "inline_manager_proof" }],
+    resolutionModes: [
+      {
+        kind: "async_request",
+        requestType: PAYMENT_METHOD_CORRECTION_REQUEST_TYPE,
+        approvalRequestId: args.approvalRequestId,
+      },
+    ],
     metadata: {
       amount: args.amount,
       paymentMethod: args.paymentMethod,
       previousPaymentMethod: args.previousPaymentMethod,
     },
   };
+}
+
+async function createPaymentMethodCorrectionApprovalRequest(
+  ctx: MutationCtx,
+  args: {
+    actorStaffProfileId?: Id<"staffProfile">;
+    actorUserId?: Id<"athenaUser">;
+    amount: number;
+    paymentMethod: string;
+    previousPaymentMethod: string;
+    reason?: string;
+    transaction: {
+      _id: Id<"posTransaction">;
+      registerSessionId?: Id<"registerSession">;
+      storeId: Id<"store">;
+      transactionNumber: string;
+    };
+  },
+) {
+  const store = await ctx.db.get("store", args.transaction.storeId);
+  const approvalRequestId = await ctx.db.insert(
+    "approvalRequest",
+    buildApprovalRequest({
+      metadata: {
+        actionKey: PAYMENT_METHOD_CORRECTION_ACTION_KEY,
+        amount: args.amount,
+        paymentMethod: args.paymentMethod,
+        previousPaymentMethod: args.previousPaymentMethod,
+        transactionId: args.transaction._id,
+      },
+      notes: args.reason,
+      organizationId: store?.organizationId,
+      reason:
+        "Manager approval is required to correct a completed transaction payment method.",
+      registerSessionId: args.transaction.registerSessionId,
+      requestType: PAYMENT_METHOD_CORRECTION_REQUEST_TYPE,
+      requestedByStaffProfileId: args.actorStaffProfileId,
+      requestedByUserId: args.actorUserId,
+      storeId: args.transaction.storeId,
+      subjectId: args.transaction._id,
+      subjectType: "pos_transaction",
+    }),
+  );
+
+  await recordOperationalEventWithCtx(ctx, {
+    actorStaffProfileId: args.actorStaffProfileId,
+    actorUserId: args.actorUserId,
+    approvalRequestId,
+    eventType: "pos_transaction_payment_method_approval_requested",
+    message: `Payment method correction requested for ${transactionLabel(args.transaction)}.`,
+    metadata: {
+      actionKey: PAYMENT_METHOD_CORRECTION_ACTION_KEY,
+      approvalMode: "async_approval",
+      approvalRequestId,
+      amount: args.amount,
+      paymentMethod: args.paymentMethod,
+      previousPaymentMethod: args.previousPaymentMethod,
+      requiredRole: "manager",
+    },
+    reason: args.reason,
+    registerSessionId: args.transaction.registerSessionId,
+    storeId: args.transaction.storeId,
+    subjectId: args.transaction._id,
+    subjectLabel: transactionLabel(args.transaction),
+    subjectType: "pos_transaction",
+    posTransactionId: args.transaction._id,
+  });
+
+  return approvalRequestId;
 }
 
 async function requireCompletedTransaction(
@@ -194,6 +272,98 @@ async function consumePaymentMethodCorrectionApprovalProof(
   };
 }
 
+async function applyPaymentMethodCorrection(
+  ctx: MutationCtx,
+  args: {
+    actorStaffProfileId?: Id<"staffProfile">;
+    actorUserId?: Id<"athenaUser">;
+    approvalOperationalEventId?: Id<"operationalEvent">;
+    approvalProofId?: Id<"approvalProof">;
+    approvalRequestId?: Id<"approvalRequest">;
+    approverStaffProfileId?: Id<"staffProfile">;
+    paymentMethod: string;
+    reason?: string;
+    transaction: Awaited<ReturnType<typeof requireCompletedTransaction>>;
+  },
+) {
+  const [payment] = args.transaction.payments;
+  const correctedAllocation =
+    await correctSameAmountSinglePaymentAllocationWithCtx(ctx, {
+      storeId: args.transaction.storeId,
+      targetType: "pos_transaction",
+      targetId: args.transaction._id,
+      amount: payment.amount,
+      method: args.paymentMethod,
+    });
+
+  if (!correctedAllocation) {
+    throw new Error("Payment allocation must be a same-amount single payment.");
+  }
+
+  await patchPosTransaction(ctx, args.transaction._id, {
+    paymentMethod: args.paymentMethod,
+    payments: [
+      {
+        ...payment,
+        method: args.paymentMethod,
+      },
+    ],
+  });
+  const registerSessionExpectedCashDelta =
+    await adjustRegisterSessionExpectedCashForPaymentCorrection(ctx, {
+      nextPayment: {
+        amount: payment.amount,
+        method: args.paymentMethod,
+      },
+      previousPayment: payment,
+      registerSessionId: args.transaction.registerSessionId,
+      storeId: args.transaction.storeId,
+    });
+
+  const event = await recordOperationalEventWithCtx(ctx, {
+    storeId: args.transaction.storeId,
+    eventType: "pos_transaction_payment_method_corrected",
+    subjectType: "pos_transaction",
+    subjectId: args.transaction._id,
+    subjectLabel: transactionLabel(args.transaction),
+    message: `Corrected payment method for ${transactionLabel(args.transaction)}.`,
+    approvalRequestId: args.approvalRequestId,
+    reason: args.reason,
+    metadata: {
+      correctionType: "payment_method",
+      actionKey: PAYMENT_METHOD_CORRECTION_ACTION_KEY,
+      approvalProofId: args.approvalProofId,
+      approvalRequestId: args.approvalRequestId,
+      approvalOperationalEventId: args.approvalOperationalEventId,
+      approverStaffProfileId: args.approverStaffProfileId,
+      previousPaymentMethod: payment.method,
+      paymentMethod: args.paymentMethod,
+      requesterStaffProfileId: args.actorStaffProfileId,
+      amount: payment.amount,
+      registerSessionExpectedCashDelta,
+      representation: "patch_single_same_amount_payment_and_allocation",
+    },
+    actorUserId: args.actorUserId,
+    actorStaffProfileId: args.actorStaffProfileId,
+    customerProfileId: args.transaction.customerProfileId,
+    paymentAllocationId: correctedAllocation._id,
+    registerSessionId: args.transaction.registerSessionId,
+    posTransactionId: args.transaction._id,
+  });
+
+  return {
+    transactionId: args.transaction._id,
+    previousPaymentMethod: payment.method,
+    paymentMethod: args.paymentMethod,
+    approvalProofId: args.approvalProofId,
+    approvalRequestId: args.approvalRequestId,
+    approvalOperationalEventId: args.approvalOperationalEventId,
+    approverStaffProfileId: args.approverStaffProfileId,
+    paymentAllocationId: correctedAllocation._id,
+    operationalEventId: event?._id,
+  };
+}
+
 export async function correctTransactionCustomer(
   ctx: MutationCtx,
   args: {
@@ -290,9 +460,21 @@ export async function correctTransactionPaymentMethod(
   });
 
   if (!args.approvalProofId) {
+    const approvalRequestId =
+      await createPaymentMethodCorrectionApprovalRequest(ctx, {
+        actorStaffProfileId: args.actorStaffProfileId,
+        actorUserId: args.actorUserId,
+        amount: payment.amount,
+        paymentMethod: args.paymentMethod,
+        previousPaymentMethod: payment.method,
+        reason: args.reason,
+        transaction,
+      });
+
     return {
       action: "approval_required" as const,
       approval: buildPaymentMethodCorrectionApprovalRequirement({
+        approvalRequestId,
         amount: payment.amount,
         paymentMethod: args.paymentMethod,
         previousPaymentMethod: payment.method,
@@ -310,39 +492,6 @@ export async function correctTransactionPaymentMethod(
     storeId: transaction.storeId,
     transactionId: args.transactionId,
   });
-
-  const correctedAllocation =
-    await correctSameAmountSinglePaymentAllocationWithCtx(ctx, {
-      storeId: transaction.storeId,
-      targetType: "pos_transaction",
-      targetId: args.transactionId,
-      amount: payment.amount,
-      method: args.paymentMethod,
-    });
-
-  if (!correctedAllocation) {
-    throw new Error("Payment allocation must be a same-amount single payment.");
-  }
-
-  await patchPosTransaction(ctx, args.transactionId, {
-    paymentMethod: args.paymentMethod,
-    payments: [
-      {
-        ...payment,
-        method: args.paymentMethod,
-      },
-    ],
-  });
-  const registerSessionExpectedCashDelta =
-    await adjustRegisterSessionExpectedCashForPaymentCorrection(ctx, {
-      nextPayment: {
-        amount: payment.amount,
-        method: args.paymentMethod,
-      },
-      previousPayment: payment,
-      registerSessionId: transaction.registerSessionId,
-      storeId: transaction.storeId,
-    });
 
   const approvalEvent = await recordOperationalEventWithCtx(ctx, {
     storeId: transaction.storeId,
@@ -368,43 +517,135 @@ export async function correctTransactionPaymentMethod(
     posTransactionId: args.transactionId,
   });
 
-  const event = await recordOperationalEventWithCtx(ctx, {
-    storeId: transaction.storeId,
-    eventType: "pos_transaction_payment_method_corrected",
-    subjectType: "pos_transaction",
-    subjectId: args.transactionId,
-    subjectLabel: transactionLabel(transaction),
-    message: `Corrected payment method for ${transactionLabel(transaction)}.`,
-    reason: args.reason,
-    metadata: {
-      correctionType: "payment_method",
-      actionKey: PAYMENT_METHOD_CORRECTION_ACTION_KEY,
-      approvalProofId: approvalProof.approvalProofId,
-      approvalOperationalEventId: approvalEvent?._id,
-      approverStaffProfileId: approvalProof.approvedByStaffProfileId,
-      previousPaymentMethod: payment.method,
-      paymentMethod: args.paymentMethod,
-      requesterStaffProfileId: args.actorStaffProfileId,
-      amount: payment.amount,
-      registerSessionExpectedCashDelta,
-      representation: "patch_single_same_amount_payment_and_allocation",
-    },
-    actorUserId: args.actorUserId,
+  return applyPaymentMethodCorrection(ctx, {
     actorStaffProfileId: args.actorStaffProfileId,
-    customerProfileId: transaction.customerProfileId,
-    paymentAllocationId: correctedAllocation._id,
+    actorUserId: args.actorUserId,
+    approvalOperationalEventId: approvalEvent?._id,
+    approvalProofId: approvalProof.approvalProofId,
+    approverStaffProfileId: approvalProof.approvedByStaffProfileId,
+    paymentMethod: args.paymentMethod,
+    reason: args.reason,
+    transaction,
+  });
+}
+
+function getStringMetadata(
+  metadata: Record<string, unknown> | undefined,
+  key: string,
+) {
+  const value = metadata?.[key];
+  return typeof value === "string" ? value : null;
+}
+
+export async function resolvePaymentMethodCorrectionApprovalDecisionWithCtx(
+  ctx: MutationCtx,
+  args: {
+    approvalRequestId: Id<"approvalRequest">;
+    decision: "approved" | "rejected" | "cancelled";
+    reviewedByStaffProfileId?: Id<"staffProfile">;
+    reviewedByUserId?: Id<"athenaUser">;
+    decisionNotes?: string;
+  },
+) {
+  const approvalRequest = await ctx.db.get(
+    "approvalRequest",
+    args.approvalRequestId,
+  );
+
+  if (
+    !approvalRequest ||
+    approvalRequest.requestType !== PAYMENT_METHOD_CORRECTION_REQUEST_TYPE ||
+    approvalRequest.subjectType !== "pos_transaction"
+  ) {
+    throw new Error("Payment method approval request not found.");
+  }
+
+  const transactionId = approvalRequest.subjectId as Id<"posTransaction">;
+
+  if (args.decision !== "approved") {
+    await recordOperationalEventWithCtx(ctx, {
+      actorStaffProfileId: args.reviewedByStaffProfileId,
+      actorUserId: args.reviewedByUserId,
+      approvalRequestId: args.approvalRequestId,
+      eventType: "pos_transaction_payment_method_approval_rejected",
+      message: `Payment method correction ${args.decision} for Transaction ${transactionId}.`,
+      metadata: {
+        actionKey: PAYMENT_METHOD_CORRECTION_ACTION_KEY,
+        approvalRequestId: args.approvalRequestId,
+        decision: args.decision,
+      },
+      reason: args.decisionNotes,
+      storeId: approvalRequest.storeId,
+      subjectId: transactionId,
+      subjectType: "pos_transaction",
+      posTransactionId: transactionId,
+    });
+    return null;
+  }
+
+  const paymentMethod = getStringMetadata(
+    approvalRequest.metadata,
+    "paymentMethod",
+  );
+
+  if (!paymentMethod) {
+    throw new Error("Payment method approval request is missing correction details.");
+  }
+
+  const transaction = await requireCompletedTransaction(ctx, transactionId);
+
+  if (transaction.storeId !== approvalRequest.storeId) {
+    throw new Error("Payment method approval request does not match this store.");
+  }
+
+  if (transaction.payments.length !== 1) {
+    throw new Error("Only single-payment transactions can be corrected.");
+  }
+
+  const [payment] = transaction.payments;
+  if (
+    payment.amount !== transaction.totalPaid ||
+    payment.amount !== transaction.total
+  ) {
+    throw new Error(
+      "Only same-amount payment method corrections are supported.",
+    );
+  }
+
+  await requireRegisterSessionAllowsPaymentCorrection(ctx, {
     registerSessionId: transaction.registerSessionId,
-    posTransactionId: args.transactionId,
+    storeId: transaction.storeId,
   });
 
-  return {
-    transactionId: args.transactionId,
-    previousPaymentMethod: payment.method,
-    paymentMethod: args.paymentMethod,
-    approvalProofId: approvalProof.approvalProofId,
+  const approvalEvent = await recordOperationalEventWithCtx(ctx, {
+    actorStaffProfileId: args.reviewedByStaffProfileId,
+    actorUserId: args.reviewedByUserId,
+    approvalRequestId: args.approvalRequestId,
+    eventType: "pos_transaction_payment_method_approval_request_approved",
+    message: `Manager approved payment method correction for ${transactionLabel(transaction)}.`,
+    metadata: {
+      actionKey: PAYMENT_METHOD_CORRECTION_ACTION_KEY,
+      approvalRequestId: args.approvalRequestId,
+      paymentMethod,
+      previousPaymentMethod: payment.method,
+    },
+    reason: args.decisionNotes,
+    registerSessionId: transaction.registerSessionId,
+    storeId: transaction.storeId,
+    subjectId: transaction._id,
+    subjectLabel: transactionLabel(transaction),
+    subjectType: "pos_transaction",
+    posTransactionId: transaction._id,
+  });
+
+  return applyPaymentMethodCorrection(ctx, {
+    actorStaffProfileId: approvalRequest.requestedByStaffProfileId,
+    actorUserId: approvalRequest.requestedByUserId,
     approvalOperationalEventId: approvalEvent?._id,
-    approverStaffProfileId: approvalProof.approvedByStaffProfileId,
-    paymentAllocationId: correctedAllocation._id,
-    operationalEventId: event?._id,
-  };
+    approvalRequestId: args.approvalRequestId,
+    approverStaffProfileId: args.reviewedByStaffProfileId,
+    paymentMethod,
+    reason: approvalRequest.notes ?? approvalRequest.reason,
+    transaction,
+  });
 }

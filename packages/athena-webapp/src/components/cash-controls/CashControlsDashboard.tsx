@@ -201,7 +201,7 @@ function CashPositionSummary({
     },
     {
       label: "Deposited today",
-      supporting: `${snapshot.recentDeposits.length} recent drop${snapshot.recentDeposits.length === 1 ? "" : "s"}`,
+      supporting: `${snapshot.recentDeposits.length == 0 ? "No" : snapshot.recentDeposits.length} recent drop${snapshot.recentDeposits.length === 1 ? "" : "s"}`,
       value: formatCurrency(currency, depositedTotal),
     },
     {
@@ -519,7 +519,7 @@ function DrawerSessionCard({
       >
         <div>
           <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            Expected
+            Expected cash
           </dt>
           <dd className="mt-1 font-mono text-sm text-foreground">
             {formatCurrency(currency, session.expectedCash)}
@@ -610,7 +610,7 @@ function DrawerSessionLane({
           {emptyDescription}
         </div>
       ) : (
-        <div className="space-y-layout-sm">
+        <div className="space-y-layout-2xl">
           {sessions.map((session) => (
             <DrawerSessionCard
               currency={currency}
@@ -828,34 +828,7 @@ function CashroomWorkflow({
       : undefined;
 
   return (
-    <section className="space-y-layout-md rounded-lg border border-border bg-surface p-layout-lg shadow-surface">
-      <div className="flex flex-col gap-layout-md xl:flex-row xl:items-end xl:justify-between">
-        <div className="space-y-layout-2xs">
-          <h2 className="font-display text-2xl font-semibold tracking-tight text-foreground">
-            Cashroom workflow
-          </h2>
-          <p className="max-w-3xl text-sm text-muted-foreground">
-            Move drawers from live cash to reviewed closeout, with exceptions
-            surfaced only when action is needed.
-          </p>
-        </div>
-        <div className="grid gap-layout-xs sm:grid-cols-3 xl:min-w-[520px]">
-          <WorkflowSummaryItem
-            label="Ready for action"
-            value={`${needsAttention.length} drawer${needsAttention.length === 1 ? "" : "s"}`}
-          />
-          <WorkflowSummaryItem
-            label="Still in drawers"
-            value={formatCurrency(currency, onHandTotal)}
-          />
-          <WorkflowSummaryItem
-            label="Variance exposure"
-            tone={unresolvedVarianceTotal > 0 ? "text-danger" : undefined}
-            value={formatCurrency(currency, unresolvedVarianceTotal)}
-          />
-        </div>
-      </div>
-
+    <section className="space-y-layout-2xl">
       {sessions.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border bg-surface-raised px-layout-lg py-layout-xl">
           <EmptyState
@@ -883,7 +856,7 @@ function CashroomWorkflow({
               variant="primary"
             />
           ) : null}
-          <div className="space-y-layout-lg">
+          <div className="space-y-layout-3xl">
             {hasNeedsAttention ? (
               <DrawerSessionLane
                 currency={currency}
@@ -1036,7 +1009,7 @@ export function CashControlsDashboardContent({
       }
     >
       <FadeIn className="container mx-auto py-layout-xl">
-        <div className="space-y-layout-xl">
+        <div className="space-y-layout-3xl">
           <section className="space-y-layout-md">
             <div className="flex flex-col gap-layout-sm lg:flex-row lg:items-end lg:justify-between">
               <div className="space-y-layout-2xs">
@@ -1058,11 +1031,11 @@ export function CashControlsDashboardContent({
             />
           </section>
 
-          <WorkflowJumpPoints
+          {/* <WorkflowJumpPoints
             dashboardSnapshot={dashboardSnapshot}
             orgUrlSlug={orgUrlSlug}
             storeUrlSlug={storeUrlSlug}
-          />
+          /> */}
 
           {isLoading ? (
             <section className="rounded-lg border border-border bg-surface-raised p-layout-lg text-sm text-muted-foreground shadow-surface">
@@ -1134,14 +1107,12 @@ export function CashControlsDashboard() {
 
   if (!activeStore || !params?.orgUrlSlug || !params.storeUrlSlug) {
     return (
-      <View>
-        <div className="container mx-auto py-8">
-          <EmptyState
-            description="Select a store before opening the cash-controls workspace."
-            title="No active store"
-          />
-        </div>
-      </View>
+      <div className="container mx-auto py-8">
+        <EmptyState
+          description="Select a store before opening the cash-controls workspace."
+          title="No active store"
+        />
+      </div>
     );
   }
 

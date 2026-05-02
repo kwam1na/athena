@@ -23,6 +23,10 @@ import {
 export type StaffAuthMode = "authenticate" | "recover";
 
 export type StaffAuthenticationResult = {
+  activeRoles?: string[];
+  approvalProofId?: Id<"approvalProof">;
+  approvedByStaffProfileId?: Id<"staffProfile">;
+  expiresAt?: number;
   staffProfile: {
     firstName?: string | null;
     fullName?: string | null;
