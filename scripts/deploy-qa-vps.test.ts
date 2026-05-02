@@ -15,6 +15,7 @@ describe("VPS QA deploy contract", () => {
     expect(setupScript).toContain('STOREFRONT_QA_HOST="${STOREFRONT_QA_HOST:-qa.wigclub.store}"');
     expect(setupScript).toContain('ATHENA_QA_HOST="${ATHENA_QA_HOST:-athena-qa.wigclub.store}"');
     expect(setupScript).toContain('STOREFRONT_QA_PORT="${STOREFRONT_QA_PORT:-5176}"');
+    expect(setupScript).toContain('"https://$STOREFRONT_QA_HOST" "https://$STOREFRONT_QA_HOST";');
     expect(setupScript).toContain("server_name $STOREFRONT_QA_HOST;");
     expect(setupScript).toContain("proxy_pass http://127.0.0.1:$STOREFRONT_QA_PORT;");
     expect(setupScript).toContain("server_name $ATHENA_QA_HOST;");
@@ -29,6 +30,9 @@ describe("VPS QA deploy contract", () => {
     expect(deployScript).toContain("deploy_athena_qa()");
     expect(deployScript).toContain("deploy_storefront_qa()");
     expect(deployScript).toContain("configure_storefront_qa_nginx()");
+    expect(deployScript).toContain("configure_api_gateway_cors()");
+    expect(deployScript).toContain('python3 - "$config_file" "https://$STOREFRONT_QA_HOST"');
+    expect(deployScript).toContain("Could not find the nginx CORS origin map.");
     expect(deployScript).toContain("/etc/nginx/conf.d/wigclub.conf");
     expect(deployScript).toContain("nginx -t");
     expect(deployScript).toContain("systemctl reload nginx");
