@@ -6,6 +6,9 @@ import { defineConfig } from "vitest/config";
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   base: "/",
+  server: {
+    allowedHosts: ["athena-qa.wigclub.store"],
+  },
   build: {
     rollupOptions: {
       treeshake: true,

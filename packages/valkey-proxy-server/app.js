@@ -1,15 +1,6 @@
 const express = require("express");
 const Redis = require("ioredis");
 
-const DEFAULT_CLUSTER_NODES = [
-  {
-    host:
-      process.env.VALKEY_HOST ||
-      "athena-cache-stk6pj.serverless.euw1.cache.amazonaws.com",
-    port: Number(process.env.VALKEY_PORT || 6379),
-  },
-];
-
 const DEFAULT_CLUSTER_OPTIONS = {
   dnsLookup: (address, callback) => callback(null, address),
   redisOptions: {
@@ -25,8 +16,38 @@ const DEFAULT_CLUSTER_OPTIONS = {
   clusterRetryStrategy: (times) => Math.min(times * 100, 3000),
 };
 
-function createRedisCluster({ Cluster = Redis.Cluster, nodes = DEFAULT_CLUSTER_NODES } = {}) {
-  return new Cluster(nodes, DEFAULT_CLUSTER_OPTIONS);
+function valkeyEndpointFromEnv(env = process.env) {
+  return {
+    host: env.VALKEY_HOST || env.REDIS_HOST || "127.0.0.1",
+    port: Number(env.VALKEY_PORT || env.REDIS_PORT || 6379),
+  };
+}
+
+function shouldUseCluster(env = process.env) {
+  return ["1", "true", "yes"].includes(
+    String(env.VALKEY_CLUSTER || "").toLowerCase()
+  );
+}
+
+function createRedisCluster({
+  Cluster = Redis.Cluster,
+  nodes,
+  env = process.env,
+} = {}) {
+  const clusterNodes = nodes || [valkeyEndpointFromEnv(env)];
+  return new Cluster(clusterNodes, DEFAULT_CLUSTER_OPTIONS);
+}
+
+function createRedisClient({
+  RedisClient = Redis,
+  Cluster = Redis.Cluster,
+  env = process.env,
+} = {}) {
+  if (shouldUseCluster(env)) {
+    return createRedisCluster({ Cluster, env });
+  }
+
+  return new RedisClient(valkeyEndpointFromEnv(env));
 }
 
 function attachRedisLogging(redis, logger = console) {
@@ -319,10 +340,11 @@ function createApp({ redis, logger = console } = {}) {
 function startServer({
   app,
   port = process.env.PORT || 3000,
+  host = process.env.VALKEY_PROXY_HOST || process.env.HOST || "127.0.0.1",
   logger = console,
 } = {}) {
-  return app.listen(port, () => {
-    logger.log(`Valkey proxy listening on port ${port}`);
+  return app.listen(port, host, () => {
+    logger.log(`Valkey proxy listening on ${host}:${port}`);
   });
 }
 
@@ -330,6 +352,7 @@ module.exports = {
   attachRedisLogging,
   createApp,
   createHandlers,
+  createRedisClient,
   createRedisCluster,
   runConnectionProbe,
   serializeRedisValue,

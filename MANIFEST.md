@@ -12,7 +12,7 @@ Athena is a multi-tenant retail platform for **wigclub.store**. It consists of t
 |---------|------|---------|
 | `packages/athena-webapp` | `@athena/webapp` | Admin dashboard — inventory, orders, POS, analytics |
 | `packages/storefront-webapp` | `@athena/storefront-webapp` | Customer storefront — shop, cart, checkout, rewards |
-| `packages/valkey-proxy-server` | — | HTTP bridge to local Valkey cache on the DigitalOcean droplet |
+| `packages/valkey-proxy-server` | — | HTTP bridge to local Valkey cache on the VPS |
 
 ---
 
@@ -31,7 +31,8 @@ athena/
 ├── CLAUDE.md                 # Dual-graph context policy (read this first)
 ├── MANIFEST.md               # This file
 ├── CONTEXT.md                # Session context (updated at session end)
-├── deploy-athena.sh          # Deploy to DigitalOcean via scp + symlink swap
+├── scripts/deploy-vps.sh     # Authoritative VPS deployment entrypoint
+├── manage-athena-versions.sh # Interactive wrapper for deploy and version management
 └── package.json              # Workspace root
 ```
 
@@ -264,7 +265,7 @@ Key files: `src/components/checkout/Checkout.tsx`, `src/api/checkoutSession.ts`,
 
 ## Valkey Proxy (`packages/valkey-proxy-server`)
 
-HTTP bridge to the local Valkey instance on the DigitalOcean droplet.
+HTTP bridge to the local Valkey instance on the VPS.
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -284,9 +285,9 @@ HTTP bridge to the local Valkey instance on the DigitalOcean droplet.
 | **Convex** | Backend-as-a-service: DB, auth, HTTP API, crons. Dev deployment: `jovial-wildebeest-179`. Prod: `colorless-cardinal-870` |
 | **Cloudflare R2** | Image and asset storage (S3-compatible; uses `@aws-sdk/client-s3` pointed at R2). Code: `convex/cloudflare/r2.ts` |
 | **Cloudflare Stream** | Video hosting + HLS delivery. Code: `convex/cloudflare/stream.ts` |
-| **Cloudflare Tunnel** | Routes all subdomains (wigclub.store, www, athena, api, dev, cache) to the DigitalOcean droplet |
-| **DigitalOcean** | Droplet at 178.128.161.200 running Nginx + PM2. Deploy via `deploy-athena.sh` |
-| **Valkey (local)** | Redis-compatible cache running locally on the DO droplet |
+| **Cloudflare Tunnel** | Routes public hostnames (wigclub.store, www, athena, qa, api, dev, cache) to the VPS |
+| **VPS** | Ubuntu host running nginx, PM2, Valkey, static app versions, cache proxy, and QA dev server. Deploy via `scripts/deploy-vps.sh` |
+| **Valkey (local)** | Redis-compatible cache running locally on the VPS |
 | **Paystack** | Payment processing (Ghana/Africa). Inline JS in storefront; webhook at `/webhooks/paystack` |
 | **Stripe** | Payment processing (international) |
 | **MailerSend** | Transactional email (OTP codes, order confirmations) |
