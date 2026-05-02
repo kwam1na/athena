@@ -193,6 +193,42 @@ describe("CommandApprovalDialog", () => {
     ).toBeInTheDocument();
   });
 
+  it("formats closeout variance approval copy as stored currency", () => {
+    renderDialog({
+      approval: {
+        ...inlineApproval,
+        action: {
+          key: "register.closeout.submit",
+          label: "Submit register closeout",
+        },
+        copy: {
+          title: "Manager approval required",
+          message:
+            "Variance of -20000 exceeded the closeout approval threshold.",
+          primaryActionLabel: "Approve closeout",
+        },
+        reason:
+          "Variance of -20000 exceeded the closeout approval threshold.",
+        subject: {
+          id: "3",
+          label: "3",
+          type: "register_session",
+        },
+      },
+    });
+
+    expect(
+      screen.getByText(
+        "Variance of GH₵-200 exceeded the closeout approval threshold.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Variance of -20000 exceeded the closeout approval threshold.",
+      ),
+    ).not.toBeInTheDocument();
+  });
+
   it("authenticates a manager, creates an approval proof, and returns proof id for retry", async () => {
     const { user, onAuthenticateForApproval, onApproved } = renderDialog();
 

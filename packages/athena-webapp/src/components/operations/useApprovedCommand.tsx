@@ -64,6 +64,12 @@ function hasInlineManagerProof(approval: ApprovalRequirement) {
   );
 }
 
+function hasAsyncApprovalRequest(approval: ApprovalRequirement) {
+  return approval.resolutionModes.some(
+    (mode) => mode.kind === "async_request" && Boolean(mode.approvalRequestId),
+  );
+}
+
 export function useApprovedCommand({ onAuthenticateForApproval, storeId }: UseApprovedCommandArgs) {
   const [pendingApproval, setPendingApproval] =
     useState<PendingApproval<unknown> | null>(null);
@@ -75,6 +81,13 @@ export function useApprovedCommand({ onAuthenticateForApproval, storeId }: UseAp
     ) => {
       if (isApprovalRequiredResult(result)) {
         pending.onApprovalRequired?.(result.approval);
+
+        if (hasAsyncApprovalRequest(result.approval)) {
+          setPendingApproval(null);
+          await pending.onResult(result);
+          return result;
+        }
+
         setPendingApproval({
           ...pending,
           approval: result.approval,

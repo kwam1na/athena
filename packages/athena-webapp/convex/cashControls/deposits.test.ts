@@ -27,6 +27,7 @@ describe("cash control deposits", () => {
           "session_closing" as Id<"registerSession">,
           {
             _id: "approval_1" as Id<"approvalRequest">,
+            notes: "Counted twice before manager review.",
             reason: "Variance review required.",
             status: "pending",
           },
@@ -110,6 +111,7 @@ describe("cash control deposits", () => {
       _id: "session_closing",
       pendingApprovalRequest: {
         _id: "approval_1",
+        notes: "Counted twice before manager review.",
         status: "pending",
       },
       terminalName: "Back counter",

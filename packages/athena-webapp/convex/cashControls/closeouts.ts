@@ -59,12 +59,13 @@ type CashControlsConfig = {
 
 type CloseoutApprovalRequestRecord = Pick<
   Doc<"approvalRequest">,
-  "_id" | "createdAt" | "reason" | "registerSessionId" | "requestType" | "requestedByStaffProfileId" | "status"
+  "_id" | "createdAt" | "notes" | "reason" | "registerSessionId" | "requestType" | "requestedByStaffProfileId" | "status"
 >;
 
 type CloseoutApprovalRequestSummary = {
   _id: Id<"approvalRequest">;
   createdAt: number;
+  notes?: string;
   reason?: string;
   requestedByStaffName: string | null;
   status: string;
@@ -523,29 +524,33 @@ export const getCloseoutSnapshot = query({
     ctx: QueryCtx,
     args: { storeId: Id<"store"> }
   ): Promise<CloseoutSnapshot> => {
-    const [registerSessions, pendingApprovalRequests, store] = await Promise.all([
+    const [registerSessions, store] = await Promise.all([
       listRegisterSessionsForCloseout(ctx, args.storeId),
-      ctx.db
-        .query("approvalRequest")
-        .withIndex("by_storeId_status", (q) =>
-          q.eq("storeId", args.storeId).eq("status", "pending")
-        )
-        .take(CLOSEOUT_SESSION_LIMIT),
       ctx.runQuery(internal.inventory.stores.findById, { id: args.storeId }),
     ]);
     const config = getCashControlsConfig(store);
-    const approvalMap = new Map<Id<"approvalRequest">, CloseoutApprovalRequestRecord>(
-      pendingApprovalRequests
-        .filter(
-          (approvalRequest: Doc<"approvalRequest">) =>
-            approvalRequest.registerSessionId &&
-            approvalRequest.requestType === "variance_review"
-        )
-        .map((approvalRequest: Doc<"approvalRequest">) => [
-          approvalRequest._id,
-          approvalRequest,
-        ])
+    const approvalRequestIds = Array.from(
+      new Set(
+        registerSessions
+          .map((registerSession) => registerSession.managerApprovalRequestId)
+          .filter(Boolean) as Id<"approvalRequest">[],
+      ),
     );
+    const approvalRequests = await Promise.all(
+      approvalRequestIds.map((approvalRequestId) =>
+        ctx.db.get("approvalRequest", approvalRequestId),
+      ),
+    );
+    const approvalMap = new Map<Id<"approvalRequest">, CloseoutApprovalRequestRecord>();
+    for (const approvalRequest of approvalRequests) {
+      if (
+        approvalRequest &&
+        approvalRequest.registerSessionId &&
+        approvalRequest.requestType === "variance_review"
+      ) {
+        approvalMap.set(approvalRequest._id, approvalRequest);
+      }
+    }
     const staffProfileIds = new Set<Id<"staffProfile">>();
 
     for (const registerSession of registerSessions) {
@@ -589,6 +594,7 @@ export const getCloseoutSnapshot = query({
             ? {
                 _id: approvalRequest._id,
                 createdAt: approvalRequest.createdAt,
+                notes: approvalRequest.notes,
                 reason: approvalRequest.reason,
                 requestedByStaffName: approvalRequest.requestedByStaffProfileId
                   ? staffMap.get(approvalRequest.requestedByStaffProfileId) ?? null
@@ -1109,6 +1115,7 @@ export const correctRegisterSessionOpeningFloat = mutation({
       action: REGISTER_OPENING_FLOAT_CORRECTION_ACTION,
       approvalProofId: args.approvalProofId,
       requiredRole: "manager",
+      requestedByStaffProfileId: args.actorStaffProfileId,
       storeId: args.storeId,
       subject: {
         type: "register_session",

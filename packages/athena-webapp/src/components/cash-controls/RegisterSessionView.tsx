@@ -70,6 +70,7 @@ const LINKED_TRANSACTIONS_PREVIEW_LIMIT = 5;
 
 type RegisterSessionApprovalRequest = {
   _id: string;
+  notes?: string | null;
   reason?: string | null;
   requestedByStaffName?: string | null;
   status: string;
@@ -82,6 +83,7 @@ type RegisterSessionDetail = {
   countedCash?: number;
   expectedCash: number;
   netExpectedCash?: number;
+  notes?: string | null;
   openedAt: number;
   openedByStaffName?: string | null;
   openingFloat: number;
@@ -863,6 +865,8 @@ export function RegisterSessionViewContent({
     reviewReasonFormatter,
     registerSession?.pendingApprovalRequest?.reason,
   );
+  const closeoutRequestNotes =
+    registerSession?.pendingApprovalRequest?.notes ?? registerSession?.notes;
   const formattedCloseoutReviewReason = formatReviewReason(
     reviewReasonFormatter,
     registerSessionSnapshot?.closeoutReview?.reason,
@@ -1007,15 +1011,27 @@ export function RegisterSessionViewContent({
               </p>
             </div>
           </div>
-          <p className="mt-4 border-t border-amber-200/70 pt-3 text-xs text-muted-foreground">
-            Requested by{" "}
-            {registerSession.pendingApprovalRequest?.requestedByStaffName
-              ? formatStaffDisplayName({
-                  fullName:
-                    registerSession.pendingApprovalRequest.requestedByStaffName,
-                })
-              : "staff not recorded"}
-          </p>
+          <div className="mt-4 space-y-3 border-t border-amber-200/70 pt-3 text-xs text-muted-foreground">
+            <p>
+              Requested by{" "}
+              {registerSession.pendingApprovalRequest?.requestedByStaffName
+                ? formatStaffDisplayName({
+                    fullName:
+                      registerSession.pendingApprovalRequest.requestedByStaffName,
+                  })
+                : "staff not recorded"}
+            </p>
+            {closeoutRequestNotes ? (
+              <div className="space-y-1 rounded-md bg-amber-50/60 px-3 py-2 text-muted-foreground">
+                <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-amber-900/70">
+                  Request notes
+                </p>
+                <p className="text-sm leading-5 text-foreground">
+                  {closeoutRequestNotes}
+                </p>
+              </div>
+            ) : null}
+          </div>
         </div>
 
         <label className="block w-[480px] space-y-2">

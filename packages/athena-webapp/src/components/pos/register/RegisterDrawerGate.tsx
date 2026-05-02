@@ -16,9 +16,11 @@ import {
 
 function CashControlsButton({
   className,
+  registerSessionId,
   variant = "ghost",
 }: {
   className?: string;
+  registerSessionId?: string;
   variant?: "default" | "ghost";
 }) {
   return (
@@ -28,12 +30,17 @@ function CashControlsButton({
         params={(params) => ({
           ...params,
           orgUrlSlug: params.orgUrlSlug!,
+          ...(registerSessionId ? { sessionId: registerSessionId } : {}),
           storeUrlSlug: params.storeUrlSlug!,
         })}
         search={{
           o: getOrigin(),
         }}
-        to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls"
+        to={
+          registerSessionId
+            ? "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId"
+            : "/$orgUrlSlug/store/$storeUrlSlug/cash-controls"
+        }
       >
         Cash controls
         <ArrowRightIcon className="ml-2 h-4 w-4" />
@@ -260,6 +267,7 @@ export function RegisterDrawerGate({
               {drawerGate.canOpenCashControls ? (
                 <CashControlsButton
                   className="w-full sm:w-auto"
+                  registerSessionId={drawerGate.cashControlsRegisterSessionId}
                   variant="default"
                 />
               ) : null}
@@ -405,7 +413,12 @@ export function RegisterDrawerGate({
                     "Reopen register"}
                 </LoadingButton>
 
-                <CashControlsButton className="w-full sm:w-auto" />
+                {drawerGate.canOpenCashControls ? (
+                  <CashControlsButton
+                    className="w-full sm:w-auto"
+                    registerSessionId={drawerGate.cashControlsRegisterSessionId}
+                  />
+                ) : null}
 
                 <Button
                   className="w-full sm:w-auto"
@@ -516,7 +529,12 @@ export function RegisterDrawerGate({
             Sign out
           </Button>
 
-          <CashControlsButton className="w-full sm:w-auto" />
+          {drawerGate.canOpenCashControls ? (
+            <CashControlsButton
+              className="w-full sm:w-auto"
+              registerSessionId={drawerGate.cashControlsRegisterSessionId}
+            />
+          ) : null}
         </div>
       </form>
     </div>

@@ -808,18 +808,13 @@ describe("TransactionView", () => {
     await user.click(screen.getByRole("button", { name: "Confirm" }));
 
     expect(
-      await screen.findByText("Manager approval required"),
-    ).toBeInTheDocument();
+      screen.queryByText("Manager approval required"),
+    ).not.toBeInTheDocument();
     expect(
-      screen.getByText(
+      screen.queryByText(
         "A manager needs to review this completed transaction payment method update before it is applied.",
       ),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Approval request approval-1 is pending in the review queue.",
-      ),
-    ).toBeInTheDocument();
+    ).not.toBeInTheDocument();
     expect(approvalMutation).not.toHaveBeenCalled();
     expect(authMutation).toHaveBeenCalledWith({
       allowedRoles: ["cashier", "manager"],
@@ -912,7 +907,9 @@ describe("TransactionView", () => {
         transactionId: "txn_19",
       });
     });
-    expect(screen.queryByText("Manager approval required")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Manager approval required"),
+    ).not.toBeInTheDocument();
   });
 
   it("exits the correction workflow after an async payment correction request is queued", async () => {
@@ -988,10 +985,6 @@ describe("TransactionView", () => {
       screen.getByRole("button", { name: "Submit payment update" }),
     );
     await user.click(screen.getByRole("button", { name: "Confirm" }));
-    await screen.findByText(
-      "Approval request approval-1 is pending in the review queue.",
-    );
-
     await waitFor(() => {
       expect(approvalMutation).not.toHaveBeenCalled();
       expect(paymentMutation).toHaveBeenNthCalledWith(1, {
@@ -1005,6 +998,7 @@ describe("TransactionView", () => {
     expect(
       screen.queryByText("Transaction updates"),
     ).not.toBeInTheDocument();
+    expect(screen.queryByText("Manager approval required")).not.toBeInTheDocument();
   });
 
   it("renders correction history when operational events are present", () => {
