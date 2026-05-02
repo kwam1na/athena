@@ -8,6 +8,7 @@ import {
   parseHarnessBehaviorArgs,
   resolveHarnessBehaviorShell,
   runHarnessBehaviorScenario,
+  runPlaywrightFlow,
 } from "./harness-behavior";
 
 const tempRoots: string[] = [];
@@ -31,6 +32,43 @@ afterEach(async () => {
     )
   );
 });
+
+const missingChromiumError = [
+  "browserType.launch: Executable doesn't exist at /Users/example/Library/Caches/ms-playwright/chromium_headless_shell-1217/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+  "Looks like Playwright was just installed or updated.",
+  "Please run the following command to download new browsers:",
+  "",
+  "    npx playwright install",
+].join("\n");
+
+function createPlaywrightModule(launch: () => Promise<unknown>) {
+  return {
+    chromium: {
+      launch,
+    },
+  };
+}
+
+function createBrowser() {
+  const page = {
+    goto: async () => {},
+    on: () => {},
+    getByRole: () => ({
+      click: async () => {},
+    }),
+    waitForSelector: async () => {},
+    textContent: async () => null,
+    video: () => null,
+  };
+
+  return {
+    newContext: async () => ({
+      close: async () => {},
+      newPage: async () => page,
+    }),
+    close: async () => {},
+  };
+}
 
 describe("runHarnessBehaviorScenario", () => {
   it("runs boot/readiness/browser/runtime/assertion/cleanup and captures runtime signals", async () => {
@@ -386,6 +424,77 @@ describe("runHarnessBehaviorScenario", () => {
         ]),
       },
     });
+  });
+});
+
+describe("runPlaywrightFlow", () => {
+  it("installs Chromium once and retries when local Playwright browser binaries are missing", async () => {
+    let launchCount = 0;
+    let installCount = 0;
+    const browser = createBrowser();
+
+    const result = await runPlaywrightFlow({
+      url: "http://127.0.0.1:4173",
+      playwrightModule: createPlaywrightModule(async () => {
+        launchCount += 1;
+        if (launchCount === 1) {
+          throw new Error(missingChromiumError);
+        }
+        return browser;
+      }),
+      env: {},
+      installChromium: async () => {
+        installCount += 1;
+      },
+      steps: async () => ({ loaded: true }),
+    });
+
+    expect(result.stepResult).toEqual({ loaded: true });
+    expect(launchCount).toBe(2);
+    expect(installCount).toBe(1);
+  });
+
+  it("does not auto-install missing Chromium in CI", async () => {
+    let installCount = 0;
+
+    await expect(
+      runPlaywrightFlow({
+        url: "http://127.0.0.1:4173",
+        playwrightModule: createPlaywrightModule(async () => {
+          throw new Error(missingChromiumError);
+        }),
+        env: { CI: "true" },
+        installChromium: async () => {
+          installCount += 1;
+        },
+        steps: async () => ({}),
+      })
+    ).rejects.toThrow("Run `bunx playwright install chromium` and rerun the blocked validation.");
+
+    expect(installCount).toBe(0);
+  });
+
+  it("still fails genuine browser launch failures after Chromium install", async () => {
+    let launchCount = 0;
+    const launchFailure = new Error("browser process crashed after launch");
+
+    await expect(
+      runPlaywrightFlow({
+        url: "http://127.0.0.1:4173",
+        playwrightModule: createPlaywrightModule(async () => {
+          launchCount += 1;
+          if (launchCount === 1) {
+            throw new Error(missingChromiumError);
+          }
+          throw launchFailure;
+        }),
+        env: {},
+        installChromium: async () => {},
+        steps: async () => ({}),
+      })
+    ).rejects.toThrow("browser process crashed after launch");
+
+    expect(launchCount).toBe(2);
   });
 });
 
