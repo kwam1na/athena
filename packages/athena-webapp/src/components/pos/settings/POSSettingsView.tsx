@@ -3,8 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/ui/loading-button";
-import View from "../../View";
-import { ComposedPageHeader, ViewHeader } from "../../common/PageHeader";
+import { NavigateBackButton } from "../../common/PageHeader";
 import { FadeIn } from "../../common/FadeIn";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
@@ -68,90 +67,113 @@ function FingerprintRegistrationCard({
   existingTerminalName,
   existingTerminalRegisterNumber,
 }: FingerprintRegistrationCardProps) {
+  const terminalStatusLabel = fingerprintError
+    ? "Needs attention"
+    : isExistingTerminal
+      ? "Ready"
+      : "Setup needed";
+  const primaryActionLabel = isExistingTerminal
+    ? "Save terminal settings"
+    : "Register terminal";
+
   return (
-    <View
-      header={<ViewHeader title="Register terminal" />}
-      hideHeaderBottomBorder
-    >
-      <div className="space-y-4 p-6">
-        <div className="flex gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="terminal-name">Terminal name</Label>
-            <div className="flex gap-2">
-              <Input
-                id="terminal-name"
-                placeholder="Front Counter Terminal"
-                className="w-[300px]"
-                value={displayName}
-                onChange={(event) => onDisplayNameChange(event.target.value)}
-              />
-              {isExistingTerminal && isRegisterNumberLocked && (
-                <LoadingButton
-                  onClick={onUpdateExisting}
-                  isLoading={isUpdatingExisting}
-                  disabled={!canUpdateExisting || isUpdatingExisting}
-                  variant="outline"
-                >
-                  Update terminal
-                </LoadingButton>
-              )}
-            </div>
-          </div>
+    <section className="grid gap-layout-xl border-b border-border py-layout-2xl lg:grid-cols-[17rem_minmax(0,1fr)]">
+      <div className="space-y-layout-sm">
+        <h2 className="text-2xl font-medium text-foreground">
+          Register setup
+        </h2>
+        <p className="text-sm leading-6 text-muted-foreground">
+          Name this checkout station and assign the register number the team
+          uses for cash drawer work.
+        </p>
+      </div>
+
+      <div className="space-y-layout-lg">
+        <div className="flex flex-wrap gap-layout-xs">
+          <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
+            {terminalStatusLabel}
+          </span>
+          <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
+            {existingTerminalName ?? "No register name"}
+          </span>
+          <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
+            {existingTerminalRegisterNumber
+              ? `Register ${existingTerminalRegisterNumber}`
+              : "Register number needed"}
+          </span>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="terminal-register-number">Register number</Label>
-          <div className="flex gap-2">
+
+        <div className="flex gap-4">
+          <div className="space-y-layout-xs">
+            <Label htmlFor="terminal-name">Terminal name</Label>
+            <Input
+              id="terminal-name"
+              placeholder="Front Counter Terminal"
+              className="h-control-standard bg-background"
+              value={displayName}
+              onChange={(event) => onDisplayNameChange(event.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Use a name your team recognizes at the counter.
+            </p>
+          </div>
+
+          <div className="space-y-layout-xs">
+            <Label htmlFor="terminal-register-number">Register number</Label>
             <Input
               id="terminal-register-number"
               placeholder="1"
-              className="w-[300px]"
+              className="h-control-standard bg-background"
               value={registerNumber}
               disabled={isExistingTerminal && isRegisterNumberLocked}
               onChange={(event) => onRegisterNumberChange(event.target.value)}
             />
-            {(!isExistingTerminal || !isRegisterNumberLocked) && (
-              <LoadingButton
-                onClick={onRegister}
-                isLoading={isRegistering}
-                disabled={!canRegister || isRegistering}
-                variant={isExistingTerminal ? "outline" : "default"}
-              >
-                {isExistingTerminal
-                  ? "Save terminal settings"
-                  : "Register terminal"}
-              </LoadingButton>
-            )}
+            <p className="text-xs text-muted-foreground">
+              {isExistingTerminal && isRegisterNumberLocked
+                ? "Registered terminals keep their original register number."
+                : "Use the number printed on the drawer or assigned by the manager."}
+            </p>
           </div>
         </div>
 
-        <div className="space-y-2">
-          {fingerprintError && (
-            <p className="text-sm text-destructive">{fingerprintError}</p>
-          )}
+        {fingerprintError ? (
+          <div
+            className="rounded-md border border-danger/20 bg-danger/10 px-layout-md py-layout-sm text-sm text-danger"
+            role="alert"
+          >
+            {fingerprintError}
+          </div>
+        ) : null}
 
-          {isExistingTerminal && existingTerminalName && (
-            <p className="text-sm text-muted-foreground">
-              This terminal is registered as
-              <span className="font-semibold"> {existingTerminalName}</span>
-            </p>
-          )}
+        <div className="border-t border-border pt-layout-md">
+          <p className="pb-layout-md text-sm text-muted-foreground">
+            {existingTerminalRegisterNumber
+              ? "This register is ready for checkout."
+              : "Register number required before checkout can start here."}
+          </p>
 
-          {isExistingTerminal &&
-            (existingTerminalRegisterNumber ? (
-              <p className="text-sm text-muted-foreground">
-                Register{" "}
-                <span className="font-semibold">
-                  {existingTerminalRegisterNumber}
-                </span>
-              </p>
-            ) : (
-              <p className="text-sm text-amber-500">
-                Register number is not configured yet.
-              </p>
-            ))}
+          {isExistingTerminal && isRegisterNumberLocked ? (
+            <LoadingButton
+              onClick={onUpdateExisting}
+              isLoading={isUpdatingExisting}
+              disabled={!canUpdateExisting || isUpdatingExisting}
+              variant="default"
+            >
+              Update terminal
+            </LoadingButton>
+          ) : (
+            <LoadingButton
+              onClick={onRegister}
+              isLoading={isRegistering}
+              disabled={!canRegister || isRegistering}
+              variant="default"
+            >
+              {primaryActionLabel}
+            </LoadingButton>
+          )}
         </div>
       </div>
-    </View>
+    </section>
   );
 }
 
@@ -382,21 +404,26 @@ export function POSSettingsView() {
   };
 
   return (
-    <View
-      header={
-        <ComposedPageHeader
-          leadingContent={
-            <div>
-              <p className="text-lg font-semibold text-gray-900">
-                POS Settings
-              </p>
-            </div>
-          }
-        />
-      }
-    >
-      <FadeIn className="container mx-auto h-full w-full p-6">
-        <div className="grid gap-6">
+    <FadeIn className="min-h-full bg-background">
+      <main className="container mx-auto py-layout-2xl">
+        <div className="mb-layout-lg">
+          <NavigateBackButton />
+        </div>
+
+        <header className="max-w-4xl space-y-layout-sm">
+          <p className="text-xs font-medium uppercase tracking-[0.28em] text-muted-foreground">
+            Point of sale
+          </p>
+          <h1 className="font-display text-4xl font-light leading-tight text-foreground">
+            POS settings
+          </h1>
+          <p className="max-w-3xl text-md leading-8 text-muted-foreground">
+            Configure the register details this checkout station uses before
+            staff start in-store sales.
+          </p>
+        </header>
+
+        <div className="mt-layout-xl border-t border-border">
           <FingerprintRegistrationCard
             displayName={displayName}
             onDisplayNameChange={(value) => {
@@ -423,7 +450,7 @@ export function POSSettingsView() {
             }
           />
         </div>
-      </FadeIn>
-    </View>
+      </main>
+    </FadeIn>
   );
 }

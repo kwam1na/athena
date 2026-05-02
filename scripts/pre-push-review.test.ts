@@ -748,9 +748,7 @@ describe("repo harness ergonomics", () => {
     expect(workflow).toContain(
       "run: python3 -m pip install -r .graphify-requirements.txt"
     );
-    expect(workflow).toContain(
-      "run: bunx playwright install --with-deps chromium"
-    );
+    expect(workflow).toContain("run: bunx playwright install chromium");
     expect(workflow).toContain("run: bun run harness:audit");
     expect(workflow).toContain("HARNESS_INFERENTIAL_SEMANTIC_MODE: shadow");
     expect(workflow).toContain("run: bun run harness:inferential-review");

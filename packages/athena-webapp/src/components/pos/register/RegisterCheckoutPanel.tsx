@@ -11,6 +11,10 @@ interface RegisterCheckoutPanelProps {
   cashierCard: RegisterCashierCardState | null;
   onPaymentFlowChange?: (isActive: boolean) => void;
   onPaymentEntryStart?: () => void;
+  onEditingPaymentChange?: (isEditing: boolean) => void;
+  hidePaymentItemCountSummary?: boolean;
+  paymentsExpanded?: boolean;
+  onPaymentsExpandedChange?: (isExpanded: boolean) => void;
 }
 
 export function RegisterCheckoutPanel({
@@ -18,6 +22,10 @@ export function RegisterCheckoutPanel({
   cashierCard,
   onPaymentFlowChange,
   onPaymentEntryStart,
+  onEditingPaymentChange,
+  hidePaymentItemCountSummary = false,
+  paymentsExpanded,
+  onPaymentsExpandedChange,
 }: RegisterCheckoutPanelProps) {
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col gap-6">
@@ -41,6 +49,10 @@ export function RegisterCheckoutPanel({
         onStartNewTransaction={checkout.onStartNewTransaction}
         onPaymentFlowChange={onPaymentFlowChange}
         onPaymentEntryStart={onPaymentEntryStart}
+        onEditingPaymentChange={onEditingPaymentChange}
+        hidePaymentItemCountSummary={hidePaymentItemCountSummary}
+        paymentsExpanded={paymentsExpanded}
+        onPaymentsExpandedChange={onPaymentsExpandedChange}
       />
 
       {!checkout.isTransactionCompleted && (

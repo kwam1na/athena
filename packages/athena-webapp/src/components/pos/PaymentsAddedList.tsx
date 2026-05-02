@@ -29,16 +29,19 @@ interface PaymentsAddedListProps {
   payments: Payment[];
   formatter: Intl.NumberFormat;
   totalAmountDue: number;
-  itemCount?: number;
   balanceDue?: number;
   selectedPaymentMethod?: SelectedPaymentMethod | null;
   paymentAmountDraft?: number;
   readOnly?: boolean;
   isTransactionCompleted?: boolean;
+  editingPaymentId?: string | null;
+  onEditingPaymentIdChange?: (paymentId: string | null) => void;
+  paymentsExpanded?: boolean;
   onUpdatePayment?: (paymentId: string, amount: number) => void;
   onRemovePayment?: (paymentId: string) => void;
   onClearPayments?: () => void;
   onEditingPaymentChange?: (isEditing: boolean) => void;
+  onPaymentsExpandedChange?: (isExpanded: boolean) => void;
   variant?: "default" | "minimized";
 }
 
@@ -64,39 +67,95 @@ const getPaymentMethodLabel = (method: SelectedPaymentMethod) => {
   }
 };
 
+function PaidTotalBadge({
+  formatter,
+  totalPaid,
+  compact = false,
+}: {
+  formatter: Intl.NumberFormat;
+  totalPaid: number;
+  compact?: boolean;
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-md bg-white/75 px-2.5 py-1 font-semibold text-foreground ring-1 ring-inset ring-border/70",
+        compact ? "text-xs" : "text-sm",
+      )}
+    >
+      Paid {formatStoredAmount(formatter, totalPaid)}
+    </span>
+  );
+}
+
 export const PaymentsAddedList = ({
   payments,
   formatter,
   totalAmountDue,
-  itemCount,
   balanceDue,
   selectedPaymentMethod = null,
   paymentAmountDraft,
   readOnly = false,
   isTransactionCompleted = false,
+  editingPaymentId: controlledEditingPaymentId,
+  onEditingPaymentIdChange,
+  paymentsExpanded: controlledPaymentsExpanded,
   onUpdatePayment,
   onRemovePayment,
   onClearPayments,
   onEditingPaymentChange,
+  onPaymentsExpandedChange,
   variant = "default",
 }: PaymentsAddedListProps) => {
-  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
+  const [internalEditingPaymentId, setInternalEditingPaymentId] = useState<
+    string | null
+  >(null);
   const [editingAmount, setEditingAmount] = useState<number | undefined>(
     undefined,
   );
   const [isPaymentsExpanded, setIsPaymentsExpanded] = useState(false);
   const [editingKeypadValue, setEditingKeypadValue] = useState("");
+  const editingPaymentId =
+    controlledEditingPaymentId ?? internalEditingPaymentId;
+  const paymentsExpanded =
+    controlledPaymentsExpanded ?? isPaymentsExpanded;
 
   useEffect(() => {
-    onEditingPaymentChange?.(editingPaymentId !== null);
     return () => onEditingPaymentChange?.(false);
-  }, [editingPaymentId, onEditingPaymentChange]);
+  }, [onEditingPaymentChange]);
+
+  useEffect(() => {
+    return () => onPaymentsExpandedChange?.(false);
+  }, [onPaymentsExpandedChange]);
+
+  const setPaymentsExpanded = (isExpanded: boolean) => {
+    if (controlledPaymentsExpanded === undefined) {
+      setIsPaymentsExpanded(isExpanded);
+    }
+
+    onPaymentsExpandedChange?.(isExpanded);
+  };
+
+  const setPaymentEditing = (paymentId: string | null) => {
+    if (controlledEditingPaymentId === undefined) {
+      setInternalEditingPaymentId(paymentId);
+    }
+
+    onEditingPaymentIdChange?.(paymentId);
+    onEditingPaymentChange?.(paymentId !== null);
+  };
 
   const handleStartEdit = (payment: Payment) => {
-    setEditingPaymentId(payment.id);
+    setPaymentEditing(payment.id);
     setEditingAmount(payment.amount);
     setEditingKeypadValue("");
-    setIsPaymentsExpanded(true);
+    setPaymentsExpanded(true);
+  };
+
+  const clearPaymentEditing = () => {
+    setPaymentEditing(null);
+    setEditingAmount(undefined);
+    setEditingKeypadValue("");
   };
 
   const handleSaveEdit = (paymentId: string) => {
@@ -126,16 +185,43 @@ export const PaymentsAddedList = ({
       return;
     }
 
+    if (otherPaymentsTotal + editingAmount >= totalAmountDue) {
+      setPaymentsExpanded(false);
+    }
+
     onUpdatePayment(paymentId, editingAmount);
-    setEditingPaymentId(null);
-    setEditingAmount(undefined);
-    setEditingKeypadValue("");
+    clearPaymentEditing();
   };
 
   const handleCancelEdit = () => {
-    setEditingPaymentId(null);
-    setEditingAmount(undefined);
-    setEditingKeypadValue("");
+    const isSaleCovered = payments.reduce(
+      (sum, payment) => sum + payment.amount,
+      0,
+    ) >= totalAmountDue;
+
+    if (isSaleCovered) {
+      setPaymentsExpanded(false);
+    }
+
+    clearPaymentEditing();
+  };
+
+  const resetPaymentCollectionControls = () => {
+    clearPaymentEditing();
+    setPaymentsExpanded(false);
+  };
+
+  const handleClearPayments = () => {
+    resetPaymentCollectionControls();
+    onClearPayments?.();
+  };
+
+  const handleRemovePayment = (paymentId: string) => {
+    if (payments.length <= 1 || editingPaymentId === paymentId) {
+      resetPaymentCollectionControls();
+    }
+
+    onRemovePayment?.(paymentId);
   };
 
   if (payments.length === 0) {
@@ -165,14 +251,14 @@ export const PaymentsAddedList = ({
   const summaryDividerClass = hasProjectedChangeDue
     ? "border-green-200"
     : "border-signal/10";
-  const showSaleSummary = itemCount !== undefined && balanceDue !== undefined;
+  const showSaleSummary = balanceDue !== undefined;
   const isMinimized = variant === "minimized";
   const editingPayment = payments.find(
     (payment) => payment.id === editingPaymentId,
   );
   const canCollapsePayments = showSaleSummary && !isTransactionCompleted;
-  const showPaymentRows = !canCollapsePayments || isPaymentsExpanded;
-  const togglePaymentsLabel = isPaymentsExpanded
+  const showPaymentRows = !canCollapsePayments || paymentsExpanded;
+  const togglePaymentsLabel = paymentsExpanded
     ? "Hide payments"
     : `Show payments (${payments.length})`;
 
@@ -188,10 +274,10 @@ export const PaymentsAddedList = ({
           "w-full rounded-lg bg-white/80 font-medium",
           compact ? "mt-3 h-10 text-sm" : "mt-4 h-12 text-sm",
         )}
-        onClick={() => setIsPaymentsExpanded((expanded) => !expanded)}
+        onClick={() => setPaymentsExpanded(!paymentsExpanded)}
       >
         {togglePaymentsLabel}
-        {isPaymentsExpanded ? (
+        {paymentsExpanded ? (
           <ChevronUp className="h-4 w-4" />
         ) : (
           <ChevronDown className="h-4 w-4" />
@@ -320,12 +406,11 @@ export const PaymentsAddedList = ({
             </div>
             <div
               className={cn(
-                "mt-2 flex items-center justify-between gap-3 border-t pt-2 text-xs text-muted-foreground",
+                "mt-2 flex justify-end border-t pt-2 text-xs text-muted-foreground",
                 summaryDividerClass,
               )}
             >
-              <span>{itemCount} items</span>
-              <span>Paid {formatStoredAmount(formatter, totalPaid)}</span>
+              <PaidTotalBadge formatter={formatter} totalPaid={totalPaid} />
             </div>
           </div>
         )}
@@ -442,7 +527,7 @@ export const PaymentsAddedList = ({
 
   if (isMinimized) {
     return (
-      <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+      <div className="space-y-3">
         {showSaleSummary && (
           <div
             className={cn(
@@ -466,12 +551,15 @@ export const PaymentsAddedList = ({
             </div>
             <div
               className={cn(
-                "mt-2 flex items-center justify-between gap-3 border-t pt-2 text-xs text-muted-foreground",
+                "mt-2 flex justify-end border-t pt-2 text-xs text-muted-foreground",
                 summaryDividerClass,
               )}
             >
-              <span>{itemCount} items</span>
-              <span>Paid {formatStoredAmount(formatter, totalPaid)}</span>
+              <PaidTotalBadge
+                formatter={formatter}
+                totalPaid={totalPaid}
+                compact
+              />
             </div>
             {renderPaymentsToggle(true)}
           </div>
@@ -493,7 +581,7 @@ export const PaymentsAddedList = ({
                 <Button
                   variant="outline"
                   className="h-9 rounded-lg border-red-100 bg-white px-3 text-xs font-medium text-red-600 hover:bg-red-50 hover:text-red-700"
-                  onClick={onClearPayments}
+                  onClick={handleClearPayments}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Clear all
@@ -579,7 +667,8 @@ export const PaymentsAddedList = ({
                             <Button
                               variant="outline"
                               className="h-9 w-9 rounded-lg bg-white p-0 text-red-600 hover:text-red-700"
-                              onClick={() => onRemovePayment(payment.id)}
+                              aria-label={`Remove ${getPaymentMethodLabel(payment.method)} payment`}
+                              onClick={() => handleRemovePayment(payment.id)}
                             >
                               <X className="h-4 w-4" />
                             </Button>
@@ -598,7 +687,7 @@ export const PaymentsAddedList = ({
   }
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div className="space-y-5">
       {showSaleSummary && (
         <div className={cn("grid gap-4", showPaymentRows && "mb-5")}>
           <div className={cn("rounded-xl border p-6", summaryToneClass)}>
@@ -617,12 +706,11 @@ export const PaymentsAddedList = ({
             </div>
             <div
               className={cn(
-                "mt-5 flex items-center justify-between gap-3 border-t pt-4 text-sm text-muted-foreground",
+                "mt-5 flex justify-end border-t pt-4 text-sm text-muted-foreground",
                 summaryDividerClass,
               )}
             >
-              <span>{itemCount} items</span>
-              <span>Paid {formatStoredAmount(formatter, totalPaid)}</span>
+              <PaidTotalBadge formatter={formatter} totalPaid={totalPaid} />
             </div>
             {renderPaymentsToggle()}
           </div>
@@ -644,7 +732,7 @@ export const PaymentsAddedList = ({
               <Button
                 variant="outline"
                 className="h-11 rounded-lg border-red-100 bg-white px-4 text-sm font-medium text-red-600 hover:bg-red-50 hover:text-red-700"
-                onClick={onClearPayments}
+                onClick={handleClearPayments}
               >
                 <Trash2 className="h-4 w-4" />
                 Clear all
@@ -730,7 +818,8 @@ export const PaymentsAddedList = ({
                           <Button
                             variant="outline"
                             className="h-11 w-11 rounded-lg bg-white p-0 text-red-600 hover:text-red-700"
-                            onClick={() => onRemovePayment(payment.id)}
+                            aria-label={`Remove ${getPaymentMethodLabel(payment.method)} payment`}
+                            onClick={() => handleRemovePayment(payment.id)}
                           >
                             <X className="w-4 h-4" />
                           </Button>

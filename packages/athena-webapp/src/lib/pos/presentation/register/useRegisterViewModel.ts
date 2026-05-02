@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 
 import { api } from "~/convex/_generated/api";
@@ -123,6 +123,30 @@ function presentOperatorError(message: string): void {
   toast.error(toOperatorMessage(message));
 }
 
+type StaffProfileRosterRow = {
+  credentialStatus?: "pending" | "active" | "suspended" | "revoked" | null;
+  primaryRole?:
+    | "manager"
+    | "front_desk"
+    | "stylist"
+    | "technician"
+    | "cashier"
+    | null;
+  roles?: Array<
+    "manager" | "front_desk" | "stylist" | "technician" | "cashier"
+  >;
+  status?: "active" | "inactive";
+};
+
+function canOperateRegister(staff: StaffProfileRosterRow): boolean {
+  if (staff.status !== "active" || staff.credentialStatus !== "active") {
+    return false;
+  }
+
+  const roles = staff.roles?.length ? staff.roles : [staff.primaryRole];
+  return roles.some((role) => role === "cashier" || role === "manager");
+}
+
 export function useRegisterViewModel(): RegisterViewModel {
   const { activeStore } = useGetActiveStore();
   const { user } = useAuth();
@@ -186,6 +210,17 @@ export function useRegisterViewModel(): RegisterViewModel {
   const bootstrapState = bootstrapRegister({
     registerState,
   });
+  const staffRosterResult = useQuery(
+    api.operations.staffProfiles.listStaffProfiles,
+    activeStore?._id ? { storeId: activeStore._id } : "skip",
+  ) as unknown;
+  const isStaffRosterLoaded =
+    !activeStore?._id || Array.isArray(staffRosterResult);
+  const staffRoster = Array.isArray(staffRosterResult)
+    ? (staffRosterResult as StaffProfileRosterRow[])
+    : [];
+  const activeRegisterOperatorCount = staffRoster.filter(canOperateRegister)
+    .length;
   const activeSession = useConvexActiveSession({
     storeId: activeStore?._id,
     terminalId: terminal?._id ?? null,
@@ -1891,6 +1926,36 @@ export function useRegisterViewModel(): RegisterViewModel {
       }),
     [customerInfo, terminal],
   );
+  const onboarding = useMemo<RegisterViewModel["onboarding"]>(() => {
+    const isTerminalLookupResolved = terminal !== undefined;
+    const terminalReady = Boolean(terminal);
+    const cashierSetupReady =
+      !isStaffRosterLoaded || activeRegisterOperatorCount > 0;
+    const cashierSignedIn = Boolean(staffProfileId);
+    const shouldShow =
+      (isTerminalLookupResolved && !terminalReady) ||
+      (isStaffRosterLoaded && activeRegisterOperatorCount === 0);
+    const nextStep =
+      isTerminalLookupResolved && !terminalReady
+      ? "terminal"
+      : isStaffRosterLoaded && activeRegisterOperatorCount === 0
+        ? "cashierSetup"
+        : "ready";
+
+    return {
+      shouldShow,
+      terminalReady,
+      cashierSetupReady,
+      cashierSignedIn,
+      cashierCount: activeRegisterOperatorCount,
+      nextStep,
+    };
+  }, [
+    activeRegisterOperatorCount,
+    isStaffRosterLoaded,
+    staffProfileId,
+    terminal,
+  ]);
 
   const sessionPanel =
     activeStore?._id && terminal?._id && staffProfileId
@@ -2120,6 +2185,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     hasActiveStore: Boolean(activeStore),
     header,
     registerInfo,
+    onboarding,
     customerPanel: {
       isOpen: showCustomerPanel,
       onOpenChange: setShowCustomerPanel,

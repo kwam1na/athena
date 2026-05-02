@@ -363,6 +363,42 @@ describe("openDrawer", () => {
     );
   });
 
+  it("maps wrapped duplicate register-number faults to a conflict user_error", async () => {
+    authMocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
+      _id: "user-1" as Id<"athenaUser">,
+    });
+
+    const ctx = {
+      runQuery: vi.fn().mockResolvedValue({
+        _id: "store-1" as Id<"store">,
+        organizationId: "org-1" as Id<"organization">,
+      }),
+      db: createDbMock(),
+      runMutation: vi
+        .fn()
+        .mockRejectedValue(
+          new Error(
+            "Uncaught Error: A register session is already open for this register number.",
+          ),
+        ),
+    } as unknown as MutationCtx;
+
+    await expect(
+      openDrawer(ctx, {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        staffProfileId: "staff-1" as Id<"staffProfile">,
+        registerNumber: "A1",
+        openingFloat: 5000,
+      }),
+    ).resolves.toEqual(
+      userError({
+        code: "conflict",
+        message: "A register session is already open for this register number.",
+      }),
+    );
+  });
+
   it("returns a validation_failed user_error when terminal registerNumber differs", async () => {
     const ctx = {
       runQuery: vi.fn().mockResolvedValue({

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Pencil, Plus, UserMinus } from "lucide-react";
 import { toast } from "sonner";
@@ -224,6 +224,7 @@ function StaffProvisionForm({
   const [email, setEmail] = useState(staff?.email ?? "");
   const [staffCode, setStaffCode] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
 
   const createStaffProfile = useMutation(
     api.operations.staffProfiles.createStaffProfile,
@@ -386,9 +387,9 @@ function StaffProvisionForm({
         mode === "create"
           ? createStaffProfile(payload)
           : updateStaffProfile({
-              ...payload,
-              staffProfileId: staff?._id as Id<"staffProfile">,
-            })
+            ...payload,
+            staffProfileId: staff?._id as Id<"staffProfile">,
+          })
       );
 
       if (result.kind !== "ok" || !result.data?._id) {
@@ -413,9 +414,9 @@ function StaffProvisionForm({
     } catch (error) {
       toast.error(
         (error as Error).message ||
-          (mode === "create"
-            ? "Failed to add staff member"
-            : "Failed to update staff member"),
+        (mode === "create"
+          ? "Failed to add staff member"
+          : "Failed to update staff member"),
       );
       console.error(error);
     } finally {
@@ -423,121 +424,194 @@ function StaffProvisionForm({
     }
   };
 
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLFormElement>) => {
+    if (
+      event.key !== "Enter" ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.shiftKey ||
+      event.nativeEvent.isComposing
+    ) {
+      return;
+    }
+
+    const target = event.target as HTMLElement | null;
+    const isTextArea = target instanceof HTMLTextAreaElement;
+    const isButton = target instanceof HTMLButtonElement;
+    const isExpandedControl = target?.getAttribute("aria-expanded") === "true";
+
+    if (isTextArea || isButton || isExpandedControl) {
+      return;
+    }
+
+    event.preventDefault();
+    formRef.current?.requestSubmit();
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
-      <div className="space-y-2">
-        <p className="text-lg font-medium">
-          {mode === "create" ? "Add staff member" : "Edit staff member"}
-        </p>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
+    <form
+      ref={formRef}
+      onKeyDown={handleKeyDown}
+      onSubmit={handleSubmit}
+      className="overflow-hidden"
+    >
+      <DialogHeader className="border-b bg-surface px-6 py-5">
         <div className="space-y-2">
-          <Label htmlFor="staff-first-name">First name</Label>
-          <Input
-            id="staff-first-name"
-            value={firstName}
-            onChange={(event) => setFirstName(event.target.value)}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="staff-last-name">Last name</Label>
-          <Input
-            id="staff-last-name"
-            value={lastName}
-            onChange={(event) => setLastName(event.target.value)}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="staff-username">Username</Label>
-          <Input
-            id="staff-username"
-            value={isUsernamePending ? "Checking..." : username}
-            readOnly
-            className="cursor-not-allowed bg-muted"
-            disabled={isUsernamePending}
-          />
-          <p className="text-xs text-muted-foreground">
-            Auto-generated from first and last name
+          <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+            Staff profile
           </p>
+          <DialogTitle>
+            {mode === "create" ? "Add staff member" : "Edit staff member"}
+          </DialogTitle>
+          <DialogDescription>
+            Capture the profile details staff use across POS, services, and
+            cash controls. PIN setup happens after the profile is saved.
+          </DialogDescription>
         </div>
+      </DialogHeader>
 
-        <div className="space-y-2">
-          <Label htmlFor="staff-role">Role</Label>
-          <Select
-            value={selectedRole}
-            onValueChange={(value) => setSelectedRole(value as OperationalRole)}
-          >
-            <SelectTrigger id="staff-role">
-              <SelectValue placeholder="Select role" />
-            </SelectTrigger>
-            <SelectContent>
-              {ROLE_OPTIONS.map((role) => (
-                <SelectItem key={role.value} value={role.value}>
-                  {role.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      <div className="max-h-[min(72vh,42rem)] overflow-y-auto px-6 py-6">
+        <div className="space-y-6">
+          <section className="space-y-4">
+            <div className="space-y-1">
+              <h4 className="text-sm font-medium text-foreground">
+                Required details
+              </h4>
+              <p className="text-sm text-muted-foreground">
+                Name, role, and username are needed before this staff member can
+                be saved.
+              </p>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="staff-first-name">First name</Label>
+                <Input
+                  id="staff-first-name"
+                  value={firstName}
+                  onChange={(event) => setFirstName(event.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="staff-last-name">Last name</Label>
+                <Input
+                  id="staff-last-name"
+                  value={lastName}
+                  onChange={(event) => setLastName(event.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="staff-username">Username</Label>
+                <Input
+                  id="staff-username"
+                  value={isUsernamePending ? "Checking..." : username}
+                  readOnly
+                  className="cursor-not-allowed bg-muted"
+                  disabled={isUsernamePending}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Auto-generated from first and last name.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="staff-role">Role</Label>
+                <Select
+                  value={selectedRole}
+                  onValueChange={(value) =>
+                    setSelectedRole(value as OperationalRole)
+                  }
+                >
+                  <SelectTrigger id="staff-role">
+                    <SelectValue placeholder="Select role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ROLE_OPTIONS.map((role) => (
+                      <SelectItem key={role.value} value={role.value}>
+                        {role.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-4 rounded-lg border border-border/80 bg-background p-4">
+            <div className="space-y-1">
+              <h4 className="text-sm font-medium text-foreground">
+                Work and contact
+              </h4>
+              <p className="text-sm text-muted-foreground">
+                Optional details help managers identify staff in operational
+                records.
+              </p>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="staff-start-date">Start date</Label>
+                <Input
+                  id="staff-start-date"
+                  type="date"
+                  value={startDate}
+                  onChange={(event) => setStartDate(event.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="staff-job-title">Job title</Label>
+                <Input
+                  id="staff-job-title"
+                  value={jobTitle}
+                  onChange={(event) => setJobTitle(event.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="staff-phone">Phone number</Label>
+                <Input
+                  id="staff-phone"
+                  value={phoneNumber}
+                  onChange={(event) => setPhoneNumber(event.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="staff-email">Email</Label>
+                <Input
+                  id="staff-email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                />
+              </div>
+            </div>
+          </section>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="staff-start-date">Start date</Label>
-          <Input
-            id="staff-start-date"
-            type="date"
-            value={startDate}
-            onChange={(event) => setStartDate(event.target.value)}
-          />
-        </div>
+      <DialogFooter className="border-t bg-surface px-6 py-4">
+        <Button
+          variant="outline"
+          type="button"
+          onClick={onCancel}
+          disabled={isSaving}
+        >
+          Cancel
+        </Button>
 
-        <div className="space-y-2">
-          <Label htmlFor="staff-job-title">Job title</Label>
-          <Input
-            id="staff-job-title"
-            value={jobTitle}
-            onChange={(event) => setJobTitle(event.target.value)}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="staff-phone">Phone number</Label>
-          <Input
-            id="staff-phone"
-            value={phoneNumber}
-            onChange={(event) => setPhoneNumber(event.target.value)}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="staff-email">Email</Label>
-          <Input
-            id="staff-email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-          />
-        </div>
-      </div>
-
-      <div className="flex items-center gap-4">
         <LoadingButton
           type="submit"
-          variant="outline"
-          className="min-w-[96px]"
+          className="min-w-[112px]"
           isLoading={isSaving}
           disabled={!isValid}
         >
           {mode === "create" ? "Save" : "Update"}
         </LoadingButton>
-
-        <Button variant="ghost" type="button" onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
+      </DialogFooter>
     </form>
   );
 }
@@ -687,11 +761,10 @@ function CredentialPinDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={isSaving}>
+          <Button variant="ghost" onClick={onClose} disabled={isSaving}>
             Cancel
           </Button>
           <LoadingButton
-            variant="ghost"
             onClick={handleSubmit}
             isLoading={isSaving}
             disabled={
@@ -911,26 +984,32 @@ export const StaffManagement = ({
         </p>
       )}
 
-      {formState ? (
-        <div className="w-[50%]">
-          <StaffProvisionForm
-            mode={formState.mode}
-            organizationId={organizationId}
-            onCancel={() => setFormState(null)}
-            onSuccess={() => setFormState(null)}
-            staff={formState.mode === "edit" ? formState.staff : null}
-            storeId={storeId}
-          />
-        </div>
-      ) : (
-        <Button
-          variant="ghost"
-          onClick={() => setFormState({ mode: "create" })}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Add Staff Member
-        </Button>
-      )}
+      <Button variant="ghost" onClick={() => setFormState({ mode: "create" })}>
+        <Plus className="mr-2 h-4 w-4" />
+        Add Staff Member
+      </Button>
+
+      <Dialog
+        open={formState !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setFormState(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-3xl overflow-hidden p-0">
+          {formState ? (
+            <StaffProvisionForm
+              mode={formState.mode}
+              organizationId={organizationId}
+              onCancel={() => setFormState(null)}
+              onSuccess={() => setFormState(null)}
+              staff={formState.mode === "edit" ? formState.staff : null}
+              storeId={storeId}
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       <CredentialPinDialog
         onClose={() => setPinSetupState(null)}

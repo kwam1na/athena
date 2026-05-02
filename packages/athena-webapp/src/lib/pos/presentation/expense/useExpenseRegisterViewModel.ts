@@ -529,6 +529,14 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
         : "Expense Register",
       hasTerminal: Boolean(terminal),
     },
+    onboarding: {
+      shouldShow: false,
+      terminalReady: Boolean(terminal),
+      cashierSetupReady: true,
+      cashierSignedIn: store.cashier.isAuthenticated,
+      cashierCount: store.cashier.isAuthenticated ? 1 : 0,
+      nextStep: "ready",
+    },
     customerPanel: {
       isOpen: false,
       onOpenChange: () => {},

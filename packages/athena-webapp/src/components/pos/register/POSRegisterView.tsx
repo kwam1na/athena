@@ -11,7 +11,17 @@ import {
 import { useSidebar } from "@/components/ui/sidebar";
 import View from "@/components/View";
 import { cn } from "~/src/lib/utils";
-import { ScanBarcode, Search } from "lucide-react";
+import {
+  ArrowRight,
+  CheckCircle2,
+  Circle,
+  ScanBarcode,
+  Search,
+  ShoppingBasket,
+  Settings,
+  Users,
+} from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -25,6 +35,7 @@ import { RegisterCheckoutPanel } from "./RegisterCheckoutPanel";
 import { RegisterCustomerPanel } from "./RegisterCustomerPanel";
 import { RegisterDrawerGate } from "./RegisterDrawerGate";
 import { ExpenseCompletionPanel } from "./ExpenseCompletionPanel";
+import { getOrigin } from "~/src/lib/navigationUtils";
 
 function useCollapseSidebarForPosFlow() {
   const { isMobile, open, setOpen } = useSidebar();
@@ -131,6 +142,198 @@ function DrawerGateWorkspace({
   );
 }
 
+function RegisterSetupResolvingWorkspace() {
+  return (
+    <div className="h-full min-h-0 rounded-lg border border-border bg-background" />
+  );
+}
+
+function CartCountSummary({
+  itemCount,
+  onExpandCart,
+}: {
+  itemCount: number;
+  onExpandCart: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="shrink-0 rounded-lg border border-border bg-background p-4 text-left transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      onClick={onExpandCart}
+      aria-label="Show cart items"
+    >
+      <div className="flex items-center justify-between gap-4">
+        <div className="space-y-1">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Items
+          </p>
+          <p className="text-2xl font-semibold leading-none text-foreground">
+            {itemCount}
+          </p>
+        </div>
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
+          <ShoppingBasket className="h-4 w-4" />
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function POSOnboardingWorkspace({
+  onboarding,
+}: {
+  onboarding: RegisterViewModel["onboarding"];
+}) {
+  const steps = [
+    {
+      id: "terminal",
+      title: "Set up this register",
+      description: onboarding.terminalReady
+        ? "Register details are ready for this checkout station."
+        : "Name this checkout station and assign its register number.",
+      isComplete: onboarding.terminalReady,
+      isCurrent: onboarding.nextStep === "terminal",
+      icon: Settings,
+      action:
+        onboarding.nextStep === "terminal" ? (
+          <Link
+            params={(params) => ({
+              ...params,
+              orgUrlSlug: params.orgUrlSlug!,
+              storeUrlSlug: params.storeUrlSlug!,
+            })}
+            to="/$orgUrlSlug/store/$storeUrlSlug/pos/settings"
+            search={{ o: getOrigin() }}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-action-commit px-4 text-sm font-medium text-action-commit-foreground transition-colors hover:bg-action-commit/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            Open register setup
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        ) : null,
+    },
+    {
+      id: "cashierSetup",
+      title: "Add cashier access",
+      description: onboarding.cashierSetupReady
+        ? `${onboarding.cashierCount} cashier ${
+            onboarding.cashierCount === 1 ? "profile is" : "profiles are"
+          } ready for POS sign-in.`
+        : "Add at least one cashier or manager with an active PIN.",
+      isComplete: onboarding.cashierSetupReady,
+      isCurrent: onboarding.nextStep === "cashierSetup",
+      icon: Users,
+      action:
+        onboarding.nextStep === "cashierSetup" ? (
+          <Link
+            params={(params) => ({
+              ...params,
+              orgUrlSlug: params.orgUrlSlug!,
+              storeUrlSlug: params.storeUrlSlug!,
+            })}
+            to="/$orgUrlSlug/store/$storeUrlSlug/members"
+            search={{ o: getOrigin() }}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-action-commit px-4 text-sm font-medium text-action-commit-foreground transition-colors hover:bg-action-commit/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            Manage staff
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        ) : null,
+    },
+  ];
+
+  return (
+    <div className="flex h-full min-h-0 overflow-y-auto rounded-lg border border-border bg-background">
+      <div className="mx-auto flex w-full flex-col gap-layout-xl px-layout-3xl py-layout-2xl">
+        <header className="max-w-3xl space-y-layout-sm">
+          <p className="text-xs font-medium uppercase tracking-[0.24em] text-muted-foreground">
+            Onboarding
+          </p>
+          <h2 className="font-display text-3xl font-light text-foreground">
+            Finish setup before your first checkout
+          </h2>
+          <p className="text-sm leading-6 text-muted-foreground">
+            Athena checks the register setup and staff access before products
+            can be scanned into a sale.
+          </p>
+        </header>
+
+        <div className="grid gap-layout-lg lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.9fr)]">
+          <div className="space-y-layout-md">
+            {steps.map((step) => {
+              const Icon = step.icon;
+              const isWaiting = !step.isComplete && !step.isCurrent;
+              return (
+                <section
+                  key={step.id}
+                  className={cn(
+                    "rounded-lg border p-layout-md transition-colors",
+                    step.isComplete && "border-border bg-surface",
+                    step.isCurrent &&
+                    "border-action-commit/40 bg-background shadow-sm",
+                    isWaiting &&
+                    "border-transparent bg-transparent py-layout-sm opacity-55",
+                  )}
+                >
+                  <div className="flex gap-layout-md">
+                    <div
+                      className={cn(
+                        "mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-background text-muted-foreground",
+                        step.isComplete &&
+                        "border-success/30 bg-success/10 text-success",
+                        step.isCurrent &&
+                        !step.isComplete &&
+                        "border-action-commit/30 bg-action-neutral-soft text-action-commit",
+                        isWaiting &&
+                        "h-8 w-8 border-border/60 bg-transparent text-muted-foreground",
+                      )}
+                    >
+                      {step.isComplete ? (
+                        <CheckCircle2 className="h-4 w-4" />
+                      ) : step.isCurrent ? (
+                        <Icon className="h-4 w-4" />
+                      ) : (
+                        <Circle className="h-4 w-4" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1 space-y-layout-xs">
+                      <div className="flex flex-wrap items-center gap-layout-xs">
+                        <h3
+                          className={cn(
+                            "text-base font-medium text-foreground",
+                            isWaiting && "font-normal text-muted-foreground",
+                          )}
+                        >
+                          {step.title}
+                        </h3>
+                        {!isWaiting ? (
+                          <span className="rounded-full border border-border bg-background px-layout-xs py-layout-2xs text-xs text-muted-foreground">
+                            {step.isComplete ? "Done" : "Next"}
+                          </span>
+                        ) : null}
+                      </div>
+                      <p
+                        className={cn(
+                          "text-sm leading-6 text-muted-foreground",
+                          isWaiting && "text-muted-foreground/80",
+                        )}
+                      >
+                        {step.description}
+                      </p>
+                      {step.action ? (
+                        <div className="pt-layout-xs">{step.action}</div>
+                      ) : null}
+                    </div>
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface POSRegisterViewProps {
   workflowMode?: RegisterWorkflowMode;
   viewModel?: RegisterViewModel;
@@ -145,7 +348,9 @@ export function POSRegisterView({
   const effectiveWorkflowMode: RegisterWorkflowMode =
     workflowMode ?? viewModel.workflowMode ?? "pos";
   const isPosWorkflow = effectiveWorkflowMode === "pos";
-  const [isPaymentInputActive, setIsPaymentInputActive] = useState(false);
+  const [isPaymentEntryActive, setIsPaymentEntryActive] = useState(false);
+  const [isPaymentEditActive, setIsPaymentEditActive] = useState(false);
+  const [isPaymentsListExpanded, setIsPaymentsListExpanded] = useState(false);
   const productEntryRef = useRef<ProductEntryHandle>(null);
   const headerProductSearchInputRef = useRef<HTMLInputElement>(null);
 
@@ -159,13 +364,37 @@ export function POSRegisterView({
   );
   const hasProductSearchIntent =
     (viewModel.productEntry?.productSearchQuery ?? "").trim().length > 0;
+  const cartItemCount =
+    viewModel.cart?.items?.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
   const isAwaitingCashierAuth = Boolean(viewModel.authDialog?.open);
-  const shouldShowPaymentWorkspace =
-    isPosWorkflow && isPaymentInputActive && !hasProductSearchIntent;
+  const onboardingState =
+    viewModel.onboarding ??
+    ({
+      shouldShow: false,
+      terminalReady: viewModel.registerInfo?.hasTerminal ?? false,
+      cashierSetupReady: true,
+      cashierSignedIn: Boolean(viewModel.cashierCard),
+      cashierCount: viewModel.cashierCard ? 1 : 0,
+      nextStep: "ready",
+    } satisfies RegisterViewModel["onboarding"]);
+  const shouldShowOnboarding =
+    isPosWorkflow &&
+    onboardingState.shouldShow &&
+    !viewModel.checkout.isTransactionCompleted &&
+    !viewModel.drawerGate;
+  const isResolvingRegisterSetup =
+    isPosWorkflow &&
+    !onboardingState.shouldShow &&
+    !onboardingState.terminalReady &&
+    !viewModel.authDialog &&
+    !viewModel.drawerGate &&
+    !viewModel.checkout.isTransactionCompleted;
   const canSearchProducts =
     !viewModel.checkout.isTransactionCompleted &&
     !viewModel.drawerGate &&
-    !isAwaitingCashierAuth;
+    !isAwaitingCashierAuth &&
+    !shouldShowOnboarding &&
+    !isResolvingRegisterSetup;
   const isHeaderProductSearchSupported =
     isSessionActive && canSearchProducts && !viewModel.productEntry.disabled;
   const shouldRenderSaleSurface =
@@ -173,18 +402,29 @@ export function POSRegisterView({
   const shouldRenderExpenseCompletionPanel = !isPosWorkflow;
   const shouldRenderCheckoutPanel =
     isPosWorkflow || shouldRenderExpenseCompletionPanel;
+  const shouldShowPaymentWorkspace =
+    isPosWorkflow && isPaymentEntryActive && !hasProductSearchIntent;
+  const shouldShowCartSummarySidebar =
+    isPosWorkflow &&
+    shouldRenderSaleSurface &&
+    ((isPaymentEntryActive && hasProductSearchIntent) ||
+      isPaymentEditActive ||
+      isPaymentsListExpanded) &&
+    !shouldShowPaymentWorkspace &&
+    !shouldShowOnboarding &&
+    !isResolvingRegisterSetup;
   const shouldRenderCartSidebar =
-    shouldRenderSaleSurface && !shouldShowPaymentWorkspace;
+    shouldRenderSaleSurface &&
+    !shouldShowPaymentWorkspace &&
+    !shouldShowCartSummarySidebar &&
+    !shouldShowOnboarding &&
+    !isResolvingRegisterSetup;
   const shouldRenderWorkspaceSidebar =
-    shouldRenderCartSidebar ||
-    shouldRenderCheckoutPanel ||
-    isAwaitingCashierAuth;
-
-  useEffect(() => {
-    if (hasProductSearchIntent && isPaymentInputActive) {
-      setIsPaymentInputActive(false);
-    }
-  }, [hasProductSearchIntent, isPaymentInputActive]);
+    !shouldShowOnboarding &&
+    !isResolvingRegisterSetup &&
+    (shouldRenderCartSidebar ||
+      shouldRenderCheckoutPanel ||
+      isAwaitingCashierAuth);
 
   useEffect(() => {
     const handleCmdK = (event: KeyboardEvent) => {
@@ -229,7 +469,19 @@ export function POSRegisterView({
   }, [isHeaderProductSearchSupported]);
 
   const handlePaymentFlowChange = useCallback((isActive: boolean) => {
-    setIsPaymentInputActive(isActive);
+    setIsPaymentEntryActive(isActive);
+  }, []);
+
+  const handlePaymentsExpandedChange = useCallback((isExpanded: boolean) => {
+    setIsPaymentsListExpanded(isExpanded);
+  }, []);
+
+  const handleCartSummaryClick = useCallback(() => {
+    setIsPaymentsListExpanded(false);
+  }, []);
+
+  const handleEditingPaymentChange = useCallback((isEditing: boolean) => {
+    setIsPaymentEditActive(isEditing);
   }, []);
 
   const handlePaymentEntryStart = useCallback(() => {
@@ -237,7 +489,7 @@ export function POSRegisterView({
       viewModel.productEntry?.setProductSearchQuery?.("");
     }
 
-    setIsPaymentInputActive(true);
+    setIsPaymentEntryActive(true);
   }, [hasProductSearchIntent, viewModel.productEntry]);
 
   if (!viewModel.hasActiveStore) {
@@ -297,17 +549,19 @@ export function POSRegisterView({
                 </p>
               </div>
 
-              <ProductSearchInput
-                ref={headerProductSearchInputRef}
-                disabled={!isHeaderProductSearchSupported}
-                productSearchQuery={viewModel.productEntry.productSearchQuery}
-                setProductSearchQuery={
-                  viewModel.productEntry.setProductSearchQuery
-                }
-                onBarcodeSubmit={viewModel.productEntry.onBarcodeSubmit}
-                className="max-w-[800px] flex-1"
-                inputClassName="h-14"
-              />
+              {!shouldShowOnboarding && !isResolvingRegisterSetup ? (
+                <ProductSearchInput
+                  ref={headerProductSearchInputRef}
+                  disabled={!isHeaderProductSearchSupported}
+                  productSearchQuery={viewModel.productEntry.productSearchQuery}
+                  setProductSearchQuery={
+                    viewModel.productEntry.setProductSearchQuery
+                  }
+                  onBarcodeSubmit={viewModel.productEntry.onBarcodeSubmit}
+                  className="max-w-[800px] flex-1"
+                  inputClassName="h-14"
+                />
+              ) : null}
             </div>
           }
           trailingContent={
@@ -324,7 +578,10 @@ export function POSRegisterView({
     >
       <FadeIn className={registerContentClassName}>
         <div className="flex h-full min-h-0 flex-col gap-6 overflow-hidden">
-          {isPosWorkflow && shouldRenderSaleSurface ? (
+          {isPosWorkflow &&
+          shouldRenderSaleSurface &&
+          !shouldShowOnboarding &&
+          !isResolvingRegisterSetup ? (
             <RegisterCustomerPanel
               customerPanel={viewModel.customerPanel}
               disabled={!isSessionActive}
@@ -339,7 +596,11 @@ export function POSRegisterView({
                   !shouldRenderWorkspaceSidebar && "lg:col-span-2",
                 )}
               >
-                {isPosWorkflow && viewModel.drawerGate ? (
+                {shouldShowOnboarding ? (
+                  <POSOnboardingWorkspace onboarding={onboardingState} />
+                ) : isResolvingRegisterSetup ? (
+                  <RegisterSetupResolvingWorkspace />
+                ) : isPosWorkflow && viewModel.drawerGate ? (
                   <DrawerGateWorkspace drawerGate={viewModel.drawerGate} />
                 ) : isAwaitingCashierAuth && viewModel.authDialog ? (
                   <CashierAuthWorkspace authDialog={viewModel.authDialog} />
@@ -404,11 +665,19 @@ export function POSRegisterView({
                     />
                   ) : null}
 
+                  {shouldShowCartSummarySidebar ? (
+                    <CartCountSummary
+                      itemCount={cartItemCount}
+                      onExpandCart={handleCartSummaryClick}
+                    />
+                  ) : null}
+
                   {shouldRenderCheckoutPanel ? (
                     <div
                       className={cn(
                         "rounded-lg bg-white p-4",
                         shouldShowPaymentWorkspace ||
+                          shouldShowCartSummarySidebar ||
                           viewModel.checkout.isTransactionCompleted
                           ? "flex min-h-0 flex-1 flex-col overflow-hidden"
                           : "shrink-0",
@@ -420,6 +689,14 @@ export function POSRegisterView({
                           cashierCard={viewModel.cashierCard}
                           onPaymentFlowChange={handlePaymentFlowChange}
                           onPaymentEntryStart={handlePaymentEntryStart}
+                          onEditingPaymentChange={handleEditingPaymentChange}
+                          hidePaymentItemCountSummary={
+                            shouldShowCartSummarySidebar
+                          }
+                          paymentsExpanded={isPaymentsListExpanded}
+                          onPaymentsExpandedChange={
+                            handlePaymentsExpandedChange
+                          }
                         />
                       ) : (
                         <ExpenseCompletionPanel checkout={viewModel.checkout} />
@@ -443,8 +720,8 @@ export function POSRegisterView({
                 </div>
               </div>
             ) : null}
-            </div>
           </div>
+        </div>
       </FadeIn>
 
       {viewModel.authDialog && !isAwaitingCashierAuth && (

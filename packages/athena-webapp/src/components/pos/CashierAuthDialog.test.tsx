@@ -316,4 +316,18 @@ describe("mapThrownError", () => {
       message: GENERIC_UNEXPECTED_ERROR_MESSAGE,
     });
   });
+
+  it("preserves known drawer conflict messages from wrapped Convex faults", () => {
+    expect(
+      mapThrownError(
+        new Error(
+          "Uncaught Error: A register session is already open for this register number.",
+        ),
+      ),
+    ).toEqual({
+      ok: false,
+      code: "conflict",
+      message: "A register session is already open for this register number.",
+    });
+  });
 });

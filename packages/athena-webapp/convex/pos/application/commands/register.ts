@@ -33,17 +33,17 @@ function mapOpenDrawerUserError(error: unknown): OpenDrawerResult | null {
     return null;
   }
 
-  if (error.message === OPEN_DRAWER_TERMINAL_CONFLICT_MESSAGE) {
+  if (error.message.includes(OPEN_DRAWER_TERMINAL_CONFLICT_MESSAGE)) {
     return userError({
       code: "conflict",
-      message: error.message,
+      message: OPEN_DRAWER_TERMINAL_CONFLICT_MESSAGE,
     });
   }
 
-  if (error.message === OPEN_DRAWER_REGISTER_NUMBER_CONFLICT_MESSAGE) {
+  if (error.message.includes(OPEN_DRAWER_REGISTER_NUMBER_CONFLICT_MESSAGE)) {
     return userError({
       code: "conflict",
-      message: error.message,
+      message: OPEN_DRAWER_REGISTER_NUMBER_CONFLICT_MESSAGE,
     });
   }
 

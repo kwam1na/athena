@@ -77,7 +77,9 @@ vi.mock("@/components/pos/ProductEntry", async () => {
 });
 
 vi.mock("@/components/pos/CartItems", () => ({
-  CartItems: () => <div>cart-items</div>,
+  CartItems: ({ density }: { density?: string }) => (
+    <div data-testid={`cart-items-${density ?? "default"}`}>cart-items</div>
+  ),
 }));
 
 vi.mock("@/components/pos/CashierAuthDialog", () => ({
@@ -129,15 +131,28 @@ vi.mock("./RegisterCheckoutPanel", () => ({
   RegisterCheckoutPanel: ({
     onPaymentFlowChange,
     onPaymentEntryStart,
+    onEditingPaymentChange,
+    onPaymentsExpandedChange,
   }: {
     onPaymentFlowChange: (active: boolean) => void;
     onPaymentEntryStart: () => void;
+    onEditingPaymentChange?: (editing: boolean) => void;
+    onPaymentsExpandedChange?: (expanded: boolean) => void;
   }) => (
     <div>
+      <button onClick={() => onPaymentFlowChange(false)}>
+        show-payment-methods
+      </button>
       <button onClick={() => onPaymentFlowChange(true)}>
-        activate-payment-flow
+        activate-payment-entry
       </button>
       <button onClick={onPaymentEntryStart}>start-payment-entry</button>
+      <button onClick={() => onEditingPaymentChange?.(true)}>
+        start-payment-edit
+      </button>
+      <button onClick={() => onPaymentsExpandedChange?.(true)}>
+        expand-payments
+      </button>
       <div>register-checkout-panel</div>
     </div>
   ),
@@ -185,7 +200,14 @@ describe("POSRegisterView", () => {
       customerPanel: {},
       productEntry: {},
       cart: {
-        items: [],
+        items: [
+          {
+            id: "line-1",
+            name: "Nuggs",
+            price: 5500,
+            quantity: 1,
+          },
+        ],
       },
       checkout: {
         isTransactionCompleted: false,
@@ -218,6 +240,171 @@ describe("POSRegisterView", () => {
     expect(screen.getByText("cart-items")).toBeInTheDocument();
     expect(screen.getByText("register-checkout-panel")).toBeInTheDocument();
     expect(screen.queryByText("cashier-auth-dialog")).not.toBeInTheDocument();
+  });
+
+  it("renders POS onboarding when register setup is incomplete", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: false,
+      },
+      registerInfo: {
+        customerName: undefined,
+        registerLabel: "No terminal configured",
+        hasTerminal: false,
+      },
+      onboarding: {
+        shouldShow: true,
+        terminalReady: false,
+        cashierSetupReady: true,
+        cashierSignedIn: false,
+        cashierCount: 2,
+        nextStep: "terminal",
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: true,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: null,
+      cashierCard: null,
+      authDialog: null,
+      drawerGate: null,
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(screen.getByText("Onboarding")).toBeInTheDocument();
+    expect(screen.getByText("Finish setup before your first checkout")).toBeInTheDocument();
+    expect(screen.getByText("Set up this register")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /open register setup/i }),
+    ).toHaveAttribute("href", "/$orgUrlSlug/store/$storeUrlSlug/pos/settings");
+    expect(screen.queryByText("product-search-input")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("register-checkout-panel"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("returns to the regular cashier sign-in flow once setup is ready", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: false,
+      },
+      registerInfo: {
+        customerName: undefined,
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      onboarding: {
+        shouldShow: false,
+        terminalReady: true,
+        cashierSetupReady: true,
+        cashierSignedIn: false,
+        cashierCount: 1,
+        nextStep: "ready",
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: true,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: null,
+      cashierCard: null,
+      authDialog: {
+        open: true,
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        workflowMode: "pos",
+        onAuthenticated: vi.fn(),
+        onDismiss: vi.fn(),
+      },
+      drawerGate: null,
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(screen.queryByText("Onboarding")).not.toBeInTheDocument();
+    expect(screen.getByText("cashier-auth-dialog")).toBeInTheDocument();
+    expect(screen.getByText("register-customer-panel")).toBeInTheDocument();
+    expect(screen.getByText("cart-items")).toBeInTheDocument();
+    expect(screen.getByText("register-checkout-panel")).toBeInTheDocument();
+  });
+
+  it("holds a blank register workspace while setup is resolving before auth", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: false,
+      },
+      registerInfo: {
+        customerName: undefined,
+        registerLabel: "No terminal configured",
+        hasTerminal: false,
+      },
+      onboarding: {
+        shouldShow: false,
+        terminalReady: false,
+        cashierSetupReady: true,
+        cashierSignedIn: false,
+        cashierCount: 1,
+        nextStep: "ready",
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: true,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: null,
+      cashierCard: null,
+      authDialog: null,
+      drawerGate: null,
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(screen.queryByText("Onboarding")).not.toBeInTheDocument();
+    expect(screen.queryByText("Ready for product lookup")).not.toBeInTheDocument();
+    expect(screen.queryByText("product-search-input")).not.toBeInTheDocument();
+    expect(screen.queryByText("register-customer-panel")).not.toBeInTheDocument();
+    expect(screen.queryByText("cart-items")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("register-checkout-panel"),
+    ).not.toBeInTheDocument();
   });
 
   it("renders cashier authentication in the product lookup space while keeping POS controls visible", async () => {
@@ -533,7 +720,7 @@ describe("POSRegisterView", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("returns to product entry when a paid sale starts a new product search", async () => {
+  it("keeps product lookup stable while payment method selection is active", async () => {
     const setProductSearchQuery = vi.fn();
     const baseViewModel = {
       hasActiveStore: true,
@@ -554,7 +741,14 @@ describe("POSRegisterView", () => {
         onBarcodeSubmit: vi.fn(),
       },
       cart: {
-        items: [],
+        items: [
+          {
+            id: "line-1",
+            name: "Nuggs",
+            price: 5500,
+            quantity: 1,
+          },
+        ],
       },
       checkout: {
         isTransactionCompleted: false,
@@ -572,9 +766,10 @@ describe("POSRegisterView", () => {
     const { POSRegisterView } = await import("./POSRegisterView");
     const { rerender } = render(<POSRegisterView />);
 
-    await userEvent.click(screen.getByText("activate-payment-flow"));
+    await userEvent.click(screen.getByText("show-payment-methods"));
 
-    expect(screen.getByText("cart-items")).toBeInTheDocument();
+    expect(screen.getByText("Ready for product lookup")).toBeInTheDocument();
+    expect(screen.getByTestId("cart-items-compact")).toBeInTheDocument();
     expect(screen.queryByText("product-entry")).not.toBeInTheDocument();
 
     mockUseRegisterViewModel.mockReturnValue({
@@ -591,13 +786,317 @@ describe("POSRegisterView", () => {
       expect(screen.getByText("product-entry")).toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByText("activate-payment-flow"));
+    await userEvent.click(screen.getByText("show-payment-methods"));
 
     expect(setProductSearchQuery).not.toHaveBeenCalled();
 
     await userEvent.click(screen.getByText("start-payment-entry"));
 
     expect(setProductSearchQuery).toHaveBeenCalledWith("");
+  });
+
+  it("moves cart to the left while payment entry is active", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: true,
+      },
+      registerInfo: {
+        customerName: "Ama Serwa",
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: false,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+      },
+      cart: {
+        items: [
+          {
+            id: "line-1",
+            name: "Nuggs",
+            price: 5500,
+            quantity: 1,
+          },
+        ],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: {},
+      cashierCard: {},
+      authDialog: {
+        open: false,
+      },
+      drawerGate: null,
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    await userEvent.click(screen.getByText("start-payment-entry"));
+
+    expect(
+      screen.queryByText("Ready for product lookup"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("cart-items-comfortable")).toBeInTheDocument();
+    expect(screen.queryByTestId("cart-items-compact")).not.toBeInTheDocument();
+  });
+
+  it("keeps the product lookup workspace stable while a payment is edited", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: true,
+      },
+      registerInfo: {
+        customerName: "Ama Serwa",
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: false,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+      },
+      cart: {
+        items: [
+          {
+            id: "line-1",
+            name: "Nuggs",
+            price: 5500,
+            quantity: 1,
+          },
+          {
+            id: "line-2",
+            name: "Agya",
+            price: 7500,
+            quantity: 2,
+          },
+        ],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: {},
+      cashierCard: {},
+      authDialog: {
+        open: false,
+      },
+      drawerGate: null,
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(screen.getByText("Ready for product lookup")).toBeInTheDocument();
+    expect(screen.getByTestId("cart-items-compact")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByText("start-payment-edit"));
+
+    expect(screen.getByText("Ready for product lookup")).toBeInTheDocument();
+    expect(screen.queryByTestId("cart-items-compact")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("cart-items-comfortable"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Items")).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
+  });
+
+  it("summarizes the cart in the rail when payment entry stays beside product results", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: true,
+      },
+      registerInfo: {
+        customerName: "Ama Serwa",
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: false,
+        productSearchQuery: "agya",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+      },
+      cart: {
+        items: [
+          {
+            id: "line-1",
+            name: "Nuggs",
+            price: 5500,
+            quantity: 1,
+          },
+          {
+            id: "line-2",
+            name: "Agya",
+            price: 7500,
+            quantity: 2,
+          },
+        ],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: {},
+      cashierCard: {},
+      authDialog: {
+        open: false,
+      },
+      drawerGate: null,
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    await userEvent.click(screen.getByText("activate-payment-entry"));
+
+    expect(screen.getByText("product-entry")).toBeInTheDocument();
+    expect(screen.getByText("Items")).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
+    expect(screen.queryByTestId("cart-items-compact")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("cart-items-comfortable"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("collapses the cart in the rail when payments are expanded", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: true,
+      },
+      registerInfo: {
+        customerName: "Ama Serwa",
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: false,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+      },
+      cart: {
+        items: [
+          {
+            id: "line-1",
+            name: "Nuggs",
+            price: 5500,
+            quantity: 1,
+          },
+          {
+            id: "line-2",
+            name: "Agya",
+            price: 7500,
+            quantity: 2,
+          },
+        ],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: {},
+      cashierCard: {},
+      authDialog: {
+        open: false,
+      },
+      drawerGate: null,
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(screen.getByTestId("cart-items-compact")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByText("expand-payments"));
+
+    expect(screen.queryByTestId("cart-items-compact")).not.toBeInTheDocument();
+    expect(screen.getByText("Items")).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
+  });
+
+  it("expands the cart and collapses payments when the item summary is selected", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: true,
+      },
+      registerInfo: {
+        customerName: "Ama Serwa",
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: false,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+      },
+      cart: {
+        items: [
+          {
+            id: "line-1",
+            name: "Nuggs",
+            price: 5500,
+            quantity: 1,
+          },
+          {
+            id: "line-2",
+            name: "Agya",
+            price: 7500,
+            quantity: 2,
+          },
+        ],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: {},
+      cashierCard: {},
+      authDialog: {
+        open: false,
+      },
+      drawerGate: null,
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    await userEvent.click(screen.getByText("expand-payments"));
+
+    expect(screen.queryByTestId("cart-items-compact")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Show cart items" }),
+    ).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Show cart items" }),
+    );
+
+    expect(screen.getByTestId("cart-items-compact")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Show cart items" }),
+    ).not.toBeInTheDocument();
   });
 
   it("renders the drawer gate in the product lookup space while drawer setup is pending", async () => {

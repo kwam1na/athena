@@ -1012,15 +1012,6 @@ export const correctRegisterSessionOpeningFloat = mutation({
       });
     }
 
-    if (args.correctedOpeningFloat === registerSession.openingFloat) {
-      return ok({
-        action: "unchanged" as const,
-        correctedOpeningFloat: args.correctedOpeningFloat,
-        previousOpeningFloat: registerSession.openingFloat,
-        registerSession,
-      });
-    }
-
     const previousOpeningFloat = registerSession.openingFloat;
 
     if (!args.approvalProofId) {
@@ -1048,6 +1039,15 @@ export const correctRegisterSessionOpeningFloat = mutation({
 
     if (approvalProof.kind !== "ok") {
       return approvalProof;
+    }
+
+    if (args.correctedOpeningFloat === previousOpeningFloat) {
+      return ok({
+        action: "unchanged" as const,
+        correctedOpeningFloat: args.correctedOpeningFloat,
+        previousOpeningFloat,
+        registerSession,
+      });
     }
 
     const updatedSession = await ctx.runMutation(

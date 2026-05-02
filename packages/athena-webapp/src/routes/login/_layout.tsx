@@ -190,19 +190,27 @@ export function LoginLayout() {
 
   return (
     <main
-      className="flex h-screen w-full overflow-hidden bg-background text-foreground"
+      className="relative isolate flex h-screen w-full overflow-hidden bg-background text-foreground"
       aria-busy={isLoading}
     >
+      <div
+        className="pointer-events-none absolute inset-0 z-0 bg-background"
+        aria-hidden="true"
+      >
+        <div className="absolute inset-0 opacity-70 [background-image:linear-gradient(to_right,hsl(var(--border)/0.36)_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--border)/0.28)_1px,transparent_1px)] [background-size:48px_48px] [mask-image:linear-gradient(to_bottom,black,black_68%,transparent)]" />
+        <div className="absolute inset-y-0 right-0 w-[62%] opacity-45 [background-image:repeating-linear-gradient(135deg,transparent_0,transparent_28px,hsl(var(--border)/0.34)_28px,hsl(var(--border)/0.34)_29px)] [mask-image:linear-gradient(to_left,black,transparent_76%)]" />
+      </div>
+
       <div className="absolute left-layout-xl top-layout-xl z-20">
         <Link
           to={HOME_PATH}
-          className="flex h-10 items-center justify-center rounded-md px-layout-sm font-display text-base font-semibold text-foreground transition-colors duration-standard ease-standard hover:text-signal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="flex h-10 items-center justify-center rounded-md px-layout-sm font-display text-base font-light tracking-[0.18em] text-foreground transition-colors duration-standard ease-standard hover:text-signal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           athena
         </Link>
       </div>
 
-      <div className="flex h-full w-full items-center justify-center px-layout-md py-layout-xl sm:px-layout-xl">
+      <div className="relative z-10 flex h-full w-full items-center justify-center px-layout-md py-layout-xl sm:px-layout-xl">
         <section className="w-full max-w-[25rem]">
           {authSyncError && (
             <div

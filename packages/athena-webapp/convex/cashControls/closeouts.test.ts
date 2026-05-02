@@ -183,7 +183,7 @@ describe("cash control closeouts", () => {
     expect(runMutation).not.toHaveBeenCalled();
   });
 
-  it("returns unchanged for same opening float without duplicate audit history", async () => {
+  it("requires manager approval for same opening float corrections", async () => {
     const runMutation = vi.fn();
     const ctx = {
       db: {
@@ -208,11 +208,16 @@ describe("cash control closeouts", () => {
     });
 
     expect(result).toMatchObject({
-      kind: "ok",
-      data: {
-        action: "unchanged",
-        correctedOpeningFloat: 30000,
-        previousOpeningFloat: 30000,
+      kind: "approval_required",
+      approval: {
+        action: {
+          key: "cash_controls.register_session.correct_opening_float",
+        },
+        requiredRole: "manager",
+        subject: {
+          id: "session-1",
+          type: "register_session",
+        },
       },
     });
     expect(runMutation).not.toHaveBeenCalled();

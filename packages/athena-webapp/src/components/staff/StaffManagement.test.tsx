@@ -199,6 +199,43 @@ describe("StaffManagement", () => {
     expect(updateStaffCredential).not.toHaveBeenCalled();
   });
 
+  it("submits the staff dialog when Enter is pressed in a field", async () => {
+    mockConvex({
+      staffProfiles: [],
+      usernameAvailability: { available: true, normalizedUsername: "amens" },
+    });
+    const user = userEvent.setup();
+
+    render(
+      <StaffManagement
+        organizationId={"org-1" as Id<"organization">}
+        storeId={"store-1" as Id<"store">}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /add staff member/i }));
+    await user.type(screen.getByLabelText(/first name/i), "Ama");
+    await user.type(screen.getByLabelText(/last name/i), "Mensah");
+    await chooseRole(user, /cashier/i);
+
+    await waitFor(() =>
+      expect(screen.getByLabelText(/username/i)).toHaveValue("amens"),
+    );
+
+    await user.click(screen.getByLabelText(/email/i));
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(createStaffProfile).toHaveBeenCalledTimes(1));
+    expect(createStaffProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        firstName: "Ama",
+        lastName: "Mensah",
+        requestedRoles: ["cashier"],
+        username: "amens",
+      }),
+    );
+  });
+
   it("sets a PIN for a pending credential", async () => {
     mockConvex();
     const user = userEvent.setup();

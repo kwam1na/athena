@@ -158,6 +158,47 @@ Copy and labels:
 - Keep operator language calm and factual; follow
   [product copy tone](../../../../docs/product-copy-tone.md).
 
+## Operator Input Pages
+
+Use this pattern for pages whose main job is to collect setup, configuration, or profile
+information from an operator. Examples include POS settings, store setup, staff provisioning
+when it is a full page, route configuration, and other settings flows where the operator is
+entering a bounded set of fields.
+
+Page structure:
+
+- Render the page on the normal `bg-background` canvas; do not wrap the entire page in an
+  enclosing `View`, floating card, or panel.
+- Put the outlet back affordance above the page title with `NavigateBackButton` when the page
+  was reached from another workflow.
+- Use a guidance-style page header: uppercase eyebrow, large light display title, and one
+  restrained sentence explaining the operational outcome.
+- Add a quiet divider below the header before the first input section.
+- Lay out each input section as a row: left rail for the section title and short explanation,
+  right rail for status chips, fields, validation/error copy, and the action.
+- Separate repeated sections with full-width border rules instead of stacking cards.
+
+Section rhythm:
+
+- Left rail: `text-2xl font-medium` section heading and muted helper copy. Keep this copy about
+  the operator outcome, not the implementation.
+- Right rail: use compact status chips at the top when they help orientation, then a responsive
+  field grid, then helper/error copy, then the primary action after a top border.
+- Keep primary actions in the right rail, close to the fields they submit. Avoid page-level
+  action bars for a single section.
+- Use cards only inside the right rail when a contained sub-decision truly needs framing. The
+  input section itself should remain an unframed row.
+
+Copy rules:
+
+- Prefer operator language such as "register", "checkout station", "drawer", "team", "route",
+  "store", and "profile" over implementation language such as "browser", "fingerprint",
+  "terminal identity", "binding", or "session" unless the operator must act on that concept.
+- Status chips should answer scan questions: "Ready", "Setup needed", "Needs attention",
+  object name, or missing required detail.
+- Helper text should explain what to enter or why it matters. Do not describe how the system
+  stores or detects the value unless that is part of the operator's decision.
+
 ## Shell Composition
 
 The shell anchors the workspace and then steps aside for page content.

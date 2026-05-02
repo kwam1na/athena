@@ -627,6 +627,45 @@ describe("RegisterSessionViewContent", () => {
     );
   });
 
+  it("shows an inline note without submitting when the amount is unchanged", async () => {
+    const user = userEvent.setup();
+    const onCorrectOpeningFloat = vi.fn();
+
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="USD"
+        isLoading={false}
+        onAuthenticateStaff={vi.fn()}
+        onCorrectOpeningFloat={onCorrectOpeningFloat}
+        onRecordDeposit={vi.fn()}
+        onReviewCloseout={vi.fn()}
+        onSubmitCloseout={vi.fn()}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            status: "active",
+          },
+        }}
+        storeId="store-1"
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Correct opening float" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Submit" }));
+
+    expect(onCorrectOpeningFloat).not.toHaveBeenCalled();
+    expect(
+      screen.getByLabelText("Opening float correction reason"),
+    ).toBeInTheDocument();
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Corrected amount matches the current opening float. Enter a different amount to submit a correction.",
+    );
+  });
+
   it("exits the opening float correction workflow without submitting", async () => {
     const user = userEvent.setup();
     const onCorrectOpeningFloat = vi.fn();
@@ -878,6 +917,8 @@ describe("RegisterSessionViewContent", () => {
     await user.click(
       screen.getByRole("button", { name: "Correct opening float" }),
     );
+    await user.clear(screen.getByLabelText("Corrected opening float"));
+    await user.type(screen.getByLabelText("Corrected opening float"), "60");
     await user.type(
       screen.getByLabelText("Opening float correction reason"),
       "Correction from counted opening cash.",
