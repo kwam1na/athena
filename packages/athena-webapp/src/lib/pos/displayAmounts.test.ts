@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { formatStoredAmount, parseDisplayAmountInput } from "./displayAmounts";
 import { validatePaymentAmount, validatePayments } from "./validation";
@@ -6,6 +6,10 @@ import { validatePaymentAmount, validatePayments } from "./validation";
 const formatter = new Intl.NumberFormat("en-GH", {
   style: "currency",
   currency: "GHS",
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe("POS display amounts", () => {
@@ -36,20 +40,28 @@ describe("POS display amounts", () => {
   });
 
   it("renders payment validation errors in display units", () => {
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const validation = validatePaymentAmount(15000, 10000, formatter, "card");
 
     expect(validation.isValid).toBe(false);
     expect(validation.errors[0]).toContain(formatter.format(150));
     expect(validation.errors[0]).toContain(formatter.format(100));
     expect(validation.errors[0]).not.toContain(formatter.format(15000));
+    expect(consoleWarn).toHaveBeenCalledWith(
+      expect.stringContaining("[POS] Payment amount validation failed"),
+    );
   });
 
   it("renders total-paid validation errors in display units", () => {
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const validation = validatePayments([{ amount: 15000 }], 20000, formatter);
 
     expect(validation.isValid).toBe(false);
     expect(validation.errors[0]).toContain(formatter.format(200));
     expect(validation.errors[0]).toContain(formatter.format(150));
     expect(validation.errors[0]).not.toContain(formatter.format(20000));
+    expect(consoleWarn).toHaveBeenCalledWith(
+      expect.stringContaining("[POS] Payments validation failed"),
+    );
   });
 });

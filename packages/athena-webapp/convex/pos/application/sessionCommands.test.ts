@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 type SessionRecord = {
   _id: string;
@@ -63,6 +63,10 @@ type TraceCall = {
 };
 
 describe("createPosSessionCommandService", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("creates a fresh active session when no matching active session exists", async () => {
     const commandService = await loadCommandService();
     const repository = createFakeRepository({
@@ -520,6 +524,9 @@ describe("createPosSessionCommandService", () => {
   });
 
   it("keeps session start successful when lifecycle tracing fails", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
     const commandService = await loadCommandService();
     const repository = createFakeRepository({
       registerSessions: [
@@ -554,6 +561,10 @@ describe("createPosSessionCommandService", () => {
         expiresAt: 61_000,
       },
     });
+    expect(consoleError).toHaveBeenCalledWith(
+      "[workflow-trace] pos.session.lifecycle.started",
+      expect.any(Error),
+    );
     expect(repository.getSession("session-1")).not.toHaveProperty(
       "workflowTraceId",
     );

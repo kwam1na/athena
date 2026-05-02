@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { usePrint } from "@/hooks/usePrint";
 
@@ -29,6 +29,10 @@ describe("usePrint Hook", () => {
     mockPrintWindow.closed = false;
     mockPrintWindow.onload = null;
     mockPrintWindow.document.readyState = "complete";
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   describe("Basic Functionality", () => {
@@ -198,6 +202,9 @@ describe("usePrint Hook", () => {
 
   describe("Error Handling", () => {
     it("should handle blocked popup window", () => {
+      const consoleError = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
       const { result } = renderHook(() => usePrint());
 
       // Mock window.open returning null (blocked popup)
@@ -214,9 +221,15 @@ describe("usePrint Hook", () => {
         "_blank",
         "width=300,height=600,scrollbars=yes"
       );
+      expect(consoleError).toHaveBeenCalledWith(
+        "Could not open print window - may be blocked by popup blocker"
+      );
     });
 
     it("should handle print errors gracefully", () => {
+      const consoleError = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
       const { result } = renderHook(() => usePrint());
 
       // Mock print to throw an error
@@ -238,9 +251,16 @@ describe("usePrint Hook", () => {
       }).not.toThrow();
 
       expect(mockPrintWindow.print).toHaveBeenCalled();
+      expect(consoleError).toHaveBeenCalledWith(
+        "Error during printing:",
+        expect.any(Error)
+      );
     });
 
     it("should handle document.write errors", () => {
+      const consoleError = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
       const { result } = renderHook(() => usePrint());
 
       // Mock document.write to throw an error
@@ -253,6 +273,10 @@ describe("usePrint Hook", () => {
           result.current.printReceipt("<div>Test</div>");
         });
       }).not.toThrow();
+      expect(consoleError).toHaveBeenCalledWith(
+        "Error preparing print window:",
+        expect.any(Error)
+      );
     });
 
     it("should handle empty content gracefully", () => {
@@ -313,6 +337,9 @@ describe("usePrint Hook", () => {
 
   describe("Fallback Behavior", () => {
     it("should use document body fallback when popup is blocked", () => {
+      const consoleError = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
       const { result } = renderHook(() => usePrint());
 
       // Mock window.open returning null (blocked popup)
@@ -340,6 +367,9 @@ describe("usePrint Hook", () => {
 
       expect(document.createElement).toHaveBeenCalledWith("div");
       expect(document.body.appendChild).toHaveBeenCalled();
+      expect(consoleError).toHaveBeenCalledWith(
+        "Could not open print window - may be blocked by popup blocker"
+      );
 
       // Restore original methods
       document.createElement = originalCreateElement;

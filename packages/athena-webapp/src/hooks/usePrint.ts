@@ -2,11 +2,6 @@ import { useCallback } from "react";
 
 export const usePrint = () => {
   const printReceipt = useCallback((receiptContent: string) => {
-    console.log(
-      "printReceipt called with content length:",
-      receiptContent.length
-    );
-
     // Create a new window for printing with specific dimensions for receipt
     const printWindow = window.open(
       "",
@@ -36,14 +31,11 @@ export const usePrint = () => {
       return;
     }
 
-    console.log("Print window opened successfully");
-
     // Set up close event handler to prevent reopening
     let isClosing = false;
     const handleClose = () => {
       if (!isClosing) {
         isClosing = true;
-        console.log("Print window closing event triggered");
       }
     };
 

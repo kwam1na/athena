@@ -240,6 +240,9 @@ describe("recordPosSessionTraceBestEffort", () => {
   });
 
   it("reports traceCreated false when the trace row write fails", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
     const traceSeed = buildPosSessionTraceSeed({
       storeId: "store-1" as Id<"store">,
       sessionNumber: "SES-001",
@@ -266,5 +269,9 @@ describe("recordPosSessionTraceBestEffort", () => {
       traceCreated: false,
       traceId: traceSeed.trace.traceId,
     });
+    expect(consoleError).toHaveBeenCalledWith(
+      "[workflow-trace] pos.session.trace.create",
+      expect.any(Error),
+    );
   });
 });

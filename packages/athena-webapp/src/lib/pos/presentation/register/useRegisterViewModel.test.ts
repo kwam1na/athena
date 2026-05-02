@@ -899,6 +899,7 @@ describe("useRegisterViewModel", () => {
   });
 
   it("gates an active POS session assigned to a different open drawer", async () => {
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
     mockRegisterState = {
       phase: "active",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
@@ -942,6 +943,12 @@ describe("useRegisterViewModel", () => {
     });
 
     expect(mockSyncSessionCheckoutState).not.toHaveBeenCalled();
+    expect(consoleWarn).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "[POS] Skipped checkout sync while drawer recovery is required",
+      ),
+    );
+    consoleWarn.mockRestore();
   });
 
   it("does not add products through direct handlers while an active session lacks drawer assignment", async () => {
@@ -1602,6 +1609,7 @@ describe("useRegisterViewModel", () => {
   });
 
   it("keeps local payment draft state but skips payment sync while drawer recovery is required", async () => {
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
     mockRegisterState = {
       phase: "active",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
@@ -1632,6 +1640,12 @@ describe("useRegisterViewModel", () => {
       expect.objectContaining({ method: "cash", amount: 120 }),
     ]);
     expect(mockSyncSessionCheckoutState).not.toHaveBeenCalled();
+    expect(consoleWarn).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "[POS] Skipped checkout sync while drawer recovery is required",
+      ),
+    );
+    consoleWarn.mockRestore();
   });
 
   it("blocks cart mutation handlers while drawer recovery is required", async () => {
