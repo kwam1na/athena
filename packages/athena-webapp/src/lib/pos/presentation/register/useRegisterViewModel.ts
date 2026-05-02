@@ -37,10 +37,14 @@ import {
 import { parseDisplayAmountInput } from "@/lib/pos/displayAmounts";
 import { toOperatorMessage } from "@/lib/errors/operatorMessages";
 import { isApprovalRequiredResult, runCommand } from "@/lib/errors/runCommand";
+import type { CommandApprovalProofResult } from "@/components/operations/CommandApprovalDialog";
+import { useApprovedCommand } from "@/components/operations/useApprovedCommand";
 import { logger } from "@/lib/logger";
 import { useConvexCommandGateway } from "@/lib/pos/infrastructure/convex/commandGateway";
 import { useConvexRegisterState } from "@/lib/pos/infrastructure/convex/registerGateway";
 import { isPosUsableRegisterSessionStatus } from "~/shared/registerSessionStatus";
+import { userError, type CommandResult } from "~/shared/commandResult";
+import type { ApprovalRequirement } from "~/shared/approvalPolicy";
 import {
   useConvexActiveSession,
   useConvexHeldSessions,
@@ -49,7 +53,10 @@ import {
   type PosSessionDetail,
 } from "@/lib/pos/infrastructure/convex/sessionGateway";
 
-import type { RegisterViewModel } from "./registerUiState";
+import type {
+  RegisterCloseoutApprovalDialogState,
+  RegisterViewModel,
+} from "./registerUiState";
 import { EMPTY_REGISTER_CUSTOMER_INFO } from "./registerUiState";
 import {
   buildRegisterHeaderState,
@@ -273,6 +280,36 @@ export function useRegisterViewModel(): RegisterViewModel {
   const submitRegisterSessionCloseout = useMutation(
     api.cashControls.closeouts.submitRegisterSessionCloseout,
   );
+  const authenticateStaffCredentialForApproval = useMutation(
+    api.operations.staffCredentials.authenticateStaffCredentialForApproval,
+  );
+  const closeoutApprovalRunner = useApprovedCommand({
+    storeId: activeStore?._id,
+    onAuthenticateForApproval: (args) => {
+      if (!activeStore?._id) {
+        return Promise.resolve(
+          userError({
+            code: "authentication_failed",
+            message: "Select a store before confirming manager approval.",
+          }),
+        );
+      }
+
+      return runCommand(
+        () =>
+          authenticateStaffCredentialForApproval({
+            actionKey: args.actionKey,
+            pinHash: args.pinHash,
+            reason: args.reason,
+            requiredRole: args.requiredRole,
+            requestedByStaffProfileId: args.requestedByStaffProfileId,
+            storeId: activeStore._id,
+            subject: args.subject,
+            username: args.username,
+          }) as Promise<CommandResult<CommandApprovalProofResult>>,
+      );
+    },
+  });
   const reopenRegisterSessionCloseout = useMutation(
     api.cashControls.closeouts.reopenRegisterSessionCloseout,
   );
@@ -993,6 +1030,73 @@ export function useRegisterViewModel(): RegisterViewModel {
     terminal?._id,
   ]);
 
+  const runRegisterCloseoutSubmit = useCallback(
+    async (args: {
+      approvalProofId?: Id<"approvalProof">;
+      countedCash: number;
+      notes?: string;
+      registerSessionId: Id<"registerSession">;
+    }) => {
+      if (!activeStore?._id || !user?._id || !staffProfileId) {
+        setDrawerErrorMessage(
+          "Register sign-in required. Sign in before submitting closeout.",
+        );
+        return;
+      }
+
+      setDrawerErrorMessage(null);
+      await closeoutApprovalRunner.run({
+        requestedByStaffProfileId: staffProfileId,
+        execute: async (approvalArgs) => {
+          setIsSubmittingCloseout(true);
+          const result = await runCommand(() =>
+            submitRegisterSessionCloseout({
+              actorStaffProfileId: staffProfileId,
+              actorUserId: user._id,
+              approvalProofId:
+                approvalArgs.approvalProofId ?? args.approvalProofId,
+              countedCash: args.countedCash,
+              notes: args.notes,
+              registerSessionId: args.registerSessionId,
+              storeId: activeStore._id,
+            }),
+          );
+          setIsSubmittingCloseout(false);
+          return result;
+        },
+        onApprovalRequired: () => {
+          toast.success("Closeout submitted for manager review");
+        },
+        onResult: (result) => {
+          if (isApprovalRequiredResult(result)) {
+            return;
+          }
+
+          if (result.kind !== "ok") {
+            setDrawerErrorMessage(toOperatorMessage(result.error.message));
+            return;
+          }
+
+          setCloseoutCountedCash("");
+          setCloseoutNotes("");
+          if (result.data?.action === "closed") {
+            setIsCloseoutRequested(false);
+          }
+          requestBootstrap();
+          toast.success("Register session closed");
+        },
+      });
+    },
+    [
+      activeStore?._id,
+      closeoutApprovalRunner,
+      requestBootstrap,
+      staffProfileId,
+      submitRegisterSessionCloseout,
+      user?._id,
+    ],
+  );
+
   const handleSubmitRegisterCloseout = useCallback(async () => {
     if (!activeStore?._id || !user?._id || !staffProfileId) {
       setDrawerErrorMessage(
@@ -1019,46 +1123,33 @@ export function useRegisterViewModel(): RegisterViewModel {
       return;
     }
 
-    setDrawerErrorMessage(null);
-    setIsSubmittingCloseout(true);
+    const expectedCloseoutCash = activeCloseoutRegisterSession?.expectedCash;
+    const trimmedCloseoutNotes = trimOptional(closeoutNotes);
+    const hasCloseoutVariance =
+      expectedCloseoutCash !== undefined &&
+      parsedCountedCash !== expectedCloseoutCash;
 
-    const result = await runCommand(() =>
-      submitRegisterSessionCloseout({
-        actorStaffProfileId: staffProfileId,
-        actorUserId: user._id,
-        countedCash: parsedCountedCash,
-        notes: trimOptional(closeoutNotes),
-        registerSessionId,
-        storeId: activeStore._id,
-      }),
-    );
-
-    setIsSubmittingCloseout(false);
-
-    if (result.kind !== "ok") {
-      setDrawerErrorMessage(toOperatorMessage(result.error.message));
+    if (hasCloseoutVariance && !trimmedCloseoutNotes) {
+      setDrawerErrorMessage(
+        "Closeout notes required. Add notes before submitting a count with variance.",
+      );
       return;
     }
 
-    setCloseoutCountedCash("");
-    setCloseoutNotes("");
-    if (result.data?.action === "closed") {
-      setIsCloseoutRequested(false);
-    }
-    requestBootstrap();
-    toast.success(
-      result.data?.action === "approval_required"
-        ? "Closeout submitted for manager review"
-        : "Register session closed",
-    );
+    await runRegisterCloseoutSubmit({
+      countedCash: parsedCountedCash,
+      notes: trimmedCloseoutNotes,
+      registerSessionId,
+    });
   }, [
     activeStore?._id,
     activeCloseoutRegisterSession?._id,
+    activeCloseoutRegisterSession?.expectedCash,
+    activeCloseoutRegisterSession?.registerNumber,
     closeoutCountedCash,
     closeoutNotes,
-    requestBootstrap,
+    runRegisterCloseoutSubmit,
     staffProfileId,
-    submitRegisterSessionCloseout,
     user?._id,
   ]);
 
@@ -2181,6 +2272,9 @@ export function useRegisterViewModel(): RegisterViewModel {
         }
       : null;
 
+  const closeoutApprovalDialog: RegisterCloseoutApprovalDialogState | null =
+    closeoutApprovalRunner.approvalDialog as RegisterCloseoutApprovalDialogState | null;
+
   return {
     hasActiveStore: Boolean(activeStore),
     header,
@@ -2248,6 +2342,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     drawerGate,
     closeoutControl,
     authDialog,
+    closeoutApprovalDialog,
     onNavigateBack: handleNavigateBack,
   };
 }

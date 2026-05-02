@@ -5,6 +5,7 @@ import {
   buildRegisterSessionVarianceApprovalRequirement,
   correctRegisterSessionOpeningFloat,
   getCashControlsConfig,
+  submitRegisterSessionCloseout,
 } from "./closeouts";
 
 function getSource(relativePath: string) {
@@ -85,16 +86,32 @@ describe("cash control closeouts", () => {
         } as never,
       }),
     ).toEqual({
-      actionKey: "cash_controls.register_session.review_variance",
-      approvalRequestId: "approval-1",
-      context: {
+      action: {
+        key: "cash_controls.register_session.review_variance",
+        label: "Review register closeout variance",
+      },
+      copy: {
+        message: "Variance of 6050 exceeded the closeout approval threshold.",
+        primaryActionLabel: "Approve closeout",
+        secondaryActionLabel: "Got it",
+        title: "Manager approval required",
+      },
+      metadata: {
         countedCash: 16050,
         expectedCash: 10000,
         variance: 6050,
       },
-      mode: "async_approval",
       reason: "Variance of 6050 exceeded the closeout approval threshold.",
       requiredRole: "manager",
+      resolutionModes: [
+        { kind: "inline_manager_proof" },
+        {
+          approvalRequestId: "approval-1",
+          kind: "async_request",
+          requestType: "variance_review",
+        },
+      ],
+      selfApproval: "allowed",
       subject: {
         id: "session-1",
         label: "Register 3",
@@ -139,12 +156,15 @@ describe("cash control closeouts", () => {
     expect(source).toContain("buildApprovalRequest");
     expect(source).toContain("buildRegisterSessionVarianceApprovalRequirement");
     expect(source).toContain("recordOperationalEventWithCtx");
-    expect(source).toContain("consumeApprovalProofWithCtx");
+    expect(source).toContain("consumeCommandApprovalProofWithCtx");
+    expect(source).toContain("requestedByStaffProfileId: args.actorStaffProfileId");
     expect(source).toContain("beginRegisterSessionCloseout");
     expect(source).toContain("closeRegisterSession");
     expect(source).toContain("decideApprovalRequest");
-    expect(source).toContain("approvalRequirement");
-    expect(source).toContain("cash_controls.register_session.review_variance");
+    expect(source).toContain("approvalProofId: v.optional(v.id(\"approvalProof\"))");
+    expect(source).toContain("approvalMode: \"inline_manager_proof\"");
+    expect(source).toContain("approvalRequired(approvalRequirement)");
+    expect(source).toContain("REGISTER_VARIANCE_REVIEW_ACTION");
   });
 
   it("exposes opening float correction as a command-result mutation with audit rails", () => {
@@ -178,6 +198,32 @@ describe("cash control closeouts", () => {
       error: {
         code: "validation_failed",
         message: "Corrected opening float must be a non-negative amount.",
+      },
+    });
+    expect(runMutation).not.toHaveBeenCalled();
+  });
+
+  it("returns user_error for invalid closeout counts without mutating", async () => {
+    const runMutation = vi.fn();
+    const ctx = {
+      db: {
+        get: vi.fn(),
+      },
+      runMutation,
+      runQuery: vi.fn(),
+    };
+
+    const result = await getHandler(submitRegisterSessionCloseout)(ctx, {
+      countedCash: -1,
+      registerSessionId: "session-1",
+      storeId: "store-1",
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "validation_failed",
+        message: "Counted cash cannot be negative.",
       },
     });
     expect(runMutation).not.toHaveBeenCalled();

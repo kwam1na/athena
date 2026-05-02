@@ -436,9 +436,11 @@ describe("register session trace lifecycle handlers", () => {
 
     expect(result).toEqual(
       expect.objectContaining({
-        kind: "ok",
-        data: expect.objectContaining({
-          action: "approval_required",
+        kind: "approval_required",
+        approval: expect.objectContaining({
+          action: expect.objectContaining({
+            key: "cash_controls.register_session.review_variance",
+          }),
         }),
       }),
     );

@@ -1260,7 +1260,7 @@ describe("POSRegisterView", () => {
         registerNumber: "1",
         currency: "GHS",
         closeoutCountedCash: "",
-        closeoutDraftVariance: undefined,
+        closeoutDraftVariance: -500,
         closeoutNotes: "",
         expectedCash: 5000,
         errorMessage: null,
@@ -1296,8 +1296,12 @@ describe("POSRegisterView", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Expected")).toBeInTheDocument();
     expect(screen.getByText("GH₵50")).toBeInTheDocument();
+    expect(screen.getByText("GH₵-5")).toBeInTheDocument();
     expect(screen.getByLabelText(/counted cash/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/closeout notes/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/closeout notes/i)).toBeRequired();
+    expect(
+      screen.getByText("Notes are required when the count has variance."),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /submit closeout/i }),
     ).toBeInTheDocument();

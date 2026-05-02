@@ -76,16 +76,27 @@ vi.mock("@/components/staff-auth/StaffAuthenticationDialog", () => ({
       <button
         type="button"
         onClick={async () => {
-          await onAuthenticate({
+          const result = await onAuthenticate({
             mode: "authenticate",
             pinHash: "hashed-pin",
             username: "ato",
           });
-          onAuthenticated({
-            approvalProofId: "approval-proof-1",
-            staffProfile: { fullName: "Ato Kofi" },
-            staffProfileId: "staff-1",
-          });
+          const authenticatedResult =
+            typeof result === "object" &&
+            result !== null &&
+            "kind" in result &&
+            result.kind === "ok" &&
+            "data" in result
+              ? (result.data as {
+                  approvalProofId?: string;
+                  staffProfile: { fullName: string };
+                  staffProfileId: string;
+                })
+              : {
+                  staffProfile: { fullName: "Ato Kofi" },
+                  staffProfileId: "staff-1",
+                };
+          onAuthenticated(authenticatedResult);
         }}
       >
         Confirm staff for {copy.submitLabel}
@@ -301,6 +312,7 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getAllByText("Ama M.").length).toBeGreaterThan(0);
     expect(screen.getByText("Variance review required.")).toBeInTheDocument();
     expect(screen.getByText("Closeout workflow")).toBeInTheDocument();
+    expect(screen.getByText("Counted cash ($)")).toBeInTheDocument();
     expect(screen.getByLabelText("Closeout counted cash")).toHaveValue(171);
     expect(
       screen.getByRole("button", { name: "Submit closeout" }),
@@ -474,6 +486,54 @@ describe("RegisterSessionViewContent", () => {
     ).toBeGreaterThan(0);
   });
 
+  it("communicates rejected closeout approval in the left rail", () => {
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            pendingApprovalRequest: {
+              _id: "approval-1",
+              reason:
+                "Variance of -84500 exceeded the closeout approval threshold.",
+              requestedByStaffName: "Kwamina Mensah",
+              status: "rejected",
+            },
+          },
+          timeline: [
+            {
+              _id: "event-1",
+              actorStaffName: "Kwamina Mensah",
+              createdAt: new Date("2026-05-02T03:41:00.000Z").getTime(),
+              eventType: "register_session_closeout_rejected",
+              message:
+                "Manager rejected the register closeout for recount or correction.",
+            },
+          ],
+        }}
+        orgUrlSlug="wigclub"
+        storeId="store-1"
+        storeUrlSlug="wigclub"
+      />,
+    );
+
+    expect(screen.getByText("Closeout rejected")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Manager approval pending"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Manager rejected this closeout. Recount or correct the drawer before submitting again.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("submits the closeout count from the register detail page", async () => {
     const user = userEvent.setup();
     const onAuthenticateStaff = vi.fn();
@@ -514,8 +574,149 @@ describe("RegisterSessionViewContent", () => {
     await waitFor(() =>
       expect(onSubmitCloseout).toHaveBeenCalledWith({
         actorStaffProfileId: "staff-1",
+        approvalProofId: undefined,
         countedCash: 18000,
         notes: "Final count after second safe drop.",
+        registerSessionId: "session-1",
+      }),
+    );
+  });
+
+  it("chains inline manager approval when a manager submits a variance closeout", async () => {
+    const user = userEvent.setup();
+    const onAuthenticateStaff = vi.fn().mockResolvedValue(
+      ok({
+        activeRoles: ["manager"],
+        staffProfile: { fullName: "Ato Kofi" },
+        staffProfileId: "staff-1",
+      }),
+    );
+    const onAuthenticateCloseoutReviewApproval = vi.fn().mockResolvedValue(
+      ok({
+        approvalProofId: "approval-proof-1",
+        staffProfile: { fullName: "Ato Kofi" },
+        staffProfileId: "staff-1",
+      }),
+    );
+    const onSubmitCloseout = vi
+      .fn()
+      .mockResolvedValue(ok({ action: "closed" }));
+
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="GHS"
+        isLoading={false}
+        onAuthenticateCloseoutReviewApproval={
+          onAuthenticateCloseoutReviewApproval
+        }
+        onAuthenticateStaff={onAuthenticateStaff}
+        onRecordDeposit={vi.fn()}
+        onReviewCloseout={vi.fn()}
+        onSubmitCloseout={onSubmitCloseout}
+        registerSessionSnapshot={baseSnapshot}
+        storeId="store-1"
+      />,
+    );
+
+    await user.clear(screen.getByLabelText("Closeout counted cash"));
+    await user.type(screen.getByLabelText("Closeout counted cash"), "180");
+    await user.type(
+      screen.getByLabelText("Closeout notes"),
+      "Manager counted the overage.",
+    );
+    await user.click(screen.getByRole("button", { name: "Submit closeout" }));
+    await user.click(
+      screen.getByRole("button", { name: "Confirm staff for Submit closeout" }),
+    );
+
+    expect(onAuthenticateStaff).toHaveBeenCalledWith({
+      allowedRoles: ["cashier", "manager"],
+      pinHash: "hashed-pin",
+      username: "ato",
+    });
+    expect(onAuthenticateCloseoutReviewApproval).toHaveBeenCalledWith({
+      pinHash: "hashed-pin",
+      reason: "Manager counted the overage.",
+      registerSessionId: "session-1",
+      requestedByStaffProfileId: "staff-1",
+      username: "ato",
+    });
+    await waitFor(() =>
+      expect(onSubmitCloseout).toHaveBeenCalledWith({
+        actorStaffProfileId: "staff-1",
+        approvalProofId: "approval-proof-1",
+        countedCash: 18000,
+        notes: "Manager counted the overage.",
+        registerSessionId: "session-1",
+      }),
+    );
+  });
+
+  it("requires closeout notes when counted cash has a variance", async () => {
+    const user = userEvent.setup();
+    const onAuthenticateStaff = vi.fn();
+    const onSubmitCloseout = vi.fn();
+
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="GHS"
+        isLoading={false}
+        onAuthenticateStaff={onAuthenticateStaff}
+        onRecordDeposit={vi.fn()}
+        onReviewCloseout={vi.fn()}
+        onSubmitCloseout={onSubmitCloseout}
+        registerSessionSnapshot={baseSnapshot}
+        storeId="store-1"
+      />,
+    );
+
+    await user.clear(screen.getByLabelText("Closeout counted cash"));
+    await user.type(screen.getByLabelText("Closeout counted cash"), "180");
+    await user.click(screen.getByRole("button", { name: "Submit closeout" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Add closeout notes before submitting a count with variance.",
+    );
+    expect(onAuthenticateStaff).not.toHaveBeenCalled();
+    expect(onSubmitCloseout).not.toHaveBeenCalled();
+  });
+
+  it("allows closeout without notes when counted cash matches expected cash", async () => {
+    const user = userEvent.setup();
+    const onAuthenticateStaff = vi.fn();
+    const onSubmitCloseout = vi
+      .fn()
+      .mockResolvedValue(ok({ action: "closed" }));
+
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="GHS"
+        isLoading={false}
+        onAuthenticateStaff={onAuthenticateStaff}
+        onRecordDeposit={vi.fn()}
+        onReviewCloseout={vi.fn()}
+        onSubmitCloseout={onSubmitCloseout}
+        registerSessionSnapshot={baseSnapshot}
+        storeId="store-1"
+      />,
+    );
+
+    await user.clear(screen.getByLabelText("Closeout counted cash"));
+    await user.type(screen.getByLabelText("Closeout counted cash"), "176");
+    await user.click(screen.getByRole("button", { name: "Submit closeout" }));
+    await user.click(
+      screen.getByRole("button", { name: "Confirm staff for Submit closeout" }),
+    );
+
+    await waitFor(() =>
+      expect(onSubmitCloseout).toHaveBeenCalledWith({
+        actorStaffProfileId: "staff-1",
+        approvalProofId: undefined,
+        countedCash: 17600,
+        notes: undefined,
         registerSessionId: "session-1",
       }),
     );

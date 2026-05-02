@@ -122,6 +122,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/operations/OperationsQueueView.auth.test.tsx`](../../src/components/operations/OperationsQueueView.auth.test.tsx)
 - [`src/components/operations/OperationsQueueView.test.tsx`](../../src/components/operations/OperationsQueueView.test.tsx)
 - [`src/components/operations/StockAdjustmentWorkspace.test.tsx`](../../src/components/operations/StockAdjustmentWorkspace.test.tsx)
+- [`src/components/operations/useApprovedCommand.test.tsx`](../../src/components/operations/useApprovedCommand.test.tsx)
 - [`src/components/orders/OrderStatus.test.tsx`](../../src/components/orders/OrderStatus.test.tsx)
 - [`src/components/orders/ReturnExchangeView.test.tsx`](../../src/components/orders/ReturnExchangeView.test.tsx)
 - [`src/components/orders/utils.test.ts`](../../src/components/orders/utils.test.ts)

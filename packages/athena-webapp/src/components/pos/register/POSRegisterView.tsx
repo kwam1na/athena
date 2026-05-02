@@ -1,5 +1,6 @@
 import { ComposedPageHeader } from "@/components/common/PageHeader";
 import { FadeIn } from "@/components/common/FadeIn";
+import { CommandApprovalDialog } from "@/components/operations/CommandApprovalDialog";
 import { CashierAuthDialog } from "@/components/pos/CashierAuthDialog";
 import { CashierView } from "@/components/pos/CashierView";
 import { CartItems } from "@/components/pos/CartItems";
@@ -734,6 +735,22 @@ export function POSRegisterView({
           onDismiss={viewModel.authDialog.onDismiss}
         />
       )}
+
+      {viewModel.closeoutApprovalDialog ? (
+        <CommandApprovalDialog
+          approval={viewModel.closeoutApprovalDialog.approval}
+          onApproved={viewModel.closeoutApprovalDialog.onApproved}
+          onAuthenticateForApproval={
+            viewModel.closeoutApprovalDialog.onAuthenticateForApproval
+          }
+          onDismiss={viewModel.closeoutApprovalDialog.onDismiss}
+          open={viewModel.closeoutApprovalDialog.open}
+          requestedByStaffProfileId={
+            viewModel.closeoutApprovalDialog.requestedByStaffProfileId
+          }
+          storeId={viewModel.closeoutApprovalDialog.storeId}
+        />
+      ) : null}
     </View>
   );
 }

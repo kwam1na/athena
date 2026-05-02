@@ -90,6 +90,9 @@ describe("correctTransactionPaymentMethod", () => {
         },
         resolutionModes: [
           {
+            kind: "inline_manager_proof",
+          },
+          {
             kind: "async_request",
             requestType: "payment_method_correction",
             approvalRequestId: "approval-1",
