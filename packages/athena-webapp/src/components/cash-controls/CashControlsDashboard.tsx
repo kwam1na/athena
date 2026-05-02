@@ -610,7 +610,7 @@ function DrawerSessionLane({
           {emptyDescription}
         </div>
       ) : (
-        <div className="space-y-layout-2xl">
+        <div className="space-y-layout-xl">
           {sessions.map((session) => (
             <DrawerSessionCard
               currency={currency}
