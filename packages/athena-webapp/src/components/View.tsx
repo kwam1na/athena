@@ -11,7 +11,7 @@ export default function View({
   hideHeaderBottomBorder = false,
   hideBorder = false,
   width = "contained",
-  lockDocumentScroll = true,
+  lockDocumentScroll = false,
   fullHeight = true,
 }: {
   children: React.ReactNode;
@@ -58,15 +58,14 @@ export default function View({
         width === "full"
           ? "w-full max-w-none px-4 sm:px-6 lg:px-8"
           : "container mx-auto",
-        fullHeight &&
-          "h-[calc(100dvh-2.5rem)] max-h-[calc(100dvh-2.5rem)] min-h-0",
+        fullHeight && "h-full max-h-full min-h-0",
         className,
       )}
     >
       <div
         className={cn(
-          "h-full min-h-0 flex flex-col rounded-lg",
-          fullHeight && "min-h-0 overflow-hidden",
+          "min-h-0 flex flex-col rounded-lg",
+          fullHeight ? "h-full overflow-hidden" : "h-auto",
           !hideBorder && "border",
           contentClassName,
         )}
@@ -85,7 +84,7 @@ export default function View({
         <main
           className={cn(
             fullHeight &&
-              "min-h-0 flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide",
+              "min-h-0 flex-1 overflow-y-auto overscroll-contain overflow-x-hidden scrollbar-hide",
             mainClassName,
           )}
         >

@@ -1,20 +1,11 @@
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import OrganizationSwitcher from "./organization-switcher";
-import { LOGGED_IN_USER_ID_KEY } from "../lib/constants";
 
 const mocked = vi.hoisted(() => ({
   navigate: vi.fn(),
-  signOut: vi.fn().mockResolvedValue(undefined),
   useGetStores: vi.fn().mockReturnValue([]),
-}));
-
-vi.mock("@convex-dev/auth/react", () => ({
-  useAuthActions: () => ({
-    signOut: mocked.signOut,
-  }),
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -63,12 +54,9 @@ vi.mock("@/components/ui/popover", () => ({
 describe("OrganizationSwitcher", () => {
   beforeEach(() => {
     mocked.navigate.mockReset();
-    mocked.signOut.mockReset();
   });
 
-  it("clears both local state and the Convex auth session on logout", async () => {
-    const user = userEvent.setup();
-
+  it("only exposes organization switching actions", () => {
     render(
       <OrganizationSwitcher
         items={[
@@ -81,12 +69,9 @@ describe("OrganizationSwitcher", () => {
       />
     );
 
-    await user.click(screen.getByRole("button", { name: /sign out/i }));
-
-    await waitFor(() => expect(mocked.signOut).toHaveBeenCalled());
-    expect(window.localStorage.removeItem).toHaveBeenCalledWith(
-      LOGGED_IN_USER_ID_KEY
-    );
-    expect(mocked.navigate).toHaveBeenCalledWith({ to: "/login" });
+    expect(
+      screen.getByRole("combobox", { name: /select an organization/i })
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /sign out/i })).not.toBeInTheDocument();
   });
 });

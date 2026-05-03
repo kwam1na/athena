@@ -559,7 +559,7 @@ export function OrderSummary({
                     Sale complete
                   </p>
                   <h2 className="text-3xl font-semibold tracking-tight text-foreground md:text-[3rem]">
-                    {readOnly ? "Sale recorded." : "Ready for next sale."}
+                    {readOnly ? "Sale recorded" : "Ready for next sale"}
                   </h2>
                 </div>
               </div>

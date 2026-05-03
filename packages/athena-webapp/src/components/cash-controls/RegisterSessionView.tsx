@@ -538,7 +538,7 @@ export function RegisterSessionViewContent({
   async function handleRecordDeposit() {
     if (!registerSession?._id || !storeId) {
       setErrorMessage(
-        "A store and register session are required before recording a deposit.",
+        "A store and register session are required before recording a deposit",
       );
       return;
     }
@@ -546,7 +546,7 @@ export function RegisterSessionViewContent({
     const parsedAmount = Number(amount);
 
     if (!amount.trim() || Number.isNaN(parsedAmount) || parsedAmount <= 0) {
-      setErrorMessage("Enter a deposit amount greater than zero.");
+      setErrorMessage("Enter a deposit amount greater than zero");
       return;
     }
 
@@ -581,7 +581,7 @@ export function RegisterSessionViewContent({
   async function handleSubmitCloseout() {
     if (!registerSession?._id) {
       setCloseoutErrorMessage(
-        "A register session is required before submitting a closeout.",
+        "A register session is required before submitting a closeout",
       );
       return;
     }
@@ -590,7 +590,7 @@ export function RegisterSessionViewContent({
 
     if (parsedCountedCash === undefined) {
       setCloseoutErrorMessage(
-        "Enter the counted cash before submitting the closeout.",
+        "Enter the counted cash before submitting the closeout",
       );
       return;
     }
@@ -601,7 +601,7 @@ export function RegisterSessionViewContent({
 
     if (parsedCountedCash !== expectedCloseoutCash && !trimmedCloseoutNotes) {
       setCloseoutErrorMessage(
-        "Add closeout notes before submitting a count with variance.",
+        "Add closeout notes before submitting a count with variance",
       );
       return;
     }
@@ -618,7 +618,7 @@ export function RegisterSessionViewContent({
   async function handleReviewCloseout(decision: "approved" | "rejected") {
     if (!registerSession?._id) {
       setCloseoutErrorMessage(
-        "A register session is required before reviewing a closeout.",
+        "A register session is required before reviewing a closeout",
       );
       return;
     }
@@ -635,7 +635,7 @@ export function RegisterSessionViewContent({
   async function handleSubmitOpeningFloatCorrection() {
     if (!registerSession?._id) {
       setOpeningFloatCorrectionError(
-        "A register session is required before correcting opening float.",
+        "A register session is required before correcting opening float",
       );
       setOpeningFloatCorrectionInfo("");
       return;
@@ -643,7 +643,7 @@ export function RegisterSessionViewContent({
 
     if (!["open", "active"].includes(registerSession.status)) {
       setOpeningFloatCorrectionError(
-        "Opening float can only be corrected while the drawer is open.",
+        "Opening float can only be corrected while the drawer is open",
       );
       setOpeningFloatCorrectionInfo("");
       return;
@@ -653,7 +653,7 @@ export function RegisterSessionViewContent({
     const trimmedReason = openingFloatCorrectionReason.trim();
 
     if (parsedOpeningFloat === undefined) {
-      setOpeningFloatCorrectionError("Enter the corrected opening float.");
+      setOpeningFloatCorrectionError("Enter the corrected opening float");
       setOpeningFloatCorrectionInfo("");
       return;
     }
@@ -670,7 +670,7 @@ export function RegisterSessionViewContent({
     }
 
     if (!trimmedReason) {
-      setOpeningFloatCorrectionError("Add a reason for this correction.");
+      setOpeningFloatCorrectionError("Add a reason for this correction");
       setOpeningFloatCorrectionInfo("");
       return;
     }
@@ -791,7 +791,7 @@ export function RegisterSessionViewContent({
         return;
       }
 
-      setOpeningFloatCorrectionSuccess("Opening float corrected.");
+      setOpeningFloatCorrectionSuccess("Opening float corrected");
       setOpeningFloatCorrectionInfo("");
       setOpeningFloatCorrectionReason("");
       setIsOpeningFloatCorrectionOpen(false);
@@ -826,8 +826,8 @@ export function RegisterSessionViewContent({
           title: "Manager sign-in required",
           description:
             closeoutStaffAuthIntent.decision === "approved"
-              ? "Authenticate to approve variance."
-              : "Authenticate to reject variance.",
+              ? "Authenticate to approve variance"
+              : "Authenticate to reject variance",
           submitLabel:
             closeoutStaffAuthIntent.decision === "approved"
               ? "Approve variance"
@@ -835,7 +835,7 @@ export function RegisterSessionViewContent({
         }
       : {
           title: "Closeout sign-in required",
-          description: "Authenticate to submit closeout.",
+          description: "Authenticate to submit closeout",
           submitLabel: "Submit closeout",
         };
   const transactions = registerSessionSnapshot?.transactions ?? [];
@@ -948,8 +948,8 @@ export function RegisterSessionViewContent({
     !isOpeningFloatCorrectionOpen &&
     !openingFloatCorrectionSuccess &&
     !hasOpeningFloatCorrectionHistory
-      ? "Review the rejected closeout, then recount or correct the drawer."
-      : "Correct the starting cash amount without changing linked sales.";
+      ? "Review the rejected closeout, then recount or correct the drawer"
+      : "Correct the starting cash amount without changing linked sales";
   const correctionHistoryLabel = hasCloseoutRejectionHistory
     ? "Closeout history"
     : "Correction history";
@@ -976,7 +976,7 @@ export function RegisterSessionViewContent({
               <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
                 {formattedApprovalReason ??
                   formattedCloseoutReviewReason ??
-                  "Review the submitted count before closing this drawer."}
+                  "Review the submitted count before closing this drawer"}
               </p>
             </div>
           </div>
@@ -1122,8 +1122,8 @@ export function RegisterSessionViewContent({
         getSuccessMessage={(result) => {
           const staffDisplayName = formatStaffDisplayName(result.staffProfile);
           return staffDisplayName
-            ? `Confirmed as ${staffDisplayName}.`
-            : "Staff credentials confirmed.";
+            ? `Confirmed as ${staffDisplayName}`
+            : "Staff credentials confirmed";
         }}
         onAuthenticate={(args) => {
           if (
@@ -1190,7 +1190,7 @@ export function RegisterSessionViewContent({
             ) : !registerSession ? (
               <div className="px-layout-lg py-layout-xl">
                 <EmptyState
-                  description="Try re-opening the cash-controls workspace and selecting a register session again."
+                  description="Try re-opening the cash-controls workspace and selecting a register session again"
                   title="Register session not found"
                 />
               </div>
@@ -1655,7 +1655,7 @@ export function RegisterSessionViewContent({
                         icon={
                           <Receipt className="h-12 w-12 text-muted-foreground" />
                         }
-                        description="Completed POS sales linked to this register will appear here."
+                        description="Completed POS sales linked to this register will appear here"
                         title="No linked transactions"
                       />
                     </div>
@@ -1841,7 +1841,7 @@ export function RegisterSessionViewContent({
                 {!registerSessionSnapshot ? null : registerSessionSnapshot
                     .deposits.length === 0 ? (
                   <EmptyState
-                    description="Once a safe drop is recorded it will appear here with the staff name and reference."
+                    description="Once a safe drop is recorded it will appear here with the staff name and reference"
                     title="No deposits recorded"
                   />
                 ) : (
@@ -2250,7 +2250,7 @@ export function RegisterSessionView() {
     if (!activeStore?._id || !user?._id) {
       return userError({
         code: "authentication_failed",
-        message: "You must be logged in to submit a register closeout.",
+        message: "You must be logged in to submit a register closeout",
       });
     }
 
@@ -2283,7 +2283,7 @@ export function RegisterSessionView() {
     if (!activeStore?._id) {
       return userError({
         code: "authentication_failed",
-        message: "Select a store before confirming staff credentials.",
+        message: "Select a store before confirming staff credentials",
       });
     }
 
@@ -2307,7 +2307,7 @@ export function RegisterSessionView() {
     if (!activeStore?._id) {
       return userError({
         code: "authentication_failed",
-        message: "Select a store before confirming manager approval.",
+        message: "Select a store before confirming manager approval",
       });
     }
 
@@ -2352,7 +2352,7 @@ export function RegisterSessionView() {
     if (!activeStore?._id) {
       return userError({
         code: "authentication_failed",
-        message: "Select a store before confirming manager approval.",
+        message: "Select a store before confirming manager approval",
       });
     }
 
@@ -2375,7 +2375,7 @@ export function RegisterSessionView() {
     if (!activeStore?._id || !user?._id) {
       return userError({
         code: "authentication_failed",
-        message: "You must be logged in to review a register closeout.",
+        message: "You must be logged in to review a register closeout",
       });
     }
 
@@ -2405,7 +2405,7 @@ export function RegisterSessionView() {
     if (!activeStore?._id || !user?._id) {
       return userError({
         code: "authentication_failed",
-        message: "You must be logged in to correct opening float.",
+        message: "You must be logged in to correct opening float",
       });
     }
 
@@ -2457,7 +2457,7 @@ export function RegisterSessionView() {
 
   if (!isAuthenticated) {
     return (
-      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before this register session can load protected cash-controls data." />
+      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before this register session can load protected cash-controls data" />
     );
   }
 
@@ -2470,7 +2470,7 @@ export function RegisterSessionView() {
       <View>
         <div className="container mx-auto py-8">
           <EmptyState
-            description="Select a store before opening a register session."
+            description="Select a store before opening a register session"
             title="No active store"
           />
         </div>

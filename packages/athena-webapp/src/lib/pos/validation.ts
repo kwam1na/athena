@@ -271,15 +271,15 @@ export function validateSession(
     // Check if session status is valid for modification
     if (session.status !== "active") {
       const statusMessages: Record<string, string> = {
-        completed: "This session has been completed and cannot be modified.",
-        void: "This session has been voided and cannot be modified.",
+        completed: "This session has been completed and cannot be modified",
+        void: "This session has been voided and cannot be modified",
         held: "This session is on hold. Please resume it first.",
         expired: "This session has expired. Start a new one to proceed.",
       };
 
       errors.push(
         statusMessages[session.status] ||
-          `Cannot modify session with status "${session.status}".`
+          `Cannot modify session with status "${session.status}"`
       );
     }
   }

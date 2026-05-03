@@ -130,8 +130,8 @@ function FingerprintRegistrationCard({
             />
             <p className="text-xs text-muted-foreground">
               {isExistingTerminal && isRegisterNumberLocked
-                ? "Registered terminals keep their original register number."
-                : "Use the number printed on the drawer or assigned by the manager."}
+                ? "Registered terminals keep their original register number"
+                : "Use the number printed on the drawer or assigned by the manager"}
             </p>
           </div>
         </div>
@@ -148,8 +148,8 @@ function FingerprintRegistrationCard({
         <div className="border-t border-border pt-layout-md">
           <p className="pb-layout-md text-sm text-muted-foreground">
             {existingTerminalRegisterNumber
-              ? "This register is ready for checkout."
-              : "Register number required before checkout can start here."}
+              ? "This register is ready for checkout"
+              : "Register number required before checkout can start here"}
           </p>
 
           {isExistingTerminal && isRegisterNumberLocked ? (

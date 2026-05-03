@@ -163,7 +163,7 @@ function PromoCodeView() {
     const parsedDiscountValue = parsePromoDiscountInput(discount, discountType);
 
     if (parsedDiscountValue === undefined) {
-      toast.error("Enter a valid discount amount.");
+      toast.error("Enter a valid discount amount");
       return;
     }
 
@@ -236,7 +236,7 @@ function PromoCodeView() {
     const parsedDiscountValue = parsePromoDiscountInput(discount, discountType);
 
     if (parsedDiscountValue === undefined) {
-      toast.error("Enter a valid discount amount.");
+      toast.error("Enter a valid discount amount");
       return;
     }
 

@@ -162,7 +162,7 @@ export function CommandApprovalDialog({
             copy={{
               title: "Enter manager credentials",
               description:
-                "Use a manager username and PIN to approve this command.",
+                "Use a manager username and PIN to approve this command",
               submitLabel:
                 approval.copy.primaryActionLabel ?? "Approve and continue",
             }}

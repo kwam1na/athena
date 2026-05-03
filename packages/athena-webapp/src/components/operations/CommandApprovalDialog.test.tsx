@@ -219,7 +219,7 @@ describe("CommandApprovalDialog", () => {
 
     expect(
       screen.getByText(
-        "Variance of GH₵-200 exceeded the closeout approval threshold.",
+        "Variance of GH₵-200 exceeded the closeout approval threshold",
       ),
     ).toBeInTheDocument();
     expect(

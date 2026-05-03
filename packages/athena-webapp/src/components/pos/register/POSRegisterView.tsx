@@ -190,8 +190,8 @@ function POSOnboardingWorkspace({
       id: "terminal",
       title: "Set up this register",
       description: onboarding.terminalReady
-        ? "Register details are ready for this checkout station."
-        : "Name this checkout station and assign its register number.",
+        ? "Register details are ready for this checkout station"
+        : "Name this checkout station and assign its register number",
       isComplete: onboarding.terminalReady,
       isCurrent: onboarding.nextStep === "terminal",
       icon: Settings,
@@ -219,7 +219,7 @@ function POSOnboardingWorkspace({
         ? `${onboarding.cashierCount} cashier ${
             onboarding.cashierCount === 1 ? "profile is" : "profiles are"
           } ready for POS sign-in.`
-        : "Add at least one cashier or manager with an active PIN.",
+        : "Add at least one cashier or manager with an active PIN",
       isComplete: onboarding.cashierSetupReady,
       isCurrent: onboarding.nextStep === "cashierSetup",
       icon: Users,
@@ -519,6 +519,8 @@ export function POSRegisterView({
 
   return (
     <View
+      fullHeight
+      lockDocumentScroll
       width={registerViewWidth}
       contentClassName={cn(
         "flex h-full max-h-full flex-col overflow-hidden rounded-2xl border border-border/80 bg-white",

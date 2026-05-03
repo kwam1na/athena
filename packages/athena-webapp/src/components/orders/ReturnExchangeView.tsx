@@ -104,7 +104,7 @@ export function ReturnExchangeViewContent({
 
   const handleSubmit = async () => {
     if (selectedItemIds.size === 0) {
-      setValidationError("Select at least one line item.");
+      setValidationError("Select at least one line item");
       return;
     }
 
@@ -120,17 +120,17 @@ export function ReturnExchangeViewContent({
       const unitPrice = Number(replacementUnitPrice);
 
       if (!replacementProductSkuId || !replacementProductName || !replacementUnitPrice) {
-        setValidationError("Provide the replacement item details.");
+        setValidationError("Provide the replacement item details");
         return;
       }
 
       if (!Number.isFinite(quantity) || quantity <= 0) {
-        setValidationError("Replacement quantity must be greater than zero.");
+        setValidationError("Replacement quantity must be greater than zero");
         return;
       }
 
       if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
-        setValidationError("Replacement price must be greater than zero.");
+        setValidationError("Replacement price must be greater than zero");
         return;
       }
 

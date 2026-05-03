@@ -547,7 +547,7 @@ const VerifyPaymentAlert = () => {
       console.error(error);
       toast("Unable to verify payment", {
         icon: <Ban className="w-4 h-4" />,
-        description: "Please try again.",
+        description: "Please try again",
       });
     } finally {
       setIsVerifyingPayment(false);

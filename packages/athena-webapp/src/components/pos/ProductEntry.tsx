@@ -167,7 +167,7 @@ function validateQuickAddLookupCode(lookupCode: string) {
   }
 
   if (trimmedLookupCode.length > QUICK_ADD_LOOKUP_CODE_MAX_LENGTH) {
-    return "Lookup code is too long.";
+    return "Lookup code is too long";
   }
 
   const lookupCodeWithoutSpaces = trimmedLookupCode.replace(/\s+/g, "");
@@ -176,10 +176,10 @@ function validateQuickAddLookupCode(lookupCode: string) {
   }
 
   if (/\s/.test(trimmedLookupCode)) {
-    return "Lookup code cannot contain spaces.";
+    return "Lookup code cannot contain spaces";
   }
 
-  return "Lookup code must be a numeric barcode (digits only).";
+  return "Lookup code must be a numeric barcode (digits only)";
 }
 
 export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
@@ -325,19 +325,19 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
       const parsedName = quickAddName.trim();
 
       if (!parsedName) {
-        setQuickAddError("Enter a valid product name.");
+        setQuickAddError("Enter a valid product name");
         return;
       }
 
       const parsedPrice = parseDisplayAmountInput(quickAddPrice);
       if (parsedPrice === undefined || parsedPrice <= 0) {
-        setQuickAddError("Enter a selling price greater than 0.");
+        setQuickAddError("Enter a selling price greater than 0");
         return;
       }
 
       const parsedQuantity = quickAddQuantity.trim() ? +quickAddQuantity : 0;
       if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
-        setQuickAddError("Enter a valid quantity greater than 0.");
+        setQuickAddError("Enter a valid quantity greater than 0");
         return;
       }
       const roundedQuantity = Math.trunc(parsedQuantity);
@@ -359,7 +359,7 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
         !isReferenceQuantityDifferent
       ) {
         setQuickAddError(
-          "Add a different price or quantity than the selected variant.",
+          "Add a different price or quantity than the selected variant",
         );
         return;
       }
@@ -382,7 +382,7 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
         resetQuickAddForm();
         setIsQuickAddOpen(false);
         handleClearSearch();
-        toast.success("Product added to catalog.");
+        toast.success("Product added to catalog");
       } catch (error) {
         console.error("[POS] Quick add product failed", error);
         setQuickAddError("Could not quick add this product. Try again.");
@@ -450,8 +450,8 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
                 </DialogTitle>
                 <DialogDescription>
                   {isAddingVariant
-                    ? "Add a different variant for this product."
-                    : "Add the details needed for this sale."}
+                    ? "Add a different variant for this product"
+                    : "Add the details needed for this sale"}
                 </DialogDescription>
               </DialogHeader>
 

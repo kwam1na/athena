@@ -18,7 +18,7 @@ import { ATHENA_EMAIL_OTP_PROVIDER_ID } from "../../../../shared/auth";
 import { LoadingButton } from "~/src/components/ui/loading-button";
 import { PENDING_ATHENA_AUTH_SYNC_KEY } from "~/src/lib/constants";
 import { useForm } from "react-hook-form";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 
@@ -27,10 +27,20 @@ const OTP_SLOT_INDEXES = [0, 1, 2, 3, 4, 5];
 const LOGIN_INPUT_SURFACE_CLASS =
   "border-border/80 bg-background shadow-[inset_0_1px_0_hsl(var(--background)/0.85)]";
 
+function normalizeOtpCode(value: string) {
+  return value
+    .normalize("NFKC")
+    .replace(/\D/g, "")
+    .slice(0, OTP_SLOT_INDEXES.length);
+}
+
 const FormSchema = z.object({
-  pin: z.string().min(6, {
-    message: "Your one-time verification code must be 6 characters.",
-  }),
+  pin: z.preprocess(
+    (value) => normalizeOtpCode(String(value ?? "")),
+    z.string().length(OTP_SLOT_INDEXES.length, {
+      message: "Your one-time verification code must be 6 characters",
+    }),
+  ),
 });
 
 function formatRequestDelay(seconds: number) {
@@ -62,6 +72,7 @@ export function InputOTPForm({
   const [requestDelaySeconds, setRequestDelaySeconds] = useState(
     requestNewCodeDelaySeconds,
   );
+  const signInInFlightRef = useRef(false);
   const { signIn } = useAuthActions();
 
   useEffect(() => {
@@ -82,15 +93,22 @@ export function InputOTPForm({
 
   // Automatically submit the form when 6 digits are entered
   const handlePinChange = (newValue: string) => {
-    form.setValue("pin", newValue);
+    const normalizedPin = normalizeOtpCode(newValue);
 
-    if (newValue.length === 6) {
+    form.setValue("pin", normalizedPin);
+
+    if (normalizedPin.length === OTP_SLOT_INDEXES.length) {
       form.handleSubmit(onSubmit)();
     }
   };
 
   async function onSubmit(data: z.infer<typeof FormSchema>) {
+    if (signInInFlightRef.current) {
+      return;
+    }
+
     try {
+      signInInFlightRef.current = true;
       setIsSigningIn(true);
       setErrorMessage(null);
 
@@ -101,6 +119,7 @@ export function InputOTPForm({
 
       if (!result.signingIn) {
         setErrorMessage("Invalid code entered");
+        signInInFlightRef.current = false;
         setIsSigningIn(false);
         return;
       }
@@ -116,6 +135,7 @@ export function InputOTPForm({
           ? "Invalid code entered"
           : message,
       );
+      signInInFlightRef.current = false;
       setIsSigningIn(false);
     }
   }
@@ -174,7 +194,12 @@ export function InputOTPForm({
                   One-time code
                 </FormLabel>
                 <FormControl>
-                  <InputOTP maxLength={6} {...field} onChange={handlePinChange}>
+                  <InputOTP
+                    maxLength={OTP_SLOT_INDEXES.length}
+                    pasteTransformer={normalizeOtpCode}
+                    {...field}
+                    onChange={handlePinChange}
+                  >
                     <InputOTPGroup>
                       {OTP_SLOT_INDEXES.map((index) => (
                         <InputOTPSlot

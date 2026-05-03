@@ -1,4 +1,4 @@
-import { Building2, Check, ChevronsUpDown, Cog } from "lucide-react";
+import { Building2, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -6,7 +6,6 @@ import {
   CommandGroup,
   CommandItem,
   CommandList,
-  CommandSeparator,
 } from "@/components/ui/command";
 import {
   Popover,
@@ -20,8 +19,6 @@ import { useEffect, useState } from "react";
 import { useOrganizationModal } from "@/hooks/useOrganizationModal";
 import { Organization } from "~/types";
 import { useGetStores } from "../hooks/useGetActiveStore";
-import { useAuthActions } from "@convex-dev/auth/react";
-import { LOGGED_IN_USER_ID_KEY } from "../lib/constants";
 
 type PopoverTriggerProps = React.ComponentPropsWithoutRef<
   typeof PopoverTrigger
@@ -51,7 +48,6 @@ export default function OrganizationSwitcher({
   const { orgUrlSlug } = useParams({ strict: false });
 
   const stores = useGetStores();
-  const { signOut } = useAuthActions();
 
   const formattedItems = items.map((item) => ({
     label: item.name,
@@ -97,13 +93,6 @@ export default function OrganizationSwitcher({
     setOpen(false);
   };
 
-  const handleSignOut = async () => {
-    await signOut();
-    localStorage.removeItem(LOGGED_IN_USER_ID_KEY);
-
-    navigate({ to: "/login" });
-  };
-
   return (
     <>
       <OverlayModal
@@ -139,7 +128,7 @@ export default function OrganizationSwitcher({
           <Command>
             <CommandList>
               {/* <CommandInput placeholder="Search organization..." />
-              <CommandEmpty>No organization found.</CommandEmpty> */}
+              <CommandEmpty>No organization found</CommandEmpty> */}
               <CommandGroup heading="Organization">
                 {formattedItems.map((organization) => (
                   <CommandItem
@@ -159,34 +148,6 @@ export default function OrganizationSwitcher({
                     /> */}
                   </CommandItem>
                 ))}
-              </CommandGroup>
-            </CommandList>
-            <CommandSeparator />
-            <CommandList>
-              <CommandGroup>
-                {/* <CommandItem
-                  onSelect={() => {
-                    navigate({
-                      to: "/$orgUrlSlug/settings/organization",
-                      params: (prev) => ({
-                        ...prev,
-                        orgUrlSlug: prev.orgUrlSlug!,
-                      }),
-                    });
-                    setOpen(false);
-                  }}
-                >
-                  Organization settings
-                </CommandItem> */}
-                <CommandItem
-                  onSelect={() => {
-                    handleSignOut();
-                    setOpen(false);
-                  }}
-                >
-                  {/* <Cog className="mr-2 h-4 w-4 text-muted-foreground" /> */}
-                  Sign out
-                </CommandItem>
               </CommandGroup>
             </CommandList>
           </Command>

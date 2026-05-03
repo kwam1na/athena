@@ -359,7 +359,7 @@ function StaffProvisionForm({
     event.preventDefault();
 
     if (!isValid) {
-      toast.error("Complete the required staff details before saving.");
+      toast.error("Complete the required staff details before saving");
       return;
     }
 
@@ -408,7 +408,7 @@ function StaffProvisionForm({
       toast.success(
         mode === "create"
           ? "Staff member added. PIN setup is still pending."
-          : "Staff member updated.",
+          : "Staff member updated",
       );
       onSuccess();
     } catch (error) {
@@ -721,8 +721,8 @@ function CredentialPinDialog({
           </DialogTitle>
           <DialogDescription>
             {state
-              ? `${state.staff.fullName} will use ${state.staff.username} to sign in.`
-              : "Configure the staff PIN."}
+              ? `${state.staff.fullName} will use ${state.staff.username} to sign in`
+              : "Configure the staff PIN"}
           </DialogDescription>
         </DialogHeader>
 

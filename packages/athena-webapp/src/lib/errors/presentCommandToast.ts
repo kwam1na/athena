@@ -9,7 +9,7 @@ import { toOperatorMessage } from "./operatorMessages";
 function getApprovalGuidance(result: ApprovalRequiredCommandResult) {
   return (
     result.approval.copy.message ||
-    "Manager approval is required before this action can continue."
+    "Manager approval is required before this action can continue"
   );
 }
 

@@ -195,7 +195,7 @@ export function ColorPopover() {
 
   const FormSchema = z.object({
     name: z.string().min(1, {
-      message: "Please provide a valid name.",
+      message: "Please provide a valid name",
     }),
   });
 

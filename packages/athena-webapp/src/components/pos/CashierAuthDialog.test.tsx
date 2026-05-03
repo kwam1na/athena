@@ -243,7 +243,7 @@ describe("CashierAuthDialog", () => {
 
     await waitFor(() =>
       expect(mocks.toastSuccess).toHaveBeenCalledWith(
-        "Signed in as Ama Mensah.",
+        "Signed in as Ama Mensah",
       ),
     );
     expect(onAuthenticated).toHaveBeenCalledWith(staffProfileId);
@@ -302,7 +302,7 @@ describe("CashierAuthDialog", () => {
       }),
     );
     expect(mocks.toastSuccess).toHaveBeenCalledWith(
-      "Signed out from all registers.",
+      "Signed out from all registers",
     );
     expect(onAuthenticated).toHaveBeenCalledWith(staffProfileId);
   });
@@ -321,13 +321,13 @@ describe("mapThrownError", () => {
     expect(
       mapThrownError(
         new Error(
-          "Uncaught Error: A register session is already open for this register number.",
+          "Uncaught Error: A register session is already open for this register number",
         ),
       ),
     ).toEqual({
       ok: false,
       code: "conflict",
-      message: "A register session is already open for this register number.",
+      message: "A register session is already open for this register number",
     });
   });
 });

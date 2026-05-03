@@ -490,7 +490,7 @@ describe("RegisterSessionViewContent", () => {
 
     expect(
       screen.getAllByText(
-        "Variance of GH₵-61 exceeded the closeout approval threshold.",
+        "Variance of GH₵-61 exceeded the closeout approval threshold",
       ).length,
     ).toBeGreaterThan(0);
   });
@@ -713,7 +713,7 @@ describe("RegisterSessionViewContent", () => {
     await user.click(screen.getByRole("button", { name: "Submit closeout" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Add closeout notes before submitting a count with variance.",
+      "Add closeout notes before submitting a count with variance",
     );
     expect(onAuthenticateStaff).not.toHaveBeenCalled();
     expect(onSubmitCloseout).not.toHaveBeenCalled();
@@ -860,7 +860,7 @@ describe("RegisterSessionViewContent", () => {
       }),
     );
     expect(await screen.findByRole("status")).toHaveTextContent(
-      "Opening float corrected.",
+      "Opening float corrected",
     );
   });
 
@@ -997,7 +997,7 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getByText("Closeout correction needed")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Review the rejected closeout, then recount or correct the drawer.",
+        "Review the rejected closeout, then recount or correct the drawer",
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("Closeout history")).toBeInTheDocument();

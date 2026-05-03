@@ -109,7 +109,7 @@ export function ReceivingView({
       .filter((lineItem) => lineItem.receivedQuantity > 0);
 
     if (batchLineItems.length === 0) {
-      toast.error("Add at least one received quantity greater than zero.");
+      toast.error("Add at least one received quantity greater than zero");
       return;
     }
 

@@ -154,20 +154,20 @@ export function ServiceAppointmentsViewContent({
     const errors: string[] = [];
 
     if (!form.selectedCustomerId) {
-      errors.push("Select a customer.");
+      errors.push("Select a customer");
     }
 
     if (!form.serviceCatalogId) {
-      errors.push("Select a catalog item.");
+      errors.push("Select a catalog item");
     }
 
     if (!form.assignedStaffProfileId) {
-      errors.push("Select a staff member.");
+      errors.push("Select a staff member");
     }
 
     const parsedStartAt = parseDateTimeLocal(form.startAt);
     if (!form.startAt || parsedStartAt === null) {
-      errors.push("Choose an appointment start time.");
+      errors.push("Choose an appointment start time");
     }
 
     if (errors.length > 0) {
@@ -344,7 +344,7 @@ export function ServiceAppointmentsViewContent({
 
           {appointments.length === 0 ? (
             <EmptyState
-              description="Booked appointments will appear here."
+              description="Booked appointments will appear here"
               title="No active appointments"
             />
           ) : (
@@ -397,7 +397,7 @@ export function ServiceAppointmentsViewContent({
 
                       if (parsedStartAt === null) {
                         setValidationErrors([
-                          "Choose a new start time before rescheduling.",
+                          "Choose a new start time before rescheduling",
                         ]);
                         return;
                       }
@@ -539,7 +539,7 @@ export function ServiceAppointmentsView() {
 
   if (!isAuthenticated) {
     return (
-      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before service appointments can load protected operations data." />
+      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before service appointments can load protected operations data" />
     );
   }
 
@@ -552,7 +552,7 @@ export function ServiceAppointmentsView() {
       <View>
         <div className="container mx-auto py-8">
           <EmptyState
-            description="Select a store before opening service appointments."
+            description="Select a store before opening service appointments"
             title="No active store"
           />
         </div>

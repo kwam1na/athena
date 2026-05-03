@@ -58,7 +58,7 @@ export function LoginForm({
               onSubmit: z
                 .string()
                 .max(256)
-                .email("Email address is not valid."),
+                .email("Email address is not valid"),
             }}
             children={(field) => (
               <Input

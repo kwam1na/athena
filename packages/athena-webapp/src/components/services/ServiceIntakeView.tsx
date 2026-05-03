@@ -156,7 +156,7 @@ export function ServiceIntakeViewContent({
     });
 
     if (errors.length > 0 || !storeId) {
-      setValidationErrors(storeId ? errors : ["An active store is required."]);
+      setValidationErrors(storeId ? errors : ["An active store is required"]);
       return;
     }
 
@@ -272,7 +272,7 @@ export function ServiceIntakeView() {
 
   if (!isAuthenticated) {
     return (
-      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before service intake can load protected operations data." />
+      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before service intake can load protected operations data" />
     );
   }
 
@@ -285,7 +285,7 @@ export function ServiceIntakeView() {
       <View>
         <div className="container mx-auto py-8">
           <EmptyState
-            description="Select a store before opening the proving-path service intake."
+            description="Select a store before opening the proving-path service intake"
             title="No active store"
           />
         </div>

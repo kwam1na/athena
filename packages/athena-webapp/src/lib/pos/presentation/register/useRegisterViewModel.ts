@@ -298,7 +298,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         return Promise.resolve(
           userError({
             code: "authentication_failed",
-            message: "Select a store before confirming manager approval.",
+            message: "Select a store before confirming manager approval",
           }),
         );
       }
@@ -841,7 +841,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       resetDraftState({
         keepCashier: true,
       });
-      toast.success("Sale placed on hold.");
+      toast.success("Sale placed on hold");
       return true;
     },
     [
@@ -874,7 +874,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       keepCashier: true,
     });
     if (hadCartItems) {
-      toast.success("Sale cleared.");
+      toast.success("Sale cleared");
     }
     return true;
   }, [operableActiveSession, resetDraftState, voidSession]);
@@ -915,7 +915,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       setPaymentState([]);
       setShowCustomerPanel(false);
       bootstrapInitialized.current = true;
-      toast.success("Sale resumed.");
+      toast.success("Sale resumed");
     },
     [
       operableActiveSession,
@@ -975,7 +975,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       keepCashier: true,
     });
     bootstrapInitialized.current = true;
-    toast.success("Sale started.");
+    toast.success("Sale started");
   }, [
     operableActiveSession,
     activeRegisterSessionId,
@@ -1234,7 +1234,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     setCloseoutCountedCash("");
     setCloseoutNotes("");
     requestBootstrap();
-    toast.success("Register reopened.");
+    toast.success("Register reopened");
   }, [
     activeStore?._id,
     activeCloseoutRegisterSession?._id,
@@ -1679,7 +1679,7 @@ export function useRegisterViewModel(): RegisterViewModel {
 
     setPaymentState([]);
     if (hadCartItems) {
-      toast.success("Sale cleared.");
+      toast.success("Sale cleared");
     }
   }, [
     operableActiveSession,
@@ -2133,7 +2133,7 @@ export function useRegisterViewModel(): RegisterViewModel {
               return;
             }
 
-            toast.success("Held sale cleared.");
+            toast.success("Held sale cleared");
           },
           onStartNewSession: handleStartNewSession,
         }

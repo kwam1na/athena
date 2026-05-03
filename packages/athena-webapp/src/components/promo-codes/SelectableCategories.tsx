@@ -31,7 +31,7 @@ export default function SelectableCategories({
 
   if (categories.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">No categories found.</p>
+      <p className="text-sm text-muted-foreground">No categories found</p>
     );
   }
 

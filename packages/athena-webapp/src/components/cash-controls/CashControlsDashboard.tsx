@@ -4,7 +4,6 @@ import {
   ArrowRight,
   ArrowUpRight,
   Banknote,
-  Landmark,
   ShieldAlert,
 } from "lucide-react";
 
@@ -262,8 +261,8 @@ function WorkflowJumpPoints({
   const items = [
     {
       body: firstOpenSession
-        ? `${formatRegisterName(firstOpenSession.registerNumber)} is ready for review or deposit entry.`
-        : "No live drawers are open right now.",
+        ? `${formatRegisterName(firstOpenSession.registerNumber)} is ready for review or deposit entry`
+        : "No live drawers are open right now",
       cta: firstOpenSession ? "Open session" : "No open sessions",
       disabled: !firstOpenSession,
       icon: Banknote,
@@ -280,8 +279,8 @@ function WorkflowJumpPoints({
     },
     {
       body: firstVarianceSession
-        ? `${formatRegisterName(firstVarianceSession.registerNumber)} needs variance review.`
-        : "Variance exceptions stay quiet until a drawer needs attention.",
+        ? `${formatRegisterName(firstVarianceSession.registerNumber)} needs variance review`
+        : "Variance exceptions stay quiet until a drawer needs attention",
       cta: firstVarianceSession ? "Resolve variance" : "No action needed",
       disabled: !firstVarianceSession,
       icon: ShieldAlert,
@@ -788,6 +787,146 @@ function ClosedSessionsSummary({
   );
 }
 
+function ClosedSessionsDailySnapshot({
+  currency,
+  orgUrlSlug,
+  sessions,
+  storeUrlSlug,
+}: {
+  currency: string;
+  orgUrlSlug: string;
+  sessions: CashControlsDashboardSession[];
+  storeUrlSlug: string;
+}) {
+  const closedCount = sessions.length;
+  const expectedTotal = sessions.reduce(
+    (total, session) => total + session.expectedCash,
+    0,
+  );
+  const countedTotal = sessions.reduce(
+    (total, session) => total + (session.countedCash ?? 0),
+    0,
+  );
+  const depositedTotal = sessions.reduce(
+    (total, session) => total + session.totalDeposited,
+    0,
+  );
+  const netVariance = sessions.reduce(
+    (total, session) => total + (session.variance ?? 0),
+    0,
+  );
+  const shortSessions = sessions.filter((session) => (session.variance ?? 0) < 0);
+  const overSessions = sessions.filter((session) => (session.variance ?? 0) > 0);
+  const balancedSessions = sessions.filter(
+    (session) => (session.variance ?? 0) === 0,
+  );
+  const shortTotal = shortSessions.reduce(
+    (total, session) => total + Math.abs(session.variance ?? 0),
+    0,
+  );
+  const overTotal = overSessions.reduce(
+    (total, session) => total + (session.variance ?? 0),
+    0,
+  );
+  const lastClosedAt = sessions.reduce<number | undefined>(
+    (latest, session) =>
+      session.closedAt && (!latest || session.closedAt > latest)
+        ? session.closedAt
+        : latest,
+    undefined,
+  );
+
+  return (
+    <aside className="space-y-layout-md rounded-lg border border-border bg-surface-raised p-layout-lg shadow-surface">
+      <div className="flex flex-wrap items-start justify-between gap-layout-md">
+        <div className="space-y-1">
+          <h3 className="font-display text-lg font-semibold text-foreground">
+            Closed today
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            All drawer activity is closed. Use this snapshot to review the day
+            before opening the session ledger.
+          </p>
+        </div>
+        <Button asChild size="sm" variant="outline">
+          <Link
+            params={{ orgUrlSlug, storeUrlSlug }}
+            search={{ o: getOrigin() }}
+            to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers"
+          >
+            View all register sessions
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </Link>
+        </Button>
+      </div>
+
+      <dl className="grid gap-layout-sm md:grid-cols-2 2xl:grid-cols-4">
+        <WorkflowSummaryItem
+          label="Drawers closed"
+          value={`${closedCount}`}
+        />
+        <WorkflowSummaryItem
+          label="Expected cash"
+          value={formatCurrency(currency, expectedTotal)}
+        />
+        <WorkflowSummaryItem
+          label="Counted cash"
+          value={formatCurrency(currency, countedTotal)}
+        />
+        <WorkflowSummaryItem
+          label="Net variance"
+          tone={getVarianceTone(netVariance)}
+          value={formatCurrency(currency, netVariance)}
+        />
+      </dl>
+
+      <div className="grid gap-layout-sm border-t border-border/70 pt-layout-md md:grid-cols-2 2xl:grid-cols-4">
+        <div className="space-y-1">
+          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            Balanced drawers
+          </p>
+          <p className="text-sm text-foreground">
+            {balancedSessions.length} of {closedCount}
+          </p>
+        </div>
+        <div className="space-y-1">
+          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            Short drawers
+          </p>
+          <p className="font-mono text-sm text-danger">
+            {shortSessions.length} / {formatCurrency(currency, shortTotal)}
+          </p>
+        </div>
+        <div className="space-y-1">
+          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            Over drawers
+          </p>
+          <p className="font-mono text-sm text-success">
+            {overSessions.length} / {formatCurrency(currency, overTotal)}
+          </p>
+        </div>
+        <div className="space-y-1">
+          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            Last closeout
+          </p>
+          <p className="text-sm text-foreground">
+            {lastClosedAt ? formatTimestamp(lastClosedAt) : "Not recorded"}
+          </p>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-border/70 bg-background/70 px-layout-md py-layout-sm">
+        <div className="flex flex-wrap items-center justify-between gap-layout-sm text-sm">
+          <span className="text-muted-foreground">Deposited from closed drawers</span>
+          <span className="font-mono text-foreground">
+            {formatCurrency(currency, depositedTotal)}
+          </span>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
 function CashroomWorkflow({
   currency,
   snapshot,
@@ -815,13 +954,13 @@ function CashroomWorkflow({
   const hasLiveDrawers = liveDrawers.length > 0;
   const primaryLane = hasNeedsAttention
     ? {
-        emptyDescription: "No drawer needs closeout or variance review.",
+        emptyDescription: "No drawer needs closeout or variance review",
         sessions: needsAttention,
         title: "Needs action",
       }
     : hasLiveDrawers
       ? {
-          emptyDescription: "No live drawers are open right now.",
+          emptyDescription: "No live drawers are open right now",
           sessions: liveDrawers,
           title: "Live drawers",
         }
@@ -832,7 +971,7 @@ function CashroomWorkflow({
       {sessions.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border bg-surface-raised px-layout-lg py-layout-xl">
           <EmptyState
-            description="New register sessions will appear here after the drawer opens."
+            description="New register sessions will appear here after the drawer opens"
             title="No register sessions"
           />
         </div>
@@ -860,19 +999,28 @@ function CashroomWorkflow({
             {hasNeedsAttention ? (
               <DrawerSessionLane
                 currency={currency}
-                emptyDescription="No live drawers are open right now."
+                emptyDescription="No live drawers are open right now"
                 orgUrlSlug={orgUrlSlug}
                 sessions={liveDrawers}
                 storeUrlSlug={storeUrlSlug}
                 title="Live drawers"
               />
             ) : null}
-            <ClosedSessionsSummary
-              currency={currency}
-              orgUrlSlug={orgUrlSlug}
-              sessions={closedSessions}
-              storeUrlSlug={storeUrlSlug}
-            />
+            {primaryLane ? (
+              <ClosedSessionsSummary
+                currency={currency}
+                orgUrlSlug={orgUrlSlug}
+                sessions={closedSessions}
+                storeUrlSlug={storeUrlSlug}
+              />
+            ) : (
+              <ClosedSessionsDailySnapshot
+                currency={currency}
+                orgUrlSlug={orgUrlSlug}
+                sessions={closedSessions}
+                storeUrlSlug={storeUrlSlug}
+              />
+            )}
           </div>
         </div>
       )}
@@ -909,7 +1057,7 @@ function DepositsLedger({
       {deposits.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border bg-surface-raised px-layout-lg py-layout-xl">
           <EmptyState
-            description="Cash drops will appear here once deposits start getting recorded."
+            description="Cash drops will appear here once deposits start getting recorded"
             title="No deposits recorded yet"
           />
         </div>
@@ -1001,7 +1149,7 @@ export function CashControlsDashboardContent({
       header={
         <CashControlsWorkspaceHeader
           activeView="cash-controls"
-          description="Track live drawers, review deposited totals, and move into session detail before shifting work into closeouts."
+          description="Track live drawers, review deposited totals, and move into session detail before shifting work into closeouts"
           orgUrlSlug={orgUrlSlug}
           storeUrlSlug={storeUrlSlug}
           title="Cash controls workspace"
@@ -1021,7 +1169,10 @@ export function CashControlsDashboardContent({
                 </h2>
               </div>
               <div className="inline-flex items-center gap-2 rounded-md border border-border bg-surface-raised px-layout-sm py-layout-xs text-sm text-muted-foreground">
-                <Landmark aria-hidden className="h-4 w-4 text-signal" />
+                <span
+                  aria-hidden
+                  className="h-2 w-2 rounded-full bg-signal"
+                />
                 Live drawers, deposits, and closeouts
               </div>
             </div>
@@ -1097,7 +1248,7 @@ export function CashControlsDashboard() {
 
   if (!isAuthenticated) {
     return (
-      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before cash controls can load protected register and deposit data." />
+      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before cash controls can load protected register and deposit data" />
     );
   }
 
@@ -1109,7 +1260,7 @@ export function CashControlsDashboard() {
     return (
       <div className="container mx-auto py-8">
         <EmptyState
-          description="Select a store before opening the cash-controls workspace."
+          description="Select a store before opening the cash-controls workspace"
           title="No active store"
         />
       </div>

@@ -9,7 +9,7 @@ const OPERATOR_MESSAGE_REWRITES: Array<[RegExp, string]> = [
   ],
   [
     /^A session is active for this cashier on a different terminal\.?$/i,
-    "Cashier already has an active session on another terminal.",
+    "Cashier already has an active session on another terminal",
   ],
   [
     /^A register session is already open for this terminal\.?$/i,
