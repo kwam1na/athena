@@ -80,10 +80,10 @@ async function writeRealBaselineSummaries(rootDir: string) {
     "coverage/root-scripts/lcov.info",
     [
       "SF:scripts/a.ts",
-      "FNF:736",
-      "FNH:647",
-      "LF:12487",
-      "LH:7232",
+      "FNF:763",
+      "FNH:672",
+      "LF:12935",
+      "LH:7471",
       "end_of_record",
     ].join("\n"),
     rootDir
