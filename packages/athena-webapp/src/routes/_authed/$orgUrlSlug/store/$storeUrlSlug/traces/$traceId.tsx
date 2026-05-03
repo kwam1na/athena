@@ -98,7 +98,7 @@ export function WorkflowTraceRouteShell({
   );
 }
 
-export function WorkflowTraceRoute() {
+function WorkflowTraceRoute() {
   const { orgUrlSlug, storeUrlSlug, traceId } = Route.useParams();
 
   return (

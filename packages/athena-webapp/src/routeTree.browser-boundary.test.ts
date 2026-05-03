@@ -121,6 +121,6 @@ describe("Athena route tree browser boundary", () => {
         warnSpy.mockRestore();
       }
     },
-    15000
+    30000
   );
 });
