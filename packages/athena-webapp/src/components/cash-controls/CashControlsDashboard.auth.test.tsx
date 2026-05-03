@@ -80,7 +80,12 @@ describe("CashControlsDashboard auth readiness", () => {
 
     render(<CashControlsDashboard />);
 
-    expect(screen.getByText("Loading cash controls...")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Loading cash controls workspace"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Loading cash controls..."),
+    ).not.toBeInTheDocument();
     expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
       "skip",
     ]);

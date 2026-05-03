@@ -2,6 +2,7 @@ import * as React from "react";
 import {
   ColumnDef,
   ColumnFiltersState,
+  Row,
   SortingState,
   VisibilityState,
   flexRender,
@@ -26,16 +27,25 @@ import {
 import { DataTableToolbar } from "./data-table-toolbar";
 import { DataTablePagination } from "./data-table-pagination";
 import { usePaginationPersistence } from "~/src/hooks/use-pagination-persistence";
+import { cn } from "@/lib/utils";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
+  getRowClassName?: (row: Row<TData>) => string | undefined;
+  onRowClick?: (row: Row<TData>) => void;
+  paginationRangeItemLabel?: string;
+  paginationRangeItemPluralLabel?: string;
   tableId: string; // Unique identifier for localStorage keys
 }
 
 export function GenericDataTable<TData, TValue>({
   columns,
   data,
+  getRowClassName,
+  onRowClick,
+  paginationRangeItemLabel,
+  paginationRangeItemPluralLabel,
   tableId,
 }: DataTableProps<TData, TValue>) {
   const [rowSelection, setRowSelection] = React.useState({});
@@ -103,7 +113,12 @@ export function GenericDataTable<TData, TValue>({
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
                 <TableRow
+                  className={cn(
+                    onRowClick ? "cursor-pointer" : undefined,
+                    getRowClassName?.(row)
+                  )}
                   key={row.id}
+                  onClick={() => onRowClick?.(row)}
                   data-state={row.getIsSelected() && "selected"}
                 >
                   {row.getVisibleCells().map((cell) => (
@@ -129,7 +144,11 @@ export function GenericDataTable<TData, TValue>({
           </TableBody>
         </Table>
       </div>
-      <DataTablePagination table={table} />
+      <DataTablePagination
+        rangeItemLabel={paginationRangeItemLabel}
+        rangeItemPluralLabel={paginationRangeItemPluralLabel}
+        table={table}
+      />
     </div>
   );
 }

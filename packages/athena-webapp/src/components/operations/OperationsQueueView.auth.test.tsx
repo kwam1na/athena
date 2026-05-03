@@ -47,7 +47,10 @@ describe("OperationsQueueView auth readiness", () => {
 
     render(<OperationsQueueView />);
 
-    expect(screen.getByText("Loading operations queue...")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Loading operations workspace"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Loading operations queue...")).not.toBeInTheDocument();
     expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
       "skip",
       "skip",

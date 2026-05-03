@@ -4,13 +4,13 @@ import { usePermissions } from "@/hooks/usePermissions";
 
 export function useProtectedAdminPageState() {
   const { isLoading: isLoadingUser, user } = useAuth();
-  const { activeStore } = useGetActiveStore();
+  const { activeStore, isLoadingStores } = useGetActiveStore();
   const { canAccessOperations, isLoading: isLoadingPermissions } =
     usePermissions();
 
   const hasFullAdminAccess = canAccessOperations();
   const hasReadyAuthenticatedUser = Boolean(user);
-  const isLoadingAccess = isLoadingPermissions || isLoadingUser;
+  const isLoadingAccess = isLoadingPermissions || isLoadingUser || isLoadingStores;
   const canQueryProtectedData = Boolean(
     activeStore?._id &&
       hasFullAdminAccess &&

@@ -147,7 +147,12 @@ describe("CashControlsDashboardContent", () => {
       />,
     );
 
-    expect(screen.getByText("Loading cash controls...")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Loading cash controls workspace"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Loading cash controls..."),
+    ).not.toBeInTheDocument();
   });
 
   it("renders overview metrics, register activity, and recent deposits", () => {
@@ -335,7 +340,10 @@ describe("CashControlsDashboardContent", () => {
       />,
     );
 
-    expect(screen.getByText("Cash controls workspace")).toBeInTheDocument();
+    expect(screen.getByText("Cash Ops")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Cash controls" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Cashroom landing")).toBeInTheDocument();
     expect(screen.getByText("Expected in drawers")).toBeInTheDocument();
     expect(screen.getByText("$424")).toBeInTheDocument();

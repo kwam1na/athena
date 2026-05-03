@@ -18,34 +18,50 @@ const tableHeaderClass =
 interface DataTableColumnHeaderProps<TData, TValue>
   extends React.HTMLAttributes<HTMLDivElement> {
   column: Column<TData, TValue>;
+  enableControls?: boolean;
   title: string;
 }
 
 export function DataTableColumnHeader<TData, TValue>({
   column,
-  title,
+  enableControls = false,
   className,
+  title,
 }: DataTableColumnHeaderProps<TData, TValue>) {
   // Load initial sorting preference from localStorage
   useEffect(() => {
+    if (!enableControls) {
+      return;
+    }
+
     const savedSort = localStorage.getItem(`table-sort-${title}`);
     if (savedSort) {
       column.toggleSorting(savedSort === "desc", true);
     }
-  }, [column, title]);
+  }, [column, enableControls, title]);
 
   // Save sorting preference when it changes
   useEffect(() => {
+    if (!enableControls) {
+      return;
+    }
+
     const currentSort = column.getIsSorted();
     if (currentSort) {
       localStorage.setItem(`table-sort-${title}`, currentSort);
     } else {
       localStorage.removeItem(`table-sort-${title}`);
     }
-  }, [column.getIsSorted(), title]);
+  }, [column.getIsSorted(), enableControls, title]);
 
-  if (!column.getCanSort()) {
-    return <div className={cn(tableHeaderClass, className)}>{title}</div>;
+  if (!enableControls || !column.getCanSort()) {
+    return (
+      <div
+        className={cn("flex w-full items-center", tableHeaderClass, className)}
+      >
+        {title}
+      </div>
+    );
   }
 
   return (

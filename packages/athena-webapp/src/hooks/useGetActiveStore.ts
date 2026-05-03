@@ -9,7 +9,7 @@ import { Store } from "~/types";
 export default function useGetActiveStore() {
   const { activeOrganization } = useGetActiveOrganization();
 
-  const [store, setStore] = useState<Store | null>(null);
+  const [store, setStore] = useState<Store | null>();
 
   const stores = useQuery(
     api.inventory.stores.getAll,
@@ -29,7 +29,7 @@ export default function useGetActiveStore() {
           organizationId: activeOrganization._id,
         });
 
-        setStore(storesWithReelVersions[0]);
+        setStore(storesWithReelVersions[0] ?? null);
 
         // console.log("s", s);
       }
@@ -43,7 +43,7 @@ export default function useGetActiveStore() {
 
   return {
     activeStore: store,
-    isLoadingStores: false,
+    isLoadingStores: Boolean(activeOrganization?._id && store === undefined),
   };
 }
 
