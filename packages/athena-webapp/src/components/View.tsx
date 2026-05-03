@@ -13,6 +13,7 @@ export default function View({
   width = "contained",
   lockDocumentScroll = false,
   fullHeight = true,
+  scrollMode = "content",
 }: {
   children: React.ReactNode;
   className?: string;
@@ -25,6 +26,7 @@ export default function View({
   width?: "contained" | "full";
   lockDocumentScroll?: boolean;
   fullHeight?: boolean;
+  scrollMode?: "content" | "page";
 }) {
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -65,7 +67,11 @@ export default function View({
       <div
         className={cn(
           "min-h-0 flex flex-col rounded-lg",
-          fullHeight ? "h-full overflow-hidden" : "h-auto",
+          fullHeight && scrollMode === "content" && "h-full overflow-hidden",
+          fullHeight &&
+            scrollMode === "page" &&
+            "h-full overflow-y-auto overscroll-contain overflow-x-hidden scrollbar-hide",
+          !fullHeight && "h-auto",
           !hideBorder && "border",
           contentClassName,
         )}
@@ -84,7 +90,9 @@ export default function View({
         <main
           className={cn(
             fullHeight &&
+              scrollMode === "content" &&
               "min-h-0 flex-1 overflow-y-auto overscroll-contain overflow-x-hidden scrollbar-hide",
+            fullHeight && scrollMode === "page" && "min-h-0 flex-none",
             mainClassName,
           )}
         >
