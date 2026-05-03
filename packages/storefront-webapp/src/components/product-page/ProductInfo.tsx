@@ -101,13 +101,13 @@ export function ProductInfo({
         )}
 
         {!hasDiscount && (
-          <p className="text-md md:text-2xl">
+          <p className="text-md md:text-2xl font-medium">
             {formatter.format(toDisplayAmount(selectedSku.price))}
           </p>
         )}
 
         {hasDiscount && !isFree && (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 font-medium">
             <p className="text-md md:text-2xl line-through text-muted-foreground">
               {formatter.format(toDisplayAmount(originalPrice))}
             </p>
@@ -118,7 +118,7 @@ export function ProductInfo({
         )}
 
         {isFree && (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 font-medium">
             <p className="text-md md:text-2xl line-through text-muted-foreground">
               {formatter.format(toDisplayAmount(originalPrice))}
             </p>

@@ -1291,6 +1291,7 @@ export function CashControlsDashboardContent({
     <View
       hideBorder
       hideHeaderBottomBorder
+      scrollMode="page"
       header={
         <CashControlsWorkspaceHeader
           activeView="cash-controls"
@@ -1384,6 +1385,7 @@ export function CashControlsDashboard() {
       <View
         hideBorder
         hideHeaderBottomBorder
+        scrollMode="page"
         header={<CashControlsHeaderSkeleton />}
       >
         <FadeIn className="container mx-auto py-layout-xl">

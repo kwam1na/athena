@@ -187,6 +187,7 @@ export function RegisterSessionsViewContent({
     <View
       hideBorder
       hideHeaderBottomBorder
+      scrollMode="page"
       header={
         <CashControlsWorkspaceHeader
           activeView="cash-controls"
