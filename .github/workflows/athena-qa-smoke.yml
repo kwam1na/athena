@@ -1,0 +1,46 @@
+name: Athena QA Smoke
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  athena-qa-browser-smoke:
+    name: Athena QA browser smoke
+    if: github.repository == 'kwam1na/athena'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright browser
+        run: bunx playwright install chromium
+
+      - name: Run Athena QA live browser smoke
+        env:
+          ATHENA_QA_URL: https://athena-qa.wigclub.store/
+        run: bun run harness:behavior --scenario athena-qa-live-smoke --record-video
+
+      - name: Upload QA smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: athena-qa-smoke-artifacts
+          path: |
+            artifacts/harness-behavior
+          if-no-files-found: ignore

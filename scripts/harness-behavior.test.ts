@@ -472,6 +472,7 @@ describe("runPlaywrightFlow", () => {
       playwrightModule: createPlaywrightModule(async () => browser),
       setupPage: async ({ page }) => {
         page.on("request", () => {});
+        page.on("pageerror", () => {});
         events.push("setup");
       },
       steps: async () => {
@@ -480,7 +481,14 @@ describe("runPlaywrightFlow", () => {
       },
     });
 
-    expect(events).toEqual(["on:console", "on:request", "setup", "goto", "steps"]);
+    expect(events).toEqual([
+      "on:console",
+      "on:request",
+      "on:pageerror",
+      "setup",
+      "goto",
+      "steps",
+    ]);
   });
 
   it("does not auto-install missing Chromium in CI", async () => {
