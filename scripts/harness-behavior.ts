@@ -887,6 +887,7 @@ export type HarnessBehaviorPlaywrightPage = {
       };
     }) => void
   ) => void;
+  on: (event: "pageerror", handler: (error: Error) => void) => void;
   getByRole: (
     role: string,
     options: { name: string | RegExp }

@@ -1,4 +1,13 @@
-import { access, chmod, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  access,
+  chmod,
+  cp,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -47,19 +56,26 @@ async function runGit(cwd: string, ...args: string[]) {
   }
 }
 
-function runWorktreeManager(cwd: string, ...args: string[]) {
+function runWorktreeManager(
+  cwd: string,
+  args: string[],
+  env: Record<string, string> = {}
+) {
   return Bun.spawnSync(["bash", "scripts/worktree-manager.sh", ...args], {
     cwd,
-    env: fixtureEnv(),
+    env: fixtureEnv(env),
     stderr: "pipe",
     stdout: "pipe",
   });
 }
 
-function fixtureEnv() {
-  return Object.fromEntries(
-    Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_"))
-  ) as Record<string, string>;
+function fixtureEnv(overrides: Record<string, string> = {}) {
+  return {
+    ...Object.fromEntries(
+      Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_"))
+    ),
+    ...overrides,
+  } as Record<string, string>;
 }
 
 afterEach(async () => {
@@ -82,7 +98,7 @@ describe("worktree-manager", () => {
       "VITE_CONVEX_SITE_URL=https://fixture.convex.site\n"
     );
 
-    const result = runWorktreeManager(rootDir, "create", "codex/test-env", "main");
+    const result = runWorktreeManager(rootDir, ["create", "codex/test-env", "main"]);
 
     expect(result.exitCode).toBe(0);
     await expect(
@@ -105,7 +121,11 @@ describe("worktree-manager", () => {
   it("fails clearly when Athena webapp Convex env source files are missing", async () => {
     const rootDir = await createFixtureRepo();
 
-    const result = runWorktreeManager(rootDir, "create", "codex/missing-env", "main");
+    const result = runWorktreeManager(rootDir, [
+      "create",
+      "codex/missing-env",
+      "main",
+    ]);
 
     expect(result.exitCode).toBe(1);
     expect(result.stderr.toString()).toContain(
@@ -126,12 +146,11 @@ describe("worktree-manager", () => {
       "VITE_CONVEX_URL=https://fixture.convex.cloud\n"
     );
 
-    const createResult = runWorktreeManager(
-      rootDir,
+    const createResult = runWorktreeManager(rootDir, [
       "create",
       "codex/idempotent-env",
-      "main"
-    );
+      "main",
+    ]);
     expect(createResult.exitCode).toBe(0);
 
     const worktreeEnv = path.join(
@@ -140,15 +159,58 @@ describe("worktree-manager", () => {
     );
     await writeFile(worktreeEnv, "VITE_CONVEX_URL=https://local.override\n");
 
-    const setupResult = runWorktreeManager(
-      rootDir,
+    const setupResult = runWorktreeManager(rootDir, [
       "setup-env",
-      ".worktrees/codex/idempotent-env"
-    );
+      ".worktrees/codex/idempotent-env",
+    ]);
 
     expect(setupResult.exitCode).toBe(0);
     await expect(readFile(worktreeEnv, "utf8")).resolves.toBe(
       "VITE_CONVEX_URL=https://local.override\n"
+    );
+  });
+
+  it("installs Bun dependencies from the lockfile during worktree setup", async () => {
+    const rootDir = await createFixtureRepo();
+    await writeFile(
+      path.join(rootDir, "packages/athena-webapp/.env"),
+      "VITE_CONVEX_URL=https://fixture.convex.cloud\n"
+    );
+    await writeFile(
+      path.join(rootDir, "package.json"),
+      "{\"name\":\"fixture\"}\n"
+    );
+    await writeFile(path.join(rootDir, "bun.lockb"), "fixture lock\n");
+    await runGit(rootDir, "add", "package.json", "bun.lockb");
+    await runGit(rootDir, "commit", "-m", "add package manifests");
+
+    const binDir = path.join(rootDir, "bin");
+    await mkdir(binDir);
+    await writeFile(
+      path.join(binDir, "bun"),
+      [
+        "#!/bin/sh",
+        "printf '%s\\n' \"$PWD $*\" >> \"$BUN_INSTALL_LOG\"",
+      ].join("\n")
+    );
+    await chmod(path.join(binDir, "bun"), 0o755);
+
+    const installLog = path.join(rootDir, "bun-install.log");
+    const result = runWorktreeManager(
+      rootDir,
+      ["create", "codex/install-deps", "main"],
+      {
+        PATH: `${binDir}:${process.env.PATH ?? ""}`,
+        BUN_INSTALL_LOG: installLog,
+      }
+    );
+
+    expect(result.exitCode).toBe(0);
+    await expect(readFile(installLog, "utf8")).resolves.toContain(
+      `${path.join(
+        rootDir,
+        ".worktrees/codex/install-deps"
+      )} install --frozen-lockfile`
     );
   });
 });

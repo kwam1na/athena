@@ -127,6 +127,28 @@ type ValkeyScenarioBrowserResult = {
   roundTripValue: string;
   consoleMessages: string[];
 };
+type AthenaQaLiveObservation = {
+  kind: "http-response" | "request-failure" | "page-error";
+  url: string;
+  method?: string;
+  resourceType?: string;
+  status?: number;
+  failureReason?: string;
+};
+export type AthenaQaLiveDiagnostic = {
+  kind: "blank-page" | "page-error" | "request-failure" | "server-response";
+  message: string;
+  url?: string;
+  status?: number;
+  failureReason?: string;
+};
+type AthenaQaLiveBrowserResult = {
+  observedText: string;
+  hasEmailField: boolean;
+  diagnostics: AthenaQaLiveDiagnostic[];
+  observations: AthenaQaLiveObservation[];
+  consoleMessages: string[];
+};
 
 function createAthenaRuntimeProcess(): HarnessBehaviorProcessDefinition {
   return {
@@ -279,6 +301,77 @@ export function diagnoseStorefrontBackendRequests(
         url: request.url,
         method: request.method,
         status: request.status,
+      });
+    }
+  }
+
+  return diagnostics;
+}
+
+function stripUrlQuery(url: string) {
+  try {
+    const parsedUrl = new URL(url);
+    parsedUrl.search = "";
+    parsedUrl.hash = "";
+    return parsedUrl.toString();
+  } catch {
+    return url.split("?")[0] ?? url;
+  }
+}
+
+export function diagnoseAthenaQaLiveSmoke(input: {
+  observedText: string;
+  hasEmailField: boolean;
+  observations: AthenaQaLiveObservation[];
+}): AthenaQaLiveDiagnostic[] {
+  const diagnostics: AthenaQaLiveDiagnostic[] = [];
+  const normalizedText = input.observedText.trim();
+
+  if (!normalizedText || !/athena/i.test(normalizedText)) {
+    diagnostics.push({
+      kind: "blank-page",
+      message: `QA page did not render Athena content. Body preview: ${normalizedText.slice(
+        0,
+        300
+      )}`,
+    });
+  }
+
+  if (!input.hasEmailField) {
+    diagnostics.push({
+      kind: "blank-page",
+      message:
+        "QA page did not render the Athena login email field. This may be a blank app shell, boot failure, or non-Athena access interstitial.",
+    });
+  }
+
+  for (const observation of input.observations) {
+    if (observation.kind === "page-error") {
+      diagnostics.push({
+        kind: "page-error",
+        message: `Page error: ${observation.failureReason ?? "unknown page error"}`,
+        url: observation.url,
+        failureReason: observation.failureReason,
+      });
+      continue;
+    }
+
+    if (observation.kind === "request-failure") {
+      diagnostics.push({
+        kind: "request-failure",
+        message: `Request failed: ${stripUrlQuery(observation.url)} (${observation.failureReason ?? "unknown error"})`,
+        url: observation.url,
+        failureReason: observation.failureReason,
+      });
+      continue;
+    }
+
+    if ((observation.status ?? 0) >= 500) {
+      diagnostics.push({
+        kind: "server-response",
+        message: `HTTP ${observation.status} ${stripUrlQuery(observation.url)}`,
+        url: observation.url,
+        status: observation.status,
       });
     }
   }
@@ -1194,11 +1287,132 @@ export const VALKEY_PROXY_LOCAL_REQUEST_RESPONSE_SCENARIO: HarnessBehaviorScenar
     },
   };
 
+export const ATHENA_QA_LIVE_SMOKE_SCENARIO: HarnessBehaviorScenario<AthenaQaLiveBrowserResult> =
+  {
+    name: "athena-qa-live-smoke",
+    description:
+      "Checks the live Athena QA browser surface and fails when the document responds but the app is blank, page errors occur, same-origin requests fail, or app resources return server errors.",
+    processes: [],
+    readiness: [],
+    browser: async ({ runPlaywrightFlow }) => {
+      const observations: AthenaQaLiveObservation[] = [];
+      const qaUrl = process.env.ATHENA_QA_URL ?? "https://athena-qa.wigclub.store/";
+      const qaOrigin = new URL(qaUrl).origin;
+
+      const flowResult = await runPlaywrightFlow({
+        url: qaUrl,
+        setupPage: ({ page }) => {
+          page.on("pageerror", (error) => {
+            observations.push({
+              kind: "page-error",
+              url: qaUrl,
+              failureReason: error.message,
+            });
+          });
+
+          page.on("response", (response) => {
+            const url = response.url();
+            const request = response.request();
+            const resourceType = request.resourceType();
+
+            if (new URL(url).origin !== qaOrigin) {
+              return;
+            }
+
+            if (
+              resourceType === "document" ||
+              resourceType === "script" ||
+              resourceType === "stylesheet" ||
+              resourceType === "fetch" ||
+              resourceType === "xhr"
+            ) {
+              observations.push({
+                kind: "http-response",
+                url,
+                method: request.method(),
+                resourceType,
+                status: response.status(),
+              });
+            }
+          });
+
+          page.on("requestfailed", (request) => {
+            const url = request.url();
+
+            if (new URL(url).origin !== qaOrigin) {
+              return;
+            }
+
+            observations.push({
+              kind: "request-failure",
+              url,
+              method: request.method(),
+              resourceType: request.resourceType(),
+              failureReason: request.failure()?.errorText ?? "request failed",
+            });
+          });
+        },
+        steps: async ({ page }) => {
+          await page.waitForSelector("body", { timeout: 10_000 });
+          let hasEmailField = false;
+          try {
+            await page.waitForSelector("input#email[type='email']", {
+              timeout: 10_000,
+            });
+            hasEmailField = true;
+          } catch {
+            hasEmailField = false;
+          }
+
+          return {
+            observedText: (await page.textContent("body"))?.trim() ?? "",
+            hasEmailField,
+          };
+        },
+      });
+
+      const diagnostics = diagnoseAthenaQaLiveSmoke({
+        observedText: flowResult.stepResult.observedText,
+        hasEmailField: flowResult.stepResult.hasEmailField,
+        observations,
+      });
+
+      return {
+        observedText: flowResult.stepResult.observedText,
+        hasEmailField: flowResult.stepResult.hasEmailField,
+        observations,
+        diagnostics,
+        consoleMessages: flowResult.consoleMessages,
+      };
+    },
+    thresholds: {
+      latency: {
+        maxTotalDurationMs: 45_000,
+        maxPhaseDurationMs: {
+          boot: 1_000,
+          readiness: 1_000,
+          browser: 40_000,
+          runtime: 1_000,
+          assertion: 1_000,
+          cleanup: 5_000,
+        },
+      },
+    },
+    assert: async ({ browserResult }) => {
+      if (browserResult.diagnostics.length > 0) {
+        throw new Error(
+          browserResult.diagnostics.map((diagnostic) => diagnostic.message).join("\n")
+        );
+      }
+    },
+  };
+
 export const HARNESS_BEHAVIOR_SCENARIOS: HarnessBehaviorScenario[] = [
   SAMPLE_RUNTIME_SMOKE_SCENARIO,
   ATHENA_ADMIN_SHELL_BOOT_SCENARIO,
   ATHENA_CONVEX_COMPOSITION_SCENARIO,
   ATHENA_CONVEX_FAILURE_VISIBILITY_SCENARIO,
+  ATHENA_QA_LIVE_SMOKE_SCENARIO,
   VALKEY_PROXY_LOCAL_REQUEST_RESPONSE_SCENARIO,
   STOREFRONT_BACKEND_FIRST_LOAD_SCENARIO,
   STOREFRONT_CHECKOUT_BOOTSTRAP_SCENARIO,

@@ -7,6 +7,7 @@
 #   2. Trusts mise/direnv configs with branch-aware safety rules,
 #      so hooks and scripts don't block on interactive trust prompts
 #   3. Ensures .worktrees is gitignored (via `git check-ignore`)
+#   4. Installs Bun dependencies from the lockfile when package manifests exist
 #
 # List / remove / switch operations are NOT provided here. Use git directly:
 #   scripts/worktree-manager.sh setup-env <worktree-path>
@@ -36,7 +37,8 @@ Creates .worktrees/<branch-name> with <branch-name> branched from
 [from-branch] (default: origin's default branch, or main).
 
 setup-env copies missing local env files into an existing worktree without
-overwriting existing destination files.
+overwriting existing destination files, then installs package dependencies when
+package.json and bun.lockb are present.
 
 The main repo checkout is not modified; from-branch is fetched but
 not checked out.
@@ -142,6 +144,24 @@ copy_env_files() {
   local worktree_path="$1"
   copy_env_files_from_dir "$worktree_path" "" "repo root" "false"
   copy_env_files_from_dir "$worktree_path" "$ATHENA_WEBAPP_ENV_DIR" "Athena webapp" "true"
+}
+
+install_worktree_dependencies() {
+  local worktree_path="$1"
+
+  if [[ ! -f "$worktree_path/package.json" || ! -f "$worktree_path/bun.lockb" ]]; then
+    echo "Dependencies:"
+    echo "  Skipped: package.json and bun.lockb not both present"
+    return
+  fi
+
+  if ! command -v bun &>/dev/null; then
+    echo "Error: bun is required to install worktree dependencies." >&2
+    exit 1
+  fi
+
+  echo "Dependencies:"
+  (cd "$worktree_path" && bun install --frozen-lockfile)
 }
 
 get_default_branch() {
@@ -312,6 +332,7 @@ setup_env() {
 
   echo "Environment files:"
   copy_env_files "$worktree_path"
+  install_worktree_dependencies "$worktree_path"
 }
 
 main() {

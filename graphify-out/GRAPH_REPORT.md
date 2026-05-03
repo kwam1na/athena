@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 4216 nodes · 3875 edges · 1490 communities detected
+- 4218 nodes · 3878 edges · 1490 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1748,84 +1748,84 @@ Cohesion: 0.18
 Nodes (0):
 
 ### Community 55 - "Community 55"
+Cohesion: 0.2
+Nodes (2): diagnoseAthenaQaLiveSmoke(), stripUrlQuery()
+
+### Community 56 - "Community 56"
 Cohesion: 0.31
 Nodes (6): expenseItemSuccess(), expenseSessionSuccess(), itemSuccess(), operationSuccess(), sessionSuccess(), success()
 
-### Community 56 - "Community 56"
+### Community 57 - "Community 57"
 Cohesion: 0.22
 Nodes (2): isValidEmail(), validateCustomerInfo()
 
-### Community 57 - "Community 57"
+### Community 58 - "Community 58"
 Cohesion: 0.22
 Nodes (2): listProductSkusByProductId(), readAllQueryResults()
 
-### Community 58 - "Community 58"
+### Community 59 - "Community 59"
 Cohesion: 0.22
 Nodes (2): getTerminalByFingerprint(), mapTerminalRecord()
 
-### Community 59 - "Community 59"
+### Community 60 - "Community 60"
 Cohesion: 0.29
 Nodes (6): handleFileSelect(), handleRevert(), handleUpload(), resetEditState(), uploadImage(), validateFile()
 
-### Community 60 - "Community 60"
+### Community 61 - "Community 61"
 Cohesion: 0.22
 Nodes (2): buildUsername(), normalizeNameSegment()
 
-### Community 61 - "Community 61"
+### Community 62 - "Community 62"
 Cohesion: 0.2
 Nodes (0):
 
-### Community 62 - "Community 62"
+### Community 63 - "Community 63"
 Cohesion: 0.38
 Nodes (9): awardPointsForGuestOrders(), awardPointsForPastOrder(), getBaseUrl(), getEligiblePastOrders(), getOrderRewardPoints(), getPointHistory(), getRewardTiers(), getUserPoints() (+1 more)
 
-### Community 63 - "Community 63"
+### Community 64 - "Community 64"
 Cohesion: 0.4
 Nodes (8): fileExists(), isJsonObject(), normalizeGraphJsonArtifact(), normalizeGraphJsonContents(), resolveGraphifyPython(), runGraphifyRebuild(), sortJsonArray(), sortJsonValue()
 
-### Community 64 - "Community 64"
+### Community 65 - "Community 65"
 Cohesion: 0.42
 Nodes (7): buildTraceEvent(), buildTraceRecord(), displayTraceAmount(), recordRegisterSessionTraceBestEffort(), resolveOccurredAt(), resolveStoreCurrency(), safeTraceWrite()
 
-### Community 65 - "Community 65"
+### Community 66 - "Community 66"
 Cohesion: 0.5
 Nodes (7): getNonEmptyString(), getOperationalEventJourney(), getOperationalEventStatus(), getOperationalEventStep(), isFailureStatus(), isOperationalEventDoc(), normalizeEvent()
 
-### Community 66 - "Community 66"
+### Community 67 - "Community 67"
 Cohesion: 0.28
 Nodes (3): modifyProduct(), onSubmit(), saveProduct()
 
-### Community 67 - "Community 67"
+### Community 68 - "Community 68"
 Cohesion: 0.39
 Nodes (7): calculateRefundAmount(), getAmountRefunded(), getAvailableItems(), getItemsToRefund(), getNetAmount(), shouldShowReturnToStock(), validateRefund()
 
-### Community 68 - "Community 68"
+### Community 69 - "Community 69"
 Cohesion: 0.33
 Nodes (6): handleEdit(), handleReset(), handleSubmit(), itemToFormState(), parseServiceCatalogForm(), validateServiceCatalogForm()
 
-### Community 69 - "Community 69"
+### Community 70 - "Community 70"
 Cohesion: 0.39
 Nodes (6): handleDeliveryRestrictionToggle(), handlePickupRestrictionToggle(), handleSaveDeliveryRestriction(), handleSavePickupRestriction(), saveDeliveryRestriction(), savePickupRestriction()
 
-### Community 70 - "Community 70"
+### Community 71 - "Community 71"
 Cohesion: 0.44
 Nodes (1): Logger
 
-### Community 71 - "Community 71"
+### Community 72 - "Community 72"
 Cohesion: 0.28
 Nodes (3): hasCustomerDetails(), trimOptional(), useRegisterViewModel()
 
-### Community 72 - "Community 72"
-Cohesion: 0.22
-Nodes (0):
-
 ### Community 73 - "Community 73"
 Cohesion: 0.22
-Nodes (2): ClusterRedis, StandaloneRedis
+Nodes (0):
 
 ### Community 74 - "Community 74"
 Cohesion: 0.22
-Nodes (0):
+Nodes (2): ClusterRedis, StandaloneRedis
 
 ### Community 75 - "Community 75"
 Cohesion: 0.46
@@ -1980,16 +1980,16 @@ Cohesion: 0.29
 Nodes (0):
 
 ### Community 113 - "Community 113"
+Cohesion: 0.33
+Nodes (2): getProductName(), sortProduct()
+
+### Community 114 - "Community 114"
 Cohesion: 0.29
 Nodes (0):
 
-### Community 114 - "Community 114"
+### Community 115 - "Community 115"
 Cohesion: 0.52
 Nodes (6): addItemToSavedBag(), getActiveSavedBag(), getBaseUrl(), removeItemFromSavedBag(), updateSavedBagItem(), updateSavedBagOwner()
-
-### Community 115 - "Community 115"
-Cohesion: 0.33
-Nodes (2): getProductName(), sortProduct()
 
 ### Community 116 - "Community 116"
 Cohesion: 0.48
@@ -2229,7 +2229,7 @@ Nodes (0):
 
 ### Community 175 - "Community 175"
 Cohesion: 0.4
-Nodes (1): Header()
+Nodes (0):
 
 ### Community 176 - "Community 176"
 Cohesion: 0.4
@@ -2240,12 +2240,12 @@ Cohesion: 0.4
 Nodes (0):
 
 ### Community 178 - "Community 178"
-Cohesion: 0.4
-Nodes (0):
-
-### Community 179 - "Community 179"
 Cohesion: 0.5
 Nodes (2): handleFileSelect(), validateFile()
+
+### Community 179 - "Community 179"
+Cohesion: 0.4
+Nodes (0):
 
 ### Community 180 - "Community 180"
 Cohesion: 0.4
@@ -2257,7 +2257,7 @@ Nodes (0):
 
 ### Community 182 - "Community 182"
 Cohesion: 0.4
-Nodes (0):
+Nodes (1): Header()
 
 ### Community 183 - "Community 183"
 Cohesion: 0.5

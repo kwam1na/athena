@@ -69,4 +69,21 @@ describe("VPS QA deploy contract", () => {
     expect(workflow).toContain('<title>Wigclub</title>');
     expect(workflow).toContain('/src/main.tsx');
   });
+
+  it("schedules browser-level Athena QA smoke checks", async () => {
+    const workflow = await readRepoFile(".github/workflows/athena-qa-smoke.yml");
+
+    expect(workflow).toContain("schedule:");
+    expect(workflow).toContain("- cron:");
+    expect(workflow).toContain("workflow_dispatch:");
+    expect(workflow).toContain("fetch-depth: 0");
+    expect(workflow).toContain("run: bun install --frozen-lockfile");
+    expect(workflow).toContain("run: bunx playwright install chromium");
+    expect(workflow).toContain("ATHENA_QA_URL: https://athena-qa.wigclub.store/");
+    expect(workflow).toContain(
+      "run: bun run harness:behavior --scenario athena-qa-live-smoke --record-video"
+    );
+    expect(workflow).toContain("actions/upload-artifact@v4");
+    expect(workflow).toContain("artifacts/harness-behavior");
+  });
 });

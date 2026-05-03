@@ -212,6 +212,7 @@ Bundled scenarios include:
 - `athena-admin-shell-boot`
 - `athena-convex-storefront-composition`
 - `athena-convex-storefront-failure-visibility`
+- `athena-qa-live-smoke`
 - `valkey-proxy-local-request-response`
 - `storefront-backend-first-load`
 - `storefront-checkout-bootstrap`
