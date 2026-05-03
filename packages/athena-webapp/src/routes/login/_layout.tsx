@@ -18,7 +18,7 @@ const HOME_PATH = "/";
 
 const AUTH_SYNC_RETRY_DELAY_MS = 100;
 const AUTH_SYNC_MAX_ATTEMPTS = 20;
-const AUTH_SYNC_RETRYABLE_MESSAGE = "Sign in again to continue.";
+const AUTH_SYNC_RETRYABLE_MESSAGE = "Sign in again to continue";
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -133,7 +133,7 @@ export function LoginLayout() {
               break;
             }
 
-            finalErrorMessage = "Could not load your Athena user profile.";
+            finalErrorMessage = "Could not load your Athena user profile";
             break;
           }
 
@@ -152,7 +152,7 @@ export function LoginLayout() {
 
         if (!userId) {
           throw new Error(
-            finalErrorMessage ?? "Could not load your Athena user profile."
+            finalErrorMessage ?? "Could not load your Athena user profile"
           );
         }
 
@@ -171,7 +171,7 @@ export function LoginLayout() {
         const message =
           error instanceof Error
             ? error.message
-            : "Could not finish loading your Athena profile.";
+            : "Could not finish loading your Athena profile";
 
         setAuthSyncError(message);
         isSyncingRef.current = false;
@@ -194,10 +194,10 @@ export function LoginLayout() {
       aria-busy={isLoading}
     >
       <div
-        className="pointer-events-none absolute inset-0 z-0 bg-background"
+        className="pointer-events-none absolute inset-0 z-0 bg-background [mask-composite:intersect] [mask-image:linear-gradient(to_bottom,transparent,black_12%,black_68%,transparent),linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]"
         aria-hidden="true"
       >
-        <div className="absolute inset-0 opacity-70 [background-image:linear-gradient(to_right,hsl(var(--border)/0.36)_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--border)/0.28)_1px,transparent_1px)] [background-size:48px_48px] [mask-image:linear-gradient(to_bottom,black,black_68%,transparent)]" />
+        <div className="absolute inset-0 opacity-70 [background-image:linear-gradient(to_right,hsl(var(--border)/0.36)_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--border)/0.28)_1px,transparent_1px)] [background-size:48px_48px]" />
         <div className="absolute inset-y-0 right-0 w-[62%] opacity-45 [background-image:repeating-linear-gradient(135deg,transparent_0,transparent_28px,hsl(var(--border)/0.34)_28px,hsl(var(--border)/0.34)_29px)] [mask-image:linear-gradient(to_left,black,transparent_76%)]" />
       </div>
 

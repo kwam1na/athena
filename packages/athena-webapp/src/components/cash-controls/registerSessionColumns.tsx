@@ -8,18 +8,26 @@ import { getOrigin } from "@/lib/navigationUtils";
 
 export type RegisterSessionRow = {
   _id: string;
+  accountabilityLabel: string;
   closedAtLabel: string;
   countedCashLabel: string;
   depositedLabel: string;
   expectedCashLabel: string;
+  expectedCashValue: number;
   openedAtLabel: string;
+  openedAtSort: number;
   openedByLabel: string;
   registerLabel: string;
   sessionCode: string;
   status: string;
   statusLabel: string;
+  timelineDateLabel: string;
+  timelineDurationLabel: string;
+  timelineRangeLabel: string;
+  varianceCaption: string;
   varianceLabel: string;
   varianceTone: string;
+  varianceValue: number;
 };
 
 function RegisterSessionLink({
@@ -69,132 +77,135 @@ export const registerSessionColumns: ColumnDef<RegisterSessionRow>[] = [
   {
     accessorKey: "registerLabel",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Register" />
+      <DataTableColumnHeader column={column} title="Session" />
     ),
     cell: ({ row }) => (
       <RegisterSessionLink
-        className="space-y-1 text-foreground hover:text-primary"
+        className="space-y-1.5 text-foreground hover:text-primary"
         row={row.original}
       >
         <span className="block font-medium">{row.original.registerLabel}</span>
-        <span className="block font-mono text-xs text-muted-foreground">
+        <span className="inline-flex rounded-md border border-border/70 bg-muted/30 px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
           {row.original.sessionCode}
         </span>
       </RegisterSessionLink>
     ),
   },
   {
-    accessorKey: "statusLabel",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Status" />
-    ),
-    cell: ({ row }) => (
-      <RegisterSessionLink row={row.original}>
-        <Badge
-          className={getStatusBadgeClass(row.original.status)}
-          size="sm"
-          variant="outline"
-        >
-          {row.original.statusLabel}
-        </Badge>
-      </RegisterSessionLink>
-    ),
-  },
-  {
-    accessorKey: "openedAtLabel",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Opened" />
-    ),
-    cell: ({ row }) => (
-      <RegisterSessionLink
-        className="text-sm text-muted-foreground"
-        row={row.original}
-      >
-        {row.original.openedAtLabel}
-      </RegisterSessionLink>
-    ),
-  },
-  {
-    accessorKey: "closedAtLabel",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Closed" />
-    ),
-    cell: ({ row }) => (
-      <RegisterSessionLink
-        className="text-sm text-muted-foreground"
-        row={row.original}
-      >
-        {row.original.closedAtLabel}
-      </RegisterSessionLink>
-    ),
-  },
-  {
     accessorKey: "openedByLabel",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Opened by" />
+      <DataTableColumnHeader column={column} title="Operator" />
     ),
     cell: ({ row }) => (
       <RegisterSessionLink
-        className="text-sm text-muted-foreground"
+        className="space-y-1.5 text-sm"
         row={row.original}
       >
-        {row.original.openedByLabel}
+        <span className="block font-medium text-foreground">
+          {row.original.openedByLabel}
+        </span>
+        <span className="block text-xs text-muted-foreground">
+          {row.original.accountabilityLabel}
+        </span>
       </RegisterSessionLink>
     ),
   },
   {
-    accessorKey: "expectedCashLabel",
+    accessorKey: "openedAtSort",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Expected" />
+      <DataTableColumnHeader column={column} title="Timeline" />
     ),
     cell: ({ row }) => (
       <RegisterSessionLink
-        className="font-mono text-foreground"
+        className="space-y-1.5 text-sm"
         row={row.original}
       >
-        {row.original.expectedCashLabel}
+        <span className="flex items-center gap-2">
+          <span className="font-medium text-foreground">
+            {row.original.timelineDateLabel}
+          </span>
+          <Badge
+            className={getStatusBadgeClass(row.original.status)}
+            size="sm"
+            variant="outline"
+          >
+            {row.original.statusLabel}
+          </Badge>
+        </span>
+        <span className="flex items-center gap-2 text-muted-foreground">
+          <span>{row.original.timelineRangeLabel}</span>
+          <span aria-hidden className="h-1 w-1 rounded-full bg-border" />
+          <span>{row.original.timelineDurationLabel}</span>
+        </span>
+        {row.original.status === "closing" ? (
+          <span className="block text-xs text-warning">
+            Closeout in progress
+          </span>
+        ) : null}
       </RegisterSessionLink>
     ),
   },
   {
-    accessorKey: "countedCashLabel",
+    accessorKey: "expectedCashValue",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Counted" />
+      <DataTableColumnHeader column={column} title="Cash position" />
     ),
     cell: ({ row }) => (
       <RegisterSessionLink
-        className="font-mono text-foreground"
+        className="min-w-56 space-y-2 text-sm"
         row={row.original}
       >
-        {row.original.countedCashLabel}
+        <span className="grid grid-cols-3 gap-3">
+          <span>
+            <span className="block text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+              Expected
+            </span>
+            <span className="mt-1 block font-mono text-foreground">
+              {row.original.expectedCashLabel}
+            </span>
+          </span>
+          <span>
+            <span className="block text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+              Counted
+            </span>
+            <span className="mt-1 block font-mono text-foreground">
+              {row.original.countedCashLabel}
+            </span>
+          </span>
+          <span>
+            <span className="block text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+              Deposited
+            </span>
+            <span className="mt-1 block font-mono text-foreground">
+              {row.original.depositedLabel}
+            </span>
+          </span>
+        </span>
       </RegisterSessionLink>
     ),
   },
   {
-    accessorKey: "depositedLabel",
+    accessorKey: "varianceValue",
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Deposited" />
+      <DataTableColumnHeader
+        className="justify-end"
+        column={column}
+        title="Discrepancy"
+      />
     ),
     cell: ({ row }) => (
       <RegisterSessionLink
-        className="font-mono text-foreground"
+        className="space-y-1 text-right"
         row={row.original}
       >
-        {row.original.depositedLabel}
-      </RegisterSessionLink>
-    ),
-  },
-  {
-    accessorKey: "varianceLabel",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Variance" />
-    ),
-    cell: ({ row }) => (
-      <RegisterSessionLink
-        className={cn("font-mono", row.original.varianceTone)}
-        row={row.original}
-      >
-        {row.original.varianceLabel}
+        <span
+          className={cn("block font-mono text-sm", row.original.varianceTone)}
+        >
+          {row.original.varianceLabel}
+        </span>
+        <span className="block text-xs text-muted-foreground">
+          {row.original.varianceCaption}
+        </span>
       </RegisterSessionLink>
     ),
   },

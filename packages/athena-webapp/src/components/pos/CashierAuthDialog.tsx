@@ -91,11 +91,11 @@ export function CashierAuthDialog({
   const primaryCopy = isExpenseWorkflow
     ? {
         title: "Sign in required",
-        description: "Authenticate to record expenses.",
+        description: "Authenticate to record expenses",
       }
     : {
         title: "Sign in required",
-        description: "Authenticate to add items.",
+        description: "Authenticate to add items",
       };
   const recoveryLabel = isExpenseWorkflow
     ? "Sign out from other sessions"
@@ -114,8 +114,8 @@ export function CashierAuthDialog({
       alternateCopy={{
         title: recoveryLabel,
         description: isExpenseWorkflow
-          ? "Confirm your staff credentials to end other active expense sessions."
-          : "Confirm your staff credentials to end other active register sessions.",
+          ? "Confirm your staff credentials to end other active expense sessions"
+          : "Confirm your staff credentials to end other active register sessions",
         submitLabel: isExpenseWorkflow
           ? "Sign out from other sessions"
           : "Sign out from all registers",
@@ -126,14 +126,14 @@ export function CashierAuthDialog({
       getSuccessMessage={(result, mode) => {
         if (mode === "recover") {
           return isExpenseWorkflow
-            ? "Signed out from other sessions."
-            : "Signed out from all registers.";
+            ? "Signed out from other sessions"
+            : "Signed out from all registers";
         }
 
         const staffDisplayName = getStaffDisplayName(result);
         return staffDisplayName
-          ? `Signed in as ${staffDisplayName}.`
-          : "Signed in.";
+          ? `Signed in as ${staffDisplayName}`
+          : "Signed in";
       }}
       onAuthenticated={(result) => {
         onAuthenticated(result.staffProfileId);

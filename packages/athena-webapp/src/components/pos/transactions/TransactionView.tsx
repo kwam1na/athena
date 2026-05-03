@@ -28,6 +28,7 @@ import type { Id } from "~/convex/_generated/dataModel";
 import { CardContent, CardHeader } from "../../ui/card";
 import { WorkflowTraceRouteLink } from "../../traces/WorkflowTraceRouteLink";
 import { Button } from "../../ui/button";
+import { Input } from "../../ui/input";
 import config from "~/src/config";
 import { formatStaffDisplayName } from "~/shared/staffDisplayName";
 import { Textarea } from "../../ui/textarea";
@@ -189,14 +190,21 @@ export function TransactionView() {
   const transactionId = params?.transactionId;
   const [correctionPanelOpen, setCorrectionPanelOpen] = useState(false);
   const [selectedCorrection, setSelectedCorrection] = useState<
-    "payment_method" | "line_items" | "amounts" | "discounts" | null
+    | "customer"
+    | "payment_method"
+    | "line_items"
+    | "amounts"
+    | "discounts"
+    | null
   >(null);
+  const [customerCorrectionReason, setCustomerCorrectionReason] = useState("");
+  const [customerProfileIdInput, setCustomerProfileIdInput] = useState("");
   const [paymentCorrectionReason, setPaymentCorrectionReason] = useState("");
   const [paymentMethodInput, setPaymentMethodInput] = useState("");
   const [correctionError, setCorrectionError] = useState<string | null>(null);
   const [correctionSubmitting, setCorrectionSubmitting] = useState(false);
   const [pendingCorrection, setPendingCorrection] = useState<
-    "payment_method" | null
+    "customer" | "payment_method" | null
   >(null);
   const [correctionHistoryExpanded, setCorrectionHistoryExpanded] =
     useState(false);
@@ -210,6 +218,9 @@ export function TransactionView() {
   const correctPaymentMethod = useMutation(
     api.inventory.pos.correctTransactionPaymentMethod,
   );
+  const correctCustomer = useMutation(
+    api.inventory.pos.correctTransactionCustomer,
+  );
   const paymentApprovalRunner = useApprovedCommand({
     storeId: activeStore?._id,
     onAuthenticateForApproval: (args) => {
@@ -218,7 +229,7 @@ export function TransactionView() {
           kind: "user_error",
           error: {
             code: "authentication_failed",
-            message: "Select a store before approving this command.",
+            message: "Select a store before approving this command",
           },
         });
       }
@@ -338,7 +349,7 @@ export function TransactionView() {
     : correctionHistory.slice(0, 2);
   const staffAuthenticationDialogCopy = {
     title: "Staff sign-in required",
-    description: "Authenticate to record this update.",
+    description: "Authenticate to record this update",
     submitLabel: "Confirm",
   };
   const isCompletedTransaction = transaction.status === "completed";
@@ -354,8 +365,8 @@ export function TransactionView() {
         transaction.registerNumber
           ? `Register ${transaction.registerNumber}`
           : "this transaction's register"
-      } to update payment details.`
-    : "Only same-amount payment method updates are supported.";
+      } to update payment details`
+    : "Only same-amount payment method updates are supported";
   const currentPaymentMethod = (transaction.payments?.[0]?.method ??
     transaction.paymentMethod ??
     null) as PosPaymentMethod | null;
@@ -364,6 +375,10 @@ export function TransactionView() {
   );
   const showPaymentMethodDirectFlow =
     selectedCorrection === "payment_method" && supportsPaymentMethodCorrection;
+  const showCustomerCorrectionError =
+    selectedCorrection === "customer" && correctionError;
+  const showPaymentMethodCorrectionError =
+    showPaymentMethodDirectFlow && correctionError;
 
   async function authenticateCorrectionStaff(args: {
     pinHash: string;
@@ -374,7 +389,7 @@ export function TransactionView() {
         kind: "user_error" as const,
         error: {
           code: "authentication_failed" as const,
-          message: "Select a store before confirming staff credentials.",
+          message: "Select a store before confirming staff credentials",
         },
       };
     }
@@ -396,6 +411,44 @@ export function TransactionView() {
     setCorrectionError(null);
   }
 
+  async function runCustomerCorrection(staff: StaffAuthenticationResult) {
+    if (!isAuthenticated) {
+      setCorrectionError("Sign in again before updating this transaction");
+      return;
+    }
+
+    const reason = customerCorrectionReason.trim();
+    if (!reason) {
+      setCorrectionError("Add a reason for this update");
+      return;
+    }
+
+    setCorrectionSubmitting(true);
+    setCorrectionError(null);
+    const result = await runCommand(
+      () =>
+        correctCustomer({
+          actorStaffProfileId: staff.staffProfileId,
+          customerProfileId: customerProfileIdInput.trim()
+            ? (customerProfileIdInput.trim() as Id<"customerProfile">)
+            : undefined,
+          reason,
+          transactionId: transactionId as Id<"posTransaction">,
+        }) as Promise<CommandResult<unknown>>,
+    );
+    setCorrectionSubmitting(false);
+
+    if (result.kind === "ok") {
+      setCustomerCorrectionReason("");
+      setCustomerProfileIdInput("");
+      exitCorrectionWorkflow();
+      toast.success("Customer attribution updated");
+      return;
+    }
+
+    setCorrectionError(result.error.message);
+  }
+
   async function runPaymentMethodCorrection(args?: {
     approvalProofId?: Id<"approvalProof">;
     sameSubmissionApproval?: {
@@ -406,22 +459,22 @@ export function TransactionView() {
     staffProfileId?: Id<"staffProfile">;
   }) {
     if (!isAuthenticated) {
-      setCorrectionError("Sign in again before updating this transaction.");
+      setCorrectionError("Sign in again before updating this transaction");
       return;
     }
 
     const paymentMethod = paymentMethodInput as PosPaymentMethod;
     const reason = paymentCorrectionReason.trim();
     if (!paymentMethod) {
-      setCorrectionError("Choose the updated payment method.");
+      setCorrectionError("Choose the updated payment method");
       return;
     }
     if (paymentMethod === currentPaymentMethod) {
-      setCorrectionError("Choose a different payment method.");
+      setCorrectionError("Choose a different payment method");
       return;
     }
     if (!reason) {
-      setCorrectionError("Add a reason for this update.");
+      setCorrectionError("Add a reason for this update");
       return;
     }
 
@@ -481,24 +534,36 @@ export function TransactionView() {
     });
   }
 
-  function requestCorrectionSubmit() {
+  function requestCorrectionSubmit(kind: "customer" | "payment_method") {
     setCorrectionError(null);
 
-    if (!paymentMethodInput.trim()) {
-      setCorrectionError("Choose the updated payment method.");
-      return;
-    }
-    if (paymentMethodInput === currentPaymentMethod) {
-      setCorrectionError("Choose a different payment method.");
+    if (kind === "customer" && !customerCorrectionReason.trim()) {
+      setCorrectionError("Add a reason for this update");
       return;
     }
 
-    if (!paymentCorrectionReason.trim()) {
-      setCorrectionError("Add a reason for this update.");
+    if (kind === "payment_method") {
+      if (!paymentMethodInput.trim()) {
+        setCorrectionError("Choose the updated payment method");
+        return;
+      }
+      if (paymentMethodInput === currentPaymentMethod) {
+        setCorrectionError("Choose a different payment method");
+        return;
+      }
+
+      if (!paymentCorrectionReason.trim()) {
+        setCorrectionError("Add a reason for this update");
+        return;
+      }
+    }
+
+    if (kind === "payment_method") {
+      setPendingCorrection(kind);
       return;
     }
 
-    setPendingCorrection("payment_method");
+    setPendingCorrection(kind);
   }
 
   return (
@@ -527,8 +592,8 @@ export function TransactionView() {
         getSuccessMessage={(result) => {
           const staffDisplayName = formatStaffDisplayName(result.staffProfile);
           return staffDisplayName
-            ? `Confirmed as ${staffDisplayName}.`
-            : "Staff credentials confirmed.";
+            ? `Confirmed as ${staffDisplayName}`
+            : "Staff credentials confirmed";
         }}
         onAuthenticate={(args) =>
           authenticateCorrectionStaff({
@@ -545,10 +610,15 @@ export function TransactionView() {
               staff: result,
               staffProfileId: result.staffProfileId,
             });
+            return;
+          }
+
+          if (correction === "customer") {
+            void runCustomerCorrection(result);
           }
         }}
         onDismiss={() => setPendingCorrection(null)}
-        open={pendingCorrection === "payment_method"}
+        open={pendingCorrection === "customer" || pendingCorrection === "payment_method"}
       />
       {paymentApprovalRunner.dialog}
       <FadeIn className="h-full">
@@ -705,6 +775,67 @@ export function TransactionView() {
                       </p>
                       <div className="grid gap-2">
                         <Button
+                          aria-label="Customer attribution"
+                          className="h-auto justify-start whitespace-normal px-3 py-3 text-left"
+                          onClick={() => setSelectedCorrection("customer")}
+                          type="button"
+                          variant={
+                            selectedCorrection === "customer"
+                              ? "workflow-soft"
+                              : "outline"
+                          }
+                        >
+                          <span className="grid gap-1">
+                            <span>Customer attribution</span>
+                            <span className="text-xs font-normal opacity-75">
+                              Change walk-in or customer assignment.
+                            </span>
+                          </span>
+                        </Button>
+                        {selectedCorrection === "customer" ? (
+                          <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
+                            <p className="text-sm font-medium text-foreground">
+                              Customer attribution update
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              Staff sign-in and customer lookup will update
+                              attribution only.
+                            </p>
+                            <Input
+                              aria-label="Updated customer profile ID"
+                              className="border-input bg-background"
+                              onChange={(event) =>
+                                setCustomerProfileIdInput(event.target.value)
+                              }
+                              placeholder="Customer profile ID, or leave blank for walk-in."
+                              value={customerProfileIdInput}
+                            />
+                            <Textarea
+                              aria-label="Customer update reason"
+                              className="min-h-[80px] border-input bg-background"
+                              onChange={(event) =>
+                                setCustomerCorrectionReason(event.target.value)
+                              }
+                              placeholder="Reason for customer attribution update."
+                              value={customerCorrectionReason}
+                            />
+                            {showCustomerCorrectionError ? (
+                              <p className="text-sm text-destructive">
+                                {correctionError}
+                              </p>
+                            ) : null}
+                            <Button
+                              disabled={correctionSubmitting}
+                              onClick={() =>
+                                requestCorrectionSubmit("customer")
+                              }
+                              type="button"
+                            >
+                              Submit customer update
+                            </Button>
+                          </div>
+                        ) : null}
+                        <Button
                           aria-label="Payment method"
                           className="h-auto justify-start whitespace-normal px-3 py-3 text-left"
                           disabled={!supportsPaymentMethodCorrection}
@@ -775,9 +906,16 @@ export function TransactionView() {
                               placeholder="Reason for payment method update."
                               value={paymentCorrectionReason}
                             />
+                            {showPaymentMethodCorrectionError ? (
+                              <p className="text-sm text-destructive">
+                                {correctionError}
+                              </p>
+                            ) : null}
                             <Button
                               disabled={correctionSubmitting}
-                              onClick={requestCorrectionSubmit}
+                              onClick={() =>
+                                requestCorrectionSubmit("payment_method")
+                              }
                               type="button"
                             >
                               Submit payment update
@@ -842,11 +980,6 @@ export function TransactionView() {
                         Use refund, exchange, or manager review for item,
                         amount, total, or discount updates.
                       </div>
-                    ) : null}
-                    {correctionError ? (
-                      <p className="text-sm text-destructive">
-                        {correctionError}
-                      </p>
                     ) : null}
                   </div>
                 </section>

@@ -149,7 +149,7 @@ export const UserInsightsSection = () => {
             )}
         </div>
       ) : (
-        <p className="text-muted-foreground">No insights available.</p>
+        <p className="text-muted-foreground">No insights available</p>
       )}
     </div>
   );

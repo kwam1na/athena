@@ -40,10 +40,25 @@ describe("RegisterSessionsViewContent", () => {
 
   it("renders all register sessions in a ledger table", () => {
     const closedAt = new Date("2026-04-29T18:30:00.000Z").getTime();
-    const expectedClosedAt = new Date(closedAt).toLocaleString("en-US", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
+    const openedAt = new Date("2026-04-29T07:40:00.000Z").getTime();
+    const expectedTimelineDate = new Date(openedAt).toLocaleDateString(
+      "en-US",
+      {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      },
+    );
+    const expectedTimelineRange = `${new Date(openedAt).toLocaleTimeString(
+      "en-US",
+      {
+        hour: "numeric",
+        minute: "2-digit",
+      },
+    )} - ${new Date(closedAt).toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+    })}`;
 
     render(
       <RegisterSessionsViewContent
@@ -67,7 +82,7 @@ describe("RegisterSessionsViewContent", () => {
             closedAt,
             countedCash: 20000,
             expectedCash: 40000,
-            openedAt: new Date("2026-04-29T07:40:00.000Z").getTime(),
+            openedAt,
             openedByStaffName: "Ato Kofi",
             openingFloat: 40000,
             registerNumber: "Register 2",
@@ -82,20 +97,32 @@ describe("RegisterSessionsViewContent", () => {
 
     expect(screen.getByText("Register sessions")).toBeInTheDocument();
     expect(
-      screen.getByText("Open, closing, and closed drawers."),
+      screen.getByText(
+        "Review drawer ownership, closeout timing, and cash discrepancies.",
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText("2 sessions")).toBeInTheDocument();
+    expect(screen.getByText("Session")).toBeInTheDocument();
+    expect(screen.queryByText("State")).not.toBeInTheDocument();
+    expect(screen.getByText("Operator")).toBeInTheDocument();
+    expect(screen.getByText("Timeline")).toBeInTheDocument();
+    expect(screen.getByText("Cash position")).toBeInTheDocument();
+    expect(screen.getByText("Discrepancy")).toBeInTheDocument();
     expect(screen.getByText("Register 3")).toBeInTheDocument();
     expect(screen.getByText("Register 2")).toBeInTheDocument();
-    expect(screen.getByText("ACTIVE")).toBeInTheDocument();
-    expect(screen.getByText("CLOSED")).toBeInTheDocument();
+    expect(screen.getByText("Active")).toBeInTheDocument();
+    expect(screen.getAllByText("Closed").length).toBeGreaterThan(0);
     expect(screen.getByText("Kwamina M.")).toBeInTheDocument();
     expect(screen.getByText("Ato K.")).toBeInTheDocument();
     expect(screen.getByText("GH₵9,690")).toBeInTheDocument();
     expect(screen.getByText("GH₵-200")).toBeInTheDocument();
-    expect(screen.getByText("-")).toBeInTheDocument();
-    expect(screen.queryByText("Not closed")).not.toBeInTheDocument();
-    expect(screen.getByText(expectedClosedAt)).toBeInTheDocument();
+    expect(screen.getByText("Balanced")).toBeInTheDocument();
+    expect(screen.getByText("Short")).toBeInTheDocument();
+    expect(screen.getByText(/ - now$/)).toBeInTheDocument();
+    expect(screen.getByText("In progress")).toBeInTheDocument();
+    expect(screen.getAllByText(expectedTimelineDate).length).toBeGreaterThan(0);
+    expect(screen.getByText(expectedTimelineRange)).toBeInTheDocument();
+    expect(screen.getByText("10 hr 50 min")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /Register 3 ACTIVE/i }),
     ).toHaveAttribute(

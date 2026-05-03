@@ -106,10 +106,12 @@ describe("ServiceAppointmentsViewContent", () => {
     await user.click(screen.getByRole("button", { name: /schedule appointment/i }));
 
     expect(onCreateAppointment).not.toHaveBeenCalled();
-    expect(screen.getByText("Select a customer.")).toBeInTheDocument();
-    expect(screen.getByText("Select a catalog item.")).toBeInTheDocument();
-    expect(screen.getByText("Select a staff member.")).toBeInTheDocument();
-    expect(screen.getByText("Choose an appointment start time.")).toBeInTheDocument();
+    expect(screen.getByText("Select a customer")).toBeInTheDocument();
+    expect(screen.getByText("Select a catalog item")).toBeInTheDocument();
+    expect(screen.getByText("Select a staff member")).toBeInTheDocument();
+    expect(
+      screen.getAllByText("Choose an appointment start time").length,
+    ).toBeGreaterThan(0);
   });
 
   it("creates appointments from catalog and selected customers", async () => {

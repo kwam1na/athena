@@ -72,7 +72,7 @@ export function ServiceIntakeForm({
     <div className="space-y-6">
       {validationErrors.length > 0 ? (
         <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          <p className="font-medium">Fix the highlighted intake details.</p>
+          <p className="font-medium">Fix the highlighted intake details</p>
           <ul className="mt-2 list-disc pl-5">
             {validationErrors.map((error) => (
               <li key={error}>{error}</li>

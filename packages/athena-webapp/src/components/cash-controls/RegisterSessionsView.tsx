@@ -63,12 +63,74 @@ function formatTimestamp(timestamp: number) {
   });
 }
 
+function formatTimelineLabel(timestamp: number) {
+  return new Date(timestamp).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function formatTimelineDate(timestamp: number) {
+  return new Date(timestamp).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function formatTimelineTime(timestamp: number) {
+  return new Date(timestamp).toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function formatDuration(openedAt: number, closedAt?: number) {
+  if (!closedAt || closedAt < openedAt) {
+    return "In progress";
+  }
+
+  const totalMinutes = Math.max(1, Math.round((closedAt - openedAt) / 60000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (hours === 0) {
+    return `${minutes} min`;
+  }
+
+  if (minutes === 0) {
+    return `${hours} hr`;
+  }
+
+  return `${hours} hr ${minutes} min`;
+}
+
+function formatTimelineRange(openedAt: number, closedAt?: number) {
+  const openedTime = formatTimelineTime(openedAt);
+
+  if (!closedAt) {
+    return `${openedTime} - now`;
+  }
+
+  return `${openedTime} - ${formatTimelineTime(closedAt)}`;
+}
+
 function getVarianceTone(variance?: number) {
   if (!variance) {
     return "text-foreground";
   }
 
   return variance > 0 ? "text-success" : "text-danger";
+}
+
+function getVarianceCaption(variance?: number) {
+  if (!variance) {
+    return "Balanced";
+  }
+
+  return variance > 0 ? "Over expected" : "Short";
 }
 
 function getStaffName(staffName?: string | null) {
@@ -92,20 +154,31 @@ export function RegisterSessionsViewContent({
     () =>
       registerSessions.map((session) => ({
         _id: session._id,
+        accountabilityLabel: `Opened ${formatTimelineLabel(session.openedAt)}`,
         closedAtLabel: session.closedAt
           ? formatTimestamp(session.closedAt)
-          : "-",
+          : "Not closed",
         countedCashLabel: formatCurrency(currency, session.countedCash),
         depositedLabel: formatCurrency(currency, session.totalDeposited),
         expectedCashLabel: formatCurrency(currency, session.expectedCash),
+        expectedCashValue: session.expectedCash,
         openedAtLabel: formatTimestamp(session.openedAt),
+        openedAtSort: session.openedAt,
         openedByLabel: getStaffName(session.openedByStaffName),
         registerLabel: formatRegisterName(session.registerNumber),
         sessionCode: formatSessionCode(session._id),
         status: session.status,
         statusLabel: formatStatusLabel(session.status),
+        timelineDateLabel: formatTimelineDate(session.openedAt),
+        timelineDurationLabel: formatDuration(session.openedAt, session.closedAt),
+        timelineRangeLabel: formatTimelineRange(
+          session.openedAt,
+          session.closedAt,
+        ),
+        varianceCaption: getVarianceCaption(session.variance),
         varianceLabel: formatCurrency(currency, session.variance ?? 0),
         varianceTone: getVarianceTone(session.variance),
+        varianceValue: session.variance ?? 0,
       })),
     [currency, registerSessions],
   );
@@ -128,7 +201,7 @@ export function RegisterSessionsViewContent({
         <section className="space-y-layout-md">
           <div className="flex flex-wrap items-center justify-between gap-layout-sm">
             <p className="text-sm text-muted-foreground">
-              Open, closing, and closed drawers.
+              Review drawer ownership, closeout timing, and cash discrepancies.
             </p>
             <Badge
               className="border-border bg-surface-raised text-muted-foreground"
@@ -146,7 +219,7 @@ export function RegisterSessionsViewContent({
           ) : registerSessions.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border bg-surface-raised px-layout-lg py-layout-xl">
               <EmptyState
-                description="Register sessions will appear after drawers are opened from POS."
+                description="Register sessions will appear after drawers are opened from POS"
                 title="No register sessions"
               />
             </div>
@@ -195,7 +268,7 @@ export function RegisterSessionsView() {
 
   if (!isAuthenticated) {
     return (
-      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before cash controls can load protected register-session data." />
+      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before cash controls can load protected register-session data" />
     );
   }
 
@@ -208,7 +281,7 @@ export function RegisterSessionsView() {
       <View>
         <div className="container mx-auto py-8">
           <EmptyState
-            description="Select a store before opening register sessions."
+            description="Select a store before opening register sessions"
             icon={<Landmark className="h-16 w-16 text-muted-foreground" />}
             title="No active store"
           />

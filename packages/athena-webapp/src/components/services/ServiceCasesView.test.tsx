@@ -84,9 +84,9 @@ describe("ServiceCasesViewContent", () => {
     await user.click(screen.getByRole("button", { name: /create service case/i }));
 
     expect(onCreateCase).not.toHaveBeenCalled();
-    expect(screen.getByText("Select a customer.")).toBeInTheDocument();
-    expect(screen.getByText("Provide a service title.")).toBeInTheDocument();
-    expect(screen.getByText("Select a staff member.")).toBeInTheDocument();
+    expect(screen.getByText("Select a customer")).toBeInTheDocument();
+    expect(screen.getByText("Provide a service title")).toBeInTheDocument();
+    expect(screen.getByText("Select a staff member")).toBeInTheDocument();
   });
 
   it("creates walk-in service cases from selected customers and catalog items", async () => {

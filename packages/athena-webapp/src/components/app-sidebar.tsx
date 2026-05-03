@@ -1,11 +1,9 @@
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
-  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -13,6 +11,8 @@ import {
   SidebarMenuSubItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
+import * as Collapsible from "@radix-ui/react-collapsible";
+import type { ComponentType, ReactNode } from "react";
 import {
   BadgePercent,
   ChartNoAxesCombined,
@@ -27,7 +27,6 @@ import {
   ShoppingBasket,
   Store,
   Truck,
-  UserCircle,
   Users,
   AlertOctagon,
   PackageCheckIcon,
@@ -42,13 +41,12 @@ import {
   ShoppingCart,
   Layers,
   Banknote,
+  ChevronRight,
 } from "lucide-react";
-import { AppHeader } from "./Navbar";
 import { Link } from "@tanstack/react-router";
 import useGetActiveStore from "../hooks/useGetActiveStore";
 import { useGetActiveOrganization } from "../hooks/useGetOrganizations";
 import { useNewOrderNotification } from "../hooks/useNewOrderNotification";
-import { useAuth } from "../hooks/useAuth";
 import { useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { useGetUnresolvedProducts } from "../hooks/useGetProducts";
@@ -57,13 +55,41 @@ import { useGetCategories } from "../hooks/useGetCategories";
 import { PermissionGate } from "./PermissionGate";
 import { usePermissions } from "../hooks/usePermissions";
 
+function SidebarMenuCollapsible({
+  icon: Icon,
+  label,
+  disabled,
+  children,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+  disabled?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <SidebarMenuItem>
+      <Collapsible.Root
+        defaultOpen={false}
+        className="group/sidebar-collapsible"
+      >
+        <Collapsible.Trigger asChild>
+          <SidebarMenuButton disabled={disabled} className="w-full">
+            <Icon className="w-4 h-4" />
+            <p className="font-medium">{label}</p>
+            <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-standard ease-standard group-data-[state=open]/sidebar-collapsible:rotate-90" />
+          </SidebarMenuButton>
+        </Collapsible.Trigger>
+        <Collapsible.Content>{children}</Collapsible.Content>
+      </Collapsible.Root>
+    </SidebarMenuItem>
+  );
+}
+
 export function AppSidebar() {
   const { activeStore } = useGetActiveStore();
   const { activeOrganization } = useGetActiveOrganization();
 
   const productsWithNoImages = useGetUnresolvedProducts();
-
-  const { user } = useAuth();
 
   useNewOrderNotification();
 
@@ -110,31 +136,10 @@ export function AppSidebar() {
   }
 
   return (
-    <Sidebar collapsible="icon">
-      <SidebarHeader>
-        <SidebarGroup>
-          <SidebarGroupContent>
-            {/* Shows AppHeader when expanded, icon when collapsed */}
-            <div className="group-data-[collapsible=icon]:hidden px-6">
-              <AppHeader />
-            </div>
-            {/* <div className="hidden group-data-[collapsible=icon]:block">
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    tooltip={`${activeOrganization.name} - ${activeStore.name}`}
-                  >
-                    <Link to="/">
-                      <Store className="w-4 h-4" />
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </div> */}
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarHeader>
+    <Sidebar
+      collapsible="icon"
+      className="top-16 bottom-auto h-[calc(100svh-4rem)]"
+    >
       <SidebarContent>
         {/* Store section */}
         <SidebarGroup>
@@ -246,22 +251,11 @@ export function AppSidebar() {
               </SidebarMenuItem>
 
               {/* Orders section */}
-              <SidebarMenuItem>
-                <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
-                  <Link
-                    to="/$orgUrlSlug/store/$storeUrlSlug/orders/all"
-                    params={(p) => ({
-                      ...p,
-                      orgUrlSlug: activeOrganization?.slug,
-                      storeUrlSlug: activeStore?.slug,
-                    })}
-                    className="flex items-center"
-                  >
-                    <ShoppingBag className="w-4 h-4" />
-                    <p className="font-medium">Orders</p>
-                  </Link>
-                </SidebarMenuButton>
-
+              <SidebarMenuCollapsible
+                icon={ShoppingBag}
+                label="Orders"
+                disabled={!hasFullAdminAccess}
+              >
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
                     <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
@@ -417,25 +411,10 @@ export function AppSidebar() {
                     </SidebarMenuButton>
                   </SidebarMenuSubItem>
                 </SidebarMenuSub>
-              </SidebarMenuItem>
+              </SidebarMenuCollapsible>
 
               {/* Products section */}
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <Link
-                    to="/$orgUrlSlug/store/$storeUrlSlug/products"
-                    params={(p) => ({
-                      ...p,
-                      orgUrlSlug: activeOrganization?.slug,
-                      storeUrlSlug: activeStore?.slug,
-                    })}
-                    className="flex items-center"
-                  >
-                    <Tag className="w-4 h-4" />
-                    <p className="font-medium">Products</p>
-                  </Link>
-                </SidebarMenuButton>
-
+              <SidebarMenuCollapsible icon={Tag} label="Products">
                 {categories?.map((category) => (
                   <SidebarMenuSub key={category._id}>
                     <SidebarMenuSubItem>
@@ -503,7 +482,7 @@ export function AppSidebar() {
                     </SidebarMenuButton>
                   </SidebarMenuSubItem>
                 </SidebarMenuSub> */}
-              </SidebarMenuItem>
+              </SidebarMenuCollapsible>
 
               {/* Bulk operations section */}
               <SidebarMenuItem>
@@ -567,22 +546,11 @@ export function AppSidebar() {
               </SidebarMenuItem>
 
               {/* Storefront section */}
-              <SidebarMenuItem>
-                <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
-                  <Link
-                    to="/$orgUrlSlug/store/$storeUrlSlug/assets"
-                    params={(p) => ({
-                      ...p,
-                      orgUrlSlug: activeOrganization?.slug,
-                      storeUrlSlug: activeStore?.slug,
-                    })}
-                    className="flex items-center"
-                  >
-                    <PanelTop className="w-4 h-4" />
-                    <p className="font-medium">Storefront</p>
-                  </Link>
-                </SidebarMenuButton>
-
+              <SidebarMenuCollapsible
+                icon={PanelTop}
+                label="Storefront"
+                disabled={!hasFullAdminAccess}
+              >
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
                     <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
@@ -658,7 +626,7 @@ export function AppSidebar() {
                     </SidebarMenuButton>
                   </SidebarMenuSubItem>
                 </SidebarMenuSub>
-              </SidebarMenuItem>
+              </SidebarMenuCollapsible>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -766,23 +734,6 @@ export function AppSidebar() {
           </SidebarGroup>
         </PermissionGate>
       </SidebarContent>
-
-      <SidebarFooter>
-        {/* User Footer - Shows email when expanded, icon when collapsed */}
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              tooltip={user?.email}
-              className="group-data-[collapsible=icon]:justify-center"
-            >
-              <UserCircle className="w-4 h-4 shrink-0" />
-              <div className="group-data-[collapsible=icon]:hidden">
-                <p className="text-sm font-medium truncate">{user?.email}</p>
-              </div>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   );

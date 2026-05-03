@@ -2,8 +2,8 @@ import type { CommandResult, UserErrorCode } from "~/shared/commandResult";
 import { GENERIC_UNEXPECTED_ERROR_MESSAGE } from "~/shared/commandResult";
 
 const KNOWN_THROWN_USER_MESSAGES = [
-  "A register session is already open for this terminal.",
-  "A register session is already open for this register number.",
+  "A register session is already open for this terminal",
+  "A register session is already open for this register number",
 ] as const;
 
 export type PosUseCaseErrorCode =

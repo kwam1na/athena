@@ -169,15 +169,15 @@ export function StockAdjustmentWorkspaceContent({
 
   const handleSubmit = async () => {
     if (!storeId) {
-      toast.error("Select a store before submitting a stock adjustment.");
+      toast.error("Select a store before submitting a stock adjustment");
       return;
     }
 
     if (changedRows.length === 0) {
       toast.error(
         adjustmentType === "manual"
-          ? "Add at least one non-zero stock delta."
-          : "Enter at least one counted quantity that differs from the system stock."
+          ? "Add at least one non-zero stock delta"
+          : "Enter at least one counted quantity that differs from the system stock"
       );
       return;
     }
@@ -417,8 +417,8 @@ export function StockAdjustmentWorkspaceContent({
               }`}
             >
               {approvalRequired
-                ? "This batch will open an approval request before inventory changes are applied."
-                : "This batch can apply immediately and will still write inventory movements."}
+                ? "This batch will open an approval request before inventory changes are applied"
+                : "This batch can apply immediately and will still write inventory movements"}
             </div>
           </div>
         </section>

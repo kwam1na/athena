@@ -902,7 +902,7 @@ describe("useRegisterViewModel", () => {
 
     expect(result.current.drawerGate).toBeNull();
     expect(toast.error).toHaveBeenCalledWith(
-      "Cashier already has an active session on another terminal.",
+      "Cashier already has an active session on another terminal",
     );
   });
 
@@ -1102,7 +1102,7 @@ describe("useRegisterViewModel", () => {
       registerSessionId: "drawer-1",
       storeId: "store-1",
     });
-    expect(toast.success).toHaveBeenCalledWith("Register reopened.");
+    expect(toast.success).toHaveBeenCalledWith("Register reopened");
   });
 
   it("gates an active POS session without a register assignment while preserving the sale", async () => {
@@ -1691,7 +1691,7 @@ describe("useRegisterViewModel", () => {
     expect(mockVoidSession).toHaveBeenCalledWith({
       sessionId: "session-1" as Id<"posSession">,
     });
-    expect(toast.success).not.toHaveBeenCalledWith("Sale cleared.");
+    expect(toast.success).not.toHaveBeenCalledWith("Sale cleared");
   });
 
   it("shows the sale-cleared toast when voiding a sale with cart items", async () => {
@@ -1711,7 +1711,7 @@ describe("useRegisterViewModel", () => {
     expect(mockVoidSession).toHaveBeenCalledWith({
       sessionId: "session-1" as Id<"posSession">,
     });
-    expect(toast.success).toHaveBeenCalledWith("Sale cleared.");
+    expect(toast.success).toHaveBeenCalledWith("Sale cleared");
   });
 
   it("does not void an empty active session before resuming a held one", async () => {
@@ -2072,7 +2072,7 @@ describe("useRegisterViewModel", () => {
         staffProfileId: "staff-1",
       }),
     );
-    expect(toast.success).not.toHaveBeenCalledWith("Sale cleared.");
+    expect(toast.success).not.toHaveBeenCalledWith("Sale cleared");
   });
 
   it("completes the transaction without a separate checkout-submitted sync round-trip", async () => {

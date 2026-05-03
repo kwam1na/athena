@@ -51,9 +51,9 @@ describe("ServiceCatalogViewContent", () => {
     await user.click(screen.getByRole("button", { name: /create service/i }));
 
     expect(onCreate).not.toHaveBeenCalled();
-    expect(screen.getByText("Service name is required.")).toBeInTheDocument();
+    expect(screen.getByText("Service name is required")).toBeInTheDocument();
     expect(
-      screen.getByText("Duration must be greater than zero."),
+      screen.getByText("Duration must be greater than zero"),
     ).toBeInTheDocument();
   });
 

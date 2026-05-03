@@ -154,7 +154,7 @@ describe("OperationsQueueViewContent", () => {
     expect(screen.getByText("No open work items")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "New service intakes and approval-driven stock reviews will appear here."
+        "New service intakes and approval-driven stock reviews will appear here"
       ),
     ).toBeInTheDocument();
   });

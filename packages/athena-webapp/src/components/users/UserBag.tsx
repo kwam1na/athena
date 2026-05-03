@@ -19,7 +19,7 @@ export const UserBag = () => {
 
   if (!bag)
     return (
-      <p className="text-sm text-muted-foreground">This user's bag is empty.</p>
+      <p className="text-sm text-muted-foreground">This user's bag is empty</p>
     );
 
   return <BagDetails bag={bag} />;

@@ -166,7 +166,7 @@ export function RefundsView() {
                   This order uses payment on delivery. Refunds must be processed
                   manually since no online payment was made.
                   {!order.paymentCollected &&
-                    " No payment has been collected yet."}
+                    " No payment has been collected yet"}
                 </p>
                 {order.paymentCollected && (
                   <p className="text-sm text-blue-700">

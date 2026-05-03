@@ -964,7 +964,7 @@ function Stock({
         onConfirm={handleClearBarcodeConfirm}
         loading={isClearingBarcode}
         title="Clear Barcode?"
-        description="Are you sure you want to clear this barcode? This action will remove the barcode value."
+        description="Are you sure you want to clear this barcode? This action will remove the barcode value"
         ctaText="Clear"
       />
     </>

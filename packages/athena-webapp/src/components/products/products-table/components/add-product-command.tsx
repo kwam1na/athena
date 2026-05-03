@@ -56,7 +56,7 @@ export function AddProductCommand<TData>({
         onValueChange={setValue}
       />
       <CommandList>
-        <CommandEmpty>No matching page.</CommandEmpty>
+        <CommandEmpty>No matching page</CommandEmpty>
         {targetPage && (
           <CommandGroup heading="Navigation">
             <CommandItem onSelect={() => goToPage(targetPage)}>

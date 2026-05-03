@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { forwardRef } from "react";
@@ -72,6 +72,59 @@ describe("InputOTPForm", () => {
 
     await waitFor(() =>
       expect(screen.getByText("Invalid code entered")).toBeInTheDocument()
+    );
+  });
+
+  it("submits a normalized code when Safari autofill provides formatted text", async () => {
+    const user = userEvent.setup();
+
+    mocked.signIn.mockResolvedValue({ signingIn: true });
+
+    render(
+      <InputOTPForm email="manager@example.com" onBack={vi.fn()} />
+    );
+
+    fireEvent.change(screen.getByLabelText(/verification code/i), {
+      target: { value: "867 273" },
+    });
+    await user.click(screen.getByRole("button", { name: /continue/i }));
+
+    await waitFor(() =>
+      expect(mocked.signIn).toHaveBeenCalledWith(ATHENA_EMAIL_OTP_PROVIDER_ID, {
+        code: "867273",
+        email: "manager@example.com",
+      })
+    );
+  });
+
+  it("does not submit the code again while the auth handoff is in flight", async () => {
+    const user = userEvent.setup();
+    let resolveSignIn: (value: { signingIn: true }) => void = () => {};
+
+    mocked.signIn.mockReturnValue(
+      new Promise((resolve) => {
+        resolveSignIn = resolve;
+      })
+    );
+
+    render(
+      <InputOTPForm email="manager@example.com" onBack={vi.fn()} />
+    );
+
+    const continueButton = screen.getByRole("button", { name: /continue/i });
+
+    await user.type(screen.getByLabelText(/verification code/i), "123456");
+    await user.click(continueButton);
+
+    expect(mocked.signIn).toHaveBeenCalledTimes(1);
+
+    resolveSignIn({ signingIn: true });
+
+    await waitFor(() =>
+      expect(window.sessionStorage.setItem).toHaveBeenCalledWith(
+        PENDING_ATHENA_AUTH_SYNC_KEY,
+        "1"
+      )
     );
   });
 

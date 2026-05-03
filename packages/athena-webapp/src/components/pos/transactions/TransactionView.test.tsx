@@ -391,12 +391,30 @@ describe("TransactionView", () => {
       authMutation,
       approvalMutation,
       paymentMutation,
+      customerMutation,
     ];
     let mutationIndex = 0;
     useMutationMock.mockImplementation(
       () => mutations[mutationIndex++ % mutations.length],
     );
   }
+
+  it("renders nothing until the route provides a transaction id", () => {
+    useParamsMock.mockReturnValue({});
+
+    const { container } = render(<TransactionView />);
+
+    expect(container.innerHTML).toBe("");
+  });
+
+  it("renders the loading shell while the transaction is unresolved", () => {
+    useParamsMock.mockReturnValue({ transactionId: "txn_loading" });
+    useQueryMock.mockReturnValue(undefined);
+
+    const { container } = render(<TransactionView />);
+
+    expect(container.querySelector(".min-h-\\[50vh\\]")).toBeInTheDocument();
+  });
 
   it("renders the session trace link when the transaction has a session trace", () => {
     useParamsMock.mockReturnValue({ transactionId: "txn_1" });
@@ -593,8 +611,8 @@ describe("TransactionView", () => {
     await user.click(screen.getByRole("button", { name: "Update" }));
 
     expect(
-      screen.queryByRole("button", { name: "Customer attribution" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Customer attribution" }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Payment method" }),
     ).toBeInTheDocument();
@@ -641,15 +659,89 @@ describe("TransactionView", () => {
     );
 
     expect(
-      screen.getByText("Add a reason for this update."),
+      screen.getByText("Add a reason for this update"),
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Update" }));
     await user.click(screen.getByRole("button", { name: "Update" }));
 
     expect(
-      screen.queryByText("Add a reason for this update."),
+      screen.queryByText("Add a reason for this update"),
     ).not.toBeInTheDocument();
+  });
+
+  it("places payment method reason errors under the reason input", async () => {
+    const user = userEvent.setup();
+    useParamsMock.mockReturnValue({ transactionId: "txn_17" });
+    useQueryMock.mockReturnValue(baseTransaction);
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Update" }));
+    await user.click(screen.getByRole("button", { name: "Payment method" }));
+    await user.selectOptions(
+      screen.getByLabelText("Updated payment method"),
+      "card",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Submit payment update" }),
+    );
+
+    const reasonInput = screen.getByLabelText("Payment method update reason");
+    const reasonError = screen.getByText("Add a reason for this update");
+    const formChildren = Array.from(reasonInput.parentElement?.children ?? []);
+
+    expect(formChildren.indexOf(reasonError)).toBe(
+      formChildren.indexOf(reasonInput) + 1,
+    );
+  });
+
+  it("places customer reason errors under the customer reason input", async () => {
+    const user = userEvent.setup();
+    useParamsMock.mockReturnValue({ transactionId: "txn_20" });
+    useQueryMock.mockReturnValue(baseTransaction);
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Update" }));
+    await user.click(
+      screen.getByRole("button", { name: "Customer attribution" }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Submit customer update" }),
+    );
+
+    const reasonInput = screen.getByLabelText("Customer update reason");
+    const reasonError = screen.getByText("Add a reason for this update");
+    const formChildren = Array.from(reasonInput.parentElement?.children ?? []);
+
+    expect(formChildren.indexOf(reasonError)).toBe(
+      formChildren.indexOf(reasonInput) + 1,
+    );
+  });
+
+  it("keeps payment method selection errors with the payment method form", async () => {
+    const user = userEvent.setup();
+    useParamsMock.mockReturnValue({ transactionId: "txn_21" });
+    useQueryMock.mockReturnValue(baseTransaction);
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Update" }));
+    await user.click(screen.getByRole("button", { name: "Payment method" }));
+    await user.type(
+      screen.getByLabelText("Payment method update reason"),
+      "Wrong tender selected",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Submit payment update" }),
+    );
+
+    expect(
+      screen.getByText("Choose the updated payment method"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Add a reason for this update")).not.toBeInTheDocument();
+    expect(screen.getByText("Same-amount payment method update")).toBeInTheDocument();
   });
 
   it("disables payment method correction when the transaction is not same-amount eligible", async () => {
@@ -672,7 +764,7 @@ describe("TransactionView", () => {
     ).toBeDisabled();
     expect(
       screen.getByText(
-        "Only same-amount payment method updates are supported.",
+        "Only same-amount payment method updates are supported",
       ),
     ).toBeInTheDocument();
     expect(
@@ -698,7 +790,7 @@ describe("TransactionView", () => {
     ).toBeDisabled();
     expect(
       screen.getByText(
-        "Only same-amount payment method updates are supported.",
+        "Only same-amount payment method updates are supported",
       ),
     ).toBeInTheDocument();
   });
@@ -721,7 +813,30 @@ describe("TransactionView", () => {
     ).toBeDisabled();
     expect(
       screen.getByText(
-        "Reopen Register 3 to update payment details.",
+        "Reopen Register 3 to update payment details",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("uses a generic reopen message when a closing register has no number", async () => {
+    const user = userEvent.setup();
+    useParamsMock.mockReturnValue({ transactionId: "txn_22" });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      registerNumber: undefined,
+      registerSessionStatus: "closing",
+    });
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Update" }));
+
+    expect(
+      screen.getByRole("button", { name: "Payment method" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByText(
+        "Reopen this transaction's register to update payment details",
       ),
     ).toBeInTheDocument();
   });

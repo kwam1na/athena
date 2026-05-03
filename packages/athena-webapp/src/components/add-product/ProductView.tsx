@@ -321,7 +321,7 @@ function ProductViewContent() {
           update: { images: imageUrls },
         });
       } catch (e) {
-        presentUnexpectedErrorToast("Error processing images.");
+        presentUnexpectedErrorToast("Error processing images");
       }
     }
 

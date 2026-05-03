@@ -192,7 +192,7 @@ export const MtnMomoView = () => {
       nextAccounts.length > 0 &&
       !nextAccounts.some((account) => account.isPrimary)
     ) {
-      toast.error("Select a primary MTN account before saving.");
+      toast.error("Select a primary MTN account before saving");
       return;
     }
 

@@ -409,6 +409,84 @@ describe("CashControlsDashboardContent", () => {
     expect(screen.getByText("BANK-339")).toBeInTheDocument();
   });
 
+  it("replaces the closed-session preview table with a daily snapshot when all drawers are closed", () => {
+    render(
+      <CashControlsDashboardContent
+        currency="USD"
+        dashboardSnapshot={{
+          ...baseSnapshot,
+          registerSessions: [
+            {
+              _id: "closed-short",
+              closedAt: new Date("2026-04-21T09:30:00.000Z").getTime(),
+              countedCash: 9500,
+              expectedCash: 10000,
+              openedAt: new Date("2026-04-21T07:30:00.000Z").getTime(),
+              openingFloat: 5000,
+              registerNumber: "Register 1",
+              status: "closed",
+              totalDeposited: 0,
+              variance: -500,
+            },
+            {
+              _id: "closed-over",
+              closedAt: new Date("2026-04-21T12:00:00.000Z").getTime(),
+              countedCash: 22000,
+              expectedCash: 20000,
+              openedAt: new Date("2026-04-21T09:45:00.000Z").getTime(),
+              openingFloat: 5000,
+              registerNumber: "Register 2",
+              status: "closed",
+              totalDeposited: 0,
+              variance: 2000,
+            },
+            {
+              _id: "closed-balanced",
+              closedAt: new Date("2026-04-21T15:15:00.000Z").getTime(),
+              countedCash: 5000,
+              expectedCash: 5000,
+              openedAt: new Date("2026-04-21T13:00:00.000Z").getTime(),
+              openingFloat: 5000,
+              registerNumber: "Register 3",
+              status: "closed",
+              totalDeposited: 1000,
+              variance: 0,
+            },
+          ],
+        }}
+        isLoading={false}
+        orgUrlSlug="v26"
+        storeUrlSlug="east-legon"
+      />,
+    );
+
+    expect(screen.getByText("Closed today")).toBeInTheDocument();
+    expect(screen.getByText("Drawers closed")).toBeInTheDocument();
+    expect(screen.getByText("Expected cash")).toBeInTheDocument();
+    expect(screen.getByText("$350")).toBeInTheDocument();
+    expect(screen.getByText("Counted cash")).toBeInTheDocument();
+    expect(screen.getByText("$365")).toBeInTheDocument();
+    expect(screen.getByText("Net variance")).toBeInTheDocument();
+    expect(screen.getByText("$15")).toBeInTheDocument();
+    expect(screen.getByText("Balanced drawers")).toBeInTheDocument();
+    expect(screen.getByText("1 of 3")).toBeInTheDocument();
+    expect(screen.getByText("Short drawers")).toBeInTheDocument();
+    expect(screen.getByText("1 / $5")).toBeInTheDocument();
+    expect(screen.getByText("Over drawers")).toBeInTheDocument();
+    expect(screen.getByText("1 / $20")).toBeInTheDocument();
+    expect(
+      screen.getByText("Deposited from closed drawers"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("$10")).toBeInTheDocument();
+    expect(screen.queryByText("Showing latest 3 of")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /View all register sessions/i }),
+    ).toHaveAttribute(
+      "href",
+      "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers?o=%252F",
+    );
+  });
+
   it("hides zero deposited value on variance session cards", () => {
     render(
       <CashControlsDashboardContent
@@ -528,7 +606,7 @@ describe("CashControlsDashboardContent", () => {
     expect(screen.queryByText("Needs action")).not.toBeInTheDocument();
     expect(screen.getByText("Live drawers")).toBeInTheDocument();
     expect(
-      screen.queryByText("No drawer needs closeout or variance review."),
+      screen.queryByText("No drawer needs closeout or variance review"),
     ).not.toBeInTheDocument();
     expect(
       screen.getByText("First safe drop after POS drawer open"),
@@ -570,9 +648,9 @@ describe("CashControlsDashboardContent", () => {
     expect(screen.queryByText("Needs action")).not.toBeInTheDocument();
     expect(screen.queryByText("Live drawers")).not.toBeInTheDocument();
     expect(
-      screen.queryByText("No drawer needs closeout or variance review."),
+      screen.queryByText("No drawer needs closeout or variance review"),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("Closed sessions")).toBeInTheDocument();
+    expect(screen.getByText("Closed today")).toBeInTheDocument();
   });
 
   it("links register session cards to the session route", () => {

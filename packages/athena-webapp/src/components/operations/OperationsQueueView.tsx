@@ -130,7 +130,7 @@ export function OperationsQueueViewContent({
       <View>
         <div className="container mx-auto py-8">
           <EmptyState
-            description="Select a store before opening stock adjustments or approval work."
+            description="Select a store before opening stock adjustments or approval work"
             title="No active store"
           />
         </div>
@@ -170,7 +170,7 @@ export function OperationsQueueViewContent({
             </div>
             {workItems.length === 0 ? (
               <EmptyState
-                description="New service intakes and approval-driven stock reviews will appear here."
+                description="New service intakes and approval-driven stock reviews will appear here"
                 title="No open work items"
               />
             ) : (
@@ -207,7 +207,7 @@ export function OperationsQueueViewContent({
             </div>
             {approvalRequests.length === 0 ? (
               <EmptyState
-                description="High-variance deposits and stock reviews will surface here."
+                description="High-variance deposits and stock reviews will surface here"
                 title="No pending approvals"
               />
             ) : (
@@ -377,7 +377,7 @@ export function OperationsQueueView() {
 
   if (!isAuthenticated) {
     return (
-      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before the operations workspace can load protected stock-ops and cash-controls data." />
+      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before the operations workspace can load protected stock-ops and cash-controls data" />
     );
   }
 
@@ -390,7 +390,7 @@ export function OperationsQueueView() {
       <View>
         <div className="container mx-auto py-8">
           <EmptyState
-            description="Select a store before opening stock adjustments or approval work."
+            description="Select a store before opening stock adjustments or approval work"
             title="No active store"
           />
         </div>

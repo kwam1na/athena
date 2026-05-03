@@ -76,15 +76,15 @@ function validateServiceCatalogForm(form: ServiceCatalogFormState) {
   const parsedDuration = Number(form.durationMinutes);
 
   if (!form.name.trim()) {
-    errors.push("Service name is required.");
+    errors.push("Service name is required");
   }
 
   if (!form.durationMinutes.trim() || Number.isNaN(parsedDuration) || parsedDuration <= 0) {
-    errors.push("Duration must be greater than zero.");
+    errors.push("Duration must be greater than zero");
   }
 
   if (form.basePrice.trim() && parseDisplayAmountInput(form.basePrice) === undefined) {
-    errors.push("Base price must be a valid amount.");
+    errors.push("Base price must be a valid amount");
   }
 
   if (
@@ -92,7 +92,7 @@ function validateServiceCatalogForm(form: ServiceCatalogFormState) {
     form.depositType === "flat" &&
     parseDisplayAmountInput(form.depositValue) === undefined
   ) {
-    errors.push("Deposit value must be a valid amount.");
+    errors.push("Deposit value must be a valid amount");
   }
 
   return errors;
@@ -418,7 +418,7 @@ export function ServiceCatalogViewContent({
 
           {items.length === 0 ? (
             <EmptyState
-              description="Create the first service item to start booking appointments and cases."
+              description="Create the first service item to start booking appointments and cases"
               title="No service catalog items"
             />
           ) : (
@@ -517,7 +517,7 @@ export function ServiceCatalogView() {
 
   if (!isAuthenticated) {
     return (
-      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before the service catalog can load protected operations data." />
+      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before the service catalog can load protected operations data" />
     );
   }
 
@@ -530,7 +530,7 @@ export function ServiceCatalogView() {
       <View>
         <div className="container mx-auto py-8">
           <EmptyState
-            description="Select a store before opening the service catalog."
+            description="Select a store before opening the service catalog"
             title="No active store"
           />
         </div>

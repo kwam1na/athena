@@ -122,25 +122,25 @@ function getFilterEmptyStateCopy(
     case "reorder_now":
       return {
         description:
-          "Nothing is below the current reorder target once active inbound is considered.",
+          "Nothing is below the current reorder target once active inbound is considered",
         title: "No immediate reorders",
       };
     case "awaiting_receipt":
       return {
         description:
-          "There are no low-stock SKUs currently covered by open receiving work.",
+          "There are no low-stock SKUs currently covered by open receiving work",
         title: "No inbound-covered SKUs",
       };
     case "availability_constrained":
       return {
         description:
-          "Sellable stock is not currently compressed by holds or commitments.",
+          "Sellable stock is not currently compressed by holds or commitments",
         title: "No reserved-stock pressure",
       };
     default:
       return {
         description:
-          "Current stock and receiving context are not flagging any procurement pressure.",
+          "Current stock and receiving context are not flagging any procurement pressure",
         title: "Procurement looks clear",
       };
   }
@@ -178,7 +178,7 @@ export function ProcurementViewContent({
       <View>
         <div className="container mx-auto py-8">
           <EmptyState
-            description="Select a store before opening procurement planning."
+            description="Select a store before opening procurement planning"
             title="No active store"
           />
         </div>
@@ -462,7 +462,7 @@ export function ProcurementViewContent({
 
             {activePurchaseOrders.length === 0 ? (
               <EmptyState
-                description="Create or advance purchase orders to keep inbound coverage visible beside low-stock recommendations."
+                description="Create or advance purchase orders to keep inbound coverage visible beside low-stock recommendations"
                 title="No active purchase orders"
               />
             ) : (
@@ -537,7 +537,7 @@ export function ProcurementView() {
 
   if (!isAuthenticated) {
     return (
-      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before procurement planning can load protected stock operations data." />
+      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before procurement planning can load protected stock operations data" />
     );
   }
 

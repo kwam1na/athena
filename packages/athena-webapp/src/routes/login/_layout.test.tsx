@@ -80,7 +80,7 @@ describe("LoginLayout", () => {
       .mockResolvedValueOnce(
         userError({
           code: "authentication_failed",
-          message: "Sign in again to continue.",
+          message: "Sign in again to continue",
           retryable: true,
         })
       )
@@ -135,7 +135,7 @@ describe("LoginLayout", () => {
     mocked.syncAuthenticatedAthenaUser.mockResolvedValue(
       userError({
         code: "authentication_failed",
-        message: "Sign in again to continue.",
+        message: "Sign in again to continue",
       })
     );
     vi.mocked(window.sessionStorage.getItem).mockReturnValue("1");
@@ -144,7 +144,7 @@ describe("LoginLayout", () => {
 
     await waitFor(() =>
       expect(
-        screen.getByText("Sign in again to continue.")
+        screen.getByText("Sign in again to continue")
       ).toBeInTheDocument()
     );
     expect(window.localStorage.setItem).not.toHaveBeenCalledWith(

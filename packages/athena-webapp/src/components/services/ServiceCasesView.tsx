@@ -209,19 +209,19 @@ export function ServiceCasesViewContent({
       : undefined;
 
     if (!createForm.selectedCustomerId) {
-      errors.push("Select a customer.");
+      errors.push("Select a customer");
     }
 
     if (!createForm.title.trim()) {
-      errors.push("Provide a service title.");
+      errors.push("Provide a service title");
     }
 
     if (!createForm.assignedStaffProfileId) {
-      errors.push("Select a staff member.");
+      errors.push("Select a staff member");
     }
 
     if (createForm.quotedAmount.trim() && quotedAmount === undefined) {
-      errors.push("Quoted amount must be a valid amount.");
+      errors.push("Quoted amount must be a valid amount");
     }
 
     if (errors.length > 0) {
@@ -427,7 +427,7 @@ export function ServiceCasesViewContent({
 
             {serviceCases.length === 0 ? (
               <EmptyState
-                description="Service cases will appear here once work is created."
+                description="Service cases will appear here once work is created"
                 title="No active cases"
               />
             ) : (
@@ -459,7 +459,7 @@ export function ServiceCasesViewContent({
           <div className="space-y-4 rounded-lg border p-4">
             {!selectedCaseSummary || !activeServiceCaseId ? (
               <EmptyState
-                description="Choose a case to review details and run service actions."
+                description="Choose a case to review details and run service actions"
                 title="No case selected"
               />
             ) : (
@@ -534,7 +534,7 @@ export function ServiceCasesViewContent({
                         const amount = parseDisplayAmountInput(paymentForm.amount);
 
                         if (amount === undefined) {
-                          setDetailErrors(["Payment amount must be a valid amount."]);
+                          setDetailErrors(["Payment amount must be a valid amount"]);
                           return;
                         }
 
@@ -654,7 +654,7 @@ export function ServiceCasesViewContent({
 
                         if (unitPrice === undefined) {
                           setDetailErrors([
-                            "Line item unit price must be a valid amount.",
+                            "Line item unit price must be a valid amount",
                           ]);
                           return;
                         }
@@ -824,7 +824,7 @@ export function ServiceCasesView() {
 
   if (!isAuthenticated) {
     return (
-      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before service cases can load protected operations data." />
+      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before service cases can load protected operations data" />
     );
   }
 
@@ -837,7 +837,7 @@ export function ServiceCasesView() {
       <View>
         <div className="container mx-auto py-8">
           <EmptyState
-            description="Select a store before opening service cases."
+            description="Select a store before opening service cases"
             title="No active store"
           />
         </div>
