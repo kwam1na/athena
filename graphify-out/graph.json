@@ -35039,7 +35039,7 @@
       "relation": "contains",
       "source": "packages_storefront_webapp_src_routes_homepageloader_ts",
       "source_file": "packages/storefront-webapp/src/routes/-homePageLoader.ts",
-      "source_location": "L13",
+      "source_location": "L14",
       "target": "homepageloader_loadhomepagedata",
       "weight": 1
     },
@@ -79405,7 +79405,7 @@
       "label": "loadHomePageData()",
       "norm_label": "loadhomepagedata()",
       "source_file": "packages/storefront-webapp/src/routes/-homePageLoader.ts",
-      "source_location": "L13"
+      "source_location": "L14"
     },
     {
       "community": 785,
