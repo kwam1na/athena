@@ -5,7 +5,6 @@ import {
   createRootRouteWithContext,
 } from "@tanstack/react-router";
 
-import { TanStackRouterDevtools } from "@tanstack/router-devtools";
 import { QueryClient } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
 import { DefaultCatchBoundary } from "@/components/auth/DefaultCatchBoundary";
