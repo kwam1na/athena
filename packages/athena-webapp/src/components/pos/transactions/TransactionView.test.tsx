@@ -2,7 +2,14 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { TransactionView } from "./TransactionView";
+import {
+  formatCorrectionEventType,
+  formatCorrectionHistoryChange,
+  formatCorrectionHistoryTitle,
+  formatPaymentMethodLabel,
+  getCorrectionHistoryChangeParts,
+  TransactionView,
+} from "./TransactionView";
 
 const useQueryMock = vi.fn();
 const useMutationMock = vi.fn();
@@ -383,7 +390,6 @@ describe("TransactionView", () => {
     const mutations = [
       authMutation,
       approvalMutation,
-      customerMutation,
       paymentMutation,
     ];
     let mutationIndex = 0;
@@ -447,6 +453,43 @@ describe("TransactionView", () => {
     render(<TransactionView />);
 
     expect(screen.queryByTestId("session-trace-link")).not.toBeInTheDocument();
+  });
+
+  it("renders completed transaction customer contact details", () => {
+    useParamsMock.mockReturnValue({ transactionId: "txn_customer" });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      _id: "txn_customer",
+      customer: {
+        email: "ama@example.com",
+        name: "Ama Mensah",
+        phone: "0240000000",
+      },
+    });
+
+    render(<TransactionView />);
+
+    expect(screen.getByText("Customer")).toBeInTheDocument();
+    expect(screen.getByText("Ama Mensah")).toBeInTheDocument();
+    expect(screen.getByText("ama@example.com • 0240000000")).toBeInTheDocument();
+  });
+
+  it("renders fallback customer info without an email and phone separator", () => {
+    useParamsMock.mockReturnValue({ transactionId: "txn_customer_info" });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      _id: "txn_customer_info",
+      customerInfo: {
+        name: "Walk-in pickup",
+        phone: "0550000000",
+      },
+    });
+
+    render(<TransactionView />);
+
+    expect(screen.getByText("Walk-in pickup")).toBeInTheDocument();
+    expect(screen.getByText("0550000000")).toBeInTheDocument();
+    expect(screen.queryByText(/ • /)).not.toBeInTheDocument();
   });
 
   it("displays only the payment method type for completed transactions", () => {
@@ -540,7 +583,7 @@ describe("TransactionView", () => {
     expect(container.querySelector(".lucide-banknote")).toBeInTheDocument();
   });
 
-  it("renders correction categories for completed transactions", async () => {
+  it("renders exposed correction categories for completed transactions", async () => {
     const user = userEvent.setup();
     useParamsMock.mockReturnValue({ transactionId: "txn_6" });
     useQueryMock.mockReturnValue(baseTransaction);
@@ -550,22 +593,13 @@ describe("TransactionView", () => {
     await user.click(screen.getByRole("button", { name: "Update" }));
 
     expect(
-      screen.getByRole("button", { name: "Customer attribution" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: "Customer attribution" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Payment method" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Items or quantities" }),
-    ).toBeInTheDocument();
-
-    await user.click(
-      screen.getByRole("button", { name: "Customer attribution" }),
-    );
-
-    expect(screen.getByText("Customer attribution update")).toBeInTheDocument();
-    expect(
-      screen.getByLabelText("Customer update reason"),
     ).toBeInTheDocument();
   });
 
@@ -597,11 +631,13 @@ describe("TransactionView", () => {
     render(<TransactionView />);
 
     await user.click(screen.getByRole("button", { name: "Update" }));
-    await user.click(
-      screen.getByRole("button", { name: "Customer attribution" }),
+    await user.click(screen.getByRole("button", { name: "Payment method" }));
+    await user.selectOptions(
+      screen.getByLabelText("Updated payment method"),
+      "card",
     );
     await user.click(
-      screen.getByRole("button", { name: "Submit customer update" }),
+      screen.getByRole("button", { name: "Submit payment update" }),
     );
 
     expect(
@@ -1149,5 +1185,82 @@ describe("TransactionView", () => {
     render(<TransactionView />);
 
     expect(screen.queryByText("Update history")).not.toBeInTheDocument();
+  });
+
+  it("formats correction history labels for fallback and partial payment changes", () => {
+    expect(formatCorrectionEventType("inventory_count_adjusted")).toBe(
+      "Inventory Count Adjusted",
+    );
+    expect(
+      formatCorrectionHistoryTitle({
+        _id: "fallback",
+        createdAt: 100,
+        eventType: "manual_payment_reviewed",
+      }),
+    ).toBe("Manual Payment Reviewed");
+    expect(
+      formatCorrectionHistoryTitle({
+        _id: "message",
+        createdAt: 100,
+        eventType: "unknown_backend_event",
+        message: "Operator note recorded",
+      }),
+    ).toBe("Operator note recorded");
+    expect(formatPaymentMethodLabel("mobile_money")).toBe("Mobile Money");
+    expect(formatPaymentMethodLabel("")).toBeNull();
+    expect(formatPaymentMethodLabel(null)).toBeNull();
+
+    expect(
+      formatCorrectionHistoryChange({
+        _id: "current-only",
+        createdAt: 100,
+        eventType: "pos_transaction_payment_method_corrected",
+        metadata: {
+          paymentMethod: "mobile_money",
+        },
+      }),
+    ).toBe("Changed to Mobile Money");
+    expect(
+      formatCorrectionHistoryChange({
+        _id: "missing-current",
+        createdAt: 100,
+        eventType: "pos_transaction_payment_method_corrected",
+        metadata: {
+          previousPaymentMethod: "cash",
+        },
+      }),
+    ).toBeNull();
+    expect(
+      formatCorrectionHistoryChange({
+        _id: "customer",
+        createdAt: 100,
+        eventType: "pos_transaction_customer_corrected",
+      }),
+    ).toBeNull();
+
+    expect(
+      getCorrectionHistoryChangeParts({
+        _id: "both",
+        createdAt: 100,
+        eventType: "pos_transaction_payment_method_corrected",
+        metadata: {
+          paymentMethod: "card",
+          previousPaymentMethod: "cash",
+        },
+      }),
+    ).toEqual({
+      paymentMethod: "Card",
+      previousPaymentMethod: "Cash",
+    });
+    expect(
+      getCorrectionHistoryChangeParts({
+        _id: "missing-current",
+        createdAt: 100,
+        eventType: "pos_transaction_payment_method_corrected",
+        metadata: {
+          previousPaymentMethod: "cash",
+        },
+      }),
+    ).toBeNull();
   });
 });
