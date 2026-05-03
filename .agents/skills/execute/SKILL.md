@@ -25,9 +25,10 @@ Do not use this skill when:
 ## Delivery Contract
 
 - Default to completing the ticket autonomously end-to-end.
-- Delivery means the PR is merged into `main` and the ticket is already marked `Done` in Linear by merge automation.
+- Delivery means the PR is merged into remote `main`, the local root checkout has fast-forwarded to the merged `origin/main`, and the ticket is already marked `Done` in Linear by merge automation.
 - When executing a coordinated batch of related tickets, delivery can mean all tickets land through one shared integration PR rather than one PR per ticket.
-- Delivery also means you leave the local repo tidy and back on `main`.
+- Delivery always includes remote merge and local fast-forward unless the user explicitly opts out or permissions prevent it.
+- Delivery also means you leave the local repo tidy, back on `main`, and reflecting the merged remote state.
 - Do not stop at "PR open" or "ready for review" unless the user explicitly asked for that narrower handoff.
 - Only treat something as a blocker when it genuinely requires user input.
 - Document significant scope decisions in Linear as you work.
@@ -71,6 +72,9 @@ Use this resolution order before asking the user for context:
 - Default execution posture is `test-first` for new behavior and bug fixes, `characterization-first` for unclear legacy behavior, and `sensor-only` only for pure docs, generated artifacts, configuration, or mechanical changes with no behavior.
 - `auto_review_and_merge = on` unless the user opts out.
 - Merge target `main`; merge method `squash`; review loop cap `3`.
+- Merge is the default delivery posture. Do not stop at an open PR when auto-review and merge are on.
+- After merge, fast-forward the local root checkout to `origin/main`; do not leave the repo on a stale local `main`.
+- In Athena, merge PRs with `bun run github:pr-merge -- <pr-number-or-url> --method squash --delete-branch` instead of raw `gh pr merge`. The helper uses the GitHub API directly, so it does not try to check out or update local `main` and is safe when `main` is already checked out in the root worktree.
 - Human approval is not required unless the user explicitly asks for it.
 - All PR checks must be green before merge.
 
@@ -192,7 +196,8 @@ After opening the PR:
 - The follow-up issue should capture the failing remote check, the local validations that passed, the root cause, and the local command, harness mapping, or coverage addition needed so the failure is caught before CI next time.
 - Link that follow-up issue from the current Linear ticket and the PR comment trail when it materially affects the handoff.
 - Iterate up to `3` times by default, but continue autonomously if the next fix is still clear.
-- When all gates pass, mark the PR ready if needed and squash-merge into `main`.
+- When all gates pass, mark the PR ready if needed and squash-merge into `main` with `bun run github:pr-merge -- <pr-number-or-url> --method squash --delete-branch`.
+- Treat the merge as incomplete until the remote merge is confirmed and the local root checkout fast-forwards to the merged `origin/main`.
 
 ### 9. Compound The Learning
 
@@ -209,7 +214,7 @@ After opening the PR:
 - If merge succeeded but Linear did not move to `Done`, update the ticket directly or document the automation mismatch in Linear before handoff.
 - Post a final Linear comment with the PR URL, merge SHA, final telemetry, validation evidence, and compounding decision.
 - For coordinated batches, confirm every included ticket reached `Done`, not just the ticket that happened to anchor the PR title.
-- After delivery, align the local `main` branch with `origin/main`, switch back to `main`, and confirm the local checkout reflects the merged result.
+- After delivery, fetch `origin`, fast-forward the local root checkout's `main` branch to `origin/main`, switch back to `main`, and confirm the local checkout reflects the merged result.
 - Clean up the working tree and any temporary worktree or branch created for the ticket so the local repo is tidy before handoff.
 - If repeated blockers remain and the next fix is not clear, leave the issue in the most accurate state, post an unresolved-item checklist with the latest telemetry, and hand off the exact blocker.
 - If merge permissions or repo settings prevent merge, leave the ticket in `In Review` and document the exact blocker.
