@@ -31,7 +31,6 @@ import { Button } from "../../ui/button";
 import config from "~/src/config";
 import { formatStaffDisplayName } from "~/shared/staffDisplayName";
 import { Textarea } from "../../ui/textarea";
-import { Input } from "../../ui/input";
 import {
   Select,
   SelectContent,
@@ -82,13 +81,13 @@ const PAYMENT_METHOD_OPTIONS = [
   { label: "Mobile Money", value: "mobile_money" },
 ] satisfies Array<{ label: string; value: PosPaymentMethod }>;
 
-function formatCorrectionEventType(eventType: string) {
+export function formatCorrectionEventType(eventType: string) {
   return eventType
     .replaceAll("_", " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function formatCorrectionHistoryTitle(event: CorrectionEvent) {
+export function formatCorrectionHistoryTitle(event: CorrectionEvent) {
   switch (event.eventType) {
     case "pos_transaction_payment_method_corrected":
       return "Payment method updated";
@@ -109,7 +108,7 @@ function formatCorrectionHistoryMeta(event: CorrectionEvent) {
   return actorName ? `${timestamp} by ${actorName}` : timestamp;
 }
 
-function formatPaymentMethodLabel(method: unknown) {
+export function formatPaymentMethodLabel(method: unknown) {
   if (typeof method !== "string" || !method.trim()) {
     return null;
   }
@@ -133,7 +132,7 @@ function isManagerStaff(staff: StaffAuthenticationResult) {
   return staff.activeRoles?.includes("manager") ?? false;
 }
 
-function formatCorrectionHistoryChange(event: CorrectionEvent) {
+export function formatCorrectionHistoryChange(event: CorrectionEvent) {
   if (event.eventType !== "pos_transaction_payment_method_corrected") {
     return null;
   }
@@ -154,7 +153,7 @@ function formatCorrectionHistoryChange(event: CorrectionEvent) {
   return null;
 }
 
-function getCorrectionHistoryChangeParts(event: CorrectionEvent) {
+export function getCorrectionHistoryChangeParts(event: CorrectionEvent) {
   if (event.eventType !== "pos_transaction_payment_method_corrected") {
     return null;
   }
@@ -190,21 +189,14 @@ export function TransactionView() {
   const transactionId = params?.transactionId;
   const [correctionPanelOpen, setCorrectionPanelOpen] = useState(false);
   const [selectedCorrection, setSelectedCorrection] = useState<
-    | "customer"
-    | "payment_method"
-    | "line_items"
-    | "amounts"
-    | "discounts"
-    | null
+    "payment_method" | "line_items" | "amounts" | "discounts" | null
   >(null);
-  const [customerProfileIdInput, setCustomerProfileIdInput] = useState("");
-  const [customerCorrectionReason, setCustomerCorrectionReason] = useState("");
   const [paymentCorrectionReason, setPaymentCorrectionReason] = useState("");
   const [paymentMethodInput, setPaymentMethodInput] = useState("");
   const [correctionError, setCorrectionError] = useState<string | null>(null);
   const [correctionSubmitting, setCorrectionSubmitting] = useState(false);
   const [pendingCorrection, setPendingCorrection] = useState<
-    "customer" | "payment_method" | null
+    "payment_method" | null
   >(null);
   const [correctionHistoryExpanded, setCorrectionHistoryExpanded] =
     useState(false);
@@ -214,9 +206,6 @@ export function TransactionView() {
   );
   const approveCommand = useMutation(
     api.operations.staffCredentials.authenticateStaffCredentialForApproval,
-  );
-  const correctCustomer = useMutation(
-    api.inventory.pos.correctTransactionCustomer,
   );
   const correctPaymentMethod = useMutation(
     api.inventory.pos.correctTransactionPaymentMethod,
@@ -377,7 +366,6 @@ export function TransactionView() {
     selectedCorrection === "payment_method" && supportsPaymentMethodCorrection;
 
   async function authenticateCorrectionStaff(args: {
-    correction: "customer" | "payment_method" | null;
     pinHash: string;
     username: string;
   }) {
@@ -406,44 +394,6 @@ export function TransactionView() {
     setSelectedCorrection(null);
     setPendingCorrection(null);
     setCorrectionError(null);
-  }
-
-  async function runCustomerCorrection(staff: StaffAuthenticationResult) {
-    if (!isAuthenticated) {
-      setCorrectionError("Sign in again before updating this transaction.");
-      return;
-    }
-
-    const reason = customerCorrectionReason.trim();
-    if (!reason) {
-      setCorrectionError("Add a reason for this update.");
-      return;
-    }
-
-    setCorrectionSubmitting(true);
-    setCorrectionError(null);
-    const result = await runCommand(
-      () =>
-        correctCustomer({
-          actorStaffProfileId: staff.staffProfileId,
-          customerProfileId: customerProfileIdInput.trim()
-            ? (customerProfileIdInput.trim() as Id<"customerProfile">)
-            : undefined,
-          reason,
-          transactionId: transactionId as Id<"posTransaction">,
-        }) as Promise<CommandResult<unknown>>,
-    );
-    setCorrectionSubmitting(false);
-
-    if (result.kind === "ok") {
-      setCustomerCorrectionReason("");
-      setCustomerProfileIdInput("");
-      exitCorrectionWorkflow();
-      toast.success("Customer attribution updated");
-      return;
-    }
-
-    setCorrectionError(result.error.message);
   }
 
   async function runPaymentMethodCorrection(args?: {
@@ -531,36 +481,24 @@ export function TransactionView() {
     });
   }
 
-  function requestCorrectionSubmit(kind: "customer" | "payment_method") {
+  function requestCorrectionSubmit() {
     setCorrectionError(null);
 
-    if (kind === "customer" && !customerCorrectionReason.trim()) {
+    if (!paymentMethodInput.trim()) {
+      setCorrectionError("Choose the updated payment method.");
+      return;
+    }
+    if (paymentMethodInput === currentPaymentMethod) {
+      setCorrectionError("Choose a different payment method.");
+      return;
+    }
+
+    if (!paymentCorrectionReason.trim()) {
       setCorrectionError("Add a reason for this update.");
       return;
     }
 
-    if (kind === "payment_method") {
-      if (!paymentMethodInput.trim()) {
-        setCorrectionError("Choose the updated payment method.");
-        return;
-      }
-      if (paymentMethodInput === currentPaymentMethod) {
-        setCorrectionError("Choose a different payment method.");
-        return;
-      }
-
-      if (!paymentCorrectionReason.trim()) {
-        setCorrectionError("Add a reason for this update.");
-        return;
-      }
-    }
-
-    if (kind === "payment_method") {
-      setPendingCorrection(kind);
-      return;
-    }
-
-    setPendingCorrection(kind);
+    setPendingCorrection("payment_method");
   }
 
   return (
@@ -594,7 +532,6 @@ export function TransactionView() {
         }}
         onAuthenticate={(args) =>
           authenticateCorrectionStaff({
-            correction: pendingCorrection,
             pinHash: args.pinHash,
             username: args.username,
           })
@@ -602,9 +539,6 @@ export function TransactionView() {
         onAuthenticated={(result, _mode, credentials) => {
           const correction = pendingCorrection;
           setPendingCorrection(null);
-          if (correction === "customer") {
-            void runCustomerCorrection(result);
-          }
           if (correction === "payment_method") {
             void runPaymentMethodCorrection({
               sameSubmissionApproval: credentials,
@@ -614,10 +548,7 @@ export function TransactionView() {
           }
         }}
         onDismiss={() => setPendingCorrection(null)}
-        open={
-          pendingCorrection === "customer" ||
-          pendingCorrection === "payment_method"
-        }
+        open={pendingCorrection === "payment_method"}
       />
       {paymentApprovalRunner.dialog}
       <FadeIn className="h-full">
@@ -760,8 +691,8 @@ export function TransactionView() {
                           Transaction updates
                         </h2>
                         <p className="text-sm leading-6 text-muted-foreground">
-                          Update customer attribution or payment labels here.
-                          Use guided workflows for sale totals and item changes.
+                          Update payment labels here. Use guided workflows for
+                          sale totals and item changes.
                         </p>
                       </div>
                     </div>
@@ -773,62 +704,6 @@ export function TransactionView() {
                         Direct updates
                       </p>
                       <div className="grid gap-2">
-                        <Button
-                          aria-label="Customer attribution"
-                          className="h-auto justify-start whitespace-normal px-3 py-3 text-left"
-                          onClick={() => setSelectedCorrection("customer")}
-                          type="button"
-                          variant={
-                            selectedCorrection === "customer"
-                              ? "workflow-soft"
-                              : "outline"
-                          }
-                        >
-                          <span className="grid gap-1">
-                            <span>Customer attribution</span>
-                            <span className="text-xs font-normal opacity-75">
-                              Change walk-in or customer assignment.
-                            </span>
-                          </span>
-                        </Button>
-                        {selectedCorrection === "customer" ? (
-                          <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
-                            <p className="text-sm font-medium text-foreground">
-                              Customer attribution update
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              Staff sign-in and customer lookup will update
-                              attribution only.
-                            </p>
-                            <Input
-                              aria-label="Updated customer profile ID"
-                              className="border-input bg-background"
-                              onChange={(event) =>
-                                setCustomerProfileIdInput(event.target.value)
-                              }
-                              placeholder="Customer profile ID, or leave blank for walk-in."
-                              value={customerProfileIdInput}
-                            />
-                            <Textarea
-                              aria-label="Customer update reason"
-                              className="min-h-[80px] border-input bg-background"
-                              onChange={(event) =>
-                                setCustomerCorrectionReason(event.target.value)
-                              }
-                              placeholder="Reason for customer attribution update."
-                              value={customerCorrectionReason}
-                            />
-                            <Button
-                              disabled={correctionSubmitting}
-                              onClick={() =>
-                                requestCorrectionSubmit("customer")
-                              }
-                              type="button"
-                            >
-                              Submit customer update
-                            </Button>
-                          </div>
-                        ) : null}
                         <Button
                           aria-label="Payment method"
                           className="h-auto justify-start whitespace-normal px-3 py-3 text-left"
@@ -902,9 +777,7 @@ export function TransactionView() {
                             />
                             <Button
                               disabled={correctionSubmitting}
-                              onClick={() =>
-                                requestCorrectionSubmit("payment_method")
-                              }
+                              onClick={requestCorrectionSubmit}
                               type="button"
                             >
                               Submit payment update
