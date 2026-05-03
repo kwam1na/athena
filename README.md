@@ -146,6 +146,9 @@ the codebase navigable for agents, turns local changes into reviewable evidence,
 and prevents stale generated docs or graph artifacts from drifting away from
 the code.
 
+For a balanced overview of how the harness is set up and what each sensor does,
+read [Repo Harness And Sensors](./docs/harness.md).
+
 At a high level, it does five jobs:
 
 - **Documents the repo shape:** generated route, test, folder, validation, and
