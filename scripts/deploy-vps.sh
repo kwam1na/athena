@@ -13,6 +13,7 @@ STOREFRONT_QA_HOST="${STOREFRONT_QA_HOST:-qa.wigclub.store}"
 
 PROD_CONVEX_CLOUD="${PROD_CONVEX_CLOUD:-https://colorless-cardinal-870.convex.cloud}"
 PROD_CONVEX_SITE="${PROD_CONVEX_SITE:-https://colorless-cardinal-870.convex.site}"
+PROD_API_URL="${PROD_API_URL:-https://api.wigclub.store}"
 DEV_CONVEX_CLOUD="${DEV_CONVEX_CLOUD:-https://jovial-wildebeest-179.convex.cloud}"
 DEV_CONVEX_SITE="${DEV_CONVEX_SITE:-https://jovial-wildebeest-179.convex.site}"
 DEV_API_URL="${DEV_API_URL:-https://dev.wigclub.store}"
@@ -207,7 +208,7 @@ deploy_storefront() {
   deploy_static_app \
     "storefront" \
     "packages/storefront-webapp" \
-    "VITE_API_URL=$PROD_CONVEX_SITE"
+    "VITE_API_URL=$PROD_API_URL"
 }
 
 deploy_valkey_proxy() {
