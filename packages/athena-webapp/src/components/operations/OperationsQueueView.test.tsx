@@ -124,45 +124,39 @@ describe("OperationsQueueViewContent", () => {
   });
 
   it("shows a loading state while permissions are resolving", () => {
-    render(
-      <OperationsQueueViewContent
-        {...baseProps}
-        isLoadingPermissions
-      />,
-    );
+    render(<OperationsQueueViewContent {...baseProps} isLoadingPermissions />);
 
-    expect(screen.getByText("Loading operations queue...")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Loading operations workspace"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Loading operations queue...")).not.toBeInTheDocument();
   });
 
   it("renders the denied state for users without operations access", () => {
     render(
-      <OperationsQueueViewContent
-        {...baseProps}
-        hasFullAdminAccess={false}
-      />,
+      <OperationsQueueViewContent {...baseProps} hasFullAdminAccess={false} />,
     );
 
     expect(screen.getByText("Access Denied")).toBeInTheDocument();
   });
 
-  it("renders the empty state when no work items or approvals are open", () => {
-    render(<OperationsQueueViewContent {...baseProps} />);
+  it("renders the open work route content without an in-page workflow rail", () => {
+    render(<OperationsQueueViewContent {...baseProps} activeWorkflow="queue" />);
 
-    expect(
-      screen.getByText("Adjust stock without losing the audit trail.")
-    ).toBeInTheDocument();
+    expect(screen.queryByText("Operations lanes")).not.toBeInTheDocument();
     expect(screen.getByText("No open work items")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "New service intakes and approval-driven stock reviews will appear here"
+        "New service intakes and approval-driven stock reviews will appear here",
       ),
     ).toBeInTheDocument();
   });
 
-  it("renders open work items and pending approvals", () => {
-    render(
+  it("separates open work items from pending approvals", () => {
+    const { rerender } = render(
       <OperationsQueueViewContent
         {...baseProps}
+        activeWorkflow="approvals"
         approvalRequests={[
           {
             _id: "approval-1" as Id<"approvalRequest">,
@@ -186,10 +180,39 @@ describe("OperationsQueueViewContent", () => {
       />,
     );
 
-    expect(screen.getAllByText("Closure wig wash and style")).toHaveLength(2);
-    expect(screen.getByText("Ama Mensah · Adjoa Tetteh")).toBeInTheDocument();
+    expect(screen.getByText("Closure wig wash and style")).toBeInTheDocument();
     expect(screen.getByText("Mary Aidoo")).toBeInTheDocument();
     expect(screen.getByText("pending")).toBeInTheDocument();
+
+    rerender(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="queue"
+        approvalRequests={[
+          {
+            _id: "approval-1" as Id<"approvalRequest">,
+            requestedByStaffName: "Mary Aidoo",
+            requestType: "service_deposit",
+            status: "pending",
+            workItemTitle: "Closure wig wash and style",
+          },
+        ]}
+        workItems={[
+          {
+            _id: "work-item-1" as Id<"operationalWorkItem">,
+            approvalState: "pending",
+            assignedStaffName: "Adjoa Tetteh",
+            customerName: "Ama Mensah",
+            priority: "urgent",
+            status: "intake_created",
+            title: "Closure wig wash and style",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Closure wig wash and style")).toBeInTheDocument();
+    expect(screen.getByText("Ama Mensah · Adjoa Tetteh")).toBeInTheDocument();
   });
 
   it("renders stock approval actions and routes decisions through the provided handler", async () => {
@@ -207,11 +230,13 @@ describe("OperationsQueueViewContent", () => {
             workItemTitle: "Cycle count review · 1 SKU",
           },
         ]}
-      />
+      />,
     );
 
     expect(
-      screen.getByText(/manager approval applies the queued inventory movement/i)
+      screen.getByText(
+        /manager approval applies the queued inventory movement/i,
+      ),
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /approve batch/i }));
@@ -225,7 +250,8 @@ describe("OperationsQueueViewContent", () => {
   it("renders the live operations page without the register closeout surface", () => {
     render(<OperationsQueueView />);
 
-    expect(screen.getByText("Operations workspace")).toBeInTheDocument();
+    expect(screen.getByText("Choose a count scope.")).toBeInTheDocument();
+    expect(screen.queryByText("Operations workspace")).not.toBeInTheDocument();
     expect(screen.queryByText(/register closeouts/i)).not.toBeInTheDocument();
   });
 
@@ -264,7 +290,7 @@ describe("OperationsQueueViewContent", () => {
       expect(decideApprovalRequest).toHaveBeenCalledWith({
         approvalRequestId: "approval-1",
         decision: "approved",
-      })
+      }),
     );
   });
 
@@ -303,10 +329,10 @@ describe("OperationsQueueViewContent", () => {
     await user.click(screen.getByRole("button", { name: /approve batch/i }));
 
     await waitFor(() =>
-      expect(mockedToast.error).toHaveBeenCalledWith("Please try again.")
+      expect(mockedToast.error).toHaveBeenCalledWith("Please try again."),
     );
     expect(mockedToast.error).not.toHaveBeenCalledWith(
-      "Leaked backend approval detail"
+      "Leaked backend approval detail",
     );
 
     consoleErrorSpy.mockRestore();

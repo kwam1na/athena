@@ -13,17 +13,28 @@ import { useTableKeyboardPagination } from "~/src/hooks/use-table-keyboard-pagin
 interface DataTablePaginationProps<TData> {
   table: Table<TData>;
   itemLabel?: string;
+  rangeItemLabel?: string;
+  rangeItemPluralLabel?: string;
   onLoadMore?: () => void;
 }
 
 export function DataTablePagination<TData>({
   table,
   itemLabel,
+  rangeItemLabel,
+  rangeItemPluralLabel,
   onLoadMore,
 }: DataTablePaginationProps<TData>) {
   useTableKeyboardPagination(table);
 
   const rowCount = table.getRowCount();
+  const { pageIndex, pageSize } = table.getState().pagination;
+  const visibleStart = rowCount === 0 ? 0 : pageIndex * pageSize + 1;
+  const visibleEnd = Math.min(rowCount, (pageIndex + 1) * pageSize);
+  const rangeLabel =
+    rowCount === 1
+      ? rangeItemLabel
+      : (rangeItemPluralLabel ?? (rangeItemLabel ? `${rangeItemLabel}s` : ""));
 
   return (
     <div className="flex items-center justify-between px-2">
@@ -33,11 +44,17 @@ export function DataTablePagination<TData>({
         </div>
       )}
       <div className="flex items-center ml-auto space-x-6 lg:space-x-8">
-        {Boolean(table.getPageCount()) && (
-          <div className="flex w-[100px] items-center justify-center text-sm font-medium">
-            Page {table.getState().pagination.pageIndex + 1} of{" "}
-            {table.getPageCount()}
+        {rangeItemLabel ? (
+          <div className="flex items-center justify-center text-sm font-medium">
+            Showing {visibleStart}-{visibleEnd} of {rowCount} {rangeLabel}
           </div>
+        ) : (
+          Boolean(table.getPageCount()) && (
+            <div className="flex w-[100px] items-center justify-center text-sm font-medium">
+              Page {table.getState().pagination.pageIndex + 1} of{" "}
+              {table.getPageCount()}
+            </div>
+          )
         )}
         <div className="flex items-center space-x-2">
           <Button

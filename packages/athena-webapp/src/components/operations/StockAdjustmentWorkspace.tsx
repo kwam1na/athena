@@ -1,4 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { ColumnDef } from "@tanstack/react-table";
+import { Link } from "@tanstack/react-router";
+import { CheckCircle2, ExternalLink, Package, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -9,16 +12,35 @@ import {
   summarizeStockAdjustmentLineItems,
 } from "~/shared/stockAdjustment";
 import type { Id } from "~/convex/_generated/dataModel";
+import { getProductName } from "~/src/lib/productUtils";
+import { getOrigin } from "~/src/lib/navigationUtils";
 import type { NormalizedCommandResult } from "../../lib/errors/runCommand";
 import { presentCommandToast } from "../../lib/errors/presentCommandToast";
+import { DataTableColumnHeader } from "../base/table/data-table-column-header";
+import { GenericDataTable } from "../base/table/data-table";
+import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { LoadingButton } from "../ui/loading-button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
+import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
 import { Textarea } from "../ui/textarea";
 
 export type InventorySnapshotItem = {
   _id: Id<"productSku">;
+  colorName?: string | null;
+  imageUrl?: string | null;
   inventoryCount: number;
+  length?: number | null;
+  productCategory?: string | null;
+  productId?: Id<"product"> | null;
   productName: string;
   quantityAvailable: number;
   sku?: string | null;
@@ -46,12 +68,27 @@ type StockAdjustmentWorkspaceContentProps = {
   inventoryItems: InventorySnapshotItem[];
   isSubmitting: boolean;
   onSubmitBatch: (
-    args: SubmitStockAdjustmentArgs
+    args: SubmitStockAdjustmentArgs,
   ) => Promise<NormalizedCommandResult<unknown>>;
   storeId?: Id<"store">;
 };
 
 type StockAdjustmentType = "manual" | "cycle_count";
+type StockAdjustmentRow = {
+  inputValue: string;
+  inventoryItem: InventorySnapshotItem;
+  isEdited: boolean;
+  quantityDelta: number;
+  submittedLineItem: SubmitStockAdjustmentArgs["lineItems"][number] | null;
+};
+
+type CountScopeOption = {
+  changedCount: number;
+  itemCount: number;
+  key: string;
+  label: string;
+};
+type CycleCountSubmissionOutcome = "applied" | "review_required" | null;
 
 const MANUAL_REASON_LABELS: Record<
   (typeof MANUAL_STOCK_ADJUSTMENT_REASON_CODES)[number],
@@ -63,17 +100,29 @@ const MANUAL_REASON_LABELS: Record<
   vendor_return: "Vendor return",
 };
 
+const UNCATEGORIZED_SCOPE_KEY = "__uncategorized";
+
+function getCountScopeKey(item: InventorySnapshotItem) {
+  return item.productCategory?.trim() || UNCATEGORIZED_SCOPE_KEY;
+}
+
+function getCountScopeLabel(key: string) {
+  return key === UNCATEGORIZED_SCOPE_KEY ? "Uncategorized" : key;
+}
+
 function buildManualDrafts(inventoryItems: InventorySnapshotItem[]) {
   return Object.fromEntries(inventoryItems.map((item) => [item._id, ""]));
 }
 
 function buildCycleCountDrafts(inventoryItems: InventorySnapshotItem[]) {
   return Object.fromEntries(
-    inventoryItems.map((item) => [item._id, String(item.inventoryCount)])
+    inventoryItems.map((item) => [item._id, String(item.inventoryCount)]),
   );
 }
 
-function buildStockAdjustmentSubmissionKey(adjustmentType: StockAdjustmentType) {
+function buildStockAdjustmentSubmissionKey(
+  adjustmentType: StockAdjustmentType,
+) {
   return `stock-adjustment-${adjustmentType}-${Date.now().toString(36)}`;
 }
 
@@ -82,89 +131,375 @@ function trimOptional(value?: string | null) {
   return nextValue ? nextValue : undefined;
 }
 
+function getInventoryItemDisplayName(item: InventorySnapshotItem) {
+  return getProductName(item) || item.sku || String(item._id);
+}
+
 export function StockAdjustmentWorkspaceContent({
   inventoryItems,
   isSubmitting,
   onSubmitBatch,
   storeId,
 }: StockAdjustmentWorkspaceContentProps) {
-  const [adjustmentType, setAdjustmentType] = useState<StockAdjustmentType>("manual");
+  const [adjustmentType, setAdjustmentType] =
+    useState<StockAdjustmentType>("cycle_count");
   const [submissionKey, setSubmissionKey] = useState(() =>
-    buildStockAdjustmentSubmissionKey("manual")
+    buildStockAdjustmentSubmissionKey("cycle_count"),
   );
   const [reasonCode, setReasonCode] = useState<
     (typeof MANUAL_STOCK_ADJUSTMENT_REASON_CODES)[number]
   >(MANUAL_STOCK_ADJUSTMENT_REASON_CODES[0]);
   const [notes, setNotes] = useState("");
   const [manualDeltas, setManualDeltas] = useState<Record<string, string>>(() =>
-    buildManualDrafts(inventoryItems)
+    buildManualDrafts(inventoryItems),
   );
   const [cycleCounts, setCycleCounts] = useState<Record<string, string>>(() =>
-    buildCycleCountDrafts(inventoryItems)
+    buildCycleCountDrafts(inventoryItems),
   );
+  const [activeInventoryItemId, setActiveInventoryItemId] =
+    useState<Id<"productSku"> | null>(inventoryItems[0]?._id ?? null);
+  const [selectedCountScopeKey, setSelectedCountScopeKey] = useState<
+    string | null
+  >(null);
+  const [cycleCountSubmissionOutcome, setCycleCountSubmissionOutcome] =
+    useState<CycleCountSubmissionOutcome>(null);
 
   useEffect(() => {
     setManualDeltas(buildManualDrafts(inventoryItems));
     setCycleCounts(buildCycleCountDrafts(inventoryItems));
   }, [inventoryItems]);
 
-  const rows = inventoryItems.map((item) => {
-    if (adjustmentType === "manual") {
-      const rawDelta = manualDeltas[item._id] ?? "";
-      const parsedDelta = rawDelta.trim() === "" ? 0 : Number(rawDelta);
-      const isEdited = Number.isInteger(parsedDelta) && parsedDelta !== 0;
-
-      return {
-        inputValue: rawDelta,
-        inventoryItem: item,
-        isEdited,
-        quantityDelta: isEdited ? parsedDelta : 0,
-        submittedLineItem: isEdited
-          ? ({
-              productSkuId: item._id,
-              quantityDelta: parsedDelta,
-            } as const)
-          : null,
-      };
+  useEffect(() => {
+    if (
+      activeInventoryItemId &&
+      inventoryItems.some((item) => item._id === activeInventoryItemId)
+    ) {
+      return;
     }
 
-    const rawCount = cycleCounts[item._id] ?? String(item.inventoryCount);
-    const parsedCount = rawCount.trim() === "" ? Number.NaN : Number(rawCount);
-    const quantityDelta = Number.isInteger(parsedCount)
-      ? parsedCount - item.inventoryCount
-      : 0;
-    const isEdited =
-      Number.isInteger(parsedCount) &&
-      parsedCount >= 0 &&
-      parsedCount !== item.inventoryCount;
+    setActiveInventoryItemId(inventoryItems[0]?._id ?? null);
+  }, [activeInventoryItemId, inventoryItems]);
 
-    return {
-      countedQuantity: parsedCount,
-      inputValue: rawCount,
-      inventoryItem: item,
-      isEdited,
-      quantityDelta,
-      submittedLineItem: isEdited
-        ? ({
-            countedQuantity: parsedCount,
-            productSkuId: item._id,
-          } as const)
-        : null,
-    };
-  });
+  const rows: StockAdjustmentRow[] = useMemo(
+    () =>
+      inventoryItems.map((item) => {
+        if (adjustmentType === "manual") {
+          const rawDelta = manualDeltas[item._id] ?? "";
+          const parsedDelta = rawDelta.trim() === "" ? 0 : Number(rawDelta);
+          const isEdited = Number.isInteger(parsedDelta) && parsedDelta !== 0;
+
+          return {
+            inputValue: rawDelta,
+            inventoryItem: item,
+            isEdited,
+            quantityDelta: isEdited ? parsedDelta : 0,
+            submittedLineItem: isEdited
+              ? ({
+                  productSkuId: item._id,
+                  quantityDelta: parsedDelta,
+                } as const)
+              : null,
+          };
+        }
+
+        const rawCount = cycleCounts[item._id] ?? String(item.inventoryCount);
+        const parsedCount =
+          rawCount.trim() === "" ? Number.NaN : Number(rawCount);
+        const quantityDelta = Number.isInteger(parsedCount)
+          ? parsedCount - item.inventoryCount
+          : 0;
+        const isEdited =
+          Number.isInteger(parsedCount) &&
+          parsedCount >= 0 &&
+          parsedCount !== item.inventoryCount;
+
+        return {
+          countedQuantity: parsedCount,
+          inputValue: rawCount,
+          inventoryItem: item,
+          isEdited,
+          quantityDelta,
+          submittedLineItem: isEdited
+            ? ({
+                countedQuantity: parsedCount,
+                productSkuId: item._id,
+              } as const)
+            : null,
+        };
+      }),
+    [adjustmentType, cycleCounts, inventoryItems, manualDeltas],
+  );
 
   const changedRows = rows.filter((row) => row.submittedLineItem);
+  const countScopeOptions: CountScopeOption[] = useMemo(() => {
+    const scopes = new Map<string, CountScopeOption>();
+
+    for (const row of rows) {
+      const key = getCountScopeKey(row.inventoryItem);
+      const existing = scopes.get(key) ?? {
+        changedCount: 0,
+        itemCount: 0,
+        key,
+        label: getCountScopeLabel(key),
+      };
+
+      existing.itemCount += 1;
+      if (row.submittedLineItem) {
+        existing.changedCount += 1;
+      }
+
+      scopes.set(key, existing);
+    }
+
+    return Array.from(scopes.values()).sort((a, b) =>
+      a.label.localeCompare(b.label),
+    );
+  }, [rows]);
+  const selectedCountScope =
+    countScopeOptions.find((scope) => scope.key === selectedCountScopeKey) ??
+    countScopeOptions[0] ??
+    null;
+  const scopedRows = useMemo(
+    () =>
+      adjustmentType === "cycle_count" && selectedCountScope
+        ? rows.filter(
+            (row) =>
+              getCountScopeKey(row.inventoryItem) === selectedCountScope.key,
+          )
+        : rows,
+    [adjustmentType, rows, selectedCountScope],
+  );
   const summary = summarizeStockAdjustmentLineItems(
     changedRows.map((row) => ({
       quantityDelta: row.quantityDelta,
-    }))
+    })),
   );
   const approvalRequired =
     changedRows.length > 0 && requiresStockAdjustmentApproval(summary);
+  const displayedReasonCode =
+    adjustmentType === "manual" ? reasonCode : CYCLE_COUNT_REASON_CODE;
+  const activeInventoryItem =
+    inventoryItems.find((item) => item._id === activeInventoryItemId) ??
+    inventoryItems[0] ??
+    null;
+  const cycleCountStatus = cycleCountSubmissionOutcome
+    ? cycleCountSubmissionOutcome === "review_required"
+      ? {
+          description:
+            "Operator count submitted. Review the queued request before inventory changes apply.",
+          label: "Review required",
+          tone: "border-warning/30 bg-warning/10 text-foreground" as const,
+        }
+      : {
+          description:
+            "Operator count submitted. Inventory movements have been written.",
+          label: "Count applied",
+          tone: "border-success/30 bg-success/10 text-foreground" as const,
+        }
+    : {
+        description:
+          "Submit the selected category count when the physical counts are recorded.",
+        label: "Count in progress",
+        tone: "border-border bg-muted/40 text-foreground" as const,
+      };
+
+  useEffect(() => {
+    if (adjustmentType !== "cycle_count") return;
+
+    if (
+      selectedCountScopeKey &&
+      countScopeOptions.some((scope) => scope.key === selectedCountScopeKey)
+    ) {
+      return;
+    }
+
+    setSelectedCountScopeKey(countScopeOptions[0]?.key ?? null);
+  }, [adjustmentType, countScopeOptions, selectedCountScopeKey]);
+
+  useEffect(() => {
+    if (adjustmentType !== "cycle_count" || !selectedCountScope) return;
+
+    if (
+      activeInventoryItemId &&
+      scopedRows.some((row) => row.inventoryItem._id === activeInventoryItemId)
+    ) {
+      return;
+    }
+
+    setActiveInventoryItemId(scopedRows[0]?.inventoryItem._id ?? null);
+  }, [activeInventoryItemId, adjustmentType, scopedRows, selectedCountScope]);
+  const columns = useMemo<ColumnDef<StockAdjustmentRow>[]>(
+    () => [
+      {
+        accessorKey: "inventoryItem.productName",
+        enableHiding: false,
+        enableSorting: false,
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="SKU" />
+        ),
+        cell: ({ row }) => {
+          const primaryLabel = getInventoryItemDisplayName(
+            row.original.inventoryItem,
+          );
+          const secondaryLabel =
+            row.original.inventoryItem.sku ?? row.original.inventoryItem._id;
+          const showSecondaryLabel = secondaryLabel !== primaryLabel;
+
+          return (
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium">{primaryLabel}</p>
+              {showSecondaryLabel ? (
+                <p className="truncate text-xs text-muted-foreground">
+                  {secondaryLabel}
+                </p>
+              ) : null}
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "inventoryItem.inventoryCount",
+        enableHiding: false,
+        enableSorting: false,
+        header: ({ column }) => (
+          <DataTableColumnHeader
+            className="justify-end"
+            column={column}
+            title="On hand"
+          />
+        ),
+        cell: ({ row }) => (
+          <p className="text-right text-sm font-medium">
+            {row.original.inventoryItem.inventoryCount}
+          </p>
+        ),
+      },
+      {
+        accessorKey: "inventoryItem.quantityAvailable",
+        enableHiding: false,
+        enableSorting: false,
+        header: ({ column }) => (
+          <DataTableColumnHeader
+            className="justify-end"
+            column={column}
+            title="Available"
+          />
+        ),
+        cell: ({ row }) => (
+          <p className="text-right text-sm text-muted-foreground">
+            {row.original.inventoryItem.quantityAvailable}
+          </p>
+        ),
+      },
+      {
+        accessorKey: "inputValue",
+        enableHiding: false,
+        enableSorting: false,
+        header: ({ column }) => (
+          <DataTableColumnHeader
+            className="justify-end"
+            column={column}
+            title={adjustmentType === "manual" ? "Delta" : "Counted"}
+          />
+        ),
+        cell: ({ row }) => {
+          const item = row.original.inventoryItem;
+          const displayName = getInventoryItemDisplayName(item);
+          const inputLabel =
+            adjustmentType === "manual"
+              ? "Adjustment delta"
+              : "Counted quantity";
+          const resetValue =
+            adjustmentType === "manual" ? "" : String(item.inventoryCount);
+
+          const setDraftValue = (value: string) =>
+            adjustmentType === "manual"
+              ? setManualDeltas((current) => ({
+                  ...current,
+                  [item._id]: value,
+                }))
+              : setCycleCounts((current) => ({
+                  ...current,
+                  [item._id]: value,
+                }));
+          const handleDraftChange = (value: string) => {
+            setDraftValue(value);
+            if (adjustmentType === "cycle_count") {
+              setCycleCountSubmissionOutcome(null);
+            }
+          };
+
+          return (
+            <div className="ml-auto flex max-w-56 items-center justify-end gap-2">
+              <Input
+                aria-label={`${inputLabel} for ${displayName}`}
+                className="h-10 w-36 text-right"
+                inputMode="numeric"
+                min={adjustmentType === "manual" ? undefined : 0}
+                onFocus={() => setActiveInventoryItemId(item._id)}
+                onChange={(event) => handleDraftChange(event.target.value)}
+                type="number"
+                value={row.original.inputValue}
+              />
+              <Button
+                aria-label={`Restore original value for ${displayName}`}
+                className="h-10 w-10 shrink-0 text-muted-foreground"
+                disabled={!row.original.isEdited}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setActiveInventoryItemId(item._id);
+                  setDraftValue(resetValue);
+                  if (adjustmentType === "cycle_count") {
+                    setCycleCountSubmissionOutcome(null);
+                  }
+                }}
+                size="icon"
+                type="button"
+                variant="ghost"
+              >
+                <RotateCcw className="h-4 w-4" />
+              </Button>
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "quantityDelta",
+        enableHiding: false,
+        enableSorting: false,
+        header: ({ column }) => (
+          <DataTableColumnHeader
+            className="justify-end"
+            column={column}
+            title="Impact"
+          />
+        ),
+        cell: ({ row }) => (
+          <p
+            className={`text-right text-sm font-medium ${
+              row.original.quantityDelta > 0
+                ? "text-success"
+                : row.original.quantityDelta < 0
+                  ? "text-warning"
+                  : "text-muted-foreground"
+            }`}
+          >
+            {row.original.quantityDelta > 0
+              ? `+${row.original.quantityDelta}`
+              : row.original.quantityDelta}
+          </p>
+        ),
+      },
+    ],
+    [adjustmentType],
+  );
 
   const handleModeChange = (nextType: StockAdjustmentType) => {
     setAdjustmentType(nextType);
     setSubmissionKey(buildStockAdjustmentSubmissionKey(nextType));
+    if (nextType === "manual") {
+      setCycleCountSubmissionOutcome(null);
+    }
   };
 
   const handleSubmit = async () => {
@@ -177,7 +512,7 @@ export function StockAdjustmentWorkspaceContent({
       toast.error(
         adjustmentType === "manual"
           ? "Add at least one non-zero stock delta"
-          : "Enter at least one counted quantity that differs from the system stock"
+          : "Enter at least one counted quantity that differs from the system stock",
       );
       return;
     }
@@ -199,11 +534,18 @@ export function StockAdjustmentWorkspaceContent({
 
     toast.success(
       approvalRequired
-        ? "Stock batch submitted for review"
+        ? adjustmentType === "cycle_count"
+          ? "Count submitted for review"
+          : "Stock batch submitted for review"
         : adjustmentType === "manual"
           ? "Stock adjustment applied"
-          : "Cycle count reconciled"
+          : "Count applied",
     );
+    if (adjustmentType === "cycle_count") {
+      setCycleCountSubmissionOutcome(
+        approvalRequired ? "review_required" : "applied",
+      );
+    }
     setNotes("");
     setManualDeltas(buildManualDrafts(inventoryItems));
     setCycleCounts(buildCycleCountDrafts(inventoryItems));
@@ -211,219 +553,276 @@ export function StockAdjustmentWorkspaceContent({
   };
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-      <section className="overflow-hidden rounded-2xl border border-border/80 bg-background">
-        <div className="border-b border-border/80 bg-[radial-gradient(circle_at_top_left,_rgba(245,158,11,0.18),_transparent_38%),linear-gradient(180deg,rgba(250,250,249,0.95),rgba(255,255,255,0.9))] px-5 py-5">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="max-w-2xl space-y-2">
-              <p className="text-xs uppercase tracking-[0.24em] text-amber-700/80">
-                Stock Ops
+    <div className="grid gap-layout-xl xl:grid-cols-[minmax(0,1fr)_320px]">
+      <section className="min-w-0 space-y-layout-2xl">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="max-w-2xl space-y-4">
+            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              Stock Ops
+            </p>
+            <div className="space-y-1">
+              <h2 className="font-display text-2xl font-semibold tracking-tight text-foreground">
+                {adjustmentType === "cycle_count"
+                  ? "Choose a count scope."
+                  : "Record stock adjustments."}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {adjustmentType === "cycle_count"
+                  ? "Start with a category, then record physical counts for the SKUs in that group."
+                  : "Enter known stock deltas. Athena applies the variance as an inventory movement, or routes larger changes for review."}
               </p>
-              <div className="space-y-1">
-                <h2 className="text-2xl font-semibold tracking-tight">
-                  Adjust stock without losing the audit trail.
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  Use manual deltas for corrections and shrinkage. Switch to cycle
-                  count when you need to reconcile the floor count back through
-                  inventory movements.
-                </p>
-              </div>
-            </div>
-
-            <div className="inline-flex rounded-full border border-amber-200/80 bg-white/90 p-1 shadow-sm">
-              <button
-                className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-                  adjustmentType === "manual"
-                    ? "bg-amber-500 text-amber-950"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-                onClick={() => handleModeChange("manual")}
-                type="button"
-              >
-                Manual adjustment
-              </button>
-              <button
-                className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-                  adjustmentType === "cycle_count"
-                    ? "bg-amber-500 text-amber-950"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-                onClick={() => handleModeChange("cycle_count")}
-                type="button"
-              >
-                Cycle count
-              </button>
             </div>
           </div>
+
+          <Tabs
+            onValueChange={(value) =>
+              handleModeChange(value as StockAdjustmentType)
+            }
+            value={adjustmentType}
+          >
+            <TabsList>
+              <TabsTrigger value="cycle_count">Cycle count</TabsTrigger>
+              <TabsTrigger value="manual">Manual adjustment</TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
 
-        <div className="space-y-5 px-5 py-5">
-          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px_220px]">
-            <div className="space-y-2">
-              <Label htmlFor="submission-key">Submission key</Label>
-              <Input
-                id="submission-key"
-                onChange={(event) => setSubmissionKey(event.target.value)}
-                value={submissionKey}
-              />
-            </div>
+        {adjustmentType === "cycle_count" ? (
+          <section
+            aria-labelledby="count-scope-heading"
+            className="space-y-layout-md"
+          >
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {countScopeOptions.map((scope) => {
+                const isSelected = scope.key === selectedCountScope?.key;
 
-            <div className="space-y-2">
-              <Label htmlFor="review-threshold">Review threshold</Label>
-              <Input
-                disabled
-                id="review-threshold"
-                value={`${STOCK_ADJUSTMENT_APPROVAL_THRESHOLD} units`}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="reason-code">Reason code</Label>
-              {adjustmentType === "manual" ? (
-                <select
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  id="reason-code"
-                  onChange={(event) =>
-                    setReasonCode(
-                      event.target.value as (typeof MANUAL_STOCK_ADJUSTMENT_REASON_CODES)[number]
-                    )
-                  }
-                  value={reasonCode}
-                >
-                  {MANUAL_STOCK_ADJUSTMENT_REASON_CODES.map((option) => (
-                    <option key={option} value={option}>
-                      {MANUAL_REASON_LABELS[option]}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <Input
-                  disabled
-                  id="reason-code"
-                  value="Cycle count reconciliation"
-                />
-              )}
-            </div>
-          </div>
-
-          <div className="overflow-hidden rounded-2xl border border-border/80">
-            <div className="grid grid-cols-[minmax(0,1.5fr)_repeat(4,minmax(0,0.7fr))] gap-3 border-b border-border/80 px-4 py-3 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-              <p>SKU</p>
-              <p className="text-right">On hand</p>
-              <p className="text-right">Available</p>
-              <p className="text-right">
-                {adjustmentType === "manual" ? "Delta" : "Counted"}
-              </p>
-              <p className="text-right">Impact</p>
-            </div>
-
-            {inventoryItems.length === 0 ? (
-              <div className="px-4 py-8 text-sm text-muted-foreground">
-                Inventory items will appear here once the store has SKUs to count.
-              </div>
-            ) : (
-              rows.map((row) => (
-                <div
-                  className={`grid grid-cols-[minmax(0,1.5fr)_repeat(4,minmax(0,0.7fr))] gap-3 border-b border-border/60 px-4 py-4 transition-colors last:border-b-0 ${
-                    row.isEdited ? "bg-amber-50/70" : "bg-background"
-                  }`}
-                  key={row.inventoryItem._id}
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">
-                      {row.inventoryItem.productName}
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {row.inventoryItem.sku ?? row.inventoryItem._id}
-                    </p>
-                  </div>
-                  <p className="text-right text-sm font-medium">
-                    {row.inventoryItem.inventoryCount}
-                  </p>
-                  <p className="text-right text-sm text-muted-foreground">
-                    {row.inventoryItem.quantityAvailable}
-                  </p>
-                  <Input
-                    aria-label={`${
-                      adjustmentType === "manual"
-                        ? "Adjustment delta"
-                        : "Counted quantity"
-                    } for ${row.inventoryItem.productName}`}
-                    className="h-10 text-right"
-                    inputMode="numeric"
-                    min={adjustmentType === "manual" ? undefined : 0}
-                    onChange={(event) =>
-                      adjustmentType === "manual"
-                        ? setManualDeltas((current) => ({
-                            ...current,
-                            [row.inventoryItem._id]: event.target.value,
-                          }))
-                        : setCycleCounts((current) => ({
-                            ...current,
-                            [row.inventoryItem._id]: event.target.value,
-                          }))
-                    }
-                    type="number"
-                    value={row.inputValue}
-                  />
-                  <p
-                    className={`text-right text-sm font-medium ${
-                      row.quantityDelta > 0
-                        ? "text-emerald-700"
-                        : row.quantityDelta < 0
-                          ? "text-amber-700"
-                          : "text-muted-foreground"
+                return (
+                  <button
+                    aria-pressed={isSelected}
+                    className={`rounded-md border px-layout-md py-layout-sm text-left transition-colors ${
+                      isSelected
+                        ? "border-action-workflow-border bg-action-workflow-soft text-foreground"
+                        : "border-border bg-background hover:bg-muted"
                     }`}
+                    key={scope.key}
+                    onClick={() => {
+                      setSelectedCountScopeKey(scope.key);
+                      setCycleCountSubmissionOutcome(null);
+                      const firstScopedItem = rows.find(
+                        (row) =>
+                          getCountScopeKey(row.inventoryItem) === scope.key,
+                      )?.inventoryItem;
+
+                      setActiveInventoryItemId(firstScopedItem?._id ?? null);
+                    }}
+                    type="button"
                   >
-                    {row.quantityDelta > 0 ? `+${row.quantityDelta}` : row.quantityDelta}
-                  </p>
-                </div>
-              ))
-            )}
-          </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">
+                          {scope.label}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {scope.itemCount}{" "}
+                          {scope.itemCount === 1 ? "SKU" : "SKUs"}
+                        </p>
+                      </div>
+                      {isSelected ? (
+                        <CheckCircle2 className="h-4 w-4 shrink-0 text-action-commit" />
+                      ) : null}
+                    </div>
+                    <div className="mt-layout-sm flex items-center gap-2 text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">
+                        {scope.changedCount}
+                      </span>
+                      <span>
+                        {scope.changedCount === 1 ? "variance" : "variances"}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
+
+        <div className="flex min-h-0 flex-col">
+          <GenericDataTable
+            columns={columns}
+            data={scopedRows}
+            getRowClassName={(row) =>
+              row.original.inventoryItem._id === activeInventoryItemId
+                ? "bg-muted/60 hover:bg-muted/70"
+                : undefined
+            }
+            onRowClick={(row) =>
+              setActiveInventoryItemId(row.original.inventoryItem._id)
+            }
+            paginationRangeItemLabel="SKU"
+            paginationRangeItemPluralLabel="SKUs"
+            tableId={`stock-adjustments-${adjustmentType}-${selectedCountScope?.key ?? "all"}`}
+          />
         </div>
       </section>
 
-      <aside className="space-y-4">
-        <section className="rounded-2xl border border-border/80 bg-background px-4 py-4">
-          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+      <aside className="space-y-layout-md">
+        <section className="rounded-lg border border-border bg-surface-raised px-layout-md py-layout-lg shadow-surface">
+          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
             Batch summary
           </p>
-          <div className="mt-4 space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <p className="text-xs text-muted-foreground">Changed rows</p>
-                <p className="text-2xl font-semibold">{summary.lineItemCount}</p>
+          <div className="mt-layout-lg space-y-layout-lg">
+            {adjustmentType === "cycle_count" ? (
+              <div
+                className={`space-y-2 rounded-md border px-layout-md py-layout-sm ${cycleCountStatus.tone}`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Count status
+                  </p>
+                  <Badge
+                    className="rounded-md border-border bg-background text-foreground"
+                    variant="outline"
+                  >
+                    {cycleCountStatus.label}
+                  </Badge>
+                </div>
+                <p className="text-sm leading-6">
+                  {cycleCountStatus.description}
+                </p>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Net delta</p>
-                <p className="text-2xl font-semibold">
+            ) : null}
+            <div className="grid grid-cols-2 gap-layout-md">
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Changed rows
+                </p>
+                <p className="font-display text-4xl font-semibold tabular-nums tracking-tight text-foreground">
+                  {summary.lineItemCount}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Net delta
+                </p>
+                <p className="font-display text-4xl font-semibold tabular-nums tracking-tight text-foreground">
                   {summary.netQuantityDelta > 0
                     ? `+${summary.netQuantityDelta}`
                     : summary.netQuantityDelta}
                 </p>
               </div>
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Largest variance</p>
-              <p className="text-lg font-medium">{summary.largestAbsoluteDelta} units</p>
+            <div className="space-y-1 border-t border-border pt-layout-md">
+              <p className="text-xs font-medium text-muted-foreground">
+                Largest variance
+              </p>
+              <p className="font-display text-3xl font-semibold tabular-nums tracking-tight text-foreground">
+                {summary.largestAbsoluteDelta} units
+              </p>
             </div>
             <div
-              className={`rounded-xl border px-3 py-3 text-sm ${
+              className={`rounded-md border px-layout-md py-layout-sm text-sm leading-6 ${
                 approvalRequired
-                  ? "border-amber-200 bg-amber-50 text-amber-900"
-                  : "border-emerald-200 bg-emerald-50 text-emerald-900"
+                  ? "border-warning/30 bg-warning/10 text-foreground"
+                  : "border-success/30 bg-success/10 text-foreground"
               }`}
             >
               {approvalRequired
-                ? "This batch will open an approval request before inventory changes are applied"
-                : "This batch can apply immediately and will still write inventory movements"}
+                ? adjustmentType === "cycle_count"
+                  ? "Submitting this count will open a review before inventory changes apply"
+                  : "This batch will open an approval request before inventory changes are applied"
+                : adjustmentType === "cycle_count"
+                  ? "Submitting this count will apply inventory movements immediately"
+                  : "This batch can apply immediately and will still write inventory movements"}
             </div>
           </div>
         </section>
 
-        <section className="rounded-2xl border border-border/80 bg-background px-4 py-4">
+        <section className="space-y-layout-md rounded-lg border border-border bg-surface-raised px-layout-md py-layout-md shadow-surface">
+          <div className="space-y-layout-sm">
+            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              SKU detail
+            </p>
+            <div className="overflow-hidden rounded-md border border-none bg-muted/30">
+              {activeInventoryItem?.imageUrl ? (
+                <img
+                  alt={getInventoryItemDisplayName(activeInventoryItem)}
+                  className="aspect-square w-full object-cover"
+                  src={activeInventoryItem.imageUrl}
+                />
+              ) : (
+                <div className="flex aspect-square w-full items-center justify-center bg-muted">
+                  <Package className="h-8 w-8 text-muted-foreground" />
+                </div>
+              )}
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-start justify-between gap-3">
+                <p className="line-clamp-2 text-sm font-medium text-foreground">
+                  {activeInventoryItem
+                    ? getInventoryItemDisplayName(activeInventoryItem)
+                    : "No SKU selected"}
+                </p>
+                {activeInventoryItem?.productId ? (
+                  <Link
+                    aria-label={`View product detail for ${getInventoryItemDisplayName(
+                      activeInventoryItem,
+                    )}`}
+                    className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    params={(prev) => ({
+                      ...prev,
+                      orgUrlSlug: prev.orgUrlSlug!,
+                      productSlug: activeInventoryItem.productId!,
+                      storeUrlSlug: prev.storeUrlSlug!,
+                    })}
+                    search={{
+                      o: getOrigin(),
+                      variant: activeInventoryItem?.sku || undefined,
+                    }}
+                    to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
+                  >
+                    View
+                    <ExternalLink className="h-3 w-3" />
+                  </Link>
+                ) : null}
+              </div>
+              {activeInventoryItem?.sku ? (
+                <p className="text-xs text-muted-foreground">
+                  {activeInventoryItem.sku}
+                </p>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="reason-code">Reason code</Label>
+            <Select
+              disabled={adjustmentType === "cycle_count"}
+              onValueChange={(value) =>
+                setReasonCode(
+                  value as (typeof MANUAL_STOCK_ADJUSTMENT_REASON_CODES)[number],
+                )
+              }
+              value={displayedReasonCode}
+            >
+              <SelectTrigger id="reason-code">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {adjustmentType === "cycle_count" ? (
+                  <SelectItem value={CYCLE_COUNT_REASON_CODE}>
+                    Cycle count reconciliation
+                  </SelectItem>
+                ) : (
+                  MANUAL_STOCK_ADJUSTMENT_REASON_CODES.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {MANUAL_REASON_LABELS[option]}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="stock-adjustment-notes">Notes</Label>
             <Textarea
@@ -434,19 +833,15 @@ export function StockAdjustmentWorkspaceContent({
             />
           </div>
 
-          <div className="mt-4 space-y-3 text-sm text-muted-foreground">
+          <div className="space-y-layout-sm text-sm text-muted-foreground">
             <p>
-              Manual adjustments require a reason code. Cycle counts always reconcile
-              with the cycle-count reason code.
-            </p>
-            <p>
-              Variances at or above {STOCK_ADJUSTMENT_APPROVAL_THRESHOLD} units move
-              into the operations queue for review.
+              Variances of {STOCK_ADJUSTMENT_APPROVAL_THRESHOLD}+ units go to
+              review.
             </p>
           </div>
 
           <LoadingButton
-            className="mt-6 w-full"
+            className="w-full"
             isLoading={isSubmitting}
             onClick={handleSubmit}
           >

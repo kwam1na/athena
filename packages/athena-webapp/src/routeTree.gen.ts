@@ -44,6 +44,9 @@ import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesNewRouteImport } fr
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsUnresolvedRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/unresolved'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/new'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsStockAdjustmentsRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpenWorkRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/open-work'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsApprovalsRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/approvals'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/logs.$logId'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/bags.$bagId'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugServicesIntakeIndexRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services/intake.index'
@@ -277,6 +280,26 @@ const AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRoute =
     path: '/$orgUrlSlug/store/$storeUrlSlug/products/new',
     getParentRoute: () => AuthedRoute,
   } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsStockAdjustmentsRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsStockAdjustmentsRouteImport.update(
+    {
+      id: '/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments',
+      path: '/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments',
+      getParentRoute: () => AuthedRoute,
+    } as any,
+  )
+const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpenWorkRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpenWorkRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/operations/open-work',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/operations/open-work',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsApprovalsRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsApprovalsRouteImport.update({
+    id: '/$orgUrlSlug/store/$storeUrlSlug/operations/approvals',
+    path: '/$orgUrlSlug/store/$storeUrlSlug/operations/approvals',
+    getParentRoute: () => AuthedRoute,
+  } as any)
 const AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRoute =
   AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId',
@@ -477,6 +500,9 @@ export interface FileRoutesByFullPath {
   '/$orgUrlSlug/store/$storeUrlSlug/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRoute
   '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/operations/approvals': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsApprovalsRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/operations/open-work': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpenWorkRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsStockAdjustmentsRoute
   '/$orgUrlSlug/store/$storeUrlSlug/products/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRoute
   '/$orgUrlSlug/store/$storeUrlSlug/products/unresolved': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsUnresolvedRoute
   '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugRoute
@@ -541,6 +567,9 @@ export interface FileRoutesByTo {
   '/$orgUrlSlug/store/$storeUrlSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute
   '/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRoute
   '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/operations/approvals': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsApprovalsRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/operations/open-work': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpenWorkRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsStockAdjustmentsRoute
   '/$orgUrlSlug/store/$storeUrlSlug/products/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRoute
   '/$orgUrlSlug/store/$storeUrlSlug/products/unresolved': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsUnresolvedRoute
   '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugRoute
@@ -608,6 +637,9 @@ export interface FileRoutesById {
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/': typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/$logId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/approvals': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsApprovalsRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/open-work': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpenWorkRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsStockAdjustmentsRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/new': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/unresolved': typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsUnresolvedRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug': typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugRoute
@@ -675,6 +707,9 @@ export interface FileRouteTypes {
     | '/$orgUrlSlug/store/$storeUrlSlug/'
     | '/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId'
     | '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId'
+    | '/$orgUrlSlug/store/$storeUrlSlug/operations/approvals'
+    | '/$orgUrlSlug/store/$storeUrlSlug/operations/open-work'
+    | '/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments'
     | '/$orgUrlSlug/store/$storeUrlSlug/products/new'
     | '/$orgUrlSlug/store/$storeUrlSlug/products/unresolved'
     | '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug'
@@ -739,6 +774,9 @@ export interface FileRouteTypes {
     | '/$orgUrlSlug/store/$storeUrlSlug'
     | '/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId'
     | '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId'
+    | '/$orgUrlSlug/store/$storeUrlSlug/operations/approvals'
+    | '/$orgUrlSlug/store/$storeUrlSlug/operations/open-work'
+    | '/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments'
     | '/$orgUrlSlug/store/$storeUrlSlug/products/new'
     | '/$orgUrlSlug/store/$storeUrlSlug/products/unresolved'
     | '/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug'
@@ -805,6 +843,9 @@ export interface FileRouteTypes {
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/bags/$bagId'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/$logId'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/approvals'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/open-work'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/new'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/products/unresolved'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/promo-codes/$promoCodeSlug'
@@ -1110,6 +1151,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsStockAdjustmentsRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/open-work': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/open-work'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/operations/open-work'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/operations/open-work'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpenWorkRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/approvals': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/approvals'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/operations/approvals'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/operations/approvals'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsApprovalsRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/$logId': {
       id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/$logId'
       path: '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId'
@@ -1327,6 +1389,9 @@ interface AuthedRouteChildren {
   AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugIndexRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRoute
+  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsApprovalsRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsApprovalsRoute
+  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpenWorkRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpenWorkRoute
+  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsStockAdjustmentsRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsStockAdjustmentsRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsUnresolvedRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugProductsUnresolvedRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugPromoCodesPromoCodeSlugRoute
@@ -1396,6 +1461,12 @@ const AuthedRouteChildren: AuthedRouteChildren = {
     AuthedOrgUrlSlugStoreStoreUrlSlugBagsBagIdRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRoute,
+  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsApprovalsRoute:
+    AuthedOrgUrlSlugStoreStoreUrlSlugOperationsApprovalsRoute,
+  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpenWorkRoute:
+    AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpenWorkRoute,
+  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsStockAdjustmentsRoute:
+    AuthedOrgUrlSlugStoreStoreUrlSlugOperationsStockAdjustmentsRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugProductsNewRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugProductsUnresolvedRoute:

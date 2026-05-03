@@ -43,7 +43,7 @@ import {
   Banknote,
   ChevronRight,
 } from "lucide-react";
-import { Link } from "@tanstack/react-router";
+import { Link, useLocation } from "@tanstack/react-router";
 import useGetActiveStore from "../hooks/useGetActiveStore";
 import { useGetActiveOrganization } from "../hooks/useGetOrganizations";
 import { useNewOrderNotification } from "../hooks/useNewOrderNotification";
@@ -59,21 +59,29 @@ function SidebarMenuCollapsible({
   icon: Icon,
   label,
   disabled,
+  defaultOpen = false,
+  isActive = false,
   children,
 }: {
   icon: ComponentType<{ className?: string }>;
   label: string;
   disabled?: boolean;
+  defaultOpen?: boolean;
+  isActive?: boolean;
   children: ReactNode;
 }) {
   return (
     <SidebarMenuItem>
       <Collapsible.Root
-        defaultOpen={false}
+        defaultOpen={defaultOpen}
         className="group/sidebar-collapsible"
       >
         <Collapsible.Trigger asChild>
-          <SidebarMenuButton disabled={disabled} className="w-full">
+          <SidebarMenuButton
+            disabled={disabled}
+            className="w-full"
+            isActive={isActive}
+          >
             <Icon className="w-4 h-4" />
             <p className="font-medium">{label}</p>
             <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-standard ease-standard group-data-[state=open]/sidebar-collapsible:rotate-90" />
@@ -88,6 +96,7 @@ function SidebarMenuCollapsible({
 export function AppSidebar() {
   const { activeStore } = useGetActiveStore();
   const { activeOrganization } = useGetActiveOrganization();
+  const location = useLocation();
 
   const productsWithNoImages = useGetUnresolvedProducts();
 
@@ -130,6 +139,7 @@ export function AppSidebar() {
   );
 
   const { canAccessOperations, hasFullAdminAccess } = usePermissions();
+  const isOperationsRoute = location.pathname.includes("/operations");
 
   if (!activeStore || !activeOrganization) {
     return null;
@@ -180,22 +190,75 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              <SidebarMenuItem>
-                <SidebarMenuButton disabled={!canAccessOperations()} asChild>
-                  <Link
-                    to="/$orgUrlSlug/store/$storeUrlSlug/operations"
-                    params={(p) => ({
-                      ...p,
-                      orgUrlSlug: activeOrganization?.slug,
-                      storeUrlSlug: activeStore?.slug,
-                    })}
-                    className="flex items-center"
-                  >
-                    <Layers className="w-4 h-4" />
-                    <p className="font-medium">Operations</p>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              <SidebarMenuCollapsible
+                defaultOpen={isOperationsRoute}
+                disabled={!canAccessOperations()}
+                icon={Layers}
+                label="Operations"
+              >
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuButton
+                      disabled={!canAccessOperations()}
+                      asChild
+                    >
+                      <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: activeOrganization?.slug,
+                          storeUrlSlug: activeStore?.slug,
+                        })}
+                        className="flex items-center"
+                      >
+                        <p className="font-medium">Stock adjustments</p>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
+
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuButton
+                      disabled={!canAccessOperations()}
+                      asChild
+                    >
+                      <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/operations/open-work"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: activeOrganization?.slug,
+                          storeUrlSlug: activeStore?.slug,
+                        })}
+                        className="flex items-center"
+                      >
+                        <p className="font-medium">Open work</p>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
+
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuButton
+                      disabled={!canAccessOperations()}
+                      asChild
+                    >
+                      <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/operations/approvals"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: activeOrganization?.slug,
+                          storeUrlSlug: activeStore?.slug,
+                        })}
+                        className="flex items-center"
+                      >
+                        <p className="font-medium">Approvals</p>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
+              </SidebarMenuCollapsible>
 
               <SidebarMenuItem>
                 <SidebarMenuButton disabled={!canAccessOperations()} asChild>

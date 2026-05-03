@@ -1,8 +1,12 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { OperationsQueueView } from "~/src/components/operations/OperationsQueueView";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
 export const Route = createFileRoute(
   "/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/"
 )({
-  component: OperationsQueueView,
+  beforeLoad: ({ params }) => {
+    throw redirect({
+      params,
+      to: "/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments",
+    });
+  },
 });

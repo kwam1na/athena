@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
-import View from "../View";
 import { FadeIn } from "../common/FadeIn";
 import { EmptyState } from "../states/empty/empty-state";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
@@ -21,6 +20,7 @@ import {
 } from "./StockAdjustmentWorkspace";
 import { Button } from "../ui/button";
 import { LoadingButton } from "../ui/loading-button";
+import { Skeleton } from "../ui/skeleton";
 
 const operationsApi = api.operations;
 const stockOpsApi = api.stockOps;
@@ -42,6 +42,17 @@ type QueueApprovalRequest = {
   status: string;
   workItemTitle?: string | null;
 };
+
+export type OperationsWorkflow = "stock" | "queue" | "approvals";
+
+function getDefaultWorkflow(args: {
+  approvalRequests: QueueApprovalRequest[];
+  workItems: QueueWorkItem[];
+}): OperationsWorkflow {
+  if (args.approvalRequests.length > 0) return "approvals";
+  if (args.workItems.length > 0) return "queue";
+  return "stock";
+}
 
 function getApprovalRequestCopy(requestType: string) {
   if (requestType === "inventory_adjustment_review") {
@@ -69,7 +80,90 @@ function getApprovalRequestCopy(requestType: string) {
   return null;
 }
 
+function OperationsWorkspaceSkeleton() {
+  return (
+    <FadeIn className="container mx-auto min-h-0 flex-1 overflow-y-auto overscroll-contain py-layout-xl scrollbar-hide">
+      <section
+        aria-label="Loading operations workspace"
+        className="grid gap-layout-xl xl:grid-cols-[minmax(0,1fr)_320px]"
+      >
+        <section className="min-w-0 space-y-layout-2xl">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="max-w-2xl space-y-4">
+              <Skeleton className="h-3 w-20" />
+              <div className="space-y-2">
+                <Skeleton className="h-8 w-80 max-w-full" />
+                <Skeleton className="h-4 w-[38rem] max-w-full" />
+              </div>
+            </div>
+            <Skeleton className="h-10 w-64" />
+          </div>
+
+          <div className="rounded-md border">
+            <div className="grid grid-cols-[minmax(180px,1fr)_120px_120px_180px_80px] gap-4 border-b px-4 py-4">
+              <Skeleton className="h-3 w-12" />
+              <Skeleton className="ml-auto h-3 w-16" />
+              <Skeleton className="ml-auto h-3 w-20" />
+              <Skeleton className="ml-auto h-3 w-16" />
+              <Skeleton className="ml-auto h-3 w-14" />
+            </div>
+            {Array.from({ length: 8 }).map((_, index) => (
+              <div
+                className="grid grid-cols-[minmax(180px,1fr)_120px_120px_180px_80px] items-center gap-4 border-b px-4 py-5 last:border-b-0"
+                key={index}
+              >
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-3 w-24" />
+                </div>
+                <Skeleton className="ml-auto h-4 w-8" />
+                <Skeleton className="ml-auto h-4 w-8" />
+                <Skeleton className="ml-auto h-10 w-36" />
+                <Skeleton className="ml-auto h-4 w-6" />
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <aside className="space-y-layout-md">
+          <section className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
+            <Skeleton className="h-3 w-28" />
+            <div className="mt-layout-lg grid grid-cols-2 gap-layout-md">
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-8 w-12" />
+              </div>
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-8 w-12" />
+              </div>
+            </div>
+            <div className="mt-layout-md space-y-2 border-t pt-layout-md">
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-8 w-24" />
+            </div>
+            <Skeleton className="mt-layout-md h-16 w-full rounded-md" />
+          </section>
+
+          <section className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
+            <Skeleton className="h-3 w-20" />
+            <Skeleton className="mt-layout-md aspect-square w-full rounded-md" />
+            <div className="mt-layout-md space-y-2">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+            <Skeleton className="mt-layout-md h-10 w-full" />
+            <Skeleton className="mt-layout-md h-24 w-full" />
+            <Skeleton className="mt-layout-md h-10 w-full" />
+          </section>
+        </aside>
+      </section>
+    </FadeIn>
+  );
+}
+
 type OperationsQueueViewContentProps = {
+  activeWorkflow?: OperationsWorkflow;
   approvalRequests: QueueApprovalRequest[];
   hasFullAdminAccess: boolean;
   inventoryItems: InventorySnapshotItem[];
@@ -82,13 +176,14 @@ type OperationsQueueViewContentProps = {
     decision: "approved" | "rejected";
   }) => Promise<void>;
   onSubmitStockBatch: (
-    args: SubmitStockAdjustmentArgs
+    args: SubmitStockAdjustmentArgs,
   ) => Promise<NormalizedCommandResult<unknown>>;
   storeId?: Id<"store">;
   workItems: QueueWorkItem[];
 };
 
 export function OperationsQueueViewContent({
+  activeWorkflow,
   approvalRequests,
   hasFullAdminAccess,
   inventoryItems,
@@ -101,14 +196,11 @@ export function OperationsQueueViewContent({
   storeId,
   workItems,
 }: OperationsQueueViewContentProps) {
+  const resolvedWorkflow =
+    activeWorkflow ?? getDefaultWorkflow({ approvalRequests, workItems });
+
   if (isLoadingPermissions) {
-    return (
-      <View>
-        <div className="container mx-auto py-10 text-sm text-muted-foreground">
-          Loading operations queue...
-        </div>
-      </View>
-    );
+    return <OperationsWorkspaceSkeleton />;
   }
 
   if (!hasFullAdminAccess) {
@@ -116,56 +208,43 @@ export function OperationsQueueViewContent({
   }
 
   if (isLoadingQueue) {
-    return (
-      <View>
-        <div className="container mx-auto py-10 text-sm text-muted-foreground">
-          Loading operations workspace...
-        </div>
-      </View>
-    );
+    return <OperationsWorkspaceSkeleton />;
   }
 
   if (!storeId) {
     return (
-      <View>
-        <div className="container mx-auto py-8">
-          <EmptyState
-            description="Select a store before opening stock adjustments or approval work"
-            title="No active store"
-          />
-        </div>
-      </View>
+      <div className="container mx-auto py-8">
+        <EmptyState
+          description="Select a store before opening stock adjustments or approval work"
+          title="No active store"
+        />
+      </div>
     );
   }
 
   return (
-    <View
-      hideBorder
-      hideHeaderBottomBorder
-      header={
-        <div className="container mx-auto flex h-[40px] items-center">
-          <p className="text-xl font-medium">Operations workspace</p>
-        </div>
-      }
-    >
-      <FadeIn className="container mx-auto grid gap-6 py-8 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.85fr)]">
-        <StockAdjustmentWorkspaceContent
-          inventoryItems={inventoryItems}
-          isSubmitting={isSubmittingStockBatch}
-          onSubmitBatch={onSubmitStockBatch}
-          storeId={storeId}
-        />
-
-        <div className="space-y-6">
-          <section className="space-y-3 rounded-2xl border border-border/80 bg-background p-4">
+    <FadeIn className="container mx-auto min-h-0 flex-1 overflow-y-auto overscroll-contain py-layout-xl scrollbar-hide">
+      <section className="min-w-0">
+        {resolvedWorkflow === "stock" ? (
+          <StockAdjustmentWorkspaceContent
+            inventoryItems={inventoryItems}
+            isSubmitting={isSubmittingStockBatch}
+            onSubmitBatch={onSubmitStockBatch}
+            storeId={storeId}
+          />
+        ) : null}
+        {resolvedWorkflow === "queue" ? (
+          <section className="space-y-layout-md rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
             <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
                 Queue
               </p>
-              <h3 className="mt-1 text-base font-medium">Open work items</h3>
+              <h3 className="mt-1 text-base font-medium text-foreground">
+                Open work items
+              </h3>
               <p className="text-sm text-muted-foreground">
-                Service intake and stock review work that still needs progress or
-                completion.
+                Service intake and stock review work that still needs progress
+                or completion.
               </p>
             </div>
             {workItems.length === 0 ? (
@@ -175,10 +254,15 @@ export function OperationsQueueViewContent({
               />
             ) : (
               workItems.map((item) => (
-                <article className="rounded-xl border border-border/80 p-3" key={item._id}>
+                <article
+                  className="rounded-lg border border-border bg-background p-layout-sm"
+                  key={item._id}
+                >
                   <div className="flex items-center justify-between gap-4">
                     <div>
-                      <p className="font-medium">{item.title}</p>
+                      <p className="font-medium text-foreground">
+                        {item.title}
+                      </p>
                       <p className="text-sm text-muted-foreground">
                         {[item.customerName, item.assignedStaffName]
                           .filter(Boolean)
@@ -194,13 +278,16 @@ export function OperationsQueueViewContent({
               ))
             )}
           </section>
-
-          <section className="space-y-3 rounded-2xl border border-border/80 bg-background p-4">
+        ) : null}
+        {resolvedWorkflow === "approvals" ? (
+          <section className="space-y-layout-md rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
             <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
                 Approvals
               </p>
-              <h3 className="mt-1 text-base font-medium">Pending requests</h3>
+              <h3 className="mt-1 text-base font-medium text-foreground">
+                Pending requests
+              </h3>
               <p className="text-sm text-muted-foreground">
                 Approval requests raised by the operations workspace.
               </p>
@@ -213,17 +300,17 @@ export function OperationsQueueViewContent({
             ) : (
               approvalRequests.map((request) => {
                 const approvalCopy = getApprovalRequestCopy(
-                  request.requestType
+                  request.requestType,
                 );
 
                 return (
                   <article
-                    className="rounded-xl border border-border/80 p-3"
+                    className="rounded-lg border border-border bg-background p-layout-sm"
                     key={request._id}
                   >
                     <div className="flex items-center justify-between gap-4">
                       <div>
-                        <p className="font-medium">
+                        <p className="font-medium text-foreground">
                           {request.workItemTitle ?? request.requestType}
                         </p>
                         <p className="text-sm text-muted-foreground">
@@ -236,16 +323,15 @@ export function OperationsQueueViewContent({
                       </p>
                     </div>
                     {approvalCopy ? (
-                      <div className="mt-3 space-y-3 rounded-xl border border-amber-200/80 bg-amber-50/70 px-3 py-3">
-                        <p className="text-sm text-amber-950">
+                      <div className="mt-layout-sm space-y-layout-sm rounded-md border border-warning/30 bg-warning/10 px-layout-sm py-layout-sm">
+                        <p className="text-sm text-foreground">
                           {approvalCopy.description}
                         </p>
                         <div className="flex flex-wrap gap-2">
                           <LoadingButton
-                            className="bg-amber-500 text-amber-950 hover:bg-amber-500/90"
                             disabled={Boolean(
                               isDecidingApprovalRequestId &&
-                                isDecidingApprovalRequestId !== request._id
+                              isDecidingApprovalRequestId !== request._id,
                             )}
                             isLoading={
                               isDecidingApprovalRequestId === request._id
@@ -281,13 +367,19 @@ export function OperationsQueueViewContent({
               })
             )}
           </section>
-        </div>
-      </FadeIn>
-    </View>
+        ) : null}
+      </section>
+    </FadeIn>
   );
 }
 
-export function OperationsQueueView() {
+type OperationsQueueViewProps = {
+  activeWorkflow?: OperationsWorkflow;
+};
+
+export function OperationsQueueView({
+  activeWorkflow,
+}: OperationsQueueViewProps = {}) {
   const {
     activeStore,
     canQueryProtectedData,
@@ -301,7 +393,7 @@ export function OperationsQueueView() {
 
   const queue = useQuery(
     operationsApi.operationalWorkItems.getQueueSnapshot,
-    canQueryProtectedData ? { storeId: activeStore!._id } : "skip"
+    canQueryProtectedData ? { storeId: activeStore!._id } : "skip",
   ) as
     | {
         approvalRequests: QueueApprovalRequest[];
@@ -310,13 +402,13 @@ export function OperationsQueueView() {
     | undefined;
   const inventoryItems = useQuery(
     stockOpsApi.adjustments.listInventorySnapshot,
-    canQueryProtectedData ? { storeId: activeStore!._id } : "skip"
+    canQueryProtectedData ? { storeId: activeStore!._id } : "skip",
   ) as InventorySnapshotItem[] | undefined;
   const submitStockAdjustmentBatch = useMutation(
-    stockOpsApi.adjustments.submitStockAdjustmentBatch
+    stockOpsApi.adjustments.submitStockAdjustmentBatch,
   );
   const decideApprovalRequest = useMutation(
-    operationsApi.approvalRequests.decideApprovalRequest
+    operationsApi.approvalRequests.decideApprovalRequest,
   );
 
   const handleSubmitStockBatch = async (args: SubmitStockAdjustmentArgs) => {
@@ -340,7 +432,7 @@ export function OperationsQueueView() {
         decideApprovalRequest({
           approvalRequestId: args.approvalRequestId,
           decision: args.decision,
-        })
+        }),
       );
 
       if (result.kind !== "ok") {
@@ -349,7 +441,7 @@ export function OperationsQueueView() {
       }
 
       const request = queue?.approvalRequests.find(
-        (approvalRequest) => approvalRequest._id === args.approvalRequestId
+        (approvalRequest) => approvalRequest._id === args.approvalRequestId,
       );
       const approvalCopy = request
         ? getApprovalRequestCopy(request.requestType)
@@ -358,7 +450,7 @@ export function OperationsQueueView() {
       toast.success(
         args.decision === "approved"
           ? (approvalCopy?.approvedToast ?? "Approval request approved")
-          : (approvalCopy?.rejectedToast ?? "Approval request rejected")
+          : (approvalCopy?.rejectedToast ?? "Approval request rejected"),
       );
     } finally {
       setDecisioningApprovalRequestId(null);
@@ -366,13 +458,7 @@ export function OperationsQueueView() {
   };
 
   if (isLoadingAccess) {
-    return (
-      <View>
-        <div className="container mx-auto py-10 text-sm text-muted-foreground">
-          Loading operations queue...
-        </div>
-      </View>
-    );
+    return <OperationsWorkspaceSkeleton />;
   }
 
   if (!isAuthenticated) {
@@ -387,19 +473,18 @@ export function OperationsQueueView() {
 
   if (!activeStore) {
     return (
-      <View>
-        <div className="container mx-auto py-8">
-          <EmptyState
-            description="Select a store before opening stock adjustments or approval work"
-            title="No active store"
-          />
-        </div>
-      </View>
+      <div className="container mx-auto py-8">
+        <EmptyState
+          description="Select a store before opening stock adjustments or approval work"
+          title="No active store"
+        />
+      </div>
     );
   }
 
   return (
     <OperationsQueueViewContent
+      activeWorkflow={activeWorkflow}
       approvalRequests={queue?.approvalRequests ?? []}
       hasFullAdminAccess={hasFullAdminAccess}
       inventoryItems={inventoryItems ?? []}

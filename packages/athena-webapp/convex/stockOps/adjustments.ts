@@ -307,15 +307,78 @@ export const listInventorySnapshot = query({
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
       .collect();
 
+    const productIds = Array.from(
+      new Set(productSkus.map((productSku) => productSku.productId))
+    );
+    const colorIds = Array.from(
+      new Set(productSkus.map((productSku) => productSku.color).filter(Boolean))
+    ) as Id<"color">[];
+
+    const [products, colors] = await Promise.all([
+      Promise.all(productIds.map((productId) => ctx.db.get("product", productId))),
+      Promise.all(colorIds.map((colorId) => ctx.db.get("color", colorId))),
+    ]);
+
+    const productMap = new Map<
+      Id<"product">,
+      NonNullable<(typeof products)[number]>
+    >();
+    products.forEach((product) => {
+      if (product) {
+        productMap.set(product._id, product);
+      }
+    });
+    const categoryIds = Array.from(
+      new Set(
+        products
+          .map((product) => product?.categoryId)
+          .filter(Boolean)
+      )
+    ) as Id<"category">[];
+    const categories = await Promise.all(
+      categoryIds.map((categoryId) => ctx.db.get("category", categoryId))
+    );
+    const categoryMap = new Map<
+      Id<"category">,
+      NonNullable<(typeof categories)[number]>
+    >();
+    categories.forEach((category) => {
+      if (category) {
+        categoryMap.set(category._id, category);
+      }
+    });
+    const colorMap = new Map<Id<"color">, NonNullable<(typeof colors)[number]>>();
+    colors.forEach((color) => {
+      if (color) {
+        colorMap.set(color._id, color);
+      }
+    });
+
     return productSkus
-      .map((productSku) => ({
-        _id: productSku._id,
-        inventoryCount: productSku.inventoryCount,
-        productName:
-          productSku.productName ?? productSku.sku ?? String(productSku._id),
-        quantityAvailable: productSku.quantityAvailable,
-        sku: productSku.sku ?? null,
-      }))
+      .map((productSku) => {
+        const product = productMap.get(productSku.productId);
+        const category = product?.categoryId
+          ? categoryMap.get(product.categoryId)
+          : null;
+        const color = productSku.color ? colorMap.get(productSku.color) : null;
+
+        return {
+          _id: productSku._id,
+          colorName: color?.name ?? null,
+          imageUrl: productSku.images[0] ?? null,
+          inventoryCount: productSku.inventoryCount,
+          length: productSku.length ?? null,
+          productCategory: category?.name ?? null,
+          productId: productSku.productId,
+          productName:
+            product?.name ??
+            productSku.productName ??
+            productSku.sku ??
+            String(productSku._id),
+          quantityAvailable: productSku.quantityAvailable,
+          sku: productSku.sku ?? null,
+        };
+      })
       .sort((left, right) => {
         const nameCompare = left.productName.localeCompare(right.productName);
         if (nameCompare !== 0) {
