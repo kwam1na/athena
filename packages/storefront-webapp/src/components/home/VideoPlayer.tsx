@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import Hls from "hls.js";
+import type Hls from "hls.js";
 import { useEffect, useRef } from "react";
 
 interface VideoPlayerProps {
@@ -13,15 +13,30 @@ export const VideoPlayer = ({ hlsUrl }: VideoPlayerProps) => {
     const video = videoRef.current;
     if (!video || !hlsUrl) return;
 
-    const hls = new Hls();
-    hls.loadSource(hlsUrl);
-    hls.attachMedia(video);
-    hls.on(Hls.Events.MANIFEST_PARSED, () => {
-      video.play().catch((e) => console.error("Error playing video:", e));
-    });
+    let disposed = false;
+    let hls: Hls | null = null;
+
+    const attachHls = async () => {
+      const { default: HlsConstructor } = (await import(
+        // @ts-expect-error hls.js publishes its light build without declarations.
+        "hls.js/light"
+      )) as unknown as { default: typeof Hls };
+
+      if (disposed || !HlsConstructor.isSupported()) return;
+
+      hls = new HlsConstructor();
+      hls.loadSource(hlsUrl);
+      hls.attachMedia(video);
+      hls.on(HlsConstructor.Events.MANIFEST_PARSED, () => {
+        video.play().catch((e) => console.error("Error playing video:", e));
+      });
+    };
+
+    void attachHls();
 
     return () => {
-      hls.destroy();
+      disposed = true;
+      hls?.destroy();
     };
   }, [hlsUrl]);
 
