@@ -25,6 +25,16 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes("node_modules")) {
+            const normalizedId = id.split(path.sep).join("/");
+
+            if (
+              normalizedId.includes("/node_modules/react/") ||
+              normalizedId.includes("/node_modules/react-dom/") ||
+              normalizedId.includes("/node_modules/scheduler/") ||
+              normalizedId.includes("/node_modules/use-sync-external-store/")
+            ) {
+              return "react-vendor";
+            }
             if (id.includes("@tanstack")) return "tanstack-vendor";
 
             if (id.includes("zod")) return "zod-vendor";
@@ -37,6 +47,51 @@ export default defineConfig({
 
             if (id.includes("posthog-js")) return "posthog-js-vendor";
 
+            if (id.includes("lucide-react")) return "icons-vendor";
+
+            if (
+              id.includes("react-hook-form") ||
+              id.includes("@hookform")
+            ) {
+              return "forms-vendor";
+            }
+
+            if (
+              id.includes("@aws-sdk") ||
+              id.includes("@smithy") ||
+              id.includes("aws-amplify") ||
+              id.includes("amazon-cognito-identity-js")
+            ) {
+              return "aws-vendor";
+            }
+
+            if (id.includes("recharts")) return "charts-vendor";
+
+            if (id.includes("zustand")) return "state-vendor";
+
+            if (id.includes("jose") || id.includes("jsonwebtoken")) {
+              return "auth-vendor";
+            }
+
+            if (
+              id.includes("cmdk") ||
+              id.includes("input-otp") ||
+              id.includes("next-themes") ||
+              id.includes("react-day-picker") ||
+              id.includes("react-hot-toast") ||
+              id.includes("react-resizable-panels") ||
+              id.includes("sonner") ||
+              id.includes("tailwind-merge") ||
+              id.includes("class-variance-authority") ||
+              id.includes("clsx")
+            ) {
+              return "ui-vendor";
+            }
+
+            if (id.includes("react-dropzone")) {
+              return "media-tools-vendor";
+            }
+
             // Fallback for other node_modules
             return "vendor";
           }
@@ -44,7 +99,12 @@ export default defineConfig({
       },
     },
   },
-  plugins: [TanStackRouterVite(), react() as unknown as PluginOption],
+  plugins: [
+    TanStackRouterVite({
+      autoCodeSplitting: true,
+    }),
+    react() as unknown as PluginOption,
+  ],
   resolve: {
     alias: {
       "~": __dirname,
