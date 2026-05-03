@@ -861,6 +861,8 @@ describe("repo harness ergonomics", () => {
       packageManager: "bun@1.1.29",
     });
     expect(workflow).toContain("bun-version-file: package.json");
+    expect(workflow).toContain("bun install --frozen-lockfile");
+    expect(workflow).not.toContain("run: bun install\n");
     expect(workflow).not.toContain("bun-version: latest");
   });
 });

@@ -28,13 +28,13 @@ The repo is not currently at 100 percent coverage. Enforcing strict 100 percent 
 
 - runs Athena webapp coverage
 - runs storefront webapp coverage
-- runs repo-root script tests with Bun LCOV coverage
+- runs first-party repo-root script tests with Bun LCOV coverage
 - aggregates the reports from the current checkout
 - fails if any covered surface regresses below the characterized baseline
 
-The target policy remains 100 percent across lines, statements, functions, and branches. Until the repo reaches that target, the gate is a ratchet: no covered surface may move backward, and the printed summary shows the remaining gap.
+The target policy remains 100 percent across lines, statements, functions, and branches. Until the repo reaches that target, the gate is a ratchet: no covered surface may move backward, and the printed summary shows the remaining gap. Repo-script coverage is characterized from first-party `scripts/*.test.ts` files only, so local worktrees cannot inflate or deflate the baseline.
 
-The baseline should match CI output. GitHub Actions currently runs `bun install`, and the repository lockfile is ignored by Bun 1.1.29 as outdated, so CI can install slightly different test tooling than a local checkout. Use the lower CI-observed coverage baseline until the lockfile/install parity gap is fixed.
+The baseline should match CI output. GitHub Actions installs dependencies with `bun install --frozen-lockfile`, and `bun run test:coverage` first runs `scripts/coverage-toolchain-parity.ts` so stale local installs or mismatched Vitest-family versions fail before coverage reports are generated.
 
 ## Exclusions
 
@@ -45,5 +45,7 @@ Generated outputs, test files, route tree generation, coverage output, and Conve
 ## Prevention
 
 - Run `bun run test:coverage` before merge-ready handoff when coverage policy or testable source changes.
+- Keep Vitest-family coverage tooling on exact, aligned versions across the root, Athena webapp, and storefront webapp manifests.
+- Keep root script coverage file selection explicit so local `worktrees/` tests cannot change local-only coverage totals.
 - Keep `scripts/coverage-summary.ts` path-relative to `process.cwd()` so worktrees and CI read their own coverage artifacts.
 - When adding a new testable package, add its coverage artifact to `scripts/coverage-summary.ts` or document the explicit staged exclusion there.

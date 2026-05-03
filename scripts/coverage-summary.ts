@@ -65,9 +65,9 @@ export const COVERAGE_SOURCES: CoverageSource[] = [
     name: "repo scripts",
     lcovPath: "coverage/root-scripts/lcov.info",
     minimumPercent: {
-      lines: (7232 / 12487) * 100,
-      statements: (7232 / 12487) * 100,
-      functions: (647 / 736) * 100,
+      lines: (7471 / 12935) * 100,
+      statements: (7471 / 12935) * 100,
+      functions: (672 / 763) * 100,
     },
   },
 ];
