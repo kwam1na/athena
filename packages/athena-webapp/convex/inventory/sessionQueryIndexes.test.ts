@@ -99,7 +99,7 @@ describe("POS and expense session indexing", () => {
     );
   });
 
-  it("uses expiry index once for pos session cleanup and filters statuses in-code", () => {
+  it("uses targeted status-expiry indexes for pos session cleanup", () => {
     const source = readProjectFile("convex", "inventory", "posSessions.ts");
     const helperSource = readSourceSlice(
       source,
@@ -107,12 +107,13 @@ describe("POS and expense session indexing", () => {
       "async function listPosSessionsForStoreStatus(",
     );
 
-    expect(helperSource).toContain('withIndex("by_expiresAt",');
-    expect(helperSource).not.toContain(
-      'withIndex("by_status_and_expiresAt",'
-    );
+    expect(helperSource).toContain('withIndex("by_status_and_expiresAt",');
+    expect(helperSource).not.toContain('withIndex("by_expiresAt",');
     expect(helperSource).not.toContain("Promise.all");
-    expect(helperSource.match(/\.paginate\(/)?.length).toBe(1);
+    expect(helperSource).not.toContain("while (true)");
+    expect(helperSource).not.toContain("continueCursor");
+    expect(helperSource).not.toContain(".paginate(");
+    expect(helperSource).toContain(".take(SESSION_CLEANUP_BATCH_SIZE)");
 
     const releaseSource = readSourceSlice(
       source,
@@ -198,7 +199,7 @@ describe("POS and expense session indexing", () => {
     );
   });
 
-  it("uses expiry index once for expense session cleanup and filters statuses in-code", () => {
+  it("uses targeted status-expiry indexes for expense session cleanup", () => {
     const source = readProjectFile(
       "convex",
       "inventory",
@@ -210,12 +211,15 @@ describe("POS and expense session indexing", () => {
       "export const getStoreExpenseSessions = query({",
     );
 
-    expect(helperSource).toContain('withIndex("by_expiresAt",');
-    expect(helperSource).not.toContain(
-      'withIndex("by_status_and_expiresAt",'
-    );
+    expect(helperSource).toContain('withIndex("by_status_and_expiresAt",');
+    expect(helperSource).not.toContain('withIndex("by_expiresAt",');
     expect(helperSource).not.toContain("Promise.all");
-    expect(helperSource.match(/\.paginate\(/)?.length).toBe(1);
+    expect(helperSource).not.toContain("while (true)");
+    expect(helperSource).not.toContain("continueCursor");
+    expect(helperSource).not.toContain(".paginate(");
+    expect(helperSource).toContain(
+      ".take(EXPENSE_SESSION_CLEANUP_BATCH_SIZE)"
+    );
 
     const releaseSource = readSourceSlice(
       source,

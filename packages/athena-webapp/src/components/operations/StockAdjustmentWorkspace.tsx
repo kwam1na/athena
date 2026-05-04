@@ -1,7 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Link } from "@tanstack/react-router";
-import { CheckCircle2, ExternalLink, Package, RotateCcw } from "lucide-react";
+import {
+  CheckCircle2,
+  ExternalLink,
+  Package,
+  RotateCcw,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -64,16 +72,51 @@ export type SubmitStockAdjustmentArgs = {
   submissionKey: string;
 };
 
+export type DeleteStockAdjustmentScopeSkusArgs = {
+  scopeKey: string;
+  storeId: Id<"store">;
+};
+
+export type DeleteStockAdjustmentScopeSkusResult = {
+  deletedCount: number;
+  dryRun: boolean;
+  productSkuIds: Array<Id<"productSku">>;
+  scopeKey: string;
+};
+
+export type StockAdjustmentType = "manual" | "cycle_count";
+export type StockAdjustmentAvailabilityFilter =
+  | "all"
+  | "all_available"
+  | "changed"
+  | "unavailable";
+
+export type StockAdjustmentSearchState = {
+  availability?: StockAdjustmentAvailabilityFilter;
+  mode?: StockAdjustmentType;
+  page?: number;
+  query?: string;
+  scope?: string;
+  sku?: string;
+};
+
+export type StockAdjustmentSearchPatch = Partial<StockAdjustmentSearchState>;
+
 type StockAdjustmentWorkspaceContentProps = {
   inventoryItems: InventorySnapshotItem[];
+  isDeletingScopeSkus?: boolean;
   isSubmitting: boolean;
+  onDeleteSelectedScopeSkus?: (
+    args: DeleteStockAdjustmentScopeSkusArgs,
+  ) => Promise<NormalizedCommandResult<DeleteStockAdjustmentScopeSkusResult>>;
+  onSearchStateChange?: (patch: StockAdjustmentSearchPatch) => void;
   onSubmitBatch: (
     args: SubmitStockAdjustmentArgs,
   ) => Promise<NormalizedCommandResult<unknown>>;
+  searchState?: StockAdjustmentSearchState;
   storeId?: Id<"store">;
 };
 
-type StockAdjustmentType = "manual" | "cycle_count";
 type StockAdjustmentRow = {
   inputValue: string;
   inventoryItem: InventorySnapshotItem;
@@ -89,6 +132,10 @@ type CountScopeOption = {
   label: string;
 };
 type CycleCountSubmissionOutcome = "applied" | "review_required" | null;
+type StockAdjustmentFilterState = {
+  availability: StockAdjustmentAvailabilityFilter;
+  query: string;
+};
 
 const MANUAL_REASON_LABELS: Record<
   (typeof MANUAL_STOCK_ADJUSTMENT_REASON_CODES)[number],
@@ -101,6 +148,19 @@ const MANUAL_REASON_LABELS: Record<
 };
 
 const UNCATEGORIZED_SCOPE_KEY = "__uncategorized";
+const INVENTORY_NUMBER_FORMATTER = new Intl.NumberFormat("en-US", {
+  maximumFractionDigits: 1,
+  notation: "compact",
+});
+const STOCK_ADJUSTMENT_AVAILABILITY_FILTER_LABELS: Record<
+  StockAdjustmentAvailabilityFilter,
+  string
+> = {
+  all: "All SKUs",
+  all_available: "All available",
+  changed: "Changed rows",
+  unavailable: "Unavailable",
+};
 
 function getCountScopeKey(item: InventorySnapshotItem) {
   return item.productCategory?.trim() || UNCATEGORIZED_SCOPE_KEY;
@@ -131,20 +191,73 @@ function trimOptional(value?: string | null) {
   return nextValue ? nextValue : undefined;
 }
 
+function pluralize(count: number, singular: string, plural = `${singular}s`) {
+  return count === 1 ? singular : plural;
+}
+
+function formatInventoryNumber(value: number) {
+  return INVENTORY_NUMBER_FORMATTER.format(value).toLowerCase();
+}
+
 function getInventoryItemDisplayName(item: InventorySnapshotItem) {
   return getProductName(item) || item.sku || String(item._id);
 }
 
+function normalizeStockAdjustmentSearch(value?: string | null) {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+function rowMatchesStockAdjustmentSearch(
+  row: StockAdjustmentRow,
+  query: string,
+) {
+  if (!query) return true;
+
+  const item = row.inventoryItem;
+  const searchableText = [
+    getInventoryItemDisplayName(item),
+    item.sku,
+    item.colorName,
+    item.productCategory,
+    item.length === null || item.length === undefined
+      ? undefined
+      : String(item.length),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return searchableText.includes(query);
+}
+
+function rowMatchesAvailabilityFilter(
+  row: StockAdjustmentRow,
+  availability: StockAdjustmentAvailabilityFilter,
+) {
+  if (availability === "all") return true;
+  if (availability === "changed") return row.isEdited;
+
+  const item = row.inventoryItem;
+  const isAllAvailable = item.inventoryCount === item.quantityAvailable;
+
+  return availability === "all_available" ? isAllAvailable : !isAllAvailable;
+}
+
 export function StockAdjustmentWorkspaceContent({
   inventoryItems,
+  isDeletingScopeSkus = false,
   isSubmitting,
+  onDeleteSelectedScopeSkus,
+  onSearchStateChange,
   onSubmitBatch,
+  searchState,
   storeId,
 }: StockAdjustmentWorkspaceContentProps) {
-  const [adjustmentType, setAdjustmentType] =
-    useState<StockAdjustmentType>("cycle_count");
+  const [adjustmentType, setAdjustmentType] = useState<StockAdjustmentType>(
+    searchState?.mode ?? "cycle_count",
+  );
   const [submissionKey, setSubmissionKey] = useState(() =>
-    buildStockAdjustmentSubmissionKey("cycle_count"),
+    buildStockAdjustmentSubmissionKey(searchState?.mode ?? "cycle_count"),
   );
   const [reasonCode, setReasonCode] = useState<
     (typeof MANUAL_STOCK_ADJUSTMENT_REASON_CODES)[number]
@@ -157,12 +270,62 @@ export function StockAdjustmentWorkspaceContent({
     buildCycleCountDrafts(inventoryItems),
   );
   const [activeInventoryItemId, setActiveInventoryItemId] =
-    useState<Id<"productSku"> | null>(inventoryItems[0]?._id ?? null);
+    useState<Id<"productSku"> | null>(
+      (searchState?.sku as Id<"productSku"> | undefined) ??
+        inventoryItems[0]?._id ??
+        null,
+    );
   const [selectedCountScopeKey, setSelectedCountScopeKey] = useState<
     string | null
-  >(null);
+  >(searchState?.scope ?? null);
+  const [filters, setFilters] = useState<StockAdjustmentFilterState>({
+    availability: searchState?.availability ?? "all",
+    query: searchState?.query ?? "",
+  });
   const [cycleCountSubmissionOutcome, setCycleCountSubmissionOutcome] =
     useState<CycleCountSubmissionOutcome>(null);
+
+  useEffect(() => {
+    if (!searchState?.mode || searchState.mode === adjustmentType) return;
+
+    setAdjustmentType(searchState.mode);
+    setSubmissionKey(buildStockAdjustmentSubmissionKey(searchState.mode));
+    if (searchState.mode === "manual") {
+      setCycleCountSubmissionOutcome(null);
+    }
+  }, [adjustmentType, searchState?.mode]);
+
+  useEffect(() => {
+    if (searchState?.scope === undefined) return;
+
+    setSelectedCountScopeKey(searchState.scope || null);
+  }, [searchState?.scope]);
+
+  useEffect(() => {
+    if (searchState?.sku === undefined) return;
+
+    setActiveInventoryItemId(
+      searchState.sku
+        ? (searchState.sku as Id<"productSku">)
+        : (inventoryItems[0]?._id ?? null),
+    );
+  }, [inventoryItems, searchState?.sku]);
+
+  useEffect(() => {
+    setFilters((current) => ({
+      availability: searchState?.availability ?? current.availability,
+      query:
+        searchState?.query === undefined ? current.query : searchState.query,
+    }));
+  }, [searchState?.availability, searchState?.query]);
+
+  const handleSelectInventoryItem = useCallback(
+    (itemId: Id<"productSku"> | null) => {
+      setActiveInventoryItemId(itemId);
+      onSearchStateChange?.({ sku: itemId ?? undefined });
+    },
+    [onSearchStateChange],
+  );
 
   useEffect(() => {
     setManualDeltas(buildManualDrafts(inventoryItems));
@@ -269,6 +432,16 @@ export function StockAdjustmentWorkspaceContent({
         : rows,
     [adjustmentType, rows, selectedCountScope],
   );
+  const normalizedFilterQuery = normalizeStockAdjustmentSearch(filters.query);
+  const filteredRows = useMemo(
+    () =>
+      scopedRows.filter(
+        (row) =>
+          rowMatchesStockAdjustmentSearch(row, normalizedFilterQuery) &&
+          rowMatchesAvailabilityFilter(row, filters.availability),
+      ),
+    [filters.availability, normalizedFilterQuery, scopedRows],
+  );
   const summary = summarizeStockAdjustmentLineItems(
     changedRows.map((row) => ({
       quantityDelta: row.quantityDelta,
@@ -282,6 +455,58 @@ export function StockAdjustmentWorkspaceContent({
     inventoryItems.find((item) => item._id === activeInventoryItemId) ??
     inventoryItems[0] ??
     null;
+  const inventoryState = useMemo(() => {
+    const totals = inventoryItems.reduce(
+      (current, item) => {
+        const unavailableUnits = Math.max(
+          0,
+          item.inventoryCount - item.quantityAvailable,
+        );
+
+        return {
+          availableUnits: current.availableUnits + item.quantityAvailable,
+          onHandUnits: current.onHandUnits + item.inventoryCount,
+          unavailableSkuCount:
+            current.unavailableSkuCount + (unavailableUnits > 0 ? 1 : 0),
+          unavailableUnits: current.unavailableUnits + unavailableUnits,
+        };
+      },
+      {
+        availableUnits: 0,
+        onHandUnits: 0,
+        unavailableSkuCount: 0,
+        unavailableUnits: 0,
+      },
+    );
+
+    const itemCount = inventoryItems.length;
+    const hasUnavailableUnits = totals.unavailableUnits > 0;
+
+    return {
+      ...totals,
+      itemCount,
+      description:
+        itemCount === 0
+          ? "Inventory appears here once SKUs are available for this store."
+          : `${formatInventoryNumber(
+              totals.availableUnits,
+            )} of ${formatInventoryNumber(totals.onHandUnits)} ${pluralize(
+              totals.onHandUnits,
+              "unit",
+            )} are available to sell.`,
+      title:
+        itemCount === 0
+          ? "No inventory loaded."
+          : hasUnavailableUnits
+            ? `${totals.unavailableSkuCount} ${pluralize(
+                totals.unavailableSkuCount,
+                "SKU",
+              )} ${
+                totals.unavailableSkuCount === 1 ? "has" : "have"
+              } unavailable units.`
+            : "All inventory is available.",
+    };
+  }, [inventoryItems]);
   const cycleCountStatus = cycleCountSubmissionOutcome
     ? cycleCountSubmissionOutcome === "review_required"
       ? {
@@ -328,6 +553,18 @@ export function StockAdjustmentWorkspaceContent({
 
     setActiveInventoryItemId(scopedRows[0]?.inventoryItem._id ?? null);
   }, [activeInventoryItemId, adjustmentType, scopedRows, selectedCountScope]);
+  useEffect(() => {
+    if (
+      activeInventoryItemId &&
+      filteredRows.some(
+        (row) => row.inventoryItem._id === activeInventoryItemId,
+      )
+    ) {
+      return;
+    }
+
+    setActiveInventoryItemId(filteredRows[0]?.inventoryItem._id ?? null);
+  }, [activeInventoryItemId, filteredRows]);
   const columns = useMemo<ColumnDef<StockAdjustmentRow>[]>(
     () => [
       {
@@ -365,31 +602,54 @@ export function StockAdjustmentWorkspaceContent({
           <DataTableColumnHeader
             className="justify-end"
             column={column}
-            title="On hand"
+            title={
+              <span className="grid min-w-48 grid-cols-2 gap-2 text-right">
+                <span>On hand</span>
+                <span>Available</span>
+              </span>
+            }
           />
         ),
-        cell: ({ row }) => (
-          <p className="text-right text-sm font-medium">
-            {row.original.inventoryItem.inventoryCount}
-          </p>
-        ),
-      },
-      {
-        accessorKey: "inventoryItem.quantityAvailable",
-        enableHiding: false,
-        enableSorting: false,
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            className="justify-end"
-            column={column}
-            title="Available"
-          />
-        ),
-        cell: ({ row }) => (
-          <p className="text-right text-sm text-muted-foreground">
-            {row.original.inventoryItem.quantityAvailable}
-          </p>
-        ),
+        cell: ({ row }) => {
+          const item = row.original.inventoryItem;
+          const availabilityMatchesOnHand =
+            item.quantityAvailable === item.inventoryCount;
+
+          if (availabilityMatchesOnHand) {
+            const availabilityLabel =
+              item.inventoryCount === 0 ? "None available" : "All available";
+
+            return (
+              <div className="flex min-w-48 justify-end">
+                <span
+                  className="inline-flex min-w-36 items-center justify-center gap-2 rounded-full border border-border bg-muted/50 px-3 py-1 text-sm font-medium tabular-nums text-muted-foreground"
+                  title="All units are available"
+                >
+                  <span className="sr-only">On hand and available match</span>
+                  {item.inventoryCount > 0 ? (
+                    <span className="text-foreground">
+                      {formatInventoryNumber(item.inventoryCount)}
+                    </span>
+                  ) : null}
+                  <span className="text-[11px] font-medium uppercase tracking-[0.12em]">
+                    {availabilityLabel}
+                  </span>
+                </span>
+              </div>
+            );
+          }
+
+          return (
+            <div className="grid min-w-48 grid-cols-2 gap-2 text-right text-sm tabular-nums">
+              <span className="font-medium text-foreground">
+                {formatInventoryNumber(item.inventoryCount)}
+              </span>
+              <span className="text-muted-foreground">
+                {formatInventoryNumber(item.quantityAvailable)}
+              </span>
+            </div>
+          );
+        },
       },
       {
         accessorKey: "inputValue",
@@ -436,7 +696,7 @@ export function StockAdjustmentWorkspaceContent({
                 className="h-10 w-36 text-right"
                 inputMode="numeric"
                 min={adjustmentType === "manual" ? undefined : 0}
-                onFocus={() => setActiveInventoryItemId(item._id)}
+                onFocus={() => handleSelectInventoryItem(item._id)}
                 onChange={(event) => handleDraftChange(event.target.value)}
                 type="number"
                 value={row.original.inputValue}
@@ -447,7 +707,7 @@ export function StockAdjustmentWorkspaceContent({
                 disabled={!row.original.isEdited}
                 onClick={(event) => {
                   event.stopPropagation();
-                  setActiveInventoryItemId(item._id);
+                  handleSelectInventoryItem(item._id);
                   setDraftValue(resetValue);
                   if (adjustmentType === "cycle_count") {
                     setCycleCountSubmissionOutcome(null);
@@ -491,7 +751,7 @@ export function StockAdjustmentWorkspaceContent({
         ),
       },
     ],
-    [adjustmentType],
+    [adjustmentType, handleSelectInventoryItem],
   );
 
   const handleModeChange = (nextType: StockAdjustmentType) => {
@@ -500,6 +760,57 @@ export function StockAdjustmentWorkspaceContent({
     if (nextType === "manual") {
       setCycleCountSubmissionOutcome(null);
     }
+
+    const nextScope =
+      nextType === "cycle_count"
+        ? (selectedCountScope?.key ?? countScopeOptions[0]?.key)
+        : undefined;
+    const nextActiveItem =
+      nextType === "cycle_count" && nextScope
+        ? rows.find((row) => getCountScopeKey(row.inventoryItem) === nextScope)
+            ?.inventoryItem
+        : rows[0]?.inventoryItem;
+
+    if (nextActiveItem) {
+      setActiveInventoryItemId(nextActiveItem._id);
+    }
+    onSearchStateChange?.({
+      mode: nextType,
+      page: 1,
+      scope: nextScope,
+      sku: nextActiveItem?._id,
+    });
+  };
+
+  const handleFilterChange = (patch: Partial<StockAdjustmentFilterState>) => {
+    const nextFilters = {
+      ...filters,
+      ...patch,
+    };
+
+    setFilters(nextFilters);
+    onSearchStateChange?.({
+      availability:
+        nextFilters.availability === "all"
+          ? undefined
+          : nextFilters.availability,
+      page: 1,
+      query: trimOptional(nextFilters.query),
+      sku: undefined,
+    });
+  };
+
+  const handleClearFilters = () => {
+    setFilters({
+      availability: "all",
+      query: "",
+    });
+    onSearchStateChange?.({
+      availability: undefined,
+      page: 1,
+      query: undefined,
+      sku: undefined,
+    });
   };
 
   const handleSubmit = async () => {
@@ -552,6 +863,35 @@ export function StockAdjustmentWorkspaceContent({
     setSubmissionKey(buildStockAdjustmentSubmissionKey(adjustmentType));
   };
 
+  const handleDeleteSelectedScopeSkus = async () => {
+    if (!storeId || !selectedCountScope || !onDeleteSelectedScopeSkus) {
+      return;
+    }
+
+    const skuLabel = selectedCountScope.itemCount === 1 ? "SKU" : "SKUs";
+    const confirmed = window.confirm(
+      `Delete ${selectedCountScope.itemCount} ${skuLabel} in ${selectedCountScope.label}? This temporary cleanup cannot be undone.`,
+    );
+
+    if (!confirmed) return;
+
+    const result = await onDeleteSelectedScopeSkus({
+      scopeKey: selectedCountScope.key,
+      storeId,
+    });
+
+    if (result.kind !== "ok") {
+      presentCommandToast(result);
+      return;
+    }
+
+    const deletedSkuLabel = result.data.deletedCount === 1 ? "SKU" : "SKUs";
+    toast.success(
+      `Deleted ${result.data.deletedCount} ${deletedSkuLabel} from ${selectedCountScope.label}`,
+    );
+    onSearchStateChange?.({ page: 1, sku: undefined });
+  };
+
   return (
     <div className="grid gap-layout-xl xl:grid-cols-[minmax(0,1fr)_320px]">
       <section className="min-w-0 space-y-layout-2xl">
@@ -562,16 +902,41 @@ export function StockAdjustmentWorkspaceContent({
             </p>
             <div className="space-y-1">
               <h2 className="font-display text-2xl font-semibold tracking-tight text-foreground">
-                {adjustmentType === "cycle_count"
-                  ? "Choose a count scope."
-                  : "Record stock adjustments."}
+                {inventoryState.title}
               </h2>
               <p className="text-sm text-muted-foreground">
+                {inventoryState.description}{" "}
                 {adjustmentType === "cycle_count"
-                  ? "Start with a category, then record physical counts for the SKUs in that group."
-                  : "Enter known stock deltas. Athena applies the variance as an inventory movement, or routes larger changes for review."}
+                  ? "Choose a scope, then record physical counts for that group."
+                  : "Record known deltas when the physical stock needs an adjustment."}
               </p>
             </div>
+            <dl className="grid max-w-xl grid-cols-3 gap-2">
+              <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
+                <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                  On hand
+                </dt>
+                <dd className="mt-1 text-sm font-medium tabular-nums text-foreground">
+                  {formatInventoryNumber(inventoryState.onHandUnits)}
+                </dd>
+              </div>
+              <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
+                <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                  Available
+                </dt>
+                <dd className="mt-1 text-sm font-medium tabular-nums text-foreground">
+                  {formatInventoryNumber(inventoryState.availableUnits)}
+                </dd>
+              </div>
+              <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
+                <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                  Unavailable
+                </dt>
+                <dd className="mt-1 text-sm font-medium tabular-nums text-foreground">
+                  {formatInventoryNumber(inventoryState.unavailableUnits)}
+                </dd>
+              </div>
+            </dl>
           </div>
 
           <Tabs
@@ -614,6 +979,11 @@ export function StockAdjustmentWorkspaceContent({
                       )?.inventoryItem;
 
                       setActiveInventoryItemId(firstScopedItem?._id ?? null);
+                      onSearchStateChange?.({
+                        page: 1,
+                        scope: scope.key,
+                        sku: firstScopedItem?._id,
+                      });
                     }}
                     type="button"
                   >
@@ -646,21 +1016,102 @@ export function StockAdjustmentWorkspaceContent({
           </section>
         ) : null}
 
+        <section
+          aria-label="SKU search and filters"
+          className="rounded-md border border-border bg-surface-raised px-layout-md py-layout-sm"
+        >
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0 flex-1">
+              <Label className="sr-only" htmlFor="stock-adjustment-sku-search">
+                Search product SKUs
+              </Label>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="stock-adjustment-sku-search"
+                  onChange={(event) =>
+                    handleFilterChange({ query: event.target.value })
+                  }
+                  placeholder="Search product or SKU"
+                  value={filters.query}
+                  className="pl-9"
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Label className="sr-only" htmlFor="stock-adjustment-availability-filter">
+                Filter by availability
+              </Label>
+              <Select
+                onValueChange={(value) =>
+                  handleFilterChange({
+                    availability: value as StockAdjustmentAvailabilityFilter,
+                  })
+                }
+                value={filters.availability}
+              >
+                <SelectTrigger
+                  className="w-[180px]"
+                  id="stock-adjustment-availability-filter"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(
+                    Object.keys(
+                      STOCK_ADJUSTMENT_AVAILABILITY_FILTER_LABELS,
+                    ) as StockAdjustmentAvailabilityFilter[]
+                  ).map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {STOCK_ADJUSTMENT_AVAILABILITY_FILTER_LABELS[option]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {filters.query || filters.availability !== "all" ? (
+                <Button
+                  className="text-muted-foreground"
+                  onClick={handleClearFilters}
+                  type="button"
+                  variant="outline"
+                >
+                  <X className="h-4 w-4" />
+                  Clear
+                </Button>
+              ) : null}
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Showing {formatInventoryNumber(filteredRows.length)} of{" "}
+            {formatInventoryNumber(scopedRows.length)}{" "}
+            {pluralize(scopedRows.length, "SKU")}.
+          </p>
+        </section>
+
         <div className="flex min-h-0 flex-col">
           <GenericDataTable
+            autoResetPageIndex={false}
             columns={columns}
-            data={scopedRows}
+            data={filteredRows}
             getRowClassName={(row) =>
               row.original.inventoryItem._id === activeInventoryItemId
                 ? "bg-muted/60 hover:bg-muted/70"
                 : undefined
             }
+            onPageIndexChange={(nextPageIndex) =>
+              onSearchStateChange?.({ page: nextPageIndex + 1 })
+            }
             onRowClick={(row) =>
-              setActiveInventoryItemId(row.original.inventoryItem._id)
+              handleSelectInventoryItem(row.original.inventoryItem._id)
+            }
+            pageIndex={
+              searchState?.page === undefined
+                ? undefined
+                : Math.max(searchState.page - 1, 0)
             }
             paginationRangeItemLabel="SKU"
             paginationRangeItemPluralLabel="SKUs"
-            tableId={`stock-adjustments-${adjustmentType}-${selectedCountScope?.key ?? "all"}`}
+            tableId={`stock-adjustments-${adjustmentType}-${selectedCountScope?.key ?? "all"}-${filters.availability}-${normalizedFilterQuery || "all"}`}
           />
         </div>
       </section>
@@ -734,6 +1185,38 @@ export function StockAdjustmentWorkspaceContent({
                   ? "Submitting this count will apply inventory movements immediately"
                   : "This batch can apply immediately and will still write inventory movements"}
             </div>
+            {adjustmentType === "cycle_count" &&
+            selectedCountScope &&
+            onDeleteSelectedScopeSkus ? (
+              <div className="space-y-layout-sm rounded-md border border-destructive/30 bg-destructive/5 px-layout-md py-layout-sm">
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-destructive">
+                    Temporary cleanup
+                  </p>
+                  <p className="text-sm font-medium text-foreground">
+                    Delete selected scope SKUs
+                  </p>
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    Deletes {selectedCountScope.itemCount}{" "}
+                    {selectedCountScope.itemCount === 1 ? "SKU" : "SKUs"} in{" "}
+                    {selectedCountScope.label} from the catalog.
+                  </p>
+                </div>
+                <LoadingButton
+                  className="w-full"
+                  disabled={
+                    isDeletingScopeSkus || selectedCountScope.itemCount === 0
+                  }
+                  isLoading={isDeletingScopeSkus}
+                  onClick={handleDeleteSelectedScopeSkus}
+                  size="sm"
+                  variant="destructive"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete scope SKUs
+                </LoadingButton>
+              </div>
+            ) : null}
           </div>
         </section>
 

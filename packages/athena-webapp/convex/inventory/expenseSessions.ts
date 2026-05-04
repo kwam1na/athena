@@ -28,7 +28,7 @@ const MAX_EXPENSE_SESSION_ITEMS = 200;
 const EXPENSE_SESSION_QUERY_CANDIDATE_LIMIT = 200;
 const ACTIVE_EXPENSE_SESSION_CANDIDATE_LIMIT = 100;
 const EXPENSE_SESSION_CLEANUP_BATCH_SIZE = 100;
-const EXPENSE_SESSION_RELEASE_STATUSES = new Set(["active", "void"]);
+const EXPENSE_SESSION_RELEASE_STATUS_VALUES = ["active", "void"] as const;
 
 const expenseSessionOperationValidator = v.object({
   sessionId: v.id("expenseSession"),
@@ -165,26 +165,21 @@ async function listExpenseSessionsByStatusBefore(
   expiresBefore: number,
 ) {
   const sessions = [];
-  let cursor: string | null = null;
 
-  while (true) {
-    const page = await ctx.db
+  for (const status of EXPENSE_SESSION_RELEASE_STATUS_VALUES) {
+    const expiredStatusSessions = await ctx.db
       .query("expenseSession")
-      .withIndex("by_expiresAt", (q) => q.lt("expiresAt", expiresBefore))
-      .paginate({ cursor, numItems: EXPENSE_SESSION_CLEANUP_BATCH_SIZE });
+      .withIndex("by_status_and_expiresAt", (q) =>
+        q.eq("status", status).lt("expiresAt", expiresBefore),
+      )
+      .take(EXPENSE_SESSION_CLEANUP_BATCH_SIZE);
 
-    sessions.push(
-      ...page.page.filter((session) =>
-        EXPENSE_SESSION_RELEASE_STATUSES.has(session.status),
-      ),
-    );
-    if (page.isDone) {
-      break;
-    }
-    cursor = page.continueCursor;
+    sessions.push(...expiredStatusSessions);
   }
 
-  return sessions;
+  return sessions
+    .sort((a, b) => a.expiresAt - b.expiresAt)
+    .slice(0, EXPENSE_SESSION_CLEANUP_BATCH_SIZE);
 }
 
 // Get expense sessions for a store (with filtering)

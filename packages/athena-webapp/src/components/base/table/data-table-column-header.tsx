@@ -16,10 +16,10 @@ const tableHeaderClass =
   "text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground";
 
 interface DataTableColumnHeaderProps<TData, TValue>
-  extends React.HTMLAttributes<HTMLDivElement> {
+  extends Omit<React.HTMLAttributes<HTMLDivElement>, "title"> {
   column: Column<TData, TValue>;
   enableControls?: boolean;
-  title: string;
+  title: React.ReactNode;
 }
 
 export function DataTableColumnHeader<TData, TValue>({
@@ -28,31 +28,33 @@ export function DataTableColumnHeader<TData, TValue>({
   className,
   title,
 }: DataTableColumnHeaderProps<TData, TValue>) {
+  const titleKey = typeof title === "string" ? title : undefined;
+
   // Load initial sorting preference from localStorage
   useEffect(() => {
-    if (!enableControls) {
+    if (!enableControls || !titleKey) {
       return;
     }
 
-    const savedSort = localStorage.getItem(`table-sort-${title}`);
+    const savedSort = localStorage.getItem(`table-sort-${titleKey}`);
     if (savedSort) {
       column.toggleSorting(savedSort === "desc", true);
     }
-  }, [column, enableControls, title]);
+  }, [column, enableControls, titleKey]);
 
   // Save sorting preference when it changes
   useEffect(() => {
-    if (!enableControls) {
+    if (!enableControls || !titleKey) {
       return;
     }
 
     const currentSort = column.getIsSorted();
     if (currentSort) {
-      localStorage.setItem(`table-sort-${title}`, currentSort);
+      localStorage.setItem(`table-sort-${titleKey}`, currentSort);
     } else {
-      localStorage.removeItem(`table-sort-${title}`);
+      localStorage.removeItem(`table-sort-${titleKey}`);
     }
-  }, [column.getIsSorted(), enableControls, title]);
+  }, [column.getIsSorted(), enableControls, titleKey]);
 
   if (!enableControls || !column.getCanSort()) {
     return (

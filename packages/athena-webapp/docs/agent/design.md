@@ -77,13 +77,38 @@ Rules:
 The font tokens are:
 
 - `--font-sans`: UI copy, controls, tables, helper text.
-- `--font-display`: page titles, section landmarks, key numerics. This uses the
-  sans family and relies on weight and scale for hierarchy.
+- `--font-display`: page titles, section landmarks, and authored workspace anchors.
+- `--font-numeric`: cash totals, ledger values, metric amounts, and other tabular operator
+  numerics.
 - `--font-mono`: technical identifiers, trace IDs, codes, and compact diagnostics.
+
+The active Athena story preset uses the same sans family for UI, display, and numeric
+typography. Cash totals and ledger values use the numeric token with tabular number styling,
+not a different font family. The previous app setup is preserved as the `athena-classic`
+preset in `src/index.css` for comparison or rollback.
 
 Use display type sparingly. It should create hierarchy, not ornament every card. Avoid
 negative letter spacing beyond existing local patterns, and do not scale font size directly
 with viewport width except for existing Storybook hero specimens.
+
+## Page-Level Headers
+
+Use the page-level header pattern for top-level workspace orientation, documentation pages,
+template overviews, and operational pages that need to quickly tell an operator where they
+are and what the page is doing. This is separate from the compact `PageHeader` used inside
+`View` headers.
+
+Canonical structure:
+
+- Uppercase eyebrow for the page family, store context, workflow, or system area.
+- Large `font-display` title as the primary orientation anchor.
+- One restrained description that explains the operational outcome, not the implementation.
+- Quiet bottom divider below the header before the first content section.
+- No enclosing card, panel, hero art, or decorative background.
+
+Use `PageLevelHeader` from `src/components/common/PageLevelHeader.tsx` when a page needs this
+orientation pattern. Keep actions outside the header unless the page has a true top-level
+primary action that belongs with the title.
 
 ## Spacing And Density
 

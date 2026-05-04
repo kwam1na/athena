@@ -57,9 +57,70 @@ type NormalizedStockAdjustmentLineItem = {
   systemQuantity: number;
 };
 
+const UNCATEGORIZED_SCOPE_KEY = "__uncategorized";
+const TEMPORARY_DELETE_SCOPE_CONFIRMATION =
+  "delete-stock-adjustment-scope-skus";
+
 function trimOptional(value?: string | null) {
   const nextValue = value?.trim();
   return nextValue ? nextValue : undefined;
+}
+
+function getStockAdjustmentScopeKey(categoryName?: string | null) {
+  return categoryName?.trim() || UNCATEGORIZED_SCOPE_KEY;
+}
+
+async function listProductSkusForStockAdjustmentScopeWithCtx(
+  ctx: MutationCtx,
+  args: {
+    scopeKey: string;
+    storeId: Id<"store">;
+  }
+) {
+  // eslint-disable-next-line @convex-dev/no-collect-in-query -- Temporary cleanup mutation intentionally scans the selected store scope once.
+  const productSkus = await ctx.db
+    .query("productSku")
+    .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+    .collect();
+  const productIds = Array.from(
+    new Set(productSkus.map((productSku) => productSku.productId))
+  );
+  const products = await Promise.all(
+    productIds.map((productId) => ctx.db.get("product", productId))
+  );
+  const productMap = new Map<
+    Id<"product">,
+    NonNullable<(typeof products)[number]>
+  >();
+  products.forEach((product) => {
+    if (product) {
+      productMap.set(product._id, product);
+    }
+  });
+  const categoryIds = Array.from(
+    new Set(products.map((product) => product?.categoryId).filter(Boolean))
+  ) as Id<"category">[];
+  const categories = await Promise.all(
+    categoryIds.map((categoryId) => ctx.db.get("category", categoryId))
+  );
+  const categoryMap = new Map<
+    Id<"category">,
+    NonNullable<(typeof categories)[number]>
+  >();
+  categories.forEach((category) => {
+    if (category) {
+      categoryMap.set(category._id, category);
+    }
+  });
+
+  return productSkus.filter((productSku) => {
+    const product = productMap.get(productSku.productId);
+    const category = product?.categoryId
+      ? categoryMap.get(product.categoryId)
+      : null;
+
+    return getStockAdjustmentScopeKey(category?.name) === args.scopeKey;
+  });
 }
 
 export function assertDistinctStockAdjustmentLineItems(
@@ -388,6 +449,78 @@ export const listInventorySnapshot = query({
         return (left.sku ?? "").localeCompare(right.sku ?? "");
       });
   },
+});
+
+export async function temporaryDeleteStockAdjustmentScopeSkusWithCtx(
+  ctx: MutationCtx,
+  args: {
+    confirmation?: string;
+    dryRun?: boolean;
+    scopeKey: string;
+    storeId: Id<"store">;
+  }
+) {
+  const store = await ctx.db.get("store", args.storeId);
+
+  if (!store) {
+    throw new Error("Store not found.");
+  }
+
+  const actorUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+
+  await requireOrganizationMemberRoleWithCtx(ctx, {
+    allowedRoles: ["full_admin"],
+    failureMessage: "Only full admins can delete stock cleanup SKUs.",
+    organizationId: store.organizationId,
+    userId: actorUser._id,
+  });
+
+  const scopeKey = args.scopeKey.trim();
+
+  if (!scopeKey) {
+    throw new Error("A stock cleanup scope key is required.");
+  }
+
+  const candidateSkus = await listProductSkusForStockAdjustmentScopeWithCtx(ctx, {
+    scopeKey,
+    storeId: args.storeId,
+  });
+  const response = {
+    deletedCount: 0,
+    dryRun: args.dryRun ?? true,
+    productSkuIds: candidateSkus.map((sku) => sku._id),
+    scopeKey,
+  };
+
+  if (args.dryRun !== false) {
+    return response;
+  }
+
+  if (args.confirmation !== TEMPORARY_DELETE_SCOPE_CONFIRMATION) {
+    throw new Error(
+      `Pass confirmation "${TEMPORARY_DELETE_SCOPE_CONFIRMATION}" to delete these SKUs.`
+    );
+  }
+
+  await Promise.all(
+    candidateSkus.map((productSku) => ctx.db.delete("productSku", productSku._id))
+  );
+
+  return {
+    ...response,
+    deletedCount: candidateSkus.length,
+    dryRun: false,
+  };
+}
+
+export const temporaryDeleteStockAdjustmentScopeSkus = mutation({
+  args: {
+    confirmation: v.optional(v.string()),
+    dryRun: v.optional(v.boolean()),
+    scopeKey: v.string(),
+    storeId: v.id("store"),
+  },
+  handler: temporaryDeleteStockAdjustmentScopeSkusWithCtx,
 });
 
 type SubmitStockAdjustmentBatchArgs = {

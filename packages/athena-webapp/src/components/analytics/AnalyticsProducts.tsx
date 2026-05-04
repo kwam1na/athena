@@ -1,6 +1,5 @@
 import { Analytic, Product } from "~/types";
 import { columns } from "./analytics-products-table/columns";
-import { AnalyticsItemsTable } from "./analytics-data-table/data-table";
 import { groupProductViewsByDay } from "./utils";
 import { useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
@@ -49,14 +48,10 @@ export default function AnalyticsProducts({ items }: { items: Analytic[] }) {
     .sort((a, b) => b.views - a.views);
 
   return (
-    <div className="container mx-auto">
-      <div className="py-8">
-        <AnalyticsProductsTable
-          data={data}
-          columns={columns}
-          tableId="analytics-products"
-        />
-      </div>
-    </div>
+    <AnalyticsProductsTable
+      data={data}
+      columns={columns}
+      tableId="analytics-products"
+    />
   );
 }

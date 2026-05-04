@@ -14,6 +14,7 @@ describe("AthenaGuidanceIntroductionPage", () => {
     expect(screen.getByRole("heading", { name: /flow detail pattern/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /restrained motion/i })).toBeInTheDocument();
     expect(screen.getByText(/context summary card/i)).toBeInTheDocument();
+    expect(screen.getByText(/Use the page-level header pattern for orientation/i)).toBeInTheDocument();
     expect(screen.getAllByText(/large working canvas/i)).not.toHaveLength(0);
   });
 });

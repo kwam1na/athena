@@ -344,11 +344,11 @@ describe("CashControlsDashboardContent", () => {
     expect(
       screen.getByRole("heading", { name: "Cash controls" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Cashroom landing")).toBeInTheDocument();
+    expect(screen.getByText("Cashroom status")).toBeInTheDocument();
     expect(screen.getByText("Expected in drawers")).toBeInTheDocument();
     expect(screen.getByText("$424")).toBeInTheDocument();
     expect(screen.getByText("1 live drawer, 1 in review")).toBeInTheDocument();
-    expect(screen.getByText("Deposited today")).toBeInTheDocument();
+    expect(screen.getByText("Deposits recorded")).toBeInTheDocument();
     expect(screen.getByText("$104")).toBeInTheDocument();
     expect(screen.getAllByText("Still in drawers").length).toBeGreaterThan(0);
     expect(screen.getAllByText("$320").length).toBeGreaterThan(0);
@@ -417,7 +417,7 @@ describe("CashControlsDashboardContent", () => {
     expect(screen.getByText("BANK-339")).toBeInTheDocument();
   });
 
-  it("replaces the closed-session preview table with a daily snapshot when all drawers are closed", () => {
+  it("replaces the closed-session preview table with a store history snapshot when all drawers are closed", () => {
     render(
       <CashControlsDashboardContent
         currency="USD"
@@ -468,8 +468,8 @@ describe("CashControlsDashboardContent", () => {
       />,
     );
 
-    expect(screen.getByText("Closed today")).toBeInTheDocument();
-    expect(screen.getByText("Drawers closed")).toBeInTheDocument();
+    expect(screen.getByText("Closed session history")).toBeInTheDocument();
+    expect(screen.getByText("Closed sessions")).toBeInTheDocument();
     expect(screen.getByText("Expected cash")).toBeInTheDocument();
     expect(screen.getByText("$350")).toBeInTheDocument();
     expect(screen.getByText("Counted cash")).toBeInTheDocument();
@@ -483,7 +483,7 @@ describe("CashControlsDashboardContent", () => {
     expect(screen.getByText("Over drawers")).toBeInTheDocument();
     expect(screen.getByText("1 / $20")).toBeInTheDocument();
     expect(
-      screen.getByText("Deposited from closed drawers"),
+      screen.getByText("Deposited across closed sessions"),
     ).toBeInTheDocument();
     expect(screen.getByText("$10")).toBeInTheDocument();
     expect(screen.queryByText("Showing latest 3 of")).not.toBeInTheDocument();
@@ -658,7 +658,7 @@ describe("CashControlsDashboardContent", () => {
     expect(
       screen.queryByText("No drawer needs closeout or variance review"),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("Closed today")).toBeInTheDocument();
+    expect(screen.getByText("Closed session history")).toBeInTheDocument();
   });
 
   it("links register session cards to the session route", () => {

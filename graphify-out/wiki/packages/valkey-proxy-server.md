@@ -17,11 +17,11 @@ Landing page for packages/valkey-proxy-server. Use this page to orient around gr
 - [validation-map.json](../../../packages/valkey-proxy-server/docs/agent/validation-map.json)
 
 ## Graph Hotspots
-- `app.js` (14 edges, Community 32) - [`packages/valkey-proxy-server/app.js`](../../../packages/valkey-proxy-server/app.js)
+- `app.js` (14 edges, Community 34) - [`packages/valkey-proxy-server/app.js`](../../../packages/valkey-proxy-server/app.js)
 - `app.test.js` (6 edges, Community 74) - [`packages/valkey-proxy-server/app.test.js`](../../../packages/valkey-proxy-server/app.test.js)
-- `createRedisClient()` (4 edges, Community 32) - [`packages/valkey-proxy-server/app.js`](../../../packages/valkey-proxy-server/app.js)
-- `createRedisCluster()` (3 edges, Community 32) - [`packages/valkey-proxy-server/app.js`](../../../packages/valkey-proxy-server/app.js)
-- `deleteKeysIndividually()` (3 edges, Community 32) - [`packages/valkey-proxy-server/app.js`](../../../packages/valkey-proxy-server/app.js)
+- `createRedisClient()` (4 edges, Community 34) - [`packages/valkey-proxy-server/app.js`](../../../packages/valkey-proxy-server/app.js)
+- `createRedisCluster()` (3 edges, Community 34) - [`packages/valkey-proxy-server/app.js`](../../../packages/valkey-proxy-server/app.js)
+- `deleteKeysIndividually()` (3 edges, Community 34) - [`packages/valkey-proxy-server/app.js`](../../../packages/valkey-proxy-server/app.js)
 
 ## Navigation
 - [wiki index](../index.md) - back to the wiki index

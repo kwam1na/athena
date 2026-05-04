@@ -1,5 +1,6 @@
 import type { PropsWithChildren, ReactNode } from "react";
 
+import { PageLevelHeader } from "@/components/common/PageLevelHeader";
 import { cn } from "@/lib/utils";
 
 type StorybookShellProps = PropsWithChildren<{
@@ -19,19 +20,11 @@ export function StorybookShell({
   return (
     <div className={cn("bg-background text-foreground", className)}>
       <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-layout-2xl px-6 py-layout-xl md:px-10 md:py-layout-2xl">
-        <header className="max-w-4xl space-y-layout-sm border-b border-border pb-layout-lg">
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-muted-foreground">
-            {eyebrow}
-          </p>
-          <div className="space-y-3">
-            <h1 className="font-display text-[clamp(2.75rem,4.6vw,4.75rem)] leading-[0.95] tracking-[-0.05em] text-foreground">
-              {title}
-            </h1>
-            <p className="max-w-3xl text-base leading-7 text-muted-foreground md:text-lg">
-              {description}
-            </p>
-          </div>
-        </header>
+        <PageLevelHeader
+          eyebrow={eyebrow}
+          title={title}
+          description={description}
+        />
         <div className="flex flex-1 flex-col gap-layout-2xl">{children}</div>
       </div>
     </div>

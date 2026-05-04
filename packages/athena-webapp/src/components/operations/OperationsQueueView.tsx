@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
+import { ok } from "~/shared/commandResult";
 import { FadeIn } from "../common/FadeIn";
 import { EmptyState } from "../states/empty/empty-state";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
@@ -14,8 +15,14 @@ import {
   type NormalizedCommandResult,
 } from "@/lib/errors/runCommand";
 import {
-  InventorySnapshotItem,
   StockAdjustmentWorkspaceContent,
+} from "./StockAdjustmentWorkspace";
+import type {
+  DeleteStockAdjustmentScopeSkusArgs,
+  DeleteStockAdjustmentScopeSkusResult,
+  InventorySnapshotItem,
+  StockAdjustmentSearchPatch,
+  StockAdjustmentSearchState,
   SubmitStockAdjustmentArgs,
 } from "./StockAdjustmentWorkspace";
 import { Button } from "../ui/button";
@@ -167,10 +174,14 @@ type OperationsQueueViewContentProps = {
   approvalRequests: QueueApprovalRequest[];
   hasFullAdminAccess: boolean;
   inventoryItems: InventorySnapshotItem[];
+  isDeletingStockScopeSkus?: boolean;
   isDecidingApprovalRequestId?: Id<"approvalRequest"> | null;
   isLoadingPermissions: boolean;
   isLoadingQueue: boolean;
   isSubmittingStockBatch: boolean;
+  onDeleteStockAdjustmentScopeSkus?: (
+    args: DeleteStockAdjustmentScopeSkusArgs,
+  ) => Promise<NormalizedCommandResult<DeleteStockAdjustmentScopeSkusResult>>;
   onDecideApprovalRequest: (args: {
     approvalRequestId: Id<"approvalRequest">;
     decision: "approved" | "rejected";
@@ -178,7 +189,9 @@ type OperationsQueueViewContentProps = {
   onSubmitStockBatch: (
     args: SubmitStockAdjustmentArgs,
   ) => Promise<NormalizedCommandResult<unknown>>;
+  onStockAdjustmentSearchChange?: (patch: StockAdjustmentSearchPatch) => void;
   storeId?: Id<"store">;
+  stockAdjustmentSearch?: StockAdjustmentSearchState;
   workItems: QueueWorkItem[];
 };
 
@@ -187,13 +200,17 @@ export function OperationsQueueViewContent({
   approvalRequests,
   hasFullAdminAccess,
   inventoryItems,
+  isDeletingStockScopeSkus,
   isDecidingApprovalRequestId,
   isLoadingPermissions,
   isLoadingQueue,
   isSubmittingStockBatch,
+  onDeleteStockAdjustmentScopeSkus,
   onDecideApprovalRequest,
   onSubmitStockBatch,
+  onStockAdjustmentSearchChange,
   storeId,
+  stockAdjustmentSearch,
   workItems,
 }: OperationsQueueViewContentProps) {
   const resolvedWorkflow =
@@ -228,8 +245,12 @@ export function OperationsQueueViewContent({
         {resolvedWorkflow === "stock" ? (
           <StockAdjustmentWorkspaceContent
             inventoryItems={inventoryItems}
+            isDeletingScopeSkus={isDeletingStockScopeSkus}
             isSubmitting={isSubmittingStockBatch}
+            onDeleteSelectedScopeSkus={onDeleteStockAdjustmentScopeSkus}
+            onSearchStateChange={onStockAdjustmentSearchChange}
             onSubmitBatch={onSubmitStockBatch}
+            searchState={stockAdjustmentSearch}
             storeId={storeId}
           />
         ) : null}
@@ -375,10 +396,14 @@ export function OperationsQueueViewContent({
 
 type OperationsQueueViewProps = {
   activeWorkflow?: OperationsWorkflow;
+  onStockAdjustmentSearchChange?: (patch: StockAdjustmentSearchPatch) => void;
+  stockAdjustmentSearch?: StockAdjustmentSearchState;
 };
 
 export function OperationsQueueView({
   activeWorkflow,
+  onStockAdjustmentSearchChange,
+  stockAdjustmentSearch,
 }: OperationsQueueViewProps = {}) {
   const {
     activeStore,
@@ -388,6 +413,8 @@ export function OperationsQueueView({
     isLoadingAccess,
   } = useProtectedAdminPageState();
   const [isSubmittingStockBatch, setIsSubmittingStockBatch] = useState(false);
+  const [isDeletingStockScopeSkus, setIsDeletingStockScopeSkus] =
+    useState(false);
   const [decisioningApprovalRequestId, setDecisioningApprovalRequestId] =
     useState<Id<"approvalRequest"> | null>(null);
 
@@ -407,6 +434,9 @@ export function OperationsQueueView({
   const submitStockAdjustmentBatch = useMutation(
     stockOpsApi.adjustments.submitStockAdjustmentBatch,
   );
+  const temporaryDeleteStockAdjustmentScopeSkus = useMutation(
+    stockOpsApi.adjustments.temporaryDeleteStockAdjustmentScopeSkus,
+  );
   const decideApprovalRequest = useMutation(
     operationsApi.approvalRequests.decideApprovalRequest,
   );
@@ -418,6 +448,29 @@ export function OperationsQueueView({
       return await runCommand(() => submitStockAdjustmentBatch(args));
     } finally {
       setIsSubmittingStockBatch(false);
+    }
+  };
+
+  const handleDeleteStockAdjustmentScopeSkus = async (
+    args: DeleteStockAdjustmentScopeSkusArgs,
+  ) => {
+    setIsDeletingStockScopeSkus(true);
+
+    try {
+      return await runCommand<DeleteStockAdjustmentScopeSkusResult>(
+        async () => {
+          const result = await temporaryDeleteStockAdjustmentScopeSkus({
+            confirmation: "delete-stock-adjustment-scope-skus",
+            dryRun: false,
+            scopeKey: args.scopeKey,
+            storeId: args.storeId,
+          });
+
+          return ok(result);
+        },
+      );
+    } finally {
+      setIsDeletingStockScopeSkus(false);
     }
   };
 
@@ -488,13 +541,17 @@ export function OperationsQueueView({
       approvalRequests={queue?.approvalRequests ?? []}
       hasFullAdminAccess={hasFullAdminAccess}
       inventoryItems={inventoryItems ?? []}
+      isDeletingStockScopeSkus={isDeletingStockScopeSkus}
       isDecidingApprovalRequestId={decisioningApprovalRequestId}
       isLoadingPermissions={false}
       isLoadingQueue={queue === undefined || inventoryItems === undefined}
+      onDeleteStockAdjustmentScopeSkus={handleDeleteStockAdjustmentScopeSkus}
       onDecideApprovalRequest={handleDecideApprovalRequest}
       isSubmittingStockBatch={isSubmittingStockBatch}
       onSubmitStockBatch={handleSubmitStockBatch}
+      onStockAdjustmentSearchChange={onStockAdjustmentSearchChange}
       storeId={activeStore._id}
+      stockAdjustmentSearch={stockAdjustmentSearch}
       workItems={queue?.workItems ?? []}
     />
   );

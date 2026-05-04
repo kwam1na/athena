@@ -54,6 +54,32 @@ describe("VPS QA deploy contract", () => {
     expect(deployScript).not.toContain('VITE_STOREFRONT_URL="$STOREFRONT_URL"');
   });
 
+  it("can build production static apps locally before uploading to the VPS", async () => {
+    const deployScript = await readRepoFile("scripts/deploy-vps.sh");
+    const interactiveScript = await readRepoFile("manage-athena-versions.sh");
+    const runbook = await readRepoFile("docs/deployment/vps-production.md");
+
+    expect(deployScript).toContain("athena-local");
+    expect(deployScript).toContain("storefront-local");
+    expect(deployScript).toContain("full-prod-local");
+    expect(deployScript).toContain("build_static_app_locally()");
+    expect(deployScript).toContain("deploy_static_app_local()");
+    expect(deployScript).toContain('eval "$env_script bun run build"');
+    expect(deployScript).toContain('rsync -a --delete "$package_dir/dist/" "$REMOTE:$version_path/"');
+    expect(deployScript).toContain('"built_on": "local"');
+    expect(deployScript).toContain("deploy_athena_local");
+    expect(deployScript).toContain("deploy_storefront_local");
+    expect(interactiveScript).toContain("athena-webapp local build");
+    expect(interactiveScript).toContain("storefront local build");
+    expect(interactiveScript).toContain("full-deploy local builds");
+    expect(interactiveScript).toContain("deploy_vps athena-local");
+    expect(interactiveScript).toContain("deploy_vps storefront-local");
+    expect(interactiveScript).toContain("deploy_vps full-prod-local");
+    expect(runbook).toContain("scripts/deploy-vps.sh athena-local");
+    expect(runbook).toContain("scripts/deploy-vps.sh storefront-local");
+    expect(runbook).toContain("scripts/deploy-vps.sh full-prod-local");
+  });
+
   it("deploys storefront QA only for storefront changes and both QA surfaces for shared deploy changes", async () => {
     const workflow = await readRepoFile(".github/workflows/athena-qa-deploy.yml");
 

@@ -89,7 +89,7 @@ const COLOR_ROLES: readonly ColorRole[] = [
 
 const TYPOGRAPHY_SPECIMENS: readonly TypeSpecimen[] = [
   {
-    label: "Display serif",
+    label: "Display sans",
     sample: "Retail operations, sharply framed.",
     note: "Use for page anchors, hero numerics, and authored section titles.",
     className:
@@ -112,6 +112,12 @@ const TYPOGRAPHY_SPECIMENS: readonly TypeSpecimen[] = [
     sample: "GHS 128,450",
     note: "Pair with the display family when numbers are the main signal.",
     className: "font-display text-[2.4rem] leading-none tracking-[-0.05em]",
+  },
+  {
+    label: "Operational numerics",
+    sample: "GH₵0",
+    note: "Use the theme family with tabular number styling for cash totals and ledger amounts.",
+    className: "font-numeric text-[2.4rem] leading-none tabular-nums",
   },
 ];
 

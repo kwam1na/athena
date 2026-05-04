@@ -30,9 +30,12 @@ import { usePaginationPersistence } from "~/src/hooks/use-pagination-persistence
 import { cn } from "@/lib/utils";
 
 interface DataTableProps<TData, TValue> {
+  autoResetPageIndex?: boolean;
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   getRowClassName?: (row: Row<TData>) => string | undefined;
+  pageIndex?: number;
+  onPageIndexChange?: (pageIndex: number) => void;
   onRowClick?: (row: Row<TData>) => void;
   paginationRangeItemLabel?: string;
   paginationRangeItemPluralLabel?: string;
@@ -40,9 +43,12 @@ interface DataTableProps<TData, TValue> {
 }
 
 export function GenericDataTable<TData, TValue>({
+  autoResetPageIndex,
   columns,
   data,
   getRowClassName,
+  pageIndex,
+  onPageIndexChange,
   onRowClick,
   paginationRangeItemLabel,
   paginationRangeItemPluralLabel,
@@ -58,8 +64,10 @@ export function GenericDataTable<TData, TValue>({
 
   // Use the pagination persistence hook
   const { pagination, setPagination } = usePaginationPersistence({
+    controlledPageIndex: pageIndex,
     tableId,
     defaultPageSize: 10,
+    onPageIndexChange,
   });
 
   const table = useReactTable({
@@ -78,6 +86,7 @@ export function GenericDataTable<TData, TValue>({
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
     onPaginationChange: setPagination,
+    autoResetPageIndex,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),

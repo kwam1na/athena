@@ -1,0 +1,5 @@
+{
+  "name": "@athena/storybook-config",
+  "private": true,
+  "type": "module"
+}
