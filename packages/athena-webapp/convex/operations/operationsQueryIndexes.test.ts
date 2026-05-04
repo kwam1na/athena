@@ -105,6 +105,26 @@ describe("operations query indexing", () => {
         fields: ["storeId", "sourceType", "sourceId"],
       },
       {
+        table: "cycleCountDraft",
+        descriptor: "by_storeId_status_scope_owner",
+        fields: ["storeId", "status", "scopeKey", "ownerUserId"],
+      },
+      {
+        table: "cycleCountDraft",
+        descriptor: "by_storeId_status_scope",
+        fields: ["storeId", "status", "scopeKey"],
+      },
+      {
+        table: "cycleCountDraftLine",
+        descriptor: "by_draftId",
+        fields: ["draftId"],
+      },
+      {
+        table: "cycleCountDraftLine",
+        descriptor: "by_draftId_productSkuId",
+        fields: ["draftId", "productSkuId"],
+      },
+      {
         table: "paymentAllocation",
         descriptor: "by_storeId_target",
         fields: ["storeId", "targetType", "targetId"],
@@ -147,6 +167,15 @@ describe("operations query indexing", () => {
     );
     expect(paymentAllocationsSource).toContain('.withIndex("by_storeId_target"');
     expect(operationalEventsSource).toContain('.withIndex("by_storeId_subject"');
+
+    const cycleCountDraftsSource = getSource("../stockOps/cycleCountDrafts.ts");
+
+    expect(cycleCountDraftsSource).toContain(
+      '.withIndex("by_storeId_status_scope_owner"'
+    );
+    expect(cycleCountDraftsSource).toContain(
+      '.withIndex("by_draftId_productSkuId"'
+    );
   });
 
   it("threads operations roles into membership and POS customer linking surfaces", () => {

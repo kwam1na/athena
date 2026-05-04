@@ -79,6 +79,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/serviceOps/serviceCases.test.ts`](../../convex/serviceOps/serviceCases.test.ts)
 - [`convex/stockOps/access.test.ts`](../../convex/stockOps/access.test.ts)
 - [`convex/stockOps/adjustments.test.ts`](../../convex/stockOps/adjustments.test.ts)
+- [`convex/stockOps/cycleCountDrafts.test.ts`](../../convex/stockOps/cycleCountDrafts.test.ts)
 - [`convex/stockOps/purchaseOrders.test.ts`](../../convex/stockOps/purchaseOrders.test.ts)
 - [`convex/stockOps/receiving.test.ts`](../../convex/stockOps/receiving.test.ts)
 - [`convex/stockOps/replenishment.test.ts`](../../convex/stockOps/replenishment.test.ts)

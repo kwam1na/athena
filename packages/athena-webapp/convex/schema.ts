@@ -88,6 +88,8 @@ import {
   purchaseOrderLineItemSchema,
   purchaseOrderSchema,
   receivingBatchSchema,
+  cycleCountDraftLineSchema,
+  cycleCountDraftSchema,
   stockAdjustmentBatchSchema,
   vendorSchema,
 } from "./schemas/stockOps";
@@ -194,6 +196,17 @@ const schema = defineSchema({
       "submissionKey",
     ])
     .index("by_workItemId", ["operationalWorkItemId"]),
+  cycleCountDraft: defineTable(cycleCountDraftSchema)
+    .index("by_storeId_status_scope_owner", [
+      "storeId",
+      "status",
+      "scopeKey",
+      "ownerUserId",
+    ])
+    .index("by_storeId_status_scope", ["storeId", "status", "scopeKey"]),
+  cycleCountDraftLine: defineTable(cycleCountDraftLineSchema)
+    .index("by_draftId", ["draftId"])
+    .index("by_draftId_productSkuId", ["draftId", "productSkuId"]),
   receivingBatch: defineTable(receivingBatchSchema)
     .index("by_storeId", ["storeId"])
     .index("by_storeId_purchaseOrderId", ["storeId", "purchaseOrderId"])

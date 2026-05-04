@@ -196,6 +196,162 @@ describe("StockAdjustmentWorkspaceContent", () => {
     ).toBeInTheDocument();
   });
 
+  it("hydrates cycle count inputs from saved draft lines", () => {
+    renderStockAdjustmentWorkspace({
+      cycleCountDraft: {
+        _id: "draft-1" as Id<"cycleCountDraft">,
+        changedLineCount: 1,
+        lastSavedAt: 1000,
+        lines: [
+          {
+            baselineAvailableCount: 6,
+            baselineInventoryCount: 8,
+            countedQuantity: 5,
+            isDirty: true,
+            productSkuId: "sku-1" as Id<"productSku">,
+          },
+        ],
+        scopeKey: "Hair",
+        staleLineCount: 0,
+        status: "open",
+      },
+    });
+
+    expect(screen.getByLabelText(/counted quantity for .*closure wig/i)).toHaveValue(5);
+    expect(screen.getByText(/1 row saved in this draft/i)).toBeInTheDocument();
+  });
+
+  it("saves cycle count edits on blur without using the URL", async () => {
+    const user = userEvent.setup();
+    const onSaveCycleCountDraftLine = vi.fn().mockResolvedValue(ok({}));
+    const onSearchStateChange = vi.fn();
+
+    renderStockAdjustmentWorkspace({
+      onSaveCycleCountDraftLine,
+      onSearchStateChange,
+      searchState: {
+        mode: "cycle_count",
+        page: 1,
+        scope: "Hair",
+        sku: "sku-1",
+      },
+    });
+
+    const input = screen.getByLabelText(/counted quantity for .*closure wig/i);
+
+    await user.clear(input);
+    await user.type(input, "5");
+    await user.tab();
+
+    await waitFor(() =>
+      expect(onSaveCycleCountDraftLine).toHaveBeenCalledWith({
+        countedQuantity: 5,
+        productSkuId: "sku-1",
+      }),
+    );
+    expect(onSearchStateChange).not.toHaveBeenCalledWith(
+      expect.objectContaining({ countedQuantity: 5 }),
+    );
+  });
+
+  it("keeps unsaved typing when another draft line refreshes", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <StockAdjustmentWorkspaceContent
+        {...baseProps}
+        cycleCountDraft={{
+          _id: "draft-1" as Id<"cycleCountDraft">,
+          changedLineCount: 0,
+          lines: [],
+          scopeKey: "Hair",
+          staleLineCount: 0,
+          status: "open",
+        }}
+      />,
+    );
+
+    const bodyWaveInput = screen.getByLabelText(
+      /counted quantity for body wave bundle/i,
+    );
+
+    await user.clear(bodyWaveInput);
+    await user.type(bodyWaveInput, "7");
+
+    rerender(
+      <StockAdjustmentWorkspaceContent
+        {...baseProps}
+        cycleCountDraft={{
+          _id: "draft-1" as Id<"cycleCountDraft">,
+          changedLineCount: 1,
+          lines: [
+            {
+              baselineAvailableCount: 6,
+              baselineInventoryCount: 8,
+              countedQuantity: 5,
+              isDirty: true,
+              productSkuId: "sku-1" as Id<"productSku">,
+            },
+          ],
+          scopeKey: "Hair",
+          staleLineCount: 0,
+          status: "open",
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByLabelText(/counted quantity for body wave bundle/i),
+    ).toHaveValue(7);
+  });
+
+  it("blocks stale draft submission feedback and names affected SKUs", async () => {
+    const user = userEvent.setup();
+    const onSubmitCycleCountDraft = vi.fn().mockResolvedValue(
+      userError({
+        code: "precondition_failed",
+        message:
+          "Inventory changed since this count started. Review the affected SKUs before submitting.",
+        metadata: {
+          staleLines: [
+            {
+              baselineInventoryCount: 8,
+              currentInventoryCount: 9,
+              productName: "Closure wig",
+              productSkuId: "sku-1",
+              sku: "CW-18",
+            },
+          ],
+        },
+      }),
+    );
+
+    renderStockAdjustmentWorkspace({
+      cycleCountDraft: {
+        _id: "draft-1" as Id<"cycleCountDraft">,
+        changedLineCount: 1,
+        lines: [
+          {
+            baselineAvailableCount: 6,
+            baselineInventoryCount: 8,
+            countedQuantity: 5,
+            isDirty: true,
+            productSkuId: "sku-1" as Id<"productSku">,
+          },
+        ],
+        scopeKey: "Hair",
+        staleLineCount: 0,
+        status: "open",
+      },
+      onSubmitCycleCountDraft,
+    });
+
+    await user.click(screen.getByRole("button", { name: /submit count/i }));
+
+    expect(await screen.findByText("Inventory changed since this count started.")).toBeInTheDocument();
+    expect(screen.getByText(/Closure wig: 8 to 9 on hand/i)).toBeInTheDocument();
+    expect(mockedToast.success).not.toHaveBeenCalledWith("Count applied");
+  });
+
   it("resets an edited cycle count field to the original system count", async () => {
     const user = userEvent.setup();
 
@@ -449,18 +605,17 @@ describe("StockAdjustmentWorkspaceContent", () => {
     expect(onSearchStateChange).toHaveBeenLastCalledWith({
       availability: "unavailable",
       page: 1,
-      query: undefined,
-      scope: "Books,Hair",
-      sku: undefined,
+      scope: "Books",
+      sku: "sku-unavailable-books",
     });
     expect(
       screen.getByRole("button", { name: /unavailable 4/i }),
     ).toHaveAttribute("aria-pressed", "true");
     expect(within(table).getByText("Ai Engineering")).toBeInTheDocument();
-    expect(within(table).getByText("Closure Wig")).toBeInTheDocument();
+    expect(within(table).queryByText("Closure Wig")).not.toBeInTheDocument();
     expect(within(table).queryByText("Body Wave Bundle")).not.toBeInTheDocument();
     expect(within(table).queryByText("Lip Gloss")).not.toBeInTheDocument();
-    expect(screen.getByText("Showing 2 of 3 SKUs.")).toBeInTheDocument();
+    expect(screen.getByText("Showing 1 of 1 SKU.")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /unavailable 4/i }));
 

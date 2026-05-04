@@ -54,6 +54,7 @@ describe("OperationsQueueView auth readiness", () => {
     expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
       "skip",
       "skip",
+      "skip",
     ]);
   });
 
@@ -70,6 +71,7 @@ describe("OperationsQueueView auth readiness", () => {
     expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
       "skip",
       "skip",
+      "skip",
     ]);
   });
 
@@ -83,6 +85,7 @@ describe("OperationsQueueView auth readiness", () => {
     expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
       { storeId: "store-1" },
       { storeId: "store-1" },
+      "skip",
     ]);
   });
 });

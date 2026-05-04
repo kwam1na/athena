@@ -299,6 +299,71 @@ describe("OperationsQueueViewContent", () => {
     );
   });
 
+  it("loads or creates the selected cycle-count draft", async () => {
+    const ensureCycleCountDraft = vi.fn().mockResolvedValue(ok({}));
+
+    mockedHooks.useMutation.mockReset();
+    mockedHooks.useQuery.mockReset();
+    mockedHooks.useMutation
+      .mockReturnValueOnce(vi.fn())
+      .mockReturnValueOnce(vi.fn())
+      .mockReturnValueOnce(ensureCycleCountDraft)
+      .mockReturnValueOnce(vi.fn())
+      .mockReturnValueOnce(vi.fn())
+      .mockReturnValueOnce(vi.fn());
+    mockedHooks.useQuery
+      .mockReturnValueOnce({
+        approvalRequests: [],
+        workItems: [],
+      })
+      .mockReturnValueOnce(baseProps.inventoryItems)
+      .mockReturnValueOnce(null);
+
+    render(
+      <OperationsQueueView
+        stockAdjustmentSearch={{
+          mode: "cycle_count",
+          scope: "Hair",
+        }}
+      />,
+    );
+
+    expect(mockedHooks.useQuery.mock.calls[2]?.[1]).toEqual({
+      scopeKey: "Hair",
+      storeId: "store-1",
+    });
+    await waitFor(() =>
+      expect(ensureCycleCountDraft).toHaveBeenCalledWith({
+        scopeKey: "Hair",
+        storeId: "store-1",
+      }),
+    );
+  });
+
+  it("skips cycle-count draft loading in manual mode", () => {
+    mockedHooks.useMutation.mockReset();
+    mockedHooks.useQuery.mockReset();
+    mockedHooks.useMutation.mockReturnValue(vi.fn());
+    mockedHooks.useQuery
+      .mockReturnValueOnce({
+        approvalRequests: [],
+        workItems: [],
+      })
+      .mockReturnValueOnce(baseProps.inventoryItems)
+      .mockReturnValueOnce(undefined);
+
+    render(
+      <OperationsQueueView
+        stockAdjustmentSearch={{
+          mode: "manual",
+          scope: "Hair",
+        }}
+      />,
+    );
+
+    expect(mockedHooks.useQuery.mock.calls[2]?.[1]).toBe("skip");
+  });
+
   it("collapses unexpected approval failures to the shared fallback toast", async () => {
     const { default: userEvent } = await import("@testing-library/user-event");
     const user = userEvent.setup();
