@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Link } from "@tanstack/react-router";
 import {
@@ -90,12 +90,47 @@ export type StockAdjustmentSearchState = {
 
 export type StockAdjustmentSearchPatch = Partial<StockAdjustmentSearchState>;
 
+export type CycleCountDraftLine = {
+  productSkuId: Id<"productSku">;
+  baselineInventoryCount: number;
+  baselineAvailableCount: number;
+  countedQuantity: number;
+  isDirty: boolean;
+  staleStatus?: "current" | "stale";
+  currentInventoryCount?: number;
+  currentAvailableCount?: number;
+};
+
+export type CycleCountDraftState = {
+  _id: Id<"cycleCountDraft">;
+  status: "open" | "submitted" | "discarded";
+  scopeKey: string;
+  changedLineCount: number;
+  staleLineCount: number;
+  lastSavedAt?: number;
+  lines: CycleCountDraftLine[];
+};
+
+type SaveCycleCountDraftLineArgs = {
+  countedQuantity: number;
+  productSkuId: Id<"productSku">;
+};
+
 type StockAdjustmentWorkspaceContentProps = {
+  cycleCountDraft?: CycleCountDraftState | null;
   inventoryItems: InventorySnapshotItem[];
+  isCycleCountDraftSaving?: boolean;
   isSubmitting: boolean;
+  onDiscardCycleCountDraft?: () => Promise<NormalizedCommandResult<unknown>>;
   onSearchStateChange?: (patch: StockAdjustmentSearchPatch) => void;
+  onSaveCycleCountDraftLine?: (
+    args: SaveCycleCountDraftLineArgs,
+  ) => Promise<NormalizedCommandResult<unknown>>;
   onSubmitBatch: (
     args: SubmitStockAdjustmentArgs,
+  ) => Promise<NormalizedCommandResult<unknown>>;
+  onSubmitCycleCountDraft?: (
+    args: { notes?: string },
   ) => Promise<NormalizedCommandResult<unknown>>;
   searchState?: StockAdjustmentSearchState;
   storeId?: Id<"store">;
@@ -158,9 +193,19 @@ function buildManualDrafts(inventoryItems: InventorySnapshotItem[]) {
   return Object.fromEntries(inventoryItems.map((item) => [item._id, ""]));
 }
 
-function buildCycleCountDrafts(inventoryItems: InventorySnapshotItem[]) {
+function buildCycleCountDrafts(
+  inventoryItems: InventorySnapshotItem[],
+  draftLines: CycleCountDraftLine[] = [],
+) {
+  const draftLineMap = new Map(
+    draftLines.map((line) => [line.productSkuId, line]),
+  );
+
   return Object.fromEntries(
-    inventoryItems.map((item) => [item._id, String(item.inventoryCount)]),
+    inventoryItems.map((item) => [
+      item._id,
+      String(draftLineMap.get(item._id)?.countedQuantity ?? item.inventoryCount),
+    ]),
   );
 }
 
@@ -258,10 +303,15 @@ function rowMatchesAvailabilityFilter(
 }
 
 export function StockAdjustmentWorkspaceContent({
+  cycleCountDraft,
   inventoryItems,
+  isCycleCountDraftSaving = false,
   isSubmitting,
+  onDiscardCycleCountDraft,
   onSearchStateChange,
+  onSaveCycleCountDraftLine,
   onSubmitBatch,
+  onSubmitCycleCountDraft,
   searchState,
   storeId,
 }: StockAdjustmentWorkspaceContentProps) {
@@ -279,7 +329,7 @@ export function StockAdjustmentWorkspaceContent({
     buildManualDrafts(inventoryItems),
   );
   const [cycleCounts, setCycleCounts] = useState<Record<string, string>>(() =>
-    buildCycleCountDrafts(inventoryItems),
+    buildCycleCountDrafts(inventoryItems, cycleCountDraft?.lines),
   );
   const [activeInventoryItemId, setActiveInventoryItemId] =
     useState<Id<"productSku"> | null>(
@@ -296,6 +346,19 @@ export function StockAdjustmentWorkspaceContent({
   });
   const [cycleCountSubmissionOutcome, setCycleCountSubmissionOutcome] =
     useState<CycleCountSubmissionOutcome>(null);
+  const [pendingCycleCountSaveCount, setPendingCycleCountSaveCount] =
+    useState(0);
+  const pendingCycleCountSavePromisesRef = useRef<Promise<void>[]>([]);
+  const locallyEditedCycleCountItemIdsRef = useRef(new Set<string>());
+  const [staleDraftLines, setStaleDraftLines] = useState<
+    Array<{
+      productSkuId: Id<"productSku">;
+      productName?: string | null;
+      sku?: string | null;
+      currentInventoryCount: number;
+      baselineInventoryCount: number;
+    }>
+  >([]);
 
   useEffect(() => {
     if (!searchState?.mode || searchState.mode === adjustmentType) return;
@@ -341,8 +404,22 @@ export function StockAdjustmentWorkspaceContent({
 
   useEffect(() => {
     setManualDeltas(buildManualDrafts(inventoryItems));
-    setCycleCounts(buildCycleCountDrafts(inventoryItems));
-  }, [inventoryItems]);
+    setCycleCounts((current) => {
+      const serverCounts = buildCycleCountDrafts(
+        inventoryItems,
+        cycleCountDraft?.lines,
+      );
+
+      return Object.fromEntries(
+        inventoryItems.map((item) => [
+          item._id,
+          locallyEditedCycleCountItemIdsRef.current.has(item._id)
+            ? (current[item._id] ?? serverCounts[item._id])
+            : serverCounts[item._id],
+        ]),
+      );
+    });
+  }, [cycleCountDraft?.lines, inventoryItems]);
 
   useEffect(() => {
     if (
@@ -354,6 +431,17 @@ export function StockAdjustmentWorkspaceContent({
 
     setActiveInventoryItemId(inventoryItems[0]?._id ?? null);
   }, [activeInventoryItemId, inventoryItems]);
+
+  const cycleCountDraftLineMap = useMemo(
+    () =>
+      new Map(
+        (cycleCountDraft?.lines ?? []).map((line) => [
+          line.productSkuId,
+          line,
+        ]),
+      ),
+    [cycleCountDraft?.lines],
+  );
 
   const rows: StockAdjustmentRow[] = useMemo(
     () =>
@@ -377,16 +465,21 @@ export function StockAdjustmentWorkspaceContent({
           };
         }
 
-        const rawCount = cycleCounts[item._id] ?? String(item.inventoryCount);
+        const draftLine = cycleCountDraftLineMap.get(item._id);
+        const baselineInventoryCount =
+          draftLine?.baselineInventoryCount ?? item.inventoryCount;
+        const rawCount =
+          cycleCounts[item._id] ??
+          String(draftLine?.countedQuantity ?? item.inventoryCount);
         const parsedCount =
           rawCount.trim() === "" ? Number.NaN : Number(rawCount);
         const quantityDelta = Number.isInteger(parsedCount)
-          ? parsedCount - item.inventoryCount
+          ? parsedCount - baselineInventoryCount
           : 0;
         const isEdited =
           Number.isInteger(parsedCount) &&
           parsedCount >= 0 &&
-          parsedCount !== item.inventoryCount;
+          parsedCount !== baselineInventoryCount;
 
         return {
           countedQuantity: parsedCount,
@@ -402,7 +495,13 @@ export function StockAdjustmentWorkspaceContent({
             : null,
         };
       }),
-    [adjustmentType, cycleCounts, inventoryItems, manualDeltas],
+    [
+      adjustmentType,
+      cycleCountDraftLineMap,
+      cycleCounts,
+      inventoryItems,
+      manualDeltas,
+    ],
   );
 
   const changedRows = rows.filter((row) => row.submittedLineItem);
@@ -473,8 +572,13 @@ export function StockAdjustmentWorkspaceContent({
   const isUnavailableScopeSelectionActive =
     filters.availability === "unavailable" &&
     unavailableCountScopeKeys.length > 0 &&
-    selectedCountScopeKeys.length === unavailableCountScopeKeys.length &&
-    unavailableCountScopeKeys.every((key) => selectedCountScopeKeySet.has(key));
+    (adjustmentType === "cycle_count"
+      ? selectedCountScopeKeys.length === 1 &&
+        selectedCountScopeKeys[0] === unavailableCountScopeKeys[0]
+      : selectedCountScopeKeys.length === unavailableCountScopeKeys.length &&
+        unavailableCountScopeKeys.every((key) =>
+          selectedCountScopeKeySet.has(key),
+        ));
   const summary = summarizeStockAdjustmentLineItems(
     changedRows.map((row) => ({
       quantityDelta: row.quantityDelta,
@@ -559,10 +663,26 @@ export function StockAdjustmentWorkspaceContent({
         }
     : {
         description:
-          "Submit the selected category count when the physical counts are recorded.",
-        label: "Count in progress",
+          cycleCountDraft && cycleCountDraft.changedLineCount > 0
+            ? `${cycleCountDraft.changedLineCount} ${pluralize(
+                cycleCountDraft.changedLineCount,
+                "row",
+              )} saved in this draft.`
+            : "Submit the selected category count when the physical counts are recorded.",
+        label:
+          isCycleCountDraftSaving
+            ? "Saving draft"
+            : cycleCountDraft?.lastSavedAt
+              ? "Draft saved"
+              : "Count in progress",
         tone: "border-border bg-muted/40 text-foreground" as const,
       };
+  const draftLastSavedLabel = cycleCountDraft?.lastSavedAt
+    ? new Intl.DateTimeFormat("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+      }).format(new Date(cycleCountDraft.lastSavedAt))
+    : null;
 
   useEffect(() => {
     if (adjustmentType !== "cycle_count") return;
@@ -586,7 +706,22 @@ export function StockAdjustmentWorkspaceContent({
     }
 
     setSelectedCountScopeKeys([fallbackScopeKey]);
-  }, [adjustmentType, countScopeOptions, selectedCountScopeKeys]);
+    const firstScopedItem = rows.find(
+      (row) => getCountScopeKey(row.inventoryItem) === fallbackScopeKey,
+    )?.inventoryItem;
+
+    onSearchStateChange?.({
+      page: 1,
+      scope: fallbackScopeKey,
+      sku: firstScopedItem?._id,
+    });
+  }, [
+    adjustmentType,
+    countScopeOptions,
+    onSearchStateChange,
+    rows,
+    selectedCountScopeKeys,
+  ]);
 
   useEffect(() => {
     if (adjustmentType !== "cycle_count" || !selectedCountScope) return;
@@ -719,7 +854,12 @@ export function StockAdjustmentWorkspaceContent({
               ? "Adjustment delta"
               : "Counted quantity";
           const resetValue =
-            adjustmentType === "manual" ? "" : String(item.inventoryCount);
+            adjustmentType === "manual"
+              ? ""
+              : String(
+                  cycleCountDraftLineMap.get(item._id)?.baselineInventoryCount ??
+                    item.inventoryCount,
+                );
 
           const setDraftValue = (value: string) =>
             adjustmentType === "manual"
@@ -734,8 +874,52 @@ export function StockAdjustmentWorkspaceContent({
           const handleDraftChange = (value: string) => {
             setDraftValue(value);
             if (adjustmentType === "cycle_count") {
+              locallyEditedCycleCountItemIdsRef.current.add(item._id);
               setCycleCountSubmissionOutcome(null);
+              setStaleDraftLines([]);
             }
+          };
+          const saveCycleCountDraftValue = async (value: string) => {
+            if (adjustmentType !== "cycle_count" || !onSaveCycleCountDraftLine) {
+              return;
+            }
+
+            const parsedCount = value.trim() === "" ? Number.NaN : Number(value);
+            if (!Number.isInteger(parsedCount) || parsedCount < 0) {
+              return;
+            }
+
+            const savePromise = onSaveCycleCountDraftLine({
+              countedQuantity: parsedCount,
+              productSkuId: item._id,
+            })
+              .then((result) => {
+                if (result.kind !== "ok") {
+                  presentCommandToast(result);
+                  return;
+                }
+
+                locallyEditedCycleCountItemIdsRef.current.delete(item._id);
+              })
+              .finally(() => {
+                pendingCycleCountSavePromisesRef.current =
+                  pendingCycleCountSavePromisesRef.current.filter(
+                    (pendingSave) => pendingSave !== savePromise,
+                  );
+                setPendingCycleCountSaveCount(
+                  pendingCycleCountSavePromisesRef.current.length,
+                );
+              });
+
+            pendingCycleCountSavePromisesRef.current = [
+              ...pendingCycleCountSavePromisesRef.current,
+              savePromise,
+            ];
+            setPendingCycleCountSaveCount(
+              pendingCycleCountSavePromisesRef.current.length,
+            );
+
+            await savePromise;
           };
 
           return (
@@ -746,6 +930,9 @@ export function StockAdjustmentWorkspaceContent({
                 inputMode="numeric"
                 min={adjustmentType === "manual" ? undefined : 0}
                 onFocus={() => handleSelectInventoryItem(item._id)}
+                onBlur={(event) =>
+                  saveCycleCountDraftValue(event.currentTarget.value)
+                }
                 onChange={(event) => handleDraftChange(event.target.value)}
                 type="number"
                 value={row.original.inputValue}
@@ -760,6 +947,8 @@ export function StockAdjustmentWorkspaceContent({
                   setDraftValue(resetValue);
                   if (adjustmentType === "cycle_count") {
                     setCycleCountSubmissionOutcome(null);
+                    setStaleDraftLines([]);
+                    void saveCycleCountDraftValue(resetValue);
                   }
                 }}
                 size="icon"
@@ -800,7 +989,7 @@ export function StockAdjustmentWorkspaceContent({
         ),
       },
     ],
-    [adjustmentType, handleSelectInventoryItem],
+    [adjustmentType, handleSelectInventoryItem, onSaveCycleCountDraftLine],
   );
 
   const handleModeChange = (nextType: StockAdjustmentType) => {
@@ -889,6 +1078,26 @@ export function StockAdjustmentWorkspaceContent({
       return;
     }
 
+    if (adjustmentType === "cycle_count") {
+      const nextScopeKey = unavailableCountScopeKeys[0];
+      const firstScopedItem = rows.find(
+        (row) => getCountScopeKey(row.inventoryItem) === nextScopeKey,
+      )?.inventoryItem;
+
+      setSelectedCountScopeKeys(nextScopeKey ? [nextScopeKey] : []);
+      setFilters((current) => ({
+        ...current,
+        availability: "unavailable",
+      }));
+      onSearchStateChange?.({
+        availability: "unavailable",
+        page: 1,
+        scope: nextScopeKey,
+        sku: firstScopedItem?._id,
+      });
+      return;
+    }
+
     setSelectedCountScopeKeys(unavailableCountScopeKeys);
     setFilters((current) => ({
       ...current,
@@ -902,10 +1111,22 @@ export function StockAdjustmentWorkspaceContent({
     });
   };
 
+  const awaitPendingCycleCountSaves = async () => {
+    const pendingSaves = pendingCycleCountSavePromisesRef.current;
+
+    if (pendingSaves.length === 0) return;
+
+    await Promise.allSettled(pendingSaves);
+  };
+
   const handleSubmit = async () => {
     if (!storeId) {
       toast.error("Select a store before submitting a stock adjustment");
       return;
+    }
+
+    if (adjustmentType === "cycle_count") {
+      await awaitPendingCycleCountSaves();
     }
 
     if (changedRows.length === 0) {
@@ -917,17 +1138,35 @@ export function StockAdjustmentWorkspaceContent({
       return;
     }
 
-    const result = await onSubmitBatch({
-      adjustmentType,
-      lineItems: changedRows.map((row) => row.submittedLineItem!),
-      notes: trimOptional(notes),
-      reasonCode:
-        adjustmentType === "manual" ? reasonCode : CYCLE_COUNT_REASON_CODE,
-      storeId,
-      submissionKey,
-    });
+    const result =
+      adjustmentType === "cycle_count" && onSubmitCycleCountDraft
+        ? await onSubmitCycleCountDraft({ notes: trimOptional(notes) })
+        : await onSubmitBatch({
+            adjustmentType,
+            lineItems: changedRows.map((row) => row.submittedLineItem!),
+            notes: trimOptional(notes),
+            reasonCode:
+              adjustmentType === "manual" ? reasonCode : CYCLE_COUNT_REASON_CODE,
+            storeId,
+            submissionKey,
+          });
 
     if (result.kind !== "ok") {
+      if (result.kind === "user_error") {
+      const staleLines = result.error.metadata?.staleLines;
+      if (Array.isArray(staleLines)) {
+        setStaleDraftLines(
+          staleLines.map((line) => ({
+            baselineInventoryCount: Number(line.baselineInventoryCount ?? 0),
+            currentInventoryCount: Number(line.currentInventoryCount ?? 0),
+            productName:
+              typeof line.productName === "string" ? line.productName : null,
+            productSkuId: String(line.productSkuId) as Id<"productSku">,
+            sku: typeof line.sku === "string" ? line.sku : null,
+          })),
+        );
+      }
+      }
       presentCommandToast(result);
       return;
     }
@@ -945,6 +1184,7 @@ export function StockAdjustmentWorkspaceContent({
       setCycleCountSubmissionOutcome(
         approvalRequired ? "review_required" : "applied",
       );
+      setStaleDraftLines([]);
     }
     setNotes("");
     setManualDeltas(buildManualDrafts(inventoryItems));
@@ -1202,23 +1442,66 @@ export function StockAdjustmentWorkspaceContent({
           </p>
           <div className="mt-layout-lg space-y-layout-lg">
             {adjustmentType === "cycle_count" ? (
-              <div
-                className={`space-y-2 rounded-md border px-layout-md py-layout-sm ${cycleCountStatus.tone}`}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    Count status
+              <div className="space-y-3">
+                <div
+                  className={`space-y-2 rounded-md border px-layout-md py-layout-sm ${cycleCountStatus.tone}`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Count status
+                    </p>
+                    <Badge
+                      className="rounded-md border-border bg-background text-foreground"
+                      variant="outline"
+                    >
+                      {cycleCountStatus.label}
+                    </Badge>
+                  </div>
+                  <p className="text-sm leading-6">
+                    {cycleCountStatus.description}
+                    {draftLastSavedLabel ? ` Last saved ${draftLastSavedLabel}.` : ""}
                   </p>
-                  <Badge
-                    className="rounded-md border-border bg-background text-foreground"
-                    variant="outline"
-                  >
-                    {cycleCountStatus.label}
-                  </Badge>
+                  {cycleCountDraft && onDiscardCycleCountDraft ? (
+                    <Button
+                      className="h-8 px-2 text-xs"
+                      disabled={isCycleCountDraftSaving || isSubmitting}
+                      onClick={async () => {
+                        await awaitPendingCycleCountSaves();
+                        const result = await onDiscardCycleCountDraft();
+
+                        if (result.kind !== "ok") {
+                          presentCommandToast(result);
+                          return;
+                        }
+
+                        setCycleCounts(buildCycleCountDrafts(inventoryItems));
+                        setCycleCountSubmissionOutcome(null);
+                        setStaleDraftLines([]);
+                        toast.success("Draft discarded");
+                      }}
+                      type="button"
+                      variant="outline"
+                    >
+                      Discard draft
+                    </Button>
+                  ) : null}
                 </div>
-                <p className="text-sm leading-6">
-                  {cycleCountStatus.description}
-                </p>
+                {staleDraftLines.length > 0 ? (
+                  <div className="rounded-md border border-warning/30 bg-warning/10 px-layout-md py-layout-sm">
+                    <p className="text-sm font-medium text-foreground">
+                      Inventory changed since this count started.
+                    </p>
+                    <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                      {staleDraftLines.map((line) => (
+                        <li key={line.productSkuId}>
+                          {line.productName ?? line.sku ?? line.productSkuId}:{" "}
+                          {line.baselineInventoryCount} to{" "}
+                          {line.currentInventoryCount} on hand.
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
               </div>
             ) : null}
             <div className="grid grid-cols-2 gap-layout-md">
@@ -1384,7 +1667,15 @@ export function StockAdjustmentWorkspaceContent({
 
           <LoadingButton
             className="w-full"
-            isLoading={isSubmitting}
+            disabled={
+              adjustmentType === "cycle_count" &&
+              (isCycleCountDraftSaving || pendingCycleCountSaveCount > 0)
+            }
+            isLoading={
+              isSubmitting ||
+              (adjustmentType === "cycle_count" &&
+                (isCycleCountDraftSaving || pendingCycleCountSaveCount > 0))
+            }
             onClick={handleSubmit}
           >
             {adjustmentType === "manual" ? "Submit adjustment" : "Submit count"}

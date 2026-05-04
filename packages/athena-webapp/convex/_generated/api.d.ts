@@ -217,6 +217,7 @@ import type * as schemas_serviceOps_serviceCase from "../schemas/serviceOps/serv
 import type * as schemas_serviceOps_serviceCaseLineItem from "../schemas/serviceOps/serviceCaseLineItem.js";
 import type * as schemas_serviceOps_serviceCatalog from "../schemas/serviceOps/serviceCatalog.js";
 import type * as schemas_serviceOps_serviceInventoryUsage from "../schemas/serviceOps/serviceInventoryUsage.js";
+import type * as schemas_stockOps_cycleCountDraft from "../schemas/stockOps/cycleCountDraft.js";
 import type * as schemas_stockOps_index from "../schemas/stockOps/index.js";
 import type * as schemas_stockOps_purchaseOrder from "../schemas/stockOps/purchaseOrder.js";
 import type * as schemas_stockOps_purchaseOrderLineItem from "../schemas/stockOps/purchaseOrderLineItem.js";
@@ -249,6 +250,7 @@ import type * as services_orderEmailService from "../services/orderEmailService.
 import type * as services_paystackService from "../services/paystackService.js";
 import type * as stockOps_access from "../stockOps/access.js";
 import type * as stockOps_adjustments from "../stockOps/adjustments.js";
+import type * as stockOps_cycleCountDrafts from "../stockOps/cycleCountDrafts.js";
 import type * as stockOps_purchaseOrders from "../stockOps/purchaseOrders.js";
 import type * as stockOps_receiving from "../stockOps/receiving.js";
 import type * as stockOps_replenishment from "../stockOps/replenishment.js";
@@ -509,6 +511,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/serviceOps/serviceCaseLineItem": typeof schemas_serviceOps_serviceCaseLineItem;
   "schemas/serviceOps/serviceCatalog": typeof schemas_serviceOps_serviceCatalog;
   "schemas/serviceOps/serviceInventoryUsage": typeof schemas_serviceOps_serviceInventoryUsage;
+  "schemas/stockOps/cycleCountDraft": typeof schemas_stockOps_cycleCountDraft;
   "schemas/stockOps/index": typeof schemas_stockOps_index;
   "schemas/stockOps/purchaseOrder": typeof schemas_stockOps_purchaseOrder;
   "schemas/stockOps/purchaseOrderLineItem": typeof schemas_stockOps_purchaseOrderLineItem;
@@ -541,6 +544,7 @@ declare const fullApi: ApiFromModules<{
   "services/paystackService": typeof services_paystackService;
   "stockOps/access": typeof stockOps_access;
   "stockOps/adjustments": typeof stockOps_adjustments;
+  "stockOps/cycleCountDrafts": typeof stockOps_cycleCountDrafts;
   "stockOps/purchaseOrders": typeof stockOps_purchaseOrders;
   "stockOps/receiving": typeof stockOps_receiving;
   "stockOps/replenishment": typeof stockOps_replenishment;
