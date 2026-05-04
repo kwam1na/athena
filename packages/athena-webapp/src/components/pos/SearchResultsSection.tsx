@@ -19,6 +19,8 @@ interface SearchResultsSectionProps {
 }
 
 const SEARCH_RESULTS_LOADING_ROWS = 4;
+const searchResultsViewportClassName =
+  "max-h-[586px] space-y-1 overflow-y-auto scrollbar-hide";
 
 function SearchResultsLoadingSkeleton() {
   return (
@@ -134,7 +136,7 @@ export function SearchResultsSection({
 
   if (isLoading) {
     return (
-      <div className={cn("max-h-[586px] space-y-1 overflow-y-auto", className)}>
+      <div className={cn(searchResultsViewportClassName, className)}>
         <span className="sr-only">Searching products…</span>
         <SearchResultsLoadingSkeleton />
       </div>
@@ -143,7 +145,7 @@ export function SearchResultsSection({
 
   if (products.length === 0) {
     return (
-      <div className={cn("max-h-[586px] space-y-1 overflow-y-auto", className)}>
+      <div className={cn(searchResultsViewportClassName, className)}>
         <div className="flex h-full flex-col items-center justify-center py-8 text-center text-gray-500">
           <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
             <Search className="w-6 h-6 text-gray-400" />
@@ -176,7 +178,7 @@ export function SearchResultsSection({
   }
 
   return (
-    <div className={cn("max-h-[586px] space-y-1 overflow-y-auto", className)}>
+    <div className={cn(searchResultsViewportClassName, className)}>
       <div className="space-y-8 py-8">
         {products.map((product: Product) => (
           <ProductCard

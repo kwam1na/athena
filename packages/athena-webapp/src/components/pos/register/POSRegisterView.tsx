@@ -633,6 +633,9 @@ export function POSRegisterView({
                       searchResults={viewModel.productEntry.searchResults}
                       isSearchLoading={viewModel.productEntry.isSearchLoading}
                       isSearchReady={viewModel.productEntry.isSearchReady}
+                      canQuickAddProduct={
+                        viewModel.productEntry.canQuickAddProduct
+                      }
                       showSearchInput={false}
                       containerClassName="h-full min-h-0"
                       lookupPanelClassName="flex h-full min-h-0 flex-col overflow-hidden"

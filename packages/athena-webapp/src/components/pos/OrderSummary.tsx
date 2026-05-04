@@ -17,6 +17,7 @@ import {
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { usePrint } from "~/src/hooks/usePrint";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
+import { getStoreConfigV2 } from "~/src/lib/storeConfig";
 import { capitalizeWords, cn } from "~/src/lib/utils";
 import config from "~/src/config";
 import PosReceiptEmail from "~/convex/emails/PosReceiptEmail";
@@ -25,6 +26,43 @@ import { currencyFormatter } from "~/shared/currencyFormatter";
 import { PaymentView, type SelectedPaymentMethod } from "./PaymentView";
 import { PaymentsAddedList } from "./PaymentsAddedList";
 import type { CartItem, Payment } from "./types";
+
+function formatReceiptWebsite(url: string) {
+  return url.replace(/^https?:\/\//, (protocol) =>
+    protocol === "https://" ? "www." : "",
+  );
+}
+
+function parseReceiptLocation(location?: string) {
+  const parts =
+    location
+      ?.split(",")
+      .map((part) => part.trim())
+      .filter(Boolean) ?? [];
+
+  if (parts.length === 0) {
+    return {};
+  }
+
+  const [street, city, third, fourth, ...rest] = parts;
+
+  if (parts.length === 4) {
+    return {
+      street,
+      city,
+      state: third,
+      country: fourth,
+    };
+  }
+
+  return {
+    street,
+    city,
+    state: third,
+    zipCode: fourth,
+    country: rest.join(", ") || undefined,
+  };
+}
 
 interface OrderSummaryProps {
   cartItems: CartItem[];
@@ -376,9 +414,10 @@ export function OrderSummary({
             )
           : undefined;
 
-      const storeContact = activeStore.config?.contactInfo;
-      const [street, city, addressState, zipCode, country] =
-        storeContact?.location?.split(",") || [];
+      const storeContact = getStoreConfigV2(activeStore).contact;
+      const { street, city, state, zipCode, country } = parseReceiptLocation(
+        storeContact.location,
+      );
 
       const receiptHTML = await render(
         <PosReceiptEmail
@@ -392,11 +431,11 @@ export function OrderSummary({
               ? {
                   street,
                   city,
-                  state: addressState,
+                  state,
                   zipCode,
                   country,
                   phone: storeContact?.phoneNumber,
-                  website: config.storeFrontUrl.replace("https://", "wwww."),
+                  website: formatReceiptWebsite(config.storeFrontUrl),
                 }
               : undefined
           }

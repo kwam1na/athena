@@ -42,6 +42,7 @@ export interface RegisterProductEntryState {
   searchResults: Product[];
   isSearchLoading: boolean;
   isSearchReady: boolean;
+  canQuickAddProduct: boolean;
 }
 
 export interface RegisterCartState {

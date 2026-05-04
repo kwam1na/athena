@@ -2337,6 +2337,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       searchResults: registerSearchProducts,
       isSearchLoading: isRegisterSearchLoading,
       isSearchReady: isRegisterCatalogReady,
+      canQuickAddProduct: isCashierManager,
     },
     cart: {
       items: activeCartItems,
