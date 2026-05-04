@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 4263 nodes · 3939 edges · 1501 communities detected
+- 4262 nodes · 3938 edges · 1501 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1611,24 +1611,24 @@ Cohesion: 0.12
 Nodes (4): listCompletedTransactionsForDay(), listSessionItems(), listTransactionItems(), readAllQueryResults()
 
 ### Community 18 - "Community 18"
-Cohesion: 0.12
-Nodes (4): getInventoryItemDisplayName(), handleDraftChange(), rowMatchesStockAdjustmentSearch(), setDraftValue()
-
-### Community 19 - "Community 19"
 Cohesion: 0.17
 Nodes (15): ancestorChain(), collectRawMoneyParses(), collectRawMoneyParsesFromSource(), collectRawNumericHelperNames(), collectSourceFiles(), containsDisallowedRawNumericParse(), containsTerm(), isAllowedDisplayConversion() (+7 more)
 
-### Community 20 - "Community 20"
+### Community 19 - "Community 19"
 Cohesion: 0.25
 Nodes (16): assertStaffProfileReadyForCredential(), authenticateStaffCredentialForApprovalWithCtx(), authenticateStaffCredentialForTerminalWithCtx(), authenticateStaffCredentialWithCtx(), createStaffCredentialWithCtx(), getActiveRolesForStaffProfile(), getCredentialById(), getCredentialByUsername() (+8 more)
 
-### Community 21 - "Community 21"
+### Community 20 - "Community 20"
 Cohesion: 0.11
 Nodes (0):
 
-### Community 22 - "Community 22"
+### Community 21 - "Community 21"
 Cohesion: 0.16
 Nodes (9): checkIfItemsHaveChanged(), createOnlineOrder(), findBestValuePromoCode(), handleExistingSession(), handleOrderCreation(), handlePlaceOrder(), listSessionItems(), updateExistingSession() (+1 more)
+
+### Community 22 - "Community 22"
+Cohesion: 0.12
+Nodes (4): getInventoryItemDisplayName(), handleDraftChange(), rowMatchesStockAdjustmentSearch(), setDraftValue()
 
 ### Community 23 - "Community 23"
 Cohesion: 0.22
@@ -1852,35 +1852,35 @@ Nodes (6): findAthenaUserByEmailWithCtx(), getAuthenticatedAthenaUserWithCtx(), 
 
 ### Community 78 - "Community 78"
 Cohesion: 0.43
-Nodes (6): sendDiscountCodeEmail(), sendDiscountReminderEmail(), sendFeedbackRequestEmail(), sendNewOrderEmail(), sendOrderEmail(), sendVerificationCode()
-
-### Community 79 - "Community 79"
-Cohesion: 0.43
 Nodes (6): buildMtnCollectionsLookupPrefixes(), isTargetEnvironment(), readScopedValue(), resolveConfigForPrefix(), resolveMtnCollectionsConfigFromEnv(), toEnvSegment()
 
-### Community 80 - "Community 80"
+### Community 79 - "Community 79"
 Cohesion: 0.46
 Nodes (7): recordApprovalAuditEventWithCtx(), recordApprovalDecisionRecordedAuditEventWithCtx(), recordApprovalProofConsumedAuditEventWithCtx(), recordApprovalRequiredAuditEventWithCtx(), recordApprovedCommandAppliedAuditEventWithCtx(), recordAsyncApprovalRequestCreatedAuditEventWithCtx(), recordManagerApprovalGrantedAuditEventWithCtx()
 
-### Community 81 - "Community 81"
+### Community 80 - "Community 80"
 Cohesion: 0.36
 Nodes (5): buildPaymentAllocation(), correctSameAmountSinglePaymentAllocationWithCtx(), findSameAmountSinglePaymentAllocation(), listPaymentAllocationsForTargetWithCtx(), recordPaymentAllocationWithCtx()
 
-### Community 82 - "Community 82"
+### Community 81 - "Community 81"
 Cohesion: 0.43
 Nodes (6): buildPosSessionTraceEvent(), buildPosSessionTraceRecord(), buildTraceSummary(), formatPaymentMethod(), recordPosSessionTraceBestEffort(), safeTraceWrite()
 
-### Community 83 - "Community 83"
+### Community 82 - "Community 82"
 Cohesion: 0.5
 Nodes (7): findExistingSku(), findOrCreateQuickAddCategory(), findOrCreateQuickAddSubcategory(), generateSKU(), isBarcodeLike(), mapSkuToCatalogResult(), quickAddCatalogItem()
+
+### Community 83 - "Community 83"
+Cohesion: 0.25
+Nodes (0):
 
 ### Community 84 - "Community 84"
 Cohesion: 0.25
 Nodes (0):
 
 ### Community 85 - "Community 85"
-Cohesion: 0.25
-Nodes (0):
+Cohesion: 0.43
+Nodes (6): sendDiscountCodeEmail(), sendDiscountReminderEmail(), sendFeedbackRequestEmail(), sendNewOrderEmail(), sendOrderEmail(), sendVerificationCode()
 
 ### Community 86 - "Community 86"
 Cohesion: 0.36
@@ -2248,7 +2248,7 @@ Nodes (0):
 
 ### Community 177 - "Community 177"
 Cohesion: 0.4
-Nodes (0):
+Nodes (1): Header()
 
 ### Community 178 - "Community 178"
 Cohesion: 0.4
@@ -2259,16 +2259,16 @@ Cohesion: 0.4
 Nodes (0):
 
 ### Community 180 - "Community 180"
-Cohesion: 0.5
-Nodes (2): handleFileSelect(), validateFile()
+Cohesion: 0.4
+Nodes (0):
 
 ### Community 181 - "Community 181"
 Cohesion: 0.5
-Nodes (2): getApprovalRequestCopy(), setDecisioningApprovalRequestId()
+Nodes (2): handleFileSelect(), validateFile()
 
 ### Community 182 - "Community 182"
-Cohesion: 0.4
-Nodes (0):
+Cohesion: 0.5
+Nodes (2): getApprovalRequestCopy(), setDecisioningApprovalRequestId()
 
 ### Community 183 - "Community 183"
 Cohesion: 0.4
@@ -2280,7 +2280,7 @@ Nodes (0):
 
 ### Community 185 - "Community 185"
 Cohesion: 0.4
-Nodes (1): Header()
+Nodes (0):
 
 ### Community 186 - "Community 186"
 Cohesion: 0.5
@@ -9683,5 +9683,5 @@ _Questions this graph is uniquely positioned to answer:_
   _Cohesion score 0.11 - nodes in this community are weakly interconnected._
 - **Should `Community 17` be split into smaller, more focused modules?**
   _Cohesion score 0.12 - nodes in this community are weakly interconnected._
-- **Should `Community 18` be split into smaller, more focused modules?**
-  _Cohesion score 0.12 - nodes in this community are weakly interconnected._
+- **Should `Community 20` be split into smaller, more focused modules?**
+  _Cohesion score 0.11 - nodes in this community are weakly interconnected._
