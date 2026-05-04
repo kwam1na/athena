@@ -12,6 +12,7 @@ tags:
   - pr-validation
   - vitest
   - bun-test
+  - ci-parity
 ---
 
 # Athena Coverage Policy Uses a Baseline Gate Until 100 Percent Is Feasible
@@ -36,6 +37,8 @@ The target policy remains 100 percent across lines, statements, functions, and b
 
 The baseline should match CI output. GitHub Actions installs dependencies with `bun install --frozen-lockfile`, and `bun run test:coverage` first runs `scripts/coverage-toolchain-parity.ts` so stale local installs or mismatched Vitest-family versions fail before coverage reports are generated.
 
+Remote CI can still diverge if local pre-push routing does not select the same coverage command for files that affect the repo harness itself. Repo-owned workflow changes under `scripts/`, package agent docs, GitHub workflow files, Husky hooks, and top-level repo wiring should route through `harness:review`, and that repo-level selection must include `bun run test:coverage`. A green `pre-push:review` is only merge-equivalent when it actually runs the same coverage gate that Actions will run for the touched surface.
+
 ## Exclusions
 
 Generated outputs, test files, route tree generation, coverage output, and Convex generated files stay excluded in the package coverage configs.
@@ -45,6 +48,7 @@ Generated outputs, test files, route tree generation, coverage output, and Conve
 ## Prevention
 
 - Run `bun run test:coverage` before merge-ready handoff when coverage policy or testable source changes.
+- Keep repo-owned harness validation selection wired to `bun run test:coverage`; otherwise script coverage regressions can pass local pre-push and fail only in GitHub Actions.
 - Keep Vitest-family coverage tooling on exact, aligned versions across the root, Athena webapp, and storefront webapp manifests.
 - Keep root script coverage file selection explicit so local `worktrees/` tests cannot change local-only coverage totals.
 - Keep `scripts/coverage-summary.ts` path-relative to `process.cwd()` so worktrees and CI read their own coverage artifacts.
