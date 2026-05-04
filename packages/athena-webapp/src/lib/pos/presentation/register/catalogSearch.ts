@@ -238,21 +238,130 @@ function scoreSearchRow(
   let score = 0;
 
   for (const token of queryTokens) {
-    if (!entry.tokens.has(token)) {
+    const tokenScore = scoreQueryTokenForEntry(entry, token);
+
+    if (tokenScore === 0) {
       continue;
     }
 
-    score += 1;
-
-    if (entry.normalizedFields.name.includes(token)) score += 8;
-    if (entry.normalizedFields.sku.includes(token)) score += 6;
-    if (entry.normalizedFields.barcode.includes(token)) score += 6;
-    if (entry.normalizedFields.category.includes(token)) score += 4;
-    if (entry.normalizedFields.attributes.includes(token)) score += 3;
-    if (entry.normalizedFields.description.includes(token)) score += 2;
+    score += tokenScore;
   }
 
   return score;
+}
+
+function scoreQueryTokenForEntry(
+  entry: RegisterCatalogIndex["searchableRows"][number],
+  token: string,
+): number {
+  if (entry.tokens.has(token)) {
+    return (
+      1 +
+      scoreFieldContains(entry.normalizedFields.name, token, 8) +
+      scoreFieldContains(entry.normalizedFields.sku, token, 6) +
+      scoreFieldContains(entry.normalizedFields.barcode, token, 6) +
+      scoreFieldContains(entry.normalizedFields.category, token, 4) +
+      scoreFieldContains(entry.normalizedFields.attributes, token, 3) +
+      scoreFieldContains(entry.normalizedFields.description, token, 2)
+    );
+  }
+
+  return bestFuzzyTokenScore(entry.tokens, token);
+}
+
+function scoreFieldContains(field: string, token: string, score: number): number {
+  return field.includes(token) ? score : 0;
+}
+
+function bestFuzzyTokenScore(tokens: Set<string>, queryToken: string): number {
+  if (queryToken.length < 3) {
+    return 0;
+  }
+
+  let bestScore = 0;
+
+  for (const candidateToken of tokens) {
+    bestScore = Math.max(
+      bestScore,
+      scoreFuzzyTokenMatch(candidateToken, queryToken),
+    );
+  }
+
+  return bestScore;
+}
+
+function scoreFuzzyTokenMatch(candidateToken: string, queryToken: string): number {
+  if (candidateToken.length < 3) {
+    return 0;
+  }
+
+  if (
+    candidateToken.includes(queryToken) ||
+    queryToken.includes(candidateToken)
+  ) {
+    return 5;
+  }
+
+  if (!isProbablySameToken(candidateToken, queryToken)) {
+    return 0;
+  }
+
+  const distance = levenshteinDistance(candidateToken, queryToken);
+  const maxLength = Math.max(candidateToken.length, queryToken.length);
+  const similarity = 1 - distance / maxLength;
+
+  if (similarity >= 0.78) {
+    return 4;
+  }
+
+  if (similarity >= 0.68) {
+    return 2;
+  }
+
+  return 0;
+}
+
+function isProbablySameToken(candidateToken: string, queryToken: string): boolean {
+  return (
+    candidateToken[0] === queryToken[0] ||
+    candidateToken.includes(queryToken.slice(0, 2)) ||
+    queryToken.includes(candidateToken.slice(0, 2))
+  );
+}
+
+function levenshteinDistance(left: string, right: string): number {
+  if (left === right) {
+    return 0;
+  }
+
+  if (left.length === 0) {
+    return right.length;
+  }
+
+  if (right.length === 0) {
+    return left.length;
+  }
+
+  let previousRow = Array.from({ length: right.length + 1 }, (_, index) => index);
+
+  for (let leftIndex = 0; leftIndex < left.length; leftIndex += 1) {
+    const currentRow = [leftIndex + 1];
+
+    for (let rightIndex = 0; rightIndex < right.length; rightIndex += 1) {
+      const insertionCost = currentRow[rightIndex] + 1;
+      const deletionCost = previousRow[rightIndex + 1] + 1;
+      const substitutionCost =
+        previousRow[rightIndex] + (left[leftIndex] === right[rightIndex] ? 0 : 1);
+
+      currentRow.push(
+        Math.min(insertionCost, deletionCost, substitutionCost),
+      );
+    }
+
+    previousRow = currentRow;
+  }
+
+  return previousRow[right.length];
 }
 
 function normalizeIdentifier(value: unknown): string {

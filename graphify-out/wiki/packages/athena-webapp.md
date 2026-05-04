@@ -21,7 +21,7 @@ Landing page for packages/athena-webapp. Use this page to orient around graph ho
 - `storeConfigV2.ts` (27 edges, Community 5) - [`packages/athena-webapp/convex/inventory/storeConfigV2.ts`](../../../packages/athena-webapp/convex/inventory/storeConfigV2.ts)
 - `cycleCountDrafts.ts` (21 edges, Community 9) - [`packages/athena-webapp/convex/stockOps/cycleCountDrafts.ts`](../../../packages/athena-webapp/convex/stockOps/cycleCountDrafts.ts)
 - `sessionCommands.ts` (20 edges, Community 12) - [`packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts`](../../../packages/athena-webapp/convex/pos/application/commands/sessionCommands.ts)
-- `expenseSessionCommands.ts` (19 edges, Community 13) - [`packages/athena-webapp/convex/pos/application/commands/expenseSessionCommands.ts`](../../../packages/athena-webapp/convex/pos/application/commands/expenseSessionCommands.ts)
+- `catalogSearch.ts` (19 edges, Community 15) - [`packages/athena-webapp/src/lib/pos/presentation/register/catalogSearch.ts`](../../../packages/athena-webapp/src/lib/pos/presentation/register/catalogSearch.ts)
 
 ## Navigation
 - [wiki index](../index.md) - back to the wiki index

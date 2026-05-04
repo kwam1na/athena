@@ -9,8 +9,9 @@ symptoms:
   - "Barcode scans waited on debounce and server lookup timing before adding an item"
   - "Active register product entry ran generic, barcode, and product-id searches as competing query paths"
   - "No-result and quick-add prompts depended on delayed server-search completion"
+  - "Short prefix input such as dura returned no local catalog results for Durable Lace Front"
 root_cause: per_input_server_search_on_register_hot_path
-resolution_type: refactor
+resolution_type: refactor_plus_local_fuzzy_matching
 severity: medium
 tags:
   - pos
@@ -18,6 +19,7 @@ tags:
   - catalog
   - barcode
   - quick-add
+  - fuzzy-search
 ---
 
 # Athena POS Register Search Uses A Local Catalog Index
@@ -45,6 +47,21 @@ but it must not become the durable inventory authority. Adding still goes
 through the POS add-item command so drawer, staff, session, inventory, and trace
 invariants stay at the command boundary.
 
+Local text ranking should be forgiving without turning into a broad semantic
+search. Keep exact identifier resolution first, then rank text tokens with a
+prefix-friendly fuzzy pass:
+
+- Ignore fuzzy matching for query tokens shorter than three characters.
+- Score direct token containment ahead of edit-distance matches so `dura`
+  finds `durable` predictably.
+- Use a cheap first-character or first-two-character overlap guard before
+  computing edit distance.
+- Use normalized Levenshtein similarity for typo tolerance, with stronger
+  scores for close matches and weaker scores for borderline matches.
+
+This keeps the register hot path local and deterministic while covering common
+operator input: prefixes, partial product names, and small typos.
+
 ## Quick Add
 
 Quick-add and no-results prompts should follow local catalog readiness, not a
@@ -62,6 +79,7 @@ command, and the next snapshot refresh should make the new SKU searchable.
   can see why the item was not auto-added.
 - Add tests for exact single-match auto-add, out-of-stock exact results, and
   product-id variant ambiguity whenever register search changes.
+- Add tests for prefix and typo matching whenever local text ranking changes.
 
 ## Related Issues
 

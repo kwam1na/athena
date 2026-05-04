@@ -146,6 +146,42 @@ describe("catalogSearch", () => {
     expect(result.results[0]?.productSkuId).toBe("sku-belt");
   });
 
+  it("returns prefix fuzzy matches from the local text index", () => {
+    const result = searchRegisterCatalog(
+      buildRegisterCatalogIndex([
+        ...rows,
+        {
+          productId: "product-durable-lace",
+          productSkuId: "sku-durable-lace",
+          name: "Durable Lace Front",
+          sku: "DLF-20",
+          barcode: "444555666777",
+          category: "Wigs",
+          description: "Long-wear frontal wig",
+          quantityAvailable: 3,
+          price: 250,
+          size: "M",
+          color: "Natural",
+          length: 20,
+        },
+      ]),
+      "dura",
+    );
+
+    expect(result.intent).toBe("text");
+    expect(result.results[0]?.productSkuId).toBe("sku-durable-lace");
+  });
+
+  it("returns typo-tolerant fuzzy matches from the local text index", () => {
+    const result = searchRegisterCatalog(
+      buildRegisterCatalogIndex(rows),
+      "lether",
+    );
+
+    expect(result.intent).toBe("text");
+    expect(result.results[0]?.productSkuId).toBe("sku-belt");
+  });
+
   it("returns no results for unmatched text", () => {
     const result = searchRegisterCatalog(
       buildRegisterCatalogIndex(rows),
