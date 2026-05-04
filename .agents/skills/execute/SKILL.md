@@ -25,9 +25,10 @@ Do not use this skill when:
 ## Delivery Contract
 
 - Default to completing the ticket autonomously end-to-end.
-- Delivery means the PR is merged into remote `main`, the local root checkout has fast-forwarded to the merged `origin/main`, and the ticket is already marked `Done` in Linear by merge automation.
+- Delivery usually means the PR is merged into remote `main`, the local root checkout has fast-forwarded to the merged `origin/main`, and the ticket is already marked `Done` in Linear by merge automation.
+- When the user or repo workflow asks to skip waiting on remote checks, delivery can hand off with GitHub auto-merge armed after local merge-level sensors and review gates pass. In that case, leave the ticket in the accurate pre-merge state, report that auto-merge is armed, and only claim merged/local fast-forwarded after the remote merge actually happens.
 - When executing a coordinated batch of related tickets, delivery can mean all tickets land through one shared integration PR rather than one PR per ticket.
-- Delivery always includes remote merge and local fast-forward unless the user explicitly opts out or permissions prevent it.
+- Delivery always includes remote merge and local fast-forward unless the user explicitly opts out, asks to rely on auto-merge, or permissions prevent it.
 - Delivery also means you leave the local repo tidy, back on `main`, and reflecting the merged remote state.
 - Do not stop at "PR open" or "ready for review" unless the user explicitly asked for that narrower handoff.
 - Only treat something as a blocker when it genuinely requires user input.
@@ -74,9 +75,9 @@ Use this resolution order before asking the user for context:
 - Merge target `main`; merge method `squash`; review loop cap `3`.
 - Merge is the default delivery posture. Do not stop at an open PR when auto-review and merge are on.
 - After merge, fast-forward the local root checkout to `origin/main`; do not leave the repo on a stale local `main`.
-- In Athena, merge PRs with `bun run github:pr-merge -- <pr-number-or-url> --method squash --delete-branch` instead of raw `gh pr merge`. The helper uses the GitHub API directly, so it does not try to check out or update local `main` and is safe when `main` is already checked out in the root worktree.
+- In Athena, merge or arm auto-merge with `bun run github:pr-merge -- <pr-number-or-url> --method squash --delete-branch` or `bun run github:pr-merge -- <pr-number-or-url> --auto --method squash` instead of raw `gh pr merge`. The helper uses GitHub APIs directly, so it does not try to check out or update local `main` and is safe when `main` is already checked out in the root worktree.
 - Human approval is not required unless the user explicitly asks for it.
-- All PR checks must be green before merge.
+- All PR checks must be green before the PR actually merges. If required checks are still pending after local gates pass, arm auto-merge instead of waiting and manually merging; if a check fails, investigate and fix it.
 
 ## Workflow
 
@@ -144,6 +145,7 @@ Use this resolution order before asking the user for context:
 - Run the smallest targeted test first, then the relevant suite, typecheck, build, lint, repo preflight, and `git diff --check`.
 - Match validation to the ticket's expected sensors and supplement with discovered repo sensors when the ticket is incomplete.
 - If the repo defines a PR-equivalent command, run that before trusting local parity with remote CI.
+- If the repo has generated-artifact repair hooks, run them before the final commit and inspect the diff. For Athena, `bun run pre-commit:generated-artifacts` refreshes harness docs, Convex generated API files, graphify artifacts, and tracked generated changes so new Convex modules do not leave `_generated/api.d.ts` drift for a follow-up PR.
 - When harness or repo validation fails, first classify it as deterministic repairable drift or a semantic blocker.
 - If the repo already defines a canonical repair command for deterministic drift, run that repair once, rerun the blocked validation once, and continue only if the rerun passes.
 - Do not invent self-corrections for semantic failures; investigate those normally.
@@ -186,7 +188,7 @@ After opening the PR:
   - `important_count > 0`
   - GitHub review state `CHANGES_REQUESTED`
   - unresolved actionable PR review threads or comments
-  - any PR check not green
+  - any PR check that failed or was cancelled
 - If blocked, fix the issue, rerun the relevant validations, push, rerun `$requesting-code-review`, and recheck GitHub feedback plus CI.
 - If remote GitHub Actions fails after local validation passed, inspect the failing logs and deduce the concrete root cause instead of guessing from the check name alone.
 - Treat remote-only failures as a local parity or harness gap until disproven:
@@ -196,7 +198,8 @@ After opening the PR:
 - The follow-up issue should capture the failing remote check, the local validations that passed, the root cause, and the local command, harness mapping, or coverage addition needed so the failure is caught before CI next time.
 - Link that follow-up issue from the current Linear ticket and the PR comment trail when it materially affects the handoff.
 - Iterate up to `3` times by default, but continue autonomously if the next fix is still clear.
-- When all gates pass, mark the PR ready if needed and squash-merge into `main` with `bun run github:pr-merge -- <pr-number-or-url> --method squash --delete-branch`.
+- When local gates and review gates pass, mark the PR ready if needed and arm auto-merge with `bun run github:pr-merge -- <pr-number-or-url> --auto --method squash` unless the user explicitly asked you to wait through merge completion or repo settings reject auto-merge.
+- If auto-merge cannot be armed and all PR checks are already green, squash-merge into `main` with `bun run github:pr-merge -- <pr-number-or-url> --method squash --delete-branch`.
 - Treat the merge as incomplete until the remote merge is confirmed and the local root checkout fast-forwards to the merged `origin/main`.
 
 ### 9. Compound The Learning

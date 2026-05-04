@@ -57,7 +57,7 @@ describe("github-pr-merge", () => {
         "--repo",
         "kwam1na/athena",
         "--json",
-        "baseRefName,headRefName,headRepository,headRepositoryOwner,isDraft,number,state,url",
+        "baseRefName,headRefName,headRepository,headRepositoryOwner,id,isDraft,number,state,url",
       ],
       [
         "gh",
@@ -77,6 +77,54 @@ describe("github-pr-merge", () => {
       ],
     ]);
     expect(inputs[1]).toBe('{"merge_method":"squash"}\n');
+  });
+
+  it("arms auto-merge through GraphQL without merging immediately", async () => {
+    const calls: string[][] = [];
+    const runCommand: CommandRunner = async (command) => {
+      calls.push(command);
+
+      if (command[0] === "gh" && command[1] === "pr" && command[2] === "view") {
+        return {
+          exitCode: 0,
+          stderr: "",
+          stdout: JSON.stringify({
+            baseRefName: "main",
+            headRefName: "codex/auto",
+            headRepository: { nameWithOwner: "kwam1na/athena" },
+            headRepositoryOwner: { login: "kwam1na" },
+            id: "PR_kwDOExample",
+            isDraft: false,
+            number: 344,
+            state: "OPEN",
+            url: "https://github.com/kwam1na/athena/pull/344",
+          }),
+        };
+      }
+
+      return { exitCode: 0, stderr: "", stdout: "{}" };
+    };
+
+    const message = await mergePullRequest(
+      {
+        auto: true,
+        deleteBranch: true,
+        method: "squash",
+        prRef: "344",
+        repo: "kwam1na/athena",
+      },
+      runCommand
+    );
+
+    expect(message).toBe(
+      "Armed auto-merge for https://github.com/kwam1na/athena/pull/344 with squash."
+    );
+    expect(calls.map((call) => call.slice(0, 3))).toEqual([
+      ["gh", "pr", "view"],
+      ["gh", "api", "graphql"],
+    ]);
+    expect(calls[1]).toContain("pullRequestId=PR_kwDOExample");
+    expect(calls[1]).toContain("mergeMethod=SQUASH");
   });
 
   it("does not delete fork branches", async () => {
@@ -332,12 +380,14 @@ describe("github-pr-merge", () => {
     expect(
       parseArgs([
         "343",
+        "--auto",
         "--method",
         "rebase",
         "--delete-branch",
         "--repo=kwam1na/athena",
       ])
     ).toEqual({
+      auto: true,
       deleteBranch: true,
       method: "rebase",
       prRef: "343",
@@ -347,6 +397,7 @@ describe("github-pr-merge", () => {
 
   it("rejects invalid CLI options", () => {
     expect(() => parseArgs([])).toThrow("Usage:");
+    expect(() => parseArgs(["--help"])).toThrow();
     expect(() => parseArgs(["343", "--method"])).toThrow("--method requires a value");
     expect(() => parseArgs(["343", "--method", "octopus"])).toThrow(
       "Unsupported merge method"

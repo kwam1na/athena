@@ -34,6 +34,7 @@ Plan -> Work -> Review -> Compound -> Repeat.
 - For `characterization-first`, write a test or fixture that captures current behavior before changing it.
 - Implement the smallest behavior slice that can turn the selected test green.
 - Run the relevant sensor after each meaningful slice, not only at the end.
+- Regenerate tracked generated client APIs before commit when source changes can affect them; for Athena Convex work this includes `convex/_generated/` via the repo's generated-artifacts hook, not just staging whatever happened to be dirty.
 - If a repo sensor fails, classify it:
   - deterministic repairable drift: run the documented repair once, inspect the result, and rerun the sensor
   - semantic blocker: investigate normally and fix the root cause
@@ -45,6 +46,7 @@ Plan -> Work -> Review -> Compound -> Repeat.
 - Use specialized reviewers when risk warrants it: correctness, tests, security, performance, data, architecture, frontend behavior, agent-native access, or project standards.
 - Treat important review findings as work, not commentary.
 - After fixes, rerun the specific sensor that should catch the issue and then the merge-level sensor set.
+- When GitHub required checks are the only remaining gate and the repo supports auto-merge, arm auto-merge after local merge-level sensors and review gates pass. Pending remote checks should be delegated to auto-merge instead of spending agent time polling green checks just to run a manual merge; failing checks still require investigation.
 
 ### Compound
 

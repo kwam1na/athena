@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { GRAPHIFY_WIKI_ARTIFACTS } from "./graphify-wiki";
 import {
+  TRACKED_CONVEX_GENERATED_ARTIFACTS,
   TRACKED_GENERATED_HARNESS_DOCS,
   TRACKED_GRAPHIFY_ARTIFACTS,
   runPreCommitGeneratedArtifacts,
@@ -15,6 +16,16 @@ describe("runPreCommitGeneratedArtifacts", () => {
     await runPreCommitGeneratedArtifacts("/repo", {
       runHarnessGenerate: async () => {
         steps.push("harness:generate");
+      },
+      hasConvexSourceChanges: async () => {
+        steps.push("convex:changed?");
+        return true;
+      },
+      refreshConvexGeneratedApi: async () => {
+        steps.push("convex:refresh");
+      },
+      verifyConvexGeneratedApi: async () => {
+        steps.push("convex:verify");
       },
       runGraphifyRebuild: async () => {
         steps.push("graphify:rebuild");
@@ -34,6 +45,10 @@ describe("runPreCommitGeneratedArtifacts", () => {
     expect(steps).toEqual([
       "harness:generate",
       `git add -- ${TRACKED_GENERATED_HARNESS_DOCS.join(" ")}`,
+      "convex:changed?",
+      "convex:refresh",
+      "convex:verify",
+      `git add -- ${TRACKED_CONVEX_GENERATED_ARTIFACTS.join(" ")}`,
       "graphify:rebuild",
       `git add -- ${TRACKED_GRAPHIFY_ARTIFACTS.join(" ")}`,
       "git add --update -- .",
@@ -45,6 +60,8 @@ describe("runPreCommitGeneratedArtifacts", () => {
 
     await runPreCommitGeneratedArtifacts("/repo", {
       runHarnessGenerate: async () => {},
+      hasConvexSourceChanges: async () => false,
+      verifyConvexGeneratedApi: async () => {},
       runGraphifyRebuild: async () => {},
       spawn(command) {
         commands.push(command);
@@ -60,6 +77,7 @@ describe("runPreCommitGeneratedArtifacts", () => {
 
     expect(commands).toEqual([
       ["git", "add", "--", ...TRACKED_GENERATED_HARNESS_DOCS],
+      ["git", "add", "--", ...TRACKED_CONVEX_GENERATED_ARTIFACTS],
       ["git", "add", "--", ...TRACKED_GRAPHIFY_ARTIFACTS],
       ["git", "add", "--update", "--", "."],
     ]);
@@ -70,6 +88,8 @@ describe("runPreCommitGeneratedArtifacts", () => {
 
     await runPreCommitGeneratedArtifacts("/repo", {
       runHarnessGenerate: async () => {},
+      hasConvexSourceChanges: async () => false,
+      verifyConvexGeneratedApi: async () => {},
       runGraphifyRebuild: async () => {},
       spawn(command) {
         commands.push(command);
@@ -91,6 +111,8 @@ describe("runPreCommitGeneratedArtifacts", () => {
 
     await runPreCommitGeneratedArtifacts("/repo", {
       runHarnessGenerate: async () => {},
+      hasConvexSourceChanges: async () => false,
+      verifyConvexGeneratedApi: async () => {},
       runGraphifyRebuild: async () => {},
       spawn(command) {
         commands.push(command);
@@ -113,6 +135,8 @@ describe("runPreCommitGeneratedArtifacts", () => {
     await expect(
       runPreCommitGeneratedArtifacts("/repo", {
         runHarnessGenerate: async () => {},
+        hasConvexSourceChanges: async () => false,
+        verifyConvexGeneratedApi: async () => {},
         runGraphifyRebuild: async () => {},
         spawn() {
           return {
@@ -127,16 +151,92 @@ describe("runPreCommitGeneratedArtifacts", () => {
     ).rejects.toThrow("git add harness docs failed");
   });
 
+  it("fails clearly when Convex generated API verification fails", async () => {
+    await expect(
+      runPreCommitGeneratedArtifacts("/repo", {
+        runHarnessGenerate: async () => {},
+        hasConvexSourceChanges: async () => false,
+        verifyConvexGeneratedApi: async () => {
+          throw new Error("convex generated api drift");
+        },
+        runGraphifyRebuild: async () => {},
+        spawn() {
+          return {
+            exited: Promise.resolve(0),
+            stderr: new Response("").body,
+          };
+        },
+        logger: {
+          log() {},
+        },
+      })
+    ).rejects.toThrow("convex generated api drift");
+  });
+
+  it("fails clearly when Convex generated API refresh fails", async () => {
+    await expect(
+      runPreCommitGeneratedArtifacts("/repo", {
+        runHarnessGenerate: async () => {},
+        hasConvexSourceChanges: async () => true,
+        refreshConvexGeneratedApi: async () => {
+          throw new Error("convex refresh failed");
+        },
+        verifyConvexGeneratedApi: async () => {},
+        runGraphifyRebuild: async () => {},
+        spawn() {
+          return {
+            exited: Promise.resolve(0),
+            stderr: new Response("").body,
+          };
+        },
+        logger: {
+          log() {},
+        },
+      })
+    ).rejects.toThrow("convex refresh failed");
+  });
+
+  it("fails clearly when staging repaired Convex generated API fails", async () => {
+    let spawnCount = 0;
+
+    await expect(
+      runPreCommitGeneratedArtifacts("/repo", {
+        runHarnessGenerate: async () => {},
+        hasConvexSourceChanges: async () => false,
+        verifyConvexGeneratedApi: async () => {},
+        runGraphifyRebuild: async () => {},
+        spawn() {
+          spawnCount += 1;
+          if (spawnCount === 1) {
+            return {
+              exited: Promise.resolve(0),
+              stderr: new Response("").body,
+            };
+          }
+          return {
+            exited: Promise.resolve(1),
+            stderr: new Response("git add convex failed").body,
+          };
+        },
+        logger: {
+          log() {},
+        },
+      })
+    ).rejects.toThrow("git add convex failed");
+  });
+
   it("fails clearly when staging repaired graphify artifacts fails", async () => {
     let spawnCount = 0;
 
     await expect(
       runPreCommitGeneratedArtifacts("/repo", {
         runHarnessGenerate: async () => {},
+        hasConvexSourceChanges: async () => false,
+        verifyConvexGeneratedApi: async () => {},
         runGraphifyRebuild: async () => {},
         spawn() {
           spawnCount += 1;
-          if (spawnCount === 1) {
+          if (spawnCount < 3) {
             return {
               exited: Promise.resolve(0),
               stderr: new Response("").body,
@@ -160,10 +260,12 @@ describe("runPreCommitGeneratedArtifacts", () => {
     await expect(
       runPreCommitGeneratedArtifacts("/repo", {
         runHarnessGenerate: async () => {},
+        hasConvexSourceChanges: async () => false,
+        verifyConvexGeneratedApi: async () => {},
         runGraphifyRebuild: async () => {},
         spawn() {
           spawnCount += 1;
-          if (spawnCount < 3) {
+          if (spawnCount < 4) {
             return {
               exited: Promise.resolve(0),
               stderr: new Response("").body,
@@ -187,10 +289,12 @@ describe("runPreCommitGeneratedArtifacts", () => {
     await expect(
       runPreCommitGeneratedArtifacts("/repo", {
         runHarnessGenerate: async () => {},
+        hasConvexSourceChanges: async () => false,
+        verifyConvexGeneratedApi: async () => {},
         runGraphifyRebuild: async () => {},
         spawn() {
           spawnCount += 1;
-          if (spawnCount < 3) {
+          if (spawnCount < 4) {
             return {
               exited: Promise.resolve(0),
               stderr: new Response("").body,
@@ -208,6 +312,16 @@ describe("runPreCommitGeneratedArtifacts", () => {
     ).rejects.toThrow(
       "Failed to stage tracked working-tree changes (exit 1): git add --update -- ."
     );
+  });
+
+  it("keeps the tracked Convex generated API list aligned with repo outputs", () => {
+    expect(TRACKED_CONVEX_GENERATED_ARTIFACTS).toEqual([
+      path.join("packages", "athena-webapp", "convex", "_generated", "api.d.ts"),
+      path.join("packages", "athena-webapp", "convex", "_generated", "api.js"),
+      path.join("packages", "athena-webapp", "convex", "_generated", "dataModel.d.ts"),
+      path.join("packages", "athena-webapp", "convex", "_generated", "server.d.ts"),
+      path.join("packages", "athena-webapp", "convex", "_generated", "server.js"),
+    ]);
   });
 
   it("keeps the tracked graphify artifact list aligned with repo outputs", () => {

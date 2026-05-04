@@ -7,4 +7,4 @@
 - Use [docs/agent/testing.md](./docs/agent/testing.md) to choose the smallest honest validation set.
 - Use [docs/agent/code-map.md](./docs/agent/code-map.md) when tracing ownership across `src/` and `convex/`.
 - For product-copy changes, follow the repo guide at [../../docs/product-copy-tone.md](../../docs/product-copy-tone.md) and normalize operator-facing system text instead of surfacing raw backend phrasing.
-- When generated Convex client artifacts need to refresh, start `bunx convex dev` from `packages/athena-webapp`. Do not use `bunx convex codegen` in this repo's normal agent flow because local workspaces may not have `CONVEX_DEPLOYMENT` configured.
+- When generated Convex client artifacts need to refresh, run `bunx convex dev --once` from `packages/athena-webapp`. Plain `bunx convex dev` enters watch mode. Do not use `bunx convex codegen` in this repo's normal agent flow because local workspaces may not have `CONVEX_DEPLOYMENT` configured.

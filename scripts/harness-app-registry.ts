@@ -311,7 +311,7 @@ export const HARNESS_APP_REGISTRY = [
         ],
         behaviorScenarios: ["athena-admin-shell-boot"],
         note:
-          "Use this when stock adjustments, procurement recommendations, purchase-order lifecycle changes, or receiving route wiring move. Start `bunx convex dev` from `packages/athena-webapp` before validation when generated client refs or new stockOps function exports changed.",
+          "Use this when stock adjustments, procurement recommendations, purchase-order lifecycle changes, or receiving route wiring move. Run `bunx convex dev --once` from `packages/athena-webapp` before validation when generated client refs or new stockOps function exports changed.",
       },
       {
         title: "Cash-controls workflow edits",
@@ -337,7 +337,7 @@ export const HARNESS_APP_REGISTRY = [
         ],
         behaviorScenarios: ["athena-admin-shell-boot"],
         note:
-          "Use this when register-session, deposit, closeout, dashboard, operations-queue approval, or cash-controls route wiring changes. This is the confirmation slice for drawers opened from POS showing up in the dashboard and register-session detail views. Start `bunx convex dev` from `packages/athena-webapp` before validation when generated client refs or new Convex function exports changed.",
+          "Use this when register-session, deposit, closeout, dashboard, operations-queue approval, or cash-controls route wiring changes. This is the confirmation slice for drawers opened from POS showing up in the dashboard and register-session detail views. Run `bunx convex dev --once` from `packages/athena-webapp` before validation when generated client refs or new Convex function exports changed.",
       },
       {
         title: "Service operations intake, catalog, appointments, and cases",
@@ -464,7 +464,7 @@ export const HARNESS_APP_REGISTRY = [
           "athena-convex-storefront-failure-visibility",
         ],
         note:
-          "Use this when order updates, refunds, return-exchange execution, review moderation, feedback-request messaging, or customer-history presentation changes. It validates the migrated storefront command-result surfaces plus the operator-facing order, review, and customer-history views before broader package validation. Start `bunx convex dev` from `packages/athena-webapp` before validation when generated client refs or new storefront function exports changed.",
+          "Use this when order updates, refunds, return-exchange execution, review moderation, feedback-request messaging, or customer-history presentation changes. It validates the migrated storefront command-result surfaces plus the operator-facing order, review, and customer-history views before broader package validation. Run `bunx convex dev --once` from `packages/athena-webapp` before validation when generated client refs or new storefront function exports changed.",
       },
       {
         title: "Workflow trace foundation, POS drawer gate, and trace-link edits",
