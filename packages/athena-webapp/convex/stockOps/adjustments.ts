@@ -425,6 +425,7 @@ export const listInventorySnapshot = query({
 
         return {
           _id: productSku._id,
+          barcode: productSku.barcode ?? null,
           colorName: color?.name ?? null,
           imageUrl: productSku.images[0] ?? null,
           inventoryCount: productSku.inventoryCount,

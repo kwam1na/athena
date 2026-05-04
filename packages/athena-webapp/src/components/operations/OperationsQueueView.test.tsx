@@ -115,12 +115,17 @@ describe("OperationsQueueViewContent", () => {
       isLoading: false,
     });
     mockedHooks.useMutation.mockReturnValue(vi.fn());
-    mockedHooks.useQuery
-      .mockReturnValueOnce({
-        approvalRequests: [],
-        workItems: [],
-      })
-      .mockReturnValueOnce([]);
+    const queueSnapshot = {
+      approvalRequests: [],
+      workItems: [],
+    };
+    const inventorySnapshot: typeof baseProps.inventoryItems = [];
+    let queryCallIndex = 0;
+    mockedHooks.useQuery.mockImplementation(() => {
+      queryCallIndex += 1;
+
+      return queryCallIndex % 2 === 1 ? queueSnapshot : inventorySnapshot;
+    });
   });
 
   it("shows a loading state while permissions are resolving", () => {
@@ -259,7 +264,6 @@ describe("OperationsQueueViewContent", () => {
     const { default: userEvent } = await import("@testing-library/user-event");
     const user = userEvent.setup();
     const submitStockBatch = vi.fn();
-    const deleteStockScopeSkus = vi.fn();
     const decideApprovalRequest = vi
       .fn()
       .mockResolvedValue(ok({ _id: "approval-1" }));
@@ -268,7 +272,6 @@ describe("OperationsQueueViewContent", () => {
     mockedHooks.useQuery.mockReset();
     mockedHooks.useMutation
       .mockReturnValueOnce(submitStockBatch)
-      .mockReturnValueOnce(deleteStockScopeSkus)
       .mockReturnValueOnce(decideApprovalRequest);
     mockedHooks.useQuery
       .mockReturnValueOnce({
@@ -300,7 +303,6 @@ describe("OperationsQueueViewContent", () => {
     const { default: userEvent } = await import("@testing-library/user-event");
     const user = userEvent.setup();
     const submitStockBatch = vi.fn();
-    const deleteStockScopeSkus = vi.fn();
     const decideApprovalRequest = vi
       .fn()
       .mockRejectedValue(new Error("Leaked backend approval detail"));
@@ -312,7 +314,6 @@ describe("OperationsQueueViewContent", () => {
     mockedHooks.useQuery.mockReset();
     mockedHooks.useMutation
       .mockReturnValueOnce(submitStockBatch)
-      .mockReturnValueOnce(deleteStockScopeSkus)
       .mockReturnValueOnce(decideApprovalRequest);
     mockedHooks.useQuery
       .mockReturnValueOnce({

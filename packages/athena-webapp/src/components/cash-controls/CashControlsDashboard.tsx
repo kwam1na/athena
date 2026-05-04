@@ -1,11 +1,6 @@
 import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
-import {
-  ArrowRight,
-  ArrowUpRight,
-  Banknote,
-  ShieldAlert,
-} from "lucide-react";
+import { ArrowRight, ArrowUpRight, Banknote, ShieldAlert } from "lucide-react";
 
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { capitalizeWords, cn, currencyFormatter } from "@/lib/utils";
@@ -571,7 +566,12 @@ function WorkflowSummaryItem({
       <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
         {label}
       </p>
-      <p className={cn("mt-1 font-numeric tabular-nums text-base text-foreground", tone)}>
+      <p
+        className={cn(
+          "mt-1 font-numeric tabular-nums text-base text-foreground",
+          tone,
+        )}
+      >
         {value}
       </p>
     </div>
@@ -960,8 +960,12 @@ function ClosedSessionsSnapshot({
     (total, session) => total + (session.variance ?? 0),
     0,
   );
-  const shortSessions = sessions.filter((session) => (session.variance ?? 0) < 0);
-  const overSessions = sessions.filter((session) => (session.variance ?? 0) > 0);
+  const shortSessions = sessions.filter(
+    (session) => (session.variance ?? 0) < 0,
+  );
+  const overSessions = sessions.filter(
+    (session) => (session.variance ?? 0) > 0,
+  );
   const balancedSessions = sessions.filter(
     (session) => (session.variance ?? 0) === 0,
   );
@@ -1007,10 +1011,7 @@ function ClosedSessionsSnapshot({
       </div>
 
       <dl className="grid gap-layout-sm md:grid-cols-2 2xl:grid-cols-4">
-        <WorkflowSummaryItem
-          label="Closed sessions"
-          value={`${closedCount}`}
-        />
+        <WorkflowSummaryItem label="Closed sessions" value={`${closedCount}`} />
         <WorkflowSummaryItem
           label="Expected cash"
           value={formatCurrency(currency, expectedTotal)}
@@ -1063,7 +1064,9 @@ function ClosedSessionsSnapshot({
 
       <div className="rounded-lg border border-border/70 bg-background/70 px-layout-md py-layout-sm">
         <div className="flex flex-wrap items-center justify-between gap-layout-sm text-sm">
-          <span className="text-muted-foreground">Deposited across closed sessions</span>
+          <span className="text-muted-foreground">
+            Deposited across closed sessions
+          </span>
           <span className="font-numeric tabular-nums text-foreground">
             {formatCurrency(currency, depositedTotal)}
           </span>
@@ -1315,7 +1318,7 @@ export function CashControlsDashboardContent({
                     Current control snapshot
                   </p>
                   <h2 className="font-display text-2xl font-semibold tracking-tight text-foreground">
-                    Cashroom status
+                    Cashroom Landing
                   </h2>
                 </div>
                 <div className="inline-flex items-center gap-2 rounded-md border border-border bg-surface-raised px-layout-sm py-layout-xs text-sm text-muted-foreground">

@@ -79,7 +79,7 @@ export default function View({
         {header && (
           <header
             className={cn(
-              "overflow-hidden",
+              "shrink-0 overflow-hidden",
               !hideHeaderBottomBorder && "border-b",
               headerClassName,
             )}

@@ -8,7 +8,6 @@ import { ok, userError } from "~/shared/commandResult";
 import { StockAdjustmentWorkspaceContent } from "./StockAdjustmentWorkspace";
 
 const mockedHandlers = vi.hoisted(() => ({
-  onDeleteSelectedScopeSkus: vi.fn(),
   onSubmitBatch: vi.fn(),
 }));
 
@@ -59,6 +58,7 @@ const baseProps = {
   inventoryItems: [
     {
       _id: "sku-1" as Id<"productSku">,
+      barcode: "1234567890123",
       colorName: "natural black",
       imageUrl: "https://cdn.example.com/closure-wig.jpg",
       inventoryCount: 8,
@@ -81,7 +81,6 @@ const baseProps = {
     },
   ],
   isSubmitting: false,
-  onDeleteSelectedScopeSkus: mockedHandlers.onDeleteSelectedScopeSkus,
   onSubmitBatch: mockedHandlers.onSubmitBatch,
   storeId: "store-1" as Id<"store">,
 };
@@ -98,19 +97,10 @@ describe("StockAdjustmentWorkspaceContent", () => {
     vi.restoreAllMocks();
     mockedToast.error.mockReset();
     mockedToast.success.mockReset();
-    mockedHandlers.onDeleteSelectedScopeSkus.mockReset();
     mockedHandlers.onSubmitBatch.mockReset();
   });
 
   beforeEach(() => {
-    mockedHandlers.onDeleteSelectedScopeSkus.mockResolvedValue(
-      ok({
-        deletedCount: 1,
-        dryRun: false,
-        productSkuIds: ["sku-1"],
-        scopeKey: "Hair",
-      }),
-    );
     mockedHandlers.onSubmitBatch.mockResolvedValue(ok({ _id: "batch-1" }));
     window.history.replaceState(
       null,
@@ -288,9 +278,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(
-        /9 of 11 units are available to sell\. Choose a scope/i,
-      ),
+      screen.getByText(/9 of 11 units are available to sell\. Choose a scope/i),
     ).toBeInTheDocument();
     expect(screen.getAllByText("On hand").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Available").length).toBeGreaterThan(0);
@@ -320,9 +308,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
     });
 
     expect(
-      screen.getByText(
-        /20\.7k of 20\.7k units are available to sell\./i,
-      ),
+      screen.getByText(/20\.7k of 20\.7k units are available to sell\./i),
     ).toBeInTheDocument();
     expect(screen.getAllByText("20.7k").length).toBeGreaterThan(1);
   });
@@ -334,7 +320,9 @@ describe("StockAdjustmentWorkspaceContent", () => {
 
     const table = screen.getByRole("table");
 
-    expect(within(table).getByText('18" Natural Black Closure Wig')).toBeInTheDocument();
+    expect(
+      within(table).getByText('18" Natural Black Closure Wig'),
+    ).toBeInTheDocument();
     expect(within(table).getByText("Body Wave Bundle")).toBeInTheDocument();
 
     await user.type(
@@ -342,7 +330,9 @@ describe("StockAdjustmentWorkspaceContent", () => {
       "body",
     );
 
-    expect(within(table).queryByText('18" Natural Black Closure Wig')).not.toBeInTheDocument();
+    expect(
+      within(table).queryByText('18" Natural Black Closure Wig'),
+    ).not.toBeInTheDocument();
     expect(within(table).getByText("Body Wave Bundle")).toBeInTheDocument();
 
     await user.clear(
@@ -351,11 +341,141 @@ describe("StockAdjustmentWorkspaceContent", () => {
     await user.click(
       screen.getByRole("combobox", { name: /filter by availability/i }),
     );
-    await user.click(await screen.findByRole("option", { name: "Unavailable" }));
+    await user.click(
+      await screen.findByRole("option", { name: "Unavailable" }),
+    );
 
-    expect(within(table).getByText('18" Natural Black Closure Wig')).toBeInTheDocument();
-    expect(within(table).queryByText("Body Wave Bundle")).not.toBeInTheDocument();
+    expect(
+      within(table).getByText('18" Natural Black Closure Wig'),
+    ).toBeInTheDocument();
+    expect(
+      within(table).queryByText("Body Wave Bundle"),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("Showing 1 of 2 SKUs.")).toBeInTheDocument();
+  });
+
+  it("shows available SKU identifiers in the table and detail rail", () => {
+    renderStockAdjustmentWorkspace();
+
+    const table = screen.getByRole("table");
+    const row = within(table)
+      .getByText('18" Natural Black Closure Wig')
+      .closest("tr");
+
+    expect(row).not.toBeNull();
+    expect(within(row!).getByText("CW-18")).toBeInTheDocument();
+    expect(within(row!).getByText("1234567890123")).toBeInTheDocument();
+    expect(within(row!).getByText("Hair")).toBeInTheDocument();
+    expect(within(row!).getByText('18"')).toBeInTheDocument();
+    expect(within(row!).getByText("natural black")).toBeInTheDocument();
+    expect(screen.getAllByText("SKU").length).toBeGreaterThan(1);
+    expect(screen.getByText("Barcode")).toBeInTheDocument();
+    expect(screen.getByText("Category")).toBeInTheDocument();
+    expect(screen.getByText("Length")).toBeInTheDocument();
+    expect(screen.getByText("Color")).toBeInTheDocument();
+  });
+
+  it("renders the fallback image slot when the active SKU has no image", () => {
+    renderStockAdjustmentWorkspace({
+      inventoryItems: [
+        {
+          _id: "sku-no-image" as Id<"productSku">,
+          colorName: "black",
+          inventoryCount: 2,
+          length: 12,
+          productCategory: "Hair",
+          productId: "product-no-image" as Id<"product">,
+          productName: "closure",
+          quantityAvailable: 2,
+          sku: "NO-IMG",
+        },
+      ],
+    });
+
+    expect(screen.getByLabelText("SKU image unavailable")).toBeInTheDocument();
+    expect(screen.getAllByText("NO-IMG").length).toBeGreaterThan(1);
+    expect(screen.getAllByText("black").length).toBeGreaterThan(1);
+  });
+
+  it("filters to unavailable SKUs from the inventory state metric", async () => {
+    const user = userEvent.setup();
+    const onSearchStateChange = vi.fn();
+
+    renderStockAdjustmentWorkspace({
+      inventoryItems: [
+        {
+          _id: "sku-unavailable-hair" as Id<"productSku">,
+          inventoryCount: 8,
+          productCategory: "Hair",
+          productName: "closure wig",
+          quantityAvailable: 6,
+          sku: "CW-18",
+        },
+        {
+          _id: "sku-available-hair" as Id<"productSku">,
+          inventoryCount: 3,
+          productCategory: "Hair",
+          productName: "body wave bundle",
+          quantityAvailable: 3,
+          sku: "BW-24",
+        },
+        {
+          _id: "sku-unavailable-books" as Id<"productSku">,
+          inventoryCount: 4,
+          productCategory: "Books",
+          productName: "ai engineering",
+          quantityAvailable: 2,
+          sku: "BOOK-1",
+        },
+        {
+          _id: "sku-available-makeup" as Id<"productSku">,
+          inventoryCount: 5,
+          productCategory: "Makeup",
+          productName: "lip gloss",
+          quantityAvailable: 5,
+          sku: "LIP-1",
+        },
+      ],
+      onSearchStateChange,
+    });
+
+    const table = screen.getByRole("table");
+
+    expect(within(table).getByText("Ai Engineering")).toBeInTheDocument();
+    expect(within(table).queryByText("Closure Wig")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /unavailable 4/i }));
+
+    expect(onSearchStateChange).toHaveBeenLastCalledWith({
+      availability: "unavailable",
+      page: 1,
+      query: undefined,
+      scope: "Books,Hair",
+      sku: undefined,
+    });
+    expect(
+      screen.getByRole("button", { name: /unavailable 4/i }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(within(table).getByText("Ai Engineering")).toBeInTheDocument();
+    expect(within(table).getByText("Closure Wig")).toBeInTheDocument();
+    expect(within(table).queryByText("Body Wave Bundle")).not.toBeInTheDocument();
+    expect(within(table).queryByText("Lip Gloss")).not.toBeInTheDocument();
+    expect(screen.getByText("Showing 2 of 3 SKUs.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /unavailable 4/i }));
+
+    expect(onSearchStateChange).toHaveBeenLastCalledWith({
+      availability: undefined,
+      page: 1,
+      query: undefined,
+      scope: undefined,
+      sku: undefined,
+    });
+    expect(
+      screen.getByRole("button", { name: /unavailable 4/i }),
+    ).toHaveAttribute("aria-pressed", "false");
+    expect(within(table).getByText("Ai Engineering")).toBeInTheDocument();
+    expect(within(table).queryByText("Closure Wig")).not.toBeInTheDocument();
   });
 
   it("reports stock filter changes for route search", async () => {
@@ -379,7 +499,9 @@ describe("StockAdjustmentWorkspaceContent", () => {
     await user.click(
       screen.getByRole("combobox", { name: /filter by availability/i }),
     );
-    await user.click(await screen.findByRole("option", { name: "Unavailable" }));
+    await user.click(
+      await screen.findByRole("option", { name: "Unavailable" }),
+    );
 
     expect(onSearchStateChange).toHaveBeenLastCalledWith({
       availability: "unavailable",
@@ -431,63 +553,8 @@ describe("StockAdjustmentWorkspaceContent", () => {
     expect(row).not.toBeNull();
     expect(within(row!).getByText("None available")).toBeInTheDocument();
     expect(within(row!).queryByText("All available")).not.toBeInTheDocument();
-    expect(within(row!).queryByText("0 None available")).not.toBeInTheDocument();
-  });
-
-  it("exposes temporary selected scope deletion behind confirmation", async () => {
-    const user = userEvent.setup();
-    const onSearchStateChange = vi.fn();
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
-
-    renderStockAdjustmentWorkspace({ onSearchStateChange });
-
-    await user.click(
-      screen.getByRole("button", { name: /delete scope skus/i }),
-    );
-
-    expect(confirm).toHaveBeenCalledWith(
-      "Delete 2 SKUs in Hair? This temporary cleanup cannot be undone.",
-    );
-    await waitFor(() =>
-      expect(mockedHandlers.onDeleteSelectedScopeSkus).toHaveBeenCalledWith({
-        scopeKey: "Hair",
-        storeId: "store-1",
-      }),
-    );
-    expect(mockedToast.success).toHaveBeenCalledWith("Deleted 1 SKU from Hair");
-    expect(onSearchStateChange).toHaveBeenCalledWith({
-      page: 1,
-      sku: undefined,
-    });
-  });
-
-  it("does not delete selected scope SKUs when confirmation is canceled", async () => {
-    const user = userEvent.setup();
-    vi.spyOn(window, "confirm").mockReturnValue(false);
-
-    renderStockAdjustmentWorkspace();
-
-    await user.click(
-      screen.getByRole("button", { name: /delete scope skus/i }),
-    );
-
-    expect(mockedHandlers.onDeleteSelectedScopeSkus).not.toHaveBeenCalled();
-    expect(mockedToast.success).not.toHaveBeenCalled();
-  });
-
-  it("keeps temporary scope deletion out of manual adjustments", async () => {
-    const user = userEvent.setup();
-
-    renderStockAdjustmentWorkspace();
-
     expect(
-      screen.getByRole("button", { name: /delete scope skus/i }),
-    ).toBeInTheDocument();
-
-    await user.click(screen.getByRole("tab", { name: /manual adjustment/i }));
-
-    expect(
-      screen.queryByRole("button", { name: /delete scope skus/i }),
+      within(row!).queryByText("0 None available"),
     ).not.toBeInTheDocument();
   });
 

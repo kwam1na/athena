@@ -344,7 +344,7 @@ describe("CashControlsDashboardContent", () => {
     expect(
       screen.getByRole("heading", { name: "Cash controls" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Cashroom status")).toBeInTheDocument();
+    expect(screen.getByText("Cashroom Landing")).toBeInTheDocument();
     expect(screen.getByText("Expected in drawers")).toBeInTheDocument();
     expect(screen.getByText("$424")).toBeInTheDocument();
     expect(screen.getByText("1 live drawer, 1 in review")).toBeInTheDocument();
