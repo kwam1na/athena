@@ -344,7 +344,7 @@ function CashPositionSummary({
       value: formatCurrency(currency, expectedCashTotal),
     },
     {
-      label: "Deposited today",
+      label: "Deposits recorded",
       supporting: `${snapshot.recentDeposits.length == 0 ? "No" : snapshot.recentDeposits.length} recent drop${snapshot.recentDeposits.length === 1 ? "" : "s"}`,
       value: formatCurrency(currency, depositedTotal),
     },
@@ -376,7 +376,7 @@ function CashPositionSummary({
           </dt>
           <dd
             className={cn(
-              "mt-layout-xs whitespace-nowrap font-mono text-2xl text-foreground",
+              "mt-layout-xs whitespace-nowrap font-numeric text-2xl tabular-nums text-foreground",
               item.valueClassName,
             )}
           >
@@ -571,7 +571,7 @@ function WorkflowSummaryItem({
       <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
         {label}
       </p>
-      <p className={cn("mt-1 font-mono text-base text-foreground", tone)}>
+      <p className={cn("mt-1 font-numeric tabular-nums text-base text-foreground", tone)}>
         {value}
       </p>
     </div>
@@ -665,7 +665,7 @@ function DrawerSessionCard({
           <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
             Expected cash
           </dt>
-          <dd className="mt-1 font-mono text-sm text-foreground">
+          <dd className="mt-1 font-numeric tabular-nums text-sm text-foreground">
             {formatCurrency(currency, session.expectedCash)}
           </dd>
         </div>
@@ -674,7 +674,7 @@ function DrawerSessionCard({
             <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
               Deposited
             </dt>
-            <dd className="mt-1 font-mono text-sm text-foreground">
+            <dd className="mt-1 font-numeric tabular-nums text-sm text-foreground">
               {formatCurrency(currency, session.totalDeposited)}
             </dd>
           </div>
@@ -684,7 +684,7 @@ function DrawerSessionCard({
             <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
               Counted
             </dt>
-            <dd className="mt-1 font-mono text-sm text-foreground">
+            <dd className="mt-1 font-numeric tabular-nums text-sm text-foreground">
               {formatCurrency(currency, session.countedCash ?? 0)}
             </dd>
           </div>
@@ -696,7 +696,7 @@ function DrawerSessionCard({
             </dt>
             <dd
               className={cn(
-                "mt-1 font-mono text-sm",
+                "mt-1 font-numeric tabular-nums text-sm",
                 getVarianceTone(variance),
               )}
             >
@@ -882,7 +882,7 @@ function ClosedSessionsSummary({
                   </TableCell>
                   <TableCell
                     className={cn(
-                      "p-0 text-right font-mono",
+                      "p-0 text-right font-numeric tabular-nums",
                       getVarianceTone(session.variance),
                     )}
                   >
@@ -932,7 +932,7 @@ function ClosedSessionsSummary({
   );
 }
 
-function ClosedSessionsDailySnapshot({
+function ClosedSessionsSnapshot({
   currency,
   orgUrlSlug,
   sessions,
@@ -986,11 +986,12 @@ function ClosedSessionsDailySnapshot({
       <div className="flex flex-wrap items-start justify-between gap-layout-md">
         <div className="space-y-1">
           <h3 className="font-display text-lg font-semibold text-foreground">
-            Closed today
+            Closed session history
           </h3>
           <p className="text-sm text-muted-foreground">
-            All drawer activity is closed. Use this snapshot to review the day
-            before opening the session ledger.
+            Recent closed drawer sessions from the store ledger. Use this
+            snapshot to review closeout patterns before opening the session
+            ledger.
           </p>
         </div>
         <Button asChild size="sm" variant="outline">
@@ -1007,7 +1008,7 @@ function ClosedSessionsDailySnapshot({
 
       <dl className="grid gap-layout-sm md:grid-cols-2 2xl:grid-cols-4">
         <WorkflowSummaryItem
-          label="Drawers closed"
+          label="Closed sessions"
           value={`${closedCount}`}
         />
         <WorkflowSummaryItem
@@ -1038,7 +1039,7 @@ function ClosedSessionsDailySnapshot({
           <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
             Short drawers
           </p>
-          <p className="font-mono text-sm text-danger">
+          <p className="font-numeric tabular-nums text-sm text-danger">
             {shortSessions.length} / {formatCurrency(currency, shortTotal)}
           </p>
         </div>
@@ -1046,7 +1047,7 @@ function ClosedSessionsDailySnapshot({
           <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
             Over drawers
           </p>
-          <p className="font-mono text-sm text-success">
+          <p className="font-numeric tabular-nums text-sm text-success">
             {overSessions.length} / {formatCurrency(currency, overTotal)}
           </p>
         </div>
@@ -1062,8 +1063,8 @@ function ClosedSessionsDailySnapshot({
 
       <div className="rounded-lg border border-border/70 bg-background/70 px-layout-md py-layout-sm">
         <div className="flex flex-wrap items-center justify-between gap-layout-sm text-sm">
-          <span className="text-muted-foreground">Deposited from closed drawers</span>
-          <span className="font-mono text-foreground">
+          <span className="text-muted-foreground">Deposited across closed sessions</span>
+          <span className="font-numeric tabular-nums text-foreground">
             {formatCurrency(currency, depositedTotal)}
           </span>
         </div>
@@ -1159,7 +1160,7 @@ function CashroomWorkflow({
                 storeUrlSlug={storeUrlSlug}
               />
             ) : (
-              <ClosedSessionsDailySnapshot
+              <ClosedSessionsSnapshot
                 currency={currency}
                 orgUrlSlug={orgUrlSlug}
                 sessions={closedSessions}
@@ -1231,7 +1232,7 @@ function DepositsLedger({
                   <TableCell className="font-medium text-foreground">
                     {formatRegisterName(deposit.registerNumber)}
                   </TableCell>
-                  <TableCell className="font-mono text-foreground">
+                  <TableCell className="font-numeric tabular-nums text-foreground">
                     {formatCurrency(currency, deposit.amount)}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
@@ -1311,10 +1312,10 @@ export function CashControlsDashboardContent({
               <div className="flex flex-col gap-layout-sm lg:flex-row lg:items-end lg:justify-between">
                 <div className="space-y-layout-2xs">
                   <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                    Today&apos;s control snapshot
+                    Current control snapshot
                   </p>
                   <h2 className="font-display text-2xl font-semibold tracking-tight text-foreground">
-                    Cashroom landing
+                    Cashroom status
                   </h2>
                 </div>
                 <div className="inline-flex items-center gap-2 rounded-md border border-border bg-surface-raised px-layout-sm py-layout-xs text-sm text-muted-foreground">
@@ -1322,7 +1323,7 @@ export function CashControlsDashboardContent({
                     aria-hidden
                     className="h-2 w-2 rounded-full bg-signal"
                   />
-                  Live drawers, deposits, and closeouts
+                  Live drawers, recent deposits, and session history
                 </div>
               </div>
               <CashPositionSummary

@@ -1,0 +1,5 @@
+#storybook-root,
+#storybook-docs {
+  min-height: 100vh;
+  background: hsl(var(--background));
+}

@@ -250,7 +250,7 @@ describe("OperationsQueueViewContent", () => {
   it("renders the live operations page without the register closeout surface", () => {
     render(<OperationsQueueView />);
 
-    expect(screen.getByText("Choose a count scope.")).toBeInTheDocument();
+    expect(screen.getByText("No inventory loaded.")).toBeInTheDocument();
     expect(screen.queryByText("Operations workspace")).not.toBeInTheDocument();
     expect(screen.queryByText(/register closeouts/i)).not.toBeInTheDocument();
   });
@@ -259,6 +259,7 @@ describe("OperationsQueueViewContent", () => {
     const { default: userEvent } = await import("@testing-library/user-event");
     const user = userEvent.setup();
     const submitStockBatch = vi.fn();
+    const deleteStockScopeSkus = vi.fn();
     const decideApprovalRequest = vi
       .fn()
       .mockResolvedValue(ok({ _id: "approval-1" }));
@@ -267,6 +268,7 @@ describe("OperationsQueueViewContent", () => {
     mockedHooks.useQuery.mockReset();
     mockedHooks.useMutation
       .mockReturnValueOnce(submitStockBatch)
+      .mockReturnValueOnce(deleteStockScopeSkus)
       .mockReturnValueOnce(decideApprovalRequest);
     mockedHooks.useQuery
       .mockReturnValueOnce({
@@ -298,6 +300,7 @@ describe("OperationsQueueViewContent", () => {
     const { default: userEvent } = await import("@testing-library/user-event");
     const user = userEvent.setup();
     const submitStockBatch = vi.fn();
+    const deleteStockScopeSkus = vi.fn();
     const decideApprovalRequest = vi
       .fn()
       .mockRejectedValue(new Error("Leaked backend approval detail"));
@@ -309,6 +312,7 @@ describe("OperationsQueueViewContent", () => {
     mockedHooks.useQuery.mockReset();
     mockedHooks.useMutation
       .mockReturnValueOnce(submitStockBatch)
+      .mockReturnValueOnce(deleteStockScopeSkus)
       .mockReturnValueOnce(decideApprovalRequest);
     mockedHooks.useQuery
       .mockReturnValueOnce({

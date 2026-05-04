@@ -145,7 +145,7 @@ cloudflared tunnel route dns <tunnel-id> athena-qa.wigclub.store
 
 ## Deploy Apps
 
-`scripts/deploy-vps.sh` is the authoritative deploy entrypoint for VPS-hosted surfaces. It uses a shared Git checkout on the VPS at `/root/athena/repo`, builds on the VPS, writes static builds into timestamped version directories, and atomically moves the `current` symlink.
+`scripts/deploy-vps.sh` is the authoritative deploy entrypoint for VPS-hosted surfaces. The default static app commands use a shared Git checkout on the VPS at `/root/athena/repo`, build on the VPS, write static builds into timestamped version directories, and atomically move the `current` symlink. When the VPS is too constrained to run the apps and build at the same time, use the local-build deploy commands to build `dist/` locally and upload the static artifact before moving the same `current` symlink.
 
 Before first use, add the VPS SSH key to GitHub with read access to this repo.
 
@@ -176,9 +176,12 @@ scripts/deploy-vps.sh versions athena
 scripts/deploy-vps.sh versions storefront
 scripts/deploy-vps.sh athena
 scripts/deploy-vps.sh storefront
+scripts/deploy-vps.sh athena-local
+scripts/deploy-vps.sh storefront-local
 scripts/deploy-vps.sh valkey-proxy
 scripts/deploy-vps.sh qa
 scripts/deploy-vps.sh full-prod
+scripts/deploy-vps.sh full-prod-local
 scripts/deploy-vps.sh all
 scripts/deploy-vps.sh check-git
 ```
@@ -195,7 +198,7 @@ The interactive helper delegates deploy choices to the same script:
 ./manage-athena-versions.sh
 ```
 
-Choose `deploy`, then the target. Rollback and version deletion remain interactive because they are intentionally human-selected operations.
+Choose `deploy`, then the target. Select `athena-webapp local build`, `storefront local build`, or `full-deploy local builds` when the static apps should be built locally and uploaded instead of built on the VPS. Rollback and version deletion remain interactive because they are intentionally human-selected operations.
 
 The active static paths are:
 

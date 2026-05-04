@@ -170,10 +170,6 @@ export default function AnalyticsCombinedUsers({
   const sortedData = combinedData.sort((a, b) => b.lastActive - a.lastActive);
 
   return (
-    <div className="container mx-auto">
-      <div className="py-8">
-        <CombinedUsersTable data={sortedData} pageSize={5} columns={columns} />
-      </div>
-    </div>
+    <CombinedUsersTable data={sortedData} pageSize={5} columns={columns} />
   );
 }

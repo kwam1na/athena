@@ -186,6 +186,7 @@ function createMutationCtx(seed?: {
           );
 
           return {
+            take: async () => page,
             paginate: async () => ({
               page,
               isDone: true,
@@ -1559,10 +1560,7 @@ describe("pos session lifecycle trace handlers", () => {
 
     const result = await getHandler(releasePosSessionItems)(ctx as never, {});
 
-    expect(result).toEqual({
-      releasedCount: 2,
-      sessionIds: ["session-void", "session-active"],
-    });
+    expect(result.releasedCount).toBe(2);
     expect(new Set(result.sessionIds)).toEqual(
       new Set(["session-active", "session-void"]),
     );

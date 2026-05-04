@@ -29,6 +29,7 @@ export function DataTablePagination<TData>({
 
   const rowCount = table.getRowCount();
   const { pageIndex, pageSize } = table.getState().pagination;
+  const pageCount = table.getPageCount();
   const visibleStart = rowCount === 0 ? 0 : pageIndex * pageSize + 1;
   const visibleEnd = Math.min(rowCount, (pageIndex + 1) * pageSize);
   const rangeLabel =
@@ -45,14 +46,20 @@ export function DataTablePagination<TData>({
       )}
       <div className="flex items-center ml-auto space-x-6 lg:space-x-8">
         {rangeItemLabel ? (
-          <div className="flex items-center justify-center text-sm font-medium">
-            Showing {visibleStart}-{visibleEnd} of {rowCount} {rangeLabel}
+          <div className="flex flex-wrap items-center justify-center gap-2 text-sm">
+            <span className="font-medium">
+              Showing {visibleStart}-{visibleEnd} of {rowCount} {rangeLabel}
+            </span>
+            {Boolean(pageCount) ? (
+              <span className="text-muted-foreground">
+                Page {pageIndex + 1} of {pageCount}
+              </span>
+            ) : null}
           </div>
         ) : (
-          Boolean(table.getPageCount()) && (
+          Boolean(pageCount) && (
             <div className="flex w-[100px] items-center justify-center text-sm font-medium">
-              Page {table.getState().pagination.pageIndex + 1} of{" "}
-              {table.getPageCount()}
+              Page {pageIndex + 1} of {pageCount}
             </div>
           )
         )}
@@ -87,7 +94,7 @@ export function DataTablePagination<TData>({
           <Button
             variant="outline"
             className="hidden h-8 w-8 p-0 lg:flex"
-            onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+            onClick={() => table.setPageIndex(pageCount - 1)}
             disabled={!table.getCanNextPage()}
           >
             <span className="sr-only">Go to last page</span>

@@ -18,6 +18,10 @@ const rootPageSchema = z.object({
   orderStatus: z.string().optional(),
   categorySlug: z.string().optional(),
   registerSessionId: z.string().optional(),
+  mode: z.enum(["cycle_count", "manual"]).optional(),
+  page: z.coerce.number().int().positive().optional(),
+  scope: z.string().optional(),
+  sku: z.string().optional(),
 });
 
 export const Route = createRootRouteWithContext<{

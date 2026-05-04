@@ -988,7 +988,7 @@ export function RegisterSessionViewContent({
               <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                 Expected
               </p>
-              <p className="font-mono text-base text-foreground">
+              <p className="font-numeric tabular-nums text-base text-foreground">
                 {formatCurrency(currency, expectedCash)}
               </p>
             </div>
@@ -996,7 +996,7 @@ export function RegisterSessionViewContent({
               <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                 Counted
               </p>
-              <p className="font-mono text-base text-foreground">
+              <p className="font-numeric tabular-nums text-base text-foreground">
                 {formatCurrency(currency, registerSession.countedCash)}
               </p>
             </div>
@@ -1005,7 +1005,7 @@ export function RegisterSessionViewContent({
                 Variance
               </p>
               <p
-                className={`font-mono text-base ${getVarianceTone(registerSession.variance)}`}
+                className={`font-numeric tabular-nums text-base ${getVarianceTone(registerSession.variance)}`}
               >
                 {formatCurrency(currency, registerSession.variance ?? 0)}
               </p>
@@ -1206,7 +1206,7 @@ export function RegisterSessionViewContent({
                         <span className="block text-xs text-muted-foreground">
                           Expected cash
                         </span>
-                        <span className="block font-mono text-3xl text-foreground">
+                        <span className="block font-numeric tabular-nums text-3xl text-foreground">
                           {formatCurrency(currency, expectedCash)}
                         </span>
                       </dd>
@@ -1215,7 +1215,7 @@ export function RegisterSessionViewContent({
                           <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
                             Opening float
                           </dt>
-                          <dd className="font-mono text-sm text-foreground">
+                          <dd className="font-numeric tabular-nums text-sm text-foreground">
                             {formatCurrency(
                               currency,
                               registerSession.openingFloat,
@@ -1226,7 +1226,7 @@ export function RegisterSessionViewContent({
                           <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
                             Counted
                           </dt>
-                          <dd className="font-mono text-sm text-foreground">
+                          <dd className="font-numeric tabular-nums text-sm text-foreground">
                             {formatCurrency(
                               currency,
                               registerSession.countedCash,
@@ -1237,7 +1237,7 @@ export function RegisterSessionViewContent({
                           <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
                             Deposited
                           </dt>
-                          <dd className="font-mono text-sm text-foreground">
+                          <dd className="font-numeric tabular-nums text-sm text-foreground">
                             {formatCurrency(
                               currency,
                               registerSession.totalDeposited,
@@ -1249,7 +1249,7 @@ export function RegisterSessionViewContent({
                             Variance
                           </dt>
                           <dd
-                            className={`font-mono text-sm ${getVarianceTone(registerSession.variance)}`}
+                            className={`font-numeric tabular-nums text-sm ${getVarianceTone(registerSession.variance)}`}
                           >
                             {formatCurrency(
                               currency,
@@ -1296,7 +1296,7 @@ export function RegisterSessionViewContent({
                         <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
                           Code
                         </span>
-                        <span className="font-mono text-sm text-foreground">
+                        <span className="font-numeric tabular-nums text-sm text-foreground">
                           {sessionCode}
                         </span>
                       </dd>
@@ -1402,7 +1402,7 @@ export function RegisterSessionViewContent({
                               <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                                 Current
                               </p>
-                              <p className="font-mono text-foreground">
+                              <p className="font-numeric tabular-nums text-foreground">
                                 {formatCurrency(
                                   currency,
                                   registerSession.openingFloat,
@@ -1413,7 +1413,7 @@ export function RegisterSessionViewContent({
                               <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                                 Corrected
                               </p>
-                              <p className="font-mono text-foreground">
+                              <p className="font-numeric tabular-nums text-foreground">
                                 {correctedOpeningFloatAmount === undefined
                                   ? "Pending"
                                   : formatCurrency(
@@ -1426,7 +1426,7 @@ export function RegisterSessionViewContent({
                               <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                                 Drawer impact
                               </p>
-                              <p className="font-mono text-foreground">
+                              <p className="font-numeric tabular-nums text-foreground">
                                 {openingFloatDelta === null
                                   ? "Pending"
                                   : formatCurrency(currency, openingFloatDelta)}
@@ -1577,7 +1577,7 @@ export function RegisterSessionViewContent({
                                         <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                                           Original float
                                         </dt>
-                                        <dd className="font-mono text-foreground">
+                                        <dd className="font-numeric tabular-nums text-foreground">
                                           {formatCurrency(
                                             currency,
                                             previousOpeningFloat,
@@ -1588,7 +1588,7 @@ export function RegisterSessionViewContent({
                                         <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                                           Corrected float
                                         </dt>
-                                        <dd className="font-mono text-foreground">
+                                        <dd className="font-numeric tabular-nums text-foreground">
                                           {formatCurrency(
                                             currency,
                                             correctedOpeningFloat,
@@ -1599,7 +1599,7 @@ export function RegisterSessionViewContent({
                                         <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                                           Drawer impact
                                         </dt>
-                                        <dd className="font-mono text-foreground">
+                                        <dd className="font-numeric tabular-nums text-foreground">
                                           {openingFloatDelta === null
                                             ? "Not recorded"
                                             : formatCurrency(
@@ -1767,7 +1767,7 @@ export function RegisterSessionViewContent({
                                     </span>
                                   </div>
                                 </TableCell>
-                                <TableCell className="font-mono text-foreground">
+                                <TableCell className="font-numeric tabular-nums text-foreground">
                                   {formatCurrency(currency, transaction.total)}
                                 </TableCell>
                                 <TableCell>
@@ -1872,7 +1872,7 @@ export function RegisterSessionViewContent({
                             className="border-b border-border/70 transition-colors hover:bg-muted/40"
                             key={deposit._id}
                           >
-                            <TableCell className="font-mono text-foreground">
+                            <TableCell className="font-numeric tabular-nums text-foreground">
                               {formatCurrency(currency, deposit.amount)}
                             </TableCell>
                             <TableCell className="text-muted-foreground">
@@ -1931,7 +1931,7 @@ export function RegisterSessionViewContent({
                           <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                             Expected
                           </dt>
-                          <dd className="font-mono text-foreground">
+                          <dd className="font-numeric tabular-nums text-foreground">
                             {formatCurrency(currency, expectedCash)}
                           </dd>
                         </div>
@@ -1939,7 +1939,7 @@ export function RegisterSessionViewContent({
                           <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                             Counted
                           </dt>
-                          <dd className="font-mono text-foreground">
+                          <dd className="font-numeric tabular-nums text-foreground">
                             {formatCurrency(
                               currency,
                               registerSession.countedCash,
@@ -1951,7 +1951,7 @@ export function RegisterSessionViewContent({
                             Variance
                           </dt>
                           <dd
-                            className={`font-mono ${getVarianceTone(registerSession.variance)}`}
+                            className={`font-numeric tabular-nums ${getVarianceTone(registerSession.variance)}`}
                           >
                             {formatCurrency(
                               currency,
@@ -1970,7 +1970,7 @@ export function RegisterSessionViewContent({
                               Submitted count
                             </p>
                             <p
-                              className={`font-mono text-lg ${getVarianceTone(registerSessionSnapshot.closeoutReview.variance)}`}
+                              className={`font-numeric tabular-nums text-lg ${getVarianceTone(registerSessionSnapshot.closeoutReview.variance)}`}
                             >
                               {formatCurrency(
                                 currency,
@@ -2016,7 +2016,7 @@ export function RegisterSessionViewContent({
                             <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                               Expected
                             </dt>
-                            <dd className="font-mono text-foreground">
+                            <dd className="font-numeric tabular-nums text-foreground">
                               {formatCurrency(currency, expectedCash)}
                             </dd>
                           </div>
@@ -2025,7 +2025,7 @@ export function RegisterSessionViewContent({
                               Draft variance
                             </dt>
                             <dd
-                              className={`font-mono ${getVarianceTone(draftVariance ?? undefined)}`}
+                              className={`font-numeric tabular-nums ${getVarianceTone(draftVariance ?? undefined)}`}
                             >
                               {draftVariance === null
                                 ? "Pending count"

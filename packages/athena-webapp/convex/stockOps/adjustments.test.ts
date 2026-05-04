@@ -499,6 +499,16 @@ describe("stock ops adjustments", () => {
     expect(source).toContain("recordInventoryMovementWithCtx");
   });
 
+  it("keeps the temporary stock-scope SKU deletion guarded", () => {
+    const source = getSource("./adjustments.ts");
+
+    expect(source).toContain("temporaryDeleteStockAdjustmentScopeSkus");
+    expect(source).toContain('"delete-stock-adjustment-scope-skus"');
+    expect(source).toContain('allowedRoles: ["full_admin"]');
+    expect(source).toContain("args.dryRun !== false");
+    expect(source).toContain('ctx.db.delete("productSku"');
+  });
+
   it("rejects unauthenticated stock-adjustment submissions", async () => {
     const { ctx } = createSubmissionMutationCtx({
       authUserId: null,

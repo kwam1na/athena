@@ -36,7 +36,8 @@ describe("AthenaFoundationsPage", () => {
 
     expect(screen.getAllByText(/shell \/ ink/i)).not.toHaveLength(0);
     expect(screen.getAllByText(/signal \/ action/i)).not.toHaveLength(0);
-    expect(screen.getByText(/display serif/i)).toBeInTheDocument();
+    expect(screen.getByText(/display sans/i)).toBeInTheDocument();
+    expect(screen.getByText(/operational numerics/i)).toBeInTheDocument();
     expect(screen.getByText(/standard workspace/i)).toBeInTheDocument();
     expect(screen.getAllByText(/receipt rail/i)).not.toHaveLength(0);
     expect(screen.getAllByText(/item canvas/i)).not.toHaveLength(0);
@@ -48,6 +49,12 @@ describe("AthenaFoundationsPage", () => {
 
   it("keeps the light sidebar tokens aligned with the light canvas palette", () => {
     expect(indexCss).toContain("--radius: 0.75rem;");
+    expect(indexCss).toContain("--font-preset-athena-classic-display:");
+    expect(indexCss).toContain("--font-preset-athena-classic-numeric:");
+    expect(indexCss).toContain("--font-preset-athena-story-display:");
+    expect(indexCss).toContain("--font-preset-athena-story-display: var(--font-preset-athena-story-sans);");
+    expect(indexCss).toContain("--font-preset-athena-story-numeric: var(--font-preset-athena-story-sans);");
+    expect(indexCss).toContain("--font-numeric: var(--font-preset-athena-story-numeric);");
     expect(indexCss).toContain("--sidebar-background: var(--background);");
     expect(indexCss).toContain("--sidebar-foreground: var(--foreground);");
     expect(indexCss).toContain("--sidebar-accent: 220 20% 96%;");

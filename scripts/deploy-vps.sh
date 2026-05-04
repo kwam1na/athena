@@ -28,12 +28,15 @@ Commands:
   versions <app>     List deployed static versions for athena or storefront.
   athena            Build and deploy the production Athena admin app.
   storefront        Build and deploy the production storefront.
+  athena-local      Build the production Athena admin app locally, then upload it.
+  storefront-local  Build the production storefront locally, then upload it.
   valkey-proxy      Install and restart the Valkey proxy from the remote checkout.
   qa                Refresh both QA dev servers from the remote checkout.
   qa-athena         Refresh the Athena admin QA dev server.
   qa-storefront     Refresh the storefront QA dev server.
   convex-prod       Deploy Convex from the local checkout.
   full-prod         Deploy Convex, Athena admin, storefront, and Valkey proxy.
+  full-prod-local   Deploy Convex, locally built static apps, and Valkey proxy.
   all               Deploy full-prod and refresh QA.
   rollback <app> <version|previous>
                      Roll back athena or storefront to a deployed static version.
@@ -197,6 +200,103 @@ printf '%s deployed: %s (%s, %s)\n' "$APP_NAME" "$fun_name" "$timestamp" "${git_
 REMOTE_SCRIPT
 }
 
+build_static_app_locally() {
+  local package_dir="$1"
+  local env_script="$2"
+
+  (
+    cd "$package_dir"
+    rm -rf dist
+    eval "$env_script bun run build"
+  )
+}
+
+generate_fun_name() {
+  awk 'BEGIN {
+    split("brave clever happy quick silent wild gentle proud tiny wise", a)
+    split("tiger eagle panda fox whale lion wolf bear owl dolphin", n)
+    split("jumps runs flies swims roars climbs glides prowls soars dashes", v)
+    srand()
+    print a[int(rand()*10)+1] "-" n[int(rand()*10)+1] "-" v[int(rand()*10)+1]
+  }'
+}
+
+upload_static_app_build() {
+  local app_name="$1"
+  local package_dir="$2"
+  local version="$3"
+  local fun_name="$4"
+  local git_sha="$5"
+  local deployed_at="$6"
+  local version_path="$ATHENA_ROOT/$app_name/versions/$version"
+  local current_path="$ATHENA_ROOT/$app_name/current"
+
+  if [ ! -d "$package_dir/dist" ]; then
+    printf 'Missing local build output at %s/dist.\n' "$package_dir" >&2
+    return 1
+  fi
+
+  remote_script "$version_path" <<'REMOTE_SCRIPT'
+set -euo pipefail
+
+VERSION_PATH="$1"
+
+rm -rf "$VERSION_PATH"
+mkdir -p "$VERSION_PATH"
+REMOTE_SCRIPT
+
+  rsync -a --delete "$package_dir/dist/" "$REMOTE:$version_path/"
+
+  remote_script "$app_name" "$package_dir" "$version" "$fun_name" "$git_sha" "$DEPLOY_REF" "$deployed_at" "$version_path" "$current_path" <<'REMOTE_SCRIPT'
+set -euo pipefail
+
+APP_NAME="$1"
+PACKAGE_DIR="$2"
+VERSION="$3"
+FUN_NAME="$4"
+GIT_SHA="$5"
+DEPLOY_REF="$6"
+DEPLOYED_AT="$7"
+VERSION_PATH="$8"
+CURRENT_PATH="$9"
+
+printf '%s\n' "$FUN_NAME" > "$VERSION_PATH/fun-name.txt"
+cat > "$VERSION_PATH/deploy.json" <<DEPLOY_JSON
+{
+  "app": "$APP_NAME",
+  "package_dir": "$PACKAGE_DIR",
+  "version": "$VERSION",
+  "fun_name": "$FUN_NAME",
+  "git_sha": "$GIT_SHA",
+  "deploy_ref": "$DEPLOY_REF",
+  "deployed_at": "$DEPLOYED_AT",
+  "built_on": "local"
+}
+DEPLOY_JSON
+ln -sfn "$VERSION_PATH" "$CURRENT_PATH"
+
+printf '%s deployed from local build: %s (%s, %s)\n' "$APP_NAME" "$FUN_NAME" "$VERSION" "${GIT_SHA:0:12}"
+REMOTE_SCRIPT
+}
+
+deploy_static_app_local() {
+  local app_name="$1"
+  local package_dir="$2"
+  local env_script="$3"
+  local version
+  local fun_name
+  local git_sha
+  local deployed_at
+
+  version="$(date -u +%Y%m%d%H%M%S)"
+  fun_name="$(generate_fun_name)"
+  git_sha="$(git rev-parse HEAD)"
+  deployed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+  build_static_app_locally "$package_dir" "$env_script"
+  upload_static_app_build "$app_name" "$package_dir" "$version" "$fun_name" "$git_sha" "$deployed_at"
+}
+
 deploy_athena() {
   deploy_static_app \
     "athena-webapp" \
@@ -204,8 +304,22 @@ deploy_athena() {
     "VITE_CONVEX_URL=$PROD_CONVEX_CLOUD VITE_API_GATEWAY_URL=$PROD_CONVEX_SITE VITE_STOREFRONT_URL=$STOREFRONT_URL"
 }
 
+deploy_athena_local() {
+  deploy_static_app_local \
+    "athena-webapp" \
+    "packages/athena-webapp" \
+    "VITE_CONVEX_URL=$PROD_CONVEX_CLOUD VITE_API_GATEWAY_URL=$PROD_CONVEX_SITE VITE_STOREFRONT_URL=$STOREFRONT_URL"
+}
+
 deploy_storefront() {
   deploy_static_app \
+    "storefront" \
+    "packages/storefront-webapp" \
+    "VITE_API_URL=$PROD_API_URL"
+}
+
+deploy_storefront_local() {
+  deploy_static_app_local \
     "storefront" \
     "packages/storefront-webapp" \
     "VITE_API_URL=$PROD_API_URL"
@@ -632,9 +746,15 @@ case "$command" in
     require_remote_source "$REMOTE_REPO" "$REMOTE_SOURCE_DIR" "$DEPLOY_REF"
     deploy_athena "$REMOTE_SOURCE_DIR" "$ATHENA_ROOT"
     ;;
+  athena-local)
+    deploy_athena_local
+    ;;
   storefront)
     require_remote_source "$REMOTE_REPO" "$REMOTE_SOURCE_DIR" "$DEPLOY_REF"
     deploy_storefront "$REMOTE_SOURCE_DIR" "$ATHENA_ROOT"
+    ;;
+  storefront-local)
+    deploy_storefront_local
     ;;
   valkey-proxy)
     require_remote_source "$REMOTE_REPO" "$REMOTE_SOURCE_DIR" "$DEPLOY_REF"
@@ -660,6 +780,13 @@ case "$command" in
     deploy_convex_prod
     deploy_athena "$REMOTE_SOURCE_DIR" "$ATHENA_ROOT"
     deploy_storefront "$REMOTE_SOURCE_DIR" "$ATHENA_ROOT"
+    deploy_valkey_proxy "$REMOTE_SOURCE_DIR" "$ATHENA_ROOT"
+    ;;
+  full-prod-local)
+    require_remote_source "$REMOTE_REPO" "$REMOTE_SOURCE_DIR" "$DEPLOY_REF"
+    deploy_convex_prod
+    deploy_athena_local
+    deploy_storefront_local
     deploy_valkey_proxy "$REMOTE_SOURCE_DIR" "$ATHENA_ROOT"
     ;;
   all)

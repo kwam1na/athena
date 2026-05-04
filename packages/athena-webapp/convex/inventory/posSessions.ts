@@ -40,7 +40,7 @@ const MAX_SESSION_ITEMS = 200;
 const SESSION_QUERY_CANDIDATE_LIMIT = 200;
 const ACTIVE_SESSION_CANDIDATE_LIMIT = 100;
 const SESSION_CLEANUP_BATCH_SIZE = 100;
-const POS_SESSION_RELEASE_STATUSES = new Set(["active", "void", "held"]);
+const POS_SESSION_RELEASE_STATUS_VALUES = ["active", "held", "void"] as const;
 
 const sessionOperationDataValidator = v.object({
   sessionId: v.id("posSession"),
@@ -191,26 +191,21 @@ async function listPosSessionsByStatusBefore(
   expiresBefore: number,
 ) {
   const sessions = [];
-  let cursor: string | null = null;
 
-  while (true) {
-    const page = await ctx.db
+  for (const status of POS_SESSION_RELEASE_STATUS_VALUES) {
+    const expiredStatusSessions = await ctx.db
       .query("posSession")
-      .withIndex("by_expiresAt", (q) => q.lt("expiresAt", expiresBefore))
-      .paginate({ cursor, numItems: SESSION_CLEANUP_BATCH_SIZE });
+      .withIndex("by_status_and_expiresAt", (q) =>
+        q.eq("status", status).lt("expiresAt", expiresBefore),
+      )
+      .take(SESSION_CLEANUP_BATCH_SIZE);
 
-    sessions.push(
-      ...page.page.filter((session) =>
-        POS_SESSION_RELEASE_STATUSES.has(session.status),
-      ),
-    );
-    if (page.isDone) {
-      break;
-    }
-    cursor = page.continueCursor;
+    sessions.push(...expiredStatusSessions);
   }
 
-  return sessions;
+  return sessions
+    .sort((a, b) => a.expiresAt - b.expiresAt)
+    .slice(0, SESSION_CLEANUP_BATCH_SIZE);
 }
 
 async function listPosSessionsForStoreStatus(

@@ -85,7 +85,7 @@ export const registerSessionColumns: ColumnDef<RegisterSessionRow>[] = [
         row={row.original}
       >
         <span className="block font-medium">{row.original.registerLabel}</span>
-        <span className="inline-flex rounded-md border border-border/70 bg-muted/30 px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+        <span className="inline-flex rounded-md border border-border/70 bg-muted/30 px-1.5 py-0.5 font-sans text-xs text-muted-foreground">
           {row.original.sessionCode}
         </span>
       </RegisterSessionLink>
@@ -160,7 +160,7 @@ export const registerSessionColumns: ColumnDef<RegisterSessionRow>[] = [
             <span className="block text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
               Expected
             </span>
-            <span className="mt-1 block font-mono text-foreground">
+            <span className="mt-1 block font-numeric tabular-nums text-foreground">
               {row.original.expectedCashLabel}
             </span>
           </span>
@@ -168,7 +168,7 @@ export const registerSessionColumns: ColumnDef<RegisterSessionRow>[] = [
             <span className="block text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
               Counted
             </span>
-            <span className="mt-1 block font-mono text-foreground">
+            <span className="mt-1 block font-numeric tabular-nums text-foreground">
               {row.original.countedCashLabel}
             </span>
           </span>
@@ -176,7 +176,7 @@ export const registerSessionColumns: ColumnDef<RegisterSessionRow>[] = [
             <span className="block text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
               Deposited
             </span>
-            <span className="mt-1 block font-mono text-foreground">
+            <span className="mt-1 block font-numeric tabular-nums text-foreground">
               {row.original.depositedLabel}
             </span>
           </span>
@@ -199,7 +199,10 @@ export const registerSessionColumns: ColumnDef<RegisterSessionRow>[] = [
         row={row.original}
       >
         <span
-          className={cn("block font-mono text-sm", row.original.varianceTone)}
+          className={cn(
+            "block font-numeric text-sm tabular-nums",
+            row.original.varianceTone,
+          )}
         >
           {row.original.varianceLabel}
         </span>

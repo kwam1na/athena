@@ -1,5 +1,5 @@
 import { useQuery } from "convex/react";
-import { AlertTriangle, GitBranch, Signal } from "lucide-react";
+import { AlertTriangle, CheckCircle2, GitBranch, Signal } from "lucide-react";
 import { api } from "~/convex/_generated/api";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import {
@@ -18,9 +18,13 @@ function formatLabel(value: string) {
 
 function SummaryCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-lg border bg-muted/30 p-4">
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <p className="mt-2 text-2xl font-semibold">{value}</p>
+    <div className="rounded-md border border-border bg-background px-layout-md py-layout-sm">
+      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-2 font-display text-2xl font-semibold text-foreground">
+        {value}
+      </p>
     </div>
   );
 }
@@ -57,11 +61,11 @@ export default function StorefrontObservabilityPanel() {
 
   if (!activeStore || report === undefined) {
     return (
-      <Card>
+      <Card className="border-border bg-surface shadow-surface">
         <CardHeader>
-          <CardTitle className="text-lg">Storefront observability</CardTitle>
+          <CardTitle className="text-lg">Storefront health</CardTitle>
           <CardDescription>
-            Loading the latest journey diagnostics.
+            Loading the latest storefront signal.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -78,66 +82,78 @@ export default function StorefrontObservabilityPanel() {
     );
   }
 
+  const visibleFunnel = report.funnel.slice(0, 5);
+  const visibleFailureClusters = report.failureClusters.slice(0, 3);
+  const hasFailures = report.summary.totalFailures > 0;
+
   return (
-    <Card>
+    <Card className="border-border bg-surface shadow-surface">
       <CardHeader className="gap-2">
-        <div className="flex items-center gap-2">
-          <Signal className="h-4 w-4" />
-          <CardTitle className="text-lg">Storefront observability</CardTitle>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Signal className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-lg">Storefront health</CardTitle>
+            </div>
+            <CardDescription>
+              Journey signal from recent customer and monitor events.
+            </CardDescription>
+          </div>
+          <Badge variant={hasFailures ? "destructive" : "secondary"}>
+            {hasFailures ? "Needs attention" : "No failures"}
+          </Badge>
         </div>
-        <CardDescription>
-          Forward-looking journey progression and failure clusters from the
-          canonical storefront observability contract.
-        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-3">
           <SummaryCard
-            label="Observed events"
+            label="Events"
             value={report.summary.totalEvents}
           />
           <SummaryCard
-            label="Failure events"
+            label="Failures"
             value={report.summary.totalFailures}
           />
           <SummaryCard
-            label="Correlated sessions"
+            label="Sessions"
             value={report.summary.uniqueSessions}
-          />
-          <SummaryCard
-            label="Synthetic monitor events"
-            value={report.summary.syntheticEvents}
           />
         </div>
 
         <div className="grid gap-6 xl:grid-cols-2">
           <div className="space-y-3">
             <div className="flex items-center gap-2">
-              <GitBranch className="h-4 w-4" />
-              <h3 className="font-medium">Journey funnel progression</h3>
+              <GitBranch className="h-4 w-4 text-muted-foreground" />
+              <h3 className="font-medium">Journey movement</h3>
             </div>
-            <div className="overflow-hidden rounded-lg border">
+            <div className="overflow-hidden rounded-md border border-border">
               <table className="w-full text-sm">
                 <thead className="bg-muted/40 text-left text-muted-foreground">
                   <tr>
-                    <th className="px-4 py-3 font-medium">Journey</th>
                     <th className="px-4 py-3 font-medium">Step</th>
                     <th className="px-4 py-3 font-medium">Status</th>
-                    <th className="px-4 py-3 font-medium">Events</th>
-                    <th className="px-4 py-3 font-medium">Sessions</th>
+                    <th className="px-4 py-3 text-right font-medium">
+                      Events
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {report.funnel.length > 0 ? (
-                    report.funnel.map((entry) => (
+                  {visibleFunnel.length > 0 ? (
+                    visibleFunnel.map((entry) => (
                       <tr
                         key={`${entry.journey}-${entry.step}-${entry.status}`}
                         className="border-t"
                       >
                         <td className="px-4 py-3">
-                          {formatLabel(entry.journey)}
+                          <div className="space-y-1">
+                            <p className="font-medium">
+                              {formatLabel(entry.step)}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatLabel(entry.journey)}
+                            </p>
+                          </div>
                         </td>
-                        <td className="px-4 py-3">{formatLabel(entry.step)}</td>
                         <td className="px-4 py-3">
                           <Badge
                             variant={
@@ -149,15 +165,16 @@ export default function StorefrontObservabilityPanel() {
                             {formatLabel(entry.status)}
                           </Badge>
                         </td>
-                        <td className="px-4 py-3">{entry.count}</td>
-                        <td className="px-4 py-3">{entry.uniqueSessions}</td>
+                        <td className="px-4 py-3 text-right">
+                          {entry.count}
+                        </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
                       <td
                         className="px-4 py-6 text-muted-foreground"
-                        colSpan={5}
+                        colSpan={3}
                       >
                         No storefront observability events have been recorded
                         yet.
@@ -171,12 +188,16 @@ export default function StorefrontObservabilityPanel() {
 
           <div className="space-y-3">
             <div className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4" />
-              <h3 className="font-medium">Failure clusters</h3>
+              {hasFailures ? (
+                <AlertTriangle className="h-4 w-4 text-danger" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4 text-success" />
+              )}
+              <h3 className="font-medium">Operator attention</h3>
             </div>
             <div className="space-y-3">
-              {report.failureClusters.length > 0 ? (
-                report.failureClusters.map((cluster) => {
+              {visibleFailureClusters.length > 0 ? (
+                visibleFailureClusters.map((cluster) => {
                   const sourceBadge = getTrafficSourceBadge(
                     cluster.trafficSource,
                   );
@@ -184,7 +205,7 @@ export default function StorefrontObservabilityPanel() {
                   return (
                     <div
                       key={cluster.errorCategory}
-                      className="rounded-lg border p-4"
+                      className="rounded-md border border-border bg-background px-layout-md py-layout-sm"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="space-y-1">
@@ -211,17 +232,6 @@ export default function StorefrontObservabilityPanel() {
                       </div>
 
                       <div className="mt-3 space-y-2 text-sm text-muted-foreground">
-                        {cluster.syntheticEvents > 0 && (
-                          <p>
-                            Synthetic monitor events: {cluster.syntheticEvents}
-                            {cluster.customerEvents > 0
-                              ? ` • Customer events: ${cluster.customerEvents}`
-                              : ""}
-                          </p>
-                        )}
-                        {cluster.sample.origin && (
-                          <p>Origin: {formatLabel(cluster.sample.origin)}</p>
-                        )}
                         {cluster.sample.route && (
                           <p>Route: {cluster.sample.route}</p>
                         )}
@@ -231,17 +241,13 @@ export default function StorefrontObservabilityPanel() {
                         {cluster.sample.errorMessage && (
                           <p>Message: {cluster.sample.errorMessage}</p>
                         )}
-                        <p>
-                          Sessions: {cluster.sessions.slice(0, 3).join(", ")}
-                        </p>
                       </div>
                     </div>
                   );
                 })
               ) : (
-                <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                  No failure clusters yet. Failed storefront observability
-                  events will appear here automatically.
+                <div className="rounded-md border border-dashed border-border bg-background px-layout-md py-layout-sm text-sm text-muted-foreground">
+                  No storefront failures need operator attention.
                 </div>
               )}
             </div>

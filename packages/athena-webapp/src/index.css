@@ -16,9 +16,18 @@
 
 @layer base {
   :root {
-    --font-sans: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-    --font-display: var(--font-sans);
-    --font-mono: "SFMono-Regular", "JetBrains Mono", "Menlo", monospace;
+    --font-preset-athena-classic-sans: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+    --font-preset-athena-classic-display: var(--font-preset-athena-classic-sans);
+    --font-preset-athena-classic-mono: "SFMono-Regular", "JetBrains Mono", "Menlo", monospace;
+    --font-preset-athena-classic-numeric: var(--font-preset-athena-classic-sans);
+    --font-preset-athena-story-sans: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+    --font-preset-athena-story-display: var(--font-preset-athena-story-sans);
+    --font-preset-athena-story-mono: "SFMono-Regular", "JetBrains Mono", "Menlo", monospace;
+    --font-preset-athena-story-numeric: var(--font-preset-athena-story-sans);
+    --font-sans: var(--font-preset-athena-story-sans);
+    --font-display: var(--font-preset-athena-story-display);
+    --font-mono: var(--font-preset-athena-story-mono);
+    --font-numeric: var(--font-preset-athena-story-numeric);
 
     --background: 0 0% 100%;
     --foreground: 222 28% 16%;

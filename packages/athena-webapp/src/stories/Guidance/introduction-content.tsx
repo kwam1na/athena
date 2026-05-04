@@ -66,6 +66,7 @@ export function AthenaGuidanceIntroductionPage() {
         <StorybookList
           items={[
             "Keep the shell, page header, and workspace sections visually distinct.",
+            "Use the page-level header pattern for orientation: uppercase eyebrow, large display title, restrained description, and a quiet divider.",
             "Use left-rail navigation or a strong top-level header to stabilize orientation.",
             "Let content blocks breathe enough that the review surface never feels crammed edge to edge.",
           ]}
