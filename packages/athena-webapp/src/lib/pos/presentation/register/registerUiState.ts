@@ -38,9 +38,10 @@ export interface RegisterProductEntryState {
   productSearchQuery: string;
   setProductSearchQuery: (query: string) => void;
   onBarcodeSubmit: (event: FormEvent) => Promise<void>;
-  onAddProduct: (product: Product) => Promise<void>;
-  barcodeSearchResult?: Product | Product[] | null;
-  productIdSearchResults?: Product[] | null;
+  onAddProduct: (product: Product) => Promise<boolean>;
+  searchResults: Product[];
+  isSearchLoading: boolean;
+  isSearchReady: boolean;
 }
 
 export interface RegisterCartState {

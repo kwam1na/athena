@@ -9,13 +9,8 @@ import type { Id } from "~/convex/_generated/dataModel";
 import type { CustomerInfo, Payment, Product } from "@/components/pos/types";
 import { useAuth } from "@/hooks/useAuth";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
-import { useDebounce } from "@/hooks/useDebounce";
 import { useGetTerminal } from "@/hooks/useGetTerminal";
 import { useNavigateBack } from "@/hooks/use-navigate-back";
-import {
-  usePOSBarcodeSearch,
-  usePOSProductIdSearch,
-} from "@/hooks/usePOSProducts";
 import { bootstrapRegister } from "@/lib/pos/application/useCases/bootstrapRegister";
 import { addItem as runAddItem } from "@/lib/pos/application/useCases/addItem";
 import { completeTransaction as runCompleteTransaction } from "@/lib/pos/application/useCases/completeTransaction";
@@ -26,14 +21,6 @@ import {
   calculatePosCartTotals,
   type PosPaymentMethod,
 } from "@/lib/pos/domain";
-import {
-  extractBarcodeFromInput,
-  type ExtractResult,
-} from "@/lib/pos/barcodeUtils";
-import {
-  POS_AUTO_ADD_DELAY_MS,
-  POS_SEARCH_DEBOUNCE_MS,
-} from "@/lib/pos/constants";
 import { parseDisplayAmountInput } from "@/lib/pos/displayAmounts";
 import { toOperatorMessage } from "@/lib/errors/operatorMessages";
 import { isApprovalRequiredResult, runCommand } from "@/lib/errors/runCommand";
@@ -41,6 +28,7 @@ import type { CommandApprovalProofResult } from "@/components/operations/Command
 import { useApprovedCommand } from "@/components/operations/useApprovedCommand";
 import { logger } from "@/lib/logger";
 import { useConvexCommandGateway } from "@/lib/pos/infrastructure/convex/commandGateway";
+import { useConvexRegisterCatalog } from "@/lib/pos/infrastructure/convex/catalogGateway";
 import { useConvexRegisterState } from "@/lib/pos/infrastructure/convex/registerGateway";
 import { isPosUsableRegisterSessionStatus } from "~/shared/registerSessionStatus";
 import { userError, type CommandResult } from "~/shared/commandResult";
@@ -65,6 +53,11 @@ import {
   getRegisterCustomerInfo,
   isRegisterSessionActive,
 } from "./selectors";
+import {
+  searchRegisterCatalog,
+  type RegisterCatalogSearchRow,
+} from "./catalogSearch";
+import { useRegisterCatalogIndex } from "./useRegisterCatalogIndex";
 
 function hasCustomerDetails(
   customer: CustomerInfo | undefined | null,
@@ -128,6 +121,36 @@ function trimOptional(value: string): string | undefined {
 
 function presentOperatorError(message: string): void {
   toast.error(toOperatorMessage(message));
+}
+
+function mapCatalogRowToProduct(row: RegisterCatalogSearchRow): Product {
+  return {
+    id: row.productSkuId,
+    name: row.name,
+    sku: row.sku ?? "",
+    barcode: row.barcode ?? "",
+    price: row.price ?? 0,
+    category: row.category ?? "",
+    description: row.description ?? "",
+    image: row.image ?? null,
+    inStock: (row.quantityAvailable ?? 0) > 0,
+    quantityAvailable: row.quantityAvailable ?? 0,
+    size: row.size ?? "",
+    length:
+      typeof row.length === "number"
+        ? row.length
+        : row.length
+          ? Number(row.length)
+          : null,
+    color: row.color ?? "",
+    productId: row.productId as Id<"product">,
+    skuId: row.productSkuId as Id<"productSku">,
+    areProcessingFeesAbsorbed: Boolean(row.areProcessingFeesAbsorbed),
+  };
+}
+
+function normalizeExactInput(value: string | undefined): string {
+  return (value ?? "").trim().toLowerCase();
 }
 
 type StaffProfileRosterRow = {
@@ -207,6 +230,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   const drawerBindingRequestRef = useRef<string | null>(null);
   const unmountSessionRef = useRef<Id<"posSession"> | null>(null);
   const unmountSessionCartItemCountRef = useRef(0);
+  const exactAddKeyRef = useRef<string | null>(null);
 
   const registerState = useConvexRegisterState({
     storeId: activeStore?._id,
@@ -234,6 +258,24 @@ export function useRegisterViewModel(): RegisterViewModel {
     staffProfileId,
     registerNumber: terminalRegisterNumber,
   });
+  const registerCatalogRows = useConvexRegisterCatalog({
+    storeId: activeStore?._id,
+  });
+  const registerCatalogIndex = useRegisterCatalogIndex(registerCatalogRows);
+  const registerSearchState = useMemo(
+    () => searchRegisterCatalog(registerCatalogIndex, productSearchQuery),
+    [productSearchQuery, registerCatalogIndex],
+  );
+  const registerSearchProducts = useMemo(
+    () => registerSearchState.results.map(mapCatalogRowToProduct),
+    [registerSearchState.results],
+  );
+  const exactSearchProduct = registerSearchState.exactMatch
+    ? mapCatalogRowToProduct(registerSearchState.exactMatch)
+    : null;
+  const isRegisterCatalogReady = registerCatalogRows !== undefined;
+  const isRegisterSearchLoading =
+    productSearchQuery.trim().length > 0 && !isRegisterCatalogReady;
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -1451,58 +1493,26 @@ export function useRegisterViewModel(): RegisterViewModel {
     terminal?._id,
   ]);
 
-  const extractionCacheRef = useRef<ExtractResult | null>(null);
-  const rawExtraction = extractBarcodeFromInput(productSearchQuery);
-  const shouldReuseCachedProductId =
-    rawExtraction.type === "barcode" &&
-    extractionCacheRef.current?.type === "productId" &&
-    extractionCacheRef.current.value === rawExtraction.value;
-
-  const extractResult = shouldReuseCachedProductId
-    ? extractionCacheRef.current!
-    : rawExtraction;
-  const extractedValue = extractResult.value;
-
-  useEffect(() => {
-    if (
-      !extractionCacheRef.current ||
-      extractionCacheRef.current.type !== extractResult.type ||
-      extractionCacheRef.current.value !== extractResult.value
-    ) {
-      extractionCacheRef.current = extractResult;
-    }
-  }, [extractResult.type, extractResult.value]);
-
-  const debouncedValue = useDebounce(extractedValue, POS_SEARCH_DEBOUNCE_MS);
-  const productIdSearchResults = usePOSProductIdSearch(
-    activeStore?._id,
-    extractResult.type === "productId" ? debouncedValue : "",
-  );
-  const barcodeSearchResult = usePOSBarcodeSearch(
-    activeStore?._id,
-    extractResult.type === "barcode" ? debouncedValue : "",
-  );
-
   const handleAddProduct = useCallback(
     async (product: Product) => {
       if (!staffProfileId) {
         toast.error("Register sign-in required. Sign in before adding items.");
-        return;
+        return false;
       }
 
       if (!product.productId || !product.skuId) {
         toast.error("Item details unavailable. Try another item.");
-        return;
+        return false;
       }
 
       if (activeSessionHasBlockedRegisterBinding) {
         toast.error("Drawer closed. Open the drawer before adding items.");
-        return;
+        return false;
       }
 
       const sessionId = await ensureSessionId();
       if (!sessionId) {
-        return;
+        return false;
       }
 
       const existingItem = activeCartItems.find(
@@ -1534,10 +1544,11 @@ export function useRegisterViewModel(): RegisterViewModel {
 
       if (!result.ok) {
         presentOperatorError(result.message);
-        return;
+        return false;
       }
 
       setProductSearchQuery("");
+      return true;
     },
     [
       activeCartItems,
@@ -1547,6 +1558,46 @@ export function useRegisterViewModel(): RegisterViewModel {
       staffProfileId,
     ],
   );
+
+  const addExactSearchProductOnce = useCallback(async (options?: {
+    allowAnyExactIdentifier?: boolean;
+  }) => {
+    if (!exactSearchProduct || !registerSearchState.canAutoAdd) {
+      return false;
+    }
+
+    const isBarcodeExact =
+      normalizeExactInput(exactSearchProduct.barcode) ===
+      normalizeExactInput(registerSearchState.query);
+    if (!options?.allowAnyExactIdentifier && !isBarcodeExact) {
+      return false;
+    }
+
+    const exactAddKey = `${registerSearchState.query}:${exactSearchProduct.skuId}`;
+    if (exactAddKeyRef.current === exactAddKey) {
+      return true;
+    }
+
+    const wasAdded = await handleAddProduct(exactSearchProduct);
+    if (wasAdded) {
+      exactAddKeyRef.current = exactAddKey;
+    }
+    return wasAdded;
+  }, [exactSearchProduct, handleAddProduct, registerSearchState]);
+
+  useEffect(() => {
+    if (!productSearchQuery.trim()) {
+      exactAddKeyRef.current = null;
+      return;
+    }
+
+    if (
+      registerSearchState.intent === "exact" &&
+      registerSearchState.canAutoAdd
+    ) {
+      void addExactSearchProductOnce();
+    }
+  }, [addExactSearchProductOnce, productSearchQuery, registerSearchState]);
 
   const handleUpdateQuantity = useCallback(
     async (itemId: Id<"posSessionItem">, quantity: number) => {
@@ -1690,52 +1741,6 @@ export function useRegisterViewModel(): RegisterViewModel {
     staffProfileId,
   ]);
 
-  useEffect(() => {
-    if (!extractedValue.trim()) {
-      return;
-    }
-
-    if (
-      extractResult.type === "productId" &&
-      productIdSearchResults &&
-      productIdSearchResults.length === 1 &&
-      productIdSearchResults[0].quantityAvailable > 0
-    ) {
-      const timeoutId = setTimeout(() => {
-        void handleAddProduct(productIdSearchResults[0]);
-      }, POS_AUTO_ADD_DELAY_MS);
-
-      return () => clearTimeout(timeoutId);
-    }
-
-    if (extractResult.type === "barcode" && barcodeSearchResult) {
-      const shouldAutoAdd = Array.isArray(barcodeSearchResult)
-        ? barcodeSearchResult.length === 1 &&
-          (barcodeSearchResult[0]?.quantityAvailable ?? 0) > 0
-        : true;
-
-      if (shouldAutoAdd) {
-        const timeoutId = setTimeout(() => {
-          const result = Array.isArray(barcodeSearchResult)
-            ? barcodeSearchResult[0]
-            : barcodeSearchResult;
-
-          if (result) {
-            void handleAddProduct(result);
-          }
-        }, POS_AUTO_ADD_DELAY_MS);
-
-        return () => clearTimeout(timeoutId);
-      }
-    }
-  }, [
-    barcodeSearchResult,
-    extractResult.type,
-    extractedValue,
-    handleAddProduct,
-    productIdSearchResults,
-  ]);
-
   const handleBarcodeSubmit = useCallback(
     async (event: FormEvent) => {
       event.preventDefault();
@@ -1743,42 +1748,26 @@ export function useRegisterViewModel(): RegisterViewModel {
         return;
       }
 
-      if (extractResult.type === "productId" && productIdSearchResults) {
-        if (productIdSearchResults.length === 1) {
-          await handleAddProduct(productIdSearchResults[0]);
-        }
+      if (registerSearchState.intent !== "exact") {
         return;
       }
 
-      if (extractResult.type === "barcode" && barcodeSearchResult) {
-        const resolvedProduct = Array.isArray(barcodeSearchResult)
-          ? barcodeSearchResult.length === 1
-            ? barcodeSearchResult[0]
-            : null
-          : barcodeSearchResult;
-
-        if (resolvedProduct) {
-          await handleAddProduct(resolvedProduct);
-          return;
-        }
+      if (
+        await addExactSearchProductOnce({
+          allowAnyExactIdentifier: true,
+        })
+      ) {
+        return;
       }
 
-      if (extractResult.type === "barcode") {
-        logger.warn("[POS] Barcode not found", {
-          barcode: extractedValue,
-          storeId: activeStore?._id,
-        });
-        toast.error("Barcode not found. Scan again or search by name.");
+      if (registerSearchState.results.length === 0) {
+        toast.error("Item not found. Scan again or search by name.");
       }
     },
     [
-      activeStore?._id,
-      barcodeSearchResult,
-      extractResult.type,
-      extractedValue,
-      handleAddProduct,
-      productIdSearchResults,
+      addExactSearchProductOnce,
       productSearchQuery,
+      registerSearchState,
     ],
   );
 
@@ -2345,8 +2334,9 @@ export function useRegisterViewModel(): RegisterViewModel {
       setProductSearchQuery,
       onBarcodeSubmit: handleBarcodeSubmit,
       onAddProduct: handleAddProduct,
-      barcodeSearchResult,
-      productIdSearchResults: productIdSearchResults ?? null,
+      searchResults: registerSearchProducts,
+      isSearchLoading: isRegisterSearchLoading,
+      isSearchReady: isRegisterCatalogReady,
     },
     cart: {
       items: activeCartItems,
