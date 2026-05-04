@@ -6,18 +6,22 @@ import { render as renderEmail } from "@react-email/components";
 import { currencyFormatter } from "~/shared/currencyFormatter";
 import { OrderSummary } from "./OrderSummary";
 
+const mockStoreState = vi.hoisted(() => ({
+  activeStore: {
+    _id: "store-1",
+    currency: "GHS",
+    name: "Wig Club",
+    config: {},
+  } as Record<string, any>,
+}));
+
 vi.mock("@react-email/components", () => ({
   render: vi.fn().mockResolvedValue("<receipt />"),
 }));
 
 vi.mock("~/src/hooks/useGetActiveStore", () => ({
   default: () => ({
-    activeStore: {
-      _id: "store-1",
-      currency: "GHS",
-      name: "Wig Club",
-      config: {},
-    },
+    activeStore: mockStoreState.activeStore,
   }),
 }));
 
@@ -66,6 +70,12 @@ function getBalanceDuePanel() {
 describe("OrderSummary completed transaction summary", () => {
   beforeEach(() => {
     vi.mocked(renderEmail).mockClear();
+    mockStoreState.activeStore = {
+      _id: "store-1",
+      currency: "GHS",
+      name: "Wig Club",
+      config: {},
+    };
   });
 
   it("does not render the tax line in the completed sale totals", () => {
@@ -258,6 +268,72 @@ describe("OrderSummary completed transaction summary", () => {
     ]);
   });
 
+  it("prints receipt header contact fields from grouped store configuration", async () => {
+    const user = userEvent.setup();
+    mockStoreState.activeStore = {
+      _id: "store-1",
+      currency: "GHS",
+      name: "Wig Club",
+      config: {
+        contact: {
+          phoneNumber: "+233 55 555 5555",
+          location: "2 Jungle Avenue, East Legon, Accra, Ghana",
+        },
+      },
+    };
+
+    render(
+      <OrderSummary
+        cartItems={[]}
+        completedOrderNumber="404928"
+        completedTransactionData={{
+          paymentMethod: "cash",
+          completedAt: new Date("2026-04-25T18:08:00.000Z"),
+          cartItems: [],
+          customerInfo: undefined,
+          subtotal: 1000,
+          tax: 0,
+          total: 1000,
+          payments: [
+            { id: "payment-1", method: "cash", amount: 1000, timestamp: 1 },
+          ],
+        }}
+        isTransactionCompleted
+        presentation="rail"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Print receipt/i }));
+
+    await waitFor(() => {
+      expect(renderEmail).toHaveBeenCalled();
+    });
+
+    const receiptElement = vi.mocked(renderEmail).mock.calls[0][0] as {
+      props: {
+        storeContact: {
+          street?: string;
+          city?: string;
+          state?: string;
+          zipCode?: string;
+          country?: string;
+          phone?: string;
+          website?: string;
+        };
+      };
+    };
+
+    expect(receiptElement.props.storeContact).toMatchObject({
+      street: "2 Jungle Avenue",
+      city: "East Legon",
+      state: "Accra",
+      country: "Ghana",
+      phone: "+233 55 555 5555",
+      website: "localhost:5174",
+    });
+    expect(receiptElement.props.storeContact.zipCode).toBeUndefined();
+  });
+
   it("reflects a draft amount equal to balance due as zero remaining", async () => {
     const user = userEvent.setup();
 
@@ -398,9 +474,7 @@ describe("OrderSummary completed transaction summary", () => {
     expect(screen.getByText("Balance due")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cash" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Card" })).toBeDisabled();
-    expect(
-      screen.getByRole("button", { name: "Mobile Money" }),
-    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Mobile Money" })).toBeDisabled();
     expect(
       screen.queryByRole("button", { name: "Complete Sale" }),
     ).not.toBeInTheDocument();
@@ -517,9 +591,9 @@ describe("OrderSummary completed transaction summary", () => {
 
     expect(onPaymentsExpandedChange).toHaveBeenCalledWith(false);
     expect(onRemovePayment).toHaveBeenCalledWith("payment-1");
-    expect(
-      onPaymentsExpandedChange.mock.invocationCallOrder[0],
-    ).toBeLessThan(onRemovePayment.mock.invocationCallOrder[0]);
+    expect(onPaymentsExpandedChange.mock.invocationCallOrder[0]).toBeLessThan(
+      onRemovePayment.mock.invocationCallOrder[0],
+    );
   });
 
   it("collapses payment-summary state before clearing all payments", async () => {
@@ -567,9 +641,9 @@ describe("OrderSummary completed transaction summary", () => {
 
     expect(onPaymentsExpandedChange).toHaveBeenCalledWith(false);
     expect(onClearPayments).toHaveBeenCalled();
-    expect(
-      onPaymentsExpandedChange.mock.invocationCallOrder[0],
-    ).toBeLessThan(onClearPayments.mock.invocationCallOrder[0]);
+    expect(onPaymentsExpandedChange.mock.invocationCallOrder[0]).toBeLessThan(
+      onClearPayments.mock.invocationCallOrder[0],
+    );
   });
 
   it("reports payment edit mode synchronously when editing starts and ends", async () => {
@@ -669,9 +743,9 @@ describe("OrderSummary completed transaction summary", () => {
 
     expect(onPaymentsExpandedChange).toHaveBeenCalledWith(false);
     expect(onEditingPaymentChange).toHaveBeenCalledWith(false);
-    expect(
-      onPaymentsExpandedChange.mock.invocationCallOrder[0],
-    ).toBeLessThan(onEditingPaymentChange.mock.invocationCallOrder[0]);
+    expect(onPaymentsExpandedChange.mock.invocationCallOrder[0]).toBeLessThan(
+      onEditingPaymentChange.mock.invocationCallOrder[0],
+    );
   });
 
   it("collapses expanded payments before saving an edit that leaves the sale fully paid", async () => {
@@ -718,9 +792,9 @@ describe("OrderSummary completed transaction summary", () => {
     expect(onPaymentsExpandedChange).toHaveBeenCalledWith(false);
     expect(onUpdatePayment).toHaveBeenCalledWith("payment-1", 1700);
     expect(onEditingPaymentChange).toHaveBeenCalledWith(false);
-    expect(
-      onPaymentsExpandedChange.mock.invocationCallOrder[0],
-    ).toBeLessThan(onUpdatePayment.mock.invocationCallOrder[0]);
+    expect(onPaymentsExpandedChange.mock.invocationCallOrder[0]).toBeLessThan(
+      onUpdatePayment.mock.invocationCallOrder[0],
+    );
     expect(onUpdatePayment.mock.invocationCallOrder[0]).toBeLessThan(
       onEditingPaymentChange.mock.invocationCallOrder[0],
     );

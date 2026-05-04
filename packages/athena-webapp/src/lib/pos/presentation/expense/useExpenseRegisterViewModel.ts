@@ -584,6 +584,7 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
       searchResults: entrySearchResults,
       isSearchLoading: isProductEntrySearchLoading,
       isSearchReady: true,
+      canQuickAddProduct: false,
     },
     cart: {
       items: store.cart.items,

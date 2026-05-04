@@ -14,7 +14,10 @@ import { Product } from "./types";
 import { usePOSQuickAddProductSku } from "@/hooks/usePOSProducts";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { currencyFormatter } from "~/convex/utils";
-import { extractBarcodeFromInput, isUrlOrBarcode } from "@/lib/pos/barcodeUtils";
+import {
+  extractBarcodeFromInput,
+  isUrlOrBarcode,
+} from "@/lib/pos/barcodeUtils";
 import {
   forwardRef,
   useCallback,
@@ -45,6 +48,7 @@ interface ProductEntryProps extends ProductSearchInputProps {
   searchResults: Product[];
   isSearchLoading: boolean;
   isSearchReady: boolean;
+  canQuickAddProduct?: boolean;
   showSearchInput?: boolean;
   containerClassName?: string;
   lookupPanelClassName?: string;
@@ -183,6 +187,7 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
       searchResults,
       isSearchLoading,
       isSearchReady,
+      canQuickAddProduct = false,
       showSearchInput = true,
       containerClassName,
       lookupPanelClassName,
@@ -232,6 +237,10 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
 
     const isAddingVariant = Boolean(quickAddSourceProduct?.productId);
     const handleOpenQuickAdd = (selectedProduct?: Product) => {
+      if (!canQuickAddProduct) {
+        return;
+      }
+
       const rawQuery = productSearchQuery.trim();
       const extractedQuery = extractBarcodeFromInput(rawQuery).value.trim();
       const lookupCode = isLikelyBarcode(extractedQuery)
@@ -382,7 +391,9 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
                 formatter={formatter}
                 onClearSearch={handleClearSearch}
                 onQuickAddProduct={
-                  isSearchReady ? handleOpenQuickAdd : undefined
+                  isSearchReady && canQuickAddProduct
+                    ? handleOpenQuickAdd
+                    : undefined
                 }
                 quickAddQuery={isSearchReady ? productSearchQuery : ""}
                 quickAddShortcutDisabled={isQuickAddOpen}

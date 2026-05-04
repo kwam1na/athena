@@ -468,6 +468,7 @@ describe("useRegisterViewModel", () => {
     expect(result.current.sessionPanel?.canClearSale).toBe(true);
     expect(result.current.customerPanel.customerInfo.name).toBe("Ama Serwa");
     expect(result.current.cashierCard?.cashierName).toBe("Ama K.");
+    expect(result.current.productEntry.canQuickAddProduct).toBe(true);
     expect(result.current.authDialog?.open).toBe(false);
   });
 
@@ -1580,6 +1581,7 @@ describe("useRegisterViewModel", () => {
       result.current.closeoutControl?.canShowOpeningFloatCorrection,
     ).toBe(false);
     expect(result.current.closeoutControl?.canCorrectOpeningFloat).toBe(false);
+    expect(result.current.productEntry.canQuickAddProduct).toBe(false);
   });
 
   it("binds a preserved active POS session after drawer recovery without clearing checkout state", async () => {
