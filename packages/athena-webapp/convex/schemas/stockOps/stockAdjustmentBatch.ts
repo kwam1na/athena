@@ -15,6 +15,8 @@ export const stockAdjustmentBatchSchema = v.object({
   lineItemCount: v.number(),
   netQuantityDelta: v.number(),
   largestAbsoluteDelta: v.number(),
+  highVarianceFlag: v.optional(v.boolean()),
+  varianceThreshold: v.optional(v.number()),
   approvalRequired: v.boolean(),
   createdByUserId: v.optional(v.id("athenaUser")),
   operationalWorkItemId: v.optional(v.id("operationalWorkItem")),

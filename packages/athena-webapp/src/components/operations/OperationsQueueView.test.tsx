@@ -332,6 +332,9 @@ describe("OperationsQueueViewContent", () => {
       scopeKey: "Hair",
       storeId: "store-1",
     });
+    expect(mockedHooks.useQuery.mock.calls[3]?.[1]).toEqual({
+      storeId: "store-1",
+    });
     await waitFor(() =>
       expect(ensureCycleCountDraft).toHaveBeenCalledWith({
         scopeKey: "Hair",
@@ -362,6 +365,9 @@ describe("OperationsQueueViewContent", () => {
     );
 
     expect(mockedHooks.useQuery.mock.calls[2]?.[1]).toBe("skip");
+    expect(mockedHooks.useQuery.mock.calls[3]?.[1]).toEqual({
+      storeId: "store-1",
+    });
   });
 
   it("collapses unexpected approval failures to the shared fallback toast", async () => {
