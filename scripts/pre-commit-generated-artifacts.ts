@@ -124,7 +124,7 @@ async function hasAthenaConvexSourceChanges(
   const command = ["git", "status", "--porcelain", "--", CONVEX_DIR];
   const proc = spawn(command, {
     cwd: rootDir,
-    stdout: "inherit",
+    stdout: "pipe",
     stderr: "pipe",
   });
   const exitCode = await proc.exited;

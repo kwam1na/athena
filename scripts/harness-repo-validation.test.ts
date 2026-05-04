@@ -51,6 +51,7 @@ describe("collectHarnessRepoValidationSelection", () => {
     ]);
     expect(selection.selectedCommands).toEqual([
       "bun run harness:test",
+      "bun run test:coverage",
       "bun run harness:inferential-review",
     ]);
   });

@@ -440,6 +440,7 @@ describe("runHarnessReview", () => {
     expect(steps).toEqual([
       "harness:check",
       "bun run harness:test",
+      "bun run test:coverage",
       "bun run harness:inferential-review",
     ]);
   });
@@ -665,6 +666,7 @@ describe("runHarnessReview", () => {
     expect(steps).toEqual([
       "harness:check",
       "raw:bun run harness:test",
+      "raw:bun run test:coverage",
       "raw:bun run harness:inferential-review",
     ]);
   });
@@ -973,6 +975,7 @@ describe("runHarnessReview", () => {
     expect(steps).toEqual([
       "harness:check",
       "raw:bun run harness:test",
+      "raw:bun run test:coverage",
       "raw:bun run harness:inferential-review",
     ]);
   });

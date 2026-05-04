@@ -1,3 +1,5 @@
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -8,6 +10,36 @@ import {
   TRACKED_GRAPHIFY_ARTIFACTS,
   runPreCommitGeneratedArtifacts,
 } from "./pre-commit-generated-artifacts";
+
+async function withTempRepo<T>(callback: (repoDir: string) => Promise<T>) {
+  const repoDir = await mkdtemp(path.join(tmpdir(), "athena-pre-commit-"));
+
+  try {
+    return await callback(repoDir);
+  } finally {
+    await rm(repoDir, { recursive: true, force: true });
+  }
+}
+
+async function writeConvexApiFixture(
+  repoDir: string,
+  apiSource = 'import type * as catalog_items from "../catalog/items.js";\n'
+) {
+  const convexDir = path.join(
+    repoDir,
+    "packages",
+    "athena-webapp",
+    "convex"
+  );
+  await mkdir(path.join(convexDir, "catalog"), { recursive: true });
+  await mkdir(path.join(convexDir, "_generated"), { recursive: true });
+  await writeFile(path.join(convexDir, "catalog", "items.ts"), "export {};\n");
+  await writeFile(
+    path.join(convexDir, "catalog", "items.test.ts"),
+    "export {};\n"
+  );
+  await writeFile(path.join(convexDir, "_generated", "api.d.ts"), apiSource);
+}
 
 describe("runPreCommitGeneratedArtifacts", () => {
   it("regenerates harness docs and graphify artifacts before staging tracked outputs", async () => {
@@ -194,6 +226,149 @@ describe("runPreCommitGeneratedArtifacts", () => {
         },
       })
     ).rejects.toThrow("convex refresh failed");
+  });
+
+  it("refreshes the Convex generated API by default when source changed", async () => {
+    await withTempRepo(async (repoDir) => {
+      await writeConvexApiFixture(repoDir);
+      const commands: Array<{ command: string[]; cwd: string; stdout: string }> = [];
+
+      await runPreCommitGeneratedArtifacts(repoDir, {
+        runHarnessGenerate: async () => {},
+        runGraphifyRebuild: async () => {},
+        spawn(command, options) {
+          commands.push({ command, cwd: options.cwd, stdout: options.stdout });
+
+          if (command[0] === "git" && command[1] === "status") {
+            return {
+              exited: Promise.resolve(0),
+              stdout: new Response(
+                " M packages/athena-webapp/convex/catalog/items.ts\n"
+              ).body,
+              stderr: new Response("").body,
+            };
+          }
+
+          return {
+            exited: Promise.resolve(0),
+            stdout: new Response("").body,
+            stderr: new Response("").body,
+          };
+        },
+        logger: {
+          log() {},
+        },
+      });
+
+      expect(commands).toContainEqual({
+        command: ["git", "status", "--porcelain", "--", "packages/athena-webapp/convex"],
+        cwd: repoDir,
+        stdout: "pipe",
+      });
+      expect(commands).toContainEqual({
+        command: ["bunx", "convex", "dev", "--once"],
+        cwd: path.join(repoDir, "packages", "athena-webapp"),
+        stdout: "inherit",
+      });
+    });
+  });
+
+  it("does not refresh the Convex generated API for generated-only drift", async () => {
+    await withTempRepo(async (repoDir) => {
+      await writeConvexApiFixture(repoDir);
+      const commands: string[] = [];
+
+      await runPreCommitGeneratedArtifacts(repoDir, {
+        runHarnessGenerate: async () => {},
+        runGraphifyRebuild: async () => {},
+        spawn(command, options) {
+          commands.push(command.join(" "));
+
+          if (command[0] === "git" && command[1] === "status") {
+            return {
+              exited: Promise.resolve(0),
+              stdout: new Response(
+                " M packages/athena-webapp/convex/_generated/api.d.ts\n"
+              ).body,
+              stderr: new Response("").body,
+            };
+          }
+
+          return {
+            exited: Promise.resolve(0),
+            stdout: new Response("").body,
+            stderr: new Response("").body,
+          };
+        },
+        logger: {
+          log() {},
+        },
+      });
+
+      expect(commands).not.toContain("bunx convex dev --once");
+    });
+  });
+
+  it("fails when default Convex generated API verification misses a source module", async () => {
+    await withTempRepo(async (repoDir) => {
+      await writeConvexApiFixture(repoDir, "");
+
+      await expect(
+        runPreCommitGeneratedArtifacts(repoDir, {
+          runHarnessGenerate: async () => {},
+          runGraphifyRebuild: async () => {},
+          spawn(command) {
+            if (command[0] === "git" && command[1] === "status") {
+              return {
+                exited: Promise.resolve(0),
+                stdout: new Response("").body,
+                stderr: new Response("").body,
+              };
+            }
+
+            return {
+              exited: Promise.resolve(0),
+              stdout: new Response("").body,
+              stderr: new Response("").body,
+            };
+          },
+          logger: {
+            log() {},
+          },
+        })
+      ).rejects.toThrow(/catalog\/items[\s\S]+bunx convex dev --once/);
+    });
+  });
+
+  it("fails clearly when default Convex source inspection fails", async () => {
+    await withTempRepo(async (repoDir) => {
+      await writeConvexApiFixture(repoDir);
+
+      await expect(
+        runPreCommitGeneratedArtifacts(repoDir, {
+          runHarnessGenerate: async () => {},
+          runGraphifyRebuild: async () => {},
+          spawn(command) {
+            if (command[0] === "git" && command[1] === "status") {
+              return {
+                exited: Promise.resolve(1),
+                stdout: new Response("").body,
+                stderr: new Response("status failed").body,
+              };
+            }
+
+            return {
+              exited: Promise.resolve(0),
+              stdout: new Response("").body,
+              stderr: new Response("").body,
+            };
+          },
+          logger: {
+            log() {},
+          },
+        })
+      ).rejects.toThrow("status failed");
+    });
   });
 
   it("fails clearly when staging repaired Convex generated API fails", async () => {
