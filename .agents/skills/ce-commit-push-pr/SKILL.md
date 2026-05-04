@@ -222,4 +222,12 @@ The new commits are already on the PR from Step 5. Report the PR URL, then ask w
 
 ### Step 8: Report
 
-Output the PR URL.
+If this PR is part of an execution or delivery workflow that should merge when required checks pass, arm auto-merge after the PR is ready and local merge-level validation has passed. In Athena, use the worktree-safe repo helper:
+
+```bash
+bun run github:pr-merge -- <pr-number-or-url> --auto --method squash
+```
+
+Pending required checks are expected after auto-merge is armed. Failed or cancelled checks are not a handoff state; inspect and fix them.
+
+Output the PR URL and whether auto-merge was armed.

@@ -267,7 +267,7 @@ describe("HARNESS_APP_REGISTRY", () => {
         { kind: "script", script: "build" },
       ],
       note:
-        "Use this when register-session, deposit, closeout, dashboard, operations-queue approval, or cash-controls route wiring changes. This is the confirmation slice for drawers opened from POS showing up in the dashboard and register-session detail views. Start `bunx convex dev` from `packages/athena-webapp` before validation when generated client refs or new Convex function exports changed.",
+        "Use this when register-session, deposit, closeout, dashboard, operations-queue approval, or cash-controls route wiring changes. This is the confirmation slice for drawers opened from POS showing up in the dashboard and register-session detail views. Run `bunx convex dev --once` from `packages/athena-webapp` before validation when generated client refs or new Convex function exports changed.",
       behaviorScenarios: ["athena-admin-shell-boot"],
     });
   });
@@ -558,7 +558,7 @@ describe("HARNESS_APP_REGISTRY", () => {
         { kind: "script", script: "build" },
       ],
       note:
-        "Use this when stock adjustments, procurement recommendations, purchase-order lifecycle changes, or receiving route wiring move. Start `bunx convex dev` from `packages/athena-webapp` before validation when generated client refs or new stockOps function exports changed.",
+        "Use this when stock adjustments, procurement recommendations, purchase-order lifecycle changes, or receiving route wiring move. Run `bunx convex dev --once` from `packages/athena-webapp` before validation when generated client refs or new stockOps function exports changed.",
       behaviorScenarios: ["athena-admin-shell-boot"],
     });
   });

@@ -28,6 +28,7 @@ type PullRequestView = {
   headRepositoryOwner: {
     login: string;
   } | null;
+  id: string;
   isDraft: boolean;
   number: number;
   state: "OPEN" | "CLOSED" | "MERGED";
@@ -39,6 +40,7 @@ type RepoView = {
 };
 
 export type MergeOptions = {
+  auto?: boolean;
   deleteBranch: boolean;
   method: MergeMethod;
   prRef: string;
@@ -46,6 +48,19 @@ export type MergeOptions = {
 };
 
 const DEFAULT_METHOD: MergeMethod = "squash";
+const HELP_TEXT = `Usage: bun scripts/github-pr-merge.ts <pr-ref> [--auto] [--method squash|merge|rebase] [--delete-branch] [--repo owner/name]
+
+Merge or arm auto-merge for a GitHub pull request through GitHub APIs without
+checking out, pulling, or mutating local main.
+
+Options:
+  --auto             Arm GitHub auto-merge instead of merging immediately.
+  --method <method>  Merge method: squash, merge, or rebase. Default: squash.
+  --delete-branch    Delete the same-repo head branch after an immediate merge.
+                     Ignored with --auto because the remote merge happens later.
+  --repo <owner/repo> Select a repository instead of resolving the current repo.
+  -h, --help         Show this help.
+`;
 
 export async function mergePullRequest(
   options: MergeOptions,
@@ -64,6 +79,11 @@ export async function mergePullRequest(
 
   if (pr.isDraft) {
     throw new Error(`Pull request ${pr.url} is still a draft.`);
+  }
+
+  if (options.auto) {
+    await enablePullRequestAutoMerge(pr, options.method, runCommand);
+    return `Armed auto-merge for ${pr.url} with ${options.method}.`;
   }
 
   await ghJson(
@@ -93,6 +113,7 @@ export async function mergePullRequest(
 }
 
 export function parseArgs(args: string[]): MergeOptions {
+  let auto = false;
   let deleteBranch = false;
   let method: MergeMethod = DEFAULT_METHOD;
   let repo: string | undefined;
@@ -100,6 +121,15 @@ export function parseArgs(args: string[]): MergeOptions {
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
+
+    if (arg === "-h" || arg === "--help") {
+      throw new HelpRequested();
+    }
+
+    if (arg === "--auto") {
+      auto = true;
+      continue;
+    }
 
     if (arg === "--delete-branch") {
       deleteBranch = true;
@@ -138,12 +168,10 @@ export function parseArgs(args: string[]): MergeOptions {
   }
 
   if (!prRef) {
-    throw new Error(
-      "Usage: bun scripts/github-pr-merge.ts <pr-ref> [--method squash|merge|rebase] [--delete-branch] [--repo owner/name]"
-    );
+    throw new Error(HELP_TEXT.trim());
   }
 
-  return { deleteBranch, method, prRef, repo };
+  return { ...(auto ? { auto } : {}), deleteBranch, method, prRef, repo };
 }
 
 async function resolveCurrentRepo(runCommand: CommandRunner) {
@@ -169,7 +197,7 @@ async function viewPullRequest(
       "--repo",
       repo,
       "--json",
-      "baseRefName,headRefName,headRepository,headRepositoryOwner,isDraft,number,state,url",
+      "baseRefName,headRefName,headRepository,headRepositoryOwner,id,isDraft,number,state,url",
     ],
     undefined,
     runCommand
@@ -191,6 +219,45 @@ async function deleteHeadBranch(
     ],
     undefined,
     runCommand
+  );
+}
+
+async function enablePullRequestAutoMerge(
+  pr: PullRequestView,
+  method: MergeMethod,
+  runCommand: CommandRunner
+) {
+  const query = `
+    mutation EnablePullRequestAutoMerge($pullRequestId: ID!, $mergeMethod: PullRequestMergeMethod!) {
+      enablePullRequestAutoMerge(input: {
+        pullRequestId: $pullRequestId
+        mergeMethod: $mergeMethod
+      }) {
+        pullRequest {
+          url
+        }
+      }
+    }
+  `;
+
+  const result = await runCommand([
+    "gh",
+    "api",
+    "graphql",
+    "-f",
+    `query=${query}`,
+    "-f",
+    `pullRequestId=${pr.id}`,
+    "-f",
+    `mergeMethod=${method.toUpperCase()}`,
+  ]);
+
+  if (result.exitCode === 0) {
+    return;
+  }
+
+  throw new Error(
+    `Failed to arm auto-merge for ${pr.url} with ${method}\n${result.stderr}`
   );
 }
 
@@ -248,6 +315,8 @@ export async function runProcess(
   return { exitCode, stdout, stderr };
 }
 
+class HelpRequested extends Error {}
+
 function requireValue(args: string[], index: number, flag: string) {
   const value = args[index];
   if (!value) {
@@ -268,6 +337,10 @@ if (import.meta.main) {
     const message = await mergePullRequest(parseArgs(Bun.argv.slice(2)));
     console.log(message);
   } catch (error) {
+    if (error instanceof HelpRequested) {
+      console.log(HELP_TEXT.trim());
+      process.exit(0);
+    }
     console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
   }

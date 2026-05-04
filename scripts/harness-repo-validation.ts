@@ -13,6 +13,7 @@ const HARNESS_REPO_VALIDATION_PATTERNS = [
 
 const HARNESS_REPO_VALIDATION_COMMANDS = [
   "bun run harness:test",
+  "bun run test:coverage",
   "bun run harness:inferential-review",
 ] as const;
 
