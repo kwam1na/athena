@@ -145,6 +145,7 @@ import type * as pos_application_corrections_correctionPolicy from "../pos/appli
 import type * as pos_application_dto from "../pos/application/dto.js";
 import type * as pos_application_queries_getRegisterState from "../pos/application/queries/getRegisterState.js";
 import type * as pos_application_queries_getTransactions from "../pos/application/queries/getTransactions.js";
+import type * as pos_application_queries_listRegisterCatalog from "../pos/application/queries/listRegisterCatalog.js";
 import type * as pos_application_queries_searchCatalog from "../pos/application/queries/searchCatalog.js";
 import type * as pos_application_queries_searchCustomers from "../pos/application/queries/searchCustomers.js";
 import type * as pos_application_queries_terminals from "../pos/application/queries/terminals.js";
@@ -439,6 +440,7 @@ declare const fullApi: ApiFromModules<{
   "pos/application/dto": typeof pos_application_dto;
   "pos/application/queries/getRegisterState": typeof pos_application_queries_getRegisterState;
   "pos/application/queries/getTransactions": typeof pos_application_queries_getTransactions;
+  "pos/application/queries/listRegisterCatalog": typeof pos_application_queries_listRegisterCatalog;
   "pos/application/queries/searchCatalog": typeof pos_application_queries_searchCatalog;
   "pos/application/queries/searchCustomers": typeof pos_application_queries_searchCustomers;
   "pos/application/queries/terminals": typeof pos_application_queries_terminals;
