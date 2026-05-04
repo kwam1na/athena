@@ -630,12 +630,9 @@ export function POSRegisterView({
                       }
                       onBarcodeSubmit={viewModel.productEntry.onBarcodeSubmit}
                       onAddProduct={viewModel.productEntry.onAddProduct}
-                      barcodeSearchResult={
-                        viewModel.productEntry.barcodeSearchResult
-                      }
-                      productIdSearchResults={
-                        viewModel.productEntry.productIdSearchResults
-                      }
+                      searchResults={viewModel.productEntry.searchResults}
+                      isSearchLoading={viewModel.productEntry.isSearchLoading}
+                      isSearchReady={viewModel.productEntry.isSearchReady}
                       showSearchInput={false}
                       containerClassName="h-full min-h-0"
                       lookupPanelClassName="flex h-full min-h-0 flex-col overflow-hidden"

@@ -6,6 +6,7 @@ import {
   lookupByBarcode,
   searchProducts,
 } from "../application/queries/searchCatalog";
+import { listRegisterCatalog } from "../application/queries/listRegisterCatalog";
 
 const catalogResultValidator = v.object({
   id: v.id("productSku"),
@@ -26,12 +27,40 @@ const catalogResultValidator = v.object({
   areProcessingFeesAbsorbed: v.boolean(),
 });
 
+const registerCatalogRowValidator = v.object({
+  id: v.id("productSku"),
+  productSkuId: v.id("productSku"),
+  skuId: v.id("productSku"),
+  productId: v.id("product"),
+  name: v.string(),
+  sku: v.string(),
+  barcode: v.string(),
+  price: v.number(),
+  category: v.string(),
+  description: v.string(),
+  image: v.union(v.string(), v.null()),
+  size: v.string(),
+  length: v.union(v.number(), v.null()),
+  color: v.string(),
+  inStock: v.boolean(),
+  quantityAvailable: v.number(),
+  areProcessingFeesAbsorbed: v.boolean(),
+});
+
 export const search = query({
   args: {
     storeId: v.id("store"),
     searchQuery: v.string(),
   },
   handler: async (ctx, args) => searchProducts(ctx, args),
+});
+
+export const listRegisterCatalogSnapshot = query({
+  args: {
+    storeId: v.id("store"),
+  },
+  returns: v.array(registerCatalogRowValidator),
+  handler: async (ctx, args) => listRegisterCatalog(ctx, args),
 });
 
 export const barcodeLookup = query({

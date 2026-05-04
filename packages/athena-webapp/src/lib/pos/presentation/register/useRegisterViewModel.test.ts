@@ -117,6 +117,25 @@ let mockBarcodeSearchResult: null;
 let mockProductIdSearchResults: [] | null;
 let mockCashier: { firstName: string; lastName: string } | null;
 let mockUser: { _id: Id<"athenaUser"> } | null;
+let mockRegisterCatalogRows: Array<{
+  id: Id<"productSku">;
+  productSkuId: Id<"productSku">;
+  skuId: Id<"productSku">;
+  productId: Id<"product">;
+  name: string;
+  sku: string;
+  barcode: string;
+  price: number;
+  category: string;
+  description: string;
+  image: string | null;
+  size: string;
+  length: number | null;
+  color: string;
+  inStock: boolean;
+  quantityAvailable: number;
+  areProcessingFeesAbsorbed: boolean;
+}>;
 
 vi.mock("convex/react", () => ({
   useQuery: (...args: unknown[]) => mockUseQuery(...args),
@@ -153,6 +172,10 @@ vi.mock("@/hooks/use-navigate-back", () => ({
 vi.mock("@/hooks/usePOSProducts", () => ({
   usePOSBarcodeSearch: () => mockBarcodeSearchResult,
   usePOSProductIdSearch: () => mockProductIdSearchResults,
+}));
+
+vi.mock("@/lib/pos/infrastructure/convex/catalogGateway", () => ({
+  useConvexRegisterCatalog: () => mockRegisterCatalogRows,
 }));
 
 vi.mock("@/hooks/useDebounce", () => ({
@@ -195,6 +218,31 @@ function deferred<T>() {
   });
 
   return { promise, resolve };
+}
+
+function buildRegisterCatalogRow(
+  overrides: Partial<(typeof mockRegisterCatalogRows)[number]> = {},
+): (typeof mockRegisterCatalogRows)[number] {
+  return {
+    id: "sku-2" as Id<"productSku">,
+    productSkuId: "sku-2" as Id<"productSku">,
+    skuId: "sku-2" as Id<"productSku">,
+    productId: "product-2" as Id<"product">,
+    name: "Deep Wave",
+    sku: "DW-18",
+    barcode: "1234567890123",
+    price: 10_000,
+    category: "Hair",
+    description: "Deep wave bundle",
+    image: null,
+    size: "18",
+    length: 18,
+    color: "natural",
+    inStock: true,
+    quantityAvailable: 5,
+    areProcessingFeesAbsorbed: false,
+    ...overrides,
+  };
 }
 
 describe("useRegisterViewModel", () => {
@@ -268,6 +316,7 @@ describe("useRegisterViewModel", () => {
     mockUser = {
       _id: "user-1" as Id<"athenaUser">,
     };
+    mockRegisterCatalogRows = [];
 
     mockUseQuery.mockImplementation(() => mockCashier);
     mockUseMutation.mockReset();
@@ -1271,6 +1320,140 @@ describe("useRegisterViewModel", () => {
     );
   });
 
+  it("adds an exact in-stock catalog match once from local register search", async () => {
+    mockRegisterCatalogRows = [buildRegisterCatalogRow()];
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("1234567890123");
+    });
+
+    await waitFor(() => expect(mockAddItem).toHaveBeenCalledTimes(1));
+    expect(mockAddItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        productId: "product-2",
+        productSkuId: "sku-2",
+        productSku: "DW-18",
+        barcode: "1234567890123",
+        productName: "Deep Wave",
+        quantity: 1,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.productEntry.onBarcodeSubmit({
+        preventDefault: vi.fn(),
+      } as never);
+    });
+
+    expect(mockAddItem).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps out-of-stock exact catalog matches visible without auto-adding", async () => {
+    mockRegisterCatalogRows = [
+      buildRegisterCatalogRow({
+        quantityAvailable: 0,
+        inStock: false,
+      }),
+    ];
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("DW-18");
+    });
+
+    expect(result.current.productEntry.searchResults).toHaveLength(1);
+    expect(result.current.productEntry.searchResults[0]).toEqual(
+      expect.objectContaining({
+        skuId: "sku-2",
+        inStock: false,
+        quantityAvailable: 0,
+      }),
+    );
+    expect(mockAddItem).not.toHaveBeenCalled();
+  });
+
+  it("adds an exact in-stock SKU match on submit without auto-adding first", async () => {
+    mockRegisterCatalogRows = [buildRegisterCatalogRow()];
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("DW-18");
+    });
+
+    expect(result.current.productEntry.searchResults).toHaveLength(1);
+    expect(mockAddItem).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await result.current.productEntry.onBarcodeSubmit({
+        preventDefault: vi.fn(),
+      } as never);
+    });
+
+    expect(mockAddItem).toHaveBeenCalledTimes(1);
+    expect(mockAddItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        productId: "product-2",
+        productSkuId: "sku-2",
+        productSku: "DW-18",
+      }),
+    );
+  });
+
+  it("shows product-id variants from local catalog without auto-adding", async () => {
+    mockRegisterCatalogRows = [
+      buildRegisterCatalogRow(),
+      buildRegisterCatalogRow({
+        id: "sku-3" as Id<"productSku">,
+        productSkuId: "sku-3" as Id<"productSku">,
+        skuId: "sku-3" as Id<"productSku">,
+        sku: "DW-20",
+        barcode: "9876543210123",
+        length: 20,
+      }),
+    ];
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("product-2");
+    });
+
+    expect(result.current.productEntry.searchResults).toHaveLength(2);
+    expect(mockAddItem).not.toHaveBeenCalled();
+  });
+
   it("pauses resumable-session auto-resume while no active drawer exists", async () => {
     mockRegisterState = {
       phase: "resumable",
@@ -1824,6 +2007,9 @@ describe("useRegisterViewModel", () => {
     expect(source).not.toContain("usePOSSessions");
     expect(source).not.toContain("useSessionManagement");
     expect(source).not.toContain("useSessionManagerOperations");
+    expect(source).not.toContain("usePOSProductSearch");
+    expect(source).not.toContain("usePOSBarcodeSearch");
+    expect(source).not.toContain("usePOSProductIdSearch");
   });
 
   it("refuses quantity updates for malformed cart items that are missing sku metadata", async () => {

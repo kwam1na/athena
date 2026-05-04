@@ -5,6 +5,8 @@ import type {
   PosCatalogItemDto,
   PosProductIdLookupInput,
   PosProductSearchInput,
+  PosRegisterCatalogInput,
+  PosRegisterCatalogRowDto,
 } from "@/lib/pos/application/dto";
 import type { PosCatalogReader } from "@/lib/pos/application/ports";
 import {
@@ -62,6 +64,15 @@ function mapProductByIdResult(
     skuId: sku._id,
     areProcessingFeesAbsorbed: productData.areProcessingFeesAbsorbed || false,
   }));
+}
+
+export function useConvexRegisterCatalog(
+  input: PosRegisterCatalogInput,
+): PosRegisterCatalogRowDto[] | undefined {
+  return useQuery(
+    api.pos.public.catalog.listRegisterCatalogSnapshot,
+    input.storeId ? { storeId: input.storeId } : "skip",
+  );
 }
 
 export function useConvexProductSearch(
@@ -130,6 +141,7 @@ export function useConvexQuickAddCatalogItem() {
 }
 
 export const convexCatalogReader: PosCatalogReader = {
+  useRegisterCatalog: useConvexRegisterCatalog,
   useProductSearch: useConvexProductSearch,
   useBarcodeLookup: useConvexBarcodeLookup,
   useProductIdLookup: useConvexProductIdLookup,

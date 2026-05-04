@@ -9,6 +9,10 @@ import { useExpenseRegisterViewModel } from "./useExpenseRegisterViewModel";
 
 const mockCreateExpenseSession = vi.fn();
 const mockNavigateBack = vi.fn();
+const posProductMocks = vi.hoisted(() => ({
+  usePOSBarcodeSearch: vi.fn(),
+  usePOSProductSearch: vi.fn(),
+}));
 const loadedSessionIds: string[] = [];
 let mockActiveSessionQuery: {
   _id: Id<"expenseSession">;
@@ -72,8 +76,8 @@ vi.mock("@/hooks/useDebounce", () => ({
 }));
 
 vi.mock("@/hooks/usePOSProducts", () => ({
-  usePOSBarcodeSearch: () => null,
-  usePOSProductSearch: () => [],
+  usePOSBarcodeSearch: posProductMocks.usePOSBarcodeSearch,
+  usePOSProductSearch: posProductMocks.usePOSProductSearch,
 }));
 
 vi.mock("@/lib/logger", () => ({
@@ -92,6 +96,8 @@ describe("useExpenseRegisterViewModel", () => {
     useExpenseStore.getState().resetAll();
     useExpenseStore.getState().setCashier("staff-1" as Id<"staffProfile">);
     mockActiveSessionQuery = null;
+    posProductMocks.usePOSBarcodeSearch.mockReturnValue(null);
+    posProductMocks.usePOSProductSearch.mockReturnValue([]);
 
     mockCreateExpenseSession.mockImplementation(async () => {
       const callCount = mockCreateExpenseSession.mock.calls.length;
@@ -175,6 +181,64 @@ describe("useExpenseRegisterViewModel", () => {
     const { result } = renderHook(() => useExpenseRegisterViewModel());
 
     expect(result.current.authDialog?.workflowMode).toBe("expense");
+  });
+
+  it("keeps expense product search hooks stable across text and barcode input", () => {
+    mockActiveSessionQuery = {
+      _id: "expense-session-1" as Id<"expenseSession">,
+      status: "active",
+      expiresAt: Date.now() + 60_000,
+      sessionNumber: "EXP-0001",
+      updatedAt: 100,
+      cartItems: [],
+    };
+    const product = {
+      id: "product-sku-1" as Id<"productSku">,
+      name: "Repair kit",
+      barcode: "1234567890123",
+      sku: "KIT-1",
+      price: 3600,
+      category: "Supplies",
+      description: "",
+      image: null,
+      inStock: true,
+      quantityAvailable: 3,
+      productId: "product-1" as Id<"product">,
+      skuId: "product-sku-1" as Id<"productSku">,
+      areProcessingFeesAbsorbed: false,
+    };
+    posProductMocks.usePOSProductSearch.mockReturnValue([product]);
+    posProductMocks.usePOSBarcodeSearch.mockReturnValue(product);
+
+    const { result } = renderHook(() => useExpenseRegisterViewModel());
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("repair");
+    });
+
+    expect(result.current.productEntry.searchResults).toEqual([product]);
+    expect(posProductMocks.usePOSProductSearch).toHaveBeenCalledWith(
+      "store-1",
+      "repair",
+    );
+    expect(posProductMocks.usePOSBarcodeSearch).toHaveBeenLastCalledWith(
+      "store-1",
+      "",
+    );
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("1234567890123");
+    });
+
+    expect(result.current.productEntry.searchResults).toEqual([product]);
+    expect(posProductMocks.usePOSProductSearch).toHaveBeenLastCalledWith(
+      "store-1",
+      "",
+    );
+    expect(posProductMocks.usePOSBarcodeSearch).toHaveBeenLastCalledWith(
+      "store-1",
+      "1234567890123",
+    );
   });
 
   it("clears expense totals and transaction state after completing a session", async () => {

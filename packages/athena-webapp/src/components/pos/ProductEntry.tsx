@@ -11,21 +11,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, PackagePlus, ScanBarcode, Search } from "lucide-react";
 import { Product } from "./types";
-import {
-  usePOSProductSearch,
-  usePOSQuickAddProductSku,
-} from "@/hooks/usePOSProducts";
+import { usePOSQuickAddProductSku } from "@/hooks/usePOSProducts";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { currencyFormatter } from "~/convex/utils";
-import { useDebounce } from "@/hooks/useDebounce";
-import {
-  extractBarcodeFromInput,
-  isUrlOrBarcode,
-} from "@/lib/pos/barcodeUtils";
-import {
-  POS_SEARCH_DEBOUNCE_MS,
-  POS_QUERY_BUFFER_MS,
-} from "@/lib/pos/constants";
+import { extractBarcodeFromInput, isUrlOrBarcode } from "@/lib/pos/barcodeUtils";
 import {
   forwardRef,
   useCallback,
@@ -35,7 +24,6 @@ import {
   useState,
 } from "react";
 import { SearchResultsSection } from "./SearchResultsSection";
-import { useProductSearchResults } from "@/hooks/useProductSearchResults";
 import { cn } from "@/lib/utils";
 import { parseDisplayAmountInput } from "@/lib/pos/displayAmounts";
 import { useAuth } from "@/hooks/useAuth";
@@ -54,8 +42,9 @@ interface ProductEntryProps extends ProductSearchInputProps {
   showProductLookup: boolean;
   setShowProductLookup: (value: boolean) => void;
   onAddProduct: (product: Product) => void;
-  barcodeSearchResult?: Product | Product[] | null;
-  productIdSearchResults?: Product[] | null;
+  searchResults: Product[];
+  isSearchLoading: boolean;
+  isSearchReady: boolean;
   showSearchInput?: boolean;
   containerClassName?: string;
   lookupPanelClassName?: string;
@@ -191,8 +180,9 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
       setProductSearchQuery,
       onBarcodeSubmit,
       onAddProduct,
-      barcodeSearchResult,
-      productIdSearchResults,
+      searchResults,
+      isSearchLoading,
+      isSearchReady,
       showSearchInput = true,
       containerClassName,
       lookupPanelClassName,
@@ -231,38 +221,7 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
       [],
     );
 
-    const debouncedProductSearchQuery = useDebounce(
-      productSearchQuery,
-      POS_SEARCH_DEBOUNCE_MS,
-    );
-
-    // Fetch search results
-    const searchResults = usePOSProductSearch(
-      activeStore?._id,
-      debouncedProductSearchQuery,
-    );
-
-    // Debounce for "no results" message to allow search query to complete
-    const debouncedForNoResults = useDebounce(
-      productSearchQuery,
-      POS_SEARCH_DEBOUNCE_MS + POS_QUERY_BUFFER_MS,
-    );
-
-    // Check if input is a URL or barcode (vs a product search term)
     const inputIsUrlOrBarcode = isUrlOrBarcode(productSearchQuery);
-
-    // Consolidate search result logic with proper prioritization
-    const { filteredProducts, isLoading } = useProductSearchResults({
-      searchResults,
-      barcodeSearchResult,
-      productIdSearchResults,
-      inputIsUrlOrBarcode,
-      rawQuery: productSearchQuery,
-      debouncedQuery: debouncedForNoResults,
-    });
-    const isWaitingForStableQuery =
-      productSearchQuery.trim().length > 0 &&
-      productSearchQuery.trim() !== debouncedForNoResults.trim();
 
     const formatter = currencyFormatter(activeStore?.currency || "GHS");
 
@@ -417,15 +376,15 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
 
             {productSearchQuery && (
               <SearchResultsSection
-                isLoading={isLoading || isWaitingForStableQuery}
-                products={filteredProducts}
+                isLoading={isSearchLoading}
+                products={searchResults}
                 onAddProduct={onAddProduct}
                 formatter={formatter}
                 onClearSearch={handleClearSearch}
-                onQuickAddProduct={handleOpenQuickAdd}
-                quickAddQuery={
-                  isWaitingForStableQuery ? "" : productSearchQuery
+                onQuickAddProduct={
+                  isSearchReady ? handleOpenQuickAdd : undefined
                 }
+                quickAddQuery={isSearchReady ? productSearchQuery : ""}
                 quickAddShortcutDisabled={isQuickAddOpen}
                 className={resultsClassName}
               />

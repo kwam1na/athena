@@ -121,6 +121,30 @@ export interface PosCatalogItemDto {
   areProcessingFeesAbsorbed: boolean;
 }
 
+export interface PosRegisterCatalogRowDto {
+  id: Id<"productSku">;
+  productSkuId: Id<"productSku">;
+  skuId: Id<"productSku">;
+  productId: Id<"product">;
+  name: string;
+  sku: string;
+  barcode: string;
+  price: number;
+  category: string;
+  description: string;
+  image: string | null;
+  size: string;
+  length: number | null;
+  color: string;
+  inStock: boolean;
+  quantityAvailable: number;
+  areProcessingFeesAbsorbed: boolean;
+}
+
+export interface PosRegisterCatalogInput {
+  storeId?: Id<"store">;
+}
+
 export interface PosRegisterStateQueryInput {
   storeId?: Id<"store">;
   terminalId?: Id<"posTerminal"> | null;

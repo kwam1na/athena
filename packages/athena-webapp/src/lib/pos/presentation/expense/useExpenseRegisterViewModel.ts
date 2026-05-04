@@ -13,6 +13,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { useNavigateBack } from "@/hooks/use-navigate-back";
 import {
   extractBarcodeFromInput,
+  isUrlOrBarcode,
   type ExtractResult,
 } from "@/lib/pos/barcodeUtils";
 import {
@@ -291,14 +292,39 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
   }, [extractResult.type, extractResult.value]);
 
   const debouncedValue = useDebounce(extractedValue, POS_SEARCH_DEBOUNCE_MS);
+  const inputIsUrlOrBarcode = isUrlOrBarcode(store.ui.productSearchQuery);
+  const productSearchResults = usePOSProductSearch(
+    activeStore?._id,
+    extractResult.type === "productId" || !inputIsUrlOrBarcode
+      ? debouncedValue
+      : "",
+  );
   const productIdSearchResults =
-    extractResult.type === "productId"
-      ? usePOSProductSearch(activeStore?._id, debouncedValue)
+    extractResult.type === "productId" ? productSearchResults : [];
+  const textSearchResults =
+    extractResult.type === "productId" ? [] : productSearchResults;
+  const barcodeSearchResult = usePOSBarcodeSearch(
+    activeStore?._id,
+    extractResult.type === "barcode" && inputIsUrlOrBarcode
+      ? debouncedValue
+      : "",
+  );
+  const barcodeSearchResults = Array.isArray(barcodeSearchResult)
+    ? barcodeSearchResult
+    : barcodeSearchResult
+      ? [barcodeSearchResult]
       : [];
-  const barcodeSearchResult =
-    extractResult.type === "barcode"
-      ? usePOSBarcodeSearch(activeStore?._id, debouncedValue)
-      : null;
+  const entrySearchResults =
+    productIdSearchResults && productIdSearchResults.length > 0
+      ? productIdSearchResults
+      : barcodeSearchResults.length > 0
+        ? barcodeSearchResults
+        : textSearchResults ?? [];
+  const isProductEntrySearchLoading =
+    store.ui.productSearchQuery.trim().length > 0 &&
+    (extractResult.type === "barcode"
+      ? barcodeSearchResult === undefined
+      : productSearchResults === undefined);
 
   useEffect(() => {
     if (!extractedValue.trim()) {
@@ -551,9 +577,13 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
       productSearchQuery: store.ui.productSearchQuery,
       setProductSearchQuery: store.setProductSearchQuery,
       onBarcodeSubmit: handleBarcodeSubmit,
-      onAddProduct: cart.addProduct,
-      barcodeSearchResult,
-      productIdSearchResults: productIdSearchResults ?? null,
+      onAddProduct: async (product) => {
+        cart.addProduct(product);
+        return true;
+      },
+      searchResults: entrySearchResults,
+      isSearchLoading: isProductEntrySearchLoading,
+      isSearchReady: true,
     },
     cart: {
       items: store.cart.items,
