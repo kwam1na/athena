@@ -4,8 +4,11 @@ import type { Id } from "../_generated/dataModel";
 import {
   discardCycleCountDraftCommandWithCtx,
   ensureCycleCountDraftCommandWithCtx,
+  getActiveCycleCountDraftSummaryWithCtx,
+  refreshCycleCountDraftLineBaselineCommandWithCtx,
   saveCycleCountDraftLineCommandWithCtx,
   submitCycleCountDraftCommandWithCtx,
+  submitActiveCycleCountDraftsCommandWithCtx,
 } from "./cycleCountDrafts";
 
 const mockedAuthServer = vi.hoisted(() => ({
@@ -227,6 +230,140 @@ describe("cycle count drafts", () => {
       baselineInventoryCount: 8,
       countedQuantity: 5,
       staleStatus: "stale",
+    });
+  });
+
+  it("refreshes a stale draft line baseline to the current stock count", async () => {
+    const { ctx, tables } = createCycleCountDraftCtx();
+    const ensured = await ensureCycleCountDraftCommandWithCtx(ctx, {
+      scopeKey: "Hair",
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(ensured.kind).toBe("ok");
+    if (ensured.kind !== "ok") return;
+
+    await saveCycleCountDraftLineCommandWithCtx(ctx, {
+      countedQuantity: 5,
+      draftId: ensured.data.draft._id,
+      productSkuId: "sku-1" as Id<"productSku">,
+    });
+    await ctx.db.patch("productSku", "sku-1" as Id<"productSku">, {
+      inventoryCount: 9,
+      quantityAvailable: 7,
+    });
+
+    const refreshed = await refreshCycleCountDraftLineBaselineCommandWithCtx(ctx, {
+      productSkuId: "sku-1" as Id<"productSku">,
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(refreshed.kind).toBe("ok");
+    expect(Array.from(tables.cycleCountDraftLine.values())[0]).toMatchObject({
+      baselineAvailableCount: 7,
+      baselineInventoryCount: 9,
+      countedQuantity: 9,
+      isDirty: false,
+      staleStatus: "current",
+    });
+    expect(tables.cycleCountDraft.get(String(ensured.data.draft._id))).toMatchObject({
+      changedLineCount: 0,
+      staleLineCount: 0,
+    });
+  });
+
+  it("summarizes changed open drafts across scopes for the operator", async () => {
+    const { ctx } = createCycleCountDraftCtx();
+    const hairDraft = await ensureCycleCountDraftCommandWithCtx(ctx, {
+      scopeKey: "Hair",
+      storeId: "store-1" as Id<"store">,
+    });
+    const beveragesDraft = await ensureCycleCountDraftCommandWithCtx(ctx, {
+      scopeKey: "Beverages",
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(hairDraft.kind).toBe("ok");
+    expect(beveragesDraft.kind).toBe("ok");
+    if (hairDraft.kind !== "ok" || beveragesDraft.kind !== "ok") return;
+
+    await saveCycleCountDraftLineCommandWithCtx(ctx, {
+      countedQuantity: 5,
+      draftId: hairDraft.data.draft._id,
+      productSkuId: "sku-1" as Id<"productSku">,
+    });
+    await saveCycleCountDraftLineCommandWithCtx(ctx, {
+      countedQuantity: 6,
+      draftId: beveragesDraft.data.draft._id,
+      productSkuId: "sku-1" as Id<"productSku">,
+    });
+
+    const summary = await getActiveCycleCountDraftSummaryWithCtx(ctx, {
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(summary).toMatchObject({
+      changedLineCount: 2,
+      draftCount: 2,
+      largestAbsoluteDelta: 3,
+      netQuantityDelta: -5,
+      scopeKeys: ["Beverages", "Hair"],
+      scopeCount: 2,
+      staleLineCount: 0,
+    });
+    expect(summary.lastSavedAt).toEqual(expect.any(Number));
+  });
+
+  it("submits changed drafts across scopes for the active store", async () => {
+    const { ctx, tables } = createCycleCountDraftCtx();
+    tables.productSku.set("sku-2", {
+      _id: "sku-2",
+      inventoryCount: 12,
+      productId: "product-2",
+      productName: "Body wave bundle",
+      quantityAvailable: 12,
+      sku: "BW-24",
+      storeId: "store-1",
+    });
+    const hairDraft = await ensureCycleCountDraftCommandWithCtx(ctx, {
+      scopeKey: "Hair",
+      storeId: "store-1" as Id<"store">,
+    });
+    const beveragesDraft = await ensureCycleCountDraftCommandWithCtx(ctx, {
+      scopeKey: "Beverages",
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(hairDraft.kind).toBe("ok");
+    expect(beveragesDraft.kind).toBe("ok");
+    if (hairDraft.kind !== "ok" || beveragesDraft.kind !== "ok") return;
+
+    await saveCycleCountDraftLineCommandWithCtx(ctx, {
+      countedQuantity: 5,
+      draftId: hairDraft.data.draft._id,
+      productSkuId: "sku-1" as Id<"productSku">,
+    });
+    await saveCycleCountDraftLineCommandWithCtx(ctx, {
+      countedQuantity: 10,
+      draftId: beveragesDraft.data.draft._id,
+      productSkuId: "sku-2" as Id<"productSku">,
+    });
+
+    const submitted = await submitActiveCycleCountDraftsCommandWithCtx(ctx, {
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(submitted.kind).toBe("ok");
+    expect(Array.from(tables.stockAdjustmentBatch.values())[0]).toMatchObject({
+      adjustmentType: "cycle_count",
+      lineItemCount: 2,
+      status: "applied",
+    });
+    expect(tables.cycleCountDraft.get(String(hairDraft.data.draft._id))).toMatchObject({
+      status: "submitted",
+    });
+    expect(tables.cycleCountDraft.get(String(beveragesDraft.data.draft._id))).toMatchObject({
+      status: "submitted",
     });
   });
 

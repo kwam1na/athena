@@ -19,6 +19,17 @@ type CycleCountDraftWithLines = {
   lines: Doc<"cycleCountDraftLine">[];
 };
 
+type ActiveCycleCountDraftSummary = {
+  changedLineCount: number;
+  draftCount: number;
+  largestAbsoluteDelta: number;
+  lastSavedAt?: number;
+  netQuantityDelta: number;
+  scopeKeys: string[];
+  scopeCount: number;
+  staleLineCount: number;
+};
+
 type StaleCycleCountDraftLine = {
   productSkuId: Id<"productSku">;
   sku?: string | null;
@@ -76,6 +87,19 @@ function buildCycleCountDraftSubmissionKey(args: {
   ].join(":");
 }
 
+function buildActiveCycleCountDraftsSubmissionKey(args: {
+  draftIds: Id<"cycleCountDraft">[];
+  ownerUserId: Id<"athenaUser">;
+  storeId: Id<"store">;
+}) {
+  return [
+    "cycle-count-drafts",
+    String(args.storeId),
+    String(args.ownerUserId),
+    ...args.draftIds.map(String).sort(),
+  ].join(":");
+}
+
 async function findOpenCycleCountDraftWithCtx(
   ctx: CycleCountDraftAccessCtx,
   args: {
@@ -94,6 +118,27 @@ async function findOpenCycleCountDraftWithCtx(
         .eq("ownerUserId", args.ownerUserId),
     )
     .first();
+}
+
+async function listOpenCycleCountDraftsWithCtx(
+  ctx: CycleCountDraftAccessCtx,
+  args: {
+    ownerUserId: Id<"athenaUser">;
+    storeId: Id<"store">;
+  },
+) {
+  // eslint-disable-next-line @convex-dev/no-collect-in-query -- Operators need a small store-wide summary of their open count drafts across scopes.
+  return ctx.db
+    .query("cycleCountDraft")
+    .withIndex("by_storeId_status_scope_owner", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("status", "open"),
+    )
+    .collect()
+    .then((drafts) =>
+      drafts.filter((draft) => draft.ownerUserId === args.ownerUserId),
+    );
 }
 
 async function listCycleCountDraftLinesWithCtx(
@@ -238,6 +283,64 @@ export async function getActiveCycleCountDraftWithCtx(
   return {
     draft,
     lines: await listCycleCountDraftLinesWithCtx(ctx, draft._id),
+  };
+}
+
+export async function getActiveCycleCountDraftSummaryWithCtx(
+  ctx: QueryCtx,
+  args: {
+    storeId: Id<"store">;
+  },
+): Promise<ActiveCycleCountDraftSummary> {
+  const { actorUser } = await requireCycleCountDraftAccess(ctx, args.storeId);
+  const drafts = await listOpenCycleCountDraftsWithCtx(ctx, {
+    ownerUserId: actorUser._id,
+    storeId: args.storeId,
+  });
+  const changedDrafts = drafts.filter((draft) => draft.changedLineCount > 0);
+  const scopeKeys = Array.from(
+    new Set(changedDrafts.map((draft) => draft.scopeKey)),
+  ).sort((left, right) => left.localeCompare(right));
+  const changedDraftLines = (
+    await Promise.all(
+      changedDrafts.map((draft) => listCycleCountDraftLinesWithCtx(ctx, draft._id)),
+    )
+  )
+    .flat()
+    .filter((line) => line.isDirty);
+  const lastSavedAt = changedDrafts.reduce<number | undefined>(
+    (latestSavedAt, draft) =>
+      latestSavedAt === undefined || draft.updatedAt > latestSavedAt
+        ? draft.updatedAt
+        : latestSavedAt,
+    undefined,
+  );
+
+  return {
+    changedLineCount: changedDrafts.reduce(
+      (total, draft) => total + draft.changedLineCount,
+      0,
+    ),
+    draftCount: drafts.length,
+    largestAbsoluteDelta: changedDraftLines.reduce(
+      (largestDelta, line) =>
+        Math.max(
+          largestDelta,
+          Math.abs(line.countedQuantity - line.baselineInventoryCount),
+        ),
+      0,
+    ),
+    lastSavedAt,
+    netQuantityDelta: changedDraftLines.reduce(
+      (total, line) => total + line.countedQuantity - line.baselineInventoryCount,
+      0,
+    ),
+    scopeKeys,
+    scopeCount: scopeKeys.length,
+    staleLineCount: changedDrafts.reduce(
+      (total, draft) => total + draft.staleLineCount,
+      0,
+    ),
   };
 }
 
@@ -424,6 +527,88 @@ export async function discardCycleCountDraftCommandWithCtx(
   }
 }
 
+export async function refreshCycleCountDraftLineBaselineCommandWithCtx(
+  ctx: MutationCtx,
+  args: {
+    productSkuId: Id<"productSku">;
+    storeId: Id<"store">;
+  },
+): Promise<CommandResult<any>> {
+  try {
+    const { actorUser, store } = await requireCycleCountDraftAccess(
+      ctx,
+      args.storeId,
+    );
+    const productSku = await ctx.db.get("productSku", args.productSkuId);
+
+    if (!productSku || productSku.storeId !== args.storeId) {
+      throw new Error("Selected SKU could not be found for this store.");
+    }
+
+    const drafts = await listOpenCycleCountDraftsWithCtx(ctx, {
+      ownerUserId: actorUser._id,
+      storeId: args.storeId,
+    });
+    const draftLineEntries = await Promise.all(
+      drafts.map(async (draft) => ({
+        draft,
+        line: await getCycleCountDraftLineWithCtx(ctx, {
+          draftId: draft._id,
+          productSkuId: args.productSkuId,
+        }),
+      })),
+    );
+    const draftLineEntry = draftLineEntries.find((entry) => entry.line);
+
+    if (!draftLineEntry?.line) {
+      throw new Error("Cycle count draft line not found.");
+    }
+
+    const now = Date.now();
+
+    await ctx.db.patch("cycleCountDraftLine", draftLineEntry.line._id, {
+      baselineAvailableCount: productSku.quantityAvailable,
+      baselineInventoryCount: productSku.inventoryCount,
+      countedQuantity: productSku.inventoryCount,
+      currentAvailableCount: productSku.quantityAvailable,
+      currentInventoryCount: productSku.inventoryCount,
+      isDirty: false,
+      staleStatus: "current",
+      updatedAt: now,
+    });
+    const summary = await refreshCycleCountDraftSummaryWithCtx(
+      ctx,
+      draftLineEntry.draft._id,
+      now,
+    );
+    await ctx.db.patch("cycleCountDraft", draftLineEntry.draft._id, {
+      lastSavedAt: now,
+      ...summary,
+    });
+    await recordOperationalEventWithCtx(ctx, {
+      actorUserId: actorUser._id,
+      eventType: "cycle_count_draft_baseline_refreshed",
+      message: "Cycle count draft baseline refreshed.",
+      metadata: {
+        productSkuId: String(args.productSkuId),
+        scopeKey: draftLineEntry.draft.scopeKey,
+      },
+      organizationId: store.organizationId,
+      storeId: args.storeId,
+      subjectId: String(draftLineEntry.draft._id),
+      subjectLabel: "Cycle count draft",
+      subjectType: "cycle_count_draft",
+    });
+
+    return ok({
+      draft: await ctx.db.get("cycleCountDraft", draftLineEntry.draft._id),
+      line: await ctx.db.get("cycleCountDraftLine", draftLineEntry.line._id),
+    });
+  } catch (error) {
+    return mapCycleCountDraftError(error);
+  }
+}
+
 async function listStaleCycleCountDraftLines(
   ctx: MutationCtx,
   lines: Doc<"cycleCountDraftLine">[],
@@ -588,6 +773,134 @@ export async function submitCycleCountDraftCommandWithCtx(
   }
 }
 
+export async function submitActiveCycleCountDraftsCommandWithCtx(
+  ctx: MutationCtx,
+  args: {
+    notes?: string;
+    storeId: Id<"store">;
+  },
+): Promise<CommandResult<any>> {
+  try {
+    const { actorUser, store } = await requireCycleCountDraftAccess(
+      ctx,
+      args.storeId,
+    );
+    const drafts = await listOpenCycleCountDraftsWithCtx(ctx, {
+      ownerUserId: actorUser._id,
+      storeId: args.storeId,
+    });
+    const changedDrafts = drafts.filter((draft) => draft.changedLineCount > 0);
+    const draftLines = await Promise.all(
+      changedDrafts.map(async (draft) => ({
+        draft,
+        lines: (await listCycleCountDraftLinesWithCtx(ctx, draft._id)).filter(
+          (line) => line.isDirty,
+        ),
+      })),
+    );
+    const lines = draftLines.flatMap((entry) => entry.lines);
+
+    if (lines.length === 0) {
+      throw new Error("Change at least one count before submitting.");
+    }
+
+    const staleLines = await listStaleCycleCountDraftLines(ctx, lines);
+
+    if (staleLines.length > 0) {
+      const now = Date.now();
+
+      await Promise.all(
+        staleLines.map((line) => {
+          const draftLine = lines.find(
+            (candidateLine) => candidateLine.productSkuId === line.productSkuId,
+          );
+
+          return draftLine
+            ? ctx.db.patch("cycleCountDraftLine", draftLine._id, {
+                currentAvailableCount: line.currentAvailableCount,
+                currentInventoryCount: line.currentInventoryCount,
+                staleStatus: "stale",
+                updatedAt: now,
+              })
+            : null;
+        }),
+      );
+      await Promise.all(
+        changedDrafts.map((draft) =>
+          refreshCycleCountDraftSummaryWithCtx(ctx, draft._id, now),
+        ),
+      );
+
+      return userError({
+        code: "precondition_failed",
+        message: "Inventory changed since this count started. Review the affected SKUs before submitting.",
+        metadata: {
+          staleLines,
+        },
+        title: "Review changed inventory",
+      });
+    }
+
+    const batch = await submitStockAdjustmentBatchWithCtx(ctx, {
+      adjustmentType: "cycle_count",
+      lineItems: lines.map((line) => ({
+        countedQuantity: line.countedQuantity,
+        productSkuId: line.productSkuId,
+      })),
+      notes: args.notes,
+      reasonCode: CYCLE_COUNT_REASON_CODE,
+      storeId: args.storeId,
+      submissionKey: buildActiveCycleCountDraftsSubmissionKey({
+        draftIds: changedDrafts.map((draft) => draft._id),
+        ownerUserId: actorUser._id,
+        storeId: args.storeId,
+      }),
+    });
+    const now = Date.now();
+
+    await Promise.all(
+      changedDrafts.map((draft) =>
+        ctx.db.patch("cycleCountDraft", draft._id, {
+          notes: args.notes?.trim() || undefined,
+          status: "submitted",
+          submittedAt: now,
+          submittedStockAdjustmentBatchId: batch?._id,
+          updatedAt: now,
+        }),
+      ),
+    );
+    await Promise.all(
+      changedDrafts.map((draft) =>
+        recordOperationalEventWithCtx(ctx, {
+          actorUserId: actorUser._id,
+          eventType: "cycle_count_draft_submitted",
+          message: "Cycle count draft submitted.",
+          metadata: {
+            lineItemCount:
+              draftLines.find((entry) => entry.draft._id === draft._id)?.lines
+                .length ?? 0,
+            scopeKey: draft.scopeKey,
+            stockAdjustmentBatchId: batch?._id ? String(batch._id) : undefined,
+          },
+          organizationId: store.organizationId,
+          storeId: draft.storeId,
+          subjectId: String(draft._id),
+          subjectLabel: "Cycle count draft",
+          subjectType: "cycle_count_draft",
+        }),
+      ),
+    );
+
+    return ok({
+      batch,
+      draftCount: changedDrafts.length,
+      status: "submitted",
+    });
+  } catch (error) {
+    return mapCycleCountDraftError(error);
+  }
+}
+
 function mapCycleCountDraftError(error: unknown): CommandResult<never> {
   const message = error instanceof Error ? error.message : "";
 
@@ -602,7 +915,8 @@ function mapCycleCountDraftError(error: unknown): CommandResult<never> {
   if (
     message === "Store not found." ||
     message === "Selected SKU could not be found for this store." ||
-    message === "Cycle count draft not found."
+    message === "Cycle count draft not found." ||
+    message === "Cycle count draft line not found."
   ) {
     return userError({ code: "not_found", message });
   }
@@ -625,6 +939,13 @@ export const getActiveCycleCountDraft = query({
     storeId: v.id("store"),
   },
   handler: getActiveCycleCountDraftWithCtx,
+});
+
+export const getActiveCycleCountDraftSummary = query({
+  args: {
+    storeId: v.id("store"),
+  },
+  handler: getActiveCycleCountDraftSummaryWithCtx,
 });
 
 export const ensureCycleCountDraft = mutation({
@@ -654,6 +975,15 @@ export const discardCycleCountDraft = mutation({
   handler: discardCycleCountDraftCommandWithCtx,
 });
 
+export const refreshCycleCountDraftLineBaseline = mutation({
+  args: {
+    productSkuId: v.id("productSku"),
+    storeId: v.id("store"),
+  },
+  returns: commandResultValidator(v.any()),
+  handler: refreshCycleCountDraftLineBaselineCommandWithCtx,
+});
+
 export const submitCycleCountDraft = mutation({
   args: {
     draftId: v.id("cycleCountDraft"),
@@ -661,4 +991,13 @@ export const submitCycleCountDraft = mutation({
   },
   returns: commandResultValidator(v.any()),
   handler: submitCycleCountDraftCommandWithCtx,
+});
+
+export const submitActiveCycleCountDrafts = mutation({
+  args: {
+    notes: v.optional(v.string()),
+    storeId: v.id("store"),
+  },
+  returns: commandResultValidator(v.any()),
+  handler: submitActiveCycleCountDraftsCommandWithCtx,
 });

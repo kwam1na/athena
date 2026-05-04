@@ -18,6 +18,7 @@ import {
   STOCK_ADJUSTMENT_APPROVAL_THRESHOLD,
   assertStockAdjustmentReasonCode,
   calculateCycleCountQuantityDelta,
+  hasHighStockAdjustmentVariance,
   requiresStockAdjustmentApproval,
   resolveStockAdjustmentQuantityDelta,
   summarizeStockAdjustmentLineItems,
@@ -31,6 +32,7 @@ export {
   STOCK_ADJUSTMENT_APPROVAL_THRESHOLD,
   assertStockAdjustmentReasonCode,
   calculateCycleCountQuantityDelta,
+  hasHighStockAdjustmentVariance,
   requiresStockAdjustmentApproval,
   resolveStockAdjustmentQuantityDelta,
   summarizeStockAdjustmentLineItems,
@@ -597,7 +599,11 @@ export async function submitStockAdjustmentBatchWithCtx(
   );
 
   const summary = summarizeStockAdjustmentLineItems(normalizedLineItems);
-  const approvalRequired = requiresStockAdjustmentApproval(summary);
+  const highVarianceFlag = hasHighStockAdjustmentVariance(summary);
+  const approvalRequired = requiresStockAdjustmentApproval({
+    adjustmentType: args.adjustmentType,
+    largestAbsoluteDelta: summary.largestAbsoluteDelta,
+  });
   const now = Date.now();
   const notes = trimOptional(args.notes);
 
@@ -609,6 +615,7 @@ export async function submitStockAdjustmentBatchWithCtx(
     lineItemCount: summary.lineItemCount,
     lineItems: normalizedLineItems,
     largestAbsoluteDelta: summary.largestAbsoluteDelta,
+    highVarianceFlag,
     netQuantityDelta: summary.netQuantityDelta,
     notes,
     organizationId: store.organizationId,
@@ -616,6 +623,7 @@ export async function submitStockAdjustmentBatchWithCtx(
     status: approvalRequired ? "pending_approval" : "applied",
     storeId: args.storeId,
     submissionKey,
+    varianceThreshold: STOCK_ADJUSTMENT_APPROVAL_THRESHOLD,
     ...(approvalRequired ? null : { appliedAt: now }),
   });
 
@@ -703,6 +711,7 @@ export async function submitStockAdjustmentBatchWithCtx(
     metadata: {
       adjustmentType: args.adjustmentType,
       approvalRequired,
+      highVarianceFlag,
       largestAbsoluteDelta: summary.largestAbsoluteDelta,
       lineItemCount: summary.lineItemCount,
       netQuantityDelta: summary.netQuantityDelta,

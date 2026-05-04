@@ -93,8 +93,17 @@ export function summarizeStockAdjustmentLineItems(
   );
 }
 
-export function requiresStockAdjustmentApproval(args: {
+export function hasHighStockAdjustmentVariance(args: {
   largestAbsoluteDelta: number;
 }) {
   return args.largestAbsoluteDelta >= STOCK_ADJUSTMENT_APPROVAL_THRESHOLD;
+}
+
+export function requiresStockAdjustmentApproval(args: {
+  adjustmentType: StockAdjustmentType;
+  largestAbsoluteDelta: number;
+}) {
+  return (
+    args.adjustmentType === "manual" && hasHighStockAdjustmentVariance(args)
+  );
 }

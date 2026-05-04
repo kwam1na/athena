@@ -17,6 +17,7 @@ import {
   StockAdjustmentWorkspaceContent,
 } from "./StockAdjustmentWorkspace";
 import type {
+  CycleCountDraftSummary,
   CycleCountDraftState,
   InventorySnapshotItem,
   StockAdjustmentSearchPatch,
@@ -171,6 +172,7 @@ type OperationsQueueViewContentProps = {
   activeWorkflow?: OperationsWorkflow;
   approvalRequests: QueueApprovalRequest[];
   cycleCountDraft?: CycleCountDraftState | null;
+  cycleCountDraftSummary?: CycleCountDraftSummary | null;
   hasFullAdminAccess: boolean;
   inventoryItems: InventorySnapshotItem[];
   isCycleCountDraftSaving?: boolean;
@@ -183,6 +185,9 @@ type OperationsQueueViewContentProps = {
     decision: "approved" | "rejected";
   }) => Promise<void>;
   onDiscardCycleCountDraft?: () => Promise<NormalizedCommandResult<unknown>>;
+  onRefreshCycleCountDraftLineBaseline?: (args: {
+    productSkuId: Id<"productSku">;
+  }) => Promise<NormalizedCommandResult<unknown>>;
   onSaveCycleCountDraftLine?: (args: {
     countedQuantity: number;
     productSkuId: Id<"productSku">;
@@ -203,6 +208,7 @@ export function OperationsQueueViewContent({
   activeWorkflow,
   approvalRequests,
   cycleCountDraft,
+  cycleCountDraftSummary,
   hasFullAdminAccess,
   inventoryItems,
   isCycleCountDraftSaving,
@@ -212,6 +218,7 @@ export function OperationsQueueViewContent({
   isSubmittingStockBatch,
   onDecideApprovalRequest,
   onDiscardCycleCountDraft,
+  onRefreshCycleCountDraftLineBaseline,
   onSaveCycleCountDraftLine,
   onSubmitStockBatch,
   onSubmitCycleCountDraft,
@@ -252,10 +259,14 @@ export function OperationsQueueViewContent({
         {resolvedWorkflow === "stock" ? (
           <StockAdjustmentWorkspaceContent
             cycleCountDraft={cycleCountDraft}
+            cycleCountDraftSummary={cycleCountDraftSummary}
             inventoryItems={inventoryItems}
             isCycleCountDraftSaving={isCycleCountDraftSaving}
             isSubmitting={isSubmittingStockBatch}
             onDiscardCycleCountDraft={onDiscardCycleCountDraft}
+            onRefreshCycleCountDraftLineBaseline={
+              onRefreshCycleCountDraftLineBaseline
+            }
             onSearchStateChange={onStockAdjustmentSearchChange}
             onSaveCycleCountDraftLine={onSaveCycleCountDraftLine}
             onSubmitBatch={onSubmitStockBatch}
@@ -463,6 +474,14 @@ export function OperationsQueueView({
       }
     | null
     | undefined;
+  const activeCycleCountDraftSummary = useQuery(
+    stockOpsApi.cycleCountDrafts.getActiveCycleCountDraftSummary,
+    canQueryProtectedData && activeStore?._id
+      ? {
+          storeId: activeStore._id,
+        }
+      : "skip",
+  ) as CycleCountDraftSummary | undefined;
   const submitStockAdjustmentBatch = useMutation(
     stockOpsApi.adjustments.submitStockAdjustmentBatch,
   );
@@ -478,8 +497,11 @@ export function OperationsQueueView({
   const discardCycleCountDraft = useMutation(
     stockOpsApi.cycleCountDrafts.discardCycleCountDraft,
   );
+  const refreshCycleCountDraftLineBaseline = useMutation(
+    stockOpsApi.cycleCountDrafts.refreshCycleCountDraftLineBaseline,
+  );
   const submitCycleCountDraft = useMutation(
-    stockOpsApi.cycleCountDrafts.submitCycleCountDraft,
+    stockOpsApi.cycleCountDrafts.submitActiveCycleCountDrafts,
   );
   const cycleCountDraft = useMemo<CycleCountDraftState | null>(() => {
     if (!activeCycleCountDraft?.draft) return null;
@@ -570,8 +592,8 @@ export function OperationsQueueView({
   };
 
   const handleSubmitCycleCountDraft = async (args: { notes?: string }) => {
-    if (!cycleCountDraft) {
-      return buildMissingDraftResult("Select a count scope before submitting a count.");
+    if (!activeStore?._id) {
+      return buildMissingDraftResult("Select a store before submitting a count.");
     }
 
     setIsSubmittingStockBatch(true);
@@ -579,12 +601,33 @@ export function OperationsQueueView({
     try {
       return await runCommand(() =>
         submitCycleCountDraft({
-          draftId: cycleCountDraft._id,
           notes: args.notes,
+          storeId: activeStore._id,
         }),
       );
     } finally {
       setIsSubmittingStockBatch(false);
+    }
+  };
+
+  const handleRefreshCycleCountDraftLineBaseline = async (args: {
+    productSkuId: Id<"productSku">;
+  }) => {
+    if (!activeStore?._id) {
+      return buildMissingDraftResult("Select a store before refreshing stock.");
+    }
+
+    setIsSavingCycleCountDraft(true);
+
+    try {
+      return await runCommand(() =>
+        refreshCycleCountDraftLineBaseline({
+          productSkuId: args.productSkuId,
+          storeId: activeStore._id,
+        }),
+      );
+    } finally {
+      setIsSavingCycleCountDraft(false);
     }
   };
 
@@ -654,6 +697,7 @@ export function OperationsQueueView({
       activeWorkflow={activeWorkflow}
       approvalRequests={queue?.approvalRequests ?? []}
       cycleCountDraft={cycleCountDraft}
+      cycleCountDraftSummary={activeCycleCountDraftSummary ?? null}
       hasFullAdminAccess={hasFullAdminAccess}
       inventoryItems={inventoryItems ?? []}
       isCycleCountDraftSaving={isSavingCycleCountDraft}
@@ -662,6 +706,9 @@ export function OperationsQueueView({
       isLoadingQueue={queue === undefined || inventoryItems === undefined}
       onDiscardCycleCountDraft={handleDiscardCycleCountDraft}
       onDecideApprovalRequest={handleDecideApprovalRequest}
+      onRefreshCycleCountDraftLineBaseline={
+        handleRefreshCycleCountDraftLineBaseline
+      }
       onSaveCycleCountDraftLine={handleSaveCycleCountDraftLine}
       isSubmittingStockBatch={isSubmittingStockBatch}
       onSubmitStockBatch={handleSubmitStockBatch}

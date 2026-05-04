@@ -55,6 +55,7 @@ describe("OperationsQueueView auth readiness", () => {
       "skip",
       "skip",
       "skip",
+      "skip",
     ]);
   });
 
@@ -72,6 +73,7 @@ describe("OperationsQueueView auth readiness", () => {
       "skip",
       "skip",
       "skip",
+      "skip",
     ]);
   });
 
@@ -86,6 +88,7 @@ describe("OperationsQueueView auth readiness", () => {
       { storeId: "store-1" },
       { storeId: "store-1" },
       "skip",
+      { storeId: "store-1" },
     ]);
   });
 });

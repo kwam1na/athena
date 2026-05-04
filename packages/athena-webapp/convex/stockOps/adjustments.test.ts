@@ -16,6 +16,7 @@ import {
   assertDistinctStockAdjustmentLineItems,
   assertStockAdjustmentReasonCode,
   calculateCycleCountQuantityDelta,
+  hasHighStockAdjustmentVariance,
   requiresStockAdjustmentApproval,
   resolveStockAdjustmentApprovalDecisionWithCtx,
   resolveStockAdjustmentQuantityDelta,
@@ -426,7 +427,7 @@ describe("stock ops adjustments", () => {
     ).toThrow("Cycle counts must reconcile with the cycle-count reason code.");
   });
 
-  it("requires approval when a batch crosses the variance threshold", () => {
+  it("requires manual adjustment approval when a batch crosses the variance threshold", () => {
     const belowThreshold = summarizeStockAdjustmentLineItems([
       { quantityDelta: STOCK_ADJUSTMENT_APPROVAL_THRESHOLD - 1 },
       { quantityDelta: -1 },
@@ -435,8 +436,26 @@ describe("stock ops adjustments", () => {
       { quantityDelta: STOCK_ADJUSTMENT_APPROVAL_THRESHOLD },
     ]);
 
-    expect(requiresStockAdjustmentApproval(belowThreshold)).toBe(false);
-    expect(requiresStockAdjustmentApproval(atThreshold)).toBe(true);
+    expect(hasHighStockAdjustmentVariance(belowThreshold)).toBe(false);
+    expect(hasHighStockAdjustmentVariance(atThreshold)).toBe(true);
+    expect(
+      requiresStockAdjustmentApproval({
+        adjustmentType: "manual",
+        largestAbsoluteDelta: belowThreshold.largestAbsoluteDelta,
+      })
+    ).toBe(false);
+    expect(
+      requiresStockAdjustmentApproval({
+        adjustmentType: "manual",
+        largestAbsoluteDelta: atThreshold.largestAbsoluteDelta,
+      })
+    ).toBe(true);
+    expect(
+      requiresStockAdjustmentApproval({
+        adjustmentType: "cycle_count",
+        largestAbsoluteDelta: atThreshold.largestAbsoluteDelta,
+      })
+    ).toBe(false);
   });
 
   it("requires typed quantities that match the adjustment mode", () => {
@@ -662,6 +681,54 @@ describe("stock ops adjustments", () => {
       expect.objectContaining({
         actorUserId: "operator-1",
         quantityDelta: -2,
+      }),
+    ]);
+  });
+
+  it("applies high-variance cycle counts immediately and flags the batch", async () => {
+    const { ctx, tables } = createSubmissionMutationCtx({
+      authUserId: "auth-user-1",
+      membershipRole: "pos_only",
+    });
+
+    await submitStockAdjustmentBatchWithCtx(ctx, {
+      adjustmentType: "cycle_count",
+      lineItems: [
+        {
+          countedQuantity: 14,
+          productSkuId: "sku-1" as Id<"productSku">,
+        },
+      ],
+      reasonCode: "cycle_count_reconciliation",
+      storeId: "store-1" as Id<"store">,
+      submissionKey: "submission-cycle-count-high-variance",
+    });
+
+    expect(Array.from(tables.stockAdjustmentBatch.values())).toEqual([
+      expect.objectContaining({
+        adjustmentType: "cycle_count",
+        approvalRequired: false,
+        highVarianceFlag: true,
+        largestAbsoluteDelta: 6,
+        status: "applied",
+        varianceThreshold: STOCK_ADJUSTMENT_APPROVAL_THRESHOLD,
+      }),
+    ]);
+    expect(tables.approvalRequest.size).toBe(0);
+    expect(tables.operationalWorkItem.size).toBe(0);
+    expect(Array.from(tables.inventoryMovement.values())).toEqual([
+      expect.objectContaining({
+        quantityDelta: 6,
+        reasonCode: "cycle_count_reconciliation",
+      }),
+    ]);
+    expect(Array.from(tables.operationalEvent.values())).toEqual([
+      expect.objectContaining({
+        eventType: "stock_adjustment_applied",
+        metadata: expect.objectContaining({
+          highVarianceFlag: true,
+          largestAbsoluteDelta: 6,
+        }),
       }),
     ]);
   });

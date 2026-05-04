@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 4257 nodes · 3921 edges · 1501 communities detected
+- 4263 nodes · 3939 edges · 1501 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1575,64 +1575,64 @@ Cohesion: 0.15
 Nodes (19): appendListSection(), buildMarkdownBundle(), collectCoverage(), evaluateGraphifyFreshness(), fileExists(), formatValidationCommand(), getChangedFilesFromGit(), isLocalGeneratedArtifactPath() (+11 more)
 
 ### Community 9 - "Community 9"
+Cohesion: 0.25
+Nodes (21): buildActiveCycleCountDraftsSubmissionKey(), buildCycleCountDraftSubmissionKey(), createCycleCountDraftWithCtx(), discardCycleCountDraftCommandWithCtx(), ensureCycleCountDraftCommandWithCtx(), ensureCycleCountDraftWithCtx(), findOpenCycleCountDraftWithCtx(), getActiveCycleCountDraftSummaryWithCtx() (+13 more)
+
+### Community 10 - "Community 10"
 Cohesion: 0.27
 Nodes (20): asBoolean(), asMtnMomoSetupStatus(), asNumber(), asOptionalArray(), asRecord(), asString(), cleanUndefined(), firstDefined() (+12 more)
 
-### Community 10 - "Community 10"
+### Community 11 - "Community 11"
 Cohesion: 0.16
 Nodes (16): buildGitProcessEnv(), collectCommandsForChangedFiles(), fileExists(), formatMissingPathPrefixError(), getChangedFilesForHarnessReview(), hasAnyHarnessDocs(), loadReviewTarget(), loadReviewTargets() (+8 more)
 
-### Community 11 - "Community 11"
+### Community 12 - "Community 12"
 Cohesion: 0.18
 Nodes (16): createDefaultSessionCommandService(), createPosSessionCommandService(), failure(), isActiveRegisterSession(), isSessionExpired(), registerSessionMatchesIdentity(), resolveRegisterSessionBinding(), runBindSessionToRegisterSessionCommand() (+8 more)
 
-### Community 12 - "Community 12"
+### Community 13 - "Community 13"
 Cohesion: 0.18
 Nodes (15): createDefaultExpenseSessionCommandService(), createExpenseSessionCommandService(), failure(), isActiveRegisterSession(), isSessionExpired(), registerSessionMatchesIdentity(), resolveRegisterSessionBinding(), runBindExpenseSessionToRegisterSessionCommand() (+7 more)
 
-### Community 13 - "Community 13"
+### Community 14 - "Community 14"
 Cohesion: 0.11
 Nodes (2): isSkuReserved(), shouldDisable()
 
-### Community 14 - "Community 14"
+### Community 15 - "Community 15"
 Cohesion: 0.15
 Nodes (10): capitalizeFirstLetter(), capitalizeWords(), cn(), currencyFormatter(), formatDate(), getErrorForField(), getProductName(), getRelativeTime() (+2 more)
 
-### Community 15 - "Community 15"
+### Community 16 - "Community 16"
 Cohesion: 0.18
 Nodes (15): assertRegisterSessionIdentity(), assertRegisterSessionMatchesTransaction(), assertValidRegisterSessionTransition(), buildClosedRegisterSessionPatch(), buildRegisterSession(), buildRegisterSessionCloseoutPatch(), buildRegisterSessionDepositPatch(), buildRegisterSessionOpeningFloatCorrectionPatch() (+7 more)
 
-### Community 16 - "Community 16"
+### Community 17 - "Community 17"
 Cohesion: 0.12
 Nodes (4): listCompletedTransactionsForDay(), listSessionItems(), listTransactionItems(), readAllQueryResults()
 
-### Community 17 - "Community 17"
+### Community 18 - "Community 18"
 Cohesion: 0.12
 Nodes (4): getInventoryItemDisplayName(), handleDraftChange(), rowMatchesStockAdjustmentSearch(), setDraftValue()
 
-### Community 18 - "Community 18"
+### Community 19 - "Community 19"
 Cohesion: 0.17
 Nodes (15): ancestorChain(), collectRawMoneyParses(), collectRawMoneyParsesFromSource(), collectRawNumericHelperNames(), collectSourceFiles(), containsDisallowedRawNumericParse(), containsTerm(), isAllowedDisplayConversion() (+7 more)
 
-### Community 19 - "Community 19"
+### Community 20 - "Community 20"
 Cohesion: 0.25
 Nodes (16): assertStaffProfileReadyForCredential(), authenticateStaffCredentialForApprovalWithCtx(), authenticateStaffCredentialForTerminalWithCtx(), authenticateStaffCredentialWithCtx(), createStaffCredentialWithCtx(), getActiveRolesForStaffProfile(), getCredentialById(), getCredentialByUsername() (+8 more)
 
-### Community 20 - "Community 20"
+### Community 21 - "Community 21"
 Cohesion: 0.11
 Nodes (0):
 
-### Community 21 - "Community 21"
+### Community 22 - "Community 22"
 Cohesion: 0.16
 Nodes (9): checkIfItemsHaveChanged(), createOnlineOrder(), findBestValuePromoCode(), handleExistingSession(), handleOrderCreation(), handlePlaceOrder(), listSessionItems(), updateExistingSession() (+1 more)
 
-### Community 22 - "Community 22"
+### Community 23 - "Community 23"
 Cohesion: 0.22
 Nodes (16): buildDegreeIndex(), buildHotspotLines(), buildPackagePage(), buildRootIndexPage(), collectRepoCodeFiles(), compareHotspots(), countCommunities(), fileExists() (+8 more)
-
-### Community 23 - "Community 23"
-Cohesion: 0.3
-Nodes (16): buildCycleCountDraftSubmissionKey(), createCycleCountDraftWithCtx(), discardCycleCountDraftCommandWithCtx(), ensureCycleCountDraftCommandWithCtx(), ensureCycleCountDraftWithCtx(), findOpenCycleCountDraftWithCtx(), getActiveCycleCountDraftWithCtx(), getCycleCountDraftLineWithCtx() (+8 more)
 
 ### Community 24 - "Community 24"
 Cohesion: 0.12
@@ -1971,88 +1971,88 @@ Cohesion: 0.38
 Nodes (3): createWorkflowTraceWithCtx(), getWorkflowTraceByIdWithCtx(), getWorkflowTraceByLookupWithCtx()
 
 ### Community 108 - "Community 108"
+Cohesion: 0.38
+Nodes (4): calculateCycleCountQuantityDelta(), hasHighStockAdjustmentVariance(), requiresStockAdjustmentApproval(), resolveStockAdjustmentQuantityDelta()
+
+### Community 109 - "Community 109"
 Cohesion: 0.33
 Nodes (2): handleKeypadPress(), setAmountFromTouch()
 
-### Community 109 - "Community 109"
+### Community 110 - "Community 110"
 Cohesion: 0.29
 Nodes (0):
 
-### Community 110 - "Community 110"
+### Community 111 - "Community 111"
 Cohesion: 0.48
 Nodes (4): applyCommandResult(), async(), handleSubmit(), parseDateTimeLocal()
 
-### Community 111 - "Community 111"
+### Community 112 - "Community 112"
 Cohesion: 0.52
 Nodes (6): deriveRegisterPhase(), hasActiveRegisterSession(), hasResumableRegisterSession(), isRegisterReadyToStart(), requiresCashier(), requiresTerminal()
-
-### Community 112 - "Community 112"
-Cohesion: 0.29
-Nodes (0):
 
 ### Community 113 - "Community 113"
 Cohesion: 0.29
 Nodes (0):
 
 ### Community 114 - "Community 114"
-Cohesion: 0.52
-Nodes (6): addItemToSavedBag(), getActiveSavedBag(), getBaseUrl(), removeItemFromSavedBag(), updateSavedBagItem(), updateSavedBagOwner()
-
-### Community 115 - "Community 115"
 Cohesion: 0.33
 Nodes (2): getProductName(), sortProduct()
 
+### Community 115 - "Community 115"
+Cohesion: 0.29
+Nodes (0):
+
 ### Community 116 - "Community 116"
+Cohesion: 0.52
+Nodes (6): addItemToSavedBag(), getActiveSavedBag(), getBaseUrl(), removeItemFromSavedBag(), updateSavedBagItem(), updateSavedBagOwner()
+
+### Community 117 - "Community 117"
 Cohesion: 0.48
 Nodes (5): createPackage(), installFixtureToolchain(), linkWorkspacePackage(), writeFixtureManifests(), writeJson()
 
-### Community 117 - "Community 117"
+### Community 118 - "Community 118"
 Cohesion: 0.52
 Nodes (5): emitSignal(), handleCheckoutSessionFetch(), handleCheckoutSessionUpdate(), jsonResponse(), withCorsHeaders()
 
-### Community 118 - "Community 118"
+### Community 119 - "Community 119"
 Cohesion: 0.33
 Nodes (2): overwriteFreshGraphifyArtifacts(), write()
 
-### Community 119 - "Community 119"
+### Community 120 - "Community 120"
 Cohesion: 0.38
 Nodes (4): createFixtureRepo(), initializeGitHistory(), runGit(), write()
 
-### Community 120 - "Community 120"
+### Community 121 - "Community 121"
 Cohesion: 0.33
 Nodes (1): ValkeyClient
 
-### Community 121 - "Community 121"
+### Community 122 - "Community 122"
 Cohesion: 0.33
 Nodes (0):
-
-### Community 122 - "Community 122"
-Cohesion: 0.73
-Nodes (5): buildOrderStatusMessage(), buildPickupDetails(), sendPaymentVerificationEmails(), sendPODOrderEmails(), shouldSendToAdmins()
 
 ### Community 123 - "Community 123"
-Cohesion: 0.33
-Nodes (0):
+Cohesion: 0.73
+Nodes (5): buildOrderStatusMessage(), buildPickupDetails(), sendPaymentVerificationEmails(), sendPODOrderEmails(), shouldSendToAdmins()
 
 ### Community 124 - "Community 124"
 Cohesion: 0.33
 Nodes (0):
 
 ### Community 125 - "Community 125"
-Cohesion: 0.6
-Nodes (5): find_block_end(), list_convex_files(), main(), scan_file(), strip_code()
-
-### Community 126 - "Community 126"
 Cohesion: 0.33
 Nodes (0):
 
+### Community 126 - "Community 126"
+Cohesion: 0.6
+Nodes (5): find_block_end(), list_convex_files(), main(), scan_file(), strip_code()
+
 ### Community 127 - "Community 127"
-Cohesion: 0.53
-Nodes (4): includesRegisterSessionStatus(), isCashControlVisibleRegisterSessionStatus(), isPosUsableRegisterSessionStatus(), isRegisterSessionConflictBlockingStatus()
+Cohesion: 0.33
+Nodes (0):
 
 ### Community 128 - "Community 128"
-Cohesion: 0.4
-Nodes (2): calculateCycleCountQuantityDelta(), resolveStockAdjustmentQuantityDelta()
+Cohesion: 0.53
+Nodes (4): includesRegisterSessionStatus(), isCashControlVisibleRegisterSessionStatus(), isPosUsableRegisterSessionStatus(), isRegisterSessionConflictBlockingStatus()
 
 ### Community 129 - "Community 129"
 Cohesion: 0.33
@@ -2063,12 +2063,12 @@ Cohesion: 0.33
 Nodes (0):
 
 ### Community 131 - "Community 131"
-Cohesion: 0.4
-Nodes (2): handlePinChange(), normalizeOtpCode()
-
-### Community 132 - "Community 132"
 Cohesion: 0.53
 Nodes (2): SelectedProductsProvider(), useSelectedProducts()
+
+### Community 132 - "Community 132"
+Cohesion: 0.4
+Nodes (2): handlePinChange(), normalizeOtpCode()
 
 ### Community 133 - "Community 133"
 Cohesion: 0.33
@@ -9679,9 +9679,9 @@ _Questions this graph is uniquely positioned to answer:_
   _Cohesion score 0.12 - nodes in this community are weakly interconnected._
 - **Should `Community 6` be split into smaller, more focused modules?**
   _Cohesion score 0.1 - nodes in this community are weakly interconnected._
-- **Should `Community 13` be split into smaller, more focused modules?**
+- **Should `Community 14` be split into smaller, more focused modules?**
   _Cohesion score 0.11 - nodes in this community are weakly interconnected._
-- **Should `Community 16` be split into smaller, more focused modules?**
-  _Cohesion score 0.12 - nodes in this community are weakly interconnected._
 - **Should `Community 17` be split into smaller, more focused modules?**
+  _Cohesion score 0.12 - nodes in this community are weakly interconnected._
+- **Should `Community 18` be split into smaller, more focused modules?**
   _Cohesion score 0.12 - nodes in this community are weakly interconnected._
