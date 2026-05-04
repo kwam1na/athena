@@ -292,6 +292,7 @@ function rowMatchesStockAdjustmentSearch(
   const searchableText = [
     getInventoryItemDisplayName(item),
     item.sku,
+    item.barcode,
     item.colorName,
     item.productCategory,
     item.length === null || item.length === undefined
@@ -367,7 +368,7 @@ export function StockAdjustmentWorkspaceContent({
   const [pendingCycleCountSaveCount, setPendingCycleCountSaveCount] =
     useState(0);
   const pendingCycleCountSavePromisesRef = useRef<Promise<void>[]>([]);
-  const locallyEditedCycleCountItemIdsRef = useRef(new Set<string>());
+  const locallyEditedCycleCountItemIdsRef = useRef(new Set<Id<"productSku">>());
   const [staleDraftLines, setStaleDraftLines] = useState<
     Array<{
       productSkuId: Id<"productSku">;
@@ -459,6 +460,51 @@ export function StockAdjustmentWorkspaceContent({
         ]),
       ),
     [cycleCountDraft?.lines],
+  );
+  const saveCycleCountDraftValue = useCallback(
+    async (productSkuId: Id<"productSku">, value: string) => {
+      if (adjustmentType !== "cycle_count" || !onSaveCycleCountDraftLine) {
+        return;
+      }
+
+      const parsedCount = value.trim() === "" ? Number.NaN : Number(value);
+      if (!Number.isInteger(parsedCount) || parsedCount < 0) {
+        return;
+      }
+
+      const savePromise = onSaveCycleCountDraftLine({
+        countedQuantity: parsedCount,
+        productSkuId,
+      })
+        .then((result) => {
+          if (result.kind !== "ok") {
+            presentCommandToast(result);
+            return;
+          }
+
+          locallyEditedCycleCountItemIdsRef.current.delete(productSkuId);
+        })
+        .finally(() => {
+          pendingCycleCountSavePromisesRef.current =
+            pendingCycleCountSavePromisesRef.current.filter(
+              (pendingSave) => pendingSave !== savePromise,
+            );
+          setPendingCycleCountSaveCount(
+            pendingCycleCountSavePromisesRef.current.length,
+          );
+        });
+
+      pendingCycleCountSavePromisesRef.current = [
+        ...pendingCycleCountSavePromisesRef.current,
+        savePromise,
+      ];
+      setPendingCycleCountSaveCount(
+        pendingCycleCountSavePromisesRef.current.length,
+      );
+
+      await savePromise;
+    },
+    [adjustmentType, onSaveCycleCountDraftLine],
   );
 
   const rows: StockAdjustmentRow[] = useMemo(
@@ -707,14 +753,14 @@ export function StockAdjustmentWorkspaceContent({
     : {
         description:
           totalDraftChangedLineCount > 0
-            ? `Overall draft: ${totalDraftChangedLineCount} ${pluralize(
+            ? `Saved count: ${totalDraftChangedLineCount} ${pluralize(
                 totalDraftChangedLineCount,
                 "SKU",
-              )} saved across ${totalDraftScopeCount || 1} ${pluralize(
+              )} across ${totalDraftScopeCount || 1} ${pluralize(
                 totalDraftScopeCount || 1,
                 "scope",
               )}.`
-            : "Overall draft: no saved SKUs yet.",
+            : "No saved counts yet.",
         label:
           isCycleCountDraftSaving
             ? "Saving draft"
@@ -741,40 +787,23 @@ export function StockAdjustmentWorkspaceContent({
 
   useEffect(() => {
     if (adjustmentType !== "cycle_count") return;
+    if (selectedCountScopeKeys.length === 0) return;
 
-    if (
-      selectedCountScopeKeys.length > 0 &&
-      selectedCountScopeKeys.every((selectedKey) =>
-        countScopeOptions.some((scope) => scope.key === selectedKey),
-      )
-    ) {
-      return;
-    }
+    const validScopeKeys = selectedCountScopeKeys.filter((selectedKey) =>
+      countScopeOptions.some((scope) => scope.key === selectedKey),
+    );
+    if (validScopeKeys.length === selectedCountScopeKeys.length) return;
 
-    const fallbackScopeKey = countScopeOptions[0]?.key;
-
-    if (!fallbackScopeKey) {
-      if (selectedCountScopeKeys.length === 0) return;
-
-      setSelectedCountScopeKeys([]);
-      return;
-    }
-
-    setSelectedCountScopeKeys([fallbackScopeKey]);
-    const firstScopedItem = rows.find(
-      (row) => getCountScopeKey(row.inventoryItem) === fallbackScopeKey,
-    )?.inventoryItem;
-
+    setSelectedCountScopeKeys(validScopeKeys);
     onSearchStateChange?.({
       page: 1,
-      scope: fallbackScopeKey,
-      sku: firstScopedItem?._id,
+      scope: serializeCountScopeKeys(validScopeKeys),
+      sku: undefined,
     });
   }, [
     adjustmentType,
     countScopeOptions,
     onSearchStateChange,
-    rows,
     selectedCountScopeKeys,
   ]);
 
@@ -934,49 +963,6 @@ export function StockAdjustmentWorkspaceContent({
               setStaleDraftLines([]);
             }
           };
-          const saveCycleCountDraftValue = async (value: string) => {
-            if (adjustmentType !== "cycle_count" || !onSaveCycleCountDraftLine) {
-              return;
-            }
-
-            const parsedCount = value.trim() === "" ? Number.NaN : Number(value);
-            if (!Number.isInteger(parsedCount) || parsedCount < 0) {
-              return;
-            }
-
-            const savePromise = onSaveCycleCountDraftLine({
-              countedQuantity: parsedCount,
-              productSkuId: item._id,
-            })
-              .then((result) => {
-                if (result.kind !== "ok") {
-                  presentCommandToast(result);
-                  return;
-                }
-
-                locallyEditedCycleCountItemIdsRef.current.delete(item._id);
-              })
-              .finally(() => {
-                pendingCycleCountSavePromisesRef.current =
-                  pendingCycleCountSavePromisesRef.current.filter(
-                    (pendingSave) => pendingSave !== savePromise,
-                  );
-                setPendingCycleCountSaveCount(
-                  pendingCycleCountSavePromisesRef.current.length,
-                );
-              });
-
-            pendingCycleCountSavePromisesRef.current = [
-              ...pendingCycleCountSavePromisesRef.current,
-              savePromise,
-            ];
-            setPendingCycleCountSaveCount(
-              pendingCycleCountSavePromisesRef.current.length,
-            );
-
-            await savePromise;
-          };
-
           return (
             <div className="ml-auto flex max-w-56 items-center justify-end gap-2">
               <Input
@@ -986,7 +972,7 @@ export function StockAdjustmentWorkspaceContent({
                 min={adjustmentType === "manual" ? undefined : 0}
                 onFocus={() => handleSelectInventoryItem(item._id)}
                 onBlur={(event) =>
-                  saveCycleCountDraftValue(event.currentTarget.value)
+                  saveCycleCountDraftValue(item._id, event.currentTarget.value)
                 }
                 onChange={(event) => handleDraftChange(event.target.value)}
                 type="number"
@@ -1003,7 +989,7 @@ export function StockAdjustmentWorkspaceContent({
                   if (adjustmentType === "cycle_count") {
                     setCycleCountSubmissionOutcome(null);
                     setStaleDraftLines([]);
-                    void saveCycleCountDraftValue(resetValue);
+                    void saveCycleCountDraftValue(item._id, resetValue);
                   }
                 }}
                 size="icon"
@@ -1044,7 +1030,7 @@ export function StockAdjustmentWorkspaceContent({
         ),
       },
     ],
-    [adjustmentType, handleSelectInventoryItem, onSaveCycleCountDraftLine],
+    [adjustmentType, handleSelectInventoryItem, saveCycleCountDraftValue],
   );
 
   const handleModeChange = (nextType: StockAdjustmentType) => {
@@ -1055,11 +1041,7 @@ export function StockAdjustmentWorkspaceContent({
     }
 
     const currentScopeKeys =
-      selectedCountScopeKeys.length > 0
-        ? selectedCountScopeKeys
-        : countScopeOptions[0]?.key
-          ? [countScopeOptions[0].key]
-          : [];
+      selectedCountScopeKeys.length > 0 ? selectedCountScopeKeys : [];
     const nextScope = serializeCountScopeKeys(currentScopeKeys);
     const nextActiveItem =
       currentScopeKeys.length > 0
@@ -1114,9 +1096,7 @@ export function StockAdjustmentWorkspaceContent({
     if (inventoryState.unavailableUnits === 0) return;
 
     if (isUnavailableScopeSelectionActive) {
-      setSelectedCountScopeKeys(
-        countScopeOptions[0]?.key ? [countScopeOptions[0].key] : [],
-      );
+      setSelectedCountScopeKeys([]);
       setFilters((current) => ({
         ...current,
         availability: "all",
@@ -1171,6 +1151,20 @@ export function StockAdjustmentWorkspaceContent({
     await Promise.allSettled(pendingSaves);
   };
 
+  const flushLocallyEditedCycleCountDraftLines = async () => {
+    await awaitPendingCycleCountSaves();
+
+    const editedItemIds = Array.from(locallyEditedCycleCountItemIdsRef.current);
+    if (editedItemIds.length === 0) return;
+
+    await Promise.allSettled(
+      editedItemIds.map((itemId) =>
+        saveCycleCountDraftValue(itemId, cycleCounts[itemId] ?? ""),
+      ),
+    );
+    await awaitPendingCycleCountSaves();
+  };
+
   const handleSubmit = async () => {
     if (!storeId) {
       toast.error("Select a store before submitting a stock adjustment");
@@ -1178,13 +1172,13 @@ export function StockAdjustmentWorkspaceContent({
     }
 
     if (adjustmentType === "cycle_count") {
-      await awaitPendingCycleCountSaves();
+      await flushLocallyEditedCycleCountDraftLines();
     }
 
     if (
       adjustmentType === "manual"
         ? changedRows.length === 0
-        : overallSummary.lineItemCount === 0
+        : overallSummary.lineItemCount === 0 && changedRows.length === 0
     ) {
       toast.error(
         adjustmentType === "manual"
@@ -1329,25 +1323,24 @@ export function StockAdjustmentWorkspaceContent({
           <h2 className="sr-only" id="count-scope-heading">
             Stock scopes
           </h2>
-          {adjustmentType === "manual" && selectedCountScopeKeys.length > 0 ? (
-            <div className="flex justify-end">
-              <Button
-                className="h-8 px-2 text-xs"
-                onClick={() => {
-                  setSelectedCountScopeKeys([]);
-                  onSearchStateChange?.({
-                    page: 1,
-                    scope: undefined,
-                    sku: rows[0]?.inventoryItem._id,
-                  });
-                }}
-                type="button"
-                variant="outline"
-              >
-                Show all scopes
-              </Button>
-            </div>
-          ) : null}
+          <div className="flex justify-end">
+            <Button
+              className="h-8 px-2 text-xs"
+              disabled={selectedCountScopeKeys.length === 0}
+              onClick={() => {
+                setSelectedCountScopeKeys([]);
+                onSearchStateChange?.({
+                  page: 1,
+                  scope: undefined,
+                  sku: rows[0]?.inventoryItem._id,
+                });
+              }}
+              type="button"
+              variant="outline"
+            >
+              Show all scopes
+            </Button>
+          </div>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {countScopeOptions.map((scope) => {
               const isSelected = selectedCountScopeKeySet.has(scope.key);
@@ -1364,7 +1357,9 @@ export function StockAdjustmentWorkspaceContent({
                   onClick={() => {
                     const nextScopeKeys =
                       adjustmentType === "cycle_count"
-                        ? [scope.key]
+                        ? isSelected
+                          ? []
+                          : [scope.key]
                         : isSelected
                           ? selectedCountScopeKeys.filter(
                               (selectedKey) => selectedKey !== scope.key,
@@ -1425,7 +1420,7 @@ export function StockAdjustmentWorkspaceContent({
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0 flex-1">
               <Label className="sr-only" htmlFor="stock-adjustment-sku-search">
-                Search product SKUs
+                Search products, SKUs, or barcodes
               </Label>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -1434,7 +1429,7 @@ export function StockAdjustmentWorkspaceContent({
                   onChange={(event) =>
                     handleFilterChange({ query: event.target.value })
                   }
-                  placeholder="Search product or SKU"
+                  placeholder="Search product, SKU, or barcode"
                   value={filters.query}
                   className="pl-9"
                 />
@@ -1662,7 +1657,7 @@ export function StockAdjustmentWorkspaceContent({
                 <div className="grid gap-2">
                   <div className="rounded-md border border-border bg-muted/30 px-3 py-3">
                     <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                      Overall draft
+                      All saved counts
                     </p>
                     <div className="mt-2 grid grid-cols-3 gap-2">
                       <div>
@@ -1695,7 +1690,7 @@ export function StockAdjustmentWorkspaceContent({
                   </div>
                   <div className="rounded-md border border-border px-3 py-3">
                     <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                      Current scope
+                      Selected scope
                     </p>
                     <div className="mt-2 grid grid-cols-3 gap-2">
                       <div>
@@ -1729,36 +1724,44 @@ export function StockAdjustmentWorkspaceContent({
                 </div>
               </div>
             ) : (
-              <>
-                <div className="grid grid-cols-2 gap-layout-md">
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground">
-                      Changed SKUs
-                    </p>
-                    <p className="font-display text-4xl font-semibold tabular-nums tracking-tight text-foreground">
-                      {summary.lineItemCount}
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground">
-                      Net delta
-                    </p>
-                    <p className="font-display text-4xl font-semibold tabular-nums tracking-tight text-foreground">
-                      {summary.netQuantityDelta > 0
-                        ? `+${summary.netQuantityDelta}`
-                        : summary.netQuantityDelta}
-                    </p>
+              <div className="space-y-3">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Adjustment metrics
+                </p>
+                <div className="rounded-md border border-border bg-muted/30 px-3 py-3">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                    Manual batch
+                  </p>
+                  <div className="mt-2 grid grid-cols-3 gap-2">
+                    <div>
+                      <p className="font-display text-3xl font-semibold tabular-nums tracking-tight text-foreground">
+                        {summary.lineItemCount}
+                      </p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        SKUs
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-display text-3xl font-semibold tabular-nums tracking-tight text-foreground">
+                        {summary.netQuantityDelta > 0
+                          ? `+${summary.netQuantityDelta}`
+                          : summary.netQuantityDelta}
+                      </p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Net
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-display text-3xl font-semibold tabular-nums tracking-tight text-foreground">
+                        {summary.largestAbsoluteDelta}
+                      </p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Variance
+                      </p>
+                    </div>
                   </div>
                 </div>
-                <div className="space-y-1 border-t border-border pt-layout-md">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    Largest variance
-                  </p>
-                  <p className="font-display text-3xl font-semibold tabular-nums tracking-tight text-foreground">
-                    {summary.largestAbsoluteDelta} units
-                  </p>
-                </div>
-              </>
+              </div>
             )}
             <div
               className={`rounded-md border px-layout-md py-layout-sm text-sm leading-6 ${
@@ -1909,6 +1912,11 @@ export function StockAdjustmentWorkspaceContent({
                 (isCycleCountDraftSaving || pendingCycleCountSaveCount > 0))
             }
             onClick={handleSubmit}
+            onMouseDown={(event) => {
+              if (adjustmentType === "cycle_count") {
+                event.preventDefault();
+              }
+            }}
           >
             {adjustmentType === "manual" ? "Submit adjustment" : "Submit count"}
           </LoadingButton>

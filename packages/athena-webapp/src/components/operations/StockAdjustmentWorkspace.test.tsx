@@ -219,7 +219,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
 
     expect(screen.getByLabelText(/counted quantity for .*closure wig/i)).toHaveValue(5);
     expect(
-      screen.getByText(/overall draft: 1 SKU saved across 1 scope/i),
+      screen.getByText(/saved count: 1 SKU across 1 scope/i),
     ).toBeInTheDocument();
   });
 
@@ -280,7 +280,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("summarizes saved draft rows across all scopes in the batch rail", () => {
+  it("summarizes saved draft SKUs across all scopes in the batch rail", () => {
     renderStockAdjustmentWorkspace({
       cycleCountDraft: {
         _id: "draft-1" as Id<"cycleCountDraft">,
@@ -319,13 +319,13 @@ describe("StockAdjustmentWorkspaceContent", () => {
     });
 
     expect(
-      screen.getByText(/overall draft: 5 SKUs saved across 3 scopes/i),
+      screen.getByText(/saved count: 5 SKUs across 3 scopes/i),
     ).toBeInTheDocument();
     expect(screen.getByText(/current: hair, 2 SKUs/i)).toBeInTheDocument();
     expect(screen.getByText(/scopes: beverages, hair/i)).toBeInTheDocument();
     expect(screen.getByText("Count metrics")).toBeInTheDocument();
-    expect(screen.getByText("Overall draft")).toBeInTheDocument();
-    expect(screen.getByText("Current scope")).toBeInTheDocument();
+    expect(screen.getByText("All saved counts")).toBeInTheDocument();
+    expect(screen.getByText("Selected scope")).toBeInTheDocument();
     expect(screen.getByText("5")).toBeInTheDocument();
     expect(screen.getByText("-9")).toBeInTheDocument();
     expect(screen.getAllByText("SKUs").length).toBeGreaterThan(0);
@@ -399,6 +399,52 @@ describe("StockAdjustmentWorkspaceContent", () => {
     );
     expect(onSearchStateChange).not.toHaveBeenCalledWith(
       expect.objectContaining({ countedQuantity: 5 }),
+    );
+  });
+
+  it("flushes the focused cycle count edit before submitting", async () => {
+    const user = userEvent.setup();
+    const onSaveCycleCountDraftLine = vi.fn().mockResolvedValue(ok({}));
+    const onSubmitCycleCountDraft = vi.fn().mockResolvedValue(ok({}));
+
+    renderStockAdjustmentWorkspace({
+      cycleCountDraft: {
+        _id: "draft-1" as Id<"cycleCountDraft">,
+        changedLineCount: 0,
+        lines: [],
+        scopeKey: "Hair",
+        staleLineCount: 0,
+        status: "open",
+      },
+      cycleCountDraftSummary: {
+        changedLineCount: 0,
+        draftCount: 0,
+        largestAbsoluteDelta: 0,
+        netQuantityDelta: 0,
+        scopeKeys: [],
+        scopeCount: 0,
+        staleLineCount: 0,
+      },
+      onSaveCycleCountDraftLine,
+      onSubmitCycleCountDraft,
+    });
+
+    const input = screen.getByLabelText(/counted quantity for .*closure wig/i);
+
+    await user.clear(input);
+    await user.type(input, "5");
+    await user.click(screen.getByRole("button", { name: /submit count/i }));
+
+    await waitFor(() =>
+      expect(onSaveCycleCountDraftLine).toHaveBeenCalledWith({
+        countedQuantity: 5,
+        productSkuId: "sku-1",
+      }),
+    );
+    await waitFor(() =>
+      expect(onSubmitCycleCountDraft).toHaveBeenCalledWith({
+        notes: undefined,
+      }),
     );
   });
 
@@ -582,7 +628,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
     expect(resetButton).toBeDisabled();
   });
 
-	  it("orients cycle counts around a selected category scope", async () => {
+  it("orients cycle counts around a selected category scope", async () => {
     const user = userEvent.setup();
 
     renderStockAdjustmentWorkspace({
@@ -614,11 +660,14 @@ describe("StockAdjustmentWorkspaceContent", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /books 1 sku/i }),
-    ).toHaveAttribute("aria-pressed", "true");
+    ).toHaveAttribute("aria-pressed", "false");
+    expect(
+      screen.getByRole("button", { name: /show all scopes/i }),
+    ).toBeDisabled();
     const table = screen.getByRole("table");
 
     expect(within(table).getByText("Ai Engineering")).toBeInTheDocument();
-    expect(within(table).queryByText("Closure Wig")).not.toBeInTheDocument();
+    expect(within(table).getByText("Closure Wig")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /hair 1 sku/i }));
 
@@ -626,8 +675,23 @@ describe("StockAdjustmentWorkspaceContent", () => {
       "aria-pressed",
       "true",
     );
+    expect(
+      screen.getByRole("button", { name: /show all scopes/i }),
+    ).toBeEnabled();
     expect(within(table).getByText("Closure Wig")).toBeInTheDocument();
     expect(within(table).queryByText("Ai Engineering")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /hair 1 sku/i }));
+
+    expect(screen.getByRole("button", { name: /hair 1 sku/i })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(
+      screen.getByRole("button", { name: /show all scopes/i }),
+    ).toBeDisabled();
+    expect(within(table).getByText("Closure Wig")).toBeInTheDocument();
+    expect(within(table).getByText("Ai Engineering")).toBeInTheDocument();
   });
 
   it("shows stock scopes in manual adjustment mode", async () => {
@@ -736,7 +800,9 @@ describe("StockAdjustmentWorkspaceContent", () => {
     expect(within(table).getByText("Body Wave Bundle")).toBeInTheDocument();
 
     await user.type(
-      screen.getByRole("textbox", { name: /search product skus/i }),
+      screen.getByRole("textbox", {
+        name: /search products, skus, or barcodes/i,
+      }),
       "body",
     );
 
@@ -746,13 +812,38 @@ describe("StockAdjustmentWorkspaceContent", () => {
     expect(within(table).getByText("Body Wave Bundle")).toBeInTheDocument();
 
     await user.clear(
-      screen.getByRole("textbox", { name: /search product skus/i }),
+      screen.getByRole("textbox", {
+        name: /search products, skus, or barcodes/i,
+      }),
     );
     await user.click(
       screen.getByRole("combobox", { name: /filter by availability/i }),
     );
     await user.click(
       await screen.findByRole("option", { name: "Unavailable" }),
+    );
+
+    expect(
+      within(table).getByText('18" Natural Black Closure Wig'),
+    ).toBeInTheDocument();
+    expect(
+      within(table).queryByText("Body Wave Bundle"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Showing 1 of 2 SKUs.")).toBeInTheDocument();
+  });
+
+  it("filters stock rows by barcode", async () => {
+    const user = userEvent.setup();
+
+    renderStockAdjustmentWorkspace();
+
+    const table = screen.getByRole("table");
+
+    await user.type(
+      screen.getByRole("textbox", {
+        name: /search products, skus, or barcodes/i,
+      }),
+      "1234567890123",
     );
 
     expect(
@@ -852,7 +943,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
     const table = screen.getByRole("table");
 
     expect(within(table).getByText("Ai Engineering")).toBeInTheDocument();
-    expect(within(table).queryByText("Closure Wig")).not.toBeInTheDocument();
+    expect(within(table).getByText("Closure Wig")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /unavailable 4/i }));
 
@@ -884,7 +975,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
       screen.getByRole("button", { name: /unavailable 4/i }),
     ).toHaveAttribute("aria-pressed", "false");
     expect(within(table).getByText("Ai Engineering")).toBeInTheDocument();
-    expect(within(table).queryByText("Closure Wig")).not.toBeInTheDocument();
+    expect(within(table).getByText("Closure Wig")).toBeInTheDocument();
   });
 
   it("reports stock filter changes for route search", async () => {
@@ -894,7 +985,9 @@ describe("StockAdjustmentWorkspaceContent", () => {
     renderStockAdjustmentWorkspace({ onSearchStateChange });
 
     await user.type(
-      screen.getByRole("textbox", { name: /search product skus/i }),
+      screen.getByRole("textbox", {
+        name: /search products, skus, or barcodes/i,
+      }),
       "CW",
     );
 
