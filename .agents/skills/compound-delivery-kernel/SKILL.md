@@ -128,7 +128,7 @@ Every delivery handoff should include:
 
 - what changed
 - validation evidence from repo sensors
-- for web app or app-surface changes, a browser preview URL from `scripts/preview-worktree.ts start athena`; if no preview is available, state the exact blocker instead of omitting it
+- for web app or app-surface changes, include a browser preview URL only when a preview was already started for inspection or explicitly requested; preview startup is optional and is not a handoff requirement
 - post-merge production deploy command and result when local CD applies, or the explicit reason it did not run
 - review status and remaining risk
 - compounding decision: documented, skill updated, follow-up filed, or no durable learning

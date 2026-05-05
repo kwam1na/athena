@@ -31,7 +31,7 @@ Do not use this skill when:
 - Delivery always includes remote merge and local fast-forward unless the user explicitly opts out, asks to rely on auto-merge, or permissions prevent it.
 - Delivery also means you leave the local repo tidy, back on `main`, and reflecting the merged remote state.
 - Do not stop at "PR open" or "ready for review" unless the user explicitly asked for that narrower handoff.
-- For Athena web app or app-surface changes, delivery handoff must include a browser preview URL from `scripts/preview-worktree.ts start athena`, or the exact blocker that prevented starting the preview.
+- For Athena web app or app-surface changes, a browser preview URL is optional. Include one only when a preview was already started for inspection or explicitly requested.
 - Only treat something as a blocker when it genuinely requires user input.
 - Document significant scope decisions in Linear as you work.
 
@@ -145,7 +145,7 @@ Use this resolution order before asking the user for context:
 
 - Run the smallest targeted test first, then the relevant suite, typecheck, build, lint, repo preflight, and `git diff --check`.
 - Match validation to the ticket's expected sensors and supplement with discovered repo sensors when the ticket is incomplete.
-- For Athena web app or app-surface changes, run `scripts/preview-worktree.ts start athena` after implementation validation so the final handoff can include a live local preview URL.
+- For Athena web app or app-surface changes, run `scripts/preview-worktree.ts start athena` after implementation validation only when browser inspection is useful or explicitly requested; final handoff does not require a live local preview URL.
 - If the repo defines a PR-equivalent command, run that before trusting local parity with remote CI.
 - If the repo has generated-artifact repair hooks, run them before the final commit and inspect the diff. For Athena, `bun run pre-commit:generated-artifacts` refreshes harness docs, Convex generated API files, graphify artifacts, and tracked generated changes so new Convex modules do not leave `_generated/api.d.ts` drift for a follow-up PR.
 - When harness or repo validation fails, first classify it as deterministic repairable drift or a semantic blocker.

@@ -146,7 +146,7 @@ describe("preview-worktree", () => {
     await stopPreview(previewOptions(stateDir, worktreeOne));
   });
 
-  it("keeps repo-local delivery skills explicit about preview handoff", async () => {
+  it("keeps repo-local delivery skills from requiring preview handoff", async () => {
     const deliverWork = await readFile(
       path.join(import.meta.dirname, "../.agents/skills/deliver-work/SKILL.md"),
       "utf8"
@@ -161,8 +161,10 @@ describe("preview-worktree", () => {
     );
 
     for (const skill of [deliverWork, execute, kernel]) {
-      expect(skill).toContain("browser preview URL");
-      expect(skill).toContain("scripts/preview-worktree.ts start athena");
+      expect(skill).toContain("preview");
+      expect(skill).toContain("not required");
+      expect(skill).not.toContain("handoff must include a browser preview URL");
+      expect(skill).not.toContain("a browser preview URL from `scripts/preview-worktree.ts start athena`; if no preview is available");
     }
   });
 
