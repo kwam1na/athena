@@ -64,7 +64,7 @@ function ProductViewContent() {
   const createProduct = useMutation(api.inventory.products.create);
   const createSku = useMutation(api.inventory.products.createSku);
   const updateProduct = useMutation(api.inventory.products.update);
-  const deleteProduct = useAction(api.inventory.products.clear);
+  const archiveProduct = useMutation(api.inventory.products.archive);
   const deleteSku = useMutation(api.inventory.products.removeSku);
   const updateSku = useMutation(api.inventory.products.updateSku);
 
@@ -82,13 +82,13 @@ function ProductViewContent() {
 
   const deleteActiveProduct = async () => {
     if (!activeProduct?._id || !activeStore)
-      throw new Error("Missing data required to delete product");
+      throw new Error("Missing data required to archive product");
 
     try {
       setIsDeleteMutationPending(true);
-      await deleteProduct({ id: activeProduct._id, storeId: activeStore._id });
+      await archiveProduct({ id: activeProduct._id, storeId: activeStore._id });
 
-      toast(`Product '${activeProduct.name}' deleted`, {
+      toast(`Product '${activeProduct.name}' archived`, {
         icon: <CheckCircledIcon className="w-4 h-4" />,
       });
 
@@ -492,7 +492,7 @@ function ProductViewContent() {
                   onClick={() => setIsDeleteModalOpen(true)}
                   disabled={isUpdatingProduct}
                 >
-                  <p>Delete</p>
+                  <p>Archive</p>
                   <TrashIcon className="w-3.5 h-3.5" />
                 </LoadingButton>
 
@@ -555,7 +555,7 @@ function ProductViewContent() {
   return (
     <View header={<Navigation />}>
       <AlertModal
-        title="Delete product?"
+        title="Archive product?"
         isOpen={isDeleteModalOpen}
         loading={isDeleteMutationPending}
         onClose={() => {

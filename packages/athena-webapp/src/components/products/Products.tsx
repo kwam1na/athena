@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useGetCategories } from "~/src/hooks/useGetCategories";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import { Button } from "../ui/button";
-import { PlusIcon, PackageXIcon } from "lucide-react";
+import { ArchiveIcon, PlusIcon, PackageXIcon } from "lucide-react";
 import {
   useGetUnresolvedProducts,
   useGetProducts,
@@ -96,6 +96,24 @@ export default function Products() {
                 </Button>
               </Link>
             ))}
+          </div>
+
+          <div>
+            <Link
+              to={"/$orgUrlSlug/store/$storeUrlSlug/products/archived"}
+              params={(prev) => ({
+                ...prev,
+                orgUrlSlug: prev.orgUrlSlug!,
+                storeUrlSlug: prev.storeUrlSlug!,
+              })}
+              search={{ o: getOrigin() }}
+              className="inline-flex"
+            >
+              <Button variant="outline">
+                <ArchiveIcon className="w-4 h-4" />
+                <p className="text-md">Archived products</p>
+              </Button>
+            </Link>
           </div>
 
           {Boolean(unresolvedProducts?.length) && (

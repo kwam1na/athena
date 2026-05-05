@@ -111,9 +111,11 @@ export const create = mutation({
       };
     }
 
-    // Check if products are visible
+    // Check if products are available for checkout
     const invisibleProducts = productExistenceChecks.filter(
-      (product) => product && product.isVisible === false,
+      (product) =>
+        product &&
+        (product.isVisible === false || product.availability === "archived"),
     );
 
     if (invisibleProducts.length > 0) {

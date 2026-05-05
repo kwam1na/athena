@@ -15,18 +15,20 @@ describe("buildAllProductsCacheKey", () => {
         ...baseArgs,
         isVisible: true,
         excludeStorefrontHidden: true,
+        availability: "live",
       }),
     ).toBe(
-      "all:products:{store-1}:category:lace-fronts:subcategory:closures:isVisible:true:excludeStorefrontHidden:true",
+      "all:products:{store-1}:category:lace-fronts:subcategory:closures:isVisible:true:availability:live:excludeStorefrontHidden:true",
     );
 
     expect(
       buildAllProductsCacheKey({
         ...baseArgs,
         isVisible: false,
+        availability: "archived",
       }),
     ).toBe(
-      "all:products:{store-1}:category:lace-fronts:subcategory:closures:isVisible:false",
+      "all:products:{store-1}:category:lace-fronts:subcategory:closures:isVisible:false:availability:archived",
     );
   });
 });

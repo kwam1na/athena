@@ -1,4 +1,4 @@
-import { AlertOctagonIcon, AlertTriangle, EyeOff } from "lucide-react";
+import { AlertOctagonIcon, AlertTriangle, Archive, EyeOff } from "lucide-react";
 import { Product } from "~/types";
 import { ProductVariant } from "../add-product/ProductStock";
 import { Badge } from "../ui/badge";
@@ -16,8 +16,16 @@ export const ProductStatus = ({
     product.isVisible !== false && productVariant?.isVisible !== false;
   const inventoryCount = productVariant?.stock ?? product.inventoryCount;
   const quantityAvailable = productVariant?.quantityAvailable ?? inventoryCount;
+  const isArchived = product.availability === "archived";
 
   const getBadgeStyles = () => {
+    if (isArchived) {
+      return {
+        bg: "bg-zinc-100 text-zinc-700",
+        text: "text-zinc-700",
+      };
+    }
+
     if (!isVisible) {
       return {
         bg: "bg-zinc-100 text-zinc-700",
@@ -51,6 +59,17 @@ export const ProductStatus = ({
   const { bg, text } = getBadgeStyles();
 
   const visibility = isVisible ? "Live" : "Hidden";
+
+  if (isArchived) {
+    return (
+      <Badge variant="outline" className={`${bg}`}>
+        <div className="flex items-center text-xs">
+          <Archive className="w-3.5 h-3.5 mr-2 text-zinc-700" />
+          <p className={text}>Archived</p>
+        </div>
+      </Badge>
+    );
+  }
 
   if (!isVisible) {
     return (

@@ -60,6 +60,7 @@ This route index enumerates the current files under `src/routes` so agents can o
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/procurement.index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/procurement.index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/index.tsx)
+- [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/archived.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/archived.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/complimentary/new.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/products/index.tsx)

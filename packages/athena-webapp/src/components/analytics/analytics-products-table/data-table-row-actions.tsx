@@ -39,7 +39,7 @@ export function DataTableRowActions<TData>({
       setIsDeleteMutationPending(true);
       await deleteRowItem();
 
-      toast(`Product '${product.name}' deleted`, {
+      toast(`Product '${product.name}' archived`, {
         icon: <CheckCircledIcon className="w-4 h-4" />,
       });
 
@@ -88,7 +88,7 @@ export function DataTableRowActions<TData>({
   return (
     <>
       <AlertModal
-        title="Delete product?"
+        title="Archive product?"
         isOpen={isDeleteModalOpen}
         loading={isDeleteMutationPending}
         onClose={() => {
@@ -126,7 +126,7 @@ export function DataTableRowActions<TData>({
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => setIsDeleteModalOpen(true)}>
-            Delete
+            Archive
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

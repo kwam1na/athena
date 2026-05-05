@@ -1,6 +1,6 @@
 /* eslint-disable @convex-dev/no-collect-in-query -- Query refactors are tracked in V26-168, V26-169, and V26-170; this PR only hardens API boundaries. */
 import {
-  action,
+  internalAction,
   internalMutation,
   internalQuery,
   mutation,
@@ -12,6 +12,7 @@ import { ProductSku } from "../../types";
 import { Id } from "../_generated/dataModel";
 import { api, internal } from "../_generated/api";
 import { deleteDirectoryInR2 } from "../cloudflare/r2";
+import { requireStoreFullAdminAccess } from "../stockOps/access";
 
 const entity = "product";
 
@@ -80,6 +81,9 @@ export const getAll = query({
     category: v.optional(v.array(v.string())),
     subcategory: v.optional(v.array(v.string())),
     isVisible: v.optional(v.boolean()),
+    availability: v.optional(
+      v.union(v.literal("draft"), v.literal("live"), v.literal("archived"))
+    ),
     excludeStorefrontHidden: v.optional(v.boolean()),
     filters: v.optional(
       v.object({
@@ -167,8 +171,18 @@ export const getAll = query({
         );
     }
 
+    const requestedAvailability = args.availability;
+
     // Filter by category/subcategory in memory
     const products = allProducts.filter((product) => {
+      if (requestedAvailability) {
+        if (product.availability !== requestedAvailability) {
+          return false;
+        }
+      } else if (product.availability === "archived") {
+        return false;
+      }
+
       if (
         storefrontHiddenCategoryIds.has(product.categoryId) ||
         storefrontHiddenSubcategoryIds.has(product.subcategoryId)
@@ -518,6 +532,10 @@ export const getByIdOrSlug = query({
       return null;
     }
 
+    if (product.availability === "archived") {
+      return null;
+    }
+
     const skusWithCategory = skus
       .map((sku) => ({
         ...sku,
@@ -848,7 +866,35 @@ export const update = mutation({
   },
 });
 
-export const remove = mutation({
+export const archive = mutation({
+  args: {
+    id: v.id(entity),
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => {
+    await requireStoreFullAdminAccess(ctx, args.storeId);
+
+    const product = await ctx.db.get("product", args.id);
+
+    if (!product || product.storeId !== args.storeId) {
+      return null;
+    }
+
+    await ctx.db.patch("product", args.id, { availability: "archived" });
+
+    await ctx.scheduler.runAfter(
+      0,
+      internal.inventory.productUtil.invalidateProductCache,
+      {
+        storeId: product.storeId,
+      }
+    );
+
+    return await ctx.db.get("product", args.id);
+  },
+});
+
+export const remove = internalMutation({
   args: {
     id: v.id(entity),
   },
@@ -862,20 +908,28 @@ export const remove = mutation({
 export const removeInternal = internalMutation({
   args: {
     id: v.id(entity),
+    storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
+    const product = await ctx.db.get("product", args.id);
+
+    if (!product || product.storeId !== args.storeId) {
+      return { message: "OK" };
+    }
+
     await ctx.db.delete("product", args.id);
 
     return { message: "OK" };
   },
 });
 
-export const clear = action({
+export const clear = internalAction({
   args: { id: v.id(entity), storeId: v.id("store") },
   handler: async (ctx, args) => {
     await Promise.all([
       await ctx.runMutation(internal.inventory.products.removeInternal, {
         id: args.id,
+        storeId: args.storeId,
       }),
       await deleteDirectoryInR2(`stores/${args.storeId}/products/${args.id}`),
     ]);

@@ -77,11 +77,13 @@ export const getAll = query({
         );
 
         const sku =
-          args.isVisible !== undefined
-            ? args.isVisible === productSku?.isVisible
-              ? productSku
-              : undefined
-            : productSku;
+          productSku?.product?.availability === "archived"
+            ? undefined
+            : args.isVisible !== undefined
+              ? args.isVisible === productSku?.isVisible
+                ? productSku
+                : undefined
+              : productSku;
 
         return {
           ...item,
@@ -90,7 +92,7 @@ export const getAll = query({
       })
     );
 
-    return enrichedItems;
+    return enrichedItems.filter((item) => item.productSku);
   },
 });
 
@@ -115,11 +117,13 @@ export const getAllInternal = internalQuery({
         );
 
         const sku =
-          args.isVisible !== undefined
-            ? args.isVisible === productSku?.isVisible
-              ? productSku
-              : undefined
-            : productSku;
+          productSku?.product?.availability === "archived"
+            ? undefined
+            : args.isVisible !== undefined
+              ? args.isVisible === productSku?.isVisible
+                ? productSku
+                : undefined
+              : productSku;
 
         return {
           ...item,
@@ -128,7 +132,7 @@ export const getAllInternal = internalQuery({
       })
     );
 
-    return enrichedItems;
+    return enrichedItems.filter((item) => item.productSku);
   },
 });
 
