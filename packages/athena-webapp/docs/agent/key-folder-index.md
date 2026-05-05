@@ -6,8 +6,8 @@ This key-folder index highlights the main directories agents are likely to need 
 
 ## Core app surfaces
 
-- [`src/routes`](../../src/routes) — TanStack route entrypoints and authenticated shells. Currently 73 file(s); key children: __root.tsx, _authed, _authed.test.tsx, _authed.tsx, index.test.tsx.
-- [`src/components`](../../src/components) — UI components, views, and package-local feature widgets. Currently 525 file(s); key children: GenericComboBox.tsx, Navbar.tsx, OrganizationView.tsx, OrganizationsView.tsx, PermissionGate.tsx.
+- [`src/routes`](../../src/routes) — TanStack route entrypoints and authenticated shells. Currently 74 file(s); key children: __root.tsx, _authed, _authed.test.tsx, _authed.tsx, index.test.tsx.
+- [`src/components`](../../src/components) — UI components, views, and package-local feature widgets. Currently 529 file(s); key children: GenericComboBox.tsx, Navbar.tsx, OrganizationView.tsx, OrganizationsView.tsx, PermissionGate.tsx.
 - [`src/components/traces`](../../src/components/traces) — Shared workflow trace screens, ordered timelines, and trace detail primitives. Currently 3 file(s); key children: WorkflowTraceRouteLink.tsx, WorkflowTraceView.test.tsx, WorkflowTraceView.tsx.
 - [`src/components/operations`](../../src/components/operations) — Manager-queue and stock-adjustment workflows that share approval rails with other operational surfaces. Currently 9 file(s); key children: CommandApprovalDialog.test.tsx, CommandApprovalDialog.tsx, OperationsQueueView.auth.test.tsx, OperationsQueueView.test.tsx, OperationsQueueView.tsx.
 - [`src/components/procurement`](../../src/components/procurement) — Procurement planning and receiving views for replenishment pressure and purchase-order execution. Currently 4 file(s); key children: ProcurementView.test.tsx, ProcurementView.tsx, ReceivingView.test.tsx, ReceivingView.tsx.

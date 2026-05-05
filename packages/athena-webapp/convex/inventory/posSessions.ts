@@ -7,7 +7,11 @@ import {
   QueryCtx,
 } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
-import { releaseInventoryHoldsBatch } from "./helpers/inventoryHolds";
+import {
+  readActiveInventoryHoldDetailsForSession,
+  releaseActiveInventoryHoldsForSession,
+  releaseInventoryHoldsBatch,
+} from "./helpers/inventoryHolds";
 import {
   validateSessionActive,
   validateSessionModifiable,
@@ -26,6 +30,8 @@ import {
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { ok, userError } from "../../shared/commandResult";
 import { isPosUsableRegisterSessionStatus } from "../../shared/registerSessionStatus";
+import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
+import { requireStoreFullAdminAccess } from "../stockOps/access";
 import {
   createPosSessionTraceRecorder,
   type PosSessionTraceStage,
@@ -35,8 +41,11 @@ import {
 const MAX_SESSION_ITEMS = 200;
 const SESSION_QUERY_CANDIDATE_LIMIT = 200;
 const ACTIVE_SESSION_CANDIDATE_LIMIT = 100;
+const SESSION_OPERATIONS_CANDIDATE_LIMIT = 100;
 const SESSION_CLEANUP_BATCH_SIZE = 100;
 const POS_SESSION_RELEASE_STATUS_VALUES = ["active", "held", "void"] as const;
+const SESSION_OPERATIONS_STATUS_VALUES = ["active", "held"] as const;
+const STAFF_ROLE_ASSIGNMENT_LIMIT = 25;
 
 const sessionOperationDataValidator = v.object({
   sessionId: v.id("posSession"),
@@ -50,6 +59,14 @@ const sessionIdOnlyValidator = v.object({
 const completeSessionDataValidator = v.object({
   sessionId: v.id("posSession"),
   transactionNumber: v.string(),
+});
+
+const expireSessionOperationsDataValidator = v.object({
+  sessionId: v.id("posSession"),
+  status: v.literal("expired"),
+  priorStatus: v.string(),
+  releasedHoldCount: v.number(),
+  releasedQuantity: v.number(),
 });
 
 function userErrorFromSessionCommandFailure(result: {
@@ -450,6 +467,415 @@ async function loadSessionCustomer(ctx: QueryCtx, session: CustomerSnapshot) {
 
   return null;
 }
+
+async function loadSessionOperator(
+  ctx: QueryCtx,
+  staffProfileId?: Id<"staffProfile">,
+) {
+  if (!staffProfileId) {
+    return null;
+  }
+
+  const staffProfile = await ctx.db.get("staffProfile", staffProfileId);
+  if (!staffProfile) {
+    return {
+      staffProfileId,
+      name: "Unknown operator",
+      status: "missing",
+    };
+  }
+
+  return {
+    staffProfileId,
+    name: staffProfile.fullName,
+    status: staffProfile.status,
+  };
+}
+
+async function loadSessionTerminal(
+  ctx: QueryCtx,
+  terminalId: Id<"posTerminal">,
+) {
+  const terminal = await ctx.db.get("posTerminal", terminalId);
+  if (!terminal) {
+    return {
+      terminalId,
+      displayName: "Unknown terminal",
+      registerNumber: undefined,
+      status: "missing",
+    };
+  }
+
+  return {
+    terminalId,
+    displayName: terminal.displayName,
+    registerNumber: terminal.registerNumber,
+    status: terminal.status,
+  };
+}
+
+async function loadSessionRegister(
+  ctx: QueryCtx,
+  registerSessionId?: Id<"registerSession">,
+) {
+  if (!registerSessionId) {
+    return null;
+  }
+
+  const registerSession = await ctx.db.get("registerSession", registerSessionId);
+  if (!registerSession) {
+    return {
+      registerSessionId,
+      registerNumber: undefined,
+      status: "missing",
+      workflowTraceId: undefined,
+    };
+  }
+
+  return {
+    registerSessionId,
+    registerNumber: registerSession.registerNumber,
+    status: registerSession.status,
+    workflowTraceId: registerSession.workflowTraceId,
+  };
+}
+
+function buildCartSummary(
+  session: {
+    subtotal?: number;
+    tax?: number;
+    total?: number;
+  },
+  cartItems: Awaited<ReturnType<typeof loadPosSessionItems>>,
+) {
+  const computedSubtotal = cartItems.reduce(
+    (sum, item) => sum + (item.price ?? 0) * item.quantity,
+    0,
+  );
+  const subtotal = session.subtotal ?? computedSubtotal;
+  const tax = session.tax ?? 0;
+
+  return {
+    lineItemCount: cartItems.length,
+    totalQuantity: cartItems.reduce((sum, item) => sum + item.quantity, 0),
+    subtotal,
+    tax,
+    total: session.total ?? subtotal + tax,
+  };
+}
+
+async function listStoreSessionsForOperationsStatus(
+  ctx: QueryCtx,
+  args: {
+    storeId: Id<"store">;
+    status: (typeof SESSION_OPERATIONS_STATUS_VALUES)[number];
+    boundedLimit: number;
+  },
+) {
+  const { status } = args;
+
+  return ctx.db
+    .query("posSession")
+    .withIndex("by_storeId_and_status", (q) =>
+      q.eq("storeId", args.storeId).eq("status", status),
+    )
+    .order("desc")
+    .take(args.boundedLimit);
+}
+
+async function buildSessionOperationsRow(
+  ctx: QueryCtx,
+  session: Awaited<ReturnType<typeof listStoreSessionsForOperationsStatus>>[number],
+  now: number,
+) {
+  const [
+    operator,
+    terminal,
+    register,
+    customer,
+    cartItems,
+    activeHoldDetails,
+  ] = await Promise.all([
+    loadSessionOperator(ctx, session.staffProfileId),
+    loadSessionTerminal(ctx, session.terminalId),
+    loadSessionRegister(ctx, session.registerSessionId),
+    loadSessionCustomer(ctx, session),
+    loadPosSessionItems(ctx, session._id),
+    readActiveInventoryHoldDetailsForSession(ctx.db, {
+      sessionId: session._id,
+      now,
+    }),
+  ]);
+  const activeHoldQuantity = activeHoldDetails.reduce(
+    (sum, hold) => sum + hold.quantity,
+    0,
+  );
+
+  return {
+    sessionId: session._id,
+    sessionNumber: session.sessionNumber,
+    status: session.status,
+    createdAt: session.createdAt,
+    updatedAt: session.updatedAt,
+    expiresAt: session.expiresAt,
+    isExpired: session.expiresAt <= now,
+    heldAt: session.heldAt,
+    resumedAt: session.resumedAt,
+    holdReason: session.holdReason,
+    notes: session.notes,
+    operator,
+    terminal,
+    register,
+    customer,
+    cart: buildCartSummary(session, cartItems),
+    activeHolds: {
+      holdCount: activeHoldDetails.length,
+      totalQuantity: activeHoldQuantity,
+      details: activeHoldDetails,
+    },
+    workflowTrace: session.workflowTraceId
+      ? {
+          traceId: session.workflowTraceId,
+          workflowType: "pos_session",
+          primaryLookupValue: session.sessionNumber,
+        }
+      : null,
+  };
+}
+
+async function validateOperationsManager(
+  ctx: MutationCtx,
+  args: {
+    storeId: Id<"store">;
+    actorStaffProfileId: Id<"staffProfile">;
+  },
+) {
+  const staffProfile = await ctx.db.get(
+    "staffProfile",
+    args.actorStaffProfileId,
+  );
+
+  if (
+    !staffProfile ||
+    staffProfile.storeId !== args.storeId ||
+    staffProfile.status !== "active"
+  ) {
+    return userError({
+      code: "authorization_failed",
+      message: "Manager access is required to expire POS sessions.",
+    });
+  }
+
+  const roleAssignments = await ctx.db
+    .query("staffRoleAssignment")
+    .withIndex("by_staffProfileId", (q) =>
+      q.eq("staffProfileId", args.actorStaffProfileId),
+    )
+    .take(STAFF_ROLE_ASSIGNMENT_LIMIT);
+  const hasManagerRole = roleAssignments.some(
+    (assignment) =>
+      assignment.storeId === args.storeId &&
+      assignment.status === "active" &&
+      assignment.role === "manager",
+  );
+
+  if (!hasManagerRole) {
+    return userError({
+      code: "authorization_failed",
+      message: "Manager access is required to expire POS sessions.",
+    });
+  }
+
+  return null;
+}
+
+async function validateOperationsActor(
+  ctx: MutationCtx,
+  args: {
+    storeId: Id<"store">;
+    actorStaffProfileId?: Id<"staffProfile">;
+  },
+) {
+  if (args.actorStaffProfileId) {
+    const managerValidation = await validateOperationsManager(ctx, {
+      storeId: args.storeId,
+      actorStaffProfileId: args.actorStaffProfileId,
+    });
+
+    return managerValidation
+      ? { error: managerValidation, actorUserId: undefined }
+      : { error: null, actorUserId: undefined };
+  }
+
+  try {
+    const { athenaUser } = await requireStoreFullAdminAccess(ctx, args.storeId);
+
+    return { error: null, actorUserId: athenaUser._id };
+  } catch {
+    return {
+      error: userError({
+        code: "authorization_failed",
+        message: "Manager access is required to expire POS sessions.",
+      }),
+      actorUserId: undefined,
+    };
+  }
+}
+
+// Store-scoped POS operations read model for active and held sessions.
+export const getStoreActiveSessionOperations = query({
+  args: {
+    storeId: v.id("store"),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const boundedLimit = Math.max(
+      1,
+      Math.min(
+        args.limit ?? SESSION_OPERATIONS_CANDIDATE_LIMIT,
+        SESSION_OPERATIONS_CANDIDATE_LIMIT,
+      ),
+    );
+    const sessions = [];
+
+    for (const status of SESSION_OPERATIONS_STATUS_VALUES) {
+      const statusSessions = await listStoreSessionsForOperationsStatus(ctx, {
+        storeId: args.storeId,
+        status,
+        boundedLimit,
+      });
+      sessions.push(...statusSessions);
+    }
+
+    const sortedSessions = sessions
+      .sort((a, b) => {
+        if (b.updatedAt !== a.updatedAt) {
+          return b.updatedAt - a.updatedAt;
+        }
+
+        return b.sessionNumber.localeCompare(a.sessionNumber);
+      })
+      .slice(0, boundedLimit);
+    const rows = await Promise.all(
+      sortedSessions.map((session) =>
+        buildSessionOperationsRow(ctx, session, now),
+      ),
+    );
+
+    return {
+      generatedAt: now,
+      rows,
+      summary: {
+        activeCount: rows.filter((row) => row.status === "active").length,
+        heldCount: rows.filter((row) => row.status === "held").length,
+        expiredCount: rows.filter((row) => row.isExpired).length,
+        activeHoldQuantity: rows.reduce(
+          (sum, row) => sum + row.activeHolds.totalQuantity,
+          0,
+        ),
+      },
+    };
+  },
+});
+
+export const expireSessionFromOperations = mutation({
+  args: {
+    storeId: v.id("store"),
+    sessionId: v.id("posSession"),
+    actorStaffProfileId: v.optional(v.id("staffProfile")),
+    reason: v.optional(v.string()),
+  },
+  returns: commandResultValidator(expireSessionOperationsDataValidator),
+  handler: async (ctx, args) => {
+    const actorValidation = await validateOperationsActor(ctx, args);
+    if (actorValidation.error) {
+      return actorValidation.error;
+    }
+
+    const session = await ctx.db.get("posSession", args.sessionId);
+    if (!session || session.storeId !== args.storeId) {
+      return userError({
+        code: "not_found",
+        message: "POS session not found.",
+      });
+    }
+
+    if (session.status === "expired") {
+      return ok({
+        sessionId: args.sessionId,
+        status: "expired" as const,
+        priorStatus: session.status,
+        releasedHoldCount: 0,
+        releasedQuantity: 0,
+      });
+    }
+
+    if (session.status !== "active" && session.status !== "held") {
+      return userError({
+        code: "precondition_failed",
+        message: "Only active or held POS sessions can be expired.",
+      });
+    }
+
+    const now = Date.now();
+    const priorStatus = session.status;
+    const releaseSummary = await releaseActiveInventoryHoldsForSession(ctx.db, {
+      sessionId: args.sessionId,
+      now,
+    });
+    const reason = args.reason?.trim() || "Expired from POS operations.";
+
+    await ctx.db.patch("posSession", args.sessionId, {
+      status: "expired",
+      expiresAt: now,
+      updatedAt: now,
+      notes: reason,
+    });
+
+    await recordOperationalEventWithCtx(ctx, {
+      storeId: session.storeId,
+      eventType: "pos_session.expired_by_operator",
+      subjectType: "pos_session",
+      subjectId: String(session._id),
+      subjectLabel: session.sessionNumber,
+      message: `Expired POS session ${session.sessionNumber} and released ${releaseSummary.releasedQuantity} held item${releaseSummary.releasedQuantity === 1 ? "" : "s"}.`,
+      reason,
+      actorStaffProfileId: args.actorStaffProfileId,
+      actorUserId: actorValidation.actorUserId,
+      registerSessionId: session.registerSessionId,
+      metadata: {
+        priorStatus,
+        releasedHoldCount: releaseSummary.releasedHoldCount,
+        releasedQuantity: releaseSummary.releasedQuantity,
+        releasedHolds: releaseSummary.releasedHolds,
+        registerNumber: session.registerNumber,
+        terminalId: session.terminalId,
+        sessionNumber: session.sessionNumber,
+      },
+    });
+
+    await recordSessionLifecycleTraceBestEffort(ctx, {
+      stage: "expired",
+      session: {
+        ...session,
+        status: "expired",
+        expiresAt: now,
+        updatedAt: now,
+        notes: reason,
+      },
+      occurredAt: now,
+    });
+
+    return ok({
+      sessionId: args.sessionId,
+      status: "expired" as const,
+      priorStatus,
+      releasedHoldCount: releaseSummary.releasedHoldCount,
+      releasedQuantity: releaseSummary.releasedQuantity,
+    });
+  },
+});
 
 // Get sessions for a store (with filtering)
 export const getStoreSessions = query({

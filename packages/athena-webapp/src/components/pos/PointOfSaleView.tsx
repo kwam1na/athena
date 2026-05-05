@@ -1,4 +1,5 @@
 import { useQuery } from "convex/react";
+import type { ComponentType } from "react";
 import View from "../View";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
@@ -22,6 +23,7 @@ import {
   Receipt,
   Search,
   HandCoins,
+  ClipboardList,
 } from "lucide-react";
 import { useGetActiveOrganization } from "@/hooks/useGetOrganizations";
 import { getOrigin } from "~/src/lib/navigationUtils";
@@ -31,6 +33,8 @@ import { Badge } from "../ui/badge";
 import { cn } from "~/src/lib/utils";
 import { usePermissions } from "~/src/hooks/usePermissions";
 import { toDisplayAmount } from "~/convex/lib/currency";
+
+const FeatureLink = Link as ComponentType<any>;
 
 const Navigation = () => {
   return (
@@ -107,6 +111,14 @@ export default function PointOfSaleView() {
       href: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions" as const,
       color: "bg-orange-500",
       available: true,
+    },
+    {
+      title: "Active Sessions",
+      description: "Review active and held sales reserving inventory",
+      icon: ClipboardList,
+      href: "/$orgUrlSlug/store/$storeUrlSlug/pos/sessions" as any,
+      color: "bg-cyan-600",
+      available: hasFullAdminAccess,
     },
     {
       title: "Expense Reports",
@@ -187,7 +199,7 @@ export default function PointOfSaleView() {
                       feature.enabled === false && "cursor-not-allowed",
                     )}
                   >
-                    <Link
+                    <FeatureLink
                       to={feature.href}
                       params={{
                         orgUrlSlug: activeOrganization.slug,
@@ -216,7 +228,7 @@ export default function PointOfSaleView() {
                           {feature.description}
                         </CardDescription>
                       </CardContent>
-                    </Link>
+                    </FeatureLink>
                   </div>
                 );
               })}
