@@ -52,6 +52,7 @@ describe("V26-169 time/query refactors", () => {
     const reviewsSource = readSource("convex/storeFront/reviews.ts");
     const guestSource = readSource("convex/storeFront/guest.ts");
     const analyticsSource = readSource("convex/storeFront/analytics.ts");
+    const userSource = readSource("convex/storeFront/user.ts");
 
     expect(offersSource).toContain('.withIndex("by_storeId_status"');
     expect(offersSource).toContain('.withIndex("by_storeFrontUserId_promoCodeId"');
@@ -67,6 +68,13 @@ describe("V26-169 time/query refactors", () => {
     expect(guestSource).toContain('.withIndex("by_marker"');
     expect(analyticsSource).toContain('.withIndex("by_storeFrontUserId_storeId"');
     expect(analyticsSource).toContain('.withIndex("by_action_productId"');
+    const mostRecentActivitySource = userSource.slice(
+      userSource.indexOf("export const getMostRecentActivity")
+    );
+    expect(mostRecentActivitySource).toContain('.withIndex("by_storeFrontUserId"');
+    expect(mostRecentActivitySource).not.toContain(
+      'q.eq(q.field("storeFrontUserId"), args.id)'
+    );
   });
 
   it("covers the remaining V26-172 analytics and reporting query hotspots", () => {
