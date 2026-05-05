@@ -230,4 +230,12 @@ bun run github:pr-merge -- <pr-number-or-url> --auto --method squash
 
 Pending required checks are expected after auto-merge is armed. Failed or cancelled checks are not a handoff state; inspect and fix them.
 
-Output the PR URL and whether auto-merge was armed.
+When the workflow stays responsible through merge completion, continue after GitHub reports the PR merged: fetch `origin/main`, fast-forward the clean root checkout to the merged commit, and run Athena production CD locally:
+
+```bash
+scripts/deploy-vps.sh full-prod-local
+```
+
+Run that deploy only from clean local `main` after the merge is present on `origin/main`. The VPS should receive locally built artifacts; it should not build the Athena or storefront apps as an automatic consequence of every merge.
+
+Output the PR URL, whether auto-merge was armed, and the post-merge local deploy result when the workflow carried through to merge.
