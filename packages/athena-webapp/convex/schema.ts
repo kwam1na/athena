@@ -191,6 +191,11 @@ const schema = defineSchema({
       "status",
       "expiresAt",
     ])
+    .index("by_storeId_status_expiresAt", [
+      "storeId",
+      "status",
+      "expiresAt",
+    ])
     .index("by_sourceSessionId_status_productSkuId", [
       "sourceSessionId",
       "status",

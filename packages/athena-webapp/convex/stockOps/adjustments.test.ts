@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
-import type { MutationCtx } from "../_generated/server";
+import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 
 const mockedAuthServer = vi.hoisted(() => ({
@@ -17,6 +17,7 @@ import {
   assertStockAdjustmentReasonCode,
   calculateCycleCountQuantityDelta,
   hasHighStockAdjustmentVariance,
+  listInventorySnapshotWithCtx,
   requiresStockAdjustmentApproval,
   resolveStockAdjustmentApprovalDecisionWithCtx,
   resolveStockAdjustmentQuantityDelta,
@@ -27,6 +28,146 @@ import {
 
 function getSource(relativePath: string) {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8");
+}
+
+function createInventorySnapshotQueryCtx() {
+  const tables = {
+    category: new Map<string, Record<string, unknown>>([
+      ["category-1", { _id: "category-1", name: "Hair" }],
+    ]),
+    color: new Map<string, Record<string, unknown>>([
+      ["color-1", { _id: "color-1", name: "Black" }],
+    ]),
+    inventoryHold: new Map<string, Record<string, unknown>>([
+      [
+        "hold-active",
+        {
+          _id: "hold-active",
+          expiresAt: 2_000,
+          productSkuId: "sku-1",
+          quantity: 2,
+          sourceSessionId: "session-1",
+          status: "active",
+          storeId: "store-1",
+        },
+      ],
+      [
+        "hold-expired",
+        {
+          _id: "hold-expired",
+          expiresAt: 500,
+          productSkuId: "sku-1",
+          quantity: 1,
+          sourceSessionId: "session-2",
+          status: "active",
+          storeId: "store-1",
+        },
+      ],
+      [
+        "hold-released",
+        {
+          _id: "hold-released",
+          expiresAt: 2_000,
+          productSkuId: "sku-1",
+          quantity: 4,
+          sourceSessionId: "session-3",
+          status: "released",
+          storeId: "store-1",
+        },
+      ],
+    ]),
+    product: new Map<string, Record<string, unknown>>([
+      [
+        "product-1",
+        {
+          _id: "product-1",
+          categoryId: "category-1",
+          name: "Closure Wig",
+        },
+      ],
+    ]),
+    productSku: new Map<string, Record<string, unknown>>([
+      [
+        "sku-1",
+        {
+          _id: "sku-1",
+          color: "color-1",
+          images: [],
+          inventoryCount: 10,
+          productId: "product-1",
+          quantityAvailable: 8,
+          sku: "CW-18",
+          storeId: "store-1",
+        },
+      ],
+    ]),
+  };
+
+  function indexedQuery(table: keyof typeof tables) {
+    const filters: Array<[string, unknown | { gt: number }]> = [];
+    const filteredRecords = () =>
+      Array.from(tables[table].values()).filter((record) =>
+        filters.every(([field, value]) =>
+          typeof value === "object" && value !== null && "gt" in value
+            ? Number(record[field]) > (value as { gt: number }).gt
+            : record[field] === value,
+        ),
+      );
+
+    const query = {
+      collect: async () => filteredRecords(),
+      take: async (limit: number) => filteredRecords().slice(0, limit),
+      withIndex(
+        _index: string,
+        applyIndex: (builder: {
+          eq: (field: string, value: unknown) => unknown;
+          gt: (field: string, value: number) => unknown;
+        }) => unknown,
+      ) {
+        const builder = {
+          eq(field: string, value: unknown) {
+            filters.push([field, value]);
+            return builder;
+          },
+          gt(field: string, value: number) {
+            filters.push([field, { gt: value }]);
+            return builder;
+          },
+        };
+
+        applyIndex(builder);
+
+        return {
+          collect: async () => filteredRecords(),
+          take: async (limit: number) => filteredRecords().slice(0, limit),
+        };
+      },
+    };
+
+    return query;
+  }
+
+  const ctx = {
+    db: {
+      async get(tableOrId: string, maybeId?: string) {
+        if (maybeId === undefined) {
+          for (const table of Object.values(tables)) {
+            const record = table.get(tableOrId);
+            if (record) return record;
+          }
+
+          return null;
+        }
+
+        return tables[tableOrId as keyof typeof tables].get(maybeId) ?? null;
+      },
+      query(table: keyof typeof tables) {
+        return indexedQuery(table);
+      },
+    },
+  } as unknown as QueryCtx;
+
+  return { ctx, tables };
 }
 
 function createApprovalDecisionMutationCtx() {
@@ -384,6 +525,25 @@ function createSubmissionMutationCtx(args: {
 }
 
 describe("stock ops adjustments", () => {
+  it("returns hold-adjusted sellable availability while preserving durable SKU availability", async () => {
+    const { ctx } = createInventorySnapshotQueryCtx();
+
+    const rows = await listInventorySnapshotWithCtx(ctx, {
+      now: 1_000,
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        _id: "sku-1",
+        durableQuantityAvailable: 8,
+        inventoryCount: 10,
+        quantityAvailable: 6,
+        reservedQuantity: 2,
+      }),
+    ]);
+  });
+
   it("calculates cycle-count deltas from the system quantity", () => {
     expect(
       calculateCycleCountQuantityDelta({

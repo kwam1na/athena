@@ -1,4 +1,9 @@
-import { mutation, query, type MutationCtx } from "../_generated/server";
+import {
+  mutation,
+  query,
+  type MutationCtx,
+  type QueryCtx,
+} from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import {
@@ -62,6 +67,7 @@ type NormalizedStockAdjustmentLineItem = {
 const UNCATEGORIZED_SCOPE_KEY = "__uncategorized";
 const TEMPORARY_DELETE_SCOPE_CONFIRMATION =
   "delete-stock-adjustment-scope-skus";
+const ACTIVE_STORE_HOLD_SUM_LIMIT = 5000;
 
 function trimOptional(value?: string | null) {
   const nextValue = value?.trim();
@@ -359,76 +365,115 @@ export async function resolveStockAdjustmentApprovalDecisionWithCtx(
   return ctx.db.get("stockAdjustmentBatch", stockAdjustmentBatchId);
 }
 
-export const listInventorySnapshot = query({
+async function readActiveHeldQuantitiesForStockOpsSnapshot(
+  ctx: QueryCtx,
   args: {
-    storeId: v.id("store"),
-  },
-  handler: async (ctx, args) => {
-    // eslint-disable-next-line @convex-dev/no-collect-in-query -- This workspace needs the full store SKU snapshot so operators can reconcile counts across the entire catalog in one pass.
-    const productSkus = await ctx.db
-      .query("productSku")
-      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-      .collect();
+    now: number;
+    storeId: Id<"store">;
+  }
+) {
+  const holds = await ctx.db
+    .query("inventoryHold")
+    .withIndex("by_storeId_status_expiresAt", (q) =>
+      q.eq("storeId", args.storeId).eq("status", "active").gt("expiresAt", args.now)
+    )
+    .take(ACTIVE_STORE_HOLD_SUM_LIMIT + 1);
 
-    const productIds = Array.from(
-      new Set(productSkus.map((productSku) => productSku.productId))
+  if (holds.length > ACTIVE_STORE_HOLD_SUM_LIMIT) {
+    throw new Error(
+      "Stock operations has too many active POS inventory holds to summarize. Expire stale POS sessions and retry."
     );
-    const colorIds = Array.from(
-      new Set(productSkus.map((productSku) => productSku.color).filter(Boolean))
-    ) as Id<"color">[];
+  }
 
-    const [products, colors] = await Promise.all([
-      Promise.all(productIds.map((productId) => ctx.db.get("product", productId))),
-      Promise.all(colorIds.map((colorId) => ctx.db.get("color", colorId))),
-    ]);
-
-    const productMap = new Map<
-      Id<"product">,
-      NonNullable<(typeof products)[number]>
-    >();
-    products.forEach((product) => {
-      if (product) {
-        productMap.set(product._id, product);
-      }
-    });
-    const categoryIds = Array.from(
-      new Set(
-        products
-          .map((product) => product?.categoryId)
-          .filter(Boolean)
-      )
-    ) as Id<"category">[];
-    const categories = await Promise.all(
-      categoryIds.map((categoryId) => ctx.db.get("category", categoryId))
+  return holds.reduce((quantities, hold) => {
+    quantities.set(
+      hold.productSkuId,
+      (quantities.get(hold.productSkuId) ?? 0) + Math.max(0, hold.quantity)
     );
-    const categoryMap = new Map<
-      Id<"category">,
-      NonNullable<(typeof categories)[number]>
-    >();
-    categories.forEach((category) => {
-      if (category) {
-        categoryMap.set(category._id, category);
-      }
-    });
-    const colorMap = new Map<Id<"color">, NonNullable<(typeof colors)[number]>>();
-    colors.forEach((color) => {
-      if (color) {
-        colorMap.set(color._id, color);
-      }
-    });
+    return quantities;
+  }, new Map<Id<"productSku">, number>());
+}
 
-    return productSkus
-      .map((productSku) => {
+export async function listInventorySnapshotWithCtx(
+  ctx: QueryCtx,
+  args: {
+    now?: number;
+    storeId: Id<"store">;
+  }
+) {
+  const now = args.now ?? Date.now();
+  // eslint-disable-next-line @convex-dev/no-collect-in-query -- This workspace needs the full store SKU snapshot so operators can reconcile counts across the entire catalog in one pass.
+  const productSkus = await ctx.db
+    .query("productSku")
+    .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+    .collect();
+  const heldQuantities = await readActiveHeldQuantitiesForStockOpsSnapshot(ctx, {
+    now,
+    storeId: args.storeId,
+  });
+
+  const productIds = Array.from(
+    new Set(productSkus.map((productSku) => productSku.productId))
+  );
+  const colorIds = Array.from(
+    new Set(productSkus.map((productSku) => productSku.color).filter(Boolean))
+  ) as Id<"color">[];
+
+  const [products, colors] = await Promise.all([
+    Promise.all(productIds.map((productId) => ctx.db.get("product", productId))),
+    Promise.all(colorIds.map((colorId) => ctx.db.get("color", colorId))),
+  ]);
+
+  const productMap = new Map<
+    Id<"product">,
+    NonNullable<(typeof products)[number]>
+  >();
+  products.forEach((product) => {
+    if (product) {
+      productMap.set(product._id, product);
+    }
+  });
+  const categoryIds = Array.from(
+    new Set(products.map((product) => product?.categoryId).filter(Boolean))
+  ) as Id<"category">[];
+  const categories = await Promise.all(
+    categoryIds.map((categoryId) => ctx.db.get("category", categoryId))
+  );
+  const categoryMap = new Map<
+    Id<"category">,
+    NonNullable<(typeof categories)[number]>
+  >();
+  categories.forEach((category) => {
+    if (category) {
+      categoryMap.set(category._id, category);
+    }
+  });
+  const colorMap = new Map<Id<"color">, NonNullable<(typeof colors)[number]>>();
+  colors.forEach((color) => {
+    if (color) {
+      colorMap.set(color._id, color);
+    }
+  });
+
+  const rows = await Promise.all(
+    productSkus.map(async (productSku) => {
         const product = productMap.get(productSku.productId);
         const category = product?.categoryId
           ? categoryMap.get(product.categoryId)
           : null;
         const color = productSku.color ? colorMap.get(productSku.color) : null;
+        const reservedQuantity = heldQuantities.get(productSku._id) ?? 0;
+        const durableQuantityAvailable = productSku.quantityAvailable;
+        const quantityAvailable = Math.max(
+          0,
+          durableQuantityAvailable - reservedQuantity
+        );
 
         return {
           _id: productSku._id,
           barcode: productSku.barcode ?? null,
           colorName: color?.name ?? null,
+          durableQuantityAvailable,
           imageUrl: productSku.images[0] ?? null,
           inventoryCount: productSku.inventoryCount,
           length: productSku.length ?? null,
@@ -439,18 +484,29 @@ export const listInventorySnapshot = query({
             productSku.productName ??
             productSku.sku ??
             String(productSku._id),
-          quantityAvailable: productSku.quantityAvailable,
+          quantityAvailable,
+          reservedQuantity,
           sku: productSku.sku ?? null,
         };
       })
-      .sort((left, right) => {
-        const nameCompare = left.productName.localeCompare(right.productName);
-        if (nameCompare !== 0) {
-          return nameCompare;
-        }
+  );
 
-        return (left.sku ?? "").localeCompare(right.sku ?? "");
-      });
+  return rows.sort((left, right) => {
+    const nameCompare = left.productName.localeCompare(right.productName);
+    if (nameCompare !== 0) {
+      return nameCompare;
+    }
+
+    return (left.sku ?? "").localeCompare(right.sku ?? "");
+  });
+}
+
+export const listInventorySnapshot = query({
+  args: {
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => {
+    return listInventorySnapshotWithCtx(ctx, args);
   },
 });
 

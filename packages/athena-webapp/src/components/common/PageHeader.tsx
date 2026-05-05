@@ -37,6 +37,7 @@ export const NavigateBackButton = () => {
 
   return (
     <Button
+      aria-label="Go back"
       onClick={navigateBack}
       variant="ghost"
       className="h-8 px-2 lg:px-3 "
@@ -94,6 +95,7 @@ export const ComposedPageHeader = ({
       <FadeIn className="flex min-w-0 flex-1 items-center gap-4">
         {o && (
           <Button
+            aria-label="Go back"
             onClick={onNavigateBack ? onNavigateBack : navigateBack}
             variant="ghost"
             className="h-8 px-2 lg:px-3 "

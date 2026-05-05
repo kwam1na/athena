@@ -6,6 +6,7 @@ import { AlertTriangle, ClipboardList } from "lucide-react";
 import { GenericDataTable } from "@/components/base/table/data-table";
 import View from "@/components/View";
 import { FadeIn } from "@/components/common/FadeIn";
+import { NavigateBackButton } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/states/empty/empty-state";
 import { NoPermissionView } from "@/components/states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "@/components/states/signed-out/ProtectedAdminSignInView";
@@ -288,7 +289,10 @@ function POSSessionsLoadingState() {
 function POSSessionsHeader() {
   return (
     <div className="container mx-auto flex h-10 items-center justify-between gap-3">
-      <p className="text-xl font-medium">POS sessions</p>
+      <div className="flex min-w-0 items-center gap-2">
+        <NavigateBackButton />
+        <p className="truncate text-xl font-medium">POS sessions</p>
+      </div>
       <Badge
         className="border-border bg-surface-raised text-muted-foreground"
         variant="outline"

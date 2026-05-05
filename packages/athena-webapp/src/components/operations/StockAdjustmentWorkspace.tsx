@@ -45,6 +45,7 @@ export type InventorySnapshotItem = {
   _id: Id<"productSku">;
   barcode?: string | null;
   colorName?: string | null;
+  durableQuantityAvailable?: number;
   imageUrl?: string | null;
   inventoryCount: number;
   length?: number | null;
@@ -52,6 +53,7 @@ export type InventorySnapshotItem = {
   productId?: Id<"product"> | null;
   productName: string;
   quantityAvailable: number;
+  reservedQuantity?: number;
   sku?: string | null;
 };
 
@@ -249,6 +251,8 @@ function getInventoryItemDisplayName(item: InventorySnapshotItem) {
 }
 
 function getSkuDetailEntries(item: InventorySnapshotItem) {
+  const reservedQuantity = item.reservedQuantity ?? 0;
+
   return [
     item.sku ? { label: "SKU", value: item.sku } : null,
     item.barcode ? { label: "Barcode", value: item.barcode } : null,
@@ -259,6 +263,12 @@ function getSkuDetailEntries(item: InventorySnapshotItem) {
       ? { label: "Length", value: `${item.length}"` }
       : null,
     item.colorName ? { label: "Color", value: item.colorName } : null,
+    reservedQuantity > 0
+      ? {
+          label: "Reserved",
+          value: `${formatInventoryNumber(reservedQuantity)} in POS sessions`,
+        }
+      : null,
   ].filter(
     (entry): entry is { label: string; value: string } =>
       entry !== null && entry.value.trim().length > 0,
@@ -682,10 +692,12 @@ export function StockAdjustmentWorkspaceContent({
           0,
           item.inventoryCount - item.quantityAvailable,
         );
+        const reservedUnits = Math.max(0, item.reservedQuantity ?? 0);
 
         return {
           availableUnits: current.availableUnits + item.quantityAvailable,
           onHandUnits: current.onHandUnits + item.inventoryCount,
+          reservedUnits: current.reservedUnits + reservedUnits,
           unavailableSkuCount:
             current.unavailableSkuCount + (unavailableUnits > 0 ? 1 : 0),
           unavailableUnits: current.unavailableUnits + unavailableUnits,
@@ -694,6 +706,7 @@ export function StockAdjustmentWorkspaceContent({
       {
         availableUnits: 0,
         onHandUnits: 0,
+        reservedUnits: 0,
         unavailableSkuCount: 0,
         unavailableUnits: 0,
       },
@@ -713,7 +726,13 @@ export function StockAdjustmentWorkspaceContent({
             )} of ${formatInventoryNumber(totals.onHandUnits)} ${pluralize(
               totals.onHandUnits,
               "unit",
-            )} are available to sell.`,
+            )} are available to sell.${
+              totals.reservedUnits > 0
+                ? ` ${formatInventoryNumber(
+                    totals.reservedUnits,
+                  )} reserved in POS sessions.`
+                : ""
+            }`,
       title:
         itemCount === 0
           ? "No inventory loaded."
@@ -912,8 +931,15 @@ export function StockAdjustmentWorkspaceContent({
               <span className="font-medium text-foreground">
                 {formatInventoryNumber(item.inventoryCount)}
               </span>
-              <span className="text-muted-foreground">
-                {formatInventoryNumber(item.quantityAvailable)}
+              <span className="space-y-0.5 text-muted-foreground">
+                <span className="block">
+                  {formatInventoryNumber(item.quantityAvailable)}
+                </span>
+                {(item.reservedQuantity ?? 0) > 0 ? (
+                  <span className="block text-[11px] font-medium uppercase tracking-[0.12em] text-warning">
+                    {formatInventoryNumber(item.reservedQuantity ?? 0)} reserved
+                  </span>
+                ) : null}
               </span>
             </div>
           );

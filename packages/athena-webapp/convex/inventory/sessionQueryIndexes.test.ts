@@ -84,6 +84,9 @@ describe("POS and expense session indexing", () => {
       '.index("by_storeId_productSkuId_status_expiresAt", [',
     );
     expect(inventoryHoldSchema).toContain(
+      '.index("by_storeId_status_expiresAt", [',
+    );
+    expect(inventoryHoldSchema).toContain(
       '.index("by_sourceSessionId_status_productSkuId", [',
     );
   });
