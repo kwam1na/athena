@@ -287,6 +287,7 @@ function ProductViewContent() {
       weight: variant.weight,
       attributes: variant.attributes || {},
       storeId: activeStore!._id,
+      isVisible: variant.isVisible,
       images,
     });
   };

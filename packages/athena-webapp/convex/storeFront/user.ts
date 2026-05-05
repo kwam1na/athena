@@ -15,12 +15,12 @@ const entity = "storeFrontUser";
 
 async function getStoreFrontActorById(
   ctx: QueryCtx,
-  id: Id<"storeFrontUser"> | Id<"guest">
+  id: Id<"storeFrontUser"> | Id<"guest">,
 ) {
   try {
     const storeFrontUser = await ctx.db.get(
       "storeFrontUser",
-      id as Id<"storeFrontUser">
+      id as Id<"storeFrontUser">,
     );
 
     if (storeFrontUser) {
@@ -123,7 +123,10 @@ export const findLinkedAccounts = query({
     const storeFrontUsers = await ctx.db
       .query("storeFrontUser")
       .filter((q) =>
-        q.and(q.eq(q.field("email"), email), q.neq(q.field("_id"), args.userId))
+        q.and(
+          q.eq(q.field("email"), email),
+          q.neq(q.field("_id"), args.userId),
+        ),
       )
       .collect();
 
@@ -149,7 +152,7 @@ export const getAllUserActivity = query({
     const analytics = await ctx.db
       .query("analytics")
       .withIndex("by_storeFrontUserId", (q) =>
-        q.eq("storeFrontUserId", args.id)
+        q.eq("storeFrontUserId", args.id),
       )
       .filter((q) => q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN))
       .collect();
@@ -170,7 +173,10 @@ export const getAllUserActivity = query({
     for (const id of idArray) {
       try {
         // Try to get from storeFrontUser table
-        const user = await ctx.db.get("storeFrontUser", id as Id<"storeFrontUser">);
+        const user = await ctx.db.get(
+          "storeFrontUser",
+          id as Id<"storeFrontUser">,
+        );
         if (user) {
           userMap[id] = { email: user.email };
           continue; // Found in storeFrontUser table, skip to next ID
@@ -209,7 +215,7 @@ export const getAllUserActivityInternal = internalQuery({
     const analytics = await ctx.db
       .query("analytics")
       .withIndex("by_storeFrontUserId", (q) =>
-        q.eq("storeFrontUserId", args.id)
+        q.eq("storeFrontUserId", args.id),
       )
       .filter((q) => q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN))
       .collect();
@@ -224,7 +230,10 @@ export const getAllUserActivityInternal = internalQuery({
 
     for (const id of idArray) {
       try {
-        const user = await ctx.db.get("storeFrontUser", id as Id<"storeFrontUser">);
+        const user = await ctx.db.get(
+          "storeFrontUser",
+          id as Id<"storeFrontUser">,
+        );
         if (user) {
           userMap[id] = { email: user.email };
           continue;
@@ -262,21 +271,25 @@ export const getLastViewedProduct = query({
     const isSkuAvailable = async (
       productId: Id<"product">,
       storeId: Id<"store">,
-      skuToCheck: string
+      skuToCheck: string,
     ) => {
       const product: any = await ctx.runQuery(
         internal.inventory.products.getByIdInternal,
         {
           id: productId,
           storeId,
-        }
+        },
       );
+
+      if (product?.availability !== "live") {
+        return null;
+      }
 
       return product?.skus?.find(
         (sku: any) =>
           sku.sku === skuToCheck &&
           (!args.category || sku.productCategory === args.category) &&
-          sku.quantityAvailable > 0
+          sku.quantityAvailable > 0,
       );
     };
 
@@ -284,14 +297,14 @@ export const getLastViewedProduct = query({
     const analytics = await ctx.db
       .query("analytics")
       .withIndex("by_storeFrontUserId", (q) =>
-        q.eq("storeFrontUserId", args.id)
+        q.eq("storeFrontUserId", args.id),
       )
       .filter((q) =>
         q.and(
           q.eq(q.field("action"), "viewed_product"),
           q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN),
-          q.lte(q.field("_creationTime"), cutoff)
-        )
+          q.lte(q.field("_creationTime"), cutoff),
+        ),
       )
       .order("desc")
       .take(100);
@@ -306,7 +319,7 @@ export const getLastViewedProduct = query({
         .filter((q) => q.eq(q.field("storeFrontUserId"), args.id))
         .collect()
         .then((items) =>
-          items.filter((item) => productSkus.includes(item.productSku))
+          items.filter((item) => productSkus.includes(item.productSku)),
         );
 
       // Create a Set of SKUs that are in the bag for faster lookup
@@ -321,19 +334,19 @@ export const getLastViewedProduct = query({
         const availableSku = await isSkuAvailable(
           analytic.data.product,
           analytic.storeId,
-          analytic.data.productSku
+          analytic.data.productSku,
         );
 
         if (availableSku) {
           console.log(
-            `Found available upsell product for user ${args.id}: ${availableSku.sku}`
+            `Found available upsell product for user ${args.id}: ${availableSku.sku}`,
           );
           return availableSku;
         }
       }
 
       console.log(
-        `No available products found in recent views for user ${args.id}`
+        `No available products found in recent views for user ${args.id}`,
       );
       return null;
     }
@@ -342,14 +355,14 @@ export const getLastViewedProduct = query({
     const allTimeAnalytics = await ctx.db
       .query("analytics")
       .withIndex("by_storeFrontUserId", (q) =>
-        q.eq("storeFrontUserId", args.id)
+        q.eq("storeFrontUserId", args.id),
       )
       .filter((q) =>
         q.and(
           q.eq(q.field("action"), "viewed_product"),
           q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN),
-          q.lte(q.field("_creationTime"), cutoff)
-        )
+          q.lte(q.field("_creationTime"), cutoff),
+        ),
       )
       .order("desc")
       .take(200); // check up to 20 most recent all-time views
@@ -357,7 +370,7 @@ export const getLastViewedProduct = query({
     if (allTimeAnalytics.length) {
       // Get all the product SKUs from analytics
       const productSkus = allTimeAnalytics.map(
-        (analytic) => analytic.data.productSku
+        (analytic) => analytic.data.productSku,
       );
 
       // Find all bag items for these SKUs
@@ -366,7 +379,7 @@ export const getLastViewedProduct = query({
         .filter((q) => q.eq(q.field("storeFrontUserId"), args.id))
         .collect()
         .then((items) =>
-          items.filter((item) => productSkus.includes(item.productSku))
+          items.filter((item) => productSkus.includes(item.productSku)),
         );
 
       // Create a Set of SKUs that are in the bag for faster lookup
@@ -379,12 +392,12 @@ export const getLastViewedProduct = query({
         const availableSku = await isSkuAvailable(
           analytic.data.product,
           analytic.storeId,
-          analytic.data.productSku
+          analytic.data.productSku,
         );
 
         if (availableSku) {
           console.log(
-            `Found available upsell product for user ${args.id}: ${availableSku.sku}`
+            `Found available upsell product for user ${args.id}: ${availableSku.sku}`,
           );
           return availableSku;
         }
@@ -410,21 +423,25 @@ export const getLastViewedProducts = query({
     const isSkuAvailable = async (
       productId: Id<"product">,
       storeId: Id<"store">,
-      skuToCheck: string
+      skuToCheck: string,
     ) => {
       const product: any = await ctx.runQuery(
         internal.inventory.products.getByIdInternal,
         {
           id: productId,
           storeId,
-        }
+        },
       );
+
+      if (product?.availability !== "live") {
+        return null;
+      }
 
       return product?.skus?.find(
         (sku: any) =>
           sku.sku === skuToCheck &&
           (!args.category || sku.productCategory === args.category) &&
-          sku.quantityAvailable > 0
+          sku.quantityAvailable > 0,
       );
     };
 
@@ -432,13 +449,13 @@ export const getLastViewedProducts = query({
     const analytics = await ctx.db
       .query("analytics")
       .withIndex("by_storeFrontUserId", (q) =>
-        q.eq("storeFrontUserId", args.id)
+        q.eq("storeFrontUserId", args.id),
       )
       .filter((q) =>
         q.and(
           q.eq(q.field("action"), "viewed_product"),
-          q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN)
-        )
+          q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN),
+        ),
       )
       .order("desc")
       .take(200); // Increased limit to get more products
@@ -464,14 +481,14 @@ export const getLastViewedProducts = query({
         const availableSku = await isSkuAvailable(
           analytic.data.product,
           analytic.storeId,
-          analytic.data.productSku
+          analytic.data.productSku,
         );
 
         if (availableSku) {
           availableProducts.push(availableSku);
           addedSkus.add(analytic.data.productSku);
           console.log(
-            `Found available product ${availableProducts.length}/${args.limit} for user ${args.id}: ${availableSku.sku}`
+            `Found available product ${availableProducts.length}/${args.limit} for user ${args.id}: ${availableSku.sku}`,
           );
         }
       }
@@ -482,20 +499,20 @@ export const getLastViewedProducts = query({
       const allTimeAnalytics = await ctx.db
         .query("analytics")
         .withIndex("by_storeFrontUserId", (q) =>
-          q.eq("storeFrontUserId", args.id)
+          q.eq("storeFrontUserId", args.id),
         )
         .filter((q) =>
           q.and(
             q.eq(q.field("action"), "viewed_product"),
-            q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN)
-          )
+            q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN),
+          ),
         )
         .order("desc")
         .take(500); // Check more all-time views
 
       if (allTimeAnalytics.length) {
         const addedSkus = new Set(
-          availableProducts.map((product) => product.sku)
+          availableProducts.map((product) => product.sku),
         );
 
         // Try each analytic in order until we reach the limit
@@ -512,14 +529,14 @@ export const getLastViewedProducts = query({
           const availableSku = await isSkuAvailable(
             analytic.data.product,
             analytic.storeId,
-            analytic.data.productSku
+            analytic.data.productSku,
           );
 
           if (availableSku) {
             availableProducts.push(availableSku);
             addedSkus.add(analytic.data.productSku);
             console.log(
-              `Found available product ${availableProducts.length}/${args.limit} for user ${args.id}: ${availableSku.sku}`
+              `Found available product ${availableProducts.length}/${args.limit} for user ${args.id}: ${availableSku.sku}`,
             );
           }
         }
@@ -527,7 +544,7 @@ export const getLastViewedProducts = query({
     }
 
     console.log(
-      `Found ${availableProducts.length} available products for user ${args.id}`
+      `Found ${availableProducts.length} available products for user ${args.id}`,
     );
     return availableProducts;
   },
@@ -546,34 +563,38 @@ export const getLastViewedProductsInternal = internalQuery({
     const isSkuAvailable = async (
       productId: Id<"product">,
       storeId: Id<"store">,
-      skuToCheck: string
+      skuToCheck: string,
     ) => {
       const product: any = await ctx.runQuery(
         internal.inventory.products.getByIdInternal,
         {
           id: productId,
           storeId,
-        }
+        },
       );
+
+      if (product?.availability !== "live") {
+        return null;
+      }
 
       return product?.skus?.find(
         (sku: any) =>
           sku.sku === skuToCheck &&
           (!args.category || sku.productCategory === args.category) &&
-          sku.quantityAvailable > 0
+          sku.quantityAvailable > 0,
       );
     };
 
     const analytics = await ctx.db
       .query("analytics")
       .withIndex("by_storeFrontUserId", (q) =>
-        q.eq("storeFrontUserId", args.id)
+        q.eq("storeFrontUserId", args.id),
       )
       .filter((q) =>
         q.and(
           q.eq(q.field("action"), "viewed_product"),
-          q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN)
-        )
+          q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN),
+        ),
       )
       .order("desc")
       .take(200);
@@ -593,7 +614,7 @@ export const getLastViewedProductsInternal = internalQuery({
         const availableSku = await isSkuAvailable(
           analytic.data.product,
           analytic.storeId,
-          analytic.data.productSku
+          analytic.data.productSku,
         );
 
         if (availableSku) {
@@ -626,11 +647,9 @@ export const getMostRecentActivity = query({
     const analytics = await ctx.db
       .query("analytics")
       .withIndex("by_storeFrontUserId", (q) =>
-        q.eq("storeFrontUserId", args.id)
+        q.eq("storeFrontUserId", args.id),
       )
-      .filter((q) =>
-        q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN)
-      )
+      .filter((q) => q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN))
       .order("desc") // Most recent first
       .first();
 
