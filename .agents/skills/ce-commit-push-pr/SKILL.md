@@ -230,12 +230,20 @@ bun run github:pr-merge -- <pr-number-or-url> --auto --method squash
 
 Pending required checks are expected after auto-merge is armed. Failed or cancelled checks are not a handoff state; inspect and fix them.
 
-When the workflow stays responsible through merge completion, continue after GitHub reports the PR merged: fetch `origin/main`, fast-forward the clean root checkout to the merged commit, and run Athena production CD locally:
+When the workflow stays responsible through merge completion, continue after GitHub reports the PR merged: fetch `origin/main`, fast-forward the clean root checkout to the merged commit, and run only the Athena production deploy commands required by the merged file set. Inspect the squash-merged diff from clean local `main` with:
 
 ```bash
-scripts/deploy-vps.sh full-prod-local
+git diff --name-only HEAD^ HEAD
 ```
 
-Run that deploy only from clean local `main` after the merge is present on `origin/main`. The VPS should receive locally built artifacts; it should not build the Athena or storefront apps as an automatic consequence of every merge.
+If the PR did not squash-merge, use `gh pr view <pr> --json files` or an equivalent merge-base range that covers only the merged PR. Then run the narrowest needed commands from clean local `main`:
+
+- `scripts/deploy-vps.sh convex-prod` for Convex runtime/schema/API changes.
+- `scripts/deploy-vps.sh athena-local` for Athena admin runtime/build changes.
+- `scripts/deploy-vps.sh storefront-local` for storefront runtime/build changes.
+- `scripts/deploy-vps.sh valkey-proxy` for Valkey proxy runtime/config changes.
+- `scripts/deploy-vps.sh full-prod-local` only when all production surfaces changed or the deploy impact is ambiguous enough that under-deploying is the larger risk.
+
+The VPS should receive locally built static artifacts; it should not build the Athena or storefront apps as an automatic consequence of every merge.
 
 Output the PR URL, whether auto-merge was armed, and the post-merge local deploy result when the workflow carried through to merge.
