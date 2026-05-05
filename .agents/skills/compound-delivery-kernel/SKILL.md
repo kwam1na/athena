@@ -48,6 +48,18 @@ Plan -> Work -> Review -> Compound -> Repeat.
 - After fixes, rerun the specific sensor that should catch the issue and then the merge-level sensor set.
 - When GitHub required checks are the only remaining gate and the repo supports auto-merge, arm auto-merge after local merge-level sensors and review gates pass. Pending remote checks should be delegated to auto-merge instead of spending agent time polling green checks just to run a manual merge; failing checks still require investigation.
 
+### Post-Merge Local CD
+
+- When a delivery workflow carries work all the way into `main`, treat production deploy as part of the post-merge finish, not as a VPS-side build job.
+- Confirm the PR actually merged and `origin/main` contains the merge before deploying. Then fast-forward the root checkout to that exact `origin/main` state and verify it is clean.
+- In Athena, run production CD locally from the clean root checkout with:
+  ```bash
+  scripts/deploy-vps.sh full-prod-local
+  ```
+  This deploys Convex, builds the Athena and storefront static apps locally, uploads the artifacts, and refreshes the Valkey proxy without asking the production VPS to build the apps on every merge.
+- Do not run local production deploy from a feature branch, dirty checkout, or temporary worktree. If the deploy script fails, keep the deploy failure as the active blocker, report the exact command and relevant output, and do not claim production is current.
+- If the user explicitly scopes delivery to PR-only or asks to skip deploy, honor that scope and state that production CD was intentionally not run.
+
 ### Compound
 
 Before handoff, decide whether this delivery taught the system something reusable.
@@ -110,6 +122,7 @@ Every delivery handoff should include:
 - what changed
 - validation evidence from repo sensors
 - for web app or app-surface changes, a browser preview URL from `scripts/preview-worktree.ts start athena`; if no preview is available, state the exact blocker instead of omitting it
+- post-merge production deploy command and result when local CD applies, or the explicit reason it did not run
 - review status and remaining risk
 - compounding decision: documented, skill updated, follow-up filed, or no durable learning
 - links to ticket, PR, and learning/follow-up artifacts when present
