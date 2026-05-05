@@ -625,11 +625,11 @@ export const getMostRecentActivity = query({
     // Get only the most recent analytics record
     const analytics = await ctx.db
       .query("analytics")
+      .withIndex("by_storeFrontUserId", (q) =>
+        q.eq("storeFrontUserId", args.id)
+      )
       .filter((q) =>
-        q.and(
-          q.eq(q.field("storeFrontUserId"), args.id),
-          q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN)
-        )
+        q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN)
       )
       .order("desc") // Most recent first
       .first();
