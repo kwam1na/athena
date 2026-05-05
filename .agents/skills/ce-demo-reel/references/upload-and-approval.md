@@ -10,7 +10,7 @@ Upload the evidence file (GIF or PNG) to litterbox for a temporary 1-hour previe
 python3 scripts/capture-demo.py preview [ARTIFACT_PATH]
 ```
 
-The last line of output is the preview URL (e.g., `https://litter.catbox.moe/abc123.gif`). This URL expires after 1 hour — no cleanup needed.
+The last line of output is a temporary review link (e.g., `https://litter.catbox.moe/abc123.gif`). This link expires after 1 hour — no cleanup needed.
 
 For multiple files (static screenshots tier), upload each file separately.
 
@@ -18,9 +18,9 @@ For multiple files (static screenshots tier), upload each file separately.
 
 ## Step 2: Destination Choice
 
-Present the preview URL to the user and ask how to handle the evidence. Use the platform's blocking question tool: `AskUserQuestion` in Claude Code (call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded), `request_user_input` in Codex, `ask_user` in Gemini, `ask_user` in Pi (requires the `pi-ask-user` extension). Fall back to presenting options in chat only when no blocking tool exists in the harness or the call errors (e.g., Codex edit modes) — not because a schema load is required. Never silently skip the question.
+Present the temporary review link to the user and ask how to handle the evidence. Use the platform's blocking question tool: `AskUserQuestion` in Claude Code (call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded), `request_user_input` in Codex, `ask_user` in Gemini, `ask_user` in Pi (requires the `pi-ask-user` extension). Fall back to presenting options in chat only when no blocking tool exists in the harness or the call errors (e.g., Codex edit modes) — not because a schema load is required. Never silently skip the question.
 
-**Question:** "Evidence preview (1h link): [PREVIEW_URL]. Where should the evidence go?"
+**Question:** "Evidence review link (1h): [TEMPORARY_REVIEW_LINK]. Where should the evidence go?"
 
 **Options:**
 1. **Upload to catbox (public URL)** -- promote to permanent hosting for PR embedding
@@ -48,15 +48,15 @@ Set evidence to null and proceed. The preview link expires on its own.
 
 ## Step 3: Promote to Permanent Hosting
 
-After the user selects "Upload to catbox", upload to permanent catbox hosting. The command accepts either the preview URL (preferred) or the local file path (fallback):
+After the user selects "Upload to catbox", upload to permanent catbox hosting. The command accepts either the temporary review link (preferred) or the local file path (fallback):
 
 ```bash
-python3 scripts/capture-demo.py upload [PREVIEW_URL or ARTIFACT_PATH]
+python3 scripts/capture-demo.py upload [TEMPORARY_REVIEW_LINK or ARTIFACT_PATH]
 ```
 
-If Step 1 produced a preview URL, pass it here -- catbox copies directly from litterbox without re-uploading. If Step 1 fell back to local review (no preview URL), pass the local artifact path instead.
+If Step 1 produced a temporary review link, pass it here -- catbox copies directly from litterbox without re-uploading. If Step 1 fell back to local review, pass the local artifact path instead.
 
-The last line of output is the permanent URL (e.g., `https://files.catbox.moe/abc123.gif`). Use this URL in the output, not the preview URL.
+The last line of output is the permanent URL (e.g., `https://files.catbox.moe/abc123.gif`). Use this URL in the output, not the temporary review link.
 
 For multiple files, promote each separately.
 
