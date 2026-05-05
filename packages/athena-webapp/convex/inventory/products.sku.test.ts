@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
+import { backfillUndefinedSkuVisibilityFromProducts } from "./productSku";
 import { archive, createSku, getAll, updateSku } from "./products";
 
 const mocks = vi.hoisted(() => ({
@@ -73,6 +74,7 @@ function createSkuMutationCtx(seed: Partial<Record<TableName, Row[]>>) {
       },
       query(table: TableName) {
         return {
+          collect: async () => Array.from(tables[table].values()),
           filter() {
             return createIndexedQuery(
               table,
@@ -321,5 +323,76 @@ describe("product catalog visibility", () => {
     expect(archivedProducts.map((product: Row) => product._id)).toEqual([
       "product-archived",
     ]);
+  });
+});
+
+describe("product SKU visibility backfill", () => {
+  it("patches only undefined SKU visibility from the parent product visibility", async () => {
+    const { ctx, tables } = createSkuMutationCtx({
+      product: [
+        {
+          _id: "product-visible",
+          isVisible: true,
+        },
+        {
+          _id: "product-hidden",
+          isVisible: false,
+        },
+        {
+          _id: "product-unknown",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku-visible-parent",
+          productId: "product-visible",
+        },
+        {
+          _id: "sku-hidden-parent",
+          productId: "product-hidden",
+        },
+        {
+          _id: "sku-already-visible",
+          isVisible: true,
+          productId: "product-hidden",
+        },
+        {
+          _id: "sku-missing-product",
+          productId: "product-missing",
+        },
+        {
+          _id: "sku-parent-without-visibility",
+          productId: "product-unknown",
+        },
+      ],
+    });
+
+    const result = await getHandler(backfillUndefinedSkuVisibilityFromProducts)(
+      ctx,
+      {},
+    );
+
+    expect(result).toEqual({
+      success: true,
+      scannedCount: 5,
+      updatedCount: 2,
+      skippedMissingProductCount: 1,
+      skippedParentWithoutVisibilityCount: 1,
+    });
+    expect(tables.productSku.get("sku-visible-parent")).toMatchObject({
+      isVisible: true,
+    });
+    expect(tables.productSku.get("sku-hidden-parent")).toMatchObject({
+      isVisible: false,
+    });
+    expect(tables.productSku.get("sku-already-visible")).toMatchObject({
+      isVisible: true,
+    });
+    expect(tables.productSku.get("sku-missing-product")).not.toHaveProperty(
+      "isVisible",
+    );
+    expect(
+      tables.productSku.get("sku-parent-without-visibility"),
+    ).not.toHaveProperty("isVisible");
   });
 });

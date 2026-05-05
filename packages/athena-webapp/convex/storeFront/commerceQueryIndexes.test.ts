@@ -143,4 +143,12 @@ describe("commerce query indexing", () => {
       "Some items in your bag are no longer available",
     );
   });
+
+  it("only returns live products from viewed-product upsells", () => {
+    const userSource = getSource("./user.ts");
+
+    expect(
+      userSource.match(/product\?\.availability !== "live"/g) ?? [],
+    ).toHaveLength(3);
+  });
 });

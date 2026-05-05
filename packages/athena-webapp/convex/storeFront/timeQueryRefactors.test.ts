@@ -118,7 +118,7 @@ describe("V26-169 time/query refactors", () => {
       userSource.match(
         /\.filter\(\(q\) => q\.neq\(q\.field\("origin"\), SYNTHETIC_MONITOR_ORIGIN\)\)/g
       )
-    ).toHaveLength(2);
+    ).toHaveLength(3);
     expect(
       userSource.match(
         /SYNTHETIC_MONITOR_ORIGIN/g

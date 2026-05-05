@@ -194,3 +194,42 @@ export const makeAllProductsVisible = mutation({
     return { success: true, updatedCount: productSkus.length };
   },
 });
+
+export const backfillUndefinedSkuVisibilityFromProducts = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const productSkus = await ctx.db.query("productSku").collect();
+    let updatedCount = 0;
+    let skippedMissingProductCount = 0;
+    let skippedParentWithoutVisibilityCount = 0;
+
+    for (const sku of productSkus) {
+      if (sku.isVisible !== undefined) continue;
+
+      const product = await ctx.db.get("product", sku.productId);
+
+      if (!product) {
+        skippedMissingProductCount += 1;
+        continue;
+      }
+
+      if (typeof product.isVisible !== "boolean") {
+        skippedParentWithoutVisibilityCount += 1;
+        continue;
+      }
+
+      await ctx.db.patch("productSku", sku._id, {
+        isVisible: product.isVisible,
+      });
+      updatedCount += 1;
+    }
+
+    return {
+      success: true,
+      scannedCount: productSkus.length,
+      updatedCount,
+      skippedMissingProductCount,
+      skippedParentWithoutVisibilityCount,
+    };
+  },
+});

@@ -10955,7 +10955,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_inventory_products_sku_test_ts",
       "source_file": "packages/athena-webapp/convex/inventory/products.sku.test.ts",
-      "source_location": "L110",
+      "source_location": "L112",
       "target": "products_sku_test_createproductsqueryctx",
       "weight": 1
     },
@@ -10967,7 +10967,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_inventory_products_sku_test_ts",
       "source_file": "packages/athena-webapp/convex/inventory/products.sku.test.ts",
-      "source_location": "L22",
+      "source_location": "L23",
       "target": "products_sku_test_createskumutationctx",
       "weight": 1
     },
@@ -10979,7 +10979,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_inventory_products_sku_test_ts",
       "source_file": "packages/athena-webapp/convex/inventory/products.sku.test.ts",
-      "source_location": "L18",
+      "source_location": "L19",
       "target": "products_sku_test_gethandler",
       "weight": 1
     },
@@ -20363,7 +20363,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_add_product_productview_tsx",
       "source_file": "packages/athena-webapp/src/components/add-product/ProductView.tsx",
-      "source_location": "L372",
+      "source_location": "L373",
       "target": "productview_handlekeydown",
       "weight": 1
     },
@@ -20387,7 +20387,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_add_product_productview_tsx",
       "source_file": "packages/athena-webapp/src/components/add-product/ProductView.tsx",
-      "source_location": "L361",
+      "source_location": "L362",
       "target": "productview_onsubmit",
       "weight": 1
     },
@@ -20411,7 +20411,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_add_product_productview_tsx",
       "source_file": "packages/athena-webapp/src/components/add-product/ProductView.tsx",
-      "source_location": "L423",
+      "source_location": "L424",
       "target": "productview_updateproductvisibility",
       "weight": 1
     },
@@ -20423,7 +20423,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_add_product_productview_tsx",
       "source_file": "packages/athena-webapp/src/components/add-product/ProductView.tsx",
-      "source_location": "L294",
+      "source_location": "L295",
       "target": "productview_updatevariantsku",
       "weight": 1
     },
@@ -39203,7 +39203,7 @@
       "relation": "calls",
       "source": "products_sku_test_createskumutationctx",
       "source_file": "packages/athena-webapp/convex/inventory/products.sku.test.ts",
-      "source_location": "L111",
+      "source_location": "L113",
       "target": "products_sku_test_createproductsqueryctx",
       "weight": 1
     },
@@ -39227,7 +39227,7 @@
       "relation": "calls",
       "source": "productview_modifyproduct",
       "source_file": "packages/athena-webapp/src/components/add-product/ProductView.tsx",
-      "source_location": "L362",
+      "source_location": "L363",
       "target": "productview_onsubmit",
       "weight": 1
     },
@@ -39239,7 +39239,7 @@
       "relation": "calls",
       "source": "productview_saveproduct",
       "source_file": "packages/athena-webapp/src/components/add-product/ProductView.tsx",
-      "source_location": "L363",
+      "source_location": "L364",
       "target": "productview_onsubmit",
       "weight": 1
     },
@@ -64465,7 +64465,7 @@
       "label": "createProductsQueryCtx()",
       "norm_label": "createproductsqueryctx()",
       "source_file": "packages/athena-webapp/convex/inventory/products.sku.test.ts",
-      "source_location": "L110"
+      "source_location": "L112"
     },
     {
       "community": 230,
@@ -64474,7 +64474,7 @@
       "label": "createSkuMutationCtx()",
       "norm_label": "createskumutationctx()",
       "source_file": "packages/athena-webapp/convex/inventory/products.sku.test.ts",
-      "source_location": "L22"
+      "source_location": "L23"
     },
     {
       "community": 230,
@@ -64483,7 +64483,7 @@
       "label": "getHandler()",
       "norm_label": "gethandler()",
       "source_file": "packages/athena-webapp/convex/inventory/products.sku.test.ts",
-      "source_location": "L18"
+      "source_location": "L19"
     },
     {
       "community": 231,
@@ -83536,7 +83536,7 @@
       "label": "handleKeyDown()",
       "norm_label": "handlekeydown()",
       "source_file": "packages/athena-webapp/src/components/add-product/ProductView.tsx",
-      "source_location": "L372"
+      "source_location": "L373"
     },
     {
       "community": 74,
@@ -83554,7 +83554,7 @@
       "label": "onSubmit()",
       "norm_label": "onsubmit()",
       "source_file": "packages/athena-webapp/src/components/add-product/ProductView.tsx",
-      "source_location": "L361"
+      "source_location": "L362"
     },
     {
       "community": 74,
@@ -83572,7 +83572,7 @@
       "label": "updateProductVisibility()",
       "norm_label": "updateproductvisibility()",
       "source_file": "packages/athena-webapp/src/components/add-product/ProductView.tsx",
-      "source_location": "L423"
+      "source_location": "L424"
     },
     {
       "community": 74,
@@ -83581,7 +83581,7 @@
       "label": "updateVariantSku()",
       "norm_label": "updatevariantsku()",
       "source_file": "packages/athena-webapp/src/components/add-product/ProductView.tsx",
-      "source_location": "L294"
+      "source_location": "L295"
     },
     {
       "community": 740,
