@@ -3,6 +3,14 @@ import { describe, expect, it, vi } from "vitest";
 import type { MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 
+const mockedAuthServer = vi.hoisted(() => ({
+  getAuthUserId: vi.fn(),
+}));
+
+vi.mock("@convex-dev/auth/server", () => ({
+  getAuthUserId: mockedAuthServer.getAuthUserId,
+}));
+
 import {
   assertDistinctReceivingLineItems,
   assertReceivablePurchaseOrderStatus,
@@ -20,7 +28,23 @@ function getSource(relativePath: string) {
 function createReceivingMutationCtx(args?: {
   purchaseOrderStatus?: string;
 }) {
+  mockedAuthServer.getAuthUserId.mockResolvedValue("auth-user-1");
+
   const tables = {
+    athenaUser: new Map<string, Record<string, unknown>>([
+      ["athena-user-1", { _id: "athena-user-1", email: "manager@example.com" }],
+    ]),
+    organizationMember: new Map<string, Record<string, unknown>>([
+      [
+        "membership-1",
+        {
+          _id: "membership-1",
+          organizationId: "org-1",
+          role: "full_admin",
+          userId: "athena-user-1",
+        },
+      ],
+    ]),
     productSku: new Map<string, Record<string, unknown>>([
       [
         "sku-1",
@@ -58,6 +82,12 @@ function createReceivingMutationCtx(args?: {
       ],
     ]),
     receivingBatch: new Map<string, Record<string, unknown>>(),
+    store: new Map<string, Record<string, unknown>>([
+      ["store-1", { _id: "store-1", organizationId: "org-1" }],
+    ]),
+    users: new Map<string, Record<string, unknown>>([
+      ["auth-user-1", { _id: "auth-user-1", email: "manager@example.com" }],
+    ]),
   };
   const insertCounters: Record<"receivingBatch" | "inventoryMovement", number> = {
     inventoryMovement: 0,
@@ -90,7 +120,40 @@ function createReceivingMutationCtx(args?: {
 
         tables[table].set(id, { ...existingRecord, ...value });
       },
-      query(table: "purchaseOrderLineItem" | "receivingBatch") {
+      query(table: keyof typeof tables) {
+        if (table === "athenaUser" || table === "organizationMember") {
+          return {
+            filter(
+              applyFilter: (queryBuilder: {
+                and: (...conditions: unknown[]) => unknown;
+                eq: (left: unknown, right: unknown) => unknown;
+                field: (name: string) => string;
+              }) => unknown
+            ) {
+              const filters: Array<[string, unknown]> = [];
+              const queryBuilder = {
+                and: (...conditions: unknown[]) => conditions,
+                eq(left: unknown, right: unknown) {
+                  filters.push([left as string, right]);
+                  return { left, right };
+                },
+                field(name: string) {
+                  return name;
+                },
+              };
+
+              applyFilter(queryBuilder);
+
+              return {
+                first: async () =>
+                  Array.from(tables[table].values()).find((record) =>
+                    filters.every(([field, value]) => record[field] === value)
+                  ) ?? null,
+              };
+            },
+          };
+        }
+
         if (table === "purchaseOrderLineItem") {
           return {
             withIndex(

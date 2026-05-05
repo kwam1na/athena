@@ -5,6 +5,7 @@ import { v } from "convex/values";
 import { recordInventoryMovementWithCtx } from "../operations/inventoryMovements";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
+import { requireStoreFullAdminAccess } from "./access";
 
 type ReceivingLineItemInput = {
   orderedQuantity: number;
@@ -182,6 +183,8 @@ export async function receivePurchaseOrderBatchWithCtx(
     throw new Error("Purchase order not found.");
   }
 
+  const { athenaUser } = await requireStoreFullAdminAccess(ctx, args.storeId);
+
   const existingReceivingBatch = await ctx.db
     .query("receivingBatch")
     .withIndex("by_storeId_purchaseOrderId_submissionKey", (q) =>
@@ -258,7 +261,7 @@ export async function receivePurchaseOrderBatchWithCtx(
     submissionKey,
     lineItemCount: totals.lineItemCount,
     totalUnits: totals.totalUnits,
-    receivedByUserId: args.receivedByUserId,
+    receivedByUserId: athenaUser._id,
     notes: trimOptional(args.notes),
     lineItems: normalizedLineItems.map((lineItem) => ({
       purchaseOrderLineItemId: lineItem._id as never,
@@ -284,7 +287,7 @@ export async function receivePurchaseOrderBatchWithCtx(
     });
 
     await recordInventoryMovementWithCtx(ctx, {
-      actorUserId: args.receivedByUserId,
+      actorUserId: athenaUser._id,
       movementType: "receipt",
       notes: trimOptional(args.notes),
       organizationId: purchaseOrder.organizationId,
