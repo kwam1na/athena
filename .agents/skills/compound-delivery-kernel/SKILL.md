@@ -109,6 +109,7 @@ Every delivery handoff should include:
 
 - what changed
 - validation evidence from repo sensors
+- for web app or app-surface changes, a browser preview URL from `scripts/preview-worktree.ts start athena`; if no preview is available, state the exact blocker instead of omitting it
 - review status and remaining risk
 - compounding decision: documented, skill updated, follow-up filed, or no durable learning
 - links to ticket, PR, and learning/follow-up artifacts when present
