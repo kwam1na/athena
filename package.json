@@ -5,6 +5,7 @@
   "scripts": {
     "prepare": "sh scripts/configure-git-hooks.sh",
     "architecture:check": "bun scripts/architecture-boundary-check.ts",
+    "compound:check": "bun scripts/compound-solution-check.ts --base origin/main",
     "graphify:check": "bun scripts/graphify-check.ts",
     "graphify:rebuild": "bun scripts/graphify-rebuild.ts",
     "harness:audit": "bun scripts/harness-audit.ts",
@@ -21,10 +22,10 @@
     "github:pr-merge": "bun scripts/github-pr-merge.ts",
     "pre-commit:generated-artifacts": "bun scripts/pre-commit-generated-artifacts.ts",
     "pre-push:review": "bun scripts/pre-push-review.ts",
-    "pr:athena": "bun run pre-commit:generated-artifacts && bun run --filter '@athena/webapp' audit:convex && bun run --filter '@athena/webapp' lint:convex:changed && bun run architecture:check && bun run test:coverage && bun run harness:test && bun run harness:check && bun run harness:review --base origin/main && bun run harness:inferential-review && bun run harness:audit && bun run harness:scorecard && bun run graphify:check",
+    "pr:athena": "bun run pre-commit:generated-artifacts && bun run compound:check && bun run --filter '@athena/webapp' audit:convex && bun run --filter '@athena/webapp' lint:convex:changed && bun run architecture:check && bun run test:coverage && bun run harness:test && bun run harness:check && bun run harness:review --base origin/main && bun run harness:inferential-review && bun run harness:audit && bun run harness:scorecard && bun run graphify:check",
     "test": "bun run --filter '@athena/webapp' test && bun run --filter '@athena/storefront-webapp' test",
     "test:coverage:scripts": "bun scripts/root-scripts-coverage.ts",
-    "test:coverage": "bun scripts/coverage-toolchain-parity.ts && bun run --filter '@athena/webapp' test:coverage && bun run --filter '@athena/storefront-webapp' test:coverage && bun run test:coverage:scripts && bun scripts/coverage-summary.ts"
+    "test:coverage": "bun scripts/coverage-toolchain-parity.ts --repair && bun run --filter '@athena/webapp' test:coverage && bun run --filter '@athena/storefront-webapp' test:coverage && bun run test:coverage:scripts && bun scripts/coverage-summary.ts"
   },
   "workspaces": [
     "packages/*"
