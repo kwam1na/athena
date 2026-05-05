@@ -113,7 +113,11 @@ export async function listRegisterCatalog(
       productCache.set(sku.productId, product);
     }
 
-    if (!product || product.storeId !== args.storeId) {
+    if (
+      !product ||
+      product.storeId !== args.storeId ||
+      product.availability === "archived"
+    ) {
       continue;
     }
 

@@ -163,6 +163,14 @@ describe("listRegisterCatalog", () => {
           description: "Should not leak",
           name: "Other Store Wig",
         },
+        {
+          _id: "product-archived",
+          storeId: "store-a",
+          categoryId: "category-store-a",
+          description: "Archived product",
+          name: "Archived Wig",
+          availability: "archived",
+        },
       ],
       productSku: [
         {
@@ -193,6 +201,16 @@ describe("listRegisterCatalog", () => {
           productId: "product-other-store",
           sku: "OTHER-STORE",
           barcode: "999",
+          images: [],
+          price: 1000,
+          quantityAvailable: 9,
+        },
+        {
+          _id: "sku-archived",
+          storeId: "store-a",
+          productId: "product-archived",
+          sku: "ARCHIVED-WIG",
+          barcode: "888",
           images: [],
           price: 1000,
           quantityAvailable: 9,

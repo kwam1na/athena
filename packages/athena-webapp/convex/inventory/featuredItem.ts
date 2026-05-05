@@ -44,7 +44,7 @@ export const create = mutation({
       type: args.type,
     });
 
-    return await ctx.db.get(id);
+    return await ctx.db.get(entity, id);
   },
 });
 
@@ -53,7 +53,7 @@ export const remove = mutation({
     id: v.id(entity),
   },
   handler: async (ctx, args) => {
-    await ctx.db.delete(args.id);
+    await ctx.db.delete(entity, args.id);
 
     return true;
   },
@@ -64,7 +64,7 @@ export const getById = query({
     id: v.id(entity),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.id);
+    return await ctx.db.get(entity, args.id);
   },
 });
 
@@ -82,7 +82,7 @@ export const getAll = query({
           args.type ? q.eq(q.field("type"), args.type) : q.eq(1, 1)
         );
       })
-      .collect();
+      .take(100);
 
     const enrichedItems: any[] = await Promise.all(
       items.map(async (item) => {
@@ -94,13 +94,16 @@ export const getAll = query({
             {
               identifier: item.productId,
               storeId: args.storeId,
+              filters: {
+                isVisible: true,
+              },
             }
           );
           enrichedData.product = product;
         }
 
         if (item.categoryId) {
-          const category = await ctx.db.get(item.categoryId);
+          const category = await ctx.db.get("category", item.categoryId);
           enrichedData.category = category;
 
           // Get first 5 products from this category
@@ -110,7 +113,8 @@ export const getAll = query({
               q.and(
                 q.eq(q.field("categoryId"), item.categoryId),
                 q.eq(q.field("storeId"), args.storeId),
-                q.eq(q.field("isVisible"), true)
+                q.eq(q.field("isVisible"), true),
+                q.neq(q.field("availability"), "archived")
               )
             )
             .take(5);
@@ -133,7 +137,10 @@ export const getAll = query({
         }
 
         if (item.subcategoryId) {
-          const subcategory = await ctx.db.get(item.subcategoryId);
+          const subcategory = await ctx.db.get(
+            "subcategory",
+            item.subcategoryId
+          );
           enrichedData.subcategory = subcategory;
 
           // Get first 5 products from this subcategory
@@ -143,7 +150,8 @@ export const getAll = query({
               q.and(
                 q.eq(q.field("subcategoryId"), item.subcategoryId),
                 q.eq(q.field("storeId"), args.storeId),
-                q.eq(q.field("isVisible"), true)
+                q.eq(q.field("isVisible"), true),
+                q.neq(q.field("availability"), "archived")
               )
             )
             .take(5);
@@ -180,7 +188,7 @@ export const updateRanks = mutation({
   handler: async (ctx, args) => {
     await Promise.all(
       args.ranks.map(async (item) => {
-        await ctx.db.patch(item.id, {
+        await ctx.db.patch(entity, item.id, {
           rank: item.rank,
         });
       })

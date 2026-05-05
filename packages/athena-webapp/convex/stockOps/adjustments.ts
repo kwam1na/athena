@@ -123,6 +123,10 @@ async function listProductSkusForStockAdjustmentScopeWithCtx(
 
   return productSkus.filter((productSku) => {
     const product = productMap.get(productSku.productId);
+    if (product?.availability === "archived") {
+      return false;
+    }
+
     const category = product?.categoryId
       ? categoryMap.get(product.categoryId)
       : null;
@@ -455,8 +459,13 @@ export async function listInventorySnapshotWithCtx(
     }
   });
 
+  const activeProductSkus = productSkus.filter((productSku) => {
+    const product = productMap.get(productSku.productId);
+    return product?.availability !== "archived";
+  });
+
   const rows = await Promise.all(
-    productSkus.map(async (productSku) => {
+    activeProductSkus.map(async (productSku) => {
         const product = productMap.get(productSku.productId);
         const category = product?.categoryId
           ? categoryMap.get(product.categoryId)

@@ -29,6 +29,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/http/domains/customerChannel/routes/storefrontCors.test.ts`](../../convex/http/domains/customerChannel/routes/storefrontCors.test.ts)
 - [`convex/http/health.test.ts`](../../convex/http/health.test.ts)
 - [`convex/http/routerComposition.test.ts`](../../convex/http/routerComposition.test.ts)
+- [`convex/inventory/bestSeller.test.ts`](../../convex/inventory/bestSeller.test.ts)
 - [`convex/inventory/expenseSessions.test.ts`](../../convex/inventory/expenseSessions.test.ts)
 - [`convex/inventory/expenseTransactions.test.ts`](../../convex/inventory/expenseTransactions.test.ts)
 - [`convex/inventory/helpers/inventoryHolds.test.ts`](../../convex/inventory/helpers/inventoryHolds.test.ts)

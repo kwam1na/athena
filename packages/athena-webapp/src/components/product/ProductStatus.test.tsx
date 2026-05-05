@@ -58,4 +58,19 @@ describe("ProductStatus", () => {
 
     expect(screen.getByText("Live")).toBeInTheDocument();
   });
+
+  it("shows archived status before stock or visibility status", () => {
+    render(
+      <ProductStatus
+        product={makeProduct({
+          availability: "archived",
+          inventoryCount: 0,
+          isVisible: false,
+        })}
+        productVariant={makeVariant({ isVisible: false, stock: 0 })}
+      />,
+    );
+
+    expect(screen.getByText("Archived")).toBeInTheDocument();
+  });
 });

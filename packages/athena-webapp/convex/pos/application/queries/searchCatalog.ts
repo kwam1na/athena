@@ -39,7 +39,11 @@ async function mapSkuToCatalogResult(
     categoryName?: string;
   },
 ): Promise<CatalogResult | null> {
-  if (!args.product || !args.sku.netPrice) {
+  if (
+    !args.product ||
+    args.product.availability === "archived" ||
+    !args.sku.netPrice
+  ) {
     return null;
   }
 
@@ -85,7 +89,7 @@ export async function searchProducts(
   if (isConvexProductId(query)) {
     const product = await getProductById(ctx, query as Id<"product">);
 
-    if (product?.storeId === args.storeId) {
+    if (product?.storeId === args.storeId && product.availability !== "archived") {
       const productSkus = await listProductSkusByProductId(ctx, product._id);
       const categoryName =
         (await getCategoryById(ctx, product.categoryId))?.name || "";
@@ -144,7 +148,7 @@ export async function lookupByBarcode(
       ? await getProductById(ctx, args.barcode as Id<"product">)
       : null;
 
-    if (product?.storeId === args.storeId) {
+    if (product?.storeId === args.storeId && product.availability !== "archived") {
       const allSkus = await listProductSkusByProductId(ctx, product._id);
       const categoryName =
         (await getCategoryById(ctx, product.categoryId))?.name || "";
@@ -167,7 +171,7 @@ export async function lookupByBarcode(
   }
 
   const product = await getProductById(ctx, sku.productId);
-  if (!product) {
+  if (!product || product.availability === "archived") {
     return null;
   }
 

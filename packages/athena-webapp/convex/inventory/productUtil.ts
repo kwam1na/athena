@@ -12,6 +12,7 @@ export function buildAllProductsCacheKey(args: {
   category?: string[];
   subcategory?: string[];
   isVisible?: boolean;
+  availability?: "archived" | "draft" | "live";
   excludeStorefrontHidden?: boolean;
 }) {
   const colorParam = args.color ? `:color:${args.color.join(",")}` : "";
@@ -24,11 +25,14 @@ export function buildAllProductsCacheKey(args: {
     : "";
   const isVisibleParam =
     args.isVisible === undefined ? "" : `:isVisible:${args.isVisible}`;
+  const availabilityParam = args.availability
+    ? `:availability:${args.availability}`
+    : ":availability:active";
   const storefrontHiddenParam = args.excludeStorefrontHidden
     ? ":excludeStorefrontHidden:true"
     : "";
 
-  return `all:products:{${args.storeId}}${colorParam}${lengthParam}${categoryParam}${subcategoryParam}${isVisibleParam}${storefrontHiddenParam}`;
+  return `all:products:{${args.storeId}}${colorParam}${lengthParam}${categoryParam}${subcategoryParam}${isVisibleParam}${availabilityParam}${storefrontHiddenParam}`;
 }
 
 export const getAllProducts = internalAction({
@@ -39,6 +43,9 @@ export const getAllProducts = internalAction({
     category: v.optional(v.array(v.string())),
     subcategory: v.optional(v.array(v.string())),
     isVisible: v.optional(v.boolean()),
+    availability: v.optional(
+      v.union(v.literal("draft"), v.literal("live"), v.literal("archived"))
+    ),
     excludeStorefrontHidden: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {

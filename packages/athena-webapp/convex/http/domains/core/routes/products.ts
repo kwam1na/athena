@@ -57,6 +57,7 @@ productRoutes.get("/bestSellers", async (c) => {
 
   const res = await c.env.runQuery(api.inventory.bestSeller.getAll, {
     storeId: storeId as Id<"store">,
+    isVisible: true,
   });
 
   return c.json(res);

@@ -132,4 +132,15 @@ describe("commerce query indexing", () => {
     expect(helperSource).toContain('.withIndex("by_externalTransactionId"');
     expect(analyticsSource).toContain('.withIndex("by_promoCodeId"');
   });
+
+  it("rejects archived products before checkout sessions can be created", () => {
+    const checkoutSessionSource = getSource("./checkoutSession.ts");
+
+    expect(checkoutSessionSource).toContain(
+      'product.availability === "archived"',
+    );
+    expect(checkoutSessionSource).toContain(
+      "Some items in your bag are no longer available",
+    );
+  });
 });

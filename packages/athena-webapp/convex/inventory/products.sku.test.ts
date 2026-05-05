@@ -1,10 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { Id } from "../_generated/dataModel";
-import type { MutationCtx } from "../_generated/server";
-import { createSku, updateSku } from "./products";
+import type { MutationCtx, QueryCtx } from "../_generated/server";
+import { archive, createSku, getAll, updateSku } from "./products";
 
-type TableName = "product" | "productSku";
+const mocks = vi.hoisted(() => ({
+  requireStoreFullAdminAccess: vi.fn(),
+}));
+
+vi.mock("../stockOps/access", () => ({
+  requireStoreFullAdminAccess: mocks.requireStoreFullAdminAccess,
+}));
+
+type TableName = "category" | "product" | "productSku" | "subcategory";
 type Row = Record<string, unknown> & { _id: string };
 
 function getHandler(definition: unknown) {
@@ -13,12 +21,18 @@ function getHandler(definition: unknown) {
 
 function createSkuMutationCtx(seed: Partial<Record<TableName, Row[]>>) {
   const tables: Record<TableName, Map<string, Row>> = {
+    category: new Map((seed.category ?? []).map((row) => [row._id, row])),
     product: new Map((seed.product ?? []).map((row) => [row._id, row])),
     productSku: new Map((seed.productSku ?? []).map((row) => [row._id, row])),
+    subcategory: new Map(
+      (seed.subcategory ?? []).map((row) => [row._id, row]),
+    ),
   };
   const counters: Record<TableName, number> = {
+    category: 0,
     product: 0,
     productSku: seed.productSku?.length ?? 0,
+    subcategory: 0,
   };
 
   function createIndexedQuery(
@@ -54,6 +68,9 @@ function createSkuMutationCtx(seed: Partial<Record<TableName, Row[]>>) {
 
         tables[table].set(id, { ...existing, ...value });
       },
+      async delete(table: TableName, id: string) {
+        tables[table].delete(id);
+      },
       query(table: TableName) {
         return {
           filter() {
@@ -82,9 +99,68 @@ function createSkuMutationCtx(seed: Partial<Record<TableName, Row[]>>) {
         };
       },
     },
+    scheduler: {
+      runAfter: vi.fn(),
+    },
   } as unknown as MutationCtx;
 
   return { ctx, tables };
+}
+
+function createProductsQueryCtx(seed: Partial<Record<TableName, Row[]>>) {
+  const { ctx, tables } = createSkuMutationCtx(seed);
+  const queryCtx = ctx as unknown as QueryCtx;
+
+  queryCtx.db.query = ((table: TableName) => ({
+    filter(applyFilter?: (queryBuilder: unknown) => (row: Row) => boolean) {
+      const predicate = applyFilter
+        ? applyFilter({
+            field: (field: string) => field,
+            eq: (field: string, value: unknown) => (row: Row) =>
+              row[field] === value,
+            and:
+              (...predicates: Array<(row: Row) => boolean>) =>
+              (row: Row) =>
+                predicates.every((predicate) => predicate(row)),
+            or:
+              (...predicates: Array<(row: Row) => boolean>) =>
+              (row: Row) =>
+                predicates.some((predicate) => predicate(row)),
+          })
+        : () => true;
+
+      const matches = Array.from(tables[table].values()).filter(predicate);
+      return {
+        collect: async () => matches,
+        first: async () => matches[0] ?? null,
+      };
+    },
+    withIndex(
+      _index: string,
+      applyIndex: (queryBuilder: {
+        eq: (field: string, value: unknown) => unknown;
+      }) => unknown,
+    ) {
+      const filters: Array<[string, unknown]> = [];
+      const queryBuilder = {
+        eq(field: string, value: unknown) {
+          filters.push([field, value]);
+          return queryBuilder;
+        },
+      };
+
+      applyIndex(queryBuilder);
+      const matches = Array.from(tables[table].values()).filter((row) =>
+        filters.every(([field, value]) => row[field] === value),
+      );
+      return {
+        collect: async () => matches,
+        first: async () => matches[0] ?? null,
+      };
+    },
+  })) as unknown as QueryCtx["db"]["query"];
+
+  return { ctx: queryCtx, tables };
 }
 
 describe("inventory SKU generation", () => {
@@ -144,5 +220,106 @@ describe("inventory SKU generation", () => {
       "productSku001",
       expect.objectContaining({ sku: result.sku }),
     );
+  });
+});
+
+describe("product archiving", () => {
+  it("archives a product without deleting the product record", async () => {
+    mocks.requireStoreFullAdminAccess.mockResolvedValue({});
+
+    const { ctx, tables } = createSkuMutationCtx({
+      product: [
+        {
+          _id: "product001",
+          availability: "live",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+    const deleteSpy = vi.spyOn(ctx.db, "delete");
+
+    const result = await getHandler(archive)(ctx, {
+      id: "product001" as Id<"product">,
+      storeId: "storezzzz" as Id<"store">,
+    });
+
+    expect(mocks.requireStoreFullAdminAccess).toHaveBeenCalledWith(
+      ctx,
+      "storezzzz",
+    );
+    expect(result).toMatchObject({
+      _id: "product001",
+      availability: "archived",
+    });
+    expect(tables.product.get("product001")).toMatchObject({
+      availability: "archived",
+    });
+    expect(deleteSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("product catalog visibility", () => {
+  it("excludes archived products by default and returns only archived products when requested", async () => {
+    const seed = {
+      product: [
+        {
+          _id: "product-live",
+          availability: "live",
+          categoryId: "category-1",
+          isVisible: true,
+          name: "Live Product",
+          storeId: "storezzzz",
+          subcategoryId: "subcategory-1",
+        },
+        {
+          _id: "product-archived",
+          availability: "archived",
+          categoryId: "category-1",
+          isVisible: true,
+          name: "Archived Product",
+          storeId: "storezzzz",
+          subcategoryId: "subcategory-1",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku-live",
+          images: ["live.jpg"],
+          inventoryCount: 1,
+          price: 1000,
+          productId: "product-live",
+          quantityAvailable: 1,
+          storeId: "storezzzz",
+        },
+        {
+          _id: "sku-archived",
+          images: ["archived.jpg"],
+          inventoryCount: 1,
+          price: 1000,
+          productId: "product-archived",
+          quantityAvailable: 1,
+          storeId: "storezzzz",
+        },
+      ],
+    };
+
+    const activeCtx = createProductsQueryCtx(seed).ctx;
+    const defaultProducts = await getHandler(getAll)(activeCtx, {
+      storeId: "storezzzz" as Id<"store">,
+    });
+
+    expect(defaultProducts.map((product: Row) => product._id)).toEqual([
+      "product-live",
+    ]);
+
+    const archivedCtx = createProductsQueryCtx(seed).ctx;
+    const archivedProducts = await getHandler(getAll)(archivedCtx, {
+      storeId: "storezzzz" as Id<"store">,
+      availability: "archived",
+    });
+
+    expect(archivedProducts.map((product: Row) => product._id)).toEqual([
+      "product-archived",
+    ]);
   });
 });

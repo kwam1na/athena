@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { Ban } from "lucide-react";
 import { useState } from "react";
 import { AlertModal } from "@/components/ui/modals/alert-modal";
-import { useDeleteProduct } from "../../product-actions";
+import { useArchiveProduct } from "../../product-actions";
 import { Product } from "~/types";
 
 interface DataTableRowActionsProps<TData> {
@@ -25,21 +25,22 @@ interface DataTableRowActionsProps<TData> {
 export function DataTableRowActions<TData>({
   row,
 }: DataTableRowActionsProps<TData>) {
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [isDeleteMutationPending, setIsDeleteMutationPending] = useState(false);
+  const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
+  const [isArchiveMutationPending, setIsArchiveMutationPending] =
+    useState(false);
 
   const navigate = useNavigate();
 
   const product = row.original as Product;
 
-  const deleteRowItem = useDeleteProduct(product._id);
+  const archiveRowItem = useArchiveProduct(product._id);
 
-  const deleteItem = async () => {
+  const archiveItem = async () => {
     try {
-      setIsDeleteMutationPending(true);
-      await deleteRowItem();
+      setIsArchiveMutationPending(true);
+      await archiveRowItem();
 
-      toast(`Product '${product.name}' deleted`, {
+      toast(`Product '${product.name}' archived`, {
         icon: <CheckCircledIcon className="w-4 h-4" />,
       });
 
@@ -57,8 +58,8 @@ export function DataTableRowActions<TData>({
         description: (e as Error).message,
       });
     } finally {
-      setIsDeleteMutationPending(false);
-      setIsDeleteModalOpen(false);
+      setIsArchiveMutationPending(false);
+      setIsArchiveModalOpen(false);
     }
   };
 
@@ -88,14 +89,14 @@ export function DataTableRowActions<TData>({
   return (
     <>
       <AlertModal
-        title="Delete product?"
-        isOpen={isDeleteModalOpen}
-        loading={isDeleteMutationPending}
+        title="Archive product?"
+        isOpen={isArchiveModalOpen}
+        loading={isArchiveMutationPending}
         onClose={() => {
-          setIsDeleteModalOpen(false);
+          setIsArchiveModalOpen(false);
         }}
         onConfirm={() => {
-          deleteItem();
+          archiveItem();
         }}
       />
       <DropdownMenu>
@@ -125,8 +126,8 @@ export function DataTableRowActions<TData>({
             Edit
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => setIsDeleteModalOpen(true)}>
-            Delete
+          <DropdownMenuItem onClick={() => setIsArchiveModalOpen(true)}>
+            Archive
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
