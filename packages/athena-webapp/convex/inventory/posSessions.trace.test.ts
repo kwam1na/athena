@@ -411,9 +411,11 @@ describe("pos session lifecycle trace handlers", () => {
         sessionId: "session-2",
       },
     });
-    expect(mocks.releaseInventoryHoldsBatch).toHaveBeenCalledWith(ctx.db, [
-      { skuId: "sku-1", quantity: 2 },
-    ]);
+    expect(mocks.releaseInventoryHoldsBatch).toHaveBeenCalledWith(ctx.db, {
+      sessionId: "session-2",
+      items: [{ skuId: "sku-1", quantity: 2 }],
+      now: expect.any(Number),
+    });
     expect(mocks.traceRecord).toHaveBeenCalledWith(
       expect.objectContaining({
         stage: "voided",
@@ -447,7 +449,11 @@ describe("pos session lifecycle trace handlers", () => {
         sessionId: "session-empty-void",
       },
     });
-    expect(mocks.releaseInventoryHoldsBatch).toHaveBeenCalledWith(ctx.db, []);
+    expect(mocks.releaseInventoryHoldsBatch).toHaveBeenCalledWith(ctx.db, {
+      sessionId: "session-empty-void",
+      items: [],
+      now: expect.any(Number),
+    });
     expect(ctx.db.delete).not.toHaveBeenCalled();
     expect(ctx.sessions[0]).toEqual(
       expect.objectContaining({
@@ -500,10 +506,14 @@ describe("pos session lifecycle trace handlers", () => {
       voidReason: "Duplicate SKU lines",
     });
 
-    expect(mocks.releaseInventoryHoldsBatch).toHaveBeenCalledWith(ctx.db, [
-      { skuId: "sku-1", quantity: 5 },
-      { skuId: "sku-2", quantity: 1 },
-    ]);
+    expect(mocks.releaseInventoryHoldsBatch).toHaveBeenCalledWith(ctx.db, {
+      sessionId: "session-aggregate-void",
+      items: [
+        { skuId: "sku-1", quantity: 5 },
+        { skuId: "sku-2", quantity: 1 },
+      ],
+      now: expect.any(Number),
+    });
     expect(ctx.items).toHaveLength(3);
     expect(ctx.db.delete).not.toHaveBeenCalled();
   });
@@ -1696,8 +1706,22 @@ describe("pos session lifecycle trace handlers", () => {
     );
     expect(mocks.releaseInventoryHoldsBatch.mock.calls).toEqual(
       expect.arrayContaining([
-        [ctx.db, [{ skuId: "sku-active", quantity: 3 }]],
-        [ctx.db, [{ skuId: "sku-held", quantity: 2 }]],
+        [
+          ctx.db,
+          {
+            sessionId: "session-other-active",
+            items: [{ skuId: "sku-active", quantity: 3 }],
+            now: expect.any(Number),
+          },
+        ],
+        [
+          ctx.db,
+          {
+            sessionId: "session-other-held",
+            items: [{ skuId: "sku-held", quantity: 2 }],
+            now: expect.any(Number),
+          },
+        ],
       ]),
     );
     expect(mocks.releaseInventoryHoldsBatch).toHaveBeenCalledTimes(2);

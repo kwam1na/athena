@@ -14,3 +14,4 @@ export * from "./featuredItem";
 export * from "./promoCode";
 export * from "./redeemedPromoCode";
 export * from "./complimentaryProduct";
+export * from "./inventoryHold";

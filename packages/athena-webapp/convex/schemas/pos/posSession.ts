@@ -12,6 +12,9 @@ export const posSessionSchema = v.object({
   transactionId: v.optional(v.id("posTransaction")), // Link to transaction created from this session
   workflowTraceId: v.optional(v.string()),
   terminalId: v.id("posTerminal"),
+  inventoryHoldMode: v.optional(
+    v.union(v.literal("legacyQuantityPatch"), v.literal("ledger"))
+  ),
 
   // Cart contents - now stored in separate posSessionItem table
   // Kept here for backward compatibility queries only

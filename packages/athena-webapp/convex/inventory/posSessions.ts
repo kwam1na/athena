@@ -7,11 +7,7 @@ import {
   QueryCtx,
 } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
-import {
-  acquireInventoryHoldsBatch,
-  releaseInventoryHoldsBatch,
-  validateInventoryAvailability,
-} from "./helpers/inventoryHolds";
+import { releaseInventoryHoldsBatch } from "./helpers/inventoryHolds";
 import {
   validateSessionActive,
   validateSessionModifiable,
@@ -257,7 +253,11 @@ async function expirePosSessionNow(
     }),
   );
 
-  await releaseInventoryHoldsBatch(ctx.db, releaseItems);
+  await releaseInventoryHoldsBatch(ctx.db, {
+    sessionId: session._id,
+    items: releaseItems,
+    now,
+  });
 
   const wasVoided = session.status === "void";
   const expirationNote = wasVoided
@@ -921,7 +921,11 @@ export const voidSession = mutation({
       }),
     );
 
-    await releaseInventoryHoldsBatch(ctx.db, releaseItems);
+    await releaseInventoryHoldsBatch(ctx.db, {
+      sessionId: args.sessionId,
+      items: releaseItems,
+      now,
+    });
 
     // Keep items for record-keeping - don't delete them
     // Items remain associated with voided session for audit trail
@@ -1009,7 +1013,11 @@ export const releaseSessionInventoryHoldsAndDeleteItems = mutation({
       }),
     );
 
-    await releaseInventoryHoldsBatch(ctx.db, releaseItems);
+    await releaseInventoryHoldsBatch(ctx.db, {
+      sessionId: args.sessionId,
+      items: releaseItems,
+      now,
+    });
 
     // Delete all items for this session
     const itemIds = items.map((item) => item._id);

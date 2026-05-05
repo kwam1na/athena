@@ -132,9 +132,13 @@ let mockRegisterCatalogRows: Array<{
   size: string;
   length: number | null;
   color: string;
+  areProcessingFeesAbsorbed: boolean;
+}>;
+let mockRegisterCatalogAvailabilityRows: Array<{
+  productSkuId: Id<"productSku">;
+  skuId: Id<"productSku">;
   inStock: boolean;
   quantityAvailable: number;
-  areProcessingFeesAbsorbed: boolean;
 }>;
 
 vi.mock("convex/react", () => ({
@@ -176,6 +180,7 @@ vi.mock("@/hooks/usePOSProducts", () => ({
 
 vi.mock("@/lib/pos/infrastructure/convex/catalogGateway", () => ({
   useConvexRegisterCatalog: () => mockRegisterCatalogRows,
+  useConvexRegisterCatalogAvailability: () => mockRegisterCatalogAvailabilityRows,
 }));
 
 vi.mock("@/hooks/useDebounce", () => ({
@@ -238,9 +243,19 @@ function buildRegisterCatalogRow(
     size: "18",
     length: 18,
     color: "natural",
+    areProcessingFeesAbsorbed: false,
+    ...overrides,
+  };
+}
+
+function buildRegisterCatalogAvailabilityRow(
+  overrides: Partial<(typeof mockRegisterCatalogAvailabilityRows)[number]> = {},
+): (typeof mockRegisterCatalogAvailabilityRows)[number] {
+  return {
+    productSkuId: "sku-2" as Id<"productSku">,
+    skuId: "sku-2" as Id<"productSku">,
     inStock: true,
     quantityAvailable: 5,
-    areProcessingFeesAbsorbed: false,
     ...overrides,
   };
 }
@@ -317,6 +332,7 @@ describe("useRegisterViewModel", () => {
       _id: "user-1" as Id<"athenaUser">,
     };
     mockRegisterCatalogRows = [];
+    mockRegisterCatalogAvailabilityRows = [];
 
     mockUseQuery.mockImplementation(() => mockCashier);
     mockUseMutation.mockReset();
@@ -1323,6 +1339,7 @@ describe("useRegisterViewModel", () => {
 
   it("adds an exact in-stock catalog match once from local register search", async () => {
     mockRegisterCatalogRows = [buildRegisterCatalogRow()];
+    mockRegisterCatalogAvailabilityRows = [buildRegisterCatalogAvailabilityRow()];
 
     const { useRegisterViewModel } = await import("./useRegisterViewModel");
     const { result } = renderHook(() => useRegisterViewModel());
@@ -1359,10 +1376,11 @@ describe("useRegisterViewModel", () => {
   });
 
   it("keeps out-of-stock exact catalog matches visible without auto-adding", async () => {
-    mockRegisterCatalogRows = [
-      buildRegisterCatalogRow({
-        quantityAvailable: 0,
+    mockRegisterCatalogRows = [buildRegisterCatalogRow()];
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow({
         inStock: false,
+        quantityAvailable: 0,
       }),
     ];
 
@@ -1390,8 +1408,44 @@ describe("useRegisterViewModel", () => {
     expect(mockAddItem).not.toHaveBeenCalled();
   });
 
+  it("keeps exact catalog matches visible but not addable while availability is unknown", async () => {
+    mockRegisterCatalogRows = [buildRegisterCatalogRow()];
+    mockRegisterCatalogAvailabilityRows = [];
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("1234567890123");
+    });
+
+    expect(result.current.productEntry.searchResults).toHaveLength(1);
+    expect(result.current.productEntry.searchResults[0]).toEqual(
+      expect.objectContaining({
+        skuId: "sku-2",
+        inStock: false,
+        quantityAvailable: 0,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.productEntry.onBarcodeSubmit({
+        preventDefault: vi.fn(),
+      } as never);
+    });
+
+    expect(mockAddItem).not.toHaveBeenCalled();
+  });
+
   it("adds an exact in-stock SKU match on submit without auto-adding first", async () => {
     mockRegisterCatalogRows = [buildRegisterCatalogRow()];
+    mockRegisterCatalogAvailabilityRows = [buildRegisterCatalogAvailabilityRow()];
 
     const { useRegisterViewModel } = await import("./useRegisterViewModel");
     const { result } = renderHook(() => useRegisterViewModel());
@@ -1452,6 +1506,80 @@ describe("useRegisterViewModel", () => {
     });
 
     expect(result.current.productEntry.searchResults).toHaveLength(2);
+    expect(mockAddItem).not.toHaveBeenCalled();
+  });
+
+  it("keeps local search result order stable when availability changes", async () => {
+    mockRegisterCatalogRows = [
+      buildRegisterCatalogRow(),
+      buildRegisterCatalogRow({
+        id: "sku-3" as Id<"productSku">,
+        productSkuId: "sku-3" as Id<"productSku">,
+        skuId: "sku-3" as Id<"productSku">,
+        sku: "DW-20",
+        barcode: "9876543210123",
+        length: 20,
+      }),
+    ];
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow({
+        inStock: false,
+        quantityAvailable: 0,
+      }),
+      buildRegisterCatalogAvailabilityRow({
+        productSkuId: "sku-3" as Id<"productSku">,
+        skuId: "sku-3" as Id<"productSku">,
+        inStock: true,
+        quantityAvailable: 8,
+      }),
+    ];
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result, rerender } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("product-2");
+    });
+
+    expect(
+      result.current.productEntry.searchResults.map((product) => ({
+        skuId: product.skuId,
+        quantityAvailable: product.quantityAvailable,
+      })),
+    ).toEqual([
+      { skuId: "sku-2", quantityAvailable: 0 },
+      { skuId: "sku-3", quantityAvailable: 8 },
+    ]);
+
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow({
+        quantityAvailable: 2,
+      }),
+      buildRegisterCatalogAvailabilityRow({
+        productSkuId: "sku-3" as Id<"productSku">,
+        skuId: "sku-3" as Id<"productSku">,
+        inStock: false,
+        quantityAvailable: 0,
+      }),
+    ];
+
+    rerender();
+
+    expect(
+      result.current.productEntry.searchResults.map((product) => ({
+        skuId: product.skuId,
+        quantityAvailable: product.quantityAvailable,
+      })),
+    ).toEqual([
+      { skuId: "sku-2", quantityAvailable: 2 },
+      { skuId: "sku-3", quantityAvailable: 0 },
+    ]);
     expect(mockAddItem).not.toHaveBeenCalled();
   });
 
@@ -2042,6 +2170,521 @@ describe("useRegisterViewModel", () => {
     });
 
     expect(mockAddItem).not.toHaveBeenCalled();
+  });
+
+  it("optimistically updates cart quantity while the server mutation is pending", async () => {
+    let resolveAddItem: (value: ReturnType<typeof ok>) => void = () => {};
+    mockAddItem.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveAddItem = resolve as typeof resolveAddItem;
+      }),
+    );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    let updatePromise: Promise<void> | undefined;
+    await act(async () => {
+      updatePromise = result.current.cart.onUpdateQuantity(
+        "item-1" as Id<"posSessionItem">,
+        2,
+      );
+    });
+
+    expect(result.current.cart.items[0].quantity).toBe(2);
+    expect(result.current.checkout.cartItems[0].quantity).toBe(2);
+
+    resolveAddItem(
+      ok({
+        itemId: "item-1" as Id<"posSessionItem">,
+        expiresAt: Date.now() + 60_000,
+      }),
+    );
+    await act(async () => {
+      await updatePromise;
+    });
+  });
+
+  it("optimistically adds product selections while the server mutation is pending", async () => {
+    let resolveAddItem: (value: ReturnType<typeof ok>) => void = () => {};
+    mockAddItem.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveAddItem = resolve as typeof resolveAddItem;
+      }),
+    );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    let addPromise: Promise<boolean> | undefined;
+    await act(async () => {
+      addPromise = result.current.productEntry.onAddProduct({
+        id: "sku-2",
+        name: "Deep Wave",
+        price: 100,
+        barcode: "1234567890123",
+        productId: "product-2" as Id<"product">,
+        skuId: "sku-2" as Id<"productSku">,
+        sku: "DW-18",
+        category: "Hair",
+        description: "Deep wave bundle",
+        image: null,
+        inStock: true,
+        quantityAvailable: 5,
+      });
+    });
+
+    expect(result.current.cart.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "Deep Wave",
+          skuId: "sku-2",
+          quantity: 1,
+        }),
+      ]),
+    );
+    expect(result.current.checkout.cartItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "Deep Wave",
+          skuId: "sku-2",
+          quantity: 1,
+        }),
+      ]),
+    );
+
+    resolveAddItem(
+      ok({
+        itemId: "item-2" as Id<"posSessionItem">,
+        expiresAt: Date.now() + 60_000,
+      }),
+    );
+    await act(async () => {
+      await addPromise;
+    });
+  });
+
+  it("optimistically increments existing product selections while the server mutation is pending", async () => {
+    let resolveAddItem: (value: ReturnType<typeof ok>) => void = () => {};
+    mockAddItem.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveAddItem = resolve as typeof resolveAddItem;
+      }),
+    );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    let addPromise: Promise<boolean> | undefined;
+    await act(async () => {
+      addPromise = result.current.productEntry.onAddProduct({
+        id: "sku-1",
+        name: "Body Wave",
+        price: 120,
+        barcode: "1234567890",
+        productId: "product-1" as Id<"product">,
+        skuId: "sku-1" as Id<"productSku">,
+        sku: "BW-12",
+        category: "Hair",
+        description: "Body wave bundle",
+        image: null,
+        inStock: true,
+        quantityAvailable: 5,
+      });
+    });
+
+    expect(result.current.cart.items[0].quantity).toBe(2);
+    expect(result.current.checkout.cartItems[0].quantity).toBe(2);
+
+    resolveAddItem(
+      ok({
+        itemId: "item-1" as Id<"posSessionItem">,
+        expiresAt: Date.now() + 60_000,
+      }),
+    );
+    await act(async () => {
+      await addPromise;
+    });
+  });
+
+  it("rolls back optimistic quantity changes when the server update fails", async () => {
+    let resolveAddItem: (value: ReturnType<typeof userError>) => void = () => {};
+    mockAddItem.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveAddItem = resolve as typeof resolveAddItem;
+      }),
+    );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    let updatePromise: Promise<void> | undefined;
+    await act(async () => {
+      updatePromise = result.current.cart.onUpdateQuantity(
+        "item-1" as Id<"posSessionItem">,
+        2,
+      );
+    });
+
+    expect(result.current.cart.items[0].quantity).toBe(2);
+
+    resolveAddItem(
+      userError({
+        code: "conflict",
+        message: "Only one item is available.",
+      }),
+    );
+    await act(async () => {
+      await updatePromise;
+    });
+
+    expect(result.current.cart.items[0].quantity).toBe(1);
+    expect(result.current.checkout.cartItems[0].quantity).toBe(1);
+    expect(toast.error).toHaveBeenCalledWith("Only one item is available.");
+  });
+
+  it("rolls back optimistic product selections when the server update fails", async () => {
+    let resolveAddItem: (value: ReturnType<typeof userError>) => void = () => {};
+    mockAddItem.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveAddItem = resolve as typeof resolveAddItem;
+      }),
+    );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    let addPromise: Promise<boolean> | undefined;
+    await act(async () => {
+      addPromise = result.current.productEntry.onAddProduct({
+        id: "sku-2",
+        name: "Deep Wave",
+        price: 100,
+        barcode: "1234567890123",
+        productId: "product-2" as Id<"product">,
+        skuId: "sku-2" as Id<"productSku">,
+        sku: "DW-18",
+        category: "Hair",
+        description: "Deep wave bundle",
+        image: null,
+        inStock: true,
+        quantityAvailable: 5,
+      });
+    });
+
+    expect(result.current.cart.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "Deep Wave",
+          skuId: "sku-2",
+        }),
+      ]),
+    );
+
+    resolveAddItem(
+      userError({
+        code: "conflict",
+        message: "Deep Wave is no longer available.",
+      }),
+    );
+    await act(async () => {
+      await addPromise;
+    });
+
+    expect(result.current.cart.items).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          skuId: "sku-2",
+        }),
+      ]),
+    );
+    expect(toast.error).toHaveBeenCalledWith(
+      "Deep Wave is no longer available.",
+    );
+  });
+
+  it("rolls back optimistic existing product selections when the server update fails", async () => {
+    let resolveAddItem: (value: ReturnType<typeof userError>) => void = () => {};
+    mockAddItem.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveAddItem = resolve as typeof resolveAddItem;
+      }),
+    );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    let addPromise: Promise<boolean> | undefined;
+    await act(async () => {
+      addPromise = result.current.productEntry.onAddProduct({
+        id: "sku-1",
+        name: "Body Wave",
+        price: 120,
+        barcode: "1234567890",
+        productId: "product-1" as Id<"product">,
+        skuId: "sku-1" as Id<"productSku">,
+        sku: "BW-12",
+        category: "Hair",
+        description: "Body wave bundle",
+        image: null,
+        inStock: true,
+        quantityAvailable: 5,
+      });
+    });
+
+    expect(result.current.cart.items[0].quantity).toBe(2);
+
+    resolveAddItem(
+      userError({
+        code: "conflict",
+        message: "Only one Body Wave is available.",
+      }),
+    );
+    await act(async () => {
+      await addPromise;
+    });
+
+    expect(result.current.cart.items[0].quantity).toBe(1);
+    expect(result.current.checkout.cartItems[0].quantity).toBe(1);
+    expect(toast.error).toHaveBeenCalledWith(
+      "Only one Body Wave is available.",
+    );
+  });
+
+  it("rolls back optimistic remove-to-zero changes when remove fails", async () => {
+    let resolveRemoveItem: (value: ReturnType<typeof userError>) => void = () => {};
+    mockRemoveItem.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveRemoveItem = resolve as typeof resolveRemoveItem;
+      }),
+    );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    let removePromise: Promise<void> | undefined;
+    await act(async () => {
+      removePromise = result.current.cart.onUpdateQuantity(
+        "item-1" as Id<"posSessionItem">,
+        0,
+      );
+    });
+
+    expect(result.current.cart.items).toHaveLength(0);
+    expect(result.current.checkout.cartItems).toHaveLength(0);
+
+    resolveRemoveItem(
+      userError({
+        code: "conflict",
+        message: "Could not remove this item.",
+      }),
+    );
+    await act(async () => {
+      await removePromise;
+    });
+
+    expect(result.current.cart.items).toHaveLength(1);
+    expect(result.current.cart.items[0].quantity).toBe(1);
+    expect(result.current.checkout.cartItems).toHaveLength(1);
+    expect(toast.error).toHaveBeenCalledWith("Could not remove this item.");
+  });
+
+  it("optimistically removes cart items while the server mutation is pending", async () => {
+    let resolveRemoveItem: (value: ReturnType<typeof ok>) => void = () => {};
+    mockRemoveItem.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveRemoveItem = resolve as typeof resolveRemoveItem;
+      }),
+    );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    let removePromise: Promise<void> | undefined;
+    await act(async () => {
+      removePromise = result.current.cart.onRemoveItem(
+        "item-1" as Id<"posSessionItem">,
+      );
+    });
+
+    expect(result.current.cart.items).toHaveLength(0);
+    expect(result.current.checkout.cartItems).toHaveLength(0);
+
+    resolveRemoveItem(
+      ok({
+        expiresAt: Date.now() + 60_000,
+      }),
+    );
+    await act(async () => {
+      await removePromise;
+    });
+  });
+
+  it("rolls back optimistic cart item removals when remove fails", async () => {
+    let resolveRemoveItem: (value: ReturnType<typeof userError>) => void = () => {};
+    mockRemoveItem.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveRemoveItem = resolve as typeof resolveRemoveItem;
+      }),
+    );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    let removePromise: Promise<void> | undefined;
+    await act(async () => {
+      removePromise = result.current.cart.onRemoveItem(
+        "item-1" as Id<"posSessionItem">,
+      );
+    });
+
+    expect(result.current.cart.items).toHaveLength(0);
+
+    resolveRemoveItem(
+      userError({
+        code: "conflict",
+        message: "Could not remove this item.",
+      }),
+    );
+    await act(async () => {
+      await removePromise;
+    });
+
+    expect(result.current.cart.items).toHaveLength(1);
+    expect(result.current.cart.items[0].quantity).toBe(1);
+    expect(result.current.checkout.cartItems).toHaveLength(1);
+    expect(toast.error).toHaveBeenCalledWith("Could not remove this item.");
+  });
+
+  it("optimistically clears cart items while bulk removal is pending", async () => {
+    let resolveClearCart: (value: ReturnType<typeof ok>) => void = () => {};
+    mockReleaseSessionInventoryHoldsAndDeleteItems.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveClearCart = resolve as typeof resolveClearCart;
+      }),
+    );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    let clearPromise: Promise<void> | undefined;
+    await act(async () => {
+      clearPromise = result.current.cart.onClearCart();
+    });
+
+    expect(result.current.cart.items).toHaveLength(0);
+    expect(result.current.checkout.cartItems).toHaveLength(0);
+
+    resolveClearCart(
+      ok({
+        sessionId: "session-1" as Id<"posSession">,
+      }),
+    );
+    await act(async () => {
+      await clearPromise;
+    });
+
+    expect(toast.success).toHaveBeenCalledWith("Sale cleared");
+  });
+
+  it("rolls back optimistic clear-cart removals when bulk removal fails", async () => {
+    let resolveClearCart: (value: ReturnType<typeof userError>) => void = () => {};
+    mockReleaseSessionInventoryHoldsAndDeleteItems.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveClearCart = resolve as typeof resolveClearCart;
+      }),
+    );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    let clearPromise: Promise<void> | undefined;
+    await act(async () => {
+      clearPromise = result.current.cart.onClearCart();
+    });
+
+    expect(result.current.cart.items).toHaveLength(0);
+
+    resolveClearCart(
+      userError({
+        code: "conflict",
+        message: "Could not clear this sale.",
+      }),
+    );
+    await act(async () => {
+      await clearPromise;
+    });
+
+    expect(result.current.cart.items).toHaveLength(1);
+    expect(result.current.cart.items[0].quantity).toBe(1);
+    expect(result.current.checkout.cartItems).toHaveLength(1);
+    expect(toast.error).toHaveBeenCalledWith("Could not clear this sale.");
   });
 
   it("syncs payment milestones through the checkout-state mutation", async () => {

@@ -296,6 +296,7 @@ export function createPosSessionCommandService(
           terminalId: args.terminalId,
           registerNumber,
           registerSessionId: registerSessionBinding.data.registerSessionId,
+          inventoryHoldMode: "ledger",
           status: "active",
           createdAt: now,
           updatedAt: now,
@@ -505,12 +506,17 @@ export function createPosSessionCommandService(
       const previousQuantity = existingItem?.quantity;
 
       let itemId: Id<"posSessionItem">;
+      const expiresAt = dependencies.calculateExpiration(now);
       if (existingItem) {
-        const adjustResult = await dependencies.inventory.adjustHold(
-          args.productSkuId,
-          existingItem.quantity,
-          args.quantity,
-        );
+        const adjustResult = await dependencies.inventory.adjustHold({
+          storeId: validation.data.storeId,
+          sessionId: args.sessionId,
+          skuId: args.productSkuId,
+          oldQuantity: existingItem.quantity,
+          newQuantity: args.quantity,
+          expiresAt,
+          now,
+        });
         if (!adjustResult.success) {
           return failure(
             "inventoryUnavailable",
@@ -527,10 +533,14 @@ export function createPosSessionCommandService(
         });
         itemId = existingItem._id;
       } else {
-        const holdResult = await dependencies.inventory.acquireHold(
-          args.productSkuId,
-          args.quantity,
-        );
+        const holdResult = await dependencies.inventory.acquireHold({
+          storeId: validation.data.storeId,
+          sessionId: args.sessionId,
+          skuId: args.productSkuId,
+          quantity: args.quantity,
+          expiresAt,
+          now,
+        });
         if (!holdResult.success) {
           return failure(
             "inventoryUnavailable",
@@ -558,7 +568,6 @@ export function createPosSessionCommandService(
         });
       }
 
-      const expiresAt = dependencies.calculateExpiration(now);
       await dependencies.repository.patchSession(args.sessionId, {
         updatedAt: now,
         expiresAt,
@@ -619,10 +628,12 @@ export function createPosSessionCommandService(
         );
       }
 
-      const releaseResult = await dependencies.inventory.releaseHold(
-        item.productSkuId,
-        item.quantity,
-      );
+      const releaseResult = await dependencies.inventory.releaseHold({
+        sessionId: args.sessionId,
+        skuId: item.productSkuId,
+        quantity: item.quantity,
+        now,
+      });
       if (!releaseResult.success) {
         return failure(
           "inventoryUnavailable",

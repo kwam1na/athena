@@ -12,6 +12,7 @@ import {
   inviteCodeSchema,
   organizationMemberSchema,
   organizationSchema,
+  inventoryHoldSchema,
   productSchema,
   productSkuSchema,
   promoCodeItemSchema,
@@ -183,6 +184,18 @@ const schema = defineSchema({
     .index("by_storeId", ["storeId"])
     .index("by_marker", ["marker"]),
   inviteCode: defineTable(inviteCodeSchema),
+  inventoryHold: defineTable(inventoryHoldSchema)
+    .index("by_storeId_productSkuId_status_expiresAt", [
+      "storeId",
+      "productSkuId",
+      "status",
+      "expiresAt",
+    ])
+    .index("by_sourceSessionId_status_productSkuId", [
+      "sourceSessionId",
+      "status",
+      "productSkuId",
+    ]),
   inventoryMovement: defineTable(inventoryMovementSchema)
     .index("by_storeId", ["storeId"])
     .index("by_storeId_productSkuId", ["storeId", "productSkuId"])
@@ -276,9 +289,9 @@ const schema = defineSchema({
       "status",
       "staffProfileId",
     ]),
-  posSessionItem: defineTable(posSessionItemSchema).index("by_sessionId", [
-    "sessionId",
-  ]),
+  posSessionItem: defineTable(posSessionItemSchema)
+    .index("by_sessionId", ["sessionId"])
+    .index("by_sessionId_productSkuId", ["sessionId", "productSkuId"]),
   expenseSession: defineTable(expenseSessionSchema)
     .index("by_storeId", ["storeId"])
     .index("by_status", ["status"])

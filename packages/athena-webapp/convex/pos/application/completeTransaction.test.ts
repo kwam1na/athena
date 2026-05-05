@@ -12,6 +12,11 @@ import {
   buildCompleteTransactionResult,
 } from "./commands/completeTransaction";
 import {
+  consumeInventoryHoldsForSession,
+  readActiveInventoryHoldQuantitiesForSession,
+  validateInventoryAvailability,
+} from "../../inventory/helpers/inventoryHolds";
+import {
   createPosTransaction,
   createPosTransactionItem,
   getPosSessionById,
@@ -56,8 +61,22 @@ vi.mock("../infrastructure/repositories/customerRepository", () => ({
   updateCustomerStats: vi.fn(),
 }));
 
+vi.mock("../../inventory/helpers/inventoryHolds", () => ({
+  consumeInventoryHoldsForSession: vi.fn(),
+  readActiveInventoryHoldQuantitiesForSession: vi.fn(),
+  validateInventoryAvailability: vi.fn(),
+}));
+
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(validateInventoryAvailability).mockResolvedValue({
+    success: true,
+    available: 10,
+  });
+  vi.mocked(consumeInventoryHoldsForSession).mockResolvedValue(new Map());
+  vi.mocked(readActiveInventoryHoldQuantitiesForSession).mockResolvedValue(
+    new Map(),
+  );
 });
 
 function expectNoCompletionSideEffects() {
@@ -610,6 +629,9 @@ describe("completeTransaction trace ordering", () => {
       "event-1" as never,
     );
     vi.mocked(patchPosTransaction).mockResolvedValue(undefined as never);
+    vi.mocked(consumeInventoryHoldsForSession).mockResolvedValue(
+      new Map([["sku-1" as Id<"productSku">, 1]]),
+    );
 
     await expect(
       createTransactionFromSessionHandler(ctx, {
@@ -645,6 +667,161 @@ describe("completeTransaction trace ordering", () => {
         registerSessionId: "register-1",
       }),
     );
+    expect(consumeInventoryHoldsForSession).toHaveBeenCalledWith(
+      undefined,
+      expect.objectContaining({
+        sessionId: "session-1",
+        items: [{ skuId: "sku-1", quantity: 1 }],
+      }),
+    );
+    expect(patchProductSku).toHaveBeenCalledWith(expect.anything(), "sku-1", {
+      quantityAvailable: 9,
+      inventoryCount: 9,
+    });
+  });
+
+  it("keeps legacy pre-ledger session availability unchanged when no hold row exists", async () => {
+    const runMutation = vi.fn().mockResolvedValue(undefined);
+    const ctx = {
+      runMutation,
+    } as never;
+
+    vi.mocked(getStoreById).mockResolvedValue({
+      _id: "store-1",
+      organizationId: "org-1",
+    } as never);
+    vi.mocked(getPosSessionById).mockResolvedValue({
+      _id: "session-legacy",
+      storeId: "store-1",
+      customerId: undefined,
+      staffProfileId: "staff-1",
+      registerNumber: "1",
+      registerSessionId: "register-1",
+      subtotal: 10,
+      tax: 0,
+      total: 10,
+      terminalId: "terminal-1",
+      customerInfo: undefined,
+    } as never);
+    vi.mocked(getRegisterSessionById).mockResolvedValue({
+      _id: "register-1",
+      storeId: "store-1",
+      status: "open",
+      terminalId: "terminal-1",
+      registerNumber: "1",
+    } as never);
+    vi.mocked(listSessionItems).mockResolvedValue([
+      {
+        _id: "session-item-1",
+        sessionId: "session-legacy",
+        storeId: "store-1",
+        productId: "product-1",
+        productSkuId: "sku-1",
+        productSku: "SKU-1",
+        productName: "Sneaker",
+        price: 10,
+        quantity: 1,
+        image: undefined,
+      },
+    ] as never);
+    vi.mocked(getProductSkuById).mockResolvedValue({
+      _id: "sku-1",
+      images: [],
+      inventoryCount: 10,
+      productId: "product-1",
+      quantityAvailable: 10,
+      sku: "SKU-1",
+    } as never);
+    vi.mocked(createPosTransaction).mockResolvedValue("txn-1" as never);
+    vi.mocked(recordRetailSalePaymentAllocations).mockResolvedValue(true);
+    vi.mocked(createPosTransactionItem).mockResolvedValue(
+      "txn-item-1" as never,
+    );
+    vi.mocked(patchProductSku).mockResolvedValue(undefined as never);
+    vi.mocked(patchPosSession).mockResolvedValue(undefined as never);
+    vi.mocked(patchPosTransaction).mockResolvedValue(undefined as never);
+    vi.mocked(consumeInventoryHoldsForSession).mockResolvedValue(new Map());
+
+    await expect(
+      createTransactionFromSessionHandler(ctx, {
+        sessionId: "session-legacy" as Id<"posSession">,
+        staffProfileId: "staff-1" as Id<"staffProfile">,
+        payments: [{ method: "cash", amount: 10, timestamp: 1 }],
+      }),
+    ).resolves.toEqual(expect.objectContaining({ kind: "ok" }));
+
+    expect(patchProductSku).toHaveBeenCalledWith(expect.anything(), "sku-1", {
+      quantityAvailable: 10,
+      inventoryCount: 9,
+    });
+  });
+
+  it("blocks ledger sessions before side effects when active hold coverage is missing", async () => {
+    vi.mocked(getPosSessionById).mockResolvedValue({
+      _id: "session-ledger",
+      storeId: "store-1",
+      customerId: undefined,
+      staffProfileId: "staff-1",
+      registerNumber: "1",
+      registerSessionId: "register-1",
+      inventoryHoldMode: "ledger",
+      subtotal: 10,
+      tax: 0,
+      total: 10,
+      terminalId: "terminal-1",
+      customerInfo: undefined,
+    } as never);
+    vi.mocked(getRegisterSessionById).mockResolvedValue({
+      _id: "register-1",
+      storeId: "store-1",
+      status: "open",
+      terminalId: "terminal-1",
+      registerNumber: "1",
+    } as never);
+    vi.mocked(listSessionItems).mockResolvedValue([
+      {
+        _id: "session-item-1",
+        sessionId: "session-ledger",
+        storeId: "store-1",
+        productId: "product-1",
+        productSkuId: "sku-1",
+        productSku: "SKU-1",
+        productName: "Sneaker",
+        price: 10,
+        quantity: 1,
+        image: undefined,
+      },
+    ] as never);
+    vi.mocked(getProductSkuById).mockResolvedValue({
+      _id: "sku-1",
+      images: [],
+      inventoryCount: 10,
+      productId: "product-1",
+      quantityAvailable: 10,
+      sku: "SKU-1",
+    } as never);
+    vi.mocked(readActiveInventoryHoldQuantitiesForSession).mockResolvedValue(
+      new Map(),
+    );
+
+    await expect(
+      createTransactionFromSessionHandler({ db: {} } as never, {
+        sessionId: "session-ledger" as Id<"posSession">,
+        staffProfileId: "staff-1" as Id<"staffProfile">,
+        payments: [{ method: "cash", amount: 10, timestamp: 1 }],
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        kind: "user_error",
+        error: expect.objectContaining({
+          code: "conflict",
+          message:
+            "Inventory hold expired for Sneaker. Scan it again before completing this sale.",
+        }),
+      }),
+    );
+
+    expectNoCompletionSideEffects();
   });
 
   it("fails before transaction side effects when the checkout cashier does not own the session", async () => {

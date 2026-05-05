@@ -15,7 +15,6 @@ const rows: RegisterCatalogSearchRow[] = [
     barcode: "000111222333",
     category: "Apparel",
     description: "Breathable linen button shirt",
-    quantityAvailable: 6,
     price: 120,
     size: "S",
     color: "Red",
@@ -29,7 +28,6 @@ const rows: RegisterCatalogSearchRow[] = [
     barcode: "000111222334",
     category: "Apparel",
     description: "Breathable linen button shirt",
-    quantityAvailable: 0,
     price: 120,
     size: "L",
     color: "Red",
@@ -43,7 +41,6 @@ const rows: RegisterCatalogSearchRow[] = [
     barcode: "999888777666",
     category: "Accessories",
     description: "Everyday cotton crew socks",
-    quantityAvailable: 12,
     price: 25,
     size: "One Size",
     color: "Black",
@@ -57,7 +54,6 @@ const rows: RegisterCatalogSearchRow[] = [
     barcode: "555444333222",
     category: "Accessories",
     description: "Brown full grain leather belt",
-    quantityAvailable: 4,
     price: 80,
     size: "32",
     color: "Brown",
@@ -158,7 +154,6 @@ describe("catalogSearch", () => {
           barcode: "444555666777",
           category: "Wigs",
           description: "Long-wear frontal wig",
-          quantityAvailable: 3,
           price: 250,
           size: "M",
           color: "Natural",
@@ -192,7 +187,7 @@ describe("catalogSearch", () => {
     expect(result.results).toEqual([]);
   });
 
-  it("keeps out-of-stock exact matches visible but not auto-addable", () => {
+  it("keeps exact metadata matches visible without marking them auto-addable", () => {
     const result = searchRegisterCatalog(
       buildRegisterCatalogIndex(rows),
       "SHIRT-RED-L",
@@ -200,7 +195,6 @@ describe("catalogSearch", () => {
 
     expect(result.intent).toBe("exact");
     expect(result.exactMatch?.productSkuId).toBe("sku-red-large");
-    expect(result.exactMatch?.quantityAvailable).toBe(0);
     expect(result.canAutoAdd).toBe(false);
   });
 });

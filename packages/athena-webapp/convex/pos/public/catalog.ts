@@ -6,7 +6,11 @@ import {
   lookupByBarcode,
   searchProducts,
 } from "../application/queries/searchCatalog";
-import { listRegisterCatalog } from "../application/queries/listRegisterCatalog";
+import {
+  REGISTER_CATALOG_AVAILABILITY_LIMIT,
+  listRegisterCatalog,
+  listRegisterCatalogAvailability as readRegisterCatalogAvailability,
+} from "../application/queries/listRegisterCatalog";
 
 const catalogResultValidator = v.object({
   id: v.id("productSku"),
@@ -42,9 +46,14 @@ const registerCatalogRowValidator = v.object({
   size: v.string(),
   length: v.union(v.number(), v.null()),
   color: v.string(),
+  areProcessingFeesAbsorbed: v.boolean(),
+});
+
+const registerCatalogAvailabilityValidator = v.object({
+  productSkuId: v.id("productSku"),
+  skuId: v.id("productSku"),
   inStock: v.boolean(),
   quantityAvailable: v.number(),
-  areProcessingFeesAbsorbed: v.boolean(),
 });
 
 export const search = query({
@@ -61,6 +70,22 @@ export const listRegisterCatalogSnapshot = query({
   },
   returns: v.array(registerCatalogRowValidator),
   handler: async (ctx, args) => listRegisterCatalog(ctx, args),
+});
+
+export const listRegisterCatalogAvailability = query({
+  args: {
+    storeId: v.id("store"),
+    productSkuIds: v.array(v.id("productSku")),
+  },
+  returns: v.array(registerCatalogAvailabilityValidator),
+  handler: async (ctx, args) =>
+    readRegisterCatalogAvailability(ctx, {
+      storeId: args.storeId,
+      productSkuIds: args.productSkuIds.slice(
+        0,
+        REGISTER_CATALOG_AVAILABILITY_LIMIT,
+      ),
+    }),
 });
 
 export const barcodeLookup = query({

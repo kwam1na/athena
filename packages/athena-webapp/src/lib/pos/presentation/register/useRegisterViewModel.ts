@@ -6,7 +6,12 @@ import { toast } from "sonner";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 
-import type { CustomerInfo, Payment, Product } from "@/components/pos/types";
+import type {
+  CartItem,
+  CustomerInfo,
+  Payment,
+  Product,
+} from "@/components/pos/types";
 import { useAuth } from "@/hooks/useAuth";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useGetTerminal } from "@/hooks/useGetTerminal";
@@ -28,7 +33,10 @@ import type { CommandApprovalProofResult } from "@/components/operations/Command
 import { useApprovedCommand } from "@/components/operations/useApprovedCommand";
 import { logger } from "@/lib/logger";
 import { useConvexCommandGateway } from "@/lib/pos/infrastructure/convex/commandGateway";
-import { useConvexRegisterCatalog } from "@/lib/pos/infrastructure/convex/catalogGateway";
+import {
+  useConvexRegisterCatalog,
+  useConvexRegisterCatalogAvailability,
+} from "@/lib/pos/infrastructure/convex/catalogGateway";
 import { useConvexRegisterState } from "@/lib/pos/infrastructure/convex/registerGateway";
 import { isPosUsableRegisterSessionStatus } from "~/shared/registerSessionStatus";
 import { userError, type CommandResult } from "~/shared/commandResult";
@@ -56,6 +64,7 @@ import {
 import {
   searchRegisterCatalog,
   type RegisterCatalogSearchRow,
+  type RegisterCatalogSearchResult,
 } from "./catalogSearch";
 import { useRegisterCatalogIndex } from "./useRegisterCatalogIndex";
 
@@ -123,7 +132,15 @@ function presentOperatorError(message: string): void {
   toast.error(toOperatorMessage(message));
 }
 
-function mapCatalogRowToProduct(row: RegisterCatalogSearchRow): Product {
+type RegisterCatalogAvailability = {
+  inStock: boolean;
+  quantityAvailable: number;
+};
+
+function mapCatalogRowToProduct(
+  row: RegisterCatalogSearchRow,
+  availability: RegisterCatalogAvailability | undefined,
+): Product {
   return {
     id: row.productSkuId,
     name: row.name,
@@ -133,8 +150,8 @@ function mapCatalogRowToProduct(row: RegisterCatalogSearchRow): Product {
     category: row.category ?? "",
     description: row.description ?? "",
     image: row.image ?? null,
-    inStock: (row.quantityAvailable ?? 0) > 0,
-    quantityAvailable: row.quantityAvailable ?? 0,
+    inStock: availability?.inStock ?? false,
+    quantityAvailable: availability?.quantityAvailable ?? 0,
     size: row.size ?? "",
     length:
       typeof row.length === "number"
@@ -146,6 +163,27 @@ function mapCatalogRowToProduct(row: RegisterCatalogSearchRow): Product {
     productId: row.productId as Id<"product">,
     skuId: row.productSkuId as Id<"productSku">,
     areProcessingFeesAbsorbed: Boolean(row.areProcessingFeesAbsorbed),
+  };
+}
+
+function mapProductToOptimisticCartItem(
+  product: Product,
+  quantity: number,
+): CartItem {
+  return {
+    id: `optimistic:${product.skuId ?? product.id}` as Id<"posSessionItem">,
+    name: product.name,
+    barcode: product.barcode,
+    sku: product.sku,
+    price: product.price,
+    quantity,
+    image: product.image ?? undefined,
+    size: product.size,
+    length: product.length,
+    color: product.color,
+    productId: product.productId,
+    skuId: product.skuId,
+    areProcessingFeesAbsorbed: product.areProcessingFeesAbsorbed,
   };
 }
 
@@ -231,6 +269,12 @@ export function useRegisterViewModel(): RegisterViewModel {
   const unmountSessionRef = useRef<Id<"posSession"> | null>(null);
   const unmountSessionCartItemCountRef = useRef(0);
   const exactAddKeyRef = useRef<string | null>(null);
+  const [optimisticCartQuantities, setOptimisticCartQuantities] = useState<
+    Record<string, number>
+  >({});
+  const [optimisticCartProducts, setOptimisticCartProducts] = useState<
+    Record<string, CartItem>
+  >({});
 
   const registerState = useConvexRegisterState({
     storeId: activeStore?._id,
@@ -262,16 +306,65 @@ export function useRegisterViewModel(): RegisterViewModel {
     storeId: activeStore?._id,
   });
   const registerCatalogIndex = useRegisterCatalogIndex(registerCatalogRows);
-  const registerSearchState = useMemo(
+  const registerMetadataSearchState = useMemo(
     () => searchRegisterCatalog(registerCatalogIndex, productSearchQuery),
     [productSearchQuery, registerCatalogIndex],
   );
+  const registerAvailabilityProductSkuIds = useMemo(
+    () =>
+      registerMetadataSearchState.results.map(
+        (row) => row.productSkuId as Id<"productSku">,
+      ),
+    [registerMetadataSearchState.results],
+  );
+  const registerCatalogAvailabilityRows = useConvexRegisterCatalogAvailability({
+    storeId: activeStore?._id,
+    productSkuIds: registerAvailabilityProductSkuIds,
+  });
+  const registerCatalogAvailabilityBySkuId = useMemo(() => {
+    const rows = registerCatalogAvailabilityRows ?? [];
+
+    return new Map<string, RegisterCatalogAvailability>(
+      rows.map((row) => [row.productSkuId, row]),
+    );
+  }, [registerCatalogAvailabilityRows]);
+  const registerSearchState = useMemo<RegisterCatalogSearchResult>(() => {
+    if (registerMetadataSearchState.intent !== "exact") {
+      return registerMetadataSearchState;
+    }
+
+    const exactAvailability = registerMetadataSearchState.exactMatch
+      ? registerCatalogAvailabilityBySkuId.get(
+          registerMetadataSearchState.exactMatch.productSkuId,
+        )
+      : undefined;
+
+    return {
+      ...registerMetadataSearchState,
+      canAutoAdd: Boolean(
+        registerMetadataSearchState.exactMatch &&
+          exactAvailability &&
+          exactAvailability.quantityAvailable > 0,
+      ),
+    };
+  }, [registerCatalogAvailabilityBySkuId, registerMetadataSearchState]);
   const registerSearchProducts = useMemo(
-    () => registerSearchState.results.map(mapCatalogRowToProduct),
-    [registerSearchState.results],
+    () =>
+      registerSearchState.results.map((row) =>
+        mapCatalogRowToProduct(
+          row,
+          registerCatalogAvailabilityBySkuId.get(row.productSkuId),
+        ),
+      ),
+    [registerCatalogAvailabilityBySkuId, registerSearchState.results],
   );
   const exactSearchProduct = registerSearchState.exactMatch
-    ? mapCatalogRowToProduct(registerSearchState.exactMatch)
+    ? mapCatalogRowToProduct(
+        registerSearchState.exactMatch,
+        registerCatalogAvailabilityBySkuId.get(
+          registerSearchState.exactMatch.productSkuId,
+        ),
+      )
     : null;
   const isRegisterCatalogReady = registerCatalogRows !== undefined;
   const isRegisterSearchLoading =
@@ -383,12 +476,79 @@ export function useRegisterViewModel(): RegisterViewModel {
   const voidSessionRef = useRef<typeof voidSession>(voidSession);
 
   const operableActiveSession = activeSession;
-  const activeCartItems = operableActiveSession?.cartItems ?? [];
+  const serverCartItems = operableActiveSession?.cartItems ?? [];
+  const activeCartItems = useMemo(() => {
+    const cartItems = serverCartItems
+      .map((item) => {
+        const optimisticQuantity = optimisticCartQuantities[item.id];
+        return optimisticQuantity === undefined
+          ? item
+          : { ...item, quantity: optimisticQuantity };
+      })
+      .filter((item) => item.quantity > 0);
+
+    for (const optimisticProduct of Object.values(optimisticCartProducts)) {
+      if (!optimisticProduct.skuId) {
+        cartItems.push(optimisticProduct);
+        continue;
+      }
+
+      const existingIndex = cartItems.findIndex(
+        (item) => item.skuId === optimisticProduct.skuId,
+      );
+      if (existingIndex >= 0) {
+        const existingItem = cartItems[existingIndex];
+        const optimisticQuantity = optimisticCartQuantities[existingItem.id];
+        cartItems[existingIndex] =
+          optimisticQuantity === undefined
+            ? { ...existingItem, quantity: optimisticProduct.quantity }
+            : existingItem;
+      } else {
+        cartItems.push(optimisticProduct);
+      }
+    }
+
+    return cartItems;
+  }, [optimisticCartProducts, optimisticCartQuantities, serverCartItems]);
   if (operableActiveSession?._id) {
     unmountSessionRef.current = operableActiveSession._id as Id<"posSession">;
     unmountSessionCartItemCountRef.current = activeCartItems.length;
   }
   voidSessionRef.current = voidSession;
+  useEffect(() => {
+    setOptimisticCartQuantities((current) => {
+      let changed = false;
+      const next = { ...current };
+
+      for (const [itemId, optimisticQuantity] of Object.entries(current)) {
+        const serverItem = serverCartItems.find((item) => item.id === itemId);
+        if (
+          (optimisticQuantity <= 0 && !serverItem) ||
+          serverItem?.quantity === optimisticQuantity
+        ) {
+          delete next[itemId];
+          changed = true;
+        }
+      }
+
+      return changed ? next : current;
+    });
+
+    setOptimisticCartProducts((current) => {
+      let changed = false;
+      const next = { ...current };
+
+      for (const [skuId, optimisticProduct] of Object.entries(current)) {
+        const serverItem = serverCartItems.find((item) => item.skuId === skuId);
+        if (serverItem && serverItem.quantity >= optimisticProduct.quantity) {
+          delete next[skuId];
+          changed = true;
+        }
+      }
+
+      return changed ? next : current;
+    });
+  }, [serverCartItems]);
   const activeTotals = useMemo(
     () => calculatePosCartTotals(activeCartItems),
     [activeCartItems],
@@ -1519,6 +1679,25 @@ export function useRegisterViewModel(): RegisterViewModel {
         (item) => item.skuId === product.skuId,
       );
       const nextQuantity = existingItem ? existingItem.quantity + 1 : 1;
+      const optimisticProductKey = product.skuId;
+      const previousOptimisticProduct = optimisticCartProducts[product.skuId];
+      const isExistingOptimisticProduct = existingItem?.id
+        .toString()
+        .startsWith("optimistic:");
+      if (existingItem && !isExistingOptimisticProduct) {
+        setOptimisticCartQuantities((current) => ({
+          ...current,
+          [existingItem.id]: nextQuantity,
+        }));
+      } else {
+        setOptimisticCartProducts((current) => ({
+          ...current,
+          [optimisticProductKey]: mapProductToOptimisticCartItem(
+            product,
+            nextQuantity,
+          ),
+        }));
+      }
 
       const result = await runAddItem({
         gateway: {
@@ -1543,6 +1722,26 @@ export function useRegisterViewModel(): RegisterViewModel {
       });
 
       if (!result.ok) {
+        if (existingItem && !isExistingOptimisticProduct) {
+          setOptimisticCartQuantities((current) => {
+            const next = { ...current };
+            delete next[existingItem.id];
+            return next;
+          });
+        } else {
+          setOptimisticCartProducts((current) => {
+            if (previousOptimisticProduct) {
+              return {
+                ...current,
+                [optimisticProductKey]: previousOptimisticProduct,
+              };
+            }
+
+            const next = { ...current };
+            delete next[optimisticProductKey];
+            return next;
+          });
+        }
         presentOperatorError(result.message);
         return false;
       }
@@ -1555,6 +1754,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       activeSessionHasBlockedRegisterBinding,
       addItemCommand,
       ensureSessionId,
+      optimisticCartProducts,
       staffProfileId,
     ],
   );
@@ -1620,6 +1820,11 @@ export function useRegisterViewModel(): RegisterViewModel {
       }
 
       if (quantity <= 0) {
+        setOptimisticCartQuantities((current) => ({
+          ...current,
+          [itemId]: 0,
+        }));
+
         const result = await removeItem({
           sessionId: operableActiveSession._id as Id<"posSession">,
           staffProfileId,
@@ -1627,6 +1832,11 @@ export function useRegisterViewModel(): RegisterViewModel {
         });
 
         if (result.kind !== "ok") {
+          setOptimisticCartQuantities((current) => {
+            const next = { ...current };
+            delete next[itemId];
+            return next;
+          });
           presentOperatorError(result.error.message);
         }
 
@@ -1637,6 +1847,11 @@ export function useRegisterViewModel(): RegisterViewModel {
         toast.error("Item details unavailable. Remove it and add it again.");
         return;
       }
+
+      setOptimisticCartQuantities((current) => ({
+        ...current,
+        [itemId]: quantity,
+      }));
 
       const result = await runAddItem({
         gateway: {
@@ -1661,6 +1876,11 @@ export function useRegisterViewModel(): RegisterViewModel {
       });
 
       if (!result.ok) {
+        setOptimisticCartQuantities((current) => {
+          const next = { ...current };
+          delete next[itemId];
+          return next;
+        });
         presentOperatorError(result.message);
       }
     },
@@ -1686,6 +1906,11 @@ export function useRegisterViewModel(): RegisterViewModel {
         return;
       }
 
+      setOptimisticCartQuantities((current) => ({
+        ...current,
+        [itemId]: 0,
+      }));
+
       const result = await removeItem({
         sessionId: operableActiveSession._id as Id<"posSession">,
         staffProfileId,
@@ -1693,6 +1918,11 @@ export function useRegisterViewModel(): RegisterViewModel {
       });
 
       if (result.kind !== "ok") {
+        setOptimisticCartQuantities((current) => {
+          const next = { ...current };
+          delete next[itemId];
+          return next;
+        });
         presentOperatorError(result.error.message);
       }
     },
@@ -1715,6 +1945,17 @@ export function useRegisterViewModel(): RegisterViewModel {
     }
 
     const checkoutStateVersion = allocateCheckoutStateVersion();
+    const previousOptimisticCartQuantities = optimisticCartQuantities;
+    const previousOptimisticCartProducts = optimisticCartProducts;
+    setOptimisticCartQuantities((current) => {
+      const next = { ...current };
+      for (const item of operableActiveSession.cartItems) {
+        next[item.id] = 0;
+      }
+      return next;
+    });
+    setOptimisticCartProducts({});
+
     const result = await releaseSessionInventoryHoldsAndDeleteItems({
       sessionId: operableActiveSession._id as Id<"posSession">,
       staffProfileId,
@@ -1722,6 +1963,8 @@ export function useRegisterViewModel(): RegisterViewModel {
     });
 
     if (result.kind !== "ok") {
+      setOptimisticCartQuantities(previousOptimisticCartQuantities);
+      setOptimisticCartProducts(previousOptimisticCartProducts);
       presentOperatorError(result.error.message);
       return;
     }
@@ -1736,6 +1979,8 @@ export function useRegisterViewModel(): RegisterViewModel {
     operableActiveSession,
     activeSessionHasBlockedRegisterBinding,
     allocateCheckoutStateVersion,
+    optimisticCartProducts,
+    optimisticCartQuantities,
     releaseSessionInventoryHoldsAndDeleteItems,
     setPaymentState,
     staffProfileId,

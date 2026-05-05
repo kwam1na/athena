@@ -12,6 +12,8 @@ import type {
   PosOpenDrawerResultDto,
   PosProductIdLookupInput,
   PosProductSearchInput,
+  PosRegisterCatalogAvailabilityInput,
+  PosRegisterCatalogAvailabilityRowDto,
   PosRegisterCatalogInput,
   PosRegisterCatalogRowDto,
   PosRegisterStateDto,
@@ -35,6 +37,9 @@ export interface PosCatalogReader {
   useRegisterCatalog(
     input: PosRegisterCatalogInput,
   ): PosRegisterCatalogRowDto[] | undefined;
+  useRegisterCatalogAvailability(
+    input: PosRegisterCatalogAvailabilityInput,
+  ): PosRegisterCatalogAvailabilityRowDto[] | undefined;
   useProductSearch(
     input: PosProductSearchInput,
   ): PosCatalogItemDto[] | undefined;

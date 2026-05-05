@@ -64,6 +64,30 @@ describe("POS and expense session indexing", () => {
     ).toHaveLength(1);
   });
 
+  it("adds the indexed POS cart item lookup and hold-ledger indexes", () => {
+    const schema = readProjectFile("convex", "schema.ts");
+    const posSessionItemSchema = readSourceSlice(
+      schema,
+      "posSessionItem: defineTable(posSessionItemSchema)",
+      "expenseSession: defineTable(expenseSessionSchema)",
+    );
+    const inventoryHoldSchema = readSourceSlice(
+      schema,
+      "inventoryHold: defineTable(inventoryHoldSchema)",
+      "inventoryMovement: defineTable(inventoryMovementSchema)",
+    );
+
+    expect(posSessionItemSchema).toContain(
+      '.index("by_sessionId_productSkuId", ["sessionId", "productSkuId"])',
+    );
+    expect(inventoryHoldSchema).toContain(
+      '.index("by_storeId_productSkuId_status_expiresAt", [',
+    );
+    expect(inventoryHoldSchema).toContain(
+      '.index("by_sourceSessionId_status_productSkuId", [',
+    );
+  });
+
   it("adds a completed transaction index for register-session filtered closeout links", () => {
     const schema = readProjectFile("convex", "schema.ts");
     const repository = readProjectFile(
