@@ -116,10 +116,24 @@ Freshness sensors catch stale generated artifacts.
 The important behavior is fail-closed repair. The harness may refresh files, but
 it does not silently push repaired evidence past review.
 
+### Compound Sensors
+
+`bun run compound:check` keeps considerable delivery work connected to
+`docs/solutions/`. It blocks changed markdown that references a missing
+`docs/solutions/**/*.md` file, and it blocks substantial source changes unless
+the branch also changes a solution note.
+
+This is a delivery guardrail, not a documentation quota. Small source edits,
+test-only changes, generated artifacts, and docs-only changes can pass without a
+new solution note. Large behavior-bearing changes need durable compounding while
+the context is still fresh.
+
 ### Coverage Sensors
 
-`bun run test:coverage` is the repo coverage gate. It runs package coverage and
-root script coverage, then aggregates the current checkout's LCOV reports.
+`bun run test:coverage` is the repo coverage gate. It first repairs missing or
+stale Vitest-family installs with `bun install --frozen-lockfile` when manifest
+versions are already correct, then runs package coverage and root script
+coverage before aggregating the current checkout's LCOV reports.
 
 The current policy is a baseline ratchet: covered surfaces may not regress below
 the characterized baseline, while the long-term target remains full coverage.

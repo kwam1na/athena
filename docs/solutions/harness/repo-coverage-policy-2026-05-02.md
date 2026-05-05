@@ -35,7 +35,7 @@ The repo is not currently at 100 percent coverage. Enforcing strict 100 percent 
 
 The target policy remains 100 percent across lines, statements, functions, and branches. Until the repo reaches that target, the gate is a ratchet: no covered surface may move backward, and the printed summary shows the remaining gap. Repo-script coverage is characterized from first-party `scripts/*.test.ts` files only, so local worktrees cannot inflate or deflate the baseline.
 
-The baseline should match CI output. GitHub Actions installs dependencies with `bun install --frozen-lockfile`, and `bun run test:coverage` first runs `scripts/coverage-toolchain-parity.ts` so stale local installs or mismatched Vitest-family versions fail before coverage reports are generated.
+The baseline should match CI output. GitHub Actions installs dependencies with `bun install --frozen-lockfile`, and `bun run test:coverage` first runs `scripts/coverage-toolchain-parity.ts --repair` so fresh worktrees repair missing or stale Vitest-family installs before coverage starts. Manifest version mismatches still fail without repair because those require a source change.
 
 Remote CI can still diverge if local pre-push routing does not select the same coverage command for files that affect the repo harness itself. Repo-owned workflow changes under `scripts/`, package agent docs, GitHub workflow files, Husky hooks, and top-level repo wiring should route through `harness:review`, and that repo-level selection must include `bun run test:coverage`. A green `pre-push:review` is only merge-equivalent when it actually runs the same coverage gate that Actions will run for the touched surface.
 
@@ -50,6 +50,7 @@ Generated outputs, test files, route tree generation, coverage output, and Conve
 - Run `bun run test:coverage` before merge-ready handoff when coverage policy or testable source changes.
 - Keep repo-owned harness validation selection wired to `bun run test:coverage`; otherwise script coverage regressions can pass local pre-push and fail only in GitHub Actions.
 - Keep Vitest-family coverage tooling on exact, aligned versions across the root, Athena webapp, and storefront webapp manifests.
+- Keep dependency-install drift as a self-repairing coverage preflight, not a reason to bypass `pr:athena` from a fresh worktree.
 - Keep root script coverage file selection explicit so local `worktrees/` tests cannot change local-only coverage totals.
 - Keep `scripts/coverage-summary.ts` path-relative to `process.cwd()` so worktrees and CI read their own coverage artifacts.
 - When adding a new testable package, add its coverage artifact to `scripts/coverage-summary.ts` or document the explicit staged exclusion there.
