@@ -53,6 +53,7 @@ This route index enumerates the current files under `src/routes` so agents can o
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense.index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense.index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/register.index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/register.index.tsx)
+- [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/sessions.index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/sessions.index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/settings.index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/settings.index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions.index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions.index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId.tsx)

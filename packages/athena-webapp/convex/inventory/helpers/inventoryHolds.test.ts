@@ -5,6 +5,7 @@ import {
   acquireInventoryHold,
   adjustInventoryHold,
   consumeInventoryHoldsForSession,
+  releaseActiveInventoryHoldsForSession,
   releaseInventoryHold,
 } from "./inventoryHolds";
 
@@ -350,6 +351,116 @@ describe("POS inventory hold ledger", () => {
         releasedAt: 1_000,
       }),
     ]);
+  });
+
+  it("releases only active session holds once and reports released quantities", async () => {
+    const { db, holds, productSkuPatches } = createDb({
+      sku: {
+        _id: "sku-1",
+        storeId: "store-1",
+        sku: "SKU-1",
+        quantityAvailable: 10,
+        inventoryCount: 10,
+      },
+      holds: [
+        buildHold({
+          _id: "hold-active-1",
+          sourceSessionId: "session-1",
+          productSkuId: "sku-1",
+          quantity: 2,
+        }),
+        buildHold({
+          _id: "hold-active-2",
+          sourceSessionId: "session-1",
+          productSkuId: "sku-2",
+          quantity: 3,
+        }),
+        buildHold({
+          _id: "hold-released",
+          sourceSessionId: "session-1",
+          productSkuId: "sku-1",
+          status: "released",
+          quantity: 5,
+        }),
+        buildHold({
+          _id: "hold-consumed",
+          sourceSessionId: "session-1",
+          productSkuId: "sku-1",
+          status: "consumed",
+          quantity: 7,
+        }),
+        buildHold({
+          _id: "hold-other-session",
+          sourceSessionId: "session-2",
+          productSkuId: "sku-1",
+          quantity: 11,
+        }),
+      ],
+    });
+
+    const result = await releaseActiveInventoryHoldsForSession(db as never, {
+      sessionId: "session-1" as Id<"posSession">,
+      now: 1_000,
+    });
+
+    expect(result).toEqual({
+      releasedHoldCount: 2,
+      releasedQuantity: 5,
+      releasedHolds: [
+        {
+          holdId: "hold-active-1",
+          productSkuId: "sku-1",
+          quantity: 2,
+        },
+        {
+          holdId: "hold-active-2",
+          productSkuId: "sku-2",
+          quantity: 3,
+        },
+      ],
+    });
+    expect(holds.find((hold) => hold._id === "hold-active-1")).toEqual(
+      expect.objectContaining({
+        status: "released",
+        releasedAt: 1_000,
+      }),
+    );
+    expect(holds.find((hold) => hold._id === "hold-active-2")).toEqual(
+      expect.objectContaining({
+        status: "released",
+        releasedAt: 1_000,
+      }),
+    );
+    expect(holds.find((hold) => hold._id === "hold-released")).toEqual(
+      expect.objectContaining({
+        status: "released",
+        updatedAt: 100,
+      }),
+    );
+    expect(holds.find((hold) => hold._id === "hold-consumed")).toEqual(
+      expect.objectContaining({
+        status: "consumed",
+        updatedAt: 100,
+      }),
+    );
+    expect(holds.find((hold) => hold._id === "hold-other-session")).toEqual(
+      expect.objectContaining({
+        status: "active",
+        updatedAt: 100,
+      }),
+    );
+    expect(productSkuPatches).toEqual([]);
+
+    const replay = await releaseActiveInventoryHoldsForSession(db as never, {
+      sessionId: "session-1" as Id<"posSession">,
+      now: 2_000,
+    });
+
+    expect(replay).toEqual({
+      releasedHoldCount: 0,
+      releasedQuantity: 0,
+      releasedHolds: [],
+    });
   });
 });
 

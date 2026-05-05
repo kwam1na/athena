@@ -3,7 +3,11 @@ import { ok } from "../../shared/commandResult";
 
 const mocks = vi.hoisted(() => ({
   createTransactionFromSessionHandler: vi.fn(),
+  readActiveInventoryHoldDetailsForSession: vi.fn(),
+  recordOperationalEventWithCtx: vi.fn(),
   recordRegisterSessionSale: vi.fn(),
+  requireStoreFullAdminAccess: vi.fn(),
+  releaseActiveInventoryHoldsForSession: vi.fn(),
   releaseInventoryHoldsBatch: vi.fn(),
   traceRecord: vi.fn(),
 }));
@@ -15,8 +19,20 @@ vi.mock("./pos", () => ({
 
 vi.mock("./helpers/inventoryHolds", () => ({
   acquireInventoryHoldsBatch: vi.fn(),
+  readActiveInventoryHoldDetailsForSession:
+    mocks.readActiveInventoryHoldDetailsForSession,
+  releaseActiveInventoryHoldsForSession:
+    mocks.releaseActiveInventoryHoldsForSession,
   releaseInventoryHoldsBatch: mocks.releaseInventoryHoldsBatch,
   validateInventoryAvailability: vi.fn(),
+}));
+
+vi.mock("../operations/operationalEvents", () => ({
+  recordOperationalEventWithCtx: mocks.recordOperationalEventWithCtx,
+}));
+
+vi.mock("../stockOps/access", () => ({
+  requireStoreFullAdminAccess: mocks.requireStoreFullAdminAccess,
 }));
 
 vi.mock("../pos/application/commands/posSessionTracing", () => ({
@@ -27,7 +43,9 @@ vi.mock("../pos/application/commands/posSessionTracing", () => ({
 
 import {
   completeSession,
+  expireSessionFromOperations,
   expireAllSessionsForStaff,
+  getStoreActiveSessionOperations,
   releaseSessionInventoryHoldsAndDeleteItems,
   releasePosSessionItems,
   syncSessionCheckoutState,
@@ -70,19 +88,69 @@ type SessionRecord = {
 type SessionItemRecord = {
   _id: string;
   sessionId: string;
+  storeId?: string;
+  productId?: string;
   productSkuId: string;
+  productSku?: string;
+  productName?: string;
+  price?: number;
   quantity: number;
 };
 
 type RegisterSessionRecord = {
   _id: string;
   storeId: string;
+  organizationId?: string;
   terminalId?: string;
   registerNumber?: string;
   status: "open" | "active" | "closing" | "closed";
+  workflowTraceId?: string;
+};
+
+type StaffProfileRecord = {
+  _id: string;
+  storeId: string;
+  organizationId?: string;
+  fullName: string;
+  firstName?: string;
+  lastName?: string;
+  status: "active" | "inactive";
+};
+
+type StaffRoleAssignmentRecord = {
+  _id: string;
+  staffProfileId: string;
+  storeId: string;
+  organizationId?: string;
+  role: string;
+  status: "active" | "inactive";
+  isPrimary?: boolean;
+};
+
+type TerminalRecord = {
+  _id: string;
+  storeId: string;
+  displayName: string;
+  registerNumber?: string;
+  status?: string;
+};
+
+type ProductSkuRecord = {
+  _id: string;
+  storeId: string;
+  sku?: string;
+  productName?: string;
+};
+
+type CustomerProfileRecord = {
+  _id: string;
+  fullName?: string;
+  email?: string;
+  phoneNumber?: string;
 };
 
 type QueryBuilderFilters = {
+  storeId?: string;
   status?: string;
   expiresBefore?: number;
   staffProfileId?: string;
@@ -93,6 +161,11 @@ function createMutationCtx(seed?: {
   sessions?: SessionRecord[];
   items?: SessionItemRecord[];
   registerSessions?: RegisterSessionRecord[];
+  staffProfiles?: StaffProfileRecord[];
+  staffRoleAssignments?: StaffRoleAssignmentRecord[];
+  terminals?: TerminalRecord[];
+  productSkus?: ProductSkuRecord[];
+  customerProfiles?: CustomerProfileRecord[];
 }) {
   const sessions = [...(seed?.sessions ?? [])];
   const items = [...(seed?.items ?? [])];
@@ -106,6 +179,29 @@ function createMutationCtx(seed?: {
       status: "open",
     } satisfies RegisterSessionRecord,
   ];
+  const staffProfiles = [
+    ...(seed?.staffProfiles ?? []),
+    {
+      _id: "cashier-1",
+      storeId: "store-1",
+      organizationId: "org-1",
+      fullName: "Ama Cashier",
+      status: "active",
+    } satisfies StaffProfileRecord,
+  ];
+  const staffRoleAssignments = [...(seed?.staffRoleAssignments ?? [])];
+  const terminals = [
+    ...(seed?.terminals ?? []),
+    {
+      _id: "terminal-1",
+      storeId: "store-1",
+      displayName: "Front register",
+      registerNumber: "1",
+      status: "active",
+    } satisfies TerminalRecord,
+  ];
+  const productSkus = [...(seed?.productSkus ?? [])];
+  const customerProfiles = [...(seed?.customerProfiles ?? [])];
 
   const db = {
     get: vi.fn(async (tableNameOrId: string, maybeId?: string) => {
@@ -118,6 +214,24 @@ function createMutationCtx(seed?: {
       if (tableName === "registerSession") {
         return (
           registerSessions.find((session) => session._id === id) ?? null
+        );
+      }
+
+      if (tableName === "staffProfile") {
+        return staffProfiles.find((profile) => profile._id === id) ?? null;
+      }
+
+      if (tableName === "posTerminal") {
+        return terminals.find((terminal) => terminal._id === id) ?? null;
+      }
+
+      if (tableName === "productSku") {
+        return productSkus.find((sku) => sku._id === id) ?? null;
+      }
+
+      if (tableName === "customerProfile") {
+        return (
+          customerProfiles.find((profile) => profile._id === id) ?? null
         );
       }
 
@@ -155,6 +269,9 @@ function createMutationCtx(seed?: {
         const filters: QueryBuilderFilters = {};
         const builder = {
           eq(field: string, value: unknown) {
+            if (field === "storeId") {
+              filters.storeId = String(value);
+            }
             if (field === "status") {
               filters.status = String(value);
             }
@@ -178,6 +295,21 @@ function createMutationCtx(seed?: {
 
         apply(builder);
 
+        if (tableName === "posSession" && indexName === "by_storeId_and_status") {
+          const page = sessions.filter(
+            (session) =>
+              session.storeId === filters.storeId &&
+              session.status === filters.status,
+          );
+
+          return {
+            order: () => ({
+              take: async (limit: number) => page.slice(0, limit),
+            }),
+            take: async (limit: number) => page.slice(0, limit),
+          };
+        }
+
         if (tableName === "posSession" && indexName === "by_status_and_expiresAt") {
           const page = sessions.filter(
             (session) =>
@@ -186,7 +318,7 @@ function createMutationCtx(seed?: {
           );
 
           return {
-            take: async () => page,
+            take: async (limit?: number) => limit ? page.slice(0, limit) : page,
             paginate: async () => ({
               page,
               isDone: true,
@@ -214,7 +346,20 @@ function createMutationCtx(seed?: {
           const page = items.filter((item) => item.sessionId === filters.sessionId);
 
           return {
-            take: async () => page,
+            take: async (limit?: number) => limit ? page.slice(0, limit) : page,
+          };
+        }
+
+        if (
+          tableName === "staffRoleAssignment" &&
+          indexName === "by_staffProfileId"
+        ) {
+          const page = staffRoleAssignments.filter(
+            (assignment) => assignment.staffProfileId === filters.staffProfileId,
+          );
+
+          return {
+            take: async (limit?: number) => limit ? page.slice(0, limit) : page,
           };
         }
 
@@ -269,10 +414,579 @@ function getHandler(definition: unknown) {
 describe("pos session lifecycle trace handlers", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mocks.recordOperationalEventWithCtx.mockResolvedValue({
+      _id: "event-1",
+    });
+    mocks.requireStoreFullAdminAccess.mockRejectedValue(
+      new Error("Authentication required."),
+    );
+    mocks.releaseActiveInventoryHoldsForSession.mockResolvedValue({
+      releasedHoldCount: 0,
+      releasedQuantity: 0,
+      releasedHolds: [],
+    });
+    mocks.readActiveInventoryHoldDetailsForSession.mockResolvedValue([]);
     mocks.traceRecord.mockResolvedValue({
       traceCreated: true,
       traceId: "pos_session:ses-001",
     });
+  });
+
+  it("returns bounded active and held store session operations rows with cart, hold, operator, register, customer, and trace details", async () => {
+    const ctx = createMutationCtx({
+      sessions: [
+        buildSession({
+          _id: "session-active",
+          sessionNumber: "SES-100",
+          status: "active",
+          staffProfileId: "cashier-1",
+          customerProfileId: "customer-1",
+          subtotal: 200,
+          tax: 30,
+          total: 230,
+          workflowTraceId: "pos_session:session-active",
+        }),
+        buildSession({
+          _id: "session-held",
+          sessionNumber: "SES-101",
+          status: "held",
+          staffProfileId: undefined,
+          customerInfo: {
+            name: "Walk-in customer",
+            phone: "0200000000",
+          },
+          registerSessionId: undefined,
+          workflowTraceId: undefined,
+        }),
+        buildSession({
+          _id: "session-completed",
+          sessionNumber: "SES-102",
+          status: "completed",
+        }),
+        buildSession({
+          _id: "session-void",
+          sessionNumber: "SES-103",
+          status: "void",
+        }),
+        buildSession({
+          _id: "session-expired",
+          sessionNumber: "SES-104",
+          status: "expired",
+        }),
+      ],
+      items: [
+        {
+          _id: "item-1",
+          sessionId: "session-active",
+          storeId: "store-1",
+          productId: "product-1",
+          productSkuId: "sku-1",
+          productSku: "WIG-A",
+          productName: "Lace Wig",
+          price: 100,
+          quantity: 2,
+        },
+        {
+          _id: "item-2",
+          sessionId: "session-held",
+          storeId: "store-1",
+          productId: "product-2",
+          productSkuId: "sku-2",
+          productSku: "WIG-B",
+          productName: "Closure Wig",
+          price: 75,
+          quantity: 1,
+        },
+      ],
+      customerProfiles: [
+        {
+          _id: "customer-1",
+          fullName: "Adwoa Mensah",
+          email: "adwoa@example.com",
+          phoneNumber: "0240000000",
+        },
+      ],
+      productSkus: [
+        {
+          _id: "sku-1",
+          storeId: "store-1",
+          sku: "WIG-A",
+          productName: "Lace Wig",
+        },
+        {
+          _id: "sku-2",
+          storeId: "store-1",
+          sku: "WIG-B",
+          productName: "Closure Wig",
+        },
+      ],
+    });
+
+    mocks.readActiveInventoryHoldDetailsForSession.mockImplementation(
+      async (_db, args: { sessionId: string }) =>
+        args.sessionId === "session-active"
+          ? [
+              {
+                holdId: "hold-1",
+                productSkuId: "sku-1",
+                sku: "WIG-A",
+                productName: "Lace Wig",
+                quantity: 2,
+                expiresAt: 4_102_444_800_000,
+                isExpired: false,
+              },
+            ]
+          : [],
+    );
+
+    const result = await getHandler(getStoreActiveSessionOperations)(
+      ctx as never,
+      {
+        storeId: "store-1",
+        limit: 10,
+      },
+    );
+
+    expect(result.rows.map((row: { sessionNumber: string }) => row.sessionNumber)).toEqual([
+      "SES-101",
+      "SES-100",
+    ]);
+    expect(result.rows[0]).toEqual(
+      expect.objectContaining({
+        sessionId: "session-held",
+        status: "held",
+        operator: null,
+        register: null,
+        customer: expect.objectContaining({
+          name: "Walk-in customer",
+        }),
+        cart: expect.objectContaining({
+          lineItemCount: 1,
+          totalQuantity: 1,
+          subtotal: 75,
+          total: 75,
+        }),
+        activeHolds: expect.objectContaining({
+          holdCount: 0,
+          totalQuantity: 0,
+          details: [],
+        }),
+        workflowTrace: null,
+      }),
+    );
+    expect(result.rows[1]).toEqual(
+      expect.objectContaining({
+        sessionId: "session-active",
+        status: "active",
+        operator: expect.objectContaining({
+          staffProfileId: "cashier-1",
+          name: "Ama Cashier",
+          status: "active",
+        }),
+        terminal: expect.objectContaining({
+          terminalId: "terminal-1",
+          displayName: "Front register",
+          registerNumber: "1",
+        }),
+        register: expect.objectContaining({
+          registerSessionId: "drawer-1",
+          status: "open",
+        }),
+        customer: expect.objectContaining({
+          customerProfileId: "customer-1",
+          name: "Adwoa Mensah",
+        }),
+        cart: expect.objectContaining({
+          lineItemCount: 1,
+          totalQuantity: 2,
+          subtotal: 200,
+          tax: 30,
+          total: 230,
+        }),
+        activeHolds: expect.objectContaining({
+          holdCount: 1,
+          totalQuantity: 2,
+          details: [
+            expect.objectContaining({
+              holdId: "hold-1",
+              productSkuId: "sku-1",
+              quantity: 2,
+            }),
+          ],
+        }),
+        workflowTrace: expect.objectContaining({
+          traceId: "pos_session:session-active",
+          primaryLookupValue: "SES-100",
+        }),
+      }),
+    );
+  });
+
+  it.each(["active", "held"] as const)(
+    "lets a manager expire a %s POS session, release active holds, and record audit plus trace evidence",
+    async (status) => {
+      const ctx = createMutationCtx({
+        sessions: [
+          buildSession({
+            _id: `session-${status}`,
+            sessionNumber: `SES-${status}`,
+            status,
+            subtotal: 100,
+            tax: 15,
+            total: 115,
+          }),
+        ],
+        staffProfiles: [
+          {
+            _id: "manager-1",
+            storeId: "store-1",
+            organizationId: "org-1",
+            fullName: "Mina Manager",
+            status: "active",
+          },
+        ],
+        staffRoleAssignments: [
+          {
+            _id: "role-1",
+            staffProfileId: "manager-1",
+            storeId: "store-1",
+            organizationId: "org-1",
+            role: "manager",
+            status: "active",
+          },
+        ],
+      });
+      mocks.releaseActiveInventoryHoldsForSession.mockResolvedValue({
+        releasedHoldCount: 2,
+        releasedQuantity: 5,
+        releasedHolds: [
+          { holdId: "hold-1", productSkuId: "sku-1", quantity: 2 },
+          { holdId: "hold-2", productSkuId: "sku-2", quantity: 3 },
+        ],
+      });
+
+      const result = await getHandler(expireSessionFromOperations)(
+        ctx as never,
+        {
+          storeId: "store-1",
+          sessionId: `session-${status}`,
+          actorStaffProfileId: "manager-1",
+          reason: "Stale hold",
+        },
+      );
+
+      expect(result).toEqual({
+        kind: "ok",
+        data: {
+          sessionId: `session-${status}`,
+          status: "expired",
+          priorStatus: status,
+          releasedHoldCount: 2,
+          releasedQuantity: 5,
+        },
+      });
+      expect(mocks.releaseActiveInventoryHoldsForSession).toHaveBeenCalledWith(
+        ctx.db,
+        {
+          sessionId: `session-${status}`,
+          now: expect.any(Number),
+        },
+      );
+      expect(ctx.sessions[0]).toEqual(
+        expect.objectContaining({
+          status: "expired",
+          expiresAt: expect.any(Number),
+          notes: "Stale hold",
+        }),
+      );
+      expect(mocks.recordOperationalEventWithCtx).toHaveBeenCalledWith(
+        ctx,
+        expect.objectContaining({
+          eventType: "pos_session.expired_by_operator",
+          subjectType: "pos_session",
+          subjectId: `session-${status}`,
+          subjectLabel: `SES-${status}`,
+          actorStaffProfileId: "manager-1",
+          registerSessionId: "drawer-1",
+          reason: "Stale hold",
+          metadata: expect.objectContaining({
+            priorStatus: status,
+            releasedHoldCount: 2,
+            releasedQuantity: 5,
+            registerNumber: "1",
+            terminalId: "terminal-1",
+          }),
+        }),
+      );
+      expect(mocks.traceRecord).toHaveBeenCalledWith(
+        expect.objectContaining({
+          stage: "expired",
+          session: expect.objectContaining({
+            _id: `session-${status}`,
+            status: "expired",
+          }),
+        }),
+      );
+    },
+  );
+
+  it("lets a protected full admin expire a POS session without a staff actor profile", async () => {
+    const ctx = createMutationCtx({
+      sessions: [
+        buildSession({
+          _id: "session-admin",
+          sessionNumber: "SES-ADMIN",
+          status: "active",
+        }),
+      ],
+    });
+    mocks.requireStoreFullAdminAccess.mockResolvedValue({
+      athenaUser: {
+        _id: "athena-user-1",
+      },
+      store: {
+        _id: "store-1",
+      },
+    });
+    mocks.releaseActiveInventoryHoldsForSession.mockResolvedValue({
+      releasedHoldCount: 1,
+      releasedQuantity: 2,
+      releasedHolds: [{ holdId: "hold-1", productSkuId: "sku-1", quantity: 2 }],
+    });
+
+    const result = await getHandler(expireSessionFromOperations)(ctx as never, {
+      storeId: "store-1",
+      sessionId: "session-admin",
+      reason: "Admin released stale cart",
+    });
+
+    expect(result).toEqual({
+      kind: "ok",
+      data: {
+        sessionId: "session-admin",
+        status: "expired",
+        priorStatus: "active",
+        releasedHoldCount: 1,
+        releasedQuantity: 2,
+      },
+    });
+    expect(mocks.requireStoreFullAdminAccess).toHaveBeenCalledWith(
+      ctx,
+      "store-1",
+    );
+    expect(mocks.recordOperationalEventWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        actorStaffProfileId: undefined,
+        actorUserId: "athena-user-1",
+        eventType: "pos_session.expired_by_operator",
+        subjectId: "session-admin",
+      }),
+    );
+  });
+
+  it("rejects non-manager, inactive, and cross-store staff before expiring a POS session", async () => {
+    const cases = [
+      {
+        label: "non-manager",
+        staffProfile: {
+          _id: "cashier-2",
+          storeId: "store-1",
+          organizationId: "org-1",
+          fullName: "Cashier Two",
+          status: "active" as const,
+        },
+        assignments: [],
+      },
+      {
+        label: "inactive",
+        staffProfile: {
+          _id: "inactive-manager",
+          storeId: "store-1",
+          organizationId: "org-1",
+          fullName: "Inactive Manager",
+          status: "inactive" as const,
+        },
+        assignments: [
+          {
+            _id: "role-inactive",
+            staffProfileId: "inactive-manager",
+            storeId: "store-1",
+            organizationId: "org-1",
+            role: "manager",
+            status: "active" as const,
+          },
+        ],
+      },
+      {
+        label: "cross-store",
+        staffProfile: {
+          _id: "other-store-manager",
+          storeId: "store-2",
+          organizationId: "org-1",
+          fullName: "Other Store Manager",
+          status: "active" as const,
+        },
+        assignments: [
+          {
+            _id: "role-cross-store",
+            staffProfileId: "other-store-manager",
+            storeId: "store-2",
+            organizationId: "org-1",
+            role: "manager",
+            status: "active" as const,
+          },
+        ],
+      },
+    ];
+
+    for (const testCase of cases) {
+      const ctx = createMutationCtx({
+        sessions: [buildSession({ _id: `session-${testCase.label}` })],
+        staffProfiles: [testCase.staffProfile],
+        staffRoleAssignments: testCase.assignments,
+      });
+
+      const result = await getHandler(expireSessionFromOperations)(
+        ctx as never,
+        {
+          storeId: "store-1",
+          sessionId: `session-${testCase.label}`,
+          actorStaffProfileId: testCase.staffProfile._id,
+          reason: "Stale hold",
+        },
+      );
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          kind: "user_error",
+          error: expect.objectContaining({
+            code: "authorization_failed",
+          }),
+        }),
+      );
+    }
+
+    expect(mocks.releaseActiveInventoryHoldsForSession).not.toHaveBeenCalled();
+    expect(mocks.recordOperationalEventWithCtx).not.toHaveBeenCalled();
+    expect(mocks.traceRecord).not.toHaveBeenCalled();
+  });
+
+  it("does not mutate completed or void sessions from the operations expire command", async () => {
+    for (const status of ["completed", "void"] as const) {
+      const ctx = createMutationCtx({
+        sessions: [
+          buildSession({
+            _id: `session-${status}`,
+            status,
+          }),
+        ],
+        staffProfiles: [
+          {
+            _id: "manager-1",
+            storeId: "store-1",
+            organizationId: "org-1",
+            fullName: "Mina Manager",
+            status: "active",
+          },
+        ],
+        staffRoleAssignments: [
+          {
+            _id: "role-1",
+            staffProfileId: "manager-1",
+            storeId: "store-1",
+            organizationId: "org-1",
+            role: "manager",
+            status: "active",
+          },
+        ],
+      });
+
+      const result = await getHandler(expireSessionFromOperations)(
+        ctx as never,
+        {
+          storeId: "store-1",
+          sessionId: `session-${status}`,
+          actorStaffProfileId: "manager-1",
+          reason: "Stale hold",
+        },
+      );
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          kind: "user_error",
+          error: expect.objectContaining({
+            code: "precondition_failed",
+          }),
+        }),
+      );
+      expect(ctx.sessions[0].status).toBe(status);
+      expect(ctx.db.patch).not.toHaveBeenCalledWith(
+        "posSession",
+        `session-${status}`,
+        expect.anything(),
+      );
+    }
+
+    expect(mocks.releaseActiveInventoryHoldsForSession).not.toHaveBeenCalled();
+    expect(mocks.recordOperationalEventWithCtx).not.toHaveBeenCalled();
+    expect(mocks.traceRecord).not.toHaveBeenCalled();
+  });
+
+  it("treats already expired sessions as an idempotent operations expire success", async () => {
+    const ctx = createMutationCtx({
+      sessions: [
+        buildSession({
+          _id: "session-expired-command",
+          status: "expired",
+        }),
+      ],
+      staffProfiles: [
+        {
+          _id: "manager-1",
+          storeId: "store-1",
+          organizationId: "org-1",
+          fullName: "Mina Manager",
+          status: "active",
+        },
+      ],
+      staffRoleAssignments: [
+        {
+          _id: "role-1",
+          staffProfileId: "manager-1",
+          storeId: "store-1",
+          organizationId: "org-1",
+          role: "manager",
+          status: "active",
+        },
+      ],
+    });
+
+    const result = await getHandler(expireSessionFromOperations)(ctx as never, {
+      storeId: "store-1",
+      sessionId: "session-expired-command",
+      actorStaffProfileId: "manager-1",
+      reason: "Replay",
+    });
+
+    expect(result).toEqual({
+      kind: "ok",
+      data: {
+        sessionId: "session-expired-command",
+        status: "expired",
+        priorStatus: "expired",
+        releasedHoldCount: 0,
+        releasedQuantity: 0,
+      },
+    });
+    expect(mocks.releaseActiveInventoryHoldsForSession).not.toHaveBeenCalled();
+    expect(mocks.recordOperationalEventWithCtx).not.toHaveBeenCalled();
+    expect(mocks.traceRecord).not.toHaveBeenCalled();
+    expect(ctx.db.patch).not.toHaveBeenCalledWith(
+      "posSession",
+      "session-expired-command",
+      expect.anything(),
+    );
   });
 
   it("records a completed lifecycle trace after completing a session", async () => {

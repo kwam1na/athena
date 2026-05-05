@@ -149,6 +149,28 @@ describe("POS and expense session indexing", () => {
     expect(releaseSource).toContain("listPosSessionsByStatusBefore(ctx, now)");
   });
 
+  it("uses bounded store-status reads for POS active-session operations", () => {
+    const source = readProjectFile("convex", "inventory", "posSessions.ts");
+    const helperSource = readSourceSlice(
+      source,
+      "async function listStoreSessionsForOperationsStatus(",
+      "async function buildSessionOperationsRow(",
+    );
+    const operationsSource = readSourceSlice(
+      source,
+      "export const getStoreActiveSessionOperations = query({",
+      "export const expireSessionFromOperations = mutation({",
+    );
+    const combinedSource = `${helperSource}\n${operationsSource}`;
+
+    expect(combinedSource).toContain('withIndex("by_storeId_and_status"');
+    expect(combinedSource).toContain('eq("storeId", args.storeId)');
+    expect(combinedSource).toContain('eq("status", status)');
+    expect(combinedSource).toContain(".take(args.boundedLimit)");
+    expect(combinedSource).not.toContain(".collect(");
+    expect(combinedSource).not.toContain(".paginate(");
+  });
+
   it("uses targeted session indexes instead of broad status scans in expenseSessions", () => {
     const source = readProjectFile(
       "convex",

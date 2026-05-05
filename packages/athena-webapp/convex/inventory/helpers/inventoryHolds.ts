@@ -48,6 +48,26 @@ type ReleaseHoldArgs = {
   now?: number;
 };
 
+export type ActiveInventoryHoldDetail = {
+  holdId: Id<"inventoryHold">;
+  productSkuId: Id<"productSku">;
+  sku?: string;
+  productName?: string;
+  quantity: number;
+  expiresAt: number;
+  isExpired: boolean;
+};
+
+export type ReleasedInventoryHoldSummary = {
+  releasedHoldCount: number;
+  releasedQuantity: number;
+  releasedHolds: Array<{
+    holdId: Id<"inventoryHold">;
+    productSkuId: Id<"productSku">;
+    quantity: number;
+  }>;
+};
+
 const ACTIVE_HOLD_SUM_LIMIT = 250;
 const ACTIVE_SESSION_HOLD_LIST_LIMIT = 500;
 
@@ -387,6 +407,42 @@ export async function releaseInventoryHoldsForSession(
   );
 }
 
+export async function releaseActiveInventoryHoldsForSession(
+  db: DatabaseWriter,
+  args: {
+    sessionId: Id<"posSession">;
+    now?: number;
+  },
+): Promise<ReleasedInventoryHoldSummary> {
+  const now = args.now ?? Date.now();
+  const activeHolds = await listActiveSessionHolds(db, {
+    sessionId: args.sessionId,
+  });
+  const releasedHolds: ReleasedInventoryHoldSummary["releasedHolds"] = [];
+  let releasedQuantity = 0;
+
+  for (const hold of activeHolds) {
+    releasedQuantity += hold.quantity;
+    releasedHolds.push({
+      holdId: hold._id,
+      productSkuId: hold.productSkuId,
+      quantity: hold.quantity,
+    });
+
+    await db.patch("inventoryHold", hold._id, {
+      status: "released",
+      releasedAt: now,
+      updatedAt: now,
+    });
+  }
+
+  return {
+    releasedHoldCount: releasedHolds.length,
+    releasedQuantity,
+    releasedHolds,
+  };
+}
+
 export async function consumeInventoryHoldsForSession(
   db: DatabaseWriter,
   args: {
@@ -456,6 +512,36 @@ export async function readActiveInventoryHoldQuantitiesForSession(
   }
 
   return quantities;
+}
+
+export async function readActiveInventoryHoldDetailsForSession(
+  db: DatabaseReader,
+  args: {
+    sessionId: Id<"posSession">;
+    now?: number;
+  },
+): Promise<ActiveInventoryHoldDetail[]> {
+  const now = args.now ?? Date.now();
+  const activeHolds = await listActiveSessionHolds(db, {
+    sessionId: args.sessionId,
+  });
+  const details: ActiveInventoryHoldDetail[] = [];
+
+  for (const hold of activeHolds) {
+    const sku = await db.get("productSku", hold.productSkuId);
+
+    details.push({
+      holdId: hold._id,
+      productSkuId: hold.productSkuId,
+      sku: sku?.sku,
+      productName: sku?.productName,
+      quantity: hold.quantity,
+      expiresAt: hold.expiresAt,
+      isExpired: hold.expiresAt <= now,
+    });
+  }
+
+  return details;
 }
 
 async function sumActiveHeldQuantity(
