@@ -1,5 +1,6 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { QueryCtx } from "../../../_generated/server";
+import { validateInventoryAvailability } from "../../../inventory/helpers/inventoryHolds";
 
 type RegisterCatalogRow = {
   id: Id<"productSku">;
@@ -16,10 +17,17 @@ type RegisterCatalogRow = {
   size: string;
   length: number | null;
   color: string;
-  inStock: boolean;
-  quantityAvailable: number;
   areProcessingFeesAbsorbed: boolean;
 };
+
+type RegisterCatalogAvailabilityRow = {
+  productSkuId: Id<"productSku">;
+  skuId: Id<"productSku">;
+  inStock: boolean;
+  quantityAvailable: number;
+};
+
+export const REGISTER_CATALOG_AVAILABILITY_LIMIT = 50;
 
 async function readCategoryName(
   ctx: QueryCtx,
@@ -80,8 +88,6 @@ function mapSkuToRegisterCatalogRow(args: {
     size: args.sku.size ?? "",
     length: args.sku.length ?? null,
     color: args.color,
-    inStock: args.sku.quantityAvailable > 0,
-    quantityAvailable: args.sku.quantityAvailable,
     areProcessingFeesAbsorbed: args.product.areProcessingFeesAbsorbed ?? false,
   };
 }
@@ -119,6 +125,42 @@ export async function listRegisterCatalog(
         color: await readColorName(ctx, colorCache, sku.color),
       }),
     );
+  }
+
+  return rows;
+}
+
+export async function listRegisterCatalogAvailability(
+  ctx: QueryCtx,
+  args: {
+    storeId: Id<"store">;
+    productSkuIds: Array<Id<"productSku">>;
+  },
+) {
+  const requestedSkuIds = Array.from(new Set(args.productSkuIds)).slice(
+    0,
+    REGISTER_CATALOG_AVAILABILITY_LIMIT,
+  );
+  const rows: RegisterCatalogAvailabilityRow[] = [];
+
+  for (const productSkuId of requestedSkuIds) {
+    const sku = await ctx.db.get("productSku", productSkuId);
+
+    if (!sku || sku.storeId !== args.storeId) {
+      continue;
+    }
+
+    const availability = await validateInventoryAvailability(ctx.db, sku._id, 1, {
+      storeId: args.storeId,
+    });
+    const quantityAvailable = availability.available ?? 0;
+
+    rows.push({
+      productSkuId: sku._id,
+      skuId: sku._id,
+      inStock: quantityAvailable > 0,
+      quantityAvailable,
+    });
   }
 
   return rows;

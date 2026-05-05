@@ -57,6 +57,7 @@ export type PosSessionTraceableSession = Pick<
   | "tax"
   | "total"
   | "registerSessionId"
+  | "inventoryHoldMode"
   | "workflowTraceId"
 >;
 

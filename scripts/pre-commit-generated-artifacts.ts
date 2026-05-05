@@ -43,6 +43,8 @@ const CONVEX_API_MODULE_EXCEPTIONS = new Set([
   "schema",
   "storeFront/customer",
 ]);
+const CONVEX_NODE_BIN_ENV = "ATHENA_CONVEX_NODE_BIN";
+const SUPPORTED_CONVEX_NODE_MAJORS = new Set([18, 20, 22, 24]);
 
 type SpawnedProcess = {
   exited: Promise<number>;
@@ -60,7 +62,12 @@ type PreCommitGeneratedArtifactsOptions = {
   runHarnessGenerate?: (rootDir: string) => Promise<void>;
   spawn?: (
     command: string[],
-    options: { cwd: string; stdout: "inherit" | "pipe"; stderr: "pipe" }
+    options: {
+      cwd: string;
+      stdout: "inherit" | "pipe";
+      stderr: "pipe";
+      env?: Record<string, string>;
+    }
   ) => SpawnedProcess;
   logger?: PreCommitGeneratedArtifactsLogger;
 };
@@ -153,10 +160,18 @@ async function refreshAthenaConvexGeneratedApi(
   spawn: NonNullable<PreCommitGeneratedArtifactsOptions["spawn"]>
 ) {
   const command = ["bunx", "convex", "dev", "--once"];
+  const nodeBin = await resolveSupportedConvexNodeBin(rootDir, spawn);
+  const env = nodeBin
+    ? {
+        ...stringProcessEnv(),
+        PATH: `${path.dirname(nodeBin)}${path.delimiter}${process.env.PATH ?? ""}`,
+      }
+    : undefined;
   const proc = spawn(command, {
     cwd: path.join(rootDir, "packages", "athena-webapp"),
     stdout: "inherit",
     stderr: "pipe",
+    env,
   });
   const exitCode = await proc.exited;
 
@@ -171,6 +186,94 @@ async function refreshAthenaConvexGeneratedApi(
     stderr ||
       `Failed to refresh Convex generated API (exit ${exitCode}): ${command.join(" ")}`
   );
+}
+
+function stringProcessEnv() {
+  return Object.fromEntries(
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string"
+    )
+  );
+}
+
+async function resolveSupportedConvexNodeBin(
+  rootDir: string,
+  spawn: NonNullable<PreCommitGeneratedArtifactsOptions["spawn"]>
+) {
+  const candidates = [
+    process.env[CONVEX_NODE_BIN_ENV],
+    process.env.NODE_BINARY,
+    process.env.HOME
+      ? path.join(
+          process.env.HOME,
+          ".cache",
+          "codex-runtimes",
+          "codex-primary-runtime",
+          "dependencies",
+          "node",
+          "bin",
+          "node"
+        )
+      : undefined,
+    "/opt/homebrew/opt/node@24/bin/node",
+    "/opt/homebrew/opt/node@22/bin/node",
+    "/opt/homebrew/opt/node@20/bin/node",
+    "/opt/homebrew/opt/node@18/bin/node",
+    "/usr/local/opt/node@24/bin/node",
+    "/usr/local/opt/node@22/bin/node",
+    "/usr/local/opt/node@20/bin/node",
+    "/usr/local/opt/node@18/bin/node",
+    "node",
+  ].filter((candidate): candidate is string => Boolean(candidate));
+  const seenCandidates = new Set<string>();
+  const checkedVersions: string[] = [];
+
+  for (const candidate of candidates) {
+    if (seenCandidates.has(candidate)) {
+      continue;
+    }
+    seenCandidates.add(candidate);
+
+    const version = await readCommandStdout(spawn, [candidate, "-v"], rootDir);
+    if (!version) {
+      continue;
+    }
+    checkedVersions.push(`${candidate} => ${version}`);
+
+    const major = Number(version.trim().replace(/^v/, "").split(".")[0]);
+    if (SUPPORTED_CONVEX_NODE_MAJORS.has(major)) {
+      return candidate.includes(path.sep) ? candidate : null;
+    }
+  }
+
+  throw new Error(
+    [
+      "Convex generated API refresh requires Node.js 18, 20, 22, or 24 because Convex deploys node actions during `convex dev --once`.",
+      `Install a supported Node version or set ${CONVEX_NODE_BIN_ENV}=/absolute/path/to/node before rerunning.`,
+      checkedVersions.length > 0
+        ? `Checked Node candidates:\n${checkedVersions.map((entry) => `  - ${entry}`).join("\n")}`
+        : "No Node candidates could be executed.",
+    ].join("\n")
+  );
+}
+
+async function readCommandStdout(
+  spawn: NonNullable<PreCommitGeneratedArtifactsOptions["spawn"]>,
+  command: string[],
+  cwd: string
+) {
+  const proc = spawn(command, {
+    cwd,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const exitCode = await proc.exited;
+
+  if (exitCode !== 0 || !proc.stdout) {
+    return null;
+  }
+
+  return (await new Response(proc.stdout).text()).trim();
 }
 
 async function verifyAthenaConvexGeneratedApi(rootDir: string) {

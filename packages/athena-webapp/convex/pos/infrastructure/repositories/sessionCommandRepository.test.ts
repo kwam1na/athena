@@ -1,38 +1,51 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import type { Id } from "../../../_generated/dataModel";
-import {
-  collectSessionItemsFromPages,
-  findSessionItemBySkuInPages,
-} from "./sessionCommandRepository";
+import { collectSessionItemsFromPages } from "./sessionCommandRepository";
 
-describe("findSessionItemBySkuInPages", () => {
-  it("keeps scanning later pages until it finds the matching sku", async () => {
-    const skuId = "sku-target" as Id<"productSku">;
+const projectRoot = process.cwd();
+const readProjectFile = (...segments: string[]) =>
+  readFileSync(join(projectRoot, ...segments), "utf8");
 
-    const item = await findSessionItemBySkuInPages(
-      async (cursor) => {
-        if (cursor === null) {
-          return {
-            page: [
-              { productSkuId: "sku-a" as Id<"productSku"> },
-              { productSkuId: "sku-b" as Id<"productSku"> },
-            ],
-            isDone: false,
-            continueCursor: "page-2",
-          };
-        }
-
-        return {
-          page: [{ productSkuId: skuId }],
-          isDone: true,
-          continueCursor: "done",
-        };
-      },
-      skuId,
+describe("createSessionCommandRepository", () => {
+  it("uses the compound session/SKU index for cart-line lookup", () => {
+    const source = readProjectFile(
+      "convex",
+      "pos",
+      "infrastructure",
+      "repositories",
+      "sessionCommandRepository.ts",
+    );
+    const lookupSource = source.slice(
+      source.indexOf("findSessionItemBySku(args)"),
+      source.indexOf("getSessionItemById(itemId)"),
     );
 
-    expect(item).toEqual({ productSkuId: skuId });
+    expect(lookupSource).toContain('withIndex("by_sessionId_productSkuId"');
+    expect(lookupSource).toContain(".unique()");
+    expect(lookupSource).not.toContain(".paginate(");
+    expect(lookupSource).not.toContain("findSessionItemBySkuInPages");
+  });
+});
+
+describe("findSessionItemBySkuInPages", () => {
+  it("is no longer the cart-line lookup path", () => {
+    const source = readProjectFile(
+      "convex",
+      "pos",
+      "infrastructure",
+      "repositories",
+      "sessionCommandRepository.ts",
+    );
+
+    const lookupSource = source.slice(
+      source.indexOf("findSessionItemBySku(args)"),
+      source.indexOf("getSessionItemById(itemId)"),
+    );
+
+    expect(lookupSource).not.toContain("findSessionItemBySkuInPages");
   });
 });
 

@@ -136,13 +136,23 @@ export interface PosRegisterCatalogRowDto {
   size: string;
   length: number | null;
   color: string;
-  inStock: boolean;
-  quantityAvailable: number;
   areProcessingFeesAbsorbed: boolean;
 }
 
 export interface PosRegisterCatalogInput {
   storeId?: Id<"store">;
+}
+
+export interface PosRegisterCatalogAvailabilityRowDto {
+  productSkuId: Id<"productSku">;
+  skuId: Id<"productSku">;
+  inStock: boolean;
+  quantityAvailable: number;
+}
+
+export interface PosRegisterCatalogAvailabilityInput {
+  storeId?: Id<"store">;
+  productSkuIds?: Array<Id<"productSku">>;
 }
 
 export interface PosRegisterStateQueryInput {

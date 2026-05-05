@@ -26,6 +26,11 @@ import {
   type CommandResult,
 } from "../../../../shared/commandResult";
 import { isPosUsableRegisterSessionStatus } from "../../../../shared/registerSessionStatus";
+import {
+  consumeInventoryHoldsForSession,
+  readActiveInventoryHoldQuantitiesForSession,
+  validateInventoryAvailability,
+} from "../../../inventory/helpers/inventoryHolds";
 
 type PosPaymentInput = {
   method: string;
@@ -269,6 +274,23 @@ export async function completeTransaction(
       return userError({
         code: "conflict",
         message: `Insufficient inventory for ${capitalizeWords(itemName)} (${sku.sku}). Available: ${sku.quantityAvailable}, Total Requested: ${totalQuantity}`,
+      });
+    }
+
+    const availability = await validateInventoryAvailability(
+      ctx.db,
+      skuId,
+      totalQuantity,
+      {
+        storeId: args.storeId,
+      },
+    );
+    if (!availability.success) {
+      return userError({
+        code: "conflict",
+        message:
+          availability.message ??
+          `Insufficient inventory for ${capitalizeWords(args.items.find((item) => item.skuId === skuId)?.name || "Unknown Product")} (${sku.sku}).`,
       });
     }
   }
@@ -551,6 +573,50 @@ export async function createTransactionFromSessionHandler(
         message: `Insufficient inventory for ${capitalizeWords(item?.productName || "Unknown Product")} (${sku.sku}). In Stock: ${sku.inventoryCount}, Needed: ${totalQuantity}`,
       });
     }
+
+    const availability = await validateInventoryAvailability(
+      ctx.db,
+      skuId,
+      totalQuantity,
+      {
+        storeId: session.storeId,
+        sessionId: args.sessionId,
+      },
+    );
+    if (!availability.success) {
+      const item = items.find(
+        (sessionItem) => sessionItem.productSkuId === skuId,
+      );
+      return userError({
+        code: "conflict",
+        message:
+          availability.message ??
+          `Insufficient inventory for ${capitalizeWords(item?.productName || "Unknown Product")} (${sku.sku}).`,
+      });
+    }
+  }
+
+  if (session.inventoryHoldMode === "ledger") {
+    const heldQuantities = await readActiveInventoryHoldQuantitiesForSession(
+      ctx.db,
+      {
+        sessionId: args.sessionId,
+        now: Date.now(),
+      },
+    );
+
+    for (const [skuId, totalQuantity] of skuQuantityMap) {
+      const heldQuantity = heldQuantities.get(skuId) ?? 0;
+      if (heldQuantity < totalQuantity) {
+        const item = items.find(
+          (sessionItem) => sessionItem.productSkuId === skuId,
+        );
+        return userError({
+          code: "conflict",
+          message: `Inventory hold expired for ${capitalizeWords(item?.productName || "Unknown Product")}. Scan it again before completing this sale.`,
+        });
+      }
+    }
   }
 
   if (args.payments.length === 0) {
@@ -630,6 +696,15 @@ export async function createTransactionFromSessionHandler(
     throw new Error(completionResult.message);
   }
 
+  const consumedHoldQuantities = await consumeInventoryHoldsForSession(ctx.db, {
+    sessionId: args.sessionId,
+    items: items.map((item) => ({
+      skuId: item.productSkuId,
+      quantity: item.quantity,
+    })),
+    now: completedAt,
+  });
+
   const transactionItems = await Promise.all(
     items.map(async (item) => {
       const sku = await getProductSkuById(ctx, item.productSkuId);
@@ -653,7 +728,16 @@ export async function createTransactionFromSessionHandler(
         totalPrice: item.price * item.quantity,
       });
 
+      const consumedHoldQuantity =
+        consumedHoldQuantities.get(item.productSkuId) ?? 0;
+      const quantityAvailableToSubtract =
+        consumedHoldQuantity >= item.quantity ? item.quantity : 0;
+
       await patchProductSku(ctx, item.productSkuId, {
+        quantityAvailable: Math.max(
+          0,
+          sku.quantityAvailable - quantityAvailableToSubtract,
+        ),
         inventoryCount: Math.max(0, sku.inventoryCount - item.quantity),
       });
 

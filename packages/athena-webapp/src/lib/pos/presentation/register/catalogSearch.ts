@@ -6,7 +6,6 @@ export interface RegisterCatalogSearchRow {
   barcode?: string | null;
   category?: string | null;
   description?: string | null;
-  quantityAvailable?: number | null;
   price?: number | null;
   size?: string | null;
   length?: number | string | null;
@@ -135,7 +134,7 @@ export function searchRegisterCatalog(
       query,
       results: exactResults,
       exactMatch,
-      canAutoAdd: !!exactMatch && isRowAvailable(exactMatch),
+      canAutoAdd: false,
     };
   }
 
@@ -390,10 +389,6 @@ function tokenizeSearchText(values: unknown[]): Set<string> {
   }
 
   return tokens;
-}
-
-function isRowAvailable(row: RegisterCatalogSearchRow): boolean {
-  return (row.quantityAvailable ?? 0) > 0;
 }
 
 function addKey(

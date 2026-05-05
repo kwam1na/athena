@@ -2,10 +2,9 @@ import { DatabaseReader, DatabaseWriter } from "../../_generated/server";
 import { Id } from "../../_generated/dataModel";
 
 /**
- * Inventory Hold Management Service
- *
- * Centralized service for managing inventory holds during POS sessions.
- * Ensures consistent inventory management across all session operations.
+ * POS inventory holds are a ledger over durable SKU inventory. Cart editing
+ * writes hold rows; completion is the only POS sale path that consumes SKU
+ * quantityAvailable/inventoryCount.
  */
 
 export interface InventoryHoldResult {
@@ -14,15 +13,58 @@ export interface InventoryHoldResult {
   available?: number;
 }
 
+type HoldDoc = {
+  _id: Id<"inventoryHold">;
+  storeId: Id<"store">;
+  productSkuId: Id<"productSku">;
+  sourceSessionId: Id<"posSession">;
+  status: "active" | "released" | "consumed" | "expired";
+  quantity: number;
+  expiresAt: number;
+};
+
+type HoldContext = {
+  storeId: Id<"store">;
+  sessionId: Id<"posSession">;
+  skuId: Id<"productSku">;
+  now?: number;
+};
+
+type AcquireHoldArgs = HoldContext & {
+  quantity: number;
+  expiresAt: number;
+};
+
+type AdjustHoldArgs = HoldContext & {
+  oldQuantity: number;
+  newQuantity: number;
+  expiresAt: number;
+};
+
+type ReleaseHoldArgs = {
+  sessionId: Id<"posSession">;
+  skuId: Id<"productSku">;
+  quantity?: number;
+  now?: number;
+};
+
+const ACTIVE_HOLD_SUM_LIMIT = 250;
+const ACTIVE_SESSION_HOLD_LIST_LIMIT = 500;
+
 /**
- * Validates if sufficient inventory is available for a product SKU
+ * Validates if sufficient inventory is available for a product SKU.
  */
 export async function validateInventoryAvailability(
   db: DatabaseReader,
   skuId: Id<"productSku">,
-  requiredQuantity: number
+  requiredQuantity: number,
+  options?: {
+    storeId?: Id<"store">;
+    sessionId?: Id<"posSession">;
+    now?: number;
+  },
 ): Promise<InventoryHoldResult> {
-  const sku = await db.get(skuId);
+  const sku = await db.get("productSku", skuId);
 
   if (!sku) {
     return {
@@ -31,7 +73,6 @@ export async function validateInventoryAvailability(
     };
   }
 
-  // Type guard for SKU data
   if (
     !("quantityAvailable" in sku) ||
     !("sku" in sku) ||
@@ -43,7 +84,18 @@ export async function validateInventoryAvailability(
     };
   }
 
-  if (sku.quantityAvailable === 0) {
+  const storeId = options?.storeId ?? sku.storeId;
+  const heldByOtherSessions = storeId
+    ? await sumActiveHeldQuantity(db, {
+        storeId,
+        skuId,
+        now: options?.now ?? Date.now(),
+        excludeSessionId: options?.sessionId,
+      })
+    : 0;
+  const available = Math.max(0, sku.quantityAvailable - heldByOtherSessions);
+
+  if (available === 0) {
     return {
       success: false,
       message: "No more units available for this product",
@@ -51,197 +103,474 @@ export async function validateInventoryAvailability(
     };
   }
 
-  if (sku.quantityAvailable < requiredQuantity) {
+  if (available < requiredQuantity) {
     return {
       success: false,
-      message: `Only ${sku.quantityAvailable} unit${sku.quantityAvailable !== 1 ? "s" : ""} available`,
-      available: sku.quantityAvailable,
+      message: `Only ${available} unit${available !== 1 ? "s" : ""} available`,
+      available,
     };
   }
 
   return {
     success: true,
-    available: sku.quantityAvailable,
+    available,
   };
 }
 
-/**
- * Acquires an inventory hold by decreasing quantityAvailable
- *
- * @param db - Database writer for mutations
- * @param skuId - Product SKU ID to hold inventory for
- * @param quantity - Quantity to hold
- * @returns Result indicating success or failure
- */
 export async function acquireInventoryHold(
   db: DatabaseWriter,
-  skuId: Id<"productSku">,
-  quantity: number
+  args: AcquireHoldArgs,
 ): Promise<InventoryHoldResult> {
-  // First validate availability
-  const validation = await validateInventoryAvailability(db, skuId, quantity);
+  const now = args.now ?? Date.now();
+  const validation = await validateInventoryAvailability(
+    db,
+    args.skuId,
+    args.quantity,
+    {
+      storeId: args.storeId,
+      sessionId: args.sessionId,
+      now,
+    },
+  );
   if (!validation.success) {
     return validation;
   }
 
-  const sku = await db.get(skuId);
-  if (!sku || !("quantityAvailable" in sku)) {
-    return {
-      success: false,
-      message: "Product not found",
-    };
-  }
-
-  // Acquire the hold by decreasing available quantity
-  await db.patch(skuId, {
-    quantityAvailable: (sku.quantityAvailable as number) - quantity,
+  const existingHold = await getActiveHoldForSessionSku(db, {
+    sessionId: args.sessionId,
+    skuId: args.skuId,
+    now,
   });
+
+  if (existingHold) {
+    await db.patch("inventoryHold", existingHold._id, {
+      quantity: existingHold.quantity + args.quantity,
+      expiresAt: args.expiresAt,
+      updatedAt: now,
+    });
+  } else {
+    await db.insert("inventoryHold", {
+      storeId: args.storeId,
+      productSkuId: args.skuId,
+      sourceType: "posSession",
+      sourceSessionId: args.sessionId,
+      status: "active",
+      quantity: args.quantity,
+      expiresAt: args.expiresAt,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
 
   return {
     success: true,
-    message: `Successfully held ${quantity} units`,
+    message: `Successfully held ${args.quantity} units`,
   };
 }
 
-/**
- * Releases an inventory hold by increasing quantityAvailable
- *
- * @param db - Database writer for mutations
- * @param skuId - Product SKU ID to release inventory for
- * @param quantity - Quantity to release
- * @returns Result indicating success or failure
- */
 export async function releaseInventoryHold(
   db: DatabaseWriter,
-  skuId: Id<"productSku">,
-  quantity: number
+  args: ReleaseHoldArgs,
 ): Promise<InventoryHoldResult> {
-  const sku = await db.get(skuId);
-
-  if (!sku) {
-    // Don't fail if SKU doesn't exist - it may have been deleted
-    console.warn(`[InventoryHolds] SKU ${skuId} not found during release`);
-    return {
-      success: true,
-      message: "SKU not found, but continuing",
-    };
-  }
-
-  if (
-    !("quantityAvailable" in sku) ||
-    typeof sku.quantityAvailable !== "number"
-  ) {
-    console.warn(`[InventoryHolds] Invalid SKU data for ${skuId}`);
-    return {
-      success: false,
-      message: "Invalid product data",
-    };
-  }
-
-  // Release the hold by increasing available quantity
-  await db.patch(skuId, {
-    quantityAvailable: sku.quantityAvailable + quantity,
+  const now = args.now ?? Date.now();
+  let remainingQuantity = args.quantity;
+  const activeHolds = await listActiveSessionHolds(db, {
+    sessionId: args.sessionId,
+    skuId: args.skuId,
   });
+
+  for (const hold of activeHolds) {
+    if (hold.expiresAt <= now) {
+      await markHoldExpired(db, hold._id, now);
+      continue;
+    }
+
+    if (remainingQuantity !== undefined) {
+      if (remainingQuantity <= 0) {
+        break;
+      }
+
+      if (hold.quantity > remainingQuantity) {
+        await db.patch("inventoryHold", hold._id, {
+          quantity: hold.quantity - remainingQuantity,
+          updatedAt: now,
+        });
+        remainingQuantity = 0;
+        break;
+      }
+
+      remainingQuantity -= hold.quantity;
+    }
+
+    await db.patch("inventoryHold", hold._id, {
+      status: "released",
+      releasedAt: now,
+      updatedAt: now,
+    });
+  }
+
+  if (remainingQuantity && remainingQuantity > 0) {
+    await restoreLegacyQuantityPatchHold(db, args.skuId, remainingQuantity);
+  }
 
   return {
     success: true,
-    message: `Successfully released ${quantity} units`,
+    message: "Successfully released inventory hold",
   };
 }
 
-/**
- * Adjusts inventory hold when quantity changes (increase or decrease)
- *
- * @param db - Database writer for mutations
- * @param skuId - Product SKU ID
- * @param oldQuantity - Previous quantity held
- * @param newQuantity - New quantity to hold
- * @returns Result indicating success or failure
- */
 export async function adjustInventoryHold(
   db: DatabaseWriter,
-  skuId: Id<"productSku">,
-  oldQuantity: number,
-  newQuantity: number
+  args: AdjustHoldArgs,
 ): Promise<InventoryHoldResult> {
-  const quantityChange = newQuantity - oldQuantity;
+  const now = args.now ?? Date.now();
 
-  if (quantityChange === 0) {
+  if (args.newQuantity <= 0) {
+    return releaseInventoryHold(db, {
+      sessionId: args.sessionId,
+      skuId: args.skuId,
+      now,
+    });
+  }
+
+  if (args.oldQuantity === args.newQuantity) {
+    const existingHold = await getActiveHoldForSessionSku(db, {
+      sessionId: args.sessionId,
+      skuId: args.skuId,
+      now,
+    });
+
+    if (existingHold && existingHold.expiresAt !== args.expiresAt) {
+      await db.patch("inventoryHold", existingHold._id, {
+        expiresAt: args.expiresAt,
+        updatedAt: now,
+      });
+    }
+
     return { success: true, message: "No quantity change" };
   }
 
-  if (quantityChange > 0) {
-    // Need to hold more inventory
-    return await acquireInventoryHold(db, skuId, quantityChange);
-  } else {
-    // Release some inventory (quantityChange is negative)
-    return await releaseInventoryHold(db, skuId, Math.abs(quantityChange));
+  const validation = await validateInventoryAvailability(
+    db,
+    args.skuId,
+    args.newQuantity,
+    {
+      storeId: args.storeId,
+      sessionId: args.sessionId,
+      now,
+    },
+  );
+  if (!validation.success) {
+    return validation;
   }
+
+  const existingHold = await getActiveHoldForSessionSku(db, {
+    sessionId: args.sessionId,
+    skuId: args.skuId,
+    now,
+  });
+
+  if (existingHold) {
+    await db.patch("inventoryHold", existingHold._id, {
+      quantity: args.newQuantity,
+      expiresAt: args.expiresAt,
+      updatedAt: now,
+    });
+  } else {
+    await db.insert("inventoryHold", {
+      storeId: args.storeId,
+      productSkuId: args.skuId,
+      sourceType: "posSession",
+      sourceSessionId: args.sessionId,
+      status: "active",
+      quantity: args.newQuantity,
+      expiresAt: args.expiresAt,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  return {
+    success: true,
+    message: "Successfully adjusted inventory hold",
+  };
 }
 
-/**
- * Batch operation: Acquires holds for multiple SKUs
- * Used when resuming sessions with multiple items
- *
- * @param db - Database writer for mutations
- * @param items - Array of {skuId, quantity} pairs
- * @returns Array of results for each item
- */
 export async function acquireInventoryHoldsBatch(
   db: DatabaseWriter,
-  items: Array<{ skuId: Id<"productSku">; quantity: number; name?: string }>
+  items: Array<{ skuId: Id<"productSku">; quantity: number; name?: string }>,
 ): Promise<{
   success: boolean;
   unavailableItems: string[];
 }> {
   const unavailableItems: string[] = [];
 
-  // First, validate all items
   for (const item of items) {
     const validation = await validateInventoryAvailability(
       db,
       item.skuId,
-      item.quantity
+      item.quantity,
     );
     if (!validation.success) {
       const itemName = item.name || "Unknown Product";
       unavailableItems.push(
-        `${itemName}: ${validation.message} (Available: ${validation.available || 0}, Need: ${item.quantity})`
+        `${itemName}: ${validation.message} (Available: ${validation.available || 0}, Need: ${item.quantity})`,
       );
     }
   }
 
-  if (unavailableItems.length > 0) {
-    return {
-      success: false,
-      unavailableItems,
-    };
-  }
-
-  // All items validated - now acquire holds
-  for (const item of items) {
-    await acquireInventoryHold(db, item.skuId, item.quantity);
-  }
-
   return {
-    success: true,
-    unavailableItems: [],
+    success: unavailableItems.length === 0,
+    unavailableItems,
   };
 }
 
-/**
- * Batch operation: Releases holds for multiple SKUs
- * Used when voiding sessions or expiring sessions with multiple items
- *
- * @param db - Database writer for mutations
- * @param items - Array of {skuId, quantity} pairs
- */
 export async function releaseInventoryHoldsBatch(
   db: DatabaseWriter,
-  items: Array<{ skuId: Id<"productSku">; quantity: number }>
+  input:
+    | {
+        sessionId: Id<"posSession">;
+        items: Array<{ skuId: Id<"productSku">; quantity: number }>;
+        now?: number;
+      }
+    | Array<{ skuId: Id<"productSku">; quantity: number }>,
 ): Promise<void> {
-  // Release holds in parallel
+  if (Array.isArray(input)) {
+    await Promise.all(
+      input.map(async (item) => {
+        const sku = await db.get("productSku", item.skuId);
+        if (!sku || typeof sku.quantityAvailable !== "number") {
+          return;
+        }
+
+        await db.patch("productSku", item.skuId, {
+          quantityAvailable: sku.quantityAvailable + item.quantity,
+        });
+      }),
+    );
+    return;
+  }
+
   await Promise.all(
-    items.map((item) => releaseInventoryHold(db, item.skuId, item.quantity))
+    input.items.map((item) =>
+      releaseInventoryHold(db, {
+        sessionId: input.sessionId,
+        skuId: item.skuId,
+        quantity: item.quantity,
+        now: input.now,
+      }),
+    ),
   );
+}
+
+export async function releaseInventoryHoldsForSession(
+  db: DatabaseWriter,
+  args: {
+    sessionId: Id<"posSession">;
+    now?: number;
+  },
+): Promise<void> {
+  const now = args.now ?? Date.now();
+  const activeHolds = await listActiveSessionHolds(db, {
+    sessionId: args.sessionId,
+  });
+
+  await Promise.all(
+    activeHolds.map((hold) =>
+      db.patch("inventoryHold", hold._id, {
+        status: hold.expiresAt <= now ? "expired" : "released",
+        releasedAt: hold.expiresAt <= now ? undefined : now,
+        expiredAt: hold.expiresAt <= now ? now : undefined,
+        updatedAt: now,
+      }),
+    ),
+  );
+}
+
+export async function consumeInventoryHoldsForSession(
+  db: DatabaseWriter,
+  args: {
+    sessionId: Id<"posSession">;
+    items: Array<{ skuId: Id<"productSku">; quantity: number }>;
+    now?: number;
+  },
+): Promise<Map<Id<"productSku">, number>> {
+  const now = args.now ?? Date.now();
+  const requiredSkuIds = new Set(args.items.map((item) => item.skuId));
+  const consumedQuantities = new Map<Id<"productSku">, number>();
+  const activeHolds = await listActiveSessionHolds(db, {
+    sessionId: args.sessionId,
+  });
+
+  for (const hold of activeHolds) {
+    if (hold.expiresAt <= now) {
+      await markHoldExpired(db, hold._id, now);
+      continue;
+    }
+
+    if (!requiredSkuIds.has(hold.productSkuId)) {
+      await db.patch("inventoryHold", hold._id, {
+        status: "released",
+        releasedAt: now,
+        updatedAt: now,
+      });
+      continue;
+    }
+
+    consumedQuantities.set(
+      hold.productSkuId,
+      (consumedQuantities.get(hold.productSkuId) ?? 0) + hold.quantity,
+    );
+    await db.patch("inventoryHold", hold._id, {
+      status: "consumed",
+      consumedAt: now,
+      updatedAt: now,
+    });
+  }
+
+  return consumedQuantities;
+}
+
+export async function readActiveInventoryHoldQuantitiesForSession(
+  db: DatabaseReader,
+  args: {
+    sessionId: Id<"posSession">;
+    now?: number;
+  },
+): Promise<Map<Id<"productSku">, number>> {
+  const now = args.now ?? Date.now();
+  const quantities = new Map<Id<"productSku">, number>();
+  const activeHolds = await listActiveSessionHolds(db, {
+    sessionId: args.sessionId,
+  });
+
+  for (const hold of activeHolds) {
+    if (hold.expiresAt <= now) {
+      continue;
+    }
+
+    quantities.set(
+      hold.productSkuId,
+      (quantities.get(hold.productSkuId) ?? 0) + hold.quantity,
+    );
+  }
+
+  return quantities;
+}
+
+async function sumActiveHeldQuantity(
+  db: DatabaseReader,
+  args: {
+    storeId: Id<"store">;
+    skuId: Id<"productSku">;
+    now: number;
+    excludeSessionId?: Id<"posSession">;
+  },
+) {
+  const holds = await db
+    .query("inventoryHold")
+    .withIndex("by_storeId_productSkuId_status_expiresAt", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("productSkuId", args.skuId)
+        .eq("status", "active")
+        .gt("expiresAt", args.now),
+    )
+    .take(ACTIVE_HOLD_SUM_LIMIT + 1);
+
+  if (holds.length > ACTIVE_HOLD_SUM_LIMIT) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  return holds.reduce((sum, hold) => {
+    if (hold.sourceSessionId === args.excludeSessionId) {
+      return sum;
+    }
+
+    return sum + hold.quantity;
+  }, 0);
+}
+
+async function getActiveHoldForSessionSku(
+  db: DatabaseReader,
+  args: {
+    sessionId: Id<"posSession">;
+    skuId: Id<"productSku">;
+    now: number;
+  },
+) {
+  const hold = await db
+    .query("inventoryHold")
+    .withIndex("by_sourceSessionId_status_productSkuId", (q) =>
+      q
+        .eq("sourceSessionId", args.sessionId)
+        .eq("status", "active")
+        .eq("productSkuId", args.skuId),
+    )
+    .first();
+
+  if (!hold) {
+    return null;
+  }
+
+  if (hold.expiresAt <= args.now) {
+    return null;
+  }
+
+  return hold as HoldDoc;
+}
+
+async function listActiveSessionHolds(
+  db: DatabaseReader,
+  args: {
+    sessionId: Id<"posSession">;
+    skuId?: Id<"productSku">;
+  },
+) {
+  const query = db
+    .query("inventoryHold")
+    .withIndex("by_sourceSessionId_status_productSkuId", (q) => {
+      const indexed = q
+        .eq("sourceSessionId", args.sessionId)
+        .eq("status", "active");
+
+      return args.skuId ? indexed.eq("productSkuId", args.skuId) : indexed;
+    });
+
+  const holds = await query.take(ACTIVE_SESSION_HOLD_LIST_LIMIT + 1);
+
+  if (holds.length > ACTIVE_SESSION_HOLD_LIST_LIMIT) {
+    throw new Error(
+      "POS session has too many active inventory holds. Please retry or contact support.",
+    );
+  }
+
+  return holds as HoldDoc[];
+}
+
+async function markHoldExpired(
+  db: DatabaseWriter,
+  holdId: Id<"inventoryHold">,
+  now: number,
+) {
+  await db.patch("inventoryHold", holdId, {
+    status: "expired",
+    expiredAt: now,
+    updatedAt: now,
+  });
+}
+
+async function restoreLegacyQuantityPatchHold(
+  db: DatabaseWriter,
+  skuId: Id<"productSku">,
+  quantity: number,
+) {
+  const sku = await db.get("productSku", skuId);
+  if (!sku || typeof sku.quantityAvailable !== "number") {
+    return;
+  }
+
+  await db.patch("productSku", skuId, {
+    quantityAvailable: sku.quantityAvailable + quantity,
+  });
 }

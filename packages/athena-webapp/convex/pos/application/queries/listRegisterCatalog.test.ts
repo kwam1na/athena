@@ -2,15 +2,28 @@ import { describe, expect, it } from "vitest";
 
 import type { Id } from "../../../_generated/dataModel";
 import type { QueryCtx } from "../../../_generated/server";
-import { listRegisterCatalog } from "./listRegisterCatalog";
+import {
+  listRegisterCatalog,
+  listRegisterCatalogAvailability,
+} from "./listRegisterCatalog";
 
-type TableName = "category" | "color" | "product" | "productSku";
+type TableName =
+  | "category"
+  | "color"
+  | "inventoryHold"
+  | "product"
+  | "productSku";
 type Row = Record<string, unknown> & { _id: string };
+type IndexedFilter = {
+  field: string;
+  matches: (value: unknown) => boolean;
+};
 
 function createRegisterCatalogCtx(seed: Partial<Record<TableName, Row[]>>) {
   const tables: Record<TableName, Map<string, Row>> = {
     category: new Map(),
     color: new Map(),
+    inventoryHold: new Map(),
     product: new Map(),
     productSku: new Map(),
   };
@@ -23,10 +36,10 @@ function createRegisterCatalogCtx(seed: Partial<Record<TableName, Row[]>>) {
 
   function createIndexedQuery(
     table: TableName,
-    filters: Array<[string, unknown]>,
+    filters: IndexedFilter[],
   ) {
     const matches = Array.from(tables[table].values()).filter((row) =>
-      filters.every(([field, value]) => row[field] === value),
+      filters.every((filter) => filter.matches(row[filter.field])),
     );
 
     return {
@@ -37,13 +50,25 @@ function createRegisterCatalogCtx(seed: Partial<Record<TableName, Row[]>>) {
       },
       collect: async () => matches,
       first: async () => matches[0] ?? null,
+      take: async (limit: number) => matches.slice(0, limit),
     };
   }
 
   const ctx = {
     db: {
-      async get(table: TableName, id: string) {
-        return tables[table].get(id) ?? null;
+      async get(tableOrId: TableName | string, maybeId?: string) {
+        if (maybeId !== undefined && tableOrId in tables) {
+          return tables[tableOrId as TableName].get(maybeId) ?? null;
+        }
+
+        for (const table of Object.values(tables)) {
+          const row = table.get(tableOrId);
+          if (row) {
+            return row;
+          }
+        }
+
+        return null;
       },
       query(table: TableName) {
         return {
@@ -51,18 +76,37 @@ function createRegisterCatalogCtx(seed: Partial<Record<TableName, Row[]>>) {
             _index: string,
             applyIndex: (queryBuilder: {
               eq: (field: string, value: unknown) => unknown;
+              gt: (field: string, value: number) => unknown;
             }) => unknown,
           ) {
-            const filters: Array<[string, unknown]> = [];
+            const filters: Array<
+              | { field: string; op: "eq"; value: unknown }
+              | { field: string; op: "gt"; value: number }
+            > = [];
             const queryBuilder = {
               eq(field: string, value: unknown) {
-                filters.push([field, value]);
+                filters.push({ field, op: "eq", value });
+                return queryBuilder;
+              },
+              gt(field: string, value: number) {
+                filters.push({ field, op: "gt", value });
                 return queryBuilder;
               },
             };
 
             applyIndex(queryBuilder);
-            return createIndexedQuery(table, filters);
+            return createIndexedQuery(
+              table,
+              filters.map((filter) => ({
+                field: filter.field,
+                matches:
+                  filter.op === "eq"
+                    ? (rowValue) => rowValue === filter.value
+                    : (rowValue) =>
+                        typeof rowValue === "number" &&
+                        rowValue > filter.value,
+              })),
+            );
           },
         };
       },
@@ -73,7 +117,7 @@ function createRegisterCatalogCtx(seed: Partial<Record<TableName, Row[]>>) {
 }
 
 describe("listRegisterCatalog", () => {
-  it("returns compact store-scoped SKU rows with identity, display, price, and availability fields", async () => {
+  it("returns compact store-scoped SKU rows with stable identity, display, and price fields", async () => {
     const { ctx } = createRegisterCatalogCtx({
       category: [
         {
@@ -176,8 +220,6 @@ describe("listRegisterCatalog", () => {
         size: "13x4",
         length: 18,
         color: "Natural black",
-        inStock: true,
-        quantityAvailable: 4,
         areProcessingFeesAbsorbed: true,
       },
       {
@@ -195,9 +237,78 @@ describe("listRegisterCatalog", () => {
         size: "",
         length: null,
         color: "",
+        areProcessingFeesAbsorbed: false,
+      },
+    ]);
+
+    expect(rows[0]).not.toHaveProperty("inStock");
+    expect(rows[0]).not.toHaveProperty("quantityAvailable");
+  });
+
+  it("returns bounded store-scoped availability for requested SKU ids after active holds", async () => {
+    const { ctx } = createRegisterCatalogCtx({
+      inventoryHold: [
+        {
+          _id: "hold-other-session",
+          storeId: "store-a",
+          productSkuId: "sku-live",
+          sourceType: "posSession",
+          sourceSessionId: "session-other",
+          status: "active",
+          quantity: 3,
+          expiresAt: Date.now() + 60_000,
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku-live",
+          storeId: "store-a",
+          productId: "product-live",
+          sku: "SKU-LIVE",
+          quantityAvailable: 4,
+        },
+        {
+          _id: "sku-out",
+          storeId: "store-a",
+          productId: "product-out",
+          sku: "SKU-OUT",
+          quantityAvailable: 0,
+        },
+        {
+          _id: "sku-other-store",
+          storeId: "store-b",
+          productId: "product-other-store",
+          sku: "SKU-OTHER",
+          quantityAvailable: 9,
+        },
+      ],
+    });
+
+    const rows = await listRegisterCatalogAvailability(ctx, {
+      storeId: "store-a" as Id<"store">,
+      productSkuIds: [
+        "sku-live",
+        "sku-out",
+        "sku-live",
+        "sku-other-store",
+        "sku-missing",
+      ] as Array<Id<"productSku">>,
+    });
+
+    expect(rows).toEqual([
+      {
+        productSkuId: "sku-live",
+        skuId: "sku-live",
+        inStock: true,
+        quantityAvailable: 1,
+      },
+      {
+        productSkuId: "sku-out",
+        skuId: "sku-out",
         inStock: false,
         quantityAvailable: 0,
-        areProcessingFeesAbsorbed: false,
       },
     ]);
   });

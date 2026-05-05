@@ -231,13 +231,23 @@ describe("runPreCommitGeneratedArtifacts", () => {
   it("refreshes the Convex generated API by default when source changed", async () => {
     await withTempRepo(async (repoDir) => {
       await writeConvexApiFixture(repoDir);
-      const commands: Array<{ command: string[]; cwd: string; stdout: string }> = [];
+      const commands: Array<{
+        command: string[];
+        cwd: string;
+        stdout: string;
+        env?: Record<string, string>;
+      }> = [];
 
       await runPreCommitGeneratedArtifacts(repoDir, {
         runHarnessGenerate: async () => {},
         runGraphifyRebuild: async () => {},
         spawn(command, options) {
-          commands.push({ command, cwd: options.cwd, stdout: options.stdout });
+          commands.push({
+            command,
+            cwd: options.cwd,
+            stdout: options.stdout,
+            env: options.env,
+          });
 
           if (command[0] === "git" && command[1] === "status") {
             return {
@@ -245,6 +255,14 @@ describe("runPreCommitGeneratedArtifacts", () => {
               stdout: new Response(
                 " M packages/athena-webapp/convex/catalog/items.ts\n"
               ).body,
+              stderr: new Response("").body,
+            };
+          }
+
+          if (command.at(-1) === "-v") {
+            return {
+              exited: Promise.resolve(0),
+              stdout: new Response("v24.14.0\n").body,
               stderr: new Response("").body,
             };
           }
@@ -264,12 +282,77 @@ describe("runPreCommitGeneratedArtifacts", () => {
         command: ["git", "status", "--porcelain", "--", "packages/athena-webapp/convex"],
         cwd: repoDir,
         stdout: "pipe",
+        env: undefined,
       });
+      expect(
+        commands.some(
+          (entry) =>
+            entry.command.join(" ") === "bunx convex dev --once" &&
+            entry.cwd === path.join(repoDir, "packages", "athena-webapp") &&
+            entry.stdout === "inherit"
+        )
+      ).toBe(true);
+    });
+  });
+
+  it("prefers a supported Node runtime for Convex generated API refresh", async () => {
+    await withTempRepo(async (repoDir) => {
+      await writeConvexApiFixture(repoDir);
+      const supportedNode = "/opt/homebrew/opt/node@24/bin/node";
+      const commands: Array<{ command: string[]; env?: Record<string, string> }> = [];
+
+      await runPreCommitGeneratedArtifacts(repoDir, {
+        runHarnessGenerate: async () => {},
+        runGraphifyRebuild: async () => {},
+        spawn(command, options) {
+          commands.push({ command, env: options.env });
+
+          if (command[0] === "git" && command[1] === "status") {
+            return {
+              exited: Promise.resolve(0),
+              stdout: new Response(
+                " M packages/athena-webapp/convex/catalog/items.ts\n"
+              ).body,
+              stderr: new Response("").body,
+            };
+          }
+
+          if (command[0] === supportedNode && command[1] === "-v") {
+            return {
+              exited: Promise.resolve(0),
+              stdout: new Response("v24.14.0\n").body,
+              stderr: new Response("").body,
+            };
+          }
+
+          if (command.at(-1) === "-v") {
+            return {
+              exited: Promise.resolve(1),
+              stdout: new Response("").body,
+              stderr: new Response("").body,
+            };
+          }
+
+          return {
+            exited: Promise.resolve(0),
+            stdout: new Response("").body,
+            stderr: new Response("").body,
+          };
+        },
+        logger: {
+          log() {},
+        },
+      });
+
       expect(commands).toContainEqual({
-        command: ["bunx", "convex", "dev", "--once"],
-        cwd: path.join(repoDir, "packages", "athena-webapp"),
-        stdout: "inherit",
+        command: [supportedNode, "-v"],
+        env: undefined,
       });
+      expect(
+        commands.find(
+          (entry) => entry.command.join(" ") === "bunx convex dev --once"
+        )?.env?.PATH.startsWith(path.dirname(supportedNode))
+      ).toBe(true);
     });
   });
 

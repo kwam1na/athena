@@ -1,10 +1,13 @@
 import { useMutation, useQuery } from "convex/react";
+import { useMemo } from "react";
 
 import type {
   PosBarcodeLookupInput,
   PosCatalogItemDto,
   PosProductIdLookupInput,
   PosProductSearchInput,
+  PosRegisterCatalogAvailabilityInput,
+  PosRegisterCatalogAvailabilityRowDto,
   PosRegisterCatalogInput,
   PosRegisterCatalogRowDto,
 } from "@/lib/pos/application/dto";
@@ -15,6 +18,8 @@ import {
 } from "@/lib/pos/barcodeUtils";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
+
+const REGISTER_CATALOG_AVAILABILITY_LIMIT = 50;
 
 type ProductByIdResult = {
   _id: Id<"product">;
@@ -72,6 +77,26 @@ export function useConvexRegisterCatalog(
   return useQuery(
     api.pos.public.catalog.listRegisterCatalogSnapshot,
     input.storeId ? { storeId: input.storeId } : "skip",
+  );
+}
+
+export function useConvexRegisterCatalogAvailability(
+  input: PosRegisterCatalogAvailabilityInput,
+): PosRegisterCatalogAvailabilityRowDto[] | undefined {
+  const productSkuIds = useMemo(
+    () =>
+      Array.from(new Set(input.productSkuIds ?? [])).slice(
+        0,
+        REGISTER_CATALOG_AVAILABILITY_LIMIT,
+      ),
+    [input.productSkuIds],
+  );
+
+  return useQuery(
+    api.pos.public.catalog.listRegisterCatalogAvailability,
+    input.storeId && productSkuIds.length > 0
+      ? { storeId: input.storeId, productSkuIds }
+      : "skip",
   );
 }
 
@@ -142,6 +167,7 @@ export function useConvexQuickAddCatalogItem() {
 
 export const convexCatalogReader: PosCatalogReader = {
   useRegisterCatalog: useConvexRegisterCatalog,
+  useRegisterCatalogAvailability: useConvexRegisterCatalogAvailability,
   useProductSearch: useConvexProductSearch,
   useBarcodeLookup: useConvexBarcodeLookup,
   useProductIdLookup: useConvexProductIdLookup,

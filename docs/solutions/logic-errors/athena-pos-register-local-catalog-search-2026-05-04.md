@@ -69,6 +69,15 @@ server-search debounce. A no-result prompt is valid only after the snapshot has
 loaded and the local search has no matches. Quick-add creation remains a backend
 command, and the next snapshot refresh should make the new SKU searchable.
 
+## Follow-up: Availability Split
+
+The local index should be built from stable metadata only. Do not include
+`quantityAvailable` or `inStock` in the full-store register catalog snapshot,
+because POS cart operations mutate availability and can invalidate the whole
+store catalog subscription. Fetch availability only for the bounded set of rows
+currently being displayed or exact-matched, and still let the add-item command be
+the final inventory authority.
+
 ## Prevention
 
 - Do not start generic per-keystroke POS product search from active register
@@ -80,7 +89,9 @@ command, and the next snapshot refresh should make the new SKU searchable.
 - Add tests for exact single-match auto-add, out-of-stock exact results, and
   product-id variant ambiguity whenever register search changes.
 - Add tests for prefix and typo matching whenever local text ranking changes.
+- Add tests that prove catalog metadata rows exclude volatile availability and
+  availability is overlaid from a bounded query.
 
 ## Related Issues
 
-- Linear: V26-463, V26-464, V26-465, V26-466, V26-467, V26-468.
+- Linear: V26-463, V26-464, V26-465, V26-466, V26-467, V26-468, V26-470.

@@ -1048,12 +1048,14 @@ describe("createPosSessionCommandService", () => {
       ],
     });
     const inventoryCalls: InventoryCall[] = [];
+    const inventoryContextCalls: Array<Record<string, unknown>> = [];
     const traceCalls: TraceCall[] = [];
 
     const result = await commandService(
       createDependencies({
         repository,
         inventoryCalls,
+        inventoryContextCalls,
         traceCalls,
         now: 1_000,
         nextExpiration: 61_000,
@@ -1078,6 +1080,17 @@ describe("createPosSessionCommandService", () => {
     });
     expect(inventoryCalls).toEqual([
       { kind: "acquire", skuId: "sku-1", quantity: 2 },
+    ]);
+    expect(inventoryContextCalls).toEqual([
+      expect.objectContaining({
+        kind: "acquire",
+        storeId: "store-1",
+        sessionId: "session-5",
+        skuId: "sku-1",
+        quantity: 2,
+        expiresAt: 61_000,
+        now: 1_000,
+      }),
     ]);
     expect(repository.items).toContainEqual(
       expect.objectContaining({
@@ -1213,12 +1226,14 @@ describe("createPosSessionCommandService", () => {
       ],
     });
     const inventoryCalls: InventoryCall[] = [];
+    const inventoryContextCalls: Array<Record<string, unknown>> = [];
     const traceCalls: TraceCall[] = [];
 
     const result = await commandService(
       createDependencies({
         repository,
         inventoryCalls,
+        inventoryContextCalls,
         traceCalls,
         now: 1_000,
         nextExpiration: 61_000,
@@ -1248,6 +1263,18 @@ describe("createPosSessionCommandService", () => {
         oldQuantity: 2,
         newQuantity: 5,
       },
+    ]);
+    expect(inventoryContextCalls).toEqual([
+      expect.objectContaining({
+        kind: "adjust",
+        storeId: "store-1",
+        sessionId: "session-6",
+        skuId: "sku-1",
+        oldQuantity: 2,
+        newQuantity: 5,
+        expiresAt: 61_000,
+        now: 1_000,
+      }),
     ]);
     expect(repository.getItem("item-9")).toEqual(
       expect.objectContaining({
@@ -1708,12 +1735,14 @@ describe("createPosSessionCommandService", () => {
       ],
     });
     const inventoryCalls: InventoryCall[] = [];
+    const inventoryContextCalls: Array<Record<string, unknown>> = [];
     const traceCalls: TraceCall[] = [];
 
     const result = await commandService(
       createDependencies({
         repository,
         inventoryCalls,
+        inventoryContextCalls,
         traceCalls,
         now: 1_000,
         nextExpiration: 61_000,
@@ -1732,6 +1761,15 @@ describe("createPosSessionCommandService", () => {
     });
     expect(inventoryCalls).toEqual([
       { kind: "release", skuId: "sku-1", quantity: 3 },
+    ]);
+    expect(inventoryContextCalls).toEqual([
+      expect.objectContaining({
+        kind: "release",
+        sessionId: "session-7",
+        skuId: "sku-1",
+        quantity: 3,
+        now: 1_000,
+      }),
     ]);
     expect(repository.getItem("item-3")).toBeNull();
     expect(repository.getSession("session-7")?.expiresAt).toBe(61_000);
@@ -2117,6 +2155,7 @@ function createDependencies(options: {
   now: number;
   nextExpiration: number;
   inventoryCalls?: InventoryCall[];
+  inventoryContextCalls?: Array<Record<string, unknown>>;
   traceCalls?: TraceCall[];
   traceError?: Error;
   traceResult?: {
@@ -2130,33 +2169,39 @@ function createDependencies(options: {
     calculateExpiration: () => options.nextExpiration,
     repository: options.repository,
     inventory: {
-      acquireHold: async (skuId: string, quantity: number) => {
+      acquireHold: async (args: { skuId: string; quantity: number }) => {
+        const { skuId, quantity } = args;
         options.inventoryCalls?.push({ kind: "acquire", skuId, quantity });
+        options.inventoryContextCalls?.push({ kind: "acquire", ...args });
         if (options.inventoryFailures?.acquire) {
           return { success: false, message: options.inventoryFailures.acquire };
         }
 
         return { success: true };
       },
-      adjustHold: async (
-        skuId: string,
-        oldQuantity: number,
-        newQuantity: number,
-      ) => {
+      adjustHold: async (args: {
+        skuId: string;
+        oldQuantity: number;
+        newQuantity: number;
+      }) => {
+        const { skuId, oldQuantity, newQuantity } = args;
         options.inventoryCalls?.push({
           kind: "adjust",
           skuId,
           oldQuantity,
           newQuantity,
         });
+        options.inventoryContextCalls?.push({ kind: "adjust", ...args });
         if (options.inventoryFailures?.adjust) {
           return { success: false, message: options.inventoryFailures.adjust };
         }
 
         return { success: true };
       },
-      releaseHold: async (skuId: string, quantity: number) => {
+      releaseHold: async (args: { skuId: string; quantity: number }) => {
+        const { skuId, quantity } = args;
         options.inventoryCalls?.push({ kind: "release", skuId, quantity });
+        options.inventoryContextCalls?.push({ kind: "release", ...args });
         if (options.inventoryFailures?.release) {
           return { success: false, message: options.inventoryFailures.release };
         }

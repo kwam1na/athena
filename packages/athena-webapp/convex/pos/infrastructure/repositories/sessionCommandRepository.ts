@@ -116,17 +116,14 @@ export function createSessionCommandRepository(
       );
     },
     findSessionItemBySku(args) {
-      return findSessionItemBySkuInPages(
-        (cursor) =>
-          ctx.db
-            .query("posSessionItem")
-            .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
-            .paginate({
-              cursor,
-              numItems: SESSION_ITEMS_PAGE_SIZE,
-            }),
-        args.productSkuId,
-      );
+      return ctx.db
+        .query("posSessionItem")
+        .withIndex("by_sessionId_productSkuId", (q) =>
+          q
+            .eq("sessionId", args.sessionId)
+            .eq("productSkuId", args.productSkuId),
+        )
+        .unique();
     },
     getSessionItemById(itemId) {
       return ctx.db.get("posSessionItem", itemId);
@@ -177,7 +174,7 @@ export async function collectSessionItemsFromPages<TItem>(
   }
 }
 
-export async function findSessionItemBySkuInPages<
+async function scanSessionItemBySkuInPages<
   TItem extends { productSkuId: Id<"productSku"> },
 >(
   loadPage: PaginatedLoader<TItem>,
@@ -201,3 +198,5 @@ export async function findSessionItemBySkuInPages<
     cursor = page.continueCursor;
   }
 }
+
+export const findSessionItemBySkuInPages = scanSessionItemBySkuInPages;
