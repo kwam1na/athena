@@ -180,6 +180,7 @@ packages/.claude/worktrees/
 /.worktrees/
 .dual-graph/
 .playwright-cli/
+.athena-preview/
 
 # Agent-generated brainstorm scratch. Durable decisions belong in docs/solutions/
 # or in a reviewed plan that is intentionally committed.

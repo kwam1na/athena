@@ -38,7 +38,8 @@ When none of those routes is a better fit, continue here.
 5. Run the narrowest relevant sensor after each meaningful slice, then the broader merge-level sensor set before handoff.
 6. Review the diff against acceptance criteria, tests, repo sensors, and project standards. Use specialized review skills or agents when risk warrants it.
 7. Apply the kernel's proactive-ticket policy for evidence-backed follow-up work. Do not expand current scope silently.
-8. Make the compound decision before final handoff: solution doc, skill update, follow-up ticket, missing sensor request, or no durable learning.
+8. For web app or app-surface changes, start or reuse a local browser preview with `scripts/preview-worktree.ts start athena` before handoff.
+9. Make the compound decision before final handoff: solution doc, skill update, follow-up ticket, missing sensor request, or no durable learning.
 
 ## Handoff
 
@@ -46,6 +47,7 @@ Report:
 
 - what changed
 - tests and repo sensors run
+- browser preview URL for app-surface changes, or the exact blocker if `scripts/preview-worktree.ts start athena` could not provide one
 - review result and residual risk
 - proactive tickets created or deferred
 - compounding decision
