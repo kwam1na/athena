@@ -51,6 +51,8 @@ Environment:
   REMOTE_REPO       Git repo URL cloned on the VPS. Default: git@github.com:kwam1na/athena.git
   REMOTE_SOURCE_DIR Shared remote checkout. Default: /root/athena/repo
   DEPLOY_REF        Git ref checked out on the VPS. Default: origin/main
+  CONVEX_DEPLOYMENT Production Convex deployment. Defaults to the prod deployment
+                    inferred from PROD_CONVEX_CLOUD.
 USAGE
 }
 
@@ -556,8 +558,41 @@ deploy_qa() {
   deploy_storefront_qa
 }
 
+prod_convex_deployment() {
+  local host
+  host="${PROD_CONVEX_CLOUD#https://}"
+  host="${host#http://}"
+  host="${host%%/*}"
+  host="${host%.convex.cloud}"
+
+  if [[ -z "$host" || "$host" == "$PROD_CONVEX_CLOUD" ]]; then
+    cat >&2 <<'MESSAGE'
+Could not infer the production Convex deployment from PROD_CONVEX_CLOUD.
+Set CONVEX_DEPLOYMENT=prod:<deployment-name> and rerun the deploy.
+MESSAGE
+    return 1
+  fi
+
+  printf 'prod:%s\n' "$host"
+}
+
 deploy_convex_prod() {
-  npx convex deploy
+  local deployment
+  deployment="${CONVEX_DEPLOYMENT:-$(prod_convex_deployment)}"
+
+  if [[ "$deployment" != prod:* ]]; then
+    cat >&2 <<MESSAGE
+Refusing to run production Convex deploy with CONVEX_DEPLOYMENT=$deployment.
+Set CONVEX_DEPLOYMENT to a prod deployment, or unset it so this script can infer
+the production deployment from PROD_CONVEX_CLOUD.
+MESSAGE
+    return 1
+  fi
+
+  (
+    cd packages/athena-webapp
+    CONVEX_DEPLOYMENT="$deployment" npx convex deploy
+  )
 }
 
 show_versions() {
