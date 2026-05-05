@@ -52,11 +52,18 @@ Plan -> Work -> Review -> Compound -> Repeat.
 
 - When a delivery workflow carries work all the way into `main`, treat production deploy as part of the post-merge finish, not as a VPS-side build job.
 - Confirm the PR actually merged and `origin/main` contains the merge before deploying. Then fast-forward the root checkout to that exact `origin/main` state and verify it is clean.
-- In Athena, run production CD locally from the clean root checkout with:
+- In Athena, choose the narrowest local production deploy commands from the merged diff instead of defaulting every merge to a full deploy. After fast-forwarding local `main`, inspect the merged file set:
   ```bash
-  scripts/deploy-vps.sh full-prod-local
+  git diff --name-only HEAD^ HEAD
   ```
-  This deploys Convex, builds the Athena and storefront static apps locally, uploads the artifacts, and refreshes the Valkey proxy without asking the production VPS to build the apps on every merge.
+  If GitHub did not use a squash merge, use the PR file list from `gh pr view <pr> --json files` or the merge-base range that covers only the merged PR.
+- Map touched files to deploy commands:
+  - `scripts/deploy-vps.sh convex-prod` when the diff changes Convex runtime code, schema, generated Convex API, or Convex-affecting package config under `packages/athena-webapp/convex/**`, `packages/athena-webapp/shared/**`, `packages/athena-webapp/package.json`, or `bun.lockb`.
+  - `scripts/deploy-vps.sh athena-local` when the diff changes Athena admin runtime assets or build inputs under `packages/athena-webapp/**`, excluding docs, tests, stories, and Convex-only changes that do not affect browser code.
+  - `scripts/deploy-vps.sh storefront-local` when the diff changes storefront runtime assets or build inputs under `packages/storefront-webapp/**`, excluding docs, tests, and stories.
+  - `scripts/deploy-vps.sh valkey-proxy` when the diff changes `packages/valkey-proxy-server/**` or deploy/nginx/proxy configuration consumed by that service.
+  - `scripts/deploy-vps.sh full-prod-local` only when the change spans Convex, both static apps, and the proxy, or when the deploy impact is genuinely ambiguous and under-deploying would be riskier than rebuilding all local artifacts.
+- Run each selected deploy command from the clean root checkout and report skipped deploy surfaces explicitly. The VPS should receive locally built static artifacts; it should not build the Athena or storefront apps as an automatic consequence of every merge.
 - Do not run local production deploy from a feature branch, dirty checkout, or temporary worktree. If the deploy script fails, keep the deploy failure as the active blocker, report the exact command and relevant output, and do not claim production is current.
 - If the user explicitly scopes delivery to PR-only or asks to skip deploy, honor that scope and state that production CD was intentionally not run.
 
