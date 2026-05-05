@@ -759,6 +759,30 @@ describe("StockAdjustmentWorkspaceContent", () => {
     expect(screen.getByText("Unavailable")).toBeInTheDocument();
   });
 
+  it("shows POS reserved units as reducing sellable availability", () => {
+    renderStockAdjustmentWorkspace({
+      inventoryItems: [
+        {
+          _id: "sku-held" as Id<"productSku">,
+          durableQuantityAvailable: 8,
+          inventoryCount: 10,
+          productCategory: "Hair",
+          productName: "Held Closure",
+          quantityAvailable: 6,
+          reservedQuantity: 2,
+          sku: "HC-18",
+        },
+      ],
+    });
+
+    expect(
+      screen.getByText(
+        /6 of 10 units are available to sell\. 2 reserved in POS sessions\./i,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("2 reserved")).toBeInTheDocument();
+  });
+
   it("formats inventory status numbers with compact k notation", () => {
     renderStockAdjustmentWorkspace({
       inventoryItems: [

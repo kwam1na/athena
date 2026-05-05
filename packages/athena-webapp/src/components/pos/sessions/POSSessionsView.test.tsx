@@ -28,6 +28,7 @@ vi.mock("@tanstack/react-router", () => ({
     </a>
   ),
   useParams: () => useParamsMock(),
+  useSearch: () => ({ o: "%2Fwigclub%2Fstore%2Fwigclub%2Fpos" }),
 }));
 
 vi.mock("convex/react", () => ({
@@ -64,6 +65,10 @@ vi.mock("@/components/View", () => ({
 
 vi.mock("@/components/common/FadeIn", () => ({
   FadeIn: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+}));
+
+vi.mock("~/src/hooks/use-navigate-back", () => ({
+  useNavigateBack: () => vi.fn(),
 }));
 
 vi.mock("@/components/base/table/data-table", () => ({
@@ -185,6 +190,7 @@ describe("POSSessionsView", () => {
 
     render(<POSSessionsView />);
 
+    expect(screen.getByRole("button", { name: "Go back" })).toBeInTheDocument();
     expect(screen.getByText("No active POS sessions")).toBeInTheDocument();
     expect(screen.getByText("0 sessions")).toBeInTheDocument();
   });
