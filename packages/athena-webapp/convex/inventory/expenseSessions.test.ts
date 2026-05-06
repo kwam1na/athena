@@ -13,8 +13,10 @@ vi.mock("./expenseTransactions", () => ({
 import {
   completeExpenseSession,
   createExpenseSession,
+  releaseExpenseSessionItems,
   releaseExpenseSessionInventoryHoldsAndDeleteItems,
   updateExpenseSession,
+  voidExpenseSession,
 } from "./expenseSessions";
 
 afterEach(() => {
@@ -36,12 +38,28 @@ type SessionRecord = {
   workflowTraceId?: string;
 };
 
+type ExpenseItemRecord = {
+  _id: string;
+  sessionId: string;
+  productSkuId: string;
+  quantity: number;
+};
+
+type ProductSkuRecord = {
+  _id: string;
+  quantityAvailable: number;
+};
+
 function createMutationCtx(seed?: {
   latestSession?: SessionRecord;
   sessions?: SessionRecord[];
+  expenseItems?: ExpenseItemRecord[];
+  productSkus?: ProductSkuRecord[];
   terminals?: Array<{ _id: string; registerNumber?: string | null }>;
 }) {
   const sessions = [...(seed?.sessions ?? [])];
+  const expenseItems = [...(seed?.expenseItems ?? [])];
+  const productSkus = [...(seed?.productSkus ?? [])];
   const terminals = [...(seed?.terminals ?? [])];
   const workflowTraces: Array<Record<string, unknown>> = [];
   const workflowTraceLookups: Array<Record<string, unknown>> = [];
@@ -58,6 +76,10 @@ function createMutationCtx(seed?: {
 
       if (tableName === "posTerminal") {
         return terminals.find((terminal) => terminal._id === id) ?? null;
+      }
+
+      if (tableName === "productSku") {
+        return productSkus.find((sku) => sku._id === id) ?? null;
       }
 
       return null;
@@ -101,6 +123,12 @@ function createMutationCtx(seed?: {
     patch: vi.fn(
       async (tableName: string, id: string, patch: Record<string, unknown>) => {
         if (tableName !== "expenseSession") {
+          if (tableName === "productSku") {
+            const sku = productSkus.find((entry) => entry._id === id);
+            if (sku) {
+              Object.assign(sku, patch);
+            }
+          }
           return;
         }
 
@@ -113,35 +141,93 @@ function createMutationCtx(seed?: {
       },
     ),
     query: vi.fn((tableName: string) => ({
-      withIndex: vi.fn(() => ({
-        unique: vi.fn(async () => {
-          if (tableName === "workflowTrace") {
-            return workflowTraces[0] ?? null;
-          }
+      withIndex: vi.fn(
+        (
+          _indexName: string,
+          apply?: (builder: {
+            eq(field: string, value: unknown): unknown;
+            lt(field: string, value: unknown): unknown;
+          }) => void,
+        ) => {
+          const filters: Record<string, unknown> = {};
+          const builder = {
+            eq(field: string, value: unknown) {
+              filters[field] = value;
+              return builder;
+            },
+            lt(field: string, value: unknown) {
+              filters[`${field}:lt`] = value;
+              return builder;
+            },
+          };
+          apply?.(builder);
 
-          if (tableName === "workflowTraceLookup") {
-            return workflowTraceLookups[0] ?? null;
-          }
+          const filteredExpenseItems =
+            tableName === "expenseSessionItem"
+              ? expenseItems.filter((item) => {
+                  if (
+                    filters.sessionId &&
+                    item.sessionId !== filters.sessionId
+                  ) {
+                    return false;
+                  }
 
-          return null;
-        }),
-        first: vi.fn(async () => seed?.latestSession ?? null),
-        order: vi.fn(() => ({
-          first: vi.fn(async () => {
-            if (tableName === "workflowTraceEvent") {
-              return workflowTraceEvents.at(-1) ?? null;
-            }
+                  return true;
+                })
+              : [];
+          const filteredSessions =
+            tableName === "expenseSession"
+              ? sessions.filter((session) => {
+                  if (filters.status && session.status !== filters.status) {
+                    return false;
+                  }
+                  if (
+                    filters["expiresAt:lt"] &&
+                    session.expiresAt >= Number(filters["expiresAt:lt"])
+                  ) {
+                    return false;
+                  }
 
-            return seed?.latestSession ?? null;
-          }),
-        })),
-        take: vi.fn(async () => []),
-      })),
+                  return true;
+                })
+              : [];
+
+          return {
+            unique: vi.fn(async () => {
+              if (tableName === "workflowTrace") {
+                return workflowTraces[0] ?? null;
+              }
+
+              if (tableName === "workflowTraceLookup") {
+                return workflowTraceLookups[0] ?? null;
+              }
+
+              return null;
+            }),
+            first: vi.fn(async () => seed?.latestSession ?? null),
+            order: vi.fn(() => ({
+              first: vi.fn(async () => {
+                if (tableName === "workflowTraceEvent") {
+                  return workflowTraceEvents.at(-1) ?? null;
+                }
+
+                return seed?.latestSession ?? null;
+              }),
+            })),
+            take: vi.fn(async () =>
+              tableName === "expenseSessionItem"
+                ? filteredExpenseItems
+                : filteredSessions,
+            ),
+          };
+        },
+      ),
     })),
   };
 
   return {
     db,
+    productSkus,
     runMutation: vi.fn(),
   };
 }
@@ -312,6 +398,80 @@ describe("expense session command results", () => {
         code: "not_found",
         message: "Session not found",
       },
+    });
+  });
+
+  it("restores quantity-patch expense holds when voiding a session", async () => {
+    const ctx = createMutationCtx({
+      sessions: [buildSession({ _id: "expense-session-1" })],
+      expenseItems: [
+        {
+          _id: "expense-item-1",
+          sessionId: "expense-session-1",
+          productSkuId: "sku-1",
+          quantity: 2,
+        },
+        {
+          _id: "expense-item-2",
+          sessionId: "expense-session-1",
+          productSkuId: "sku-1",
+          quantity: 3,
+        },
+      ],
+      productSkus: [{ _id: "sku-1", quantityAvailable: 4 }],
+    });
+
+    const result = await getHandler(voidExpenseSession)(ctx as never, {
+      sessionId: "expense-session-1",
+    });
+
+    expect(result).toEqual({
+      kind: "ok",
+      data: { sessionId: "expense-session-1" },
+    });
+    expect(ctx.productSkus[0]).toEqual(
+      expect.objectContaining({ quantityAvailable: 9 }),
+    );
+    expect(ctx.db.patch).toHaveBeenCalledWith("productSku", "sku-1", {
+      quantityAvailable: 9,
+    });
+  });
+
+  it("restores quantity-patch expense holds when expiring sessions", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(2_000);
+    const ctx = createMutationCtx({
+      sessions: [
+        buildSession({
+          _id: "expense-session-1",
+          expiresAt: 1_000,
+          status: "active",
+        }),
+      ],
+      expenseItems: [
+        {
+          _id: "expense-item-1",
+          sessionId: "expense-session-1",
+          productSkuId: "sku-1",
+          quantity: 2,
+        },
+      ],
+      productSkus: [{ _id: "sku-1", quantityAvailable: 4 }],
+    });
+
+    const result = await getHandler(releaseExpenseSessionItems)(
+      ctx as never,
+      {},
+    );
+
+    expect(result).toEqual({
+      releasedCount: 1,
+      sessionIds: ["expense-session-1"],
+    });
+    expect(ctx.productSkus[0]).toEqual(
+      expect.objectContaining({ quantityAvailable: 6 }),
+    );
+    expect(ctx.db.patch).toHaveBeenCalledWith("productSku", "sku-1", {
+      quantityAvailable: 6,
     });
   });
 });

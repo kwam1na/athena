@@ -7,6 +7,8 @@ import {
   consumeInventoryHoldsForSession,
   releaseActiveInventoryHoldsForSession,
   releaseInventoryHold,
+  releaseInventoryHoldsBatch,
+  releaseLegacyExpenseQuantityPatchHolds,
 } from "./inventoryHolds";
 
 type HoldStatus = "active" | "released" | "consumed" | "expired";
@@ -49,17 +51,23 @@ function createDb(seed: { sku: SkuRecord; holds?: HoldRecord[] }) {
       }
       return null;
     }),
-    insert: vi.fn(async (_tableName: string, input: Omit<HoldRecord, "_id">) => {
-      const hold = {
-        _id: `hold-${holds.length + 1}`,
-        ...input,
-      };
-      holds.push(hold);
-      insertedHolds.push(hold);
-      return hold._id;
-    }),
+    insert: vi.fn(
+      async (_tableName: string, input: Omit<HoldRecord, "_id">) => {
+        const hold = {
+          _id: `hold-${holds.length + 1}`,
+          ...input,
+        };
+        holds.push(hold);
+        insertedHolds.push(hold);
+        return hold._id;
+      },
+    ),
     patch: vi.fn(
-      async (tableNameOrId: string, idOrPatch: string | Record<string, unknown>, maybePatch?: Record<string, unknown>) => {
+      async (
+        tableNameOrId: string,
+        idOrPatch: string | Record<string, unknown>,
+        maybePatch?: Record<string, unknown>,
+      ) => {
         const tableName = maybePatch ? tableNameOrId : "productSku";
         const id = maybePatch ? String(idOrPatch) : tableNameOrId;
         const patch = maybePatch ?? (idOrPatch as Record<string, unknown>);
@@ -77,10 +85,13 @@ function createDb(seed: { sku: SkuRecord; holds?: HoldRecord[] }) {
       },
     ),
     query: vi.fn((tableName: string) => ({
-      withIndex(_indexName: string, apply: (builder: {
-        eq(field: string, value: unknown): unknown;
-        gt(field: string, value: unknown): unknown;
-      }) => void) {
+      withIndex(
+        _indexName: string,
+        apply: (builder: {
+          eq(field: string, value: unknown): unknown;
+          gt(field: string, value: unknown): unknown;
+        }) => void,
+      ) {
         const filters: Record<string, unknown> = {};
         const builder = {
           eq(field: string, value: unknown) {
@@ -285,13 +296,13 @@ describe("POS inventory hold ledger", () => {
     expect(productSkuPatches).toEqual([]);
   });
 
-  it("restores legacy quantity-patch holds when no ledger hold exists", async () => {
+  it("does not restore SKU availability when no ledger hold exists", async () => {
     const { db, productSkuPatches } = createDb({
       sku: {
         _id: "sku-1",
         storeId: "store-1",
         sku: "SKU-1",
-        quantityAvailable: 6,
+        quantityAvailable: 10,
         inventoryCount: 10,
       },
     });
@@ -304,6 +315,94 @@ describe("POS inventory hold ledger", () => {
     });
 
     expect(result).toMatchObject({ success: true });
+    expect(productSkuPatches).toEqual([]);
+  });
+
+  it("expires matching ledger holds without restoring SKU availability", async () => {
+    const { db, holds, productSkuPatches } = createDb({
+      sku: {
+        _id: "sku-1",
+        storeId: "store-1",
+        sku: "SKU-1",
+        quantityAvailable: 10,
+        inventoryCount: 10,
+      },
+      holds: [
+        buildHold({
+          _id: "hold-expired",
+          sourceSessionId: "session-1",
+          quantity: 2,
+          expiresAt: 500,
+        }),
+      ],
+    });
+
+    const result = await releaseInventoryHold(db as never, {
+      sessionId: "session-1" as Id<"posSession">,
+      skuId: "sku-1" as Id<"productSku">,
+      quantity: 2,
+      now: 1_000,
+    });
+
+    expect(result).toMatchObject({ success: true });
+    expect(holds[0]).toEqual(
+      expect.objectContaining({
+        status: "expired",
+        expiredAt: 1_000,
+      }),
+    );
+    expect(productSkuPatches).toEqual([]);
+  });
+
+  it("releases expired POS-session batch holds without restoring SKU availability", async () => {
+    const { db, holds, productSkuPatches } = createDb({
+      sku: {
+        _id: "sku-1",
+        storeId: "store-1",
+        sku: "SKU-1",
+        quantityAvailable: 10,
+        inventoryCount: 10,
+      },
+      holds: [
+        buildHold({
+          _id: "hold-expired",
+          sourceSessionId: "session-expired",
+          quantity: 4,
+          expiresAt: 500,
+        }),
+      ],
+    });
+
+    await releaseInventoryHoldsBatch(db as never, {
+      sessionId: "session-expired" as Id<"posSession">,
+      items: [{ skuId: "sku-1" as Id<"productSku">, quantity: 4 }],
+      now: 1_000,
+    });
+
+    expect(holds[0]).toEqual(
+      expect.objectContaining({
+        status: "expired",
+        expiredAt: 1_000,
+      }),
+    );
+    expect(productSkuPatches).toEqual([]);
+  });
+
+  it("restores explicit legacy expense quantity-patch holds", async () => {
+    const { db, productSkuPatches } = createDb({
+      sku: {
+        _id: "sku-1",
+        storeId: "store-1",
+        sku: "SKU-1",
+        quantityAvailable: 6,
+        inventoryCount: 10,
+      },
+    });
+
+    await releaseLegacyExpenseQuantityPatchHolds(db as never, [
+      { skuId: "sku-1" as Id<"productSku">, quantity: 2 },
+    ]);
+
     expect(productSkuPatches).toEqual([{ quantityAvailable: 8 }]);
   });
 

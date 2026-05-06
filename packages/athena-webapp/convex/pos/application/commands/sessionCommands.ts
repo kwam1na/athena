@@ -280,6 +280,7 @@ export function createPosSessionCommandService(
         terminalId: args.terminalId,
         registerNumber,
         registerSessionId: registerSessionBinding.data.registerSessionId,
+        inventoryHoldMode: "ledger",
         status: "active",
         createdAt: now,
         updatedAt: now,
