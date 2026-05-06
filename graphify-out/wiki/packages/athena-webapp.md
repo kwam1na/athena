@@ -17,9 +17,9 @@ Landing page for packages/athena-webapp. Use this page to orient around graph ho
 - [validation-map.json](../../../packages/athena-webapp/docs/agent/validation-map.json)
 
 ## Graph Hotspots
-- `RegisterSessionView.tsx` (27 edges, Community 6) - [`packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx`](../../../packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx)
-- `storeConfigV2.ts` (27 edges, Community 5) - [`packages/athena-webapp/convex/inventory/storeConfigV2.ts`](../../../packages/athena-webapp/convex/inventory/storeConfigV2.ts)
-- `ProcurementView.tsx` (26 edges, Community 8) - [`packages/athena-webapp/src/components/procurement/ProcurementView.tsx`](../../../packages/athena-webapp/src/components/procurement/ProcurementView.tsx)
+- `ProcurementView.tsx` (35 edges, Community 2) - [`packages/athena-webapp/src/components/procurement/ProcurementView.tsx`](../../../packages/athena-webapp/src/components/procurement/ProcurementView.tsx)
+- `RegisterSessionView.tsx` (27 edges, Community 7) - [`packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx`](../../../packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx)
+- `storeConfigV2.ts` (27 edges, Community 6) - [`packages/athena-webapp/convex/inventory/storeConfigV2.ts`](../../../packages/athena-webapp/convex/inventory/storeConfigV2.ts)
 - `posSessions.ts` (23 edges, Community 10) - [`packages/athena-webapp/convex/inventory/posSessions.ts`](../../../packages/athena-webapp/convex/inventory/posSessions.ts)
 - `cycleCountDrafts.ts` (21 edges, Community 11) - [`packages/athena-webapp/convex/stockOps/cycleCountDrafts.ts`](../../../packages/athena-webapp/convex/stockOps/cycleCountDrafts.ts)
 

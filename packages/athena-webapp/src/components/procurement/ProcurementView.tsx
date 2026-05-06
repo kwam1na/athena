@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 
@@ -19,6 +19,10 @@ import {
 } from "../ui/select";
 import { Skeleton } from "../ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
+import {
+  SkuDetailPanel,
+  type InventorySnapshotItem,
+} from "../operations/StockAdjustmentWorkspace";
 import { ReceivingView } from "./ReceivingView";
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { presentCommandToast } from "@/lib/errors/presentCommandToast";
@@ -110,7 +114,7 @@ type PurchaseOrderDetail = ProcurementOrderSummary & {
 type ReorderDraftLine = {
   productName: string;
   productSkuId: Id<"productSku">;
-  quantity: number;
+  quantityInput: string;
   sku?: string | null;
   vendorId?: Id<"vendor">;
 };
@@ -120,6 +124,9 @@ type ProcurementViewContentProps = {
   hasFullAdminAccess: boolean;
   isLoadingPermissions: boolean;
   isLoadingProcurement: boolean;
+  inventoryItems: InventorySnapshotItem[];
+  mode?: ProcurementMode;
+  onModeChange?: (mode: ProcurementMode) => void;
   purchaseOrders: ProcurementOrderSummary[];
   recommendations: ReplenishmentRecommendation[];
   storeId?: Id<"store">;
@@ -136,6 +143,8 @@ const MODE_OPTIONS = [
 ] as const;
 
 type ProcurementMode = (typeof MODE_OPTIONS)[number]["value"];
+
+const RECOMMENDATIONS_PER_PAGE = 10;
 
 const UNASSIGNED_VENDOR_VALUE = "unassigned-vendor";
 
@@ -319,16 +328,11 @@ function getRecommendationStateNote(
   const plannedPurchaseOrderCount = recommendation.plannedPurchaseOrderCount;
 
   if (hasMixedPurchaseOrderCover(recommendation)) {
-    const remainingAction =
-      plannedPurchaseOrderCount === 1
-        ? "order the remaining purchase order"
-        : `order ${plannedPurchaseOrderCount} remaining purchase orders`;
-
-    return `Next action: ${remainingAction}. ${formatUnitCount(inboundUnits)} already inbound.`;
+    return `${formatUnitCount(inboundUnits)} already inbound.`;
   }
 
   if (PLANNED_STATES.includes(recommendation.status)) {
-    return "Next action: order this purchase order.";
+    return null;
   }
 
   if (INBOUND_STATES.includes(recommendation.status)) {
@@ -337,10 +341,10 @@ function getRecommendationStateNote(
 
   if (recommendation.status === "resolved") {
     if (inboundUnits > 0) {
-      return `Stock pressure is handled. ${formatUnitCount(inboundUnits)} still inbound.`;
+      return `${formatUnitCount(inboundUnits)} still inbound.`;
     }
 
-    return "Stock pressure is handled.";
+    return null;
   }
 
   return null;
@@ -473,6 +477,22 @@ function canReceivePurchaseOrder(status: PurchaseOrderStatus) {
   return status === "ordered" || status === "partially_received";
 }
 
+function getPurchaseOrderMode(status: PurchaseOrderStatus): ProcurementMode {
+  switch (status) {
+    case "draft":
+    case "submitted":
+    case "approved":
+      return "planned";
+    case "ordered":
+    case "partially_received":
+      return "inbound";
+    case "received":
+      return "resolved";
+    case "cancelled":
+      return "exceptions";
+  }
+}
+
 function buildVendorOptions(
   vendors: VendorSummary[],
   createdVendors: VendorSummary[],
@@ -488,17 +508,40 @@ function buildVendorOptions(
   );
 }
 
+function sanitizeDraftQuantityInput(value: string) {
+  const digits = value.replace(/\D/g, "");
+
+  if (digits === "") {
+    return "";
+  }
+
+  return digits.replace(/^0+(?=\d)/, "");
+}
+
+function parseDraftLineQuantity(line: ReorderDraftLine) {
+  if (line.quantityInput.trim() === "") {
+    return null;
+  }
+
+  const quantity = Number(line.quantityInput);
+
+  return Number.isInteger(quantity) && quantity > 0 ? quantity : null;
+}
+
 export function ProcurementViewContent({
   hasActiveStore,
   hasFullAdminAccess,
   isLoadingPermissions,
   isLoadingProcurement,
+  inventoryItems,
+  mode: controlledMode,
+  onModeChange,
   purchaseOrders,
   recommendations,
   storeId,
   vendors,
 }: ProcurementViewContentProps) {
-  const [mode, setMode] = useState<ProcurementMode>("needs_action");
+  const [localMode, setLocalMode] = useState<ProcurementMode>("needs_action");
   const [draftLines, setDraftLines] = useState<ReorderDraftLine[]>([]);
   const [quickAddVendorName, setQuickAddVendorName] = useState("");
   const [createdVendors, setCreatedVendors] = useState<VendorSummary[]>([]);
@@ -509,6 +552,17 @@ export function ProcurementViewContent({
     useState<Id<"purchaseOrder"> | null>(null);
   const [selectedReceivingOrderId, setSelectedReceivingOrderId] =
     useState<Id<"purchaseOrder"> | null>(null);
+  const [selectedProductSkuId, setSelectedProductSkuId] =
+    useState<Id<"productSku"> | null>(null);
+  const [selectedPurchaseOrderId, setSelectedPurchaseOrderId] =
+    useState<Id<"purchaseOrder"> | null>(null);
+  const [recommendationPage, setRecommendationPage] = useState(1);
+  const [scrollTargetProductSkuId, setScrollTargetProductSkuId] =
+    useState<Id<"productSku"> | null>(null);
+  const stockPressureSectionRef = useRef<HTMLElement | null>(null);
+  const recommendationRowRefs = useRef(
+    new Map<Id<"productSku">, HTMLElement>(),
+  );
 
   const createVendor = useMutation(api.stockOps.vendors.createVendorCommand);
   const createPurchaseOrder = useMutation(
@@ -531,6 +585,180 @@ export function ProcurementViewContent({
     () => buildVendorOptions(vendors, createdVendors),
     [createdVendors, vendors],
   );
+  const inventoryItemsById = useMemo(
+    () => new Map(inventoryItems.map((item) => [item._id, item])),
+    [inventoryItems],
+  );
+  const mode = controlledMode ?? localMode;
+  const handleModeChange = (nextMode: ProcurementMode) => {
+    setRecommendationPage(1);
+
+    if (!controlledMode) {
+      setLocalMode(nextMode);
+    }
+
+    onModeChange?.(nextMode);
+  };
+  const handleRecommendationPageChange = (nextPage: number) => {
+    setRecommendationPage(nextPage);
+    window.requestAnimationFrame(() => {
+      stockPressureSectionRef.current?.scrollIntoView({
+        block: "start",
+        behavior: "smooth",
+      });
+    });
+  };
+
+  const visibleRecommendations = useMemo(
+    () =>
+      recommendations.filter((recommendation) =>
+        isRecommendationVisible(recommendation, mode),
+      ),
+    [mode, recommendations],
+  );
+  const recommendationPageCount = Math.max(
+    Math.ceil(visibleRecommendations.length / RECOMMENDATIONS_PER_PAGE),
+    1,
+  );
+  const clampedRecommendationPage = Math.min(
+    recommendationPage,
+    recommendationPageCount,
+  );
+  const paginatedRecommendations = visibleRecommendations.slice(
+    (clampedRecommendationPage - 1) * RECOMMENDATIONS_PER_PAGE,
+    clampedRecommendationPage * RECOMMENDATIONS_PER_PAGE,
+  );
+  const paginationStart =
+    visibleRecommendations.length === 0
+      ? 0
+      : (clampedRecommendationPage - 1) * RECOMMENDATIONS_PER_PAGE + 1;
+  const paginationEnd = Math.min(
+    clampedRecommendationPage * RECOMMENDATIONS_PER_PAGE,
+    visibleRecommendations.length,
+  );
+  const activePurchaseOrders = purchaseOrders
+    .filter((order) =>
+      ACTIVE_PROCUREMENT_STATUSES.includes(
+        order.status as (typeof ACTIVE_PROCUREMENT_STATUSES)[number],
+      ),
+    )
+    .sort((left, right) => {
+      const leftExpectedAt = left.expectedAt ?? Number.MAX_SAFE_INTEGER;
+      const rightExpectedAt = right.expectedAt ?? Number.MAX_SAFE_INTEGER;
+
+      if (leftExpectedAt !== rightExpectedAt) {
+        return leftExpectedAt - rightExpectedAt;
+      }
+
+      return left.poNumber.localeCompare(right.poNumber);
+    });
+  const selectedReceivingPurchaseOrder = activePurchaseOrders.find(
+    (purchaseOrder) => purchaseOrder._id === selectedReceivingOrderId,
+  );
+  const selectedInventoryItem = selectedProductSkuId
+    ? (inventoryItemsById.get(selectedProductSkuId) ?? null)
+    : null;
+  const visiblePurchaseOrders = activePurchaseOrders.slice(0, 6);
+  const hiddenPurchaseOrderCount = Math.max(
+    activePurchaseOrders.length - visiblePurchaseOrders.length,
+    0,
+  );
+  const draftHasMissingVendor = draftLines.some((line) => !line.vendorId);
+  const draftHasInvalidQuantity = draftLines.some(
+    (line) => parseDraftLineQuantity(line) === null,
+  );
+  const recommendationCounts: Record<ProcurementMode, number> = {
+    all: countRecommendationsForMode(recommendations, "all"),
+    exceptions: countRecommendationsForMode(recommendations, "exceptions"),
+    inbound: countRecommendationsForMode(recommendations, "inbound"),
+    needs_action: countRecommendationsForMode(recommendations, "needs_action"),
+    planned: countRecommendationsForMode(recommendations, "planned"),
+    resolved: countRecommendationsForMode(recommendations, "resolved"),
+  };
+  const summary = {
+    activePurchaseOrders: activePurchaseOrders.length,
+    exceptions: recommendationCounts.exceptions,
+    inbound: recommendationCounts.inbound,
+    needsAction: recommendationCounts.needs_action,
+    planned: recommendationCounts.planned,
+    resolved: recommendationCounts.resolved,
+  };
+  const shouldPrioritizeReorderDraft = draftLines.length > 0;
+  const plannedPurchaseOrderActionCount = visibleRecommendations.reduce(
+    (count, recommendation) =>
+      count +
+      getUniquePurchaseOrderReferences(recommendation).filter(
+        (purchaseOrder) =>
+          getPurchaseOrderMode(purchaseOrder.status) === "planned",
+      ).length,
+    0,
+  );
+
+  useEffect(() => {
+    if (recommendationPage > recommendationPageCount) {
+      setRecommendationPage(recommendationPageCount);
+    }
+  }, [recommendationPage, recommendationPageCount]);
+
+  useEffect(() => {
+    if (!scrollTargetProductSkuId) return;
+    if (
+      !visibleRecommendations.some(
+        (recommendation) => recommendation._id === scrollTargetProductSkuId,
+      )
+    ) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      recommendationRowRefs.current
+        .get(scrollTargetProductSkuId)
+        ?.scrollIntoView({
+          block: "center",
+          behavior: "smooth",
+        });
+      setScrollTargetProductSkuId(null);
+    });
+  }, [scrollTargetProductSkuId, visibleRecommendations]);
+
+  function getRecommendationForPurchaseOrder(
+    purchaseOrderId: Id<"purchaseOrder">,
+  ) {
+    return recommendations.find((recommendation) =>
+      getUniquePurchaseOrderReferences(recommendation).some(
+        (purchaseOrder) => purchaseOrder.purchaseOrderId === purchaseOrderId,
+      ),
+    );
+  }
+
+  function handlePurchaseOrderSummaryClick(
+    purchaseOrder: ProcurementOrderSummary,
+  ) {
+    const recommendation = getRecommendationForPurchaseOrder(purchaseOrder._id);
+    const nextMode = getPurchaseOrderMode(purchaseOrder.status);
+
+    setSelectedPurchaseOrderId(purchaseOrder._id);
+    if (recommendation) {
+      setSelectedProductSkuId(recommendation._id);
+      setScrollTargetProductSkuId(recommendation._id);
+    }
+    handleModeChange(nextMode);
+    if (recommendation) {
+      const nextVisibleRecommendations = recommendations.filter(
+        (nextRecommendation) =>
+          isRecommendationVisible(nextRecommendation, nextMode),
+      );
+      const recommendationIndex = nextVisibleRecommendations.findIndex(
+        (nextRecommendation) => nextRecommendation._id === recommendation._id,
+      );
+
+      if (recommendationIndex >= 0) {
+        setRecommendationPage(
+          Math.floor(recommendationIndex / RECOMMENDATIONS_PER_PAGE) + 1,
+        );
+      }
+    }
+  }
 
   if (isLoadingPermissions) {
     return null;
@@ -557,52 +785,6 @@ export function ProcurementViewContent({
     return null;
   }
 
-  const visibleRecommendations = recommendations.filter((recommendation) =>
-    isRecommendationVisible(recommendation, mode),
-  );
-  const activePurchaseOrders = purchaseOrders
-    .filter((order) =>
-      ACTIVE_PROCUREMENT_STATUSES.includes(
-        order.status as (typeof ACTIVE_PROCUREMENT_STATUSES)[number],
-      ),
-    )
-    .sort((left, right) => {
-      const leftExpectedAt = left.expectedAt ?? Number.MAX_SAFE_INTEGER;
-      const rightExpectedAt = right.expectedAt ?? Number.MAX_SAFE_INTEGER;
-
-      if (leftExpectedAt !== rightExpectedAt) {
-        return leftExpectedAt - rightExpectedAt;
-      }
-
-      return left.poNumber.localeCompare(right.poNumber);
-    });
-  const selectedReceivingPurchaseOrder = activePurchaseOrders.find(
-    (purchaseOrder) => purchaseOrder._id === selectedReceivingOrderId,
-  );
-  const visiblePurchaseOrders = activePurchaseOrders.slice(0, 6);
-  const hiddenPurchaseOrderCount = Math.max(
-    activePurchaseOrders.length - visiblePurchaseOrders.length,
-    0,
-  );
-  const draftHasMissingVendor = draftLines.some((line) => !line.vendorId);
-  const draftHasInvalidQuantity = draftLines.some((line) => line.quantity <= 0);
-  const recommendationCounts: Record<ProcurementMode, number> = {
-    all: countRecommendationsForMode(recommendations, "all"),
-    exceptions: countRecommendationsForMode(recommendations, "exceptions"),
-    inbound: countRecommendationsForMode(recommendations, "inbound"),
-    needs_action: countRecommendationsForMode(recommendations, "needs_action"),
-    planned: countRecommendationsForMode(recommendations, "planned"),
-    resolved: countRecommendationsForMode(recommendations, "resolved"),
-  };
-  const summary = {
-    activePurchaseOrders: activePurchaseOrders.length,
-    exceptions: recommendationCounts.exceptions,
-    inbound: recommendationCounts.inbound,
-    needsAction: recommendationCounts.needs_action,
-    planned: recommendationCounts.planned,
-    resolved: recommendationCounts.resolved,
-  };
-
   function addRecommendationToDraft(
     recommendation: ReplenishmentRecommendation,
   ) {
@@ -620,7 +802,9 @@ export function ProcurementViewContent({
         {
           productName: recommendation.productName,
           productSkuId: recommendation._id,
-          quantity: Math.max(1, recommendation.suggestedOrderQuantity),
+          quantityInput: String(
+            Math.max(1, recommendation.suggestedOrderQuantity),
+          ),
           sku: recommendation.sku,
         },
       ];
@@ -629,7 +813,7 @@ export function ProcurementViewContent({
 
   function updateDraftLine(
     productSkuId: Id<"productSku">,
-    updates: Partial<Pick<ReorderDraftLine, "quantity" | "vendorId">>,
+    updates: Partial<Pick<ReorderDraftLine, "quantityInput" | "vendorId">>,
   ) {
     setDraftLines((currentDraftLines) =>
       currentDraftLines.map((line) =>
@@ -744,7 +928,7 @@ export function ProcurementViewContent({
               description: line.sku
                 ? `${line.productName} (${line.sku})`
                 : line.productName,
-              orderedQuantity: line.quantity,
+              orderedQuantity: parseDraftLineQuantity(line)!,
               productSkuId: line.productSkuId,
               unitCost: 0,
             })),
@@ -779,6 +963,10 @@ export function ProcurementViewContent({
           linesByVendor.size === 1 ? "" : "s"
         } created`,
       );
+
+      if (mode === "needs_action" && summary.needsAction === 1) {
+        handleModeChange("planned");
+      }
     } finally {
       setIsCreatingPurchaseOrders(false);
     }
@@ -829,6 +1017,10 @@ export function ProcurementViewContent({
       }
 
       toast.success(`${purchaseOrder.poNumber} marked ordered`);
+
+      if (mode === "planned" && plannedPurchaseOrderActionCount === 1) {
+        handleModeChange("inbound");
+      }
     } finally {
       setUpdatingPurchaseOrderId(null);
     }
@@ -846,12 +1038,11 @@ export function ProcurementViewContent({
                 </p>
                 <div className="space-y-1">
                   <h2 className="font-display text-2xl font-semibold tracking-tight text-foreground">
-                    Procurement workspace
+                    Procurement
                   </h2>
                   <p className="text-sm text-muted-foreground">
-                    Turn low-stock items into vendor-backed purchase orders,
-                    inbound cover, and receiving work without losing the stock
-                    continuity context.
+                    Review stock pressure, create vendor-backed orders, and
+                    track receiving in one workspace.
                   </p>
                 </div>
                 <div className="grid max-w-2xl grid-cols-2 gap-2 sm:grid-cols-4">
@@ -891,7 +1082,9 @@ export function ProcurementViewContent({
               </div>
 
               <Tabs
-                onValueChange={(value) => setMode(value as ProcurementMode)}
+                onValueChange={(value) =>
+                  handleModeChange(value as ProcurementMode)
+                }
                 value={mode}
               >
                 <TabsList>
@@ -904,7 +1097,10 @@ export function ProcurementViewContent({
               </Tabs>
             </div>
 
-            <section className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface">
+            <section
+              className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface"
+              ref={stockPressureSectionRef}
+            >
               <div className="border-b border-border/70 px-layout-md py-layout-md">
                 <div className="flex flex-col gap-layout-sm lg:flex-row lg:items-end lg:justify-between">
                   <div>
@@ -934,7 +1130,7 @@ export function ProcurementViewContent({
                     />
                   </div>
                 ) : (
-                  visibleRecommendations.map((recommendation) => {
+                  paginatedRecommendations.map((recommendation) => {
                     const statusCopy = getContinuityStateCopy(
                       recommendation.status,
                     );
@@ -953,12 +1149,27 @@ export function ProcurementViewContent({
                     );
                     const stateNote =
                       getRecommendationStateNote(recommendation);
+                    const rowNote =
+                      stateNote ??
+                      (PLANNED_STATES.includes(recommendation.status)
+                        ? null
+                        : recommendation.guidance);
                     const hasSuggestedOrder =
                       recommendation.suggestedOrderQuantity > 0;
-                    const showDraftAction = isInDraft || hasSuggestedOrder;
+                    const canAddAnotherPurchaseOrder =
+                      PLANNED_STATES.includes(recommendation.status) ||
+                      INBOUND_STATES.includes(recommendation.status) ||
+                      hasPlannedPurchaseOrderCover(recommendation) ||
+                      hasInboundPurchaseOrderCover(recommendation);
+                    const showDraftAction =
+                      isInDraft ||
+                      hasSuggestedOrder ||
+                      canAddAnotherPurchaseOrder;
                     const draftActionLabel = isInDraft
                       ? "In draft"
-                      : "Add to draft";
+                      : canAddAnotherPurchaseOrder
+                        ? "Add purchase order"
+                        : "Add to draft";
                     const plannedUnits =
                       recommendation.plannedPurchaseOrderQuantity ?? 0;
                     const linkedPurchaseOrders =
@@ -974,8 +1185,47 @@ export function ProcurementViewContent({
 
                     return (
                       <article
-                        className="bg-background px-layout-md py-layout-lg transition-colors hover:bg-muted/30"
+                        aria-pressed={
+                          selectedProductSkuId === recommendation._id
+                        }
+                        className={cn(
+                          "bg-background px-layout-md py-layout-lg text-left transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                          selectedProductSkuId === recommendation._id ||
+                            linkedPurchaseOrders.some(
+                              (purchaseOrder) =>
+                                purchaseOrder.purchaseOrderId ===
+                                selectedPurchaseOrderId,
+                            )
+                            ? "bg-muted/30 hover:bg-muted/40"
+                            : undefined,
+                        )}
                         key={recommendation._id}
+                        onClick={() =>
+                          setSelectedProductSkuId(recommendation._id)
+                        }
+                        ref={(element) => {
+                          if (element) {
+                            recommendationRowRefs.current.set(
+                              recommendation._id,
+                              element,
+                            );
+                            return;
+                          }
+
+                          recommendationRowRefs.current.delete(
+                            recommendation._id,
+                          );
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key !== "Enter" && event.key !== " ") {
+                            return;
+                          }
+
+                          event.preventDefault();
+                          setSelectedProductSkuId(recommendation._id);
+                        }}
+                        role="button"
+                        tabIndex={0}
                       >
                         <div className="flex flex-col gap-layout-lg lg:flex-row lg:items-start lg:justify-between">
                           <div className="min-w-0 flex-1 space-y-layout-lg">
@@ -1008,9 +1258,11 @@ export function ProcurementViewContent({
                                     </span>
                                   ) : null}
                                 </div>
-                                <p className="max-w-3xl text-sm text-muted-foreground">
-                                  {stateNote ?? recommendation.guidance}
-                                </p>
+                                {rowNote ? (
+                                  <p className="max-w-3xl text-sm text-muted-foreground">
+                                    {rowNote}
+                                  </p>
+                                ) : null}
                               </div>
                             </div>
 
@@ -1086,7 +1338,10 @@ export function ProcurementViewContent({
                                           "flex flex-col gap-layout-sm rounded-md border bg-surface px-3 py-2 transition-colors sm:flex-row sm:items-center sm:justify-between",
                                           isReceivingActive
                                             ? "border-action-workflow-border bg-action-workflow-soft/40"
-                                            : "border-border",
+                                            : selectedPurchaseOrderId ===
+                                                purchaseOrder.purchaseOrderId
+                                              ? "border-action-workflow-border bg-action-workflow-soft/30"
+                                              : "border-border",
                                         )}
                                         key={purchaseOrder.purchaseOrderId}
                                       >
@@ -1113,24 +1368,25 @@ export function ProcurementViewContent({
                                             <Button
                                               disabled={isUpdatingPurchaseOrder}
                                               key={action.nextStatus}
-                                              onClick={() =>
+                                              onClick={(event) => {
+                                                event.stopPropagation();
                                                 action.nextStatus === "ordered"
-                                                  ? handleAdvancePurchaseOrderToOrdered(
+                                                  ? void handleAdvancePurchaseOrderToOrdered(
                                                       {
                                                         _id: purchaseOrder.purchaseOrderId,
                                                         poNumber:
                                                           purchaseOrder.poNumber,
                                                       },
                                                     )
-                                                  : handleUpdatePurchaseOrderStatus(
+                                                  : void handleUpdatePurchaseOrderStatus(
                                                       {
                                                         _id: purchaseOrder.purchaseOrderId,
                                                         poNumber:
                                                           purchaseOrder.poNumber,
                                                       },
                                                       action.nextStatus,
-                                                    )
-                                              }
+                                                    );
+                                              }}
                                               size="sm"
                                               variant={
                                                 action.nextStatus ===
@@ -1151,12 +1407,14 @@ export function ProcurementViewContent({
                                                   ? "true"
                                                   : undefined
                                               }
+                                              className="w-[92px]"
                                               disabled={isReceivingActive}
-                                              onClick={() =>
+                                              onClick={(event) => {
+                                                event.stopPropagation();
                                                 setSelectedReceivingOrderId(
                                                   purchaseOrder.purchaseOrderId,
-                                                )
-                                              }
+                                                );
+                                              }}
                                               size="sm"
                                               variant={
                                                 isReceivingActive
@@ -1181,13 +1439,18 @@ export function ProcurementViewContent({
                           {showDraftAction ? (
                             <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">
                               <Button
-                                className="self-start"
+                                className="w-[160px] self-start"
                                 disabled={isInDraft}
-                                onClick={() =>
-                                  addRecommendationToDraft(recommendation)
-                                }
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  addRecommendationToDraft(recommendation);
+                                }}
                                 size="sm"
-                                variant="workflow-soft"
+                                variant={
+                                  canAddAnotherPurchaseOrder
+                                    ? "utility"
+                                    : "workflow-soft"
+                                }
                               >
                                 {draftActionLabel}
                               </Button>
@@ -1199,12 +1462,67 @@ export function ProcurementViewContent({
                   })
                 )}
               </div>
+              {visibleRecommendations.length > RECOMMENDATIONS_PER_PAGE ? (
+                <div className="flex flex-col gap-layout-sm border-t border-border/70 px-layout-md py-layout-sm text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                  <p>
+                    Showing {paginationStart}-{paginationEnd} of{" "}
+                    {visibleRecommendations.length}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      disabled={clampedRecommendationPage === 1}
+                      onClick={() =>
+                        handleRecommendationPageChange(
+                          Math.max(1, clampedRecommendationPage - 1),
+                        )
+                      }
+                      size="sm"
+                      variant="utility"
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      disabled={
+                        clampedRecommendationPage === recommendationPageCount
+                      }
+                      onClick={() =>
+                        handleRecommendationPageChange(
+                          Math.min(
+                            recommendationPageCount,
+                            clampedRecommendationPage + 1,
+                          ),
+                        )
+                      }
+                      size="sm"
+                      variant="utility"
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
             </section>
           </section>
 
           <aside className="flex min-h-0 flex-col gap-layout-md overflow-y-auto overscroll-contain pr-1 scrollbar-hide">
+            {selectedInventoryItem ? (
+              <section
+                className={cn(
+                  "space-y-layout-xl rounded-lg border border-border bg-surface-raised px-layout-md py-layout-md shadow-surface",
+                  shouldPrioritizeReorderDraft ? "order-1" : undefined,
+                )}
+              >
+                <SkuDetailPanel activeInventoryItem={selectedInventoryItem} />
+              </section>
+            ) : null}
+
             {selectedReceivingOrderId ? (
-              <section className="space-y-layout-md rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
+              <section
+                className={cn(
+                  "space-y-layout-md rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface",
+                  shouldPrioritizeReorderDraft ? "order-4" : undefined,
+                )}
+              >
                 <div className="flex items-start justify-between gap-layout-md">
                   <PanelHeader
                     description={
@@ -1267,7 +1585,12 @@ export function ProcurementViewContent({
             ) : null}
 
             {activePurchaseOrders.length > 0 ? (
-              <section className="space-y-layout-md rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
+              <section
+                className={cn(
+                  "space-y-layout-md rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface",
+                  shouldPrioritizeReorderDraft ? "order-3" : undefined,
+                )}
+              >
                 <PanelHeader
                   description="Purchase orders that may not be visible in the current stock list."
                   eyebrow="Purchase Orders"
@@ -1278,8 +1601,29 @@ export function ProcurementViewContent({
                   {visiblePurchaseOrders.map((purchaseOrder) => {
                     return (
                       <article
-                        className="rounded-lg border border-border bg-background p-layout-md"
+                        aria-pressed={
+                          selectedPurchaseOrderId === purchaseOrder._id
+                        }
+                        className={cn(
+                          "rounded-lg border bg-background p-layout-md text-left transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                          selectedPurchaseOrderId === purchaseOrder._id
+                            ? "border-action-workflow-border bg-action-workflow-soft/30"
+                            : "border-border",
+                        )}
                         key={purchaseOrder._id}
+                        onClick={() =>
+                          handlePurchaseOrderSummaryClick(purchaseOrder)
+                        }
+                        onKeyDown={(event) => {
+                          if (event.key !== "Enter" && event.key !== " ") {
+                            return;
+                          }
+
+                          event.preventDefault();
+                          handlePurchaseOrderSummaryClick(purchaseOrder);
+                        }}
+                        role="button"
+                        tabIndex={0}
                       >
                         <div className="flex items-start justify-between gap-layout-md">
                           <div className="min-w-0 space-y-1.5">
@@ -1321,7 +1665,12 @@ export function ProcurementViewContent({
               </section>
             ) : null}
 
-            <section className="space-y-layout-lg rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
+            <section
+              className={cn(
+                "space-y-layout-lg rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface",
+                shouldPrioritizeReorderDraft ? "order-2" : undefined,
+              )}
+            >
               <PanelHeader
                 description="Select low-stock items, confirm quantities, and assign a vendor before creating draft purchase orders."
                 eyebrow="Reorder Draft"
@@ -1362,14 +1711,18 @@ export function ProcurementViewContent({
                       <label className="block space-y-1 text-xs font-medium text-muted-foreground">
                         <span>Quantity</span>
                         <Input
+                          inputMode="numeric"
                           min={1}
                           onChange={(event) =>
                             updateDraftLine(line.productSkuId, {
-                              quantity: Number(event.target.value),
+                              quantityInput: sanitizeDraftQuantityInput(
+                                event.target.value,
+                              ),
                             })
                           }
-                          type="number"
-                          value={line.quantity}
+                          pattern="[0-9]*"
+                          type="text"
+                          value={line.quantityInput}
                         />
                       </label>
                       <label className="block space-y-1 text-xs font-medium text-muted-foreground">
@@ -1453,7 +1806,12 @@ export function ProcurementViewContent({
               </Button>
             </section>
 
-            <section className="space-y-layout-md rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
+            <section
+              className={cn(
+                "space-y-layout-md rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface",
+                shouldPrioritizeReorderDraft ? "order-5" : undefined,
+              )}
+            >
               <PanelHeader
                 description="Use the current stock-continuity mix to decide whether to order, advance planned work, receive, or resolve an exception."
                 eyebrow="Snapshot"
@@ -1489,7 +1847,13 @@ export function ProcurementViewContent({
   );
 }
 
-export function ProcurementView() {
+export function ProcurementView({
+  mode,
+  onModeChange,
+}: {
+  mode?: ProcurementMode;
+  onModeChange?: (mode: ProcurementMode) => void;
+} = {}) {
   const {
     activeStore,
     canQueryProtectedData,
@@ -1508,6 +1872,10 @@ export function ProcurementView() {
     api.stockOps.purchaseOrders.listPurchaseOrders,
     procurementQueryArgs,
   ) as ProcurementOrderSummary[] | undefined;
+  const inventoryItems = useQuery(
+    api.stockOps.adjustments.listInventorySnapshot,
+    procurementQueryArgs,
+  ) as InventorySnapshotItem[] | undefined;
   const vendors = useQuery(
     api.stockOps.vendors.listVendors,
     canQueryProtectedData
@@ -1533,9 +1901,13 @@ export function ProcurementView() {
       isLoadingProcurement={Boolean(
         canQueryProtectedData &&
         (recommendations === undefined ||
+          inventoryItems === undefined ||
           purchaseOrders === undefined ||
           vendors === undefined),
       )}
+      inventoryItems={inventoryItems ?? []}
+      mode={mode}
+      onModeChange={onModeChange}
       purchaseOrders={purchaseOrders ?? []}
       recommendations={recommendations ?? []}
       storeId={activeStore?._id}

@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "~/convex/_generated/dataModel";
 import { ProcurementView, ProcurementViewContent } from "./ProcurementView";
@@ -106,6 +106,13 @@ const plannedRecommendation = {
   suggestedOrderQuantity: 0,
 };
 
+const singlePlannedRecommendation = {
+  ...plannedRecommendation,
+  plannedPurchaseOrderCount: 1,
+  plannedPurchaseOrderQuantity: 4,
+  plannedPurchaseOrders: [plannedRecommendation.plannedPurchaseOrders[0]],
+};
+
 const inboundRecommendation = {
   _id: "sku-3" as Id<"productSku">,
   guidance: "Ordered purchase-order work is covering this SKU.",
@@ -211,9 +218,32 @@ const resolvedWithInboundRecommendation = {
   status: "resolved" as const,
 };
 
+const inventoryItems = [
+  {
+    _id: "sku-1" as Id<"productSku">,
+    barcode: "BAR-CW-18",
+    colorName: "Natural black",
+    imageUrl: "https://cdn.example.com/closure-wig.jpg",
+    inventoryCount: 0,
+    productCategory: "Hair",
+    productName: "Closure Wig",
+    quantityAvailable: 0,
+    sku: "CW-18",
+  },
+  {
+    _id: "sku-4" as Id<"productSku">,
+    inventoryCount: 0,
+    productName: "Lace Adhesive",
+    quantityAvailable: 0,
+    reservedQuantity: 2,
+    sku: "LA-01",
+  },
+];
+
 const baseProps: React.ComponentProps<typeof ProcurementViewContent> = {
   hasActiveStore: true,
   hasFullAdminAccess: true,
+  inventoryItems,
   isLoadingPermissions: false,
   isLoadingProcurement: false,
   purchaseOrders: [
@@ -292,6 +322,11 @@ async function chooseDraftVendor(
 describe("ProcurementViewContent", () => {
   beforeEach(() => {
     window.scrollTo = vi.fn();
+    window.requestAnimationFrame = (callback: FrameRequestCallback) => {
+      callback(0);
+      return 0;
+    };
+    HTMLElement.prototype.scrollIntoView = vi.fn();
     vi.clearAllMocks();
     mockedHooks.useAuth.mockReturnValue({
       isLoading: false,
@@ -382,8 +417,10 @@ describe("ProcurementViewContent", () => {
       ),
     ).toHaveClass("bg-muted/50", "text-muted-foreground");
     expect(
-      screen.getByText("Next action: order this purchase order."),
-    ).toBeInTheDocument();
+      screen.queryByText(
+        "Draft purchase-order work exists but is not inbound cover yet.",
+      ),
+    ).not.toBeInTheDocument();
     expect(
       within(screen.getByText("Frontal Wig").closest("article")!).getAllByRole(
         "button",
@@ -447,6 +484,106 @@ describe("ProcurementViewContent", () => {
     );
   });
 
+  it("moves a completed single planned action to inbound", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    const onModeChange = vi.fn();
+
+    render(
+      <ProcurementViewContent
+        {...baseProps}
+        mode="planned"
+        onModeChange={onModeChange}
+        recommendations={[singlePlannedRecommendation]}
+      />,
+    );
+
+    await user.click(
+      within(screen.getByText("Frontal Wig").closest("article")!).getByRole(
+        "button",
+        { name: /mark ordered/i },
+      ),
+    );
+
+    expect(mockedHooks.advancePurchaseOrderToOrdered).toHaveBeenCalledWith({
+      purchaseOrderId: "po-draft",
+    });
+    expect(onModeChange).toHaveBeenCalledWith("inbound");
+  });
+
+  it("lets planned rows add another purchase order through the reorder draft", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+
+    render(
+      <ProcurementViewContent
+        {...baseProps}
+        mode="planned"
+        recommendations={[singlePlannedRecommendation]}
+      />,
+    );
+
+    const plannedRow = screen.getByText("Frontal Wig").closest("article")!;
+    const addPurchaseOrderButton = within(plannedRow).getByRole("button", {
+      name: /add purchase order/i,
+    });
+
+    expect(addPurchaseOrderButton).toHaveClass("w-[160px]");
+    expect(addPurchaseOrderButton).toHaveClass("text-action-neutral");
+    expect(addPurchaseOrderButton).not.toHaveClass("text-action-workflow");
+
+    await user.click(addPurchaseOrderButton);
+
+    const draftPanel = screen
+      .getByText("Vendor-backed purchase order draft")
+      .closest("section")!;
+    const openPurchaseOrdersSection = screen
+      .getByText("Open purchase orders")
+      .closest("section")!;
+    expect(within(draftPanel).getByText("Frontal Wig")).toBeInTheDocument();
+    expect(within(draftPanel).getByLabelText("Quantity")).toHaveValue("1");
+    expect(draftPanel).toHaveClass("order-2");
+    expect(openPurchaseOrdersSection).toHaveClass("order-3");
+    expect(
+      within(plannedRow).getByRole("button", { name: /in draft/i }),
+    ).toHaveClass("w-[160px]");
+    expect(
+      within(plannedRow).getByRole("button", { name: /in draft/i }),
+    ).toBeDisabled();
+  });
+
+  it("lets inbound rows add another purchase order through the reorder draft", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+
+    render(
+      <ProcurementViewContent
+        {...baseProps}
+        mode="inbound"
+        recommendations={[inboundRecommendation]}
+      />,
+    );
+
+    const inboundRow = screen.getByText("Silk Press Kit").closest("article")!;
+
+    await user.click(
+      within(inboundRow).getByRole("button", {
+        name: /add purchase order/i,
+      }),
+    );
+
+    const draftPanel = screen
+      .getByText("Vendor-backed purchase order draft")
+      .closest("section")!;
+
+    expect(within(draftPanel).getByText("Silk Press Kit")).toBeInTheDocument();
+    expect(within(draftPanel).getByLabelText("Quantity")).toHaveValue("1");
+    expect(draftPanel).toHaveClass("order-2");
+    expect(
+      within(inboundRow).getByRole("button", { name: /in draft/i }),
+    ).toBeDisabled();
+  });
+
   it("keeps mixed planned and inbound purchase orders actionable in both modes", async () => {
     const { default: userEvent } = await import("@testing-library/user-event");
     const user = userEvent.setup();
@@ -466,9 +603,7 @@ describe("ProcurementViewContent", () => {
       "text-foreground",
     );
     expect(
-      within(plannedRow).getByText(
-        "Next action: order the remaining purchase order. 5 units already inbound.",
-      ),
+      within(plannedRow).getByText("5 units already inbound."),
     ).toBeInTheDocument();
     expect(within(plannedRow).getByText("PO-DRAFT-2")).toBeInTheDocument();
     expect(within(plannedRow).getByText("PO-ORDERED")).toBeInTheDocument();
@@ -506,11 +641,49 @@ describe("ProcurementViewContent", () => {
     const resolvedRow = screen.getByText("Logitech Mouse").closest("article")!;
     expect(within(resolvedRow).getByText("Handled")).toBeInTheDocument();
     expect(
-      within(resolvedRow).getByText(
-        "Stock pressure is handled. 1 unit still inbound.",
-      ),
+      within(resolvedRow).getByText("1 unit still inbound."),
     ).toBeInTheDocument();
     expect(resolvedRow).toHaveTextContent(/0\s*planned,\s*1\s*inbound/i);
+  });
+
+  it("paginates stock pressure rows ten at a time", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    const resolvedRecommendations = Array.from({ length: 12 }, (_, index) => ({
+      ...resolvedWithInboundRecommendation,
+      _id: `sku-resolved-${index + 1}` as Id<"productSku">,
+      productName: `Handled SKU ${index + 1}`,
+      sku: `HS-${index + 1}`,
+    }));
+
+    render(
+      <ProcurementViewContent
+        {...baseProps}
+        mode="resolved"
+        recommendations={resolvedRecommendations}
+      />,
+    );
+
+    expect(screen.getByText("Showing 1-10 of 12")).toBeInTheDocument();
+    expect(screen.getByText("Handled SKU 1")).toBeInTheDocument();
+    expect(screen.getByText("Handled SKU 10")).toBeInTheDocument();
+    expect(screen.queryByText("Handled SKU 11")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /next/i }));
+
+    expect(screen.getByText("Showing 11-12 of 12")).toBeInTheDocument();
+    expect(screen.queryByText("Handled SKU 1")).not.toBeInTheDocument();
+    expect(screen.getByText("Handled SKU 11")).toBeInTheDocument();
+    expect(screen.getByText("Handled SKU 12")).toBeInTheDocument();
+    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({
+      behavior: "smooth",
+      block: "start",
+    });
+
+    await user.click(screen.getByRole("button", { name: /previous/i }));
+
+    expect(screen.getByText("Showing 1-10 of 12")).toBeInTheDocument();
+    expect(screen.getByText("Handled SKU 1")).toBeInTheDocument();
   });
 
   it("requires vendors before creating grouped draft purchase orders", async () => {
@@ -547,6 +720,111 @@ describe("ProcurementViewContent", () => {
       storeId: "store-1",
       vendorId: "vendor-1",
     });
+  });
+
+  it("moves a single needs-action draft to planned after purchase-order creation", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    const onModeChange = vi.fn();
+
+    render(
+      <ProcurementViewContent
+        {...baseProps}
+        onModeChange={onModeChange}
+        recommendations={[exposedRecommendation]}
+      />,
+    );
+
+    await user.click(
+      within(screen.getByText("Closure Wig").closest("article")!).getByRole(
+        "button",
+        { name: /add to draft/i },
+      ),
+    );
+    await chooseDraftVendor(user, "Closure Wig", "Main Vendor");
+    await user.click(
+      screen.getByRole("button", { name: /create draft purchase orders/i }),
+    );
+
+    expect(mockedHooks.createPurchaseOrder).toHaveBeenCalledWith({
+      lineItems: [
+        {
+          description: "Closure Wig (CW-18)",
+          orderedQuantity: 6,
+          productSkuId: "sku-1",
+          unitCost: 0,
+        },
+      ],
+      storeId: "store-1",
+      vendorId: "vendor-1",
+    });
+    expect(onModeChange).toHaveBeenCalledWith("planned");
+  });
+
+  it("shows the stock-adjustment SKU detail panel when a pressure row is selected", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+
+    render(<ProcurementViewContent {...baseProps} />);
+
+    expect(screen.queryByText("SKU detail")).not.toBeInTheDocument();
+
+    await user.click(screen.getByText("Closure Wig").closest("article")!);
+
+    const skuDetailPanel = screen.getByText("SKU detail").closest("section")!;
+    expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
+    expect(
+      within(skuDetailPanel).getByText("Natural Black Closure Wig"),
+    ).toBeInTheDocument();
+    expect(within(skuDetailPanel).getByText("CW-18")).toBeInTheDocument();
+    expect(within(skuDetailPanel).getByText("BAR-CW-18")).toBeInTheDocument();
+    expect(within(skuDetailPanel).getByText("Hair")).toBeInTheDocument();
+    await user.click(
+      within(screen.getByText("Lace Adhesive").closest("article")!).getByRole(
+        "button",
+        { name: /add purchase order/i },
+      ),
+    );
+
+    expect(
+      within(skuDetailPanel).getByText("Natural Black Closure Wig"),
+    ).toBeInTheDocument();
+    const draftPanel = screen
+      .getByText("Vendor-backed purchase order draft")
+      .closest("section")!;
+    const openPurchaseOrdersSection = screen
+      .getByText("Open purchase orders")
+      .closest("section")!;
+    expect(skuDetailPanel).toHaveClass("order-1");
+    expect(draftPanel).toHaveClass("order-2");
+    expect(openPurchaseOrdersSection).toHaveClass("order-3");
+  });
+
+  it("keeps draft quantity entry editable without forcing zero or leading zeroes", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+
+    render(<ProcurementViewContent {...baseProps} />);
+
+    await user.click(
+      within(screen.getByText("Closure Wig").closest("article")!).getByRole(
+        "button",
+        { name: /add to draft/i },
+      ),
+    );
+
+    const quantityInput = screen.getByLabelText("Quantity");
+
+    await user.clear(quantityInput);
+
+    expect(quantityInput).toHaveValue("");
+    expect(
+      screen.getByRole("button", { name: /create draft purchase orders/i }),
+    ).toBeDisabled();
+
+    await user.type(quantityInput, "04");
+
+    expect(quantityInput).toHaveValue("4");
   });
 
   it("quick-adds a vendor and assigns it to the first draft line missing one", async () => {
@@ -600,7 +878,7 @@ describe("ProcurementViewContent", () => {
     await user.click(
       within(screen.getByText("Lace Adhesive").closest("article")!).getByRole(
         "button",
-        { name: /add to draft/i },
+        { name: /add purchase order/i },
       ),
     );
     await chooseDraftVendor(user, "Closure Wig", "Main Vendor");
@@ -657,6 +935,67 @@ describe("ProcurementViewContent", () => {
     expect(mockedHooks.updatePurchaseOrderStatus).not.toHaveBeenCalled();
   });
 
+  it("navigates from a purchase-order summary to the owning row and tab", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+
+    render(<ProcurementViewContent {...baseProps} />);
+
+    expect(screen.queryByText("Frontal Wig")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /po-draft/i }));
+
+    const plannedRow = screen.getByText("Frontal Wig").closest("article")!;
+    expect(screen.getByRole("tab", { name: /planned/i })).toHaveAttribute(
+      "data-state",
+      "active",
+    );
+    expect(plannedRow).toHaveClass("bg-muted/30");
+    await waitFor(() =>
+      expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({
+        behavior: "smooth",
+        block: "center",
+      }),
+    );
+  });
+
+  it("opens the owning page when a purchase-order summary targets a paginated row", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    const fillerRecommendations = Array.from({ length: 10 }, (_, index) => ({
+      ...plannedRecommendation,
+      _id: `sku-planned-filler-${index + 1}` as Id<"productSku">,
+      plannedPurchaseOrders: [
+        {
+          ...plannedRecommendation.plannedPurchaseOrders[0],
+          poNumber: `PO-FILLER-${index + 1}`,
+          purchaseOrderId: `po-filler-${index + 1}` as Id<"purchaseOrder">,
+        },
+      ],
+      productName: `Planned SKU ${index + 1}`,
+      sku: `PS-${index + 1}`,
+    }));
+
+    render(
+      <ProcurementViewContent
+        {...baseProps}
+        recommendations={[...fillerRecommendations, singlePlannedRecommendation]}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /po-draft/i }));
+
+    expect(screen.getByText("Showing 11-11 of 11")).toBeInTheDocument();
+    expect(screen.queryByText("Planned SKU 1")).not.toBeInTheDocument();
+    expect(screen.getByText("Frontal Wig")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({
+        behavior: "smooth",
+        block: "center",
+      }),
+    );
+  });
+
   it("opens receiving from ordered purchase orders", async () => {
     const { default: userEvent } = await import("@testing-library/user-event");
     const user = userEvent.setup();
@@ -665,11 +1004,19 @@ describe("ProcurementViewContent", () => {
 
     await user.click(screen.getByRole("tab", { name: /inbound/i }));
     const silkPressRow = screen.getByText("Silk Press Kit").closest("article")!;
+    const receiveButton = within(silkPressRow).getByRole("button", {
+      name: /receive/i,
+    });
+
+    expect(receiveButton).toHaveClass("w-[92px]");
     await user.click(
-      within(silkPressRow).getByRole("button", { name: /receive/i }),
+      receiveButton,
     );
 
     expect(screen.getByText("Receiving form for po-1")).toBeInTheDocument();
+    expect(
+      within(silkPressRow).getByRole("button", { name: /receiving/i }),
+    ).toHaveClass("w-[92px]");
     expect(
       within(silkPressRow).getByRole("button", { name: /receiving/i }),
     ).toBeDisabled();
@@ -753,6 +1100,7 @@ describe("ProcurementViewContent", () => {
       "skip",
       "skip",
       "skip",
+      "skip",
     ]);
   });
 
@@ -778,6 +1126,7 @@ describe("ProcurementViewContent", () => {
       "skip",
       "skip",
       "skip",
+      "skip",
     ]);
   });
 
@@ -785,11 +1134,13 @@ describe("ProcurementViewContent", () => {
     mockedHooks.useQuery
       .mockReturnValueOnce([])
       .mockReturnValueOnce([])
+      .mockReturnValueOnce([])
       .mockReturnValueOnce([]);
 
     render(<ProcurementView />);
 
     expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
+      { storeId: "store-1" },
       { storeId: "store-1" },
       { storeId: "store-1" },
       { status: "active", storeId: "store-1" },

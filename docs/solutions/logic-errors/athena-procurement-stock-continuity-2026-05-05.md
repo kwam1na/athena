@@ -72,6 +72,24 @@ as the row being received and open a compact receiving panel in the rail. After 
 successful receipt, close that panel instead of leaving an empty 0-unit workflow
 behind. This keeps the workspace focused on the remaining stock-continuity work.
 
+Parent navigation should land on the first useful child surface. If the sidebar
+shows a grouped area like Products, Orders, or Operations, clicking the parent
+should still navigate to the canonical route for that work area instead of only
+toggling disclosure. Disclosure can remain available, but the parent label must
+not become a dead end.
+
+Keep tab state in a domain-specific search parameter. Procurement uses
+`procurementMode`; stock adjustments use `mode` for cycle count/manual
+adjustment. Reusing a generic search key across sibling workspaces can make
+TanStack Router validate one workspace's tab as another workspace's enum and
+break navigation.
+
+Paginate long stock-pressure lists, but preserve workflow jumps. The visible
+rows can be limited to ten at a time, while counts still reflect the full
+filtered tab. When a right-rail purchase-order summary navigates to a row, first
+move to the tab and page containing that row, then perform the row-target scroll.
+Direct row selection should not auto-scroll away from the operator's cursor.
+
 ## Why This Works
 
 Operators think in terms of stock risk: what is exposed, what is already being

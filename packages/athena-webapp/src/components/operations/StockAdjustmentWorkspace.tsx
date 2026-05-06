@@ -329,6 +329,85 @@ function rowMatchesAvailabilityFilter(
   return availability === "all_available" ? isAllAvailable : !isAllAvailable;
 }
 
+export function SkuDetailPanel({
+  activeInventoryItem,
+}: {
+  activeInventoryItem: InventorySnapshotItem | null;
+}) {
+  const activeInventoryItemDetails = activeInventoryItem
+    ? getSkuDetailEntries(activeInventoryItem)
+    : [];
+
+  return (
+    <div className="space-y-layout-sm">
+      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+        SKU detail
+      </p>
+      <div className="overflow-hidden rounded-md bg-muted/30">
+        {activeInventoryItem?.imageUrl ? (
+          <img
+            alt={getInventoryItemDisplayName(activeInventoryItem)}
+            className="aspect-square w-full object-cover"
+            src={activeInventoryItem.imageUrl}
+          />
+        ) : (
+          <div className="flex aspect-square w-full items-center justify-center bg-muted">
+            <Package
+              aria-label="SKU image unavailable"
+              className="h-8 w-8 text-muted-foreground"
+            />
+          </div>
+        )}
+      </div>
+      <div className="space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          {activeInventoryItem ? (
+            <p className="line-clamp-2 text-sm font-medium text-foreground">
+              {getInventoryItemDisplayName(activeInventoryItem)}
+            </p>
+          ) : null}
+          {activeInventoryItem?.productId ? (
+            <Link
+              aria-label={`View product detail for ${getInventoryItemDisplayName(
+                activeInventoryItem,
+              )}`}
+              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              params={(prev) => ({
+                ...prev,
+                orgUrlSlug: prev.orgUrlSlug!,
+                productSlug: activeInventoryItem.productId!,
+                storeUrlSlug: prev.storeUrlSlug!,
+              })}
+              search={{
+                o: getOrigin(),
+                variant: activeInventoryItem?.sku || undefined,
+              }}
+              to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
+            >
+              View
+              <ExternalLink className="h-3 w-3" />
+            </Link>
+          ) : null}
+        </div>
+        {activeInventoryItemDetails.length > 0 ? (
+          <dl className="grid grid-cols-2 gap-x-layout-md gap-y-layout-md pt-layout-xs text-xs">
+            {activeInventoryItemDetails.map((entry) => (
+              <div className="min-w-0" key={entry.label}>
+                <dt className="font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                  {entry.label}
+                </dt>
+                <dd className="mt-0.5 truncate text-foreground capitalize">
+                  {entry.value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function StockAdjustmentWorkspaceContent({
   cycleCountDraft,
   cycleCountDraftSummary,
@@ -682,9 +761,6 @@ export function StockAdjustmentWorkspaceContent({
     inventoryItems.find((item) => item._id === activeInventoryItemId) ??
     inventoryItems[0] ??
     null;
-  const activeInventoryItemDetails = activeInventoryItem
-    ? getSkuDetailEntries(activeInventoryItem)
-    : [];
   const inventoryState = useMemo(() => {
     const totals = inventoryItems.reduce(
       (current, item) => {
@@ -1810,72 +1886,7 @@ export function StockAdjustmentWorkspaceContent({
         </section>
 
         <section className="space-y-layout-xl rounded-lg border border-border bg-surface-raised px-layout-md py-layout-md shadow-surface">
-          <div className="space-y-layout-sm">
-            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              SKU detail
-            </p>
-            <div className="overflow-hidden rounded-md bg-muted/30">
-              {activeInventoryItem?.imageUrl ? (
-                <img
-                  alt={getInventoryItemDisplayName(activeInventoryItem)}
-                  className="aspect-square w-full object-cover"
-                  src={activeInventoryItem.imageUrl}
-                />
-              ) : (
-                <div className="flex aspect-square w-full items-center justify-center bg-muted">
-                  <Package
-                    aria-label="SKU image unavailable"
-                    className="h-8 w-8 text-muted-foreground"
-                  />
-                </div>
-              )}
-            </div>
-            <div className="space-y-4">
-              <div className="flex items-start justify-between gap-3">
-                {activeInventoryItem ? (
-                  <p className="line-clamp-2 text-sm font-medium text-foreground">
-                    {getInventoryItemDisplayName(activeInventoryItem)}
-                  </p>
-                ) : null}
-                {activeInventoryItem?.productId ? (
-                  <Link
-                    aria-label={`View product detail for ${getInventoryItemDisplayName(
-                      activeInventoryItem,
-                    )}`}
-                    className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                    params={(prev) => ({
-                      ...prev,
-                      orgUrlSlug: prev.orgUrlSlug!,
-                      productSlug: activeInventoryItem.productId!,
-                      storeUrlSlug: prev.storeUrlSlug!,
-                    })}
-                    search={{
-                      o: getOrigin(),
-                      variant: activeInventoryItem?.sku || undefined,
-                    }}
-                    to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
-                  >
-                    View
-                    <ExternalLink className="h-3 w-3" />
-                  </Link>
-                ) : null}
-              </div>
-              {activeInventoryItemDetails.length > 0 ? (
-                <dl className="grid grid-cols-2 gap-x-layout-md gap-y-layout-md pt-layout-xs text-xs">
-                  {activeInventoryItemDetails.map((entry) => (
-                    <div className="min-w-0" key={entry.label}>
-                      <dt className="font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                        {entry.label}
-                      </dt>
-                      <dd className="mt-0.5 truncate text-foreground capitalize">
-                        {entry.value}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-              ) : null}
-            </div>
-          </div>
+          <SkuDetailPanel activeInventoryItem={activeInventoryItem} />
 
           <div className="space-y-2">
             <Label htmlFor="reason-code">Reason code</Label>

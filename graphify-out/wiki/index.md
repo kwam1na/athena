@@ -8,19 +8,19 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 
 ## Repo Summary
 - Code files discovered: 1594
-- Graph nodes: 4477
-- Graph edges: 4271
+- Graph nodes: 4487
+- Graph edges: 4286
 - Communities: 1522
 
 ## Graph Hotspots
 - `harness-inferential-review.ts` (46 edges, Community 0) - [`scripts/harness-inferential-review.ts`](../../scripts/harness-inferential-review.ts)
 - `storefrontJourneyEvents.ts` (45 edges, Community 1) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)
 - `createJourneyEvent()` (40 edges, Community 1) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)
-- `harness-check.ts` (32 edges, Community 2) - [`scripts/harness-check.ts`](../../scripts/harness-check.ts)
-- `harness-behavior.ts` (30 edges, Community 3) - [`scripts/harness-behavior.ts`](../../scripts/harness-behavior.ts)
-- `harness-generate.ts` (30 edges, Community 4) - [`scripts/harness-generate.ts`](../../scripts/harness-generate.ts)
-- `harness-scorecard.ts` (27 edges, Community 7) - [`scripts/harness-scorecard.ts`](../../scripts/harness-scorecard.ts)
-- `RegisterSessionView.tsx` (27 edges, Community 6) - [`packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx`](../../packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx)
+- `ProcurementView.tsx` (35 edges, Community 2) - [`packages/athena-webapp/src/components/procurement/ProcurementView.tsx`](../../packages/athena-webapp/src/components/procurement/ProcurementView.tsx)
+- `harness-check.ts` (32 edges, Community 3) - [`scripts/harness-check.ts`](../../scripts/harness-check.ts)
+- `harness-behavior.ts` (30 edges, Community 4) - [`scripts/harness-behavior.ts`](../../scripts/harness-behavior.ts)
+- `harness-generate.ts` (30 edges, Community 5) - [`scripts/harness-generate.ts`](../../scripts/harness-generate.ts)
+- `harness-scorecard.ts` (27 edges, Community 8) - [`scripts/harness-scorecard.ts`](../../scripts/harness-scorecard.ts)
 
 ## Registered Packages
 - [Athena Webapp](packages/athena-webapp.md)
