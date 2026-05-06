@@ -20,6 +20,9 @@ const rootPageSchema = z.object({
   registerSessionId: z.string().optional(),
   mode: z.enum(["cycle_count", "manual"]).optional(),
   page: z.coerce.number().int().positive().optional(),
+  procurementMode: z
+    .enum(["needs_action", "planned", "inbound", "exceptions", "resolved", "all"])
+    .optional(),
   scope: z.string().optional(),
   sku: z.string().optional(),
 });

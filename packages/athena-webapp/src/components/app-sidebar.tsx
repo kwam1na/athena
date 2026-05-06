@@ -12,7 +12,7 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 import * as Collapsible from "@radix-ui/react-collapsible";
-import type { ComponentType, ReactNode } from "react";
+import type { ComponentType, MouseEventHandler, ReactNode } from "react";
 import {
   BadgePercent,
   ChartNoAxesCombined,
@@ -43,7 +43,7 @@ import {
   Banknote,
   ChevronRight,
 } from "lucide-react";
-import { Link, useLocation } from "@tanstack/react-router";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import useGetActiveStore from "../hooks/useGetActiveStore";
 import { useGetActiveOrganization } from "../hooks/useGetOrganizations";
 import { useNewOrderNotification } from "../hooks/useNewOrderNotification";
@@ -61,6 +61,7 @@ function SidebarMenuCollapsible({
   disabled,
   defaultOpen = false,
   isActive = false,
+  onClick,
   children,
 }: {
   icon: ComponentType<{ className?: string }>;
@@ -68,6 +69,7 @@ function SidebarMenuCollapsible({
   disabled?: boolean;
   defaultOpen?: boolean;
   isActive?: boolean;
+  onClick?: MouseEventHandler<HTMLButtonElement>;
   children: ReactNode;
 }) {
   return (
@@ -81,6 +83,7 @@ function SidebarMenuCollapsible({
             disabled={disabled}
             className="w-full"
             isActive={isActive}
+            onClick={onClick}
           >
             <Icon className="w-4 h-4" />
             <p className="font-medium">{label}</p>
@@ -97,6 +100,7 @@ export function AppSidebar() {
   const { activeStore } = useGetActiveStore();
   const { activeOrganization } = useGetActiveOrganization();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const productsWithNoImages = useGetUnresolvedProducts();
 
@@ -140,6 +144,8 @@ export function AppSidebar() {
 
   const { canAccessOperations, hasFullAdminAccess } = usePermissions();
   const isOperationsRoute = location.pathname.includes("/operations");
+  const isOrdersRoute = location.pathname.includes("/orders");
+  const isProductsRoute = location.pathname.includes("/products");
 
   if (!activeStore || !activeOrganization) {
     return null;
@@ -194,7 +200,17 @@ export function AppSidebar() {
                 defaultOpen={isOperationsRoute}
                 disabled={!canAccessOperations()}
                 icon={Layers}
+                isActive={isOperationsRoute}
                 label="Operations"
+                onClick={() => {
+                  void navigate({
+                    to: "/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments",
+                    params: {
+                      orgUrlSlug: activeOrganization.slug,
+                      storeUrlSlug: activeStore.slug,
+                    },
+                  });
+                }}
               >
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
@@ -315,9 +331,20 @@ export function AppSidebar() {
 
               {/* Orders section */}
               <SidebarMenuCollapsible
+                defaultOpen={isOrdersRoute}
                 icon={ShoppingBag}
+                isActive={isOrdersRoute}
                 label="Orders"
                 disabled={!hasFullAdminAccess}
+                onClick={() => {
+                  void navigate({
+                    to: "/$orgUrlSlug/store/$storeUrlSlug/orders",
+                    params: {
+                      orgUrlSlug: activeOrganization.slug,
+                      storeUrlSlug: activeStore.slug,
+                    },
+                  });
+                }}
               >
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
@@ -477,7 +504,21 @@ export function AppSidebar() {
               </SidebarMenuCollapsible>
 
               {/* Products section */}
-              <SidebarMenuCollapsible icon={Tag} label="Products">
+              <SidebarMenuCollapsible
+                defaultOpen={isProductsRoute}
+                icon={Tag}
+                isActive={isProductsRoute}
+                label="Products"
+                onClick={() => {
+                  void navigate({
+                    to: "/$orgUrlSlug/store/$storeUrlSlug/products",
+                    params: {
+                      orgUrlSlug: activeOrganization.slug,
+                      storeUrlSlug: activeStore.slug,
+                    },
+                  });
+                }}
+              >
                 {categories?.map((category) => (
                   <SidebarMenuSub key={category._id}>
                     <SidebarMenuSubItem>
