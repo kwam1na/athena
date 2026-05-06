@@ -196,7 +196,7 @@ const STOCK_ADJUSTMENT_AVAILABILITY_FILTER_LABELS: Record<
   all: "All SKUs",
   all_available: "All available",
   changed: "Changed SKUs",
-  unavailable: "Unavailable",
+  unavailable: "Reserved",
 };
 
 function getCountScopeKey(item: InventorySnapshotItem) {
@@ -742,7 +742,7 @@ export function StockAdjustmentWorkspaceContent({
                 "SKU",
               )} ${
                 totals.unavailableSkuCount === 1 ? "has" : "have"
-              } unavailable units.`
+              } reserved units.`
             : "All inventory is available.",
     };
   }, [inventoryItems]);
@@ -1319,7 +1319,7 @@ export function StockAdjustmentWorkspaceContent({
                   type="button"
                 >
                   <span className="block text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                    Unavailable
+                    Reserved
                   </span>
                   <span className="mt-1 block text-sm font-medium tabular-nums text-foreground">
                     {formatInventoryNumber(inventoryState.unavailableUnits)}

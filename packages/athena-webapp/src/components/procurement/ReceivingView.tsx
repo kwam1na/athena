@@ -2,9 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation } from "convex/react";
 import { toast } from "sonner";
 
-import View from "../View";
 import { Input } from "../ui/input";
-import { Label } from "../ui/label";
 import { LoadingButton } from "../ui/loading-button";
 import type { Id } from "~/convex/_generated/dataModel";
 import { api } from "~/convex/_generated/api";
@@ -21,6 +19,7 @@ type ReceivingViewLineItem = {
 
 type ReceivingViewProps = {
   lineItems: ReceivingViewLineItem[];
+  onReceived?: () => void;
   purchaseOrderId: Id<"purchaseOrder">;
   storeId: Id<"store">;
 };
@@ -34,24 +33,38 @@ function buildSubmissionKey(purchaseOrderId: Id<"purchaseOrder">) {
   return `receive-${purchaseOrderId}-${Date.now().toString(36)}`;
 }
 
+function parseLineItemDescription(lineItem: ReceivingViewLineItem) {
+  const label = lineItem.description ?? lineItem.productSkuId;
+  const skuMatch = label.match(/^(?<name>.+) \((?<sku>[^)]+)\)$/);
+
+  if (!skuMatch?.groups) {
+    return { name: label, sku: undefined };
+  }
+
+  return {
+    name: skuMatch.groups.name,
+    sku: skuMatch.groups.sku,
+  };
+}
+
 function buildDefaultReceivedQuantities(lineItems: ReceivingViewLineItem[]) {
   return Object.fromEntries(
     lineItems.map((lineItem) => [
       lineItem._id,
       String(Math.max(0, lineItem.orderedQuantity - lineItem.receivedQuantity)),
-    ])
+    ]),
   );
 }
 
 function buildReceivedQuantitiesAfterSubmission(
   lineItems: ReceivingViewLineItem[],
-  batchLineItems: ReceivingBatchLineItem[]
+  batchLineItems: ReceivingBatchLineItem[],
 ) {
   const receivedByLineItemId = new Map(
     batchLineItems.map((lineItem) => [
       lineItem.purchaseOrderLineItemId,
       lineItem.receivedQuantity,
-    ])
+    ]),
   );
 
   return Object.fromEntries(
@@ -62,27 +75,28 @@ function buildReceivedQuantitiesAfterSubmission(
           0,
           lineItem.orderedQuantity -
             lineItem.receivedQuantity -
-            (receivedByLineItemId.get(lineItem._id) ?? 0)
-        )
+            (receivedByLineItemId.get(lineItem._id) ?? 0),
+        ),
       ),
-    ])
+    ]),
   );
 }
 
 export function ReceivingView({
   lineItems,
+  onReceived,
   purchaseOrderId,
   storeId,
 }: ReceivingViewProps) {
   const receivePurchaseOrderBatch = useMutation(
-    api.stockOps.receiving.receivePurchaseOrderBatch
+    api.stockOps.receiving.receivePurchaseOrderBatch,
   );
   const [submissionKey, setSubmissionKey] = useState(() =>
-    buildSubmissionKey(purchaseOrderId)
+    buildSubmissionKey(purchaseOrderId),
   );
-  const [receivedQuantities, setReceivedQuantities] = useState<Record<string, string>>(
-    () => buildDefaultReceivedQuantities(lineItems)
-  );
+  const [receivedQuantities, setReceivedQuantities] = useState<
+    Record<string, string>
+  >(() => buildDefaultReceivedQuantities(lineItems));
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -95,9 +109,9 @@ export function ReceivingView({
         (total, lineItem) =>
           total +
           Math.max(0, lineItem.orderedQuantity - lineItem.receivedQuantity),
-        0
+        0,
       ),
-    [lineItems]
+    [lineItems],
   );
 
   const handleSubmit = async () => {
@@ -123,7 +137,7 @@ export function ReceivingView({
           receivedByUserId: undefined,
           storeId,
           submissionKey,
-        })
+        }),
       );
 
       if (result.kind !== "ok") {
@@ -133,64 +147,64 @@ export function ReceivingView({
 
       toast.success("Receiving batch recorded");
       setReceivedQuantities(
-        buildReceivedQuantitiesAfterSubmission(lineItems, batchLineItems)
+        buildReceivedQuantitiesAfterSubmission(lineItems, batchLineItems),
       );
       setSubmissionKey(buildSubmissionKey(purchaseOrderId));
+      onReceived?.();
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <View
-      hideBorder
-      hideHeaderBottomBorder
-      header={
-        <div className="container mx-auto flex h-[40px] items-center">
-          <p className="text-xl font-medium">Receiving</p>
-        </div>
-      }
-    >
-      <div className="container mx-auto space-y-6 py-8">
+    <div className="space-y-layout-md">
+      <p className="text-sm text-muted-foreground">
+        <span className="font-medium text-foreground">{remainingTotal}</span>{" "}
+        units remaining
+      </p>
+
+      <div className="space-y-layout-md">
         <div className="space-y-2">
-          <p className="text-sm text-muted-foreground">
-            Record a purchase-order receipt without bypassing inventory
-            movements.
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Remaining units on this order: {remainingTotal}
-          </p>
-        </div>
+          {lineItems.map((lineItem) => {
+            const displayItem = parseLineItemDescription(lineItem);
 
-        <div className="space-y-4 rounded-md border p-4">
-          <div className="space-y-2">
-            <Label htmlFor="submission-key">Submission key</Label>
-            <Input
-              id="submission-key"
-              onChange={(event) => setSubmissionKey(event.target.value)}
-              value={submissionKey}
-            />
-          </div>
+            return (
+              <div
+                className="space-y-3 rounded-md border border-border bg-surface px-3 py-3"
+                key={lineItem._id}
+              >
+                <div className="min-w-0 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-medium capitalize text-foreground">
+                      {displayItem.name}
+                    </p>
+                    {displayItem.sku ? (
+                      <span className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                        {displayItem.sku}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Ordered {lineItem.orderedQuantity} · Received{" "}
+                    {lineItem.receivedQuantity}
+                  </p>
+                </div>
 
-          <div className="space-y-4">
-            {lineItems.map((lineItem) => (
-              <div className="grid gap-2 rounded-md border p-3" key={lineItem._id}>
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-medium">
-                      {lineItem.description ?? lineItem.productSkuId}
+                <div className="flex items-end justify-between gap-layout-md border-t border-border/70 pt-3">
+                  <div className="min-w-0 space-y-1">
+                    <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                      Receive now
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Ordered {lineItem.orderedQuantity} · Received{" "}
-                      {lineItem.receivedQuantity}
+                      Enter units from this delivery.
                     </p>
                   </div>
                   <Input
-                    className="max-w-28"
-                    min={0}
                     aria-label={`Received quantity for ${
                       lineItem.description ?? lineItem.productSkuId
                     }`}
+                    className="h-9 max-w-24 text-right"
+                    min={0}
                     onChange={(event) =>
                       setReceivedQuantities((current) => ({
                         ...current,
@@ -202,14 +216,19 @@ export function ReceivingView({
                   />
                 </div>
               </div>
-            ))}
-          </div>
-
-          <LoadingButton isLoading={isSubmitting} onClick={handleSubmit}>
-            Record receiving batch
-          </LoadingButton>
+            );
+          })}
         </div>
+
+        <LoadingButton
+          className="w-full"
+          isLoading={isSubmitting}
+          onClick={handleSubmit}
+          variant="workflow"
+        >
+          Record receiving batch
+        </LoadingButton>
       </div>
-    </View>
+    </div>
   );
 }

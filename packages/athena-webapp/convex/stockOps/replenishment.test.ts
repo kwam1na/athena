@@ -2,9 +2,7 @@ import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
-import {
-  listReplenishmentRecommendationsWithCtx,
-} from "./replenishment";
+import { listReplenishmentRecommendationsWithCtx } from "./replenishment";
 
 function getSource(relativePath: string) {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8");
@@ -88,6 +86,7 @@ function createReplenishmentQueryCtx() {
           poNumber: "PO-001",
           status: "ordered",
           storeId: "store-1",
+          vendorId: "vendor-1",
         },
       ],
     ]),
@@ -128,6 +127,13 @@ function createReplenishmentQueryCtx() {
 
   const ctx = {
     db: {
+      async get(table: "vendor", id: string) {
+        if (table !== "vendor") {
+          throw new Error(`Unexpected get table: ${table}`);
+        }
+
+        return tables.vendor.get(id) ?? null;
+      },
       query(table: keyof typeof tables) {
         if (table === "productSku") {
           return {
@@ -135,7 +141,7 @@ function createReplenishmentQueryCtx() {
               _index: string,
               applyIndex: (queryBuilder: {
                 eq: (field: string, value: unknown) => unknown;
-              }) => unknown
+              }) => unknown,
             ) {
               let storeId: unknown;
               const queryBuilder = {
@@ -152,8 +158,8 @@ function createReplenishmentQueryCtx() {
 
               return toAsyncIterable(
                 Array.from(tables.productSku.values()).filter(
-                  (record) => record.storeId === storeId
-                )
+                  (record) => record.storeId === storeId,
+                ),
               );
             },
           };
@@ -165,7 +171,7 @@ function createReplenishmentQueryCtx() {
               _index: string,
               applyIndex: (queryBuilder: {
                 eq: (field: string, value: unknown) => unknown;
-              }) => unknown
+              }) => unknown,
             ) {
               let status: unknown;
               let storeId: unknown;
@@ -188,8 +194,8 @@ function createReplenishmentQueryCtx() {
               return toAsyncIterable(
                 Array.from(tables.purchaseOrder.values()).filter(
                   (record) =>
-                    record.storeId === storeId && record.status === status
-                )
+                    record.storeId === storeId && record.status === status,
+                ),
               );
             },
           };
@@ -201,7 +207,7 @@ function createReplenishmentQueryCtx() {
               _index: string,
               applyIndex: (queryBuilder: {
                 eq: (field: string, value: unknown) => unknown;
-              }) => unknown
+              }) => unknown,
             ) {
               let purchaseOrderId: unknown;
               const queryBuilder = {
@@ -218,8 +224,8 @@ function createReplenishmentQueryCtx() {
 
               return toAsyncIterable(
                 Array.from(tables.purchaseOrderLineItem.values()).filter(
-                  (record) => record.purchaseOrderId === purchaseOrderId
-                )
+                  (record) => record.purchaseOrderId === purchaseOrderId,
+                ),
               );
             },
           };
@@ -231,7 +237,7 @@ function createReplenishmentQueryCtx() {
               _index: string,
               applyIndex: (queryBuilder: {
                 eq: (field: string, value: unknown) => unknown;
-              }) => unknown
+              }) => unknown,
             ) {
               let status: unknown;
               let storeId: unknown;
@@ -254,8 +260,8 @@ function createReplenishmentQueryCtx() {
               return toAsyncIterable(
                 Array.from(tables.vendor.values()).filter(
                   (record) =>
-                    record.storeId === storeId && record.status === status
-                )
+                    record.storeId === storeId && record.status === status,
+                ),
               );
             },
           };
@@ -306,12 +312,14 @@ describe("stock ops replenishment", () => {
       status: "inbound",
       suggestedOrderQuantity: 0,
     });
-    expect(result.find((item) => item._id === "sku-constrained")).toMatchObject({
-      productName: "Silk Press Kit",
-      recommendationStatus: "availability_constrained",
-      status: "exposed",
-      suggestedOrderQuantity: 0,
-    });
+    expect(result.find((item) => item._id === "sku-constrained")).toMatchObject(
+      {
+        productName: "Silk Press Kit",
+        recommendationStatus: "availability_constrained",
+        status: "exposed",
+        suggestedOrderQuantity: 0,
+      },
+    );
   });
 
   it("keeps a continuity row partially covered when inbound units still leave the shelf below target", async () => {
@@ -348,6 +356,7 @@ describe("stock ops replenishment", () => {
       poNumber: "PO-002",
       status: "approved",
       storeId: "store-1",
+      vendorId: "vendor-1",
     });
     tables.purchaseOrderLineItem.set("line-planned", {
       _id: "line-planned",
@@ -375,6 +384,7 @@ describe("stock ops replenishment", () => {
       expect.objectContaining({
         poNumber: "PO-002",
         status: "approved",
+        vendorName: "Primary Vendor",
       }),
     ]);
     expect(plannedItem?.pendingPurchaseOrders).toEqual([]);
@@ -422,6 +432,7 @@ describe("stock ops replenishment", () => {
       poNumber: "PO-STALE",
       status: "submitted",
       storeId: "store-1",
+      vendorId: "vendor-1",
     });
     tables.purchaseOrder.set("po-late", {
       _id: "po-late",
@@ -429,6 +440,7 @@ describe("stock ops replenishment", () => {
       poNumber: "PO-LATE",
       status: "ordered",
       storeId: "store-1",
+      vendorId: "vendor-1",
     });
     tables.purchaseOrder.set("po-short", {
       _id: "po-short",
@@ -436,6 +448,7 @@ describe("stock ops replenishment", () => {
       poNumber: "PO-SHORT",
       status: "partially_received",
       storeId: "store-1",
+      vendorId: "vendor-1",
     });
     tables.purchaseOrder.set("po-cancelled", {
       _id: "po-cancelled",
@@ -443,6 +456,7 @@ describe("stock ops replenishment", () => {
       poNumber: "PO-CANCELLED",
       status: "cancelled",
       storeId: "store-1",
+      vendorId: "vendor-1",
     });
 
     tables.purchaseOrderLineItem.set("line-stale", {
@@ -484,7 +498,7 @@ describe("stock ops replenishment", () => {
       storeId: "store-1" as Id<"store">,
     });
     const statusBySku = new Map(
-      result.map((item) => [String(item._id), item.status])
+      result.map((item) => [String(item._id), item.status]),
     );
 
     expect(statusBySku.get("sku-reorder")).toBe("vendor_missing");
@@ -504,6 +518,7 @@ describe("stock ops replenishment", () => {
       receivedAt: Date.now(),
       status: "received",
       storeId: "store-1",
+      vendorId: "vendor-1",
     });
     tables.purchaseOrderLineItem.set("line-received", {
       _id: "line-received",
@@ -539,6 +554,7 @@ describe("stock ops replenishment", () => {
       poNumber: "PO-OTHER",
       status: "ordered",
       storeId: "store-2",
+      vendorId: "vendor-other-store",
     });
     tables.purchaseOrderLineItem.set("line-other-store", {
       _id: "line-other-store",
@@ -562,8 +578,8 @@ describe("stock ops replenishment", () => {
     });
     expect(
       reorderItem?.pendingPurchaseOrders.some(
-        (purchaseOrder) => purchaseOrder.poNumber === "PO-OTHER"
-      )
+        (purchaseOrder) => purchaseOrder.poNumber === "PO-OTHER",
+      ),
     ).toBe(false);
   });
 

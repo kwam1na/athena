@@ -55,6 +55,12 @@ const updatePurchaseOrderStatusArgs = {
   notes: v.optional(v.string()),
 };
 
+const advancePurchaseOrderToOrderedArgs = {
+  purchaseOrderId: v.id("purchaseOrder"),
+  actorUserId: v.optional(v.id("athenaUser")),
+  notes: v.optional(v.string()),
+};
+
 type PurchaseOrderStatus = keyof typeof PURCHASE_ORDER_TRANSITIONS;
 
 type CreatePurchaseOrderArgs = {
@@ -75,6 +81,12 @@ type CreatePurchaseOrderArgs = {
 type UpdatePurchaseOrderStatusArgs = {
   purchaseOrderId: Id<"purchaseOrder">;
   nextStatus: PurchaseOrderStatus;
+  actorUserId?: Id<"athenaUser">;
+  notes?: string;
+};
+
+type AdvancePurchaseOrderToOrderedArgs = {
+  purchaseOrderId: Id<"purchaseOrder">;
   actorUserId?: Id<"athenaUser">;
   notes?: string;
 };
@@ -495,7 +507,15 @@ export async function updatePurchaseOrderStatusWithCtx(
     workItemId: purchaseOrder.operationalWorkItemId,
   });
 
-  return ctx.db.get("purchaseOrder", args.purchaseOrderId);
+  const updatedPurchaseOrder = await ctx.db.get(
+    "purchaseOrder",
+    args.purchaseOrderId,
+  );
+  if (!updatedPurchaseOrder) {
+    throw new Error("Purchase order not found.");
+  }
+
+  return updatedPurchaseOrder;
 }
 
 export async function updatePurchaseOrderStatusCommandWithCtx(
@@ -504,6 +524,63 @@ export async function updatePurchaseOrderStatusCommandWithCtx(
 ): Promise<CommandResult<any>> {
   try {
     return ok(await updatePurchaseOrderStatusWithCtx(ctx, args));
+  } catch (error) {
+    const result = mapPurchaseOrderCommandError(error);
+
+    if (result) {
+      return result;
+    }
+
+    throw error;
+  }
+}
+
+function getStatusesToOrdered(currentStatus: PurchaseOrderStatus) {
+  switch (currentStatus) {
+    case "draft":
+      return ["submitted", "approved", "ordered"] as const;
+    case "submitted":
+      return ["approved", "ordered"] as const;
+    case "approved":
+      return ["ordered"] as const;
+    case "ordered":
+      return [] as const;
+    default:
+      assertValidPurchaseOrderStatusTransition(currentStatus, "ordered");
+      return [] as const;
+  }
+}
+
+export async function advancePurchaseOrderToOrderedWithCtx(
+  ctx: MutationCtx,
+  args: AdvancePurchaseOrderToOrderedArgs,
+) {
+  const purchaseOrder = await ctx.db.get("purchaseOrder", args.purchaseOrderId);
+  if (!purchaseOrder) {
+    throw new Error("Purchase order not found.");
+  }
+
+  const nextStatuses = getStatusesToOrdered(purchaseOrder.status);
+  let currentPurchaseOrder = purchaseOrder;
+
+  for (const nextStatus of nextStatuses) {
+    currentPurchaseOrder = await updatePurchaseOrderStatusWithCtx(ctx, {
+      actorUserId: args.actorUserId,
+      nextStatus,
+      notes: args.notes,
+      purchaseOrderId: args.purchaseOrderId,
+    });
+  }
+
+  return currentPurchaseOrder;
+}
+
+export async function advancePurchaseOrderToOrderedCommandWithCtx(
+  ctx: MutationCtx,
+  args: AdvancePurchaseOrderToOrderedArgs,
+): Promise<CommandResult<any>> {
+  try {
+    return ok(await advancePurchaseOrderToOrderedWithCtx(ctx, args));
   } catch (error) {
     const result = mapPurchaseOrderCommandError(error);
 
@@ -525,4 +602,11 @@ export const updatePurchaseOrderStatusCommand = mutation({
   returns: commandResultValidator(v.any()),
   handler: async (ctx, args) =>
     updatePurchaseOrderStatusCommandWithCtx(ctx, args),
+});
+
+export const advancePurchaseOrderToOrderedCommand = mutation({
+  args: advancePurchaseOrderToOrderedArgs,
+  returns: commandResultValidator(v.any()),
+  handler: async (ctx, args) =>
+    advancePurchaseOrderToOrderedCommandWithCtx(ctx, args),
 });

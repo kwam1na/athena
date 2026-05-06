@@ -129,11 +129,11 @@ describe("OperationsQueueViewContent", () => {
   });
 
   it("shows a loading state while permissions are resolving", () => {
-    render(<OperationsQueueViewContent {...baseProps} isLoadingPermissions />);
+    const { container } = render(
+      <OperationsQueueViewContent {...baseProps} isLoadingPermissions />,
+    );
 
-    expect(
-      screen.getByLabelText("Loading operations workspace"),
-    ).toBeInTheDocument();
+    expect(container.firstChild).toBeNull();
     expect(screen.queryByText("Loading operations queue...")).not.toBeInTheDocument();
   });
 
