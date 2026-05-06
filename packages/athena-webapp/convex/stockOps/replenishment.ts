@@ -35,7 +35,8 @@ type ContinuityStatus =
   | "cancelled_cover"
   | "resolved";
 
-type PurchaseOrderContextStatus = (typeof PURCHASE_ORDER_CONTEXT_STATUSES)[number];
+type PurchaseOrderContextStatus =
+  (typeof PURCHASE_ORDER_CONTEXT_STATUSES)[number];
 type PlannedContextStatus = (typeof PLANNED_CONTEXT_STATUSES)[number];
 type InboundCoverStatus = (typeof INBOUND_COVER_STATUSES)[number];
 
@@ -53,6 +54,7 @@ type PurchaseOrderLineContext = {
   receivedQuantity: number;
   status: PurchaseOrderContextStatus;
   vendorId: Id<"vendor">;
+  vendorName?: string;
 };
 
 type SkuContinuityContext = {
@@ -157,14 +159,14 @@ async function listStorePurchaseOrdersByStatus(
   args: {
     status: PurchaseOrderContextStatus;
     storeId: Id<"store">;
-  }
+  },
 ) {
   const purchaseOrders = [];
 
   for await (const purchaseOrder of ctx.db
     .query("purchaseOrder")
     .withIndex("by_storeId_status", (q) =>
-      q.eq("storeId", args.storeId).eq("status", args.status)
+      q.eq("storeId", args.storeId).eq("status", args.status),
     )) {
     purchaseOrders.push(purchaseOrder);
   }
@@ -178,7 +180,7 @@ async function listActiveStoreVendors(ctx: QueryCtx, storeId: Id<"store">) {
   for await (const vendor of ctx.db
     .query("vendor")
     .withIndex("by_storeId_status", (q) =>
-      q.eq("storeId", storeId).eq("status", "active")
+      q.eq("storeId", storeId).eq("status", "active"),
     )) {
     vendors.push(vendor);
 
@@ -192,14 +194,14 @@ async function listActiveStoreVendors(ctx: QueryCtx, storeId: Id<"store">) {
 
 async function listPurchaseOrderLineItems(
   ctx: QueryCtx,
-  purchaseOrderId: Id<"purchaseOrder">
+  purchaseOrderId: Id<"purchaseOrder">,
 ) {
   const lineItems = [];
 
   for await (const lineItem of ctx.db
     .query("purchaseOrderLineItem")
     .withIndex("by_purchaseOrderId", (q) =>
-      q.eq("purchaseOrderId", purchaseOrderId)
+      q.eq("purchaseOrderId", purchaseOrderId),
     )) {
     lineItems.push(lineItem);
   }
@@ -208,13 +210,13 @@ async function listPurchaseOrderLineItems(
 }
 
 function isPlannedStatus(
-  status: PurchaseOrderContextStatus
+  status: PurchaseOrderContextStatus,
 ): status is PlannedContextStatus {
   return PLANNED_CONTEXT_STATUSES.includes(status as PlannedContextStatus);
 }
 
 function isInboundStatus(
-  status: PurchaseOrderContextStatus
+  status: PurchaseOrderContextStatus,
 ): status is InboundCoverStatus {
   return INBOUND_COVER_STATUSES.includes(status as InboundCoverStatus);
 }
@@ -234,17 +236,18 @@ function getPlannedActionAt(purchaseOrder: {
 function getStartOfCurrentDay(timestamp: number) {
   const date = new Date(timestamp);
 
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  return new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+  ).getTime();
 }
 
-function hasStalePlannedAction(
-  context: SkuContinuityContext,
-  now: number
-) {
+function hasStalePlannedAction(context: SkuContinuityContext, now: number) {
   return context.plannedPurchaseOrders.some(
     (purchaseOrder) =>
       purchaseOrder.actionAt !== undefined &&
-      now - purchaseOrder.actionAt > PLANNED_ACTION_STALE_AFTER_MS
+      now - purchaseOrder.actionAt > PLANNED_ACTION_STALE_AFTER_MS,
   );
 }
 
@@ -255,12 +258,12 @@ function hasLateInbound(context: SkuContinuityContext, now: number) {
     (purchaseOrder) =>
       purchaseOrder.expectedAt !== undefined &&
       purchaseOrder.expectedAt < lateBefore &&
-      purchaseOrder.pendingQuantity > 0
+      purchaseOrder.pendingQuantity > 0,
   );
 }
 
 function sortPurchaseOrderContexts<T extends PurchaseOrderLineContext>(
-  purchaseOrders: T[]
+  purchaseOrders: T[],
 ) {
   purchaseOrders.sort((left, right) => {
     const leftSortAt =
@@ -288,26 +291,27 @@ function sortPurchaseOrderContexts<T extends PurchaseOrderLineContext>(
 
 async function buildSkuContinuityContextById(
   ctx: QueryCtx,
-  storeId: Id<"store">
+  storeId: Id<"store">,
 ) {
   const skuContinuityContextById = new Map<string, SkuContinuityContext>();
   const purchaseOrdersByStatus = await Promise.all(
     PURCHASE_ORDER_CONTEXT_STATUSES.map((status) =>
-      listStorePurchaseOrdersByStatus(ctx, { status, storeId })
-    )
+      listStorePurchaseOrdersByStatus(ctx, { status, storeId }),
+    ),
   );
 
   for (const purchaseOrder of purchaseOrdersByStatus.flat()) {
     const lineItems = await listPurchaseOrderLineItems(ctx, purchaseOrder._id);
+    const vendor = await ctx.db.get("vendor", purchaseOrder.vendorId);
 
-    lineItems.forEach((lineItem) => {
+    for (const lineItem of lineItems) {
       if (String(lineItem.storeId) !== String(storeId)) {
-        return;
+        continue;
       }
 
       const pendingQuantity = Math.max(
         lineItem.orderedQuantity - lineItem.receivedQuantity,
-        0
+        0,
       );
 
       const key = String(lineItem.productSkuId);
@@ -335,6 +339,7 @@ async function buildSkuContinuityContextById(
         receivedQuantity: lineItem.receivedQuantity,
         status: purchaseOrder.status,
         vendorId: purchaseOrder.vendorId,
+        vendorName: vendor?.name,
       };
 
       if (isPlannedStatus(purchaseOrder.status) && pendingQuantity > 0) {
@@ -366,13 +371,16 @@ async function buildSkuContinuityContextById(
         currentContext.cancelledPurchaseOrders.push(lineContext);
       }
 
-      if (purchaseOrder.status === "received" && lineItem.receivedQuantity > 0) {
+      if (
+        purchaseOrder.status === "received" &&
+        lineItem.receivedQuantity > 0
+      ) {
         currentContext.receivedQuantity += lineItem.receivedQuantity;
         currentContext.receivedPurchaseOrders.push(lineContext);
       }
 
       skuContinuityContextById.set(key, currentContext);
-    });
+    }
   }
 
   skuContinuityContextById.forEach((context) => {
@@ -420,7 +428,7 @@ function deriveContinuityStatus(args: {
   const hasReceived = (args.context?.receivedQuantity ?? 0) > 0;
   const hasPartiallyReceivedInbound =
     args.context?.inboundPurchaseOrders.some(
-      (purchaseOrder) => purchaseOrder.status === "partially_received"
+      (purchaseOrder) => purchaseOrder.status === "partially_received",
     ) ?? false;
 
   if (!args.hasPressure) {
@@ -466,13 +474,14 @@ export async function listReplenishmentRecommendationsWithCtx(
   ctx: QueryCtx,
   args: {
     storeId: Id<"store">;
-  }
+  },
 ) {
-  const [activeVendors, productSkus, skuContinuityContextById] = await Promise.all([
-    listActiveStoreVendors(ctx, args.storeId),
-    listStoreProductSkus(ctx, args.storeId),
-    buildSkuContinuityContextById(ctx, args.storeId),
-  ]);
+  const [activeVendors, productSkus, skuContinuityContextById] =
+    await Promise.all([
+      listActiveStoreVendors(ctx, args.storeId),
+      listStoreProductSkus(ctx, args.storeId),
+      buildSkuContinuityContextById(ctx, args.storeId),
+    ]);
   const hasActiveVendor = activeVendors.length > 0;
   const now = Date.now();
 
@@ -496,7 +505,7 @@ export async function listReplenishmentRecommendationsWithCtx(
             DEFAULT_REPLENISHMENT_TARGET -
               productSku.inventoryCount -
               inboundQuantity,
-            0
+            0,
           )
         : 0;
       const actionGap = lowInventory
@@ -561,8 +570,7 @@ export async function listReplenishmentRecommendationsWithCtx(
             "cancelled_cover",
           ].includes(status),
           nextExpectedAt: context?.nextExpectedAt,
-          pendingPurchaseOrderCount:
-            context?.inboundPurchaseOrders.length ?? 0,
+          pendingPurchaseOrderCount: context?.inboundPurchaseOrders.length ?? 0,
           pendingPurchaseOrderQuantity: inboundQuantity,
           pendingPurchaseOrders: context?.inboundPurchaseOrders ?? [],
           plannedPurchaseOrderCount: context?.plannedPurchaseOrders.length ?? 0,

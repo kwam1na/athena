@@ -45,11 +45,9 @@ describe("OperationsQueueView auth readiness", () => {
       isLoadingAccess: true,
     });
 
-    render(<OperationsQueueView />);
+    const { container } = render(<OperationsQueueView />);
 
-    expect(
-      screen.getByLabelText("Loading operations workspace"),
-    ).toBeInTheDocument();
+    expect(container.firstChild).toBeNull();
     expect(screen.queryByText("Loading operations queue...")).not.toBeInTheDocument();
     expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
       "skip",

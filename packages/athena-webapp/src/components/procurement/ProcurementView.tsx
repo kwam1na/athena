@@ -9,11 +9,21 @@ import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { PanelHeader } from "../ui/panel-header";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
+import { Skeleton } from "../ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
 import { ReceivingView } from "./ReceivingView";
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { presentCommandToast } from "@/lib/errors/presentCommandToast";
 import { runCommand } from "@/lib/errors/runCommand";
+import { cn } from "@/lib/utils";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 
@@ -44,6 +54,7 @@ type PurchaseOrderReference = {
   poNumber: string;
   purchaseOrderId: Id<"purchaseOrder">;
   status: PurchaseOrderStatus;
+  vendorName?: string;
 };
 
 type ReplenishmentRecommendation = {
@@ -120,11 +131,13 @@ const MODE_OPTIONS = [
   { label: "Planned", value: "planned" as const },
   { label: "Inbound", value: "inbound" as const },
   { label: "Exceptions", value: "exceptions" as const },
-  { label: "Resolved", value: "resolved" as const },
+  { label: "Handled", value: "resolved" as const },
   { label: "All", value: "all" as const },
 ] as const;
 
 type ProcurementMode = (typeof MODE_OPTIONS)[number]["value"];
+
+const UNASSIGNED_VENDOR_VALUE = "unassigned-vendor";
 
 const ACTIVE_PROCUREMENT_STATUSES = [
   "draft",
@@ -134,10 +147,7 @@ const ACTIVE_PROCUREMENT_STATUSES = [
   "partially_received",
 ] as const;
 
-const PLANNED_STATES: ContinuityState[] = [
-  "planned",
-  "stale_planned_action",
-];
+const PLANNED_STATES: ContinuityState[] = ["planned", "stale_planned_action"];
 
 const INBOUND_STATES: ContinuityState[] = [
   "inbound",
@@ -177,8 +187,7 @@ function getContinuityStateCopy(status: ContinuityState) {
       };
     case "inbound":
       return {
-        badgeClassName:
-          "border-success/30 bg-success/10 text-success-foreground",
+        badgeClassName: "border-success/30 bg-success/10 text-success",
         label: "Inbound",
       };
     case "late_inbound":
@@ -195,14 +204,13 @@ function getContinuityStateCopy(status: ContinuityState) {
       };
     case "planned":
       return {
-        badgeClassName:
-          "border-action-workflow-border bg-action-workflow-soft text-action-workflow",
+        badgeClassName: "border-border bg-muted/50 text-muted-foreground",
         label: "Planned",
       };
     case "resolved":
       return {
         badgeClassName: "border-border bg-muted/50 text-foreground",
-        label: "Resolved",
+        label: "Handled",
       };
     case "short_receipt":
       return {
@@ -224,6 +232,120 @@ function getContinuityStateCopy(status: ContinuityState) {
   }
 }
 
+function formatUnitCount(count: number) {
+  return `${count} ${count === 1 ? "unit" : "units"}`;
+}
+
+function formatLineCount(count: number) {
+  return `${count} ${count === 1 ? "line" : "lines"}`;
+}
+
+function formatPurchaseOrderCount(count: number) {
+  return `${count} purchase order${count === 1 ? "" : "s"}`;
+}
+
+function getUniquePurchaseOrderReferences(
+  recommendation: ReplenishmentRecommendation,
+) {
+  const purchaseOrderReferencesById = new Map<string, PurchaseOrderReference>();
+
+  [
+    ...(recommendation.plannedPurchaseOrders ?? []),
+    ...(recommendation.inboundPurchaseOrders ?? []),
+    ...recommendation.pendingPurchaseOrders,
+  ].forEach((purchaseOrder) => {
+    purchaseOrderReferencesById.set(
+      String(purchaseOrder.purchaseOrderId),
+      purchaseOrder,
+    );
+  });
+
+  return [...purchaseOrderReferencesById.values()];
+}
+
+function getUniqueVendorCount(purchaseOrders: PurchaseOrderReference[]) {
+  return new Set(
+    purchaseOrders
+      .map((purchaseOrder) => purchaseOrder.vendorName)
+      .filter(Boolean),
+  ).size;
+}
+
+function hasPlannedPurchaseOrderCover(
+  recommendation: Pick<
+    ReplenishmentRecommendation,
+    "plannedPurchaseOrderCount" | "plannedPurchaseOrderQuantity"
+  >,
+) {
+  return (
+    (recommendation.plannedPurchaseOrderCount ?? 0) > 0 ||
+    (recommendation.plannedPurchaseOrderQuantity ?? 0) > 0
+  );
+}
+
+function hasInboundPurchaseOrderCover(
+  recommendation: Pick<
+    ReplenishmentRecommendation,
+    "inboundPurchaseOrderCount" | "inboundPurchaseOrderQuantity"
+  >,
+) {
+  return (
+    (recommendation.inboundPurchaseOrderCount ?? 0) > 0 ||
+    (recommendation.inboundPurchaseOrderQuantity ?? 0) > 0
+  );
+}
+
+function hasMixedPurchaseOrderCover(
+  recommendation: Pick<
+    ReplenishmentRecommendation,
+    | "inboundPurchaseOrderCount"
+    | "inboundPurchaseOrderQuantity"
+    | "plannedPurchaseOrderCount"
+    | "plannedPurchaseOrderQuantity"
+  >,
+) {
+  return (
+    hasPlannedPurchaseOrderCover(recommendation) &&
+    hasInboundPurchaseOrderCover(recommendation)
+  );
+}
+
+function getRecommendationStateNote(
+  recommendation: ReplenishmentRecommendation,
+) {
+  const inboundUnits =
+    recommendation.inboundPurchaseOrderQuantity ??
+    recommendation.pendingPurchaseOrderQuantity;
+  const plannedPurchaseOrderCount = recommendation.plannedPurchaseOrderCount;
+
+  if (hasMixedPurchaseOrderCover(recommendation)) {
+    const remainingAction =
+      plannedPurchaseOrderCount === 1
+        ? "order the remaining purchase order"
+        : `order ${plannedPurchaseOrderCount} remaining purchase orders`;
+
+    return `Next action: ${remainingAction}. ${formatUnitCount(inboundUnits)} already inbound.`;
+  }
+
+  if (PLANNED_STATES.includes(recommendation.status)) {
+    return "Next action: order this purchase order.";
+  }
+
+  if (INBOUND_STATES.includes(recommendation.status)) {
+    return `Inbound cover: ${formatUnitCount(inboundUnits)}. Track receiving on the open purchase order.`;
+  }
+
+  if (recommendation.status === "resolved") {
+    if (inboundUnits > 0) {
+      return `Stock pressure is handled. ${formatUnitCount(inboundUnits)} still inbound.`;
+    }
+
+    return "Stock pressure is handled.";
+  }
+
+  return null;
+}
+
 function isRecommendationVisible(
   recommendation: ReplenishmentRecommendation,
   mode: ProcurementMode,
@@ -237,11 +359,17 @@ function isRecommendationVisible(
   }
 
   if (mode === "planned") {
-    return PLANNED_STATES.includes(recommendation.status);
+    return (
+      PLANNED_STATES.includes(recommendation.status) ||
+      hasPlannedPurchaseOrderCover(recommendation)
+    );
   }
 
   if (mode === "inbound") {
-    return INBOUND_STATES.includes(recommendation.status);
+    return (
+      INBOUND_STATES.includes(recommendation.status) ||
+      hasInboundPurchaseOrderCover(recommendation)
+    );
   }
 
   if (mode === "resolved") {
@@ -258,6 +386,15 @@ function isRecommendationVisible(
     recommendation.status === "short_receipt" ||
     recommendation.status === "stale_planned_action"
   );
+}
+
+function countRecommendationsForMode(
+  recommendations: ReplenishmentRecommendation[],
+  mode: ProcurementMode,
+) {
+  return recommendations.filter((recommendation) =>
+    isRecommendationVisible(recommendation, mode),
+  ).length;
 }
 
 function getModeEmptyStateCopy(mode: ProcurementMode) {
@@ -283,8 +420,8 @@ function getModeEmptyStateCopy(mode: ProcurementMode) {
     case "resolved":
       return {
         description:
-          "No rows have cleared their pressure into a resolved continuity state yet",
-        title: "No resolved rows",
+          "No rows have enough stock or purchase order cover right now",
+        title: "No handled rows",
       };
     default:
       return {
@@ -295,18 +432,30 @@ function getModeEmptyStateCopy(mode: ProcurementMode) {
   }
 }
 
+function getRecommendationCountCopy(mode: ProcurementMode, count: number) {
+  const countCopy = count === 0 ? "No" : String(count);
+
+  switch (mode) {
+    case "all":
+      return `${countCopy} total stock item${count === 1 ? "" : "s"}`;
+    case "exceptions":
+      return `${countCopy} exception${count === 1 ? "" : "s"}`;
+    case "inbound":
+      return `${countCopy} inbound stock item${count === 1 ? "" : "s"}`;
+    case "needs_action":
+      if (count === 0) return "No action needed";
+      return `${countCopy} need${count === 1 ? "s" : ""} action`;
+    case "planned":
+      return `${countCopy} planned stock item${count === 1 ? "" : "s"}`;
+    case "resolved":
+      return `${countCopy} handled stock item${count === 1 ? "" : "s"}`;
+  }
+}
+
 function getNextLifecycleActions(status: PurchaseOrderStatus) {
   switch (status) {
     case "draft":
-      return [
-        { label: "Submit", nextStatus: "submitted" as const },
-        { label: "Cancel", nextStatus: "cancelled" as const },
-      ];
     case "submitted":
-      return [
-        { label: "Approve", nextStatus: "approved" as const },
-        { label: "Cancel", nextStatus: "cancelled" as const },
-      ];
     case "approved":
       return [
         { label: "Mark ordered", nextStatus: "ordered" as const },
@@ -324,7 +473,10 @@ function canReceivePurchaseOrder(status: PurchaseOrderStatus) {
   return status === "ordered" || status === "partially_received";
 }
 
-function buildVendorOptions(vendors: VendorSummary[], createdVendors: VendorSummary[]) {
+function buildVendorOptions(
+  vendors: VendorSummary[],
+  createdVendors: VendorSummary[],
+) {
   const vendorsById = new Map<Id<"vendor">, VendorSummary>();
 
   [...vendors, ...createdVendors].forEach((vendor) => {
@@ -365,6 +517,9 @@ export function ProcurementViewContent({
   const updatePurchaseOrderStatus = useMutation(
     api.stockOps.purchaseOrders.updatePurchaseOrderStatusCommand,
   );
+  const advancePurchaseOrderToOrdered = useMutation(
+    api.stockOps.purchaseOrders.advancePurchaseOrderToOrderedCommand,
+  );
   const receivingPurchaseOrder = useQuery(
     api.stockOps.purchaseOrders.getPurchaseOrder,
     selectedReceivingOrderId
@@ -378,13 +533,7 @@ export function ProcurementViewContent({
   );
 
   if (isLoadingPermissions) {
-    return (
-      <View>
-        <div className="container mx-auto py-10 text-sm text-muted-foreground">
-          Loading procurement workspace...
-        </div>
-      </View>
-    );
+    return null;
   }
 
   if (!hasFullAdminAccess) {
@@ -405,13 +554,7 @@ export function ProcurementViewContent({
   }
 
   if (isLoadingProcurement) {
-    return (
-      <View>
-        <div className="container mx-auto py-10 text-sm text-muted-foreground">
-          Loading procurement workspace...
-        </div>
-      </View>
-    );
+    return null;
   }
 
   const visibleRecommendations = recommendations.filter((recommendation) =>
@@ -433,6 +576,9 @@ export function ProcurementViewContent({
 
       return left.poNumber.localeCompare(right.poNumber);
     });
+  const selectedReceivingPurchaseOrder = activePurchaseOrders.find(
+    (purchaseOrder) => purchaseOrder._id === selectedReceivingOrderId,
+  );
   const visiblePurchaseOrders = activePurchaseOrders.slice(0, 6);
   const hiddenPurchaseOrderCount = Math.max(
     activePurchaseOrders.length - visiblePurchaseOrders.length,
@@ -440,17 +586,21 @@ export function ProcurementViewContent({
   );
   const draftHasMissingVendor = draftLines.some((line) => !line.vendorId);
   const draftHasInvalidQuantity = draftLines.some((line) => line.quantity <= 0);
+  const recommendationCounts: Record<ProcurementMode, number> = {
+    all: countRecommendationsForMode(recommendations, "all"),
+    exceptions: countRecommendationsForMode(recommendations, "exceptions"),
+    inbound: countRecommendationsForMode(recommendations, "inbound"),
+    needs_action: countRecommendationsForMode(recommendations, "needs_action"),
+    planned: countRecommendationsForMode(recommendations, "planned"),
+    resolved: countRecommendationsForMode(recommendations, "resolved"),
+  };
   const summary = {
     activePurchaseOrders: activePurchaseOrders.length,
-    exceptions: recommendations.filter((item) => item.isException).length,
-    inbound: recommendations.filter((item) => INBOUND_STATES.includes(item.status))
-      .length,
-    needsAction: recommendations.filter((item) =>
-      isRecommendationVisible(item, "needs_action"),
-    ).length,
-    planned: recommendations.filter((item) => PLANNED_STATES.includes(item.status))
-      .length,
-    resolved: recommendations.filter((item) => item.status === "resolved").length,
+    exceptions: recommendationCounts.exceptions,
+    inbound: recommendationCounts.inbound,
+    needsAction: recommendationCounts.needs_action,
+    planned: recommendationCounts.planned,
+    resolved: recommendationCounts.resolved,
   };
 
   function addRecommendationToDraft(
@@ -553,7 +703,7 @@ export function ProcurementViewContent({
     }
 
     if (draftLines.length === 0) {
-      toast.error("Add at least one SKU to the reorder draft");
+      toast.error("Add at least one stock item to the reorder draft");
       return;
     }
 
@@ -563,7 +713,9 @@ export function ProcurementViewContent({
     }
 
     if (draftHasInvalidQuantity) {
-      toast.error("Use quantities greater than zero before creating POs");
+      toast.error(
+        "Use quantities greater than zero before creating purchase orders",
+      );
       return;
     }
 
@@ -633,7 +785,7 @@ export function ProcurementViewContent({
   }
 
   async function handleUpdatePurchaseOrderStatus(
-    purchaseOrder: ProcurementOrderSummary,
+    purchaseOrder: Pick<ProcurementOrderSummary, "_id" | "poNumber">,
     nextStatus: PurchaseOrderStatus,
   ) {
     setUpdatingPurchaseOrderId(purchaseOrder._id);
@@ -651,7 +803,32 @@ export function ProcurementViewContent({
         return;
       }
 
-      toast.success(`${purchaseOrder.poNumber} moved to ${formatStatus(nextStatus)}`);
+      toast.success(
+        `${purchaseOrder.poNumber} moved to ${formatStatus(nextStatus)}`,
+      );
+    } finally {
+      setUpdatingPurchaseOrderId(null);
+    }
+  }
+
+  async function handleAdvancePurchaseOrderToOrdered(
+    purchaseOrder: Pick<ProcurementOrderSummary, "_id" | "poNumber">,
+  ) {
+    setUpdatingPurchaseOrderId(purchaseOrder._id);
+
+    try {
+      const result = await runCommand(() =>
+        advancePurchaseOrderToOrdered({
+          purchaseOrderId: purchaseOrder._id,
+        }),
+      );
+
+      if (result.kind !== "ok") {
+        presentCommandToast(result);
+        return;
+      }
+
+      toast.success(`${purchaseOrder.poNumber} marked ordered`);
     } finally {
       setUpdatingPurchaseOrderId(null);
     }
@@ -662,8 +839,8 @@ export function ProcurementViewContent({
       <FadeIn className="container mx-auto h-full min-h-0 overflow-hidden py-layout-xl">
         <div className="grid h-full min-h-0 gap-layout-xl xl:grid-cols-[minmax(0,1fr)_360px]">
           <section className="min-h-0 min-w-0 space-y-layout-2xl overflow-y-auto overscroll-contain pr-1 scrollbar-hide">
-            <div className="flex flex-wrap items-start justify-between gap-layout-md">
-              <div className="max-w-2xl space-y-4">
+            <div className="flex flex-wrap items-start justify-between gap-layout-xl">
+              <div className="max-w-2xl space-y-6">
                 <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
                   Stock Ops
                 </p>
@@ -672,8 +849,9 @@ export function ProcurementViewContent({
                     Procurement workspace
                   </h2>
                   <p className="text-sm text-muted-foreground">
-                    Work SKU pressure into vendor-backed POs, inbound cover, and
-                    receiving without losing the stock continuity context.
+                    Turn low-stock items into vendor-backed purchase orders,
+                    inbound cover, and receiving work without losing the stock
+                    continuity context.
                   </p>
                 </div>
                 <div className="grid max-w-2xl grid-cols-2 gap-2 sm:grid-cols-4">
@@ -730,24 +908,19 @@ export function ProcurementViewContent({
               <div className="border-b border-border/70 px-layout-md py-layout-md">
                 <div className="flex flex-col gap-layout-sm lg:flex-row lg:items-end lg:justify-between">
                   <div>
-                    <h3 className="font-display text-2xl font-semibold tracking-tight text-foreground">
-                      SKU pressure
+                    <h3 className="text-lg font-medium text-foreground">
+                      Stock pressure
                     </h3>
-                    <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                      Recommendations combine current stock, sellable stock,
-                      planned action, and inbound cover.
+                    <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+                      Review low-stock items and decide what needs a purchase
+                      order.
                     </p>
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    Showing{" "}
-                    <span className="font-medium tabular-nums text-foreground">
-                      {visibleRecommendations.length}
-                    </span>{" "}
-                    of{" "}
-                    <span className="font-medium tabular-nums text-foreground">
-                      {recommendations.length}
-                    </span>{" "}
-                    rows
+                  <p className="text-sm font-medium text-muted-foreground">
+                    {getRecommendationCountCopy(
+                      mode,
+                      visibleRecommendations.length,
+                    )}
                   </p>
                 </div>
               </div>
@@ -765,136 +938,261 @@ export function ProcurementViewContent({
                     const statusCopy = getContinuityStateCopy(
                       recommendation.status,
                     );
+                    const statusLabel = hasMixedPurchaseOrderCover(
+                      recommendation,
+                    )
+                      ? "Planned + inbound"
+                      : statusCopy.label;
+                    const statusClassName = hasMixedPurchaseOrderCover(
+                      recommendation,
+                    )
+                      ? "border-border bg-muted/50 text-foreground"
+                      : statusCopy.badgeClassName;
                     const isInDraft = draftLines.some(
                       (line) => line.productSkuId === recommendation._id,
                     );
-                    const plannedPurchaseOrders =
-                      recommendation.plannedPurchaseOrders ?? [];
-                    const inboundPurchaseOrders =
-                      recommendation.inboundPurchaseOrders ??
-                      recommendation.pendingPurchaseOrders;
+                    const stateNote =
+                      getRecommendationStateNote(recommendation);
+                    const hasSuggestedOrder =
+                      recommendation.suggestedOrderQuantity > 0;
+                    const showDraftAction = isInDraft || hasSuggestedOrder;
+                    const draftActionLabel = isInDraft
+                      ? "In draft"
+                      : "Add to draft";
+                    const plannedUnits =
+                      recommendation.plannedPurchaseOrderQuantity ?? 0;
+                    const linkedPurchaseOrders =
+                      getUniquePurchaseOrderReferences(recommendation);
+                    const linkedVendorCount =
+                      getUniqueVendorCount(linkedPurchaseOrders);
+                    const inboundUnits =
+                      recommendation.inboundPurchaseOrderQuantity ??
+                      recommendation.pendingPurchaseOrderQuantity;
+                    const nextEta = formatOptionalDate(
+                      recommendation.nextExpectedAt,
+                    );
 
                     return (
                       <article
-                        className="bg-background px-layout-md py-layout-md transition-colors hover:bg-muted/30"
+                        className="bg-background px-layout-md py-layout-lg transition-colors hover:bg-muted/30"
                         key={recommendation._id}
                       >
-                        <div className="flex flex-wrap items-start justify-between gap-layout-md">
-                          <div className="min-w-0 flex-1 space-y-layout-md">
-                            <div className="space-y-2">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <h4 className="text-base font-semibold capitalize text-foreground">
-                                  {recommendation.productName}
-                                </h4>
-                                {recommendation.sku ? (
-                                  <span className="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                                    {recommendation.sku}
+                        <div className="flex flex-col gap-layout-lg lg:flex-row lg:items-start lg:justify-between">
+                          <div className="min-w-0 flex-1 space-y-layout-lg">
+                            <div className="space-y-3">
+                              <div className="min-w-0 space-y-3">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <h4 className="text-base font-semibold capitalize text-foreground">
+                                    {recommendation.productName}
+                                  </h4>
+                                  {recommendation.sku ? (
+                                    <span className="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                                      {recommendation.sku}
+                                    </span>
+                                  ) : null}
+                                  <span
+                                    className={`rounded-md border px-2 py-1 text-[11px] font-medium ${statusClassName}`}
+                                  >
+                                    {statusLabel}
                                   </span>
-                                ) : null}
-                                <span
-                                  className={`rounded-md border px-2 py-1 text-[11px] font-medium ${statusCopy.badgeClassName}`}
-                                >
-                                  {statusCopy.label}
-                                </span>
+                                  {linkedPurchaseOrders.length > 0 ? (
+                                    <span className="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-medium text-foreground/70">
+                                      {formatPurchaseOrderCount(
+                                        linkedPurchaseOrders.length,
+                                      )}
+                                      {linkedVendorCount > 0
+                                        ? ` · ${linkedVendorCount} vendor${
+                                            linkedVendorCount === 1 ? "" : "s"
+                                          }`
+                                        : ""}
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <p className="max-w-3xl text-sm text-muted-foreground">
+                                  {stateNote ?? recommendation.guidance}
+                                </p>
                               </div>
-                              <p className="max-w-2xl text-sm text-muted-foreground">
-                                {recommendation.guidance}
-                              </p>
                             </div>
 
-                            <dl className="grid gap-3 sm:grid-cols-3">
-                              <div className="rounded-md border border-border/70 bg-surface px-3 py-2">
+                            <dl className="grid gap-layout-lg text-sm sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)]">
+                              <div className="space-y-3">
                                 <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                                  Available now
+                                  Stock now
                                 </dt>
-                                <dd className="mt-1 font-display text-2xl font-semibold tabular-nums tracking-tight text-foreground">
-                                  {recommendation.quantityAvailable}
+                                <dd className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                                  <span className="text-lg font-semibold tabular-nums text-foreground">
+                                    {recommendation.inventoryCount}
+                                  </span>
+                                  <span className="text-muted-foreground">
+                                    on hand
+                                  </span>
+                                  <span
+                                    className="text-border"
+                                    aria-hidden="true"
+                                  >
+                                    /
+                                  </span>
+                                  <span className="font-medium tabular-nums text-foreground">
+                                    {recommendation.quantityAvailable}
+                                  </span>
+                                  <span className="text-muted-foreground">
+                                    available
+                                  </span>
                                 </dd>
                               </div>
-                              <div className="rounded-md border border-border/70 bg-surface px-3 py-2">
+                              <div className="space-y-3 border-t border-border/70 pt-layout-md sm:border-l sm:border-t-0 sm:pl-layout-lg sm:pt-0">
                                 <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                                  On hand
+                                  Cover
                                 </dt>
-                                <dd className="mt-1 font-display text-2xl font-semibold tabular-nums tracking-tight text-foreground">
-                                  {recommendation.inventoryCount}
-                                </dd>
-                              </div>
-                              <div className="rounded-md border border-border/70 bg-surface px-3 py-2">
-                                <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                                  Suggested order
-                                </dt>
-                                <dd className="mt-1 font-display text-2xl font-semibold tabular-nums tracking-tight text-foreground">
-                                  {recommendation.suggestedOrderQuantity}
+                                <dd className="text-foreground">
+                                  <span className="font-medium tabular-nums">
+                                    {plannedUnits}
+                                  </span>{" "}
+                                  planned,{" "}
+                                  <span className="font-medium tabular-nums">
+                                    {inboundUnits}
+                                  </span>{" "}
+                                  inbound
+                                  <span className="text-muted-foreground">
+                                    {" "}
+                                    · ETA{" "}
+                                  </span>
+                                  <span className="font-medium">{nextEta}</span>
                                 </dd>
                               </div>
                             </dl>
 
-                            <div className="flex flex-wrap gap-layout-sm text-sm text-muted-foreground">
-                              <span>
-                                Planned units:{" "}
-                                <span className="font-medium tabular-nums text-foreground">
-                                  {recommendation.plannedPurchaseOrderQuantity ??
-                                    0}
-                                </span>
-                              </span>
-                              <span>
-                                Inbound units:{" "}
-                                <span className="font-medium tabular-nums text-foreground">
-                                  {recommendation.inboundPurchaseOrderQuantity ??
-                                    recommendation.pendingPurchaseOrderQuantity}
-                                </span>
-                              </span>
-                              <span>
-                                Next ETA:{" "}
-                                <span className="font-medium text-foreground">
-                                  {formatOptionalDate(
-                                    recommendation.nextExpectedAt,
-                                  )}
-                                </span>
-                              </span>
-                            </div>
+                            {linkedPurchaseOrders.length > 0 ? (
+                              <div className="space-y-3">
+                                <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                                  Purchase orders
+                                </div>
+                                <div className="space-y-2">
+                                  {linkedPurchaseOrders.map((purchaseOrder) => {
+                                    const lifecycleActions =
+                                      getNextLifecycleActions(
+                                        purchaseOrder.status,
+                                      );
+                                    const isReceivingActive =
+                                      selectedReceivingOrderId ===
+                                      purchaseOrder.purchaseOrderId;
+                                    const isUpdatingPurchaseOrder =
+                                      updatingPurchaseOrderId ===
+                                      purchaseOrder.purchaseOrderId;
 
-                            {plannedPurchaseOrders.length > 0 ||
-                            inboundPurchaseOrders.length > 0 ? (
-                              <div className="flex flex-wrap gap-2">
-                                {plannedPurchaseOrders.map((purchaseOrder) => (
-                                  <div
-                                    className="rounded-md border border-action-workflow-border bg-action-workflow-soft px-2.5 py-1.5 text-xs text-action-workflow"
-                                    key={`planned-${purchaseOrder.purchaseOrderId}`}
-                                  >
-                                    <span>{purchaseOrder.poNumber} · </span>
-                                    planned · {purchaseOrder.pendingQuantity}u
-                                  </div>
-                                ))}
-                                {inboundPurchaseOrders.map((purchaseOrder) => (
-                                  <div
-                                    className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-muted-foreground"
-                                    key={`inbound-${purchaseOrder.purchaseOrderId}`}
-                                  >
-                                    <span className="text-foreground">
-                                      {purchaseOrder.poNumber} ·{" "}
-                                    </span>
-                                    inbound · {purchaseOrder.pendingQuantity}u ·{" "}
-                                    {formatOptionalDate(
-                                      purchaseOrder.expectedAt,
-                                    )}
-                                  </div>
-                                ))}
+                                    return (
+                                      <div
+                                        className={cn(
+                                          "flex flex-col gap-layout-sm rounded-md border bg-surface px-3 py-2 transition-colors sm:flex-row sm:items-center sm:justify-between",
+                                          isReceivingActive
+                                            ? "border-action-workflow-border bg-action-workflow-soft/40"
+                                            : "border-border",
+                                        )}
+                                        key={purchaseOrder.purchaseOrderId}
+                                      >
+                                        <div className="min-w-0 space-y-1">
+                                          <div className="flex flex-wrap items-center gap-2 text-sm">
+                                            <span className="font-medium capitalize text-foreground">
+                                              {purchaseOrder.vendorName ??
+                                                "Vendor not set"}
+                                            </span>
+                                            <span className="text-xs font-medium text-muted-foreground">
+                                              {purchaseOrder.poNumber}
+                                            </span>
+                                          </div>
+                                          <div className="text-xs text-muted-foreground">
+                                            {formatUnitCount(
+                                              purchaseOrder.pendingQuantity,
+                                            )}{" "}
+                                            ·{" "}
+                                            {formatStatus(purchaseOrder.status)}
+                                          </div>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2 sm:justify-end">
+                                          {lifecycleActions.map((action) => (
+                                            <Button
+                                              disabled={isUpdatingPurchaseOrder}
+                                              key={action.nextStatus}
+                                              onClick={() =>
+                                                action.nextStatus === "ordered"
+                                                  ? handleAdvancePurchaseOrderToOrdered(
+                                                      {
+                                                        _id: purchaseOrder.purchaseOrderId,
+                                                        poNumber:
+                                                          purchaseOrder.poNumber,
+                                                      },
+                                                    )
+                                                  : handleUpdatePurchaseOrderStatus(
+                                                      {
+                                                        _id: purchaseOrder.purchaseOrderId,
+                                                        poNumber:
+                                                          purchaseOrder.poNumber,
+                                                      },
+                                                      action.nextStatus,
+                                                    )
+                                              }
+                                              size="sm"
+                                              variant={
+                                                action.nextStatus ===
+                                                "cancelled"
+                                                  ? "utility"
+                                                  : "workflow-soft"
+                                              }
+                                            >
+                                              {action.label}
+                                            </Button>
+                                          ))}
+                                          {canReceivePurchaseOrder(
+                                            purchaseOrder.status,
+                                          ) ? (
+                                            <Button
+                                              aria-current={
+                                                isReceivingActive
+                                                  ? "true"
+                                                  : undefined
+                                              }
+                                              disabled={isReceivingActive}
+                                              onClick={() =>
+                                                setSelectedReceivingOrderId(
+                                                  purchaseOrder.purchaseOrderId,
+                                                )
+                                              }
+                                              size="sm"
+                                              variant={
+                                                isReceivingActive
+                                                  ? "utility"
+                                                  : "workflow-soft"
+                                              }
+                                            >
+                                              {isReceivingActive
+                                                ? "Receiving"
+                                                : "Receive"}
+                                            </Button>
+                                          ) : null}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
                               </div>
                             ) : null}
                           </div>
 
-                          <Button
-                            disabled={
-                              isInDraft ||
-                              recommendation.suggestedOrderQuantity <= 0
-                            }
-                            onClick={() => addRecommendationToDraft(recommendation)}
-                            size="sm"
-                            variant="workflow-soft"
-                          >
-                            {isInDraft ? "In draft" : "Add to draft"}
-                          </Button>
+                          {showDraftAction ? (
+                            <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">
+                              <Button
+                                className="self-start"
+                                disabled={isInDraft}
+                                onClick={() =>
+                                  addRecommendationToDraft(recommendation)
+                                }
+                                size="sm"
+                                variant="workflow-soft"
+                              >
+                                {draftActionLabel}
+                              </Button>
+                            </div>
+                          ) : null}
                         </div>
                       </article>
                     );
@@ -904,20 +1202,131 @@ export function ProcurementViewContent({
             </section>
           </section>
 
-          <aside className="min-h-0 space-y-layout-md overflow-y-auto overscroll-contain pr-1 scrollbar-hide">
-            <section className="space-y-layout-md rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
-              <div>
-                <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                  Reorder Draft
-                </p>
-                <h3 className="mt-1 text-base font-medium text-foreground">
-                  Vendor-backed PO draft
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  Select SKU pressure, confirm quantities, and assign a vendor
-                  before creating draft purchase orders.
-                </p>
-              </div>
+          <aside className="flex min-h-0 flex-col gap-layout-md overflow-y-auto overscroll-contain pr-1 scrollbar-hide">
+            {selectedReceivingOrderId ? (
+              <section className="space-y-layout-md rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
+                <div className="flex items-start justify-between gap-layout-md">
+                  <PanelHeader
+                    description={
+                      receivingPurchaseOrder?.vendor?.name
+                        ? receivingPurchaseOrder.poNumber
+                        : undefined
+                    }
+                    eyebrow="Receiving"
+                    title={
+                      receivingPurchaseOrder?.vendor?.name ? (
+                        <span className="capitalize">
+                          {receivingPurchaseOrder.vendor.name}
+                        </span>
+                      ) : (
+                        (receivingPurchaseOrder?.poNumber ??
+                        selectedReceivingPurchaseOrder?.poNumber ??
+                        "Purchase order")
+                      )
+                    }
+                  />
+                  <Button
+                    onClick={() => setSelectedReceivingOrderId(null)}
+                    size="sm"
+                    variant="ghost"
+                  >
+                    Close
+                  </Button>
+                </div>
+
+                {storeId && receivingPurchaseOrder ? (
+                  <ReceivingView
+                    lineItems={receivingPurchaseOrder.lineItems}
+                    onReceived={() => setSelectedReceivingOrderId(null)}
+                    purchaseOrderId={receivingPurchaseOrder._id}
+                    storeId={storeId}
+                  />
+                ) : (
+                  <div
+                    aria-label="Loading receiving details"
+                    className="space-y-layout-md"
+                  >
+                    <Skeleton className="h-5 w-28" />
+                    <div className="space-y-3 rounded-md border border-border bg-surface px-3 py-3">
+                      <div className="space-y-2">
+                        <Skeleton className="h-4 w-44" />
+                        <Skeleton className="h-3 w-32" />
+                      </div>
+                      <div className="flex items-end justify-between gap-layout-md border-t border-border/70 pt-3">
+                        <div className="space-y-2">
+                          <Skeleton className="h-3 w-24" />
+                          <Skeleton className="h-3 w-36" />
+                        </div>
+                        <Skeleton className="h-9 w-24" />
+                      </div>
+                    </div>
+                    <Skeleton className="h-10 w-full" />
+                  </div>
+                )}
+              </section>
+            ) : null}
+
+            {activePurchaseOrders.length > 0 ? (
+              <section className="space-y-layout-md rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
+                <PanelHeader
+                  description="Purchase orders that may not be visible in the current stock list."
+                  eyebrow="Purchase Orders"
+                  title="Open purchase orders"
+                />
+
+                <div className="space-y-layout-sm">
+                  {visiblePurchaseOrders.map((purchaseOrder) => {
+                    return (
+                      <article
+                        className="rounded-lg border border-border bg-background p-layout-md"
+                        key={purchaseOrder._id}
+                      >
+                        <div className="flex items-start justify-between gap-layout-md">
+                          <div className="min-w-0 space-y-1.5">
+                            <p className="truncate text-sm font-medium text-foreground/80">
+                              {purchaseOrder.poNumber}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatLineCount(purchaseOrder.lineItemCount)} ·{" "}
+                              {formatUnitCount(purchaseOrder.totalUnits)}
+                            </p>
+                          </div>
+                          <dl className="shrink-0 space-y-2 text-right text-xs">
+                            <div>
+                              <dt className="sr-only">Status</dt>
+                              <dd className="font-medium text-foreground">
+                                {formatStatus(purchaseOrder.status)}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="sr-only">Expected date</dt>
+                              <dd className="text-muted-foreground">
+                                {formatOptionalDate(purchaseOrder.expectedAt)}
+                              </dd>
+                            </div>
+                          </dl>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+
+                {hiddenPurchaseOrderCount > 0 ? (
+                  <p className="rounded-lg border border-dashed border-border bg-background/70 px-layout-sm py-layout-sm text-sm text-muted-foreground">
+                    Showing 6 of {activePurchaseOrders.length} active purchase
+                    orders. Use the stock list to review the remaining{" "}
+                    {hiddenPurchaseOrderCount}.
+                  </p>
+                ) : null}
+              </section>
+            ) : null}
+
+            <section className="space-y-layout-lg rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
+              <PanelHeader
+                description="Select low-stock items, confirm quantities, and assign a vendor before creating draft purchase orders."
+                eyebrow="Reorder Draft"
+                title="Vendor-backed purchase order draft"
+              />
 
               {draftLines.length === 0 ? (
                 <EmptyState
@@ -925,10 +1334,10 @@ export function ProcurementViewContent({
                   title="No reorder lines"
                 />
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {draftLines.map((line) => (
                     <article
-                      className="space-y-3 rounded-lg border border-border bg-background p-layout-sm"
+                      className="space-y-4 rounded-lg border border-border/80 bg-surface p-layout-sm"
                       key={line.productSkuId}
                     >
                       <div className="flex items-start justify-between gap-layout-md">
@@ -965,39 +1374,57 @@ export function ProcurementViewContent({
                       </label>
                       <label className="block space-y-1 text-xs font-medium text-muted-foreground">
                         <span>Vendor</span>
-                        <select
-                          aria-label={`Vendor for ${line.productName}`}
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                          onChange={(event) =>
+                        <Select
+                          onValueChange={(value) =>
                             updateDraftLine(line.productSkuId, {
-                              vendorId: event.target.value
-                                ? (event.target.value as Id<"vendor">)
-                                : undefined,
+                              vendorId:
+                                value === UNASSIGNED_VENDOR_VALUE
+                                  ? undefined
+                                  : (value as Id<"vendor">),
                             })
                           }
-                          value={line.vendorId ?? ""}
+                          value={line.vendorId ?? UNASSIGNED_VENDOR_VALUE}
                         >
-                          <option value="">Choose vendor</option>
-                          {vendorOptions.map((vendor) => (
-                            <option key={vendor._id} value={vendor._id}>
-                              {vendor.name}
-                            </option>
-                          ))}
-                        </select>
+                          <SelectTrigger
+                            aria-label={`Vendor for ${line.productName}`}
+                            className="[&>span]:capitalize"
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem
+                              disabled
+                              value={UNASSIGNED_VENDOR_VALUE}
+                            >
+                              Choose vendor
+                            </SelectItem>
+                            {vendorOptions.map((vendor) => (
+                              <SelectItem
+                                className="capitalize"
+                                key={vendor._id}
+                                value={vendor._id}
+                              >
+                                {vendor.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </label>
                     </article>
                   ))}
                 </div>
               )}
 
-              <div className="space-y-2 rounded-lg border border-dashed border-border bg-background/70 p-layout-sm">
+              <div className="space-y-2 rounded-lg border border-dashed border-border/80 bg-surface p-layout-sm">
                 <p className="text-sm font-medium text-foreground">
                   Quick add vendor
                 </p>
                 <div className="flex gap-2">
                   <Input
                     aria-label="Vendor name"
-                    onChange={(event) => setQuickAddVendorName(event.target.value)}
+                    onChange={(event) =>
+                      setQuickAddVendorName(event.target.value)
+                    }
                     placeholder="Vendor name"
                     value={quickAddVendorName}
                   />
@@ -1022,23 +1449,16 @@ export function ProcurementViewContent({
                 onClick={handleCreateDraftPurchaseOrders}
                 variant="workflow"
               >
-                Create draft POs
+                Create draft purchase orders
               </Button>
             </section>
 
             <section className="space-y-layout-md rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
-              <div>
-                <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                  Snapshot
-                </p>
-                <h3 className="mt-1 text-base font-medium text-foreground">
-                  Planning signal
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  Use the current stock-continuity mix to decide whether to
-                  order, advance planned work, receive, or resolve an exception.
-                </p>
-              </div>
+              <PanelHeader
+                description="Use the current stock-continuity mix to decide whether to order, advance planned work, receive, or resolve an exception."
+                eyebrow="Snapshot"
+                title="Planning signal"
+              />
 
               <div className="divide-y divide-border/70 rounded-lg border border-border bg-background">
                 {[
@@ -1046,7 +1466,7 @@ export function ProcurementViewContent({
                   ["Planned", summary.planned],
                   ["Inbound", summary.inbound],
                   ["Exceptions", summary.exceptions],
-                  ["Resolved", summary.resolved],
+                  ["Handled", summary.resolved],
                   ["Active vendors", vendorOptions.length],
                   ["Active purchase orders", summary.activePurchaseOrders],
                 ].map(([label, value]) => (
@@ -1062,136 +1482,6 @@ export function ProcurementViewContent({
                 ))}
               </div>
             </section>
-
-            <section className="space-y-layout-md rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
-              <div>
-                <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                  Purchase Orders
-                </p>
-                <h3 className="mt-1 text-base font-medium text-foreground">
-                  Open procurement flow
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  Draft, planned, ordered, and partially received purchase
-                  orders stay actionable beside SKU pressure.
-                </p>
-              </div>
-
-              {activePurchaseOrders.length === 0 ? (
-                <EmptyState
-                  description="Create or advance purchase orders to keep planned and inbound coverage visible beside SKU pressure"
-                  title="No active purchase orders"
-                />
-              ) : (
-                <>
-                  {visiblePurchaseOrders.map((purchaseOrder) => {
-                    const lifecycleActions = getNextLifecycleActions(
-                      purchaseOrder.status,
-                    );
-                    const isUpdating =
-                      updatingPurchaseOrderId === purchaseOrder._id;
-
-                    return (
-                      <article
-                        className="space-y-3 rounded-lg border border-border bg-background p-layout-sm"
-                        key={purchaseOrder._id}
-                      >
-                        <div className="flex items-center justify-between gap-layout-md">
-                          <div className="min-w-0">
-                            <p className="truncate font-medium text-foreground">
-                              {purchaseOrder.poNumber}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              {purchaseOrder.lineItemCount} lines ·{" "}
-                              {purchaseOrder.totalUnits} units
-                            </p>
-                          </div>
-                          <div className="shrink-0 text-right text-xs text-muted-foreground">
-                            <p>{formatStatus(purchaseOrder.status)}</p>
-                            <p>{formatOptionalDate(purchaseOrder.expectedAt)}</p>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap gap-2">
-                          {lifecycleActions.map((action) => (
-                            <Button
-                              disabled={isUpdating}
-                              key={action.nextStatus}
-                              onClick={() =>
-                                handleUpdatePurchaseOrderStatus(
-                                  purchaseOrder,
-                                  action.nextStatus,
-                                )
-                              }
-                              size="sm"
-                              variant={
-                                action.nextStatus === "cancelled"
-                                  ? "utility"
-                                  : "workflow-soft"
-                              }
-                            >
-                              {action.label}
-                            </Button>
-                          ))}
-                          {canReceivePurchaseOrder(purchaseOrder.status) ? (
-                            <Button
-                              onClick={() =>
-                                setSelectedReceivingOrderId(purchaseOrder._id)
-                              }
-                              size="sm"
-                              variant="workflow-soft"
-                            >
-                              Receive
-                            </Button>
-                          ) : null}
-                        </div>
-                      </article>
-                    );
-                  })}
-                  {hiddenPurchaseOrderCount > 0 ? (
-                    <div className="rounded-lg border border-dashed border-border bg-background/70 px-layout-sm py-layout-sm text-sm text-muted-foreground">
-                      Showing 6 of {activePurchaseOrders.length} active purchase
-                      orders. Review the purchase-order workspace to inspect the
-                      remaining {hiddenPurchaseOrderCount}.
-                    </div>
-                  ) : null}
-                </>
-              )}
-            </section>
-
-            {selectedReceivingOrderId ? (
-              <section className="space-y-layout-md rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
-                <div className="flex items-start justify-between gap-layout-md">
-                  <div>
-                    <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                      Receiving
-                    </p>
-                    <h3 className="mt-1 text-base font-medium text-foreground">
-                      {receivingPurchaseOrder?.poNumber ?? "Loading PO"}
-                    </h3>
-                  </div>
-                  <Button
-                    onClick={() => setSelectedReceivingOrderId(null)}
-                    size="sm"
-                    variant="ghost"
-                  >
-                    Close
-                  </Button>
-                </div>
-
-                {storeId && receivingPurchaseOrder ? (
-                  <ReceivingView
-                    lineItems={receivingPurchaseOrder.lineItems}
-                    purchaseOrderId={receivingPurchaseOrder._id}
-                    storeId={storeId}
-                  />
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Loading receiving details...
-                  </p>
-                )}
-              </section>
-            ) : null}
           </aside>
         </div>
       </FadeIn>
@@ -1226,13 +1516,7 @@ export function ProcurementView() {
   ) as VendorSummary[] | undefined;
 
   if (isLoadingAccess) {
-    return (
-      <View>
-        <div className="container mx-auto py-10 text-sm text-muted-foreground">
-          Loading procurement workspace...
-        </div>
-      </View>
-    );
+    return null;
   }
 
   if (!isAuthenticated) {
@@ -1248,9 +1532,9 @@ export function ProcurementView() {
       isLoadingPermissions={false}
       isLoadingProcurement={Boolean(
         canQueryProtectedData &&
-          (recommendations === undefined ||
-            purchaseOrders === undefined ||
-            vendors === undefined),
+        (recommendations === undefined ||
+          purchaseOrders === undefined ||
+          vendors === undefined),
       )}
       purchaseOrders={purchaseOrders ?? []}
       recommendations={recommendations ?? []}

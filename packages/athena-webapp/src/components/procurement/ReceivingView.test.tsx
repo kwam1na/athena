@@ -30,16 +30,17 @@ describe("ReceivingView", () => {
     vi.restoreAllMocks();
     mockedConvex.receivePurchaseOrderBatch.mockReset();
     mockedConvex.receivePurchaseOrderBatch.mockResolvedValue(
-      ok({ _id: "receiving-batch-1" })
+      ok({ _id: "receiving-batch-1" }),
     );
     mockedToast.error.mockReset();
     mockedToast.success.mockReset();
   });
 
-  it("submits a receiving batch with a submission key and partial quantities", async () => {
+  it("submits a receiving batch with a generated submission key and partial quantities", async () => {
     mockedConvex.receivePurchaseOrderBatch.mockResolvedValue(
-      ok({ _id: "receiving-batch-1" })
+      ok({ _id: "receiving-batch-1" }),
     );
+    vi.spyOn(Date, "now").mockReturnValue(1000);
     const user = userEvent.setup();
 
     render(
@@ -47,7 +48,7 @@ describe("ReceivingView", () => {
         lineItems={[
           {
             _id: "line-item-1" as Id<"purchaseOrderLineItem">,
-            description: "Curly closure",
+            description: "Curly closure (CC-18)",
             orderedQuantity: 4,
             productSkuId: "sku-1" as Id<"productSku">,
             receivedQuantity: 1,
@@ -55,19 +56,22 @@ describe("ReceivingView", () => {
         ]}
         purchaseOrderId={"purchase-order-1" as Id<"purchaseOrder">}
         storeId={"store-1" as Id<"store">}
-      />
+      />,
     );
 
-    await user.clear(screen.getByLabelText(/submission key/i));
-    await user.type(screen.getByLabelText(/submission key/i), "batch-2026-04-20");
+    expect(screen.getByText("Curly closure")).toBeInTheDocument();
+    expect(screen.getByText("CC-18")).toBeInTheDocument();
+    expect(screen.queryByText("Curly closure (CC-18)")).not.toBeInTheDocument();
     await user.clear(
-      screen.getByLabelText(/received quantity for curly closure/i)
+      screen.getByLabelText(/received quantity for curly closure/i),
     );
     await user.type(
       screen.getByLabelText(/received quantity for curly closure/i),
-      "2"
+      "2",
     );
-    await user.click(screen.getByRole("button", { name: /record receiving batch/i }));
+    await user.click(
+      screen.getByRole("button", { name: /record receiving batch/i }),
+    );
 
     await waitFor(() =>
       expect(mockedConvex.receivePurchaseOrderBatch).toHaveBeenCalledWith({
@@ -80,17 +84,19 @@ describe("ReceivingView", () => {
         purchaseOrderId: "purchase-order-1",
         receivedByUserId: undefined,
         storeId: "store-1",
-        submissionKey: "batch-2026-04-20",
-      })
+        submissionKey: "receive-purchase-order-1-rs",
+      }),
     );
     await waitFor(() =>
-      expect(mockedToast.success).toHaveBeenCalledWith("Receiving batch recorded")
+      expect(mockedToast.success).toHaveBeenCalledWith(
+        "Receiving batch recorded",
+      ),
     );
   });
 
   it("submits only positive receiving quantities and rotates the default key", async () => {
     mockedConvex.receivePurchaseOrderBatch.mockResolvedValue(
-      ok({ _id: "receiving-batch-1" })
+      ok({ _id: "receiving-batch-1" }),
     );
     vi.spyOn(Date, "now")
       .mockReturnValueOnce(1000)
@@ -118,17 +124,19 @@ describe("ReceivingView", () => {
         ]}
         purchaseOrderId={"purchase-order-1" as Id<"purchaseOrder">}
         storeId={"store-1" as Id<"store">}
-      />
+      />,
     );
 
     await user.clear(
-      screen.getByLabelText(/received quantity for body wave bundle/i)
+      screen.getByLabelText(/received quantity for body wave bundle/i),
     );
     await user.type(
       screen.getByLabelText(/received quantity for body wave bundle/i),
-      "2"
+      "2",
     );
-    await user.click(screen.getByRole("button", { name: /record receiving batch/i }));
+    await user.click(
+      screen.getByRole("button", { name: /record receiving batch/i }),
+    );
 
     await waitFor(() =>
       expect(mockedConvex.receivePurchaseOrderBatch).toHaveBeenCalledWith({
@@ -142,13 +150,7 @@ describe("ReceivingView", () => {
         receivedByUserId: undefined,
         storeId: "store-1",
         submissionKey: "receive-purchase-order-1-rs",
-      })
-    );
-
-    await waitFor(() =>
-      expect(screen.getByLabelText(/submission key/i)).toHaveValue(
-        "receive-purchase-order-1-1jk"
-      )
+      }),
     );
   });
 
@@ -166,11 +168,11 @@ describe("ReceivingView", () => {
         ]}
         purchaseOrderId={"purchase-order-1" as Id<"purchaseOrder">}
         storeId={"store-1" as Id<"store">}
-      />
+      />,
     );
 
     expect(
-      screen.getByLabelText(/received quantity for curly closure/i)
+      screen.getByLabelText(/received quantity for curly closure/i),
     ).toHaveValue(3);
 
     rerender(
@@ -186,17 +188,17 @@ describe("ReceivingView", () => {
         ]}
         purchaseOrderId={"purchase-order-1" as Id<"purchaseOrder">}
         storeId={"store-1" as Id<"store">}
-      />
+      />,
     );
 
     expect(
-      screen.getByLabelText(/received quantity for curly closure/i)
+      screen.getByLabelText(/received quantity for curly closure/i),
     ).toHaveValue(1);
   });
 
   it("updates displayed quantities to the remaining amounts after a successful receipt", async () => {
     mockedConvex.receivePurchaseOrderBatch.mockResolvedValue(
-      ok({ _id: "receiving-batch-1" })
+      ok({ _id: "receiving-batch-1" }),
     );
     const user = userEvent.setup();
 
@@ -213,17 +215,19 @@ describe("ReceivingView", () => {
         ]}
         purchaseOrderId={"purchase-order-1" as Id<"purchaseOrder">}
         storeId={"store-1" as Id<"store">}
-      />
+      />,
     );
 
     await user.clear(
-      screen.getByLabelText(/received quantity for curly closure/i)
+      screen.getByLabelText(/received quantity for curly closure/i),
     );
     await user.type(
       screen.getByLabelText(/received quantity for curly closure/i),
-      "2"
+      "2",
     );
-    await user.click(screen.getByRole("button", { name: /record receiving batch/i }));
+    await user.click(
+      screen.getByRole("button", { name: /record receiving batch/i }),
+    );
 
     await waitFor(() =>
       expect(mockedConvex.receivePurchaseOrderBatch).toHaveBeenCalledWith(
@@ -234,15 +238,46 @@ describe("ReceivingView", () => {
               receivedQuantity: 2,
             },
           ],
-        })
-      )
+        }),
+      ),
     );
 
     await waitFor(() =>
       expect(
-        screen.getByLabelText(/received quantity for curly closure/i)
-      ).toHaveValue(1)
+        screen.getByLabelText(/received quantity for curly closure/i),
+      ).toHaveValue(1),
     );
+  });
+
+  it("notifies the parent after a successful receipt", async () => {
+    mockedConvex.receivePurchaseOrderBatch.mockResolvedValue(
+      ok({ _id: "receiving-batch-1" }),
+    );
+    const onReceived = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <ReceivingView
+        lineItems={[
+          {
+            _id: "line-item-1" as Id<"purchaseOrderLineItem">,
+            description: "Curly closure",
+            orderedQuantity: 4,
+            productSkuId: "sku-1" as Id<"productSku">,
+            receivedQuantity: 1,
+          },
+        ]}
+        onReceived={onReceived}
+        purchaseOrderId={"purchase-order-1" as Id<"purchaseOrder">}
+        storeId={"store-1" as Id<"store">}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /record receiving batch/i }),
+    );
+
+    await waitFor(() => expect(onReceived).toHaveBeenCalledTimes(1));
   });
 
   it("collapses unexpected receiving failures to the shared fallback toast", async () => {
@@ -252,7 +287,7 @@ describe("ReceivingView", () => {
       .mockImplementation(() => undefined);
 
     mockedConvex.receivePurchaseOrderBatch.mockRejectedValueOnce(
-      new Error("Leaked receiving backend detail")
+      new Error("Leaked receiving backend detail"),
     );
 
     render(
@@ -268,23 +303,25 @@ describe("ReceivingView", () => {
         ]}
         purchaseOrderId={"purchase-order-1" as Id<"purchaseOrder">}
         storeId={"store-1" as Id<"store">}
-      />
+      />,
     );
 
     await user.clear(
-      screen.getByLabelText(/received quantity for curly closure/i)
+      screen.getByLabelText(/received quantity for curly closure/i),
     );
     await user.type(
       screen.getByLabelText(/received quantity for curly closure/i),
-      "2"
+      "2",
     );
-    await user.click(screen.getByRole("button", { name: /record receiving batch/i }));
+    await user.click(
+      screen.getByRole("button", { name: /record receiving batch/i }),
+    );
 
     await waitFor(() =>
-      expect(mockedToast.error).toHaveBeenCalledWith("Please try again.")
+      expect(mockedToast.error).toHaveBeenCalledWith("Please try again."),
     );
     expect(mockedToast.error).not.toHaveBeenCalledWith(
-      "Leaked receiving backend detail"
+      "Leaked receiving backend detail",
     );
 
     consoleErrorSpy.mockRestore();

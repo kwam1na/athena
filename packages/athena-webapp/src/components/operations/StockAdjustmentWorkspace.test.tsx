@@ -748,7 +748,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: "1 SKU has unavailable units.",
+        name: "1 SKU has reserved units.",
       }),
     ).toBeInTheDocument();
     expect(
@@ -756,7 +756,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
     ).toBeInTheDocument();
     expect(screen.getAllByText("On hand").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Available").length).toBeGreaterThan(0);
-    expect(screen.getByText("Unavailable")).toBeInTheDocument();
+    expect(screen.getByText("Reserved")).toBeInTheDocument();
   });
 
   it("shows POS reserved units as reducing sellable availability", () => {
@@ -844,7 +844,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
       screen.getByRole("combobox", { name: /filter by availability/i }),
     );
     await user.click(
-      await screen.findByRole("option", { name: "Unavailable" }),
+      await screen.findByRole("option", { name: "Reserved" }),
     );
 
     expect(
@@ -922,7 +922,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
     expect(screen.getAllByText("black").length).toBeGreaterThan(1);
   });
 
-  it("filters to unavailable SKUs from the inventory state metric", async () => {
+  it("filters to reserved SKUs from the inventory state metric", async () => {
     const user = userEvent.setup();
     const onSearchStateChange = vi.fn();
 
@@ -969,7 +969,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
     expect(within(table).getByText("Ai Engineering")).toBeInTheDocument();
     expect(within(table).getByText("Closure Wig")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /unavailable 4/i }));
+    await user.click(screen.getByRole("button", { name: /reserved 4/i }));
 
     expect(onSearchStateChange).toHaveBeenLastCalledWith({
       availability: "unavailable",
@@ -978,7 +978,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
       sku: "sku-unavailable-books",
     });
     expect(
-      screen.getByRole("button", { name: /unavailable 4/i }),
+      screen.getByRole("button", { name: /reserved 4/i }),
     ).toHaveAttribute("aria-pressed", "true");
     expect(within(table).getByText("Ai Engineering")).toBeInTheDocument();
     expect(within(table).queryByText("Closure Wig")).not.toBeInTheDocument();
@@ -986,7 +986,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
     expect(within(table).queryByText("Lip Gloss")).not.toBeInTheDocument();
     expect(screen.getByText("Showing 1 of 1 SKU.")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /unavailable 4/i }));
+    await user.click(screen.getByRole("button", { name: /reserved 4/i }));
 
     expect(onSearchStateChange).toHaveBeenLastCalledWith({
       availability: undefined,
@@ -996,7 +996,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
       sku: undefined,
     });
     expect(
-      screen.getByRole("button", { name: /unavailable 4/i }),
+      screen.getByRole("button", { name: /reserved 4/i }),
     ).toHaveAttribute("aria-pressed", "false");
     expect(within(table).getByText("Ai Engineering")).toBeInTheDocument();
     expect(within(table).getByText("Closure Wig")).toBeInTheDocument();
@@ -1026,7 +1026,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
       screen.getByRole("combobox", { name: /filter by availability/i }),
     );
     await user.click(
-      await screen.findByRole("option", { name: "Unavailable" }),
+      await screen.findByRole("option", { name: "Reserved" }),
     );
 
     expect(onSearchStateChange).toHaveBeenLastCalledWith({

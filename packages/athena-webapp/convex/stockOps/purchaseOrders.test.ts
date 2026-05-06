@@ -105,12 +105,18 @@ describe("stock ops purchase orders", () => {
     expect(source).toContain(
       "export const updatePurchaseOrderStatusCommand = mutation({",
     );
+    expect(source).toContain(
+      "export const advancePurchaseOrderToOrderedCommand = mutation({",
+    );
     expect(source).toContain("commandResultValidator(v.any())");
     expect(source).toContain(
       "return ok(await createPurchaseOrderWithCtx(ctx, args));",
     );
     expect(source).toContain(
       "return ok(await updatePurchaseOrderStatusWithCtx(ctx, args));",
+    );
+    expect(source).toContain(
+      "return ok(await advancePurchaseOrderToOrderedWithCtx(ctx, args));",
     );
     expect(source).toContain("createOperationalWorkItemWithCtx");
     expect(source).toContain("recordOperationalEventWithCtx");

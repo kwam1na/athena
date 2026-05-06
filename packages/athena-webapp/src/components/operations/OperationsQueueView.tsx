@@ -13,9 +13,7 @@ import {
   runCommand,
   type NormalizedCommandResult,
 } from "@/lib/errors/runCommand";
-import {
-  StockAdjustmentWorkspaceContent,
-} from "./StockAdjustmentWorkspace";
+import { StockAdjustmentWorkspaceContent } from "./StockAdjustmentWorkspace";
 import type {
   CycleCountDraftSummary,
   CycleCountDraftState,
@@ -26,7 +24,6 @@ import type {
 } from "./StockAdjustmentWorkspace";
 import { Button } from "../ui/button";
 import { LoadingButton } from "../ui/loading-button";
-import { Skeleton } from "../ui/skeleton";
 
 const operationsApi = api.operations;
 const stockOpsApi = api.stockOps;
@@ -86,88 +83,6 @@ function getApprovalRequestCopy(requestType: string) {
   return null;
 }
 
-function OperationsWorkspaceSkeleton() {
-  return (
-    <FadeIn className="container mx-auto min-h-0 flex-1 overflow-y-auto overscroll-contain py-layout-xl scrollbar-hide">
-      <section
-        aria-label="Loading operations workspace"
-        className="grid gap-layout-xl xl:grid-cols-[minmax(0,1fr)_320px]"
-      >
-        <section className="min-w-0 space-y-layout-2xl">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="max-w-2xl space-y-4">
-              <Skeleton className="h-3 w-20" />
-              <div className="space-y-2">
-                <Skeleton className="h-8 w-80 max-w-full" />
-                <Skeleton className="h-4 w-[38rem] max-w-full" />
-              </div>
-            </div>
-            <Skeleton className="h-10 w-64" />
-          </div>
-
-          <div className="rounded-md border">
-            <div className="grid grid-cols-[minmax(180px,1fr)_120px_120px_180px_80px] gap-4 border-b px-4 py-4">
-              <Skeleton className="h-3 w-12" />
-              <Skeleton className="ml-auto h-3 w-16" />
-              <Skeleton className="ml-auto h-3 w-20" />
-              <Skeleton className="ml-auto h-3 w-16" />
-              <Skeleton className="ml-auto h-3 w-14" />
-            </div>
-            {Array.from({ length: 8 }).map((_, index) => (
-              <div
-                className="grid grid-cols-[minmax(180px,1fr)_120px_120px_180px_80px] items-center gap-4 border-b px-4 py-5 last:border-b-0"
-                key={index}
-              >
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-40" />
-                  <Skeleton className="h-3 w-24" />
-                </div>
-                <Skeleton className="ml-auto h-4 w-8" />
-                <Skeleton className="ml-auto h-4 w-8" />
-                <Skeleton className="ml-auto h-10 w-36" />
-                <Skeleton className="ml-auto h-4 w-6" />
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <aside className="space-y-layout-md">
-          <section className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
-            <Skeleton className="h-3 w-28" />
-            <div className="mt-layout-lg grid grid-cols-2 gap-layout-md">
-              <div className="space-y-2">
-                <Skeleton className="h-3 w-20" />
-                <Skeleton className="h-8 w-12" />
-              </div>
-              <div className="space-y-2">
-                <Skeleton className="h-3 w-16" />
-                <Skeleton className="h-8 w-12" />
-              </div>
-            </div>
-            <div className="mt-layout-md space-y-2 border-t pt-layout-md">
-              <Skeleton className="h-3 w-24" />
-              <Skeleton className="h-8 w-24" />
-            </div>
-            <Skeleton className="mt-layout-md h-16 w-full rounded-md" />
-          </section>
-
-          <section className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
-            <Skeleton className="h-3 w-20" />
-            <Skeleton className="mt-layout-md aspect-square w-full rounded-md" />
-            <div className="mt-layout-md space-y-2">
-              <Skeleton className="h-4 w-32" />
-              <Skeleton className="h-3 w-24" />
-            </div>
-            <Skeleton className="mt-layout-md h-10 w-full" />
-            <Skeleton className="mt-layout-md h-24 w-full" />
-            <Skeleton className="mt-layout-md h-10 w-full" />
-          </section>
-        </aside>
-      </section>
-    </FadeIn>
-  );
-}
-
 type OperationsQueueViewContentProps = {
   activeWorkflow?: OperationsWorkflow;
   approvalRequests: QueueApprovalRequest[];
@@ -195,9 +110,9 @@ type OperationsQueueViewContentProps = {
   onSubmitStockBatch: (
     args: SubmitStockAdjustmentArgs,
   ) => Promise<NormalizedCommandResult<unknown>>;
-  onSubmitCycleCountDraft?: (
-    args: { notes?: string },
-  ) => Promise<NormalizedCommandResult<unknown>>;
+  onSubmitCycleCountDraft?: (args: {
+    notes?: string;
+  }) => Promise<NormalizedCommandResult<unknown>>;
   onStockAdjustmentSearchChange?: (patch: StockAdjustmentSearchPatch) => void;
   storeId?: Id<"store">;
   stockAdjustmentSearch?: StockAdjustmentSearchState;
@@ -231,7 +146,7 @@ export function OperationsQueueViewContent({
     activeWorkflow ?? getDefaultWorkflow({ approvalRequests, workItems });
 
   if (isLoadingPermissions) {
-    return <OperationsWorkspaceSkeleton />;
+    return null;
   }
 
   if (!hasFullAdminAccess) {
@@ -239,7 +154,7 @@ export function OperationsQueueViewContent({
   }
 
   if (isLoadingQueue) {
-    return <OperationsWorkspaceSkeleton />;
+    return null;
   }
 
   if (!storeId) {
@@ -557,7 +472,9 @@ export function OperationsQueueView({
     productSkuId: Id<"productSku">;
   }) => {
     if (!cycleCountDraft) {
-      return buildMissingDraftResult("Select a count scope before saving a draft.");
+      return buildMissingDraftResult(
+        "Select a count scope before saving a draft.",
+      );
     }
 
     setIsSavingCycleCountDraft(true);
@@ -577,7 +494,9 @@ export function OperationsQueueView({
 
   const handleDiscardCycleCountDraft = async () => {
     if (!cycleCountDraft) {
-      return buildMissingDraftResult("Select a count scope before discarding a draft.");
+      return buildMissingDraftResult(
+        "Select a count scope before discarding a draft.",
+      );
     }
 
     setIsSavingCycleCountDraft(true);
@@ -593,7 +512,9 @@ export function OperationsQueueView({
 
   const handleSubmitCycleCountDraft = async (args: { notes?: string }) => {
     if (!activeStore?._id) {
-      return buildMissingDraftResult("Select a store before submitting a count.");
+      return buildMissingDraftResult(
+        "Select a store before submitting a count.",
+      );
     }
 
     setIsSubmittingStockBatch(true);
@@ -668,7 +589,7 @@ export function OperationsQueueView({
   };
 
   if (isLoadingAccess) {
-    return <OperationsWorkspaceSkeleton />;
+    return null;
   }
 
   if (!isAuthenticated) {

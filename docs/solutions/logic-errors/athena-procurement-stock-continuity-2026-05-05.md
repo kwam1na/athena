@@ -53,6 +53,25 @@ Keep four boundaries distinct:
 This keeps the procurement workspace SKU-pressure-first while still using POs as
 the durable execution artifact.
 
+## Interface Pattern
+
+Keep the main stock-pressure list as the operator's source of truth. Purchase
+orders can appear in the right rail for broad awareness, but row-level actions
+belong beside the stock item they affect. When a purchase order is ready to
+order or receive, put the command on that row so the operator can see the SKU,
+vendor, order identifier, and cover state before acting.
+
+Show purchase-order identity as supporting metadata, not as the primary object.
+The row should lead with product and stock state, then show vendor and purchase
+order details where they help reconcile multiple vendors or multiple purchase
+orders for the same SKU. Avoid status badges that share the main action color;
+state labels should read as facts, while buttons should read as commands.
+
+When an authorized operator starts receiving, mark the active purchase-order row
+as the row being received and open a compact receiving panel in the rail. After a
+successful receipt, close that panel instead of leaving an empty 0-unit workflow
+behind. This keeps the workspace focused on the remaining stock-continuity work.
+
 ## Why This Works
 
 Operators think in terms of stock risk: what is exposed, what is already being
@@ -75,6 +94,12 @@ receiving, operational-event, and inventory records change.
   wrappers so operator copy stays calm and actionable.
 - Keep receiving as the inventory mutation path; lifecycle status changes alone
   should not alter stock counts.
+- If a command can advance a draft purchase order to the next operational state,
+  make that sequence server-owned behind one explicit operator command instead
+  of forcing the UI through every intermediate transition.
+- Use plain operator language in the workspace: spell out purchase order in
+  visible copy, reserve compact identifiers for reconciliation, and prefer
+  "Handled" for completed stock-pressure work.
 
 ## Related Issues
 
