@@ -7,42 +7,42 @@ crons.interval(
   "release-checkout-items",
   { minutes: process.env.STAGE == "prod" ? 10 : 1440 },
   internal.storeFront.checkoutSession.releaseCheckoutItems,
-  {}
+  {},
 );
 
 crons.interval(
   "clear-abandoned-sessions",
   { minutes: process.env.STAGE == "prod" ? 30 : 1440 },
   internal.storeFront.checkoutSession.clearAbandonedSessions,
-  {}
+  {},
 );
 
 crons.interval(
   "complete-checkout-sessions",
   { minutes: process.env.STAGE == "prod" ? 30 : 1440 },
   internal.storeFront.checkoutSession.completeCheckoutSessions,
-  {}
+  {},
 );
 
 crons.interval(
   "release-pos-session-items",
   { minutes: process.env.STAGE == "prod" ? 10 : 1440 },
   internal.inventory.posSessions.releasePosSessionItems,
-  {}
+  {},
 );
 
 crons.interval(
   "release-expired-expense-sessions",
-  { minutes: process.env.STAGE == "prod" ? 5 : 1440 },
+  { minutes: process.env.STAGE == "prod" ? 10 : 1440 },
   internal.inventory.expenseSessions.releaseExpenseSessionItems,
-  {}
+  {},
 );
 
 crons.interval(
   "auto-verify-payments",
   { minutes: process.env.STAGE == "prod" ? 10 : 1440 },
   internal.storeFront.payment.autoVerifyUnverifiedPayments,
-  {}
+  {},
 );
 
 export default crons;

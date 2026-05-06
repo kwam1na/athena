@@ -7,16 +7,16 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 - [packages/AGENTS.md](../../packages/AGENTS.md) - package router plus the operational guides for each harnessed package
 
 ## Repo Summary
-- Code files discovered: 1594
-- Graph nodes: 4492
-- Graph edges: 4296
-- Communities: 1522
+- Code files discovered: 1595
+- Graph nodes: 4501
+- Graph edges: 4309
+- Communities: 1523
 
 ## Graph Hotspots
 - `harness-inferential-review.ts` (46 edges, Community 0) - [`scripts/harness-inferential-review.ts`](../../scripts/harness-inferential-review.ts)
 - `storefrontJourneyEvents.ts` (45 edges, Community 1) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)
 - `createJourneyEvent()` (40 edges, Community 1) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)
-- `ProcurementView.tsx` (35 edges, Community 2) - [`packages/athena-webapp/src/components/procurement/ProcurementView.tsx`](../../packages/athena-webapp/src/components/procurement/ProcurementView.tsx)
+- `ProcurementView.tsx` (39 edges, Community 2) - [`packages/athena-webapp/src/components/procurement/ProcurementView.tsx`](../../packages/athena-webapp/src/components/procurement/ProcurementView.tsx)
 - `harness-check.ts` (32 edges, Community 3) - [`scripts/harness-check.ts`](../../scripts/harness-check.ts)
 - `harness-behavior.ts` (30 edges, Community 4) - [`scripts/harness-behavior.ts`](../../scripts/harness-behavior.ts)
 - `harness-generate.ts` (30 edges, Community 5) - [`scripts/harness-generate.ts`](../../scripts/harness-generate.ts)
