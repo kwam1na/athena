@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import View from "../View";
@@ -127,8 +133,12 @@ type ProcurementViewContentProps = {
   inventoryItems: InventorySnapshotItem[];
   mode?: ProcurementMode;
   onModeChange?: (mode: ProcurementMode) => void;
+  onPageChange?: (page: number) => void;
+  onSelectedSkuChange?: (sku: string | null, page?: number) => void;
+  page?: number;
   purchaseOrders: ProcurementOrderSummary[];
   recommendations: ReplenishmentRecommendation[];
+  selectedSku?: string;
   storeId?: Id<"store">;
   vendors: VendorSummary[];
 };
@@ -528,6 +538,19 @@ function parseDraftLineQuantity(line: ReorderDraftLine) {
   return Number.isInteger(quantity) && quantity > 0 ? quantity : null;
 }
 
+function getRecommendationUrlSku(recommendation: ReplenishmentRecommendation) {
+  return recommendation.sku ?? recommendation._id;
+}
+
+function matchesRecommendationSku(
+  recommendation: ReplenishmentRecommendation,
+  selectedSku: string | undefined,
+) {
+  return (
+    selectedSku === recommendation.sku || selectedSku === recommendation._id
+  );
+}
+
 export function ProcurementViewContent({
   hasActiveStore,
   hasFullAdminAccess,
@@ -536,8 +559,12 @@ export function ProcurementViewContent({
   inventoryItems,
   mode: controlledMode,
   onModeChange,
+  onPageChange,
+  onSelectedSkuChange,
+  page: controlledPage,
   purchaseOrders,
   recommendations,
+  selectedSku,
   storeId,
   vendors,
 }: ProcurementViewContentProps) {
@@ -590,8 +617,32 @@ export function ProcurementViewContent({
     [inventoryItems],
   );
   const mode = controlledMode ?? localMode;
+  const controlledSelectedProductSkuId = selectedSku
+    ? (recommendations.find((recommendation) =>
+        matchesRecommendationSku(recommendation, selectedSku),
+      )?._id ?? null)
+    : null;
+  const activeSelectedProductSkuId =
+    selectedSku === undefined
+      ? selectedProductSkuId
+      : controlledSelectedProductSkuId;
+  const activeRecommendationPage = controlledPage ?? recommendationPage;
+  const setActiveRecommendationPage = (nextPage: number) => {
+    if (controlledPage === undefined) {
+      setRecommendationPage(nextPage);
+    }
+
+    onPageChange?.(nextPage);
+  };
+  const selectProductSku = (recommendation: ReplenishmentRecommendation) => {
+    setSelectedProductSkuId(recommendation._id);
+    onSelectedSkuChange?.(
+      getRecommendationUrlSku(recommendation),
+      clampedRecommendationPage,
+    );
+  };
   const handleModeChange = (nextMode: ProcurementMode) => {
-    setRecommendationPage(1);
+    setActiveRecommendationPage(1);
 
     if (!controlledMode) {
       setLocalMode(nextMode);
@@ -600,7 +651,12 @@ export function ProcurementViewContent({
     onModeChange?.(nextMode);
   };
   const handleRecommendationPageChange = (nextPage: number) => {
-    setRecommendationPage(nextPage);
+    const boundedPage = Math.min(
+      Math.max(nextPage, 1),
+      recommendationPageCount,
+    );
+
+    setActiveRecommendationPage(boundedPage);
     window.requestAnimationFrame(() => {
       stockPressureSectionRef.current?.scrollIntoView({
         block: "start",
@@ -621,7 +677,7 @@ export function ProcurementViewContent({
     1,
   );
   const clampedRecommendationPage = Math.min(
-    recommendationPage,
+    activeRecommendationPage,
     recommendationPageCount,
   );
   const paginatedRecommendations = visibleRecommendations.slice(
@@ -655,8 +711,8 @@ export function ProcurementViewContent({
   const selectedReceivingPurchaseOrder = activePurchaseOrders.find(
     (purchaseOrder) => purchaseOrder._id === selectedReceivingOrderId,
   );
-  const selectedInventoryItem = selectedProductSkuId
-    ? (inventoryItemsById.get(selectedProductSkuId) ?? null)
+  const selectedInventoryItem = activeSelectedProductSkuId
+    ? (inventoryItemsById.get(activeSelectedProductSkuId) ?? null)
     : null;
   const visiblePurchaseOrders = activePurchaseOrders.slice(0, 6);
   const hiddenPurchaseOrderCount = Math.max(
@@ -695,10 +751,13 @@ export function ProcurementViewContent({
   );
 
   useEffect(() => {
-    if (recommendationPage > recommendationPageCount) {
+    if (
+      controlledPage === undefined &&
+      activeRecommendationPage > recommendationPageCount
+    ) {
       setRecommendationPage(recommendationPageCount);
     }
-  }, [recommendationPage, recommendationPageCount]);
+  }, [activeRecommendationPage, controlledPage, recommendationPageCount]);
 
   useEffect(() => {
     if (!scrollTargetProductSkuId) return;
@@ -739,7 +798,7 @@ export function ProcurementViewContent({
 
     setSelectedPurchaseOrderId(purchaseOrder._id);
     if (recommendation) {
-      setSelectedProductSkuId(recommendation._id);
+      selectProductSku(recommendation);
       setScrollTargetProductSkuId(recommendation._id);
     }
     handleModeChange(nextMode);
@@ -753,7 +812,7 @@ export function ProcurementViewContent({
       );
 
       if (recommendationIndex >= 0) {
-        setRecommendationPage(
+        setActiveRecommendationPage(
           Math.floor(recommendationIndex / RECOMMENDATIONS_PER_PAGE) + 1,
         );
       }
@@ -1186,11 +1245,11 @@ export function ProcurementViewContent({
                     return (
                       <article
                         aria-pressed={
-                          selectedProductSkuId === recommendation._id
+                          activeSelectedProductSkuId === recommendation._id
                         }
                         className={cn(
                           "bg-background px-layout-md py-layout-lg text-left transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                          selectedProductSkuId === recommendation._id ||
+                          activeSelectedProductSkuId === recommendation._id ||
                             linkedPurchaseOrders.some(
                               (purchaseOrder) =>
                                 purchaseOrder.purchaseOrderId ===
@@ -1200,9 +1259,7 @@ export function ProcurementViewContent({
                             : undefined,
                         )}
                         key={recommendation._id}
-                        onClick={() =>
-                          setSelectedProductSkuId(recommendation._id)
-                        }
+                        onClick={() => selectProductSku(recommendation)}
                         ref={(element) => {
                           if (element) {
                             recommendationRowRefs.current.set(
@@ -1222,7 +1279,7 @@ export function ProcurementViewContent({
                           }
 
                           event.preventDefault();
-                          setSelectedProductSkuId(recommendation._id);
+                          selectProductSku(recommendation);
                         }}
                         role="button"
                         tabIndex={0}
@@ -1463,41 +1520,75 @@ export function ProcurementViewContent({
                 )}
               </div>
               {visibleRecommendations.length > RECOMMENDATIONS_PER_PAGE ? (
-                <div className="flex flex-col gap-layout-sm border-t border-border/70 px-layout-md py-layout-sm text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-                  <p>
-                    Showing {paginationStart}-{paginationEnd} of{" "}
-                    {visibleRecommendations.length}
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      disabled={clampedRecommendationPage === 1}
-                      onClick={() =>
-                        handleRecommendationPageChange(
-                          Math.max(1, clampedRecommendationPage - 1),
-                        )
-                      }
-                      size="sm"
-                      variant="utility"
-                    >
-                      Previous
-                    </Button>
-                    <Button
-                      disabled={
-                        clampedRecommendationPage === recommendationPageCount
-                      }
-                      onClick={() =>
-                        handleRecommendationPageChange(
-                          Math.min(
+                <div className="flex border-t border-border/70 px-layout-md py-layout-sm text-sm">
+                  <div className="ml-auto flex flex-col gap-layout-sm sm:flex-row sm:items-center sm:gap-layout-md">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium text-muted-foreground">
+                        Showing {paginationStart}-{paginationEnd} of{" "}
+                        {visibleRecommendations.length}
+                      </span>
+                      <span className="text-muted-foreground">
+                        Page {clampedRecommendationPage} of{" "}
+                        {recommendationPageCount}
+                      </span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        className="hidden h-8 w-8 p-0 lg:flex"
+                        disabled={clampedRecommendationPage === 1}
+                        onClick={() => handleRecommendationPageChange(1)}
+                        variant="outline"
+                      >
+                        <span className="sr-only">Go to first page</span>
+                        <ChevronsLeft />
+                      </Button>
+                      <Button
+                        className="h-8 w-8 p-0"
+                        disabled={clampedRecommendationPage === 1}
+                        onClick={() =>
+                          handleRecommendationPageChange(
+                            Math.max(1, clampedRecommendationPage - 1),
+                          )
+                        }
+                        variant="outline"
+                      >
+                        <span className="sr-only">Go to previous page</span>
+                        <ChevronLeft />
+                      </Button>
+                      <Button
+                        className="h-8 w-8 p-0"
+                        disabled={
+                          clampedRecommendationPage === recommendationPageCount
+                        }
+                        onClick={() =>
+                          handleRecommendationPageChange(
+                            Math.min(
+                              recommendationPageCount,
+                              clampedRecommendationPage + 1,
+                            ),
+                          )
+                        }
+                        variant="outline"
+                      >
+                        <span className="sr-only">Go to next page</span>
+                        <ChevronRight />
+                      </Button>
+                      <Button
+                        className="hidden h-8 w-8 p-0 lg:flex"
+                        disabled={
+                          clampedRecommendationPage === recommendationPageCount
+                        }
+                        onClick={() =>
+                          handleRecommendationPageChange(
                             recommendationPageCount,
-                            clampedRecommendationPage + 1,
-                          ),
-                        )
-                      }
-                      size="sm"
-                      variant="utility"
-                    >
-                      Next
-                    </Button>
+                          )
+                        }
+                        variant="outline"
+                      >
+                        <span className="sr-only">Go to last page</span>
+                        <ChevronsRight />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ) : null}
@@ -1850,9 +1941,17 @@ export function ProcurementViewContent({
 export function ProcurementView({
   mode,
   onModeChange,
+  onPageChange,
+  onSelectedSkuChange,
+  page,
+  selectedSku,
 }: {
   mode?: ProcurementMode;
   onModeChange?: (mode: ProcurementMode) => void;
+  onPageChange?: (page: number) => void;
+  onSelectedSkuChange?: (sku: string | null, page?: number) => void;
+  page?: number;
+  selectedSku?: string;
 } = {}) {
   const {
     activeStore,
@@ -1908,8 +2007,12 @@ export function ProcurementView({
       inventoryItems={inventoryItems ?? []}
       mode={mode}
       onModeChange={onModeChange}
+      onPageChange={onPageChange}
+      onSelectedSkuChange={onSelectedSkuChange}
+      page={page}
       purchaseOrders={purchaseOrders ?? []}
       recommendations={recommendations ?? []}
+      selectedSku={selectedSku}
       storeId={activeStore?._id}
       vendors={vendors ?? []}
     />

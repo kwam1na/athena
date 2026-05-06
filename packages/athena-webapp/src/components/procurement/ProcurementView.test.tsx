@@ -276,6 +276,17 @@ const baseProps: React.ComponentProps<typeof ProcurementViewContent> = {
   ],
 };
 
+function makeRecommendation(
+  index: number,
+): typeof exposedRecommendation {
+  return {
+    ...exposedRecommendation,
+    _id: `sku-page-${index}` as Id<"productSku">,
+    productName: `Page Item ${index}`,
+    sku: `PAGE-${index}`,
+  };
+}
+
 function installMutationMocks() {
   let mutationCallIndex = 0;
 
@@ -798,6 +809,96 @@ describe("ProcurementViewContent", () => {
     expect(skuDetailPanel).toHaveClass("order-1");
     expect(draftPanel).toHaveClass("order-2");
     expect(openPurchaseOrdersSection).toHaveClass("order-3");
+  });
+
+  it("reports the selected pressure row as a URL-safe SKU with its visible page", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    const onSelectedSkuChange = vi.fn();
+
+    render(
+      <ProcurementViewContent
+        {...baseProps}
+        onSelectedSkuChange={onSelectedSkuChange}
+        page={2}
+        recommendations={Array.from({ length: 12 }, (_, index) =>
+          makeRecommendation(index + 1),
+        )}
+      />,
+    );
+
+    await user.click(screen.getByText("Page Item 11").closest("article")!);
+
+    expect(onSelectedSkuChange).toHaveBeenCalledWith("PAGE-11", 2);
+  });
+
+  it("opens the SKU detail panel from a selected URL SKU", () => {
+    render(<ProcurementViewContent {...baseProps} selectedSku="CW-18" />);
+
+    const skuDetailPanel = screen.getByText("SKU detail").closest("section")!;
+
+    expect(
+      within(skuDetailPanel).getByText("Natural Black Closure Wig"),
+    ).toBeInTheDocument();
+    expect(within(skuDetailPanel).getByText("CW-18")).toBeInTheDocument();
+  });
+
+  it("uses the URL page to choose the visible pressure rows", () => {
+    render(
+      <ProcurementViewContent
+        {...baseProps}
+        page={2}
+        recommendations={Array.from({ length: 12 }, (_, index) =>
+          makeRecommendation(index + 1),
+        )}
+      />,
+    );
+
+    expect(screen.queryByText("Page Item 1")).not.toBeInTheDocument();
+    expect(screen.getByText("Page Item 11")).toBeInTheDocument();
+    expect(screen.getByText("Page Item 12")).toBeInTheDocument();
+  });
+
+  it("does not rewrite a controlled URL page when there are not enough visible rows yet", async () => {
+    const onPageChange = vi.fn();
+
+    render(
+      <ProcurementViewContent
+        {...baseProps}
+        onPageChange={onPageChange}
+        page={2}
+        recommendations={[]}
+      />,
+    );
+
+    await waitFor(() => expect(onPageChange).not.toHaveBeenCalled());
+  });
+
+  it("reports first and last page changes for URL state", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    const onPageChange = vi.fn();
+
+    render(
+      <ProcurementViewContent
+        {...baseProps}
+        onPageChange={onPageChange}
+        page={2}
+        recommendations={Array.from({ length: 22 }, (_, index) =>
+          makeRecommendation(index + 1),
+        )}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /^go to first page$/i }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: /^go to last page$/i }),
+    );
+
+    expect(onPageChange).toHaveBeenNthCalledWith(1, 1);
+    expect(onPageChange).toHaveBeenNthCalledWith(2, 3);
   });
 
   it("keeps draft quantity entry editable without forcing zero or leading zeroes", async () => {
