@@ -19,6 +19,18 @@ type CompoundSolutionFinding = {
 };
 
 const DEFAULT_SOURCE_LINE_THRESHOLD = 150;
+const REQUIRED_SOLUTION_FRONTMATTER_FIELDS = [
+  "title",
+  "date",
+  "category",
+  "module",
+  "problem_type",
+  "component",
+  "resolution_type",
+  "severity",
+  "tags",
+] as const;
+const REQUIRED_SOLUTION_SECTIONS = ["Problem", "Solution", "Prevention"] as const;
 
 const SOURCE_PATTERNS = [
   /^packages\/[^/]+\/src\/.*\.(ts|tsx|js|jsx)$/,
@@ -28,6 +40,13 @@ const SOURCE_PATTERNS = [
 ] as const;
 
 const TEST_FILE_PATTERN = /(^|\/)[^/]+\.(test|spec)\.(ts|tsx|js|jsx)$/;
+const COMPOUND_SENSITIVE_PATTERNS = [
+  /^scripts\/(?:compound-solution-check|pre-push-review|pre-commit-generated-artifacts|harness-|coverage-|architecture-boundary-check|github-pr-merge).*\.(ts|tsx|js|mjs|cjs)$/,
+  /^\.agents\/skills\/(?:execute|deliver-work|compound-delivery-kernel|track|ce-work|ce-commit-push-pr)\/SKILL\.md$/,
+  /^\.github\/workflows\/.+\.ya?ml$/,
+  /^\.husky\/.+$/,
+  /^package\.json$/,
+] as const;
 const SOLUTION_REFERENCE_PATTERN =
   /(?:^|[\s('"`])((?:\.\/)?docs\/solutions\/[A-Za-z0-9._/-]+\.md)(?=$|[\s)'"`,.])/g;
 
@@ -64,9 +83,51 @@ export function isConsiderableSourcePath(repoPath: string) {
   return SOURCE_PATTERNS.some((pattern) => pattern.test(normalizedPath));
 }
 
+export function isCompoundSensitiveWorkflowPath(repoPath: string) {
+  const normalizedPath = normalizeRepoPath(repoPath);
+
+  if (
+    isSolutionDocPath(normalizedPath) ||
+    normalizedPath.startsWith("graphify-out/") ||
+    normalizedPath.includes("/_generated/") ||
+    TEST_FILE_PATTERN.test(normalizedPath)
+  ) {
+    return false;
+  }
+
+  return COMPOUND_SENSITIVE_PATTERNS.some((pattern) => pattern.test(normalizedPath));
+}
+
 export function extractSolutionReferences(markdown: string) {
   return sortUniquePaths(
     [...markdown.matchAll(SOLUTION_REFERENCE_PATTERN)].map((match) => match[1])
+  );
+}
+
+function extractFrontmatter(markdown: string) {
+  if (!markdown.startsWith("---\n")) {
+    return "";
+  }
+
+  const closingIndex = markdown.indexOf("\n---", 4);
+  if (closingIndex === -1) {
+    return "";
+  }
+
+  return markdown.slice(4, closingIndex);
+}
+
+function missingSolutionFrontmatterFields(markdown: string) {
+  const frontmatter = extractFrontmatter(markdown);
+
+  return REQUIRED_SOLUTION_FRONTMATTER_FIELDS.filter(
+    (field) => !new RegExp(`^${field}:`, "m").test(frontmatter)
+  );
+}
+
+function missingSolutionSections(markdown: string) {
+  return REQUIRED_SOLUTION_SECTIONS.filter(
+    (section) => !new RegExp(`^## ${section}\\s*$`, "m").test(markdown)
   );
 }
 
@@ -98,6 +159,9 @@ export function collectCompoundSolutionFindings({
   const changedSolutionDocs = normalizedChangedFiles.filter((filePath) =>
     isSolutionDocPath(filePath)
   );
+  const changedSensitiveWorkflowFiles = normalizedChangedFiles.filter((filePath) =>
+    isCompoundSensitiveWorkflowPath(filePath)
+  );
 
   for (const [filePath, markdown] of markdownContents) {
     const references = extractSolutionReferences(markdown);
@@ -113,11 +177,41 @@ export function collectCompoundSolutionFindings({
     }
   }
 
+  for (const filePath of changedSolutionDocs) {
+    const markdown = markdownContents.get(filePath) ?? "";
+    const missingFrontmatterFields = missingSolutionFrontmatterFields(markdown);
+    const missingSections = missingSolutionSections(markdown);
+
+    if (missingFrontmatterFields.length > 0) {
+      findings.push({
+        message: `Changed solution note ${filePath} is missing required frontmatter fields: ${missingFrontmatterFields.join(
+          ", "
+        )}.`,
+      });
+    }
+
+    if (missingSections.length > 0) {
+      findings.push({
+        message: `Changed solution note ${filePath} is missing required sections: ${missingSections.join(
+          ", "
+        )}.`,
+      });
+    }
+  }
+
   const sourceLineTotal = totalConsiderableSourceLineChanges(sourceLineChanges);
 
   if (sourceLineTotal >= threshold && changedSolutionDocs.length === 0) {
     findings.push({
       message: `Substantial source change detected (${sourceLineTotal} changed source lines, threshold ${threshold}) without a docs/solutions/**/*.md update.`,
+    });
+  }
+
+  if (changedSensitiveWorkflowFiles.length > 0 && changedSolutionDocs.length === 0) {
+    findings.push({
+      message: `Compound-sensitive workflow changes detected in ${changedSensitiveWorkflowFiles.join(
+        ", "
+      )} without a docs/solutions/**/*.md update.`,
     });
   }
 
@@ -313,7 +407,7 @@ export function assertCompoundSolutionCheck(
     throw new Error(
       `Compound solution check failed:\n${findings
         .map((finding) => `- ${finding.message}`)
-        .join("\n")}\n\nAdd or update a docs/solutions note for reusable work, or remove stale solution references from the changed docs.`
+        .join("\n")}\n\nThis is the final integration gate for the whole branch, including parallel subagent work. Add or update a complete docs/solutions note for reusable work, remove stale solution references from changed docs, or tighten this sensor with a focused regression if the branch is a proven false positive.`
     );
   }
 }
