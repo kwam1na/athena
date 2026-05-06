@@ -8,6 +8,7 @@ type SessionRecord = {
   staffProfileId?: string;
   registerNumber?: string;
   registerSessionId?: string;
+  inventoryHoldMode?: "ledger";
   status: "active" | "held" | "completed" | "void" | "expired";
   workflowTraceId?: string;
   expiresAt: number;
@@ -112,6 +113,7 @@ describe("createPosSessionCommandService", () => {
         staffProfileId: "cashier-1",
         registerNumber: "1",
         registerSessionId: "drawer-1",
+        inventoryHoldMode: "ledger",
         expiresAt: 61_000,
         workflowTraceId: "pos_session:session-1",
       }),

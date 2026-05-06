@@ -7,7 +7,7 @@ import {
   QueryCtx,
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import { releaseInventoryHoldsBatch } from "./helpers/inventoryHolds";
+import { releaseLegacyExpenseQuantityPatchHolds } from "./helpers/inventoryHolds";
 import { validateExpenseSessionModifiable } from "./helpers/expenseSessionValidation";
 import { calculateExpenseSessionExpiration } from "./helpers/expenseSessionExpiration";
 import { commandResultValidator } from "../lib/commandResultValidators";
@@ -606,7 +606,7 @@ export const voidExpenseSession = mutation({
       }),
     );
 
-    await releaseInventoryHoldsBatch(ctx.db, releaseItems);
+    await releaseLegacyExpenseQuantityPatchHolds(ctx.db, releaseItems);
 
     // Mark session as void
     await ctx.db.patch("expenseSession", args.sessionId, {
@@ -777,7 +777,7 @@ export const releaseExpenseSessionItems = internalMutation({
           }),
         );
 
-        await releaseInventoryHoldsBatch(ctx.db, releaseItems);
+        await releaseLegacyExpenseQuantityPatchHolds(ctx.db, releaseItems);
         console.log(
           `[Expense] Released inventory holds for ${releaseItems.length} SKUs`,
         );

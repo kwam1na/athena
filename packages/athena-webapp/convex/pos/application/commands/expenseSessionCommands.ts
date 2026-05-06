@@ -3,10 +3,6 @@ import type { MutationCtx } from "../../../_generated/server";
 
 import { calculateExpenseSessionExpiration } from "../../../inventory/helpers/expenseSessionExpiration";
 import {
-  createInventoryHoldGateway,
-  type PosInventoryHoldGateway,
-} from "../../infrastructure/integrations/inventoryHoldGateway";
-import {
   createExpenseSessionCommandRepository,
   type ExpenseSessionCommandRepository,
 } from "../../infrastructure/repositories/expenseSessionCommandRepository";
@@ -129,9 +125,31 @@ type ExpenseSessionCommandDependencies = {
   now: () => number;
   calculateExpiration: (baseTime: number) => number;
   repository: ExpenseSessionCommandRepository;
-  inventory: PosInventoryHoldGateway;
+  inventory: ExpenseInventoryHoldGateway;
   traceRecorder?: ExpenseSessionTraceRecorder;
 };
+
+interface ExpenseInventoryHoldGatewayResult {
+  success: boolean;
+  message?: string;
+  available?: number;
+}
+
+interface ExpenseInventoryHoldGateway {
+  acquireHold(
+    skuId: Id<"productSku">,
+    quantity: number,
+  ): Promise<ExpenseInventoryHoldGatewayResult>;
+  adjustHold(
+    skuId: Id<"productSku">,
+    oldQuantity: number,
+    newQuantity: number,
+  ): Promise<ExpenseInventoryHoldGatewayResult>;
+  releaseHold(
+    skuId: Id<"productSku">,
+    quantity: number,
+  ): Promise<ExpenseInventoryHoldGatewayResult>;
+}
 
 export function createExpenseSessionCommandService(
   dependencies: ExpenseSessionCommandDependencies,
@@ -648,9 +666,88 @@ function createDefaultExpenseSessionCommandService(
     now: () => Date.now(),
     calculateExpiration: calculateExpenseSessionExpiration,
     repository: createExpenseSessionCommandRepository(ctx),
-    inventory: createInventoryHoldGateway(ctx),
+    inventory: createExpenseInventoryHoldGateway(ctx),
     traceRecorder: createExpenseSessionTraceRecorder(ctx),
   });
+}
+
+function createExpenseInventoryHoldGateway(
+  ctx: MutationCtx,
+): ExpenseInventoryHoldGateway {
+  return {
+    acquireHold(skuId, quantity) {
+      return acquireExpenseQuantityPatchHold(ctx, skuId, quantity);
+    },
+    adjustHold(skuId, oldQuantity, newQuantity) {
+      return adjustExpenseQuantityPatchHold(
+        ctx,
+        skuId,
+        oldQuantity,
+        newQuantity,
+      );
+    },
+    releaseHold(skuId, quantity) {
+      return releaseExpenseQuantityPatchHold(ctx, skuId, quantity);
+    },
+  };
+}
+
+async function acquireExpenseQuantityPatchHold(
+  ctx: MutationCtx,
+  skuId: Id<"productSku">,
+  quantity: number,
+): Promise<ExpenseInventoryHoldGatewayResult> {
+  const sku = await ctx.db.get("productSku", skuId);
+  if (!sku || typeof sku.quantityAvailable !== "number") {
+    return { success: false, message: "Product not found" };
+  }
+
+  if (sku.quantityAvailable < quantity) {
+    return {
+      success: false,
+      message: `Only ${sku.quantityAvailable} unit${sku.quantityAvailable !== 1 ? "s" : ""} available`,
+      available: sku.quantityAvailable,
+    };
+  }
+
+  await ctx.db.patch("productSku", skuId, {
+    quantityAvailable: sku.quantityAvailable - quantity,
+  });
+  return { success: true };
+}
+
+async function releaseExpenseQuantityPatchHold(
+  ctx: MutationCtx,
+  skuId: Id<"productSku">,
+  quantity: number,
+): Promise<ExpenseInventoryHoldGatewayResult> {
+  const sku = await ctx.db.get("productSku", skuId);
+  if (!sku || typeof sku.quantityAvailable !== "number") {
+    return { success: true };
+  }
+
+  await ctx.db.patch("productSku", skuId, {
+    quantityAvailable: sku.quantityAvailable + quantity,
+  });
+  return { success: true };
+}
+
+async function adjustExpenseQuantityPatchHold(
+  ctx: MutationCtx,
+  skuId: Id<"productSku">,
+  oldQuantity: number,
+  newQuantity: number,
+): Promise<ExpenseInventoryHoldGatewayResult> {
+  const quantityChange = newQuantity - oldQuantity;
+  if (quantityChange === 0) {
+    return { success: true };
+  }
+
+  if (quantityChange > 0) {
+    return acquireExpenseQuantityPatchHold(ctx, skuId, quantityChange);
+  }
+
+  return releaseExpenseQuantityPatchHold(ctx, skuId, Math.abs(quantityChange));
 }
 
 function buildNextSessionNumber(

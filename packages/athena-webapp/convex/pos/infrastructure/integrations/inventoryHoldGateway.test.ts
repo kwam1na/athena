@@ -1,77 +1,104 @@
 import { describe, expect, it, vi } from "vitest";
 
+import {
+  acquireInventoryHold,
+  adjustInventoryHold,
+  releaseInventoryHold,
+} from "../../../inventory/helpers/inventoryHolds";
 import { createInventoryHoldGateway } from "./inventoryHoldGateway";
 
-function createCtx(quantityAvailable = 5) {
-  const sku = {
-    _id: "sku-1",
-    quantityAvailable,
-  };
-  const patches: Array<Record<string, unknown>> = [];
+vi.mock("../../../inventory/helpers/inventoryHolds", () => ({
+  acquireInventoryHold: vi.fn(async () => ({ success: true })),
+  adjustInventoryHold: vi.fn(async () => ({ success: true })),
+  releaseInventoryHold: vi.fn(async () => ({ success: true })),
+}));
 
+function createCtx() {
   return {
-    ctx: {
-      db: {
-        get: vi.fn(async (tableName: string, id: string) =>
-          tableName === "productSku" && id === "sku-1" ? sku : null,
-        ),
-        patch: vi.fn(async (_tableName: string, _id: string, patch: Record<string, unknown>) => {
-          patches.push(patch);
-          Object.assign(sku, patch);
-        }),
-      },
-    },
-    patches,
-    sku,
+    db: {},
   };
 }
 
-describe("createInventoryHoldGateway legacy quantity-patch compatibility", () => {
-  it("subtracts availability for tuple acquire calls", async () => {
-    const { ctx, patches } = createCtx(5);
-    const gateway = createInventoryHoldGateway(ctx as never);
+function createLegacyPatchCtx() {
+  return {
+    db: {
+      get: vi.fn(async () => ({
+        _id: "sku-1",
+        quantityAvailable: 5,
+      })),
+      patch: vi.fn(async () => undefined),
+    },
+  };
+}
 
-    await expect(gateway.acquireHold("sku-1" as never, 2)).resolves.toEqual({
+describe("createInventoryHoldGateway", () => {
+  it("delegates acquire calls to the ledger helper with object-shaped args", async () => {
+    const ctx = createCtx();
+    const gateway = createInventoryHoldGateway(ctx as never);
+    const args = {
+      storeId: "store-1",
+      sessionId: "session-1",
+      skuId: "sku-1",
+      quantity: 2,
+      expiresAt: 1_000,
+      now: 500,
+    } as never;
+
+    await expect(gateway.acquireHold(args)).resolves.toEqual({
       success: true,
     });
 
-    expect(patches).toEqual([{ quantityAvailable: 3 }]);
+    expect(acquireInventoryHold).toHaveBeenCalledWith(ctx.db, args);
   });
 
-  it("restores availability for tuple release calls", async () => {
-    const { ctx, patches } = createCtx(3);
+  it("delegates adjust calls to the ledger helper with object-shaped args", async () => {
+    const ctx = createCtx();
     const gateway = createInventoryHoldGateway(ctx as never);
+    const args = {
+      storeId: "store-1",
+      sessionId: "session-1",
+      skuId: "sku-1",
+      oldQuantity: 2,
+      newQuantity: 5,
+      expiresAt: 1_000,
+      now: 500,
+    } as never;
 
-    await expect(gateway.releaseHold("sku-1" as never, 2)).resolves.toEqual({
+    await expect(gateway.adjustHold(args)).resolves.toEqual({
       success: true,
     });
 
-    expect(patches).toEqual([{ quantityAvailable: 5 }]);
+    expect(adjustInventoryHold).toHaveBeenCalledWith(ctx.db, args);
   });
 
-  it("adjusts tuple holds by patching only the quantity delta", async () => {
-    const { ctx, patches } = createCtx(3);
+  it("delegates release calls to the ledger helper with object-shaped args", async () => {
+    const ctx = createCtx();
+    const gateway = createInventoryHoldGateway(ctx as never);
+    const args = {
+      sessionId: "session-1",
+      skuId: "sku-1",
+      quantity: 2,
+      now: 500,
+    } as never;
+
+    await expect(gateway.releaseHold(args)).resolves.toEqual({
+      success: true,
+    });
+
+    expect(releaseInventoryHold).toHaveBeenCalledWith(ctx.db, args);
+  });
+
+  it("rejects tuple-shaped acquire calls instead of patching SKU availability", async () => {
+    const ctx = createLegacyPatchCtx();
     const gateway = createInventoryHoldGateway(ctx as never);
 
-    await expect(
-      gateway.adjustHold("sku-1" as never, 2, 5),
-    ).resolves.toEqual({
-      success: true,
-    });
-    await expect(
-      gateway.adjustHold("sku-1" as never, 5, 4),
-    ).resolves.toEqual({
-      success: true,
-    });
-    await expect(
-      gateway.adjustHold("sku-1" as never, 4, 4),
-    ).resolves.toEqual({
-      success: true,
-    });
+    expect(() =>
+      (gateway.acquireHold as never as (skuId: string, quantity: number) => unknown)(
+        "sku-1",
+        2,
+      ),
+    ).toThrow("object-shaped inventory hold arguments");
 
-    expect(patches).toEqual([
-      { quantityAvailable: 0 },
-      { quantityAvailable: 1 },
-    ]);
+    expect(ctx.db.patch).not.toHaveBeenCalled();
   });
 });

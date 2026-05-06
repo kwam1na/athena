@@ -202,6 +202,9 @@ export async function releaseInventoryHold(
   for (const hold of activeHolds) {
     if (hold.expiresAt <= now) {
       await markHoldExpired(db, hold._id, now);
+      if (remainingQuantity !== undefined) {
+        remainingQuantity = Math.max(0, remainingQuantity - hold.quantity);
+      }
       continue;
     }
 
@@ -227,10 +230,6 @@ export async function releaseInventoryHold(
       releasedAt: now,
       updatedAt: now,
     });
-  }
-
-  if (remainingQuantity && remainingQuantity > 0) {
-    await restoreLegacyQuantityPatchHold(db, args.skuId, remainingQuantity);
   }
 
   return {
@@ -347,30 +346,12 @@ export async function acquireInventoryHoldsBatch(
 
 export async function releaseInventoryHoldsBatch(
   db: DatabaseWriter,
-  input:
-    | {
-        sessionId: Id<"posSession">;
-        items: Array<{ skuId: Id<"productSku">; quantity: number }>;
-        now?: number;
-      }
-    | Array<{ skuId: Id<"productSku">; quantity: number }>,
+  input: {
+    sessionId: Id<"posSession">;
+    items: Array<{ skuId: Id<"productSku">; quantity: number }>;
+    now?: number;
+  },
 ): Promise<void> {
-  if (Array.isArray(input)) {
-    await Promise.all(
-      input.map(async (item) => {
-        const sku = await db.get("productSku", item.skuId);
-        if (!sku || typeof sku.quantityAvailable !== "number") {
-          return;
-        }
-
-        await db.patch("productSku", item.skuId, {
-          quantityAvailable: sku.quantityAvailable + item.quantity,
-        });
-      }),
-    );
-    return;
-  }
-
   await Promise.all(
     input.items.map((item) =>
       releaseInventoryHold(db, {
@@ -380,6 +361,24 @@ export async function releaseInventoryHoldsBatch(
         now: input.now,
       }),
     ),
+  );
+}
+
+export async function releaseLegacyExpenseQuantityPatchHolds(
+  db: DatabaseWriter,
+  items: Array<{ skuId: Id<"productSku">; quantity: number }>,
+): Promise<void> {
+  await Promise.all(
+    items.map(async (item) => {
+      const sku = await db.get("productSku", item.skuId);
+      if (!sku || typeof sku.quantityAvailable !== "number") {
+        return;
+      }
+
+      await db.patch("productSku", item.skuId, {
+        quantityAvailable: sku.quantityAvailable + item.quantity,
+      });
+    }),
   );
 }
 
@@ -643,20 +642,5 @@ async function markHoldExpired(
     status: "expired",
     expiredAt: now,
     updatedAt: now,
-  });
-}
-
-async function restoreLegacyQuantityPatchHold(
-  db: DatabaseWriter,
-  skuId: Id<"productSku">,
-  quantity: number,
-) {
-  const sku = await db.get("productSku", skuId);
-  if (!sku || typeof sku.quantityAvailable !== "number") {
-    return;
-  }
-
-  await db.patch("productSku", skuId, {
-    quantityAvailable: sku.quantityAvailable + quantity,
   });
 }

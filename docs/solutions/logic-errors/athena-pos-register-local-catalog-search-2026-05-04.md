@@ -78,6 +78,11 @@ store catalog subscription. Fetch availability only for the bounded set of rows
 currently being displayed or exact-matched, and still let the add-item command be
 the final inventory authority.
 
+POS ledger release must also stay out of SKU availability restoration. Cart
+holds represented by `inventoryHold` rows did not decrement
+`productSku.quantityAvailable` when acquired, so expiry/void/clear-cart cleanup
+should terminalize the hold rows without adding availability back to the SKU.
+
 ## Prevention
 
 - Do not start generic per-keystroke POS product search from active register
@@ -91,6 +96,8 @@ the final inventory authority.
 - Add tests for prefix and typo matching whenever local text ranking changes.
 - Add tests that prove catalog metadata rows exclude volatile availability and
   availability is overlaid from a bounded query.
+- Add tests that prove expired POS ledger holds are released or expired without
+  restoring `productSku.quantityAvailable`.
 
 ## Related Issues
 
