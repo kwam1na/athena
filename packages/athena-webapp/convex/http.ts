@@ -32,6 +32,7 @@ import { guestRoutes } from "./http/domains/customerChannel/routes/guest";
 import { colorRoutes } from "./http/domains/core/routes/colors";
 import { savedBagRoutes } from "./http/domains/customerChannel/routes/savedBag";
 import { mtnMomoRoutes } from "./http/domains/moneyMovement/routes";
+import { whatsappMessagingRoutes } from "./http/domains/customerMessaging/routes/whatsapp";
 
 const app: HonoWithConvex<ActionCtx> = new Hono();
 
@@ -65,6 +66,7 @@ app.route("/storefront", storefrontRoutes);
 
 app.route("/webhooks/paystack", paystackRoutes);
 app.route("/webhooks/mtn-momo", mtnMomoRoutes);
+app.route("/webhooks/whatsapp", whatsappMessagingRoutes);
 
 app.route("/analytics", analyticsRoutes);
 

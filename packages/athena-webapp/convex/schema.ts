@@ -62,6 +62,10 @@ import {
   mtnCollectionTransactionSchema,
 } from "./schemas/payments/mtnCollections";
 import {
+  customerMessageDeliverySchema,
+  receiptShareTokenSchema,
+} from "./schemas/customerMessaging";
+import {
   approvalRequestSchema,
   customerProfileSchema,
   inventoryMovementSchema,
@@ -248,6 +252,14 @@ const schema = defineSchema({
   mtnCollectionTransaction: defineTable(mtnCollectionTransactionSchema)
     .index("by_providerReference", ["providerReference"])
     .index("by_storeId_requestedAt", ["storeId", "requestedAt"]),
+  receiptShareToken: defineTable(receiptShareTokenSchema)
+    .index("by_tokenHash", ["tokenHash"])
+    .index("by_transactionId_status", ["transactionId", "status"])
+    .index("by_storeId_transactionId", ["storeId", "transactionId"]),
+  customerMessageDelivery: defineTable(customerMessageDeliverySchema)
+    .index("by_storeId_subject", ["storeId", "subjectType", "subjectId"])
+    .index("by_providerMessageId", ["providerMessageId"])
+    .index("by_storeId_intent_status", ["storeId", "intent", "status"]),
   organization: defineTable(organizationSchema),
   organizationMember: defineTable(organizationMemberSchema),
   posCustomer: defineTable(posCustomerSchema)

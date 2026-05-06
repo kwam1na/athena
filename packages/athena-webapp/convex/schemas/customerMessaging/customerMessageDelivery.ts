@@ -1,0 +1,36 @@
+import { v } from "convex/values";
+
+export const customerMessageDeliverySchema = v.object({
+  storeId: v.id("store"),
+  subjectType: v.literal("pos_transaction"),
+  subjectId: v.string(),
+  intent: v.literal("pos_receipt_link"),
+  channel: v.literal("whatsapp_business"),
+  receiptShareTokenId: v.optional(v.id("receiptShareToken")),
+  recipientSource: v.union(
+    v.literal("customer_profile"),
+    v.literal("sale_customer_info"),
+    v.literal("one_time_override"),
+  ),
+  recipientDisplay: v.string(),
+  recipientPhone: v.optional(v.string()),
+  providerMessageId: v.optional(v.string()),
+  providerStatus: v.optional(v.string()),
+  status: v.union(
+    v.literal("pending"),
+    v.literal("sent"),
+    v.literal("delivered"),
+    v.literal("read"),
+    v.literal("failed"),
+    v.literal("unknown"),
+  ),
+  failureCategory: v.optional(v.string()),
+  failureMessage: v.optional(v.string()),
+  actorStaffProfileId: v.optional(v.id("staffProfile")),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+  sentAt: v.optional(v.number()),
+  deliveredAt: v.optional(v.number()),
+  readAt: v.optional(v.number()),
+  failedAt: v.optional(v.number()),
+});

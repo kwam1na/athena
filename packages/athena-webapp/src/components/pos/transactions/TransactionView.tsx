@@ -22,6 +22,10 @@ import { Badge } from "../../ui/badge";
 import { getRelativeTime } from "~/src/lib/utils";
 import { PosPaymentMethod } from "~/src/lib/pos/domain";
 import { OrderSummary } from "../OrderSummary";
+import {
+  PosReceiptShareControl,
+  type ReceiptDeliveryHistoryEntry,
+} from "../receipt/PosReceiptShareControl";
 import { CartItems } from "../CartItems";
 import type { CartItem } from "../types";
 import type { Id } from "~/convex/_generated/dataModel";
@@ -29,7 +33,6 @@ import { CardContent, CardHeader } from "../../ui/card";
 import { WorkflowTraceRouteLink } from "../../traces/WorkflowTraceRouteLink";
 import { Button } from "../../ui/button";
 import { Input } from "../../ui/input";
-import config from "~/src/config";
 import { formatStaffDisplayName } from "~/shared/staffDisplayName";
 import { Textarea } from "../../ui/textarea";
 import {
@@ -74,6 +77,10 @@ type CorrectionEvent = {
 type PaymentMethodCorrectionResultData = {
   approvalProofId: Id<"approvalProof">;
   approverStaffProfileId: Id<"staffProfile">;
+};
+
+type TransactionWithReceiptDelivery = {
+  receiptDeliveryHistory?: ReceiptDeliveryHistoryEntry[] | null;
 };
 
 const PAYMENT_METHOD_OPTIONS = [
@@ -124,13 +131,22 @@ function requiresInlineManagerProof(approval: ApprovalRequirement) {
     (mode) => mode.kind === "async_request" && Boolean(mode.approvalRequestId),
   );
 
-  return !hasAsyncApprovalRequest && approval.resolutionModes.some(
-    (mode) => mode.kind === "inline_manager_proof",
+  return (
+    !hasAsyncApprovalRequest &&
+    approval.resolutionModes.some(
+      (mode) => mode.kind === "inline_manager_proof",
+    )
   );
 }
 
 function isManagerStaff(staff: StaffAuthenticationResult) {
   return staff.activeRoles?.includes("manager") ?? false;
+}
+
+function getTransactionReceiptDeliveryHistory(
+  transaction: TransactionWithReceiptDelivery,
+) {
+  return transaction.receiptDeliveryHistory ?? [];
 }
 
 export function formatCorrectionHistoryChange(event: CorrectionEvent) {
@@ -245,12 +261,14 @@ export function TransactionView() {
             storeId: activeStore._id,
             subject: args.subject,
             username: args.username,
-          }) as Promise<CommandResult<{
-            approvalProofId: Id<"approvalProof">;
-            approvedByStaffProfileId: Id<"staffProfile">;
-            expiresAt: number;
-            requestedByStaffProfileId?: Id<"staffProfile">;
-          }>>,
+          }) as Promise<
+            CommandResult<{
+              approvalProofId: Id<"approvalProof">;
+              approvedByStaffProfileId: Id<"staffProfile">;
+              expiresAt: number;
+              requestedByStaffProfileId?: Id<"staffProfile">;
+            }>
+          >,
       );
     },
   });
@@ -290,7 +308,11 @@ export function TransactionView() {
       subtotal: transaction.subtotal,
       tax: transaction.tax,
       total: transaction.total,
-      payments: transaction.payments.map((payment, index) => ({
+      payments: transaction.payments.map((payment: {
+        amount: number;
+        method: string;
+        timestamp: number;
+      }, index: number) => ({
         id: `${payment.method}-${index}-${payment.timestamp}`,
         ...payment,
         method: payment.method as PosPaymentMethod,
@@ -322,7 +344,7 @@ export function TransactionView() {
   }
 
   const completedPaymentMethods = transaction.payments?.length
-    ? Array.from(new Set(transaction.payments.map((payment) => payment.method)))
+    ? Array.from(new Set(transaction.payments.map((payment: { method: string }) => payment.method)))
     : [transaction.paymentMethod || "Unknown"];
   const paymentMethodLabel =
     completedPaymentMethods.length > 1
@@ -338,10 +360,16 @@ export function TransactionView() {
           : Smartphone;
 
   const PaymentIcon = paymentMethodIcon;
-  const storefrontReceiptUrl = `${config.storeFrontUrl.replace(
-    /\/$/,
-    "",
-  )}/shop/receipt/${transactionId}`;
+  const receiptDeliveryHistory = getTransactionReceiptDeliveryHistory(
+    transaction as TransactionWithReceiptDelivery,
+  );
+  const receiptMessaging = {
+    customerPhone:
+      transaction.customer?.phone ?? transaction.customerInfo?.phone ?? "",
+    deliveryHistory: receiptDeliveryHistory,
+    transactionId: transactionId as Id<"posTransaction">,
+    transactionNumber: transaction.transactionNumber,
+  };
   const correctionHistory = getTransactionCorrectionHistory(transaction);
   const hiddenCorrectionCount = Math.max(0, correctionHistory.length - 2);
   const visibleCorrectionHistory = correctionHistoryExpanded
@@ -487,11 +515,14 @@ export function TransactionView() {
           () =>
             correctPaymentMethod({
               actorStaffProfileId: args?.staffProfileId,
-              approvalProofId: approvalArgs.approvalProofId ?? args?.approvalProofId,
+              approvalProofId:
+                approvalArgs.approvalProofId ?? args?.approvalProofId,
               paymentMethod,
               reason,
               transactionId: transactionId as Id<"posTransaction">,
-            }) as Promise<ApprovalCommandResult<PaymentMethodCorrectionResultData>>,
+            }) as Promise<
+              ApprovalCommandResult<PaymentMethodCorrectionResultData>
+            >,
         );
         setCorrectionSubmitting(false);
         return result;
@@ -618,7 +649,10 @@ export function TransactionView() {
           }
         }}
         onDismiss={() => setPendingCorrection(null)}
-        open={pendingCorrection === "customer" || pendingCorrection === "payment_method"}
+        open={
+          pendingCorrection === "customer" ||
+          pendingCorrection === "payment_method"
+        }
       />
       {paymentApprovalRunner.dialog}
       <FadeIn className="h-full">
@@ -723,20 +757,16 @@ export function TransactionView() {
                       </Button>
                     ) : null}
 
-                    <Button
-                      className="w-full"
-                      onClick={() =>
-                        window.open(
-                          storefrontReceiptUrl,
-                          "_blank",
-                          "noreferrer",
-                        )
-                      }
-                      variant="outline"
-                    >
-                      View receipt
-                    </Button>
                   </div>
+
+                  {isCompletedTransaction ? (
+                    <div className="border-t border-border/70 p-6">
+                      <PosReceiptShareControl
+                        compact
+                        messaging={receiptMessaging}
+                      />
+                    </div>
+                  ) : null}
 
                   {/* {transaction.notes && (
                     <div className="space-y-1">
@@ -1075,6 +1105,7 @@ export function TransactionView() {
                     : undefined
                 }
                 receiptNumberOverride={transaction.transactionNumber}
+                receiptMessaging={receiptMessaging}
                 customerInfo={
                   transaction.customer
                     ? {

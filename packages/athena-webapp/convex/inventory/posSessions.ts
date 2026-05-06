@@ -58,6 +58,7 @@ const sessionIdOnlyValidator = v.object({
 
 const completeSessionDataValidator = v.object({
   sessionId: v.id("posSession"),
+  transactionId: v.id("posTransaction"),
   transactionNumber: v.string(),
 });
 
@@ -1302,6 +1303,7 @@ export const completeSession = mutation({
     // Return the session ID since the transaction will be created asynchronously
     return ok({
       sessionId: args.sessionId,
+      transactionId: sessionTransactionId,
       transactionNumber,
     });
   },

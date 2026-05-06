@@ -23,7 +23,6 @@ import { Route as ShopBagIndexRouteImport } from './routes/shop/bag.index'
 import { Route as LayoutRewardsIndexRouteImport } from './routes/_layout/rewards.index'
 import { Route as ShopCheckoutPodConfirmationRouteImport } from './routes/shop/checkout/pod-confirmation'
 import { Route as ShopCheckoutPendingRouteImport } from './routes/shop/checkout/pending'
-import { Route as ShopReceiptTransactionIdIndexRouteImport } from './routes/shop/receipt/$transactionId/index'
 import { Route as ShopCheckoutVerifyIndexRouteImport } from './routes/shop/checkout/verify.index'
 import { Route as ShopCheckoutCompleteIndexRouteImport } from './routes/shop/checkout/complete.index'
 import { Route as ShopCheckoutSessionIdSlugIndexRouteImport } from './routes/shop/checkout/$sessionIdSlug/index'
@@ -35,6 +34,7 @@ import { Route as ShopCheckoutSessionIdSlugIncompleteRouteImport } from './route
 import { Route as ShopCheckoutSessionIdSlugCompleteRouteImport } from './routes/shop/checkout/$sessionIdSlug/complete'
 import { Route as ShopCheckoutSessionIdSlugCanceledRouteImport } from './routes/shop/checkout/$sessionIdSlug/canceled'
 import { Route as LayoutShopProductProductSlugRouteImport } from './routes/_layout/shop.product.$productSlug'
+import { Route as ShopReceiptSTokenIndexRouteImport } from './routes/shop/receipt/s/$token/index'
 import { Route as LayoutShopLayoutShopCategorySlugIndexRouteImport } from './routes/_layout/_shopLayout/shop/$categorySlug/index'
 import { Route as LayoutOrdersLayoutShopOrdersIndexRouteImport } from './routes/_layout/_ordersLayout/shop/orders/index'
 import { Route as LayoutShopLayoutShopCategorySlugSubcategorySlugRouteImport } from './routes/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug'
@@ -110,12 +110,6 @@ const ShopCheckoutPendingRoute = ShopCheckoutPendingRouteImport.update({
   path: '/shop/checkout/pending',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ShopReceiptTransactionIdIndexRoute =
-  ShopReceiptTransactionIdIndexRouteImport.update({
-    id: '/shop/receipt/$transactionId/',
-    path: '/shop/receipt/$transactionId/',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const ShopCheckoutVerifyIndexRoute = ShopCheckoutVerifyIndexRouteImport.update({
   id: '/shop/checkout/verify/',
   path: '/shop/checkout/verify/',
@@ -179,6 +173,11 @@ const LayoutShopProductProductSlugRoute =
     path: '/shop/product/$productSlug',
     getParentRoute: () => LayoutRoute,
   } as any)
+const ShopReceiptSTokenIndexRoute = ShopReceiptSTokenIndexRouteImport.update({
+  id: '/shop/receipt/s/$token/',
+  path: '/shop/receipt/s/$token/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LayoutShopLayoutShopCategorySlugIndexRoute =
   LayoutShopLayoutShopCategorySlugIndexRouteImport.update({
     id: '/shop/$categorySlug/',
@@ -239,10 +238,10 @@ export interface FileRoutesByFullPath {
   '/shop/checkout/$sessionIdSlug/': typeof ShopCheckoutSessionIdSlugIndexRoute
   '/shop/checkout/complete/': typeof ShopCheckoutCompleteIndexRoute
   '/shop/checkout/verify/': typeof ShopCheckoutVerifyIndexRoute
-  '/shop/receipt/$transactionId/': typeof ShopReceiptTransactionIdIndexRoute
   '/shop/$categorySlug/$subcategorySlug': typeof LayoutShopLayoutShopCategorySlugSubcategorySlugRoute
   '/shop/orders/': typeof LayoutOrdersLayoutShopOrdersIndexRoute
   '/shop/$categorySlug/': typeof LayoutShopLayoutShopCategorySlugIndexRoute
+  '/shop/receipt/s/$token/': typeof ShopReceiptSTokenIndexRoute
   '/shop/orders/$orderId/review': typeof LayoutOrdersLayoutShopOrdersOrderIdReviewRoute
   '/shop/orders/$orderId/': typeof LayoutOrdersLayoutShopOrdersOrderIdIndexRoute
   '/shop/orders/$orderId/$orderItemId/review': typeof LayoutOrdersLayoutShopOrdersOrderIdOrderItemIdReviewRoute
@@ -270,10 +269,10 @@ export interface FileRoutesByTo {
   '/shop/checkout/$sessionIdSlug': typeof ShopCheckoutSessionIdSlugIndexRoute
   '/shop/checkout/complete': typeof ShopCheckoutCompleteIndexRoute
   '/shop/checkout/verify': typeof ShopCheckoutVerifyIndexRoute
-  '/shop/receipt/$transactionId': typeof ShopReceiptTransactionIdIndexRoute
   '/shop/$categorySlug/$subcategorySlug': typeof LayoutShopLayoutShopCategorySlugSubcategorySlugRoute
   '/shop/orders': typeof LayoutOrdersLayoutShopOrdersIndexRoute
   '/shop/$categorySlug': typeof LayoutShopLayoutShopCategorySlugIndexRoute
+  '/shop/receipt/s/$token': typeof ShopReceiptSTokenIndexRoute
   '/shop/orders/$orderId/review': typeof LayoutOrdersLayoutShopOrdersOrderIdReviewRoute
   '/shop/orders/$orderId': typeof LayoutOrdersLayoutShopOrdersOrderIdIndexRoute
   '/shop/orders/$orderId/$orderItemId/review': typeof LayoutOrdersLayoutShopOrdersOrderIdOrderItemIdReviewRoute
@@ -305,10 +304,10 @@ export interface FileRoutesById {
   '/shop/checkout/$sessionIdSlug/': typeof ShopCheckoutSessionIdSlugIndexRoute
   '/shop/checkout/complete/': typeof ShopCheckoutCompleteIndexRoute
   '/shop/checkout/verify/': typeof ShopCheckoutVerifyIndexRoute
-  '/shop/receipt/$transactionId/': typeof ShopReceiptTransactionIdIndexRoute
   '/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug': typeof LayoutShopLayoutShopCategorySlugSubcategorySlugRoute
   '/_layout/_ordersLayout/shop/orders/': typeof LayoutOrdersLayoutShopOrdersIndexRoute
   '/_layout/_shopLayout/shop/$categorySlug/': typeof LayoutShopLayoutShopCategorySlugIndexRoute
+  '/shop/receipt/s/$token/': typeof ShopReceiptSTokenIndexRoute
   '/_layout/_ordersLayout/shop/orders/$orderId/review': typeof LayoutOrdersLayoutShopOrdersOrderIdReviewRoute
   '/_layout/_ordersLayout/shop/orders/$orderId/': typeof LayoutOrdersLayoutShopOrdersOrderIdIndexRoute
   '/_layout/_ordersLayout/shop/orders/$orderId/$orderItemId/review': typeof LayoutOrdersLayoutShopOrdersOrderIdOrderItemIdReviewRoute
@@ -338,10 +337,10 @@ export interface FileRouteTypes {
     | '/shop/checkout/$sessionIdSlug/'
     | '/shop/checkout/complete/'
     | '/shop/checkout/verify/'
-    | '/shop/receipt/$transactionId/'
     | '/shop/$categorySlug/$subcategorySlug'
     | '/shop/orders/'
     | '/shop/$categorySlug/'
+    | '/shop/receipt/s/$token/'
     | '/shop/orders/$orderId/review'
     | '/shop/orders/$orderId/'
     | '/shop/orders/$orderId/$orderItemId/review'
@@ -369,10 +368,10 @@ export interface FileRouteTypes {
     | '/shop/checkout/$sessionIdSlug'
     | '/shop/checkout/complete'
     | '/shop/checkout/verify'
-    | '/shop/receipt/$transactionId'
     | '/shop/$categorySlug/$subcategorySlug'
     | '/shop/orders'
     | '/shop/$categorySlug'
+    | '/shop/receipt/s/$token'
     | '/shop/orders/$orderId/review'
     | '/shop/orders/$orderId'
     | '/shop/orders/$orderId/$orderItemId/review'
@@ -403,10 +402,10 @@ export interface FileRouteTypes {
     | '/shop/checkout/$sessionIdSlug/'
     | '/shop/checkout/complete/'
     | '/shop/checkout/verify/'
-    | '/shop/receipt/$transactionId/'
     | '/_layout/_shopLayout/shop/$categorySlug/$subcategorySlug'
     | '/_layout/_ordersLayout/shop/orders/'
     | '/_layout/_shopLayout/shop/$categorySlug/'
+    | '/shop/receipt/s/$token/'
     | '/_layout/_ordersLayout/shop/orders/$orderId/review'
     | '/_layout/_ordersLayout/shop/orders/$orderId/'
     | '/_layout/_ordersLayout/shop/orders/$orderId/$orderItemId/review'
@@ -428,7 +427,7 @@ export interface RootRouteChildren {
   ShopCheckoutSessionIdSlugIndexRoute: typeof ShopCheckoutSessionIdSlugIndexRoute
   ShopCheckoutCompleteIndexRoute: typeof ShopCheckoutCompleteIndexRoute
   ShopCheckoutVerifyIndexRoute: typeof ShopCheckoutVerifyIndexRoute
-  ShopReceiptTransactionIdIndexRoute: typeof ShopReceiptTransactionIdIndexRoute
+  ShopReceiptSTokenIndexRoute: typeof ShopReceiptSTokenIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -531,13 +530,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShopCheckoutPendingRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/shop/receipt/$transactionId/': {
-      id: '/shop/receipt/$transactionId/'
-      path: '/shop/receipt/$transactionId'
-      fullPath: '/shop/receipt/$transactionId/'
-      preLoaderRoute: typeof ShopReceiptTransactionIdIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/shop/checkout/verify/': {
       id: '/shop/checkout/verify/'
       path: '/shop/checkout/verify'
@@ -614,6 +606,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/shop/product/$productSlug'
       preLoaderRoute: typeof LayoutShopProductProductSlugRouteImport
       parentRoute: typeof LayoutRoute
+    }
+    '/shop/receipt/s/$token/': {
+      id: '/shop/receipt/s/$token/'
+      path: '/shop/receipt/s/$token'
+      fullPath: '/shop/receipt/s/$token/'
+      preLoaderRoute: typeof ShopReceiptSTokenIndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_layout/_shopLayout/shop/$categorySlug/': {
       id: '/_layout/_shopLayout/shop/$categorySlug/'
@@ -745,7 +744,7 @@ const rootRouteChildren: RootRouteChildren = {
   ShopCheckoutSessionIdSlugIndexRoute: ShopCheckoutSessionIdSlugIndexRoute,
   ShopCheckoutCompleteIndexRoute: ShopCheckoutCompleteIndexRoute,
   ShopCheckoutVerifyIndexRoute: ShopCheckoutVerifyIndexRoute,
-  ShopReceiptTransactionIdIndexRoute: ShopReceiptTransactionIdIndexRoute,
+  ShopReceiptSTokenIndexRoute: ShopReceiptSTokenIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

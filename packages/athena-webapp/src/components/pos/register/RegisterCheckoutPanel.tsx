@@ -41,6 +41,7 @@ export function RegisterCheckoutPanel({
         completedOrderNumber={checkout.completedOrderNumber}
         completedTransactionData={checkout.completedTransactionData}
         cashierName={checkout.cashierName}
+        actorStaffProfileId={checkout.actorStaffProfileId}
         onAddPayment={checkout.onAddPayment}
         onUpdatePayment={checkout.onUpdatePayment}
         onRemovePayment={checkout.onRemovePayment}

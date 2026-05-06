@@ -12,6 +12,8 @@ import {
   listTransactionsByStore,
 } from "../../infrastructure/repositories/transactionRepository";
 import { formatStaffDisplayName } from "../../../../shared/staffDisplayName";
+import { listReceiptDeliveriesForTransaction } from "../../../customerMessaging/repository";
+import { statusIsRetryable } from "../../../customerMessaging/domain";
 
 function summarizeCashierName(args: {
   fullName?: string;
@@ -196,12 +198,21 @@ export async function getTransactionById(
     storeId: transaction.storeId,
     transactionId: transaction._id,
   });
+  const receiptDeliveries = await listReceiptDeliveriesForTransaction(ctx, {
+    storeId: transaction.storeId,
+    transactionId: transaction._id,
+  });
   const actorStaffNamesById = await listStaffNames(
     ctx,
     new Set(
-      correctionHistory.flatMap((event) =>
-        event.actorStaffProfileId ? [event.actorStaffProfileId] : [],
-      ),
+      [
+        ...correctionHistory.flatMap((event) =>
+          event.actorStaffProfileId ? [event.actorStaffProfileId] : [],
+        ),
+        ...receiptDeliveries.flatMap((delivery) =>
+          delivery.actorStaffProfileId ? [delivery.actorStaffProfileId] : [],
+        ),
+      ],
     ),
   );
 
@@ -262,6 +273,26 @@ export async function getTransactionById(
       actorStaffName: event.actorStaffProfileId
         ? actorStaffNamesById.get(event.actorStaffProfileId) ?? null
         : null,
+    })),
+    receiptDeliveryHistory: receiptDeliveries.map((delivery) => ({
+      _id: delivery._id,
+      status: delivery.status,
+      providerStatus: delivery.providerStatus,
+      recipientSource: delivery.recipientSource,
+      recipientDisplay: delivery.recipientDisplay,
+      actorStaffProfileId: delivery.actorStaffProfileId,
+      actorStaffName: delivery.actorStaffProfileId
+        ? actorStaffNamesById.get(delivery.actorStaffProfileId) ?? null
+        : null,
+      createdAt: delivery.createdAt,
+      updatedAt: delivery.updatedAt,
+      sentAt: delivery.sentAt,
+      deliveredAt: delivery.deliveredAt,
+      readAt: delivery.readAt,
+      failedAt: delivery.failedAt,
+      failureCategory: delivery.failureCategory,
+      failureMessage: delivery.failureMessage,
+      retryable: statusIsRetryable(delivery.status),
     })),
     items: items.map((item) => ({
       _id: item._id,

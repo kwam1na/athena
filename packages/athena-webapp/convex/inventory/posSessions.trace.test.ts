@@ -1024,6 +1024,7 @@ describe("pos session lifecycle trace handlers", () => {
       kind: "ok",
       data: {
         sessionId: "session-1",
+        transactionId: "txn-1",
         transactionNumber: "POS-1001",
       },
     });

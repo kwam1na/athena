@@ -308,6 +308,23 @@ pm2 start bun --name storefront-qa -- run dev -- --host 127.0.0.1 --port 5176 --
 
 Because this exposes Vite dev servers through public hostnames, protect `athena-qa.wigclub.store` and `qa.wigclub.store` with Cloudflare Access or equivalent edge auth before sharing them broadly.
 
+## WhatsApp Receipt Messaging Configuration
+
+Athena POS receipt messaging sends customer-safe storefront receipt links through the Meta WhatsApp Cloud API. Configure these server-side Convex environment variables per environment before operators use the WhatsApp receipt action:
+
+| Variable | Purpose |
+| --- | --- |
+| `WHATSAPP_ACCESS_TOKEN` | Meta Cloud API access token for the WhatsApp Business account |
+| `WHATSAPP_PHONE_NUMBER_ID` | Meta phone number id used in `/{phone-number-id}/messages` send requests |
+| `WHATSAPP_RECEIPT_TEMPLATE_NAME` | Approved utility template name for POS receipt links |
+| `WHATSAPP_TEMPLATE_LANGUAGE` | Template language code; defaults to `en_US` when omitted |
+| `WHATSAPP_GRAPH_API_VERSION` | Meta Graph API version; defaults to `v24.0` when omitted |
+| `WHATSAPP_WEBHOOK_VERIFY_TOKEN` | Verify token configured in the Meta app webhook callback |
+| `WHATSAPP_WEBHOOK_APP_SECRET` | Meta app secret used to verify `X-Hub-Signature-256` webhook POST callbacks |
+| `STOREFRONT_RECEIPT_BASE_URL` | Public storefront origin used to build `/shop/receipt/s/{token}` links |
+
+The receipt template body variables are store name, transaction number, and receipt link, in that order. Configure the Meta webhook callback to Athena's `/webhooks/whatsapp` endpoint so `sent`, `delivered`, `read`, and `failed` statuses can update the POS delivery history.
+
 ## Automatic QA Deploys
 
 `.github/workflows/athena-qa-deploy.yml` deploys QA automatically on every push to `main`. In normal use that means merged PRs refresh `athena-qa.wigclub.store` without an operator running the deploy script locally. When a merge touches `packages/storefront-webapp/**` or the shared QA deployment scripts/workflow, it also refreshes `qa.wigclub.store`.
