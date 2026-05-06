@@ -128,6 +128,14 @@ test-only changes, generated artifacts, and docs-only changes can pass without a
 new solution note. Large behavior-bearing changes need durable compounding while
 the context is still fresh.
 
+The sensor also treats workflow-critical files as compound-sensitive even when
+the line count is small. Changes to repo harness scripts, PR validation wiring,
+GitHub workflows, Husky hooks, package-level command wiring, or the core
+delivery skills need a solution note because those paths affect how future
+agents deliver work. A changed solution note must include the expected
+frontmatter and the `Problem`, `Solution`, and `Prevention` sections; placeholder
+notes do not satisfy the gate.
+
 ### Coverage Sensors
 
 `bun run test:coverage` is the repo coverage gate. It first repairs missing or

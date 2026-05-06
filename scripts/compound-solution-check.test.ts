@@ -72,6 +72,36 @@ function lineChanges(entries: Array<[string, number, number]>) {
   );
 }
 
+function solutionNote(title = "Procurement") {
+  return `---
+title: ${title}
+date: 2026-05-06
+category: harness
+module: repo
+problem_type: missing_guardrail
+component: compound-check
+resolution_type: guardrail
+severity: medium
+tags:
+  - compound
+---
+
+# ${title}
+
+## Problem
+
+Substantial work needs durable delivery context.
+
+## Solution
+
+Require a concrete solution note before merge.
+
+## Prevention
+
+Run the compound check before handoff.
+`;
+}
+
 describe("extractSolutionReferences", () => {
   it("finds repo-relative solution doc references in markdown", () => {
     expect(
@@ -185,7 +215,7 @@ describe("collectCompoundSolutionFindings", () => {
         "packages/athena-webapp/src/components/ProcurementView.tsx",
       ]),
       markdownContents: new Map([
-        ["docs/solutions/logic-errors/procurement.md", "# Procurement\n"],
+        ["docs/solutions/logic-errors/procurement.md", solutionNote()],
       ]),
       sourceLineChanges: lineChanges([
         ["packages/athena-webapp/src/components/ProcurementView.tsx", 151, 0],
@@ -197,13 +227,76 @@ describe("collectCompoundSolutionFindings", () => {
 
   it("passes small source changes below the threshold", () => {
     const findings = collectCompoundSolutionFindings({
-      changedFiles: ["scripts/harness-review.ts"],
-      existingFiles: new Set(["scripts/harness-review.ts"]),
+      changedFiles: ["packages/athena-webapp/src/components/ProcurementView.tsx"],
+      existingFiles: new Set([
+        "packages/athena-webapp/src/components/ProcurementView.tsx",
+      ]),
       markdownContents: new Map(),
-      sourceLineChanges: lineChanges([["scripts/harness-review.ts", 75, 20]]),
+      sourceLineChanges: lineChanges([
+        ["packages/athena-webapp/src/components/ProcurementView.tsx", 75, 20],
+      ]),
     });
 
     expect(findings).toEqual([]);
+  });
+
+  it("passes workflow test-only changes without a solution doc", () => {
+    const findings = collectCompoundSolutionFindings({
+      changedFiles: ["scripts/compound-solution-check.test.ts"],
+      existingFiles: new Set(["scripts/compound-solution-check.test.ts"]),
+      markdownContents: new Map(),
+      sourceLineChanges: lineChanges([
+        ["scripts/compound-solution-check.test.ts", 30, 2],
+      ]),
+    });
+
+    expect(findings).toEqual([]);
+  });
+
+  it("fails sensitive workflow changes below the line threshold without a solution doc", () => {
+    const findings = collectCompoundSolutionFindings({
+      changedFiles: ["scripts/compound-solution-check.ts"],
+      existingFiles: new Set(["scripts/compound-solution-check.ts"]),
+      markdownContents: new Map(),
+      sourceLineChanges: lineChanges([["scripts/compound-solution-check.ts", 5, 1]]),
+    });
+
+    expect(findings).toEqual([
+      {
+        message:
+          "Compound-sensitive workflow changes detected in scripts/compound-solution-check.ts without a docs/solutions/**/*.md update.",
+      },
+    ]);
+  });
+
+  it("fails changed solution notes that are placeholders", () => {
+    const findings = collectCompoundSolutionFindings({
+      changedFiles: [
+        "docs/solutions/harness/placeholder.md",
+        "packages/athena-webapp/src/components/ProcurementView.tsx",
+      ],
+      existingFiles: new Set([
+        "docs/solutions/harness/placeholder.md",
+        "packages/athena-webapp/src/components/ProcurementView.tsx",
+      ]),
+      markdownContents: new Map([
+        ["docs/solutions/harness/placeholder.md", "# Placeholder\n"],
+      ]),
+      sourceLineChanges: lineChanges([
+        ["packages/athena-webapp/src/components/ProcurementView.tsx", 151, 0],
+      ]),
+    });
+
+    expect(findings).toEqual([
+      {
+        message:
+          "Changed solution note docs/solutions/harness/placeholder.md is missing required frontmatter fields: title, date, category, module, problem_type, component, resolution_type, severity, tags.",
+      },
+      {
+        message:
+          "Changed solution note docs/solutions/harness/placeholder.md is missing required sections: Problem, Solution, Prevention.",
+      },
+    ]);
   });
 });
 
@@ -257,7 +350,7 @@ describe("assertCompoundSolutionCheck", () => {
     await write(
       rootDir,
       "docs/solutions/harness/compound-solution-gate.md",
-      "# Compound Solution Gate\n"
+      solutionNote("Compound Solution Gate")
     );
 
     expect(() =>
