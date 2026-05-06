@@ -22,6 +22,11 @@ import { capitalizeWords, cn } from "~/src/lib/utils";
 import config from "~/src/config";
 import PosReceiptEmail from "~/convex/emails/PosReceiptEmail";
 import { currencyFormatter } from "~/shared/currencyFormatter";
+import {
+  PosReceiptShareControl,
+  type ReceiptMessagingConfig,
+} from "./receipt/PosReceiptShareControl";
+import type { Id } from "~/convex/_generated/dataModel";
 
 import { PaymentView, type SelectedPaymentMethod } from "./PaymentView";
 import { PaymentsAddedList } from "./PaymentsAddedList";
@@ -83,6 +88,7 @@ interface OrderSummaryProps {
   completedTransactionData?: {
     paymentMethod: string;
     payments?: Payment[];
+    transactionId?: string;
     completedAt: Date | number;
     cartItems: CartItem[];
     subtotal: number;
@@ -96,6 +102,8 @@ interface OrderSummaryProps {
   } | null;
   presentation?: "workspace" | "rail";
   cashierName?: string;
+  receiptMessaging?: ReceiptMessagingConfig;
+  actorStaffProfileId?: Id<"staffProfile"> | string | null;
   receiptNumberOverride?: string;
   onAddPayment?: (method: SelectedPaymentMethod, amount: number) => void;
   onUpdatePayment?: (paymentId: string, amount: number) => void;
@@ -125,6 +133,8 @@ export function OrderSummary({
   completedTransactionData,
   presentation = "workspace",
   cashierName,
+  receiptMessaging,
+  actorStaffProfileId,
   receiptNumberOverride,
   onAddPayment,
   onUpdatePayment,
@@ -231,6 +241,33 @@ export function OrderSummary({
   const receiptLabel = readOnly
     ? (receiptNumberOverride ?? completedOrderNumber ?? "Transaction")
     : (completedOrderNumber ?? "Transaction");
+  const effectiveReceiptMessaging = receiptMessaging
+    ? {
+        ...receiptMessaging,
+        actorStaffProfileId:
+          receiptMessaging.actorStaffProfileId ?? actorStaffProfileId,
+        customerPhone:
+          receiptMessaging.customerPhone ?? effectiveCustomerInfo?.phone,
+        transactionId:
+          receiptMessaging.transactionId ??
+          completedTransactionData?.transactionId ??
+          null,
+        transactionNumber:
+          receiptMessaging.transactionNumber ?? completedOrderNumber,
+      }
+    : completedTransactionData
+      ? {
+          actorStaffProfileId,
+          customerPhone: effectiveCustomerInfo?.phone,
+          transactionId: completedTransactionData.transactionId ?? null,
+          transactionNumber: completedOrderNumber,
+        }
+      : null;
+  const shouldShowReceiptMessaging = Boolean(
+    effectiveReceiptMessaging?.transactionId ||
+    effectiveReceiptMessaging?.customerPhone ||
+    effectiveReceiptMessaging?.deliveryHistory?.length,
+  );
   const summaryRows = [
     { label: "Transaction", value: `#${receiptLabel}` },
     {
@@ -567,6 +604,12 @@ export function OrderSummary({
             <Printer className="h-4 w-4" />
             Print receipt
           </Button>
+          {shouldShowReceiptMessaging && effectiveReceiptMessaging ? (
+            <PosReceiptShareControl
+              compact
+              messaging={effectiveReceiptMessaging}
+            />
+          ) : null}
         </div>
       </section>
     );
@@ -659,6 +702,11 @@ export function OrderSummary({
                     </Button>
                   )}
                 </div>
+                {shouldShowReceiptMessaging && effectiveReceiptMessaging ? (
+                  <PosReceiptShareControl
+                    messaging={effectiveReceiptMessaging}
+                  />
+                ) : null}
               </div>
             </div>
           </div>

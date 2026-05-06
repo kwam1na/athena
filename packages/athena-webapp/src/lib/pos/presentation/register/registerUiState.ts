@@ -106,6 +106,7 @@ export interface RegisterCheckoutState {
   completedTransactionData?: {
     paymentMethod: string;
     payments?: Payment[];
+    transactionId?: Id<"posTransaction">;
     completedAt: Date;
     cartItems: CartItem[];
     subtotal: number;
@@ -118,6 +119,7 @@ export interface RegisterCheckoutState {
     };
   } | null;
   cashierName?: string;
+  actorStaffProfileId?: Id<"staffProfile"> | null;
   onAddPayment: (method: PosPaymentMethod, amount: number) => void;
   onUpdatePayment: (paymentId: string, amount: number) => void;
   onRemovePayment: (paymentId: string) => void;

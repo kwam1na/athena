@@ -2124,6 +2124,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     setCompletedTransactionData({
       paymentMethod: currentPayments[0]?.method ?? "cash",
       payments: [...currentPayments],
+      transactionId: result.data.transactionId,
       completedAt: new Date(),
       cartItems: [...activeCartItems],
       subtotal: activeTotals.subtotal,
@@ -2611,6 +2612,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       completedOrderNumber,
       completedTransactionData,
       cashierName: getCashierDisplayName(cashier),
+      actorStaffProfileId: staffProfileId,
       onAddPayment: handleAddPayment,
       onUpdatePayment: handleUpdatePayment,
       onRemovePayment: handleRemovePayment,

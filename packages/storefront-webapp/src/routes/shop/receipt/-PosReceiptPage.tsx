@@ -1,15 +1,14 @@
 import { useEffect } from "react";
 
 import { useStoreContext } from "@/contexts/StoreContext";
-import { usePosTransactionQueries } from "@/lib/queries/posTransaction";
 import { toDisplayAmount } from "@/lib/currency";
 import { getStoreConfigV2 } from "@/lib/storeConfig";
-import { createFileRoute, useParams } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import type { PosTransaction } from "@/api/posTransaction";
+import { useQuery, type UseQueryOptions } from "@tanstack/react-query";
 
-export const Route = createFileRoute("/shop/receipt/$transactionId/")({
-  component: () => <PosReceiptPage />,
-});
+type PosReceiptPageProps = {
+  queryOptions: UseQueryOptions<PosTransaction, Error, PosTransaction, string[]>;
+};
 
 const paymentLabel = (method: string) => {
   if (method === "cash") return "Cash";
@@ -19,11 +18,22 @@ const paymentLabel = (method: string) => {
   return method.replace("_", " ");
 };
 
-export const PosReceiptPage = () => {
+const shouldRetryReceiptLookup = (failureCount: number, error: Error) => {
+  if (failureCount >= 2) {
+    return false;
+  }
+
+  if ("status" in error) {
+    return (error as { status?: number }).status != null
+      && (error as { status?: number }).status! >= 500;
+  }
+
+  return error instanceof TypeError;
+};
+
+export const PosReceiptPage = ({ queryOptions }: PosReceiptPageProps) => {
   const { formatter, store, hideNavbar, showNavbar } = useStoreContext();
-  const { transactionId } = useParams({ strict: false });
   const storeConfig = getStoreConfigV2(store);
-  const posTransactionQueries = usePosTransactionQueries();
 
   useEffect(() => {
     hideNavbar();
@@ -34,18 +44,8 @@ export const PosReceiptPage = () => {
   }, [hideNavbar, showNavbar]);
 
   const { data, isLoading } = useQuery({
-    ...posTransactionQueries.detail(transactionId || ""),
-    retry: (failureCount, error) => {
-      if (failureCount >= 2) {
-        return false;
-      }
-
-      if (error && typeof error === "object" && "status" in error) {
-        return (error as { status?: number }).status != null && (error as { status?: number }).status! >= 500;
-      }
-
-      return error instanceof TypeError;
-    },
+    ...queryOptions,
+    retry: shouldRetryReceiptLookup,
   });
 
   const money = (value?: number) => formatter.format(toDisplayAmount(value ?? 0));
@@ -95,7 +95,10 @@ export const PosReceiptPage = () => {
     data.changeGiven ??
     (totalPaidFromPayments > data.total ? totalPaidFromPayments - data.total : 0);
 
-  const locationParts = (storeConfig.contact.location || "").split(",").map((part) => part.trim()).filter(Boolean);
+  const locationParts = (storeConfig.contact.location || "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
   const [street, city, state, zipCode, country] = locationParts;
 
   return (
@@ -221,8 +224,11 @@ export const PosReceiptPage = () => {
             <p className="text-xs tracking-[1px] text-[#444]">
               {itemsCount} item{itemsCount === 1 ? "" : "s"}
             </p>
-            {data.items.map((item) => (
-              <div key={item._id} className="item-block">
+            {data.items.map((item, index) => (
+              <div
+                key={`${item.productSku || item.barcode || item.productName}-${index}`}
+                className="item-block"
+              >
                 <div className="item-top">
                   <span>{item.productName.toUpperCase()}</span>
                   <span>{money(item.totalPrice)}</span>

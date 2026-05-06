@@ -18,6 +18,7 @@ This index enumerates the current automated test files and ties them back to the
 
 - [`src/api/analytics.test.ts`](../../src/api/analytics.test.ts)
 - [`src/api/checkoutSession.test.ts`](../../src/api/checkoutSession.test.ts)
+- [`src/api/posTransaction.test.ts`](../../src/api/posTransaction.test.ts)
 - [`src/components/HomePage.test.tsx`](../../src/components/HomePage.test.tsx)
 - [`src/components/ProductCard.test.tsx`](../../src/components/ProductCard.test.tsx)
 - [`src/components/checkout/Checkout.test.tsx`](../../src/components/checkout/Checkout.test.tsx)

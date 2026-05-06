@@ -13,10 +13,12 @@ import {
 
 const useQueryMock = vi.fn();
 const useMutationMock = vi.fn();
+const useActionMock = vi.fn();
 const useParamsMock = vi.fn();
 const useProtectedAdminPageStateMock = vi.fn();
 
 vi.mock("convex/react", () => ({
+  useAction: (...args: unknown[]) => useActionMock(...args),
   useMutation: (...args: unknown[]) => useMutationMock(...args),
   useQuery: (...args: unknown[]) => useQueryMock(...args),
 }));
@@ -371,6 +373,8 @@ describe("TransactionView", () => {
   }
 
   beforeEach(() => {
+    useActionMock.mockReset();
+    useActionMock.mockReturnValue(vi.fn());
     useMutationMock.mockReset();
     useMutationMock.mockReturnValue(vi.fn());
     useQueryMock.mockReset();

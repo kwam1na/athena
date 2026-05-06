@@ -16,9 +16,6 @@ type PosTransactionPerson = {
 };
 
 export type PosTransactionItem = {
-  _id: string;
-  productId: string;
-  productSkuId: string;
   productName: string;
   productSku: string;
   barcode?: string;
@@ -31,13 +28,13 @@ export type PosTransactionItem = {
 };
 
 export type PosTransaction = {
-  _id: string;
+  _id?: string;
   transactionNumber: string;
   subtotal: number;
   tax: number;
   total: number;
-  hasTrace: boolean;
-  sessionTraceId: string | null;
+  hasTrace?: boolean;
+  sessionTraceId?: string | null;
   registerNumber?: string;
   registerSessionId?: string;
   paymentMethod?: string;
@@ -59,10 +56,18 @@ export type PosTransaction = {
 
 const getBaseUrl = () => `${config.apiGateway.URL}/pos-transactions`;
 
-export async function getPosTransaction(
-  transactionId: string,
-): Promise<PosTransaction> {
-  const response = await fetch(`${getBaseUrl()}/${transactionId}`, {
+export class PosTransactionReceiptError extends Error {
+  status?: number;
+
+  constructor(message: string, options: { status?: number } = {}) {
+    super(message);
+    this.name = "PosTransactionReceiptError";
+    this.status = options.status;
+  }
+}
+
+async function fetchPosTransaction(url: string): Promise<PosTransaction> {
+  const response = await fetch(url, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
@@ -73,8 +78,19 @@ export async function getPosTransaction(
   const res = await response.json();
 
   if (!response.ok) {
-    throw new Error(res.error || "Error fetching transaction.");
+    throw new PosTransactionReceiptError(
+      res.error || "Error fetching transaction.",
+      { status: response.status },
+    );
   }
 
   return res;
+}
+
+export async function getPosTransactionByReceiptToken(
+  token: string,
+): Promise<PosTransaction> {
+  return fetchPosTransaction(
+    `${getBaseUrl()}/receipt-shares/${encodeURIComponent(token)}`,
+  );
 }

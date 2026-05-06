@@ -1,9 +1,11 @@
 import { v } from "convex/values";
 
 import { mutation, query } from "../../_generated/server";
+import { commandResultValidator } from "../../lib/commandResultValidators";
 import {
-  commandResultValidator,
-} from "../../lib/commandResultValidators";
+  requireAuthenticatedAthenaUserWithCtx,
+  requireOrganizationMemberRoleWithCtx,
+} from "../../lib/athenaUserAuth";
 import {
   approvalRequired,
   ok,
@@ -219,6 +221,26 @@ export const getTransactionById = query({
           actorStaffName: v.union(v.string(), v.null()),
         }),
       ),
+      receiptDeliveryHistory: v.array(
+        v.object({
+          _id: v.id("customerMessageDelivery"),
+          status: v.string(),
+          providerStatus: v.optional(v.string()),
+          recipientSource: v.string(),
+          recipientDisplay: v.string(),
+          actorStaffProfileId: v.optional(v.id("staffProfile")),
+          actorStaffName: v.union(v.string(), v.null()),
+          createdAt: v.number(),
+          updatedAt: v.number(),
+          sentAt: v.optional(v.number()),
+          deliveredAt: v.optional(v.number()),
+          readAt: v.optional(v.number()),
+          failedAt: v.optional(v.number()),
+          failureCategory: v.optional(v.string()),
+          failureMessage: v.optional(v.string()),
+          retryable: v.boolean(),
+        }),
+      ),
       items: v.array(
         v.object({
           _id: v.id("posTransactionItem"),
@@ -237,7 +259,27 @@ export const getTransactionById = query({
       ),
     }),
   ),
-  handler: async (ctx, args) => getTransactionByIdQuery(ctx, args),
+  handler: async (ctx, args) => {
+    const transaction = await getTransactionQuery(ctx, args);
+    if (!transaction) {
+      return null;
+    }
+
+    const store = await ctx.db.get("store", transaction.storeId);
+    if (!store) {
+      return null;
+    }
+
+    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+    await requireOrganizationMemberRoleWithCtx(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "You cannot view this transaction.",
+      organizationId: store.organizationId,
+      userId: athenaUser._id,
+    });
+
+    return getTransactionByIdQuery(ctx, args);
+  },
 });
 
 export const voidTransaction = mutation({

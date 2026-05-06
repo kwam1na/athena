@@ -285,5 +285,6 @@ export type PosBindSessionToRegisterSessionResultDto = CommandResult<{
 
 export type PosCompleteTransactionResultDto = CommandResult<{
   sessionId: Id<"posSession">;
+  transactionId?: Id<"posTransaction">;
   transactionNumber: string;
 }>;
