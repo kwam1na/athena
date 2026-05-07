@@ -15,10 +15,8 @@ import * as Collapsible from "@radix-ui/react-collapsible";
 import type { ComponentType, MouseEventHandler, ReactNode } from "react";
 import {
   BadgePercent,
-  ChartNoAxesCombined,
   CheckCircle,
   CogIcon,
-  Gift,
   Image,
   PanelTop,
   RotateCcw,
@@ -32,8 +30,6 @@ import {
   PackageCheckIcon,
   PackageOpenIcon,
   ChartNoAxesColumn,
-  MessageCircle,
-  MessageCircleDashed,
   MessageCircleMore,
   CalendarDays,
   Tag,
@@ -54,6 +50,10 @@ import { useGetUnresolvedProducts } from "../hooks/useGetProducts";
 import { useGetCategories } from "../hooks/useGetCategories";
 import { PermissionGate } from "./PermissionGate";
 import { usePermissions } from "../hooks/usePermissions";
+
+type SidebarOrderSummary = {
+  status: string;
+};
 
 function SidebarMenuCollapsible({
   icon: Icon,
@@ -113,28 +113,28 @@ export function AppSidebar() {
   const orders = useQuery(
     api.storeFront.onlineOrder.getAllOnlineOrders,
     activeStore?._id ? { storeId: activeStore._id } : "skip",
-  );
+  ) as SidebarOrderSummary[] | undefined;
 
-  const openOrders = orders?.filter((o: any) => o.status === "open")?.length;
+  const openOrders = orders?.filter((order) => order.status === "open")?.length;
 
-  const readyOrders = orders?.filter((o: any) =>
-    o.status.includes("ready"),
+  const readyOrders = orders?.filter((order) =>
+    order.status.includes("ready"),
   )?.length;
 
   const outForDeliveryOrders = orders?.filter(
-    (o: any) => o.status === "out-for-delivery",
+    (order) => order.status === "out-for-delivery",
   )?.length;
 
-  const completedOrders = orders?.filter((o: any) =>
-    ["delivered", "picked-up"].includes(o.status),
+  const completedOrders = orders?.filter((order) =>
+    ["delivered", "picked-up"].includes(order.status),
   )?.length;
 
   const refundedOrders = orders?.filter(
-    (o: any) => o.status === "refunded",
+    (order) => order.status === "refunded",
   )?.length;
 
   const cancelledOrders = orders?.filter(
-    (o: any) => o.status === "cancelled",
+    (order) => order.status === "cancelled",
   )?.length;
 
   const unapprovedReviewsCount = useQuery(
@@ -228,6 +228,27 @@ export function AppSidebar() {
                         className="flex items-center"
                       >
                         <p className="font-medium">Stock adjustments</p>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
+
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuButton
+                      disabled={!canAccessOperations()}
+                      asChild
+                    >
+                      <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: activeOrganization?.slug,
+                          storeUrlSlug: activeStore?.slug,
+                        })}
+                        className="flex items-center"
+                      >
+                        <p className="font-medium">Daily Close</p>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuSubItem>

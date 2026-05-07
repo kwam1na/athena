@@ -144,6 +144,26 @@ describe("operations query indexing", () => {
         descriptor: "by_storeId_subject",
         fields: ["storeId", "subjectType", "subjectId"],
       },
+      {
+        table: "dailyClose",
+        descriptor: "by_storeId_operatingDate",
+        fields: ["storeId", "operatingDate"],
+      },
+      {
+        table: "dailyClose",
+        descriptor: "by_storeId_status",
+        fields: ["storeId", "status"],
+      },
+      {
+        table: "dailyClose",
+        descriptor: "by_storeId_isCurrent",
+        fields: ["storeId", "isCurrent"],
+      },
+      {
+        table: "dailyClose",
+        descriptor: "by_storeId_status_operatingDate",
+        fields: ["storeId", "status", "operatingDate"],
+      },
     ].forEach(expectIndex);
   });
 
@@ -153,6 +173,7 @@ describe("operations query indexing", () => {
     const inventoryMovementsSource = getSource("./inventoryMovements.ts");
     const paymentAllocationsSource = getSource("./paymentAllocations.ts");
     const operationalEventsSource = getSource("./operationalEvents.ts");
+    const dailyCloseSource = getSource("./dailyClose.ts");
 
     expect(customerProfilesSource).toContain('.withIndex("by_storeFrontUserId"');
     expect(customerProfilesSource).toContain('.withIndex("by_guestId"');
@@ -167,6 +188,9 @@ describe("operations query indexing", () => {
     );
     expect(paymentAllocationsSource).toContain('.withIndex("by_storeId_target"');
     expect(operationalEventsSource).toContain('.withIndex("by_storeId_subject"');
+    expect(dailyCloseSource).toContain('.withIndex("by_storeId_operatingDate"');
+    expect(dailyCloseSource).toContain('.withIndex("by_storeId_status_operatingDate"');
+    expect(dailyCloseSource).toContain('.withIndex("by_storeId_isCurrent"');
 
     const cycleCountDraftsSource = getSource("../stockOps/cycleCountDrafts.ts");
 

@@ -68,6 +68,7 @@ import {
 import {
   approvalRequestSchema,
   customerProfileSchema,
+  dailyCloseSchema,
   inventoryMovementSchema,
   operationalEventSchema,
   operationalWorkItemSchema,
@@ -183,6 +184,15 @@ const schema = defineSchema({
     .index("by_storeFrontUserId", ["storeFrontUserId"])
     .index("by_guestId", ["guestId"])
     .index("by_posCustomerId", ["posCustomerId"]),
+  dailyClose: defineTable(dailyCloseSchema)
+    .index("by_storeId_operatingDate", ["storeId", "operatingDate"])
+    .index("by_storeId_status", ["storeId", "status"])
+    .index("by_storeId_isCurrent", ["storeId", "isCurrent"])
+    .index("by_storeId_status_operatingDate", [
+      "storeId",
+      "status",
+      "operatingDate",
+    ]),
   featuredItem: defineTable(featuredItemSchema),
   guest: defineTable(guestSchema)
     .index("by_storeId", ["storeId"])

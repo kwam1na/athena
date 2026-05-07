@@ -18,9 +18,9 @@ Current coverage is closest to a retail and service business OS:
   adjustments, purchase orders, receiving, replenishment, vendors, unresolved
   product cleanup, and bulk operations are represented.
 - **Operations and accountability:** Staff profiles, credentials, register
-  sessions, cash controls, payment allocation, approvals, operational work
-  items, workflow traces, and app logs give the owner a control plane instead
-  of isolated screens.
+  sessions, cash controls, Daily Close, payment allocation, approvals,
+  operational work items, workflow traces, and app logs give the owner a
+  control plane instead of isolated screens.
 - **Service businesses:** Service intake, appointments, active service cases,
   service catalog management, and service inventory usage are first-class
   backend and UI surfaces.
@@ -138,6 +138,13 @@ The primary backend lives in `packages/athena-webapp/convex`.
   `convex/stockOps`, `convex/serviceOps`, `convex/storeFront`, and
   `convex/workflowTraces` hold the business workflows behind those public
   boundaries.
+
+Daily Close belongs to the Daily Operations Lifecycle. It is scoped to a store
+day and composes operational state into close readiness, a daily summary, and
+carry-forward work for a future opening workflow. It is separate from Cash
+Controls, which is drawer/session scoped; from a POS session, which is the
+sale/cart lifecycle; and from `registerSession`, which is the drawer/shift
+ledger that backs cash-control closeout.
 
 ## Harness
 
