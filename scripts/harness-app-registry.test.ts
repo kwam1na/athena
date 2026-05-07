@@ -168,6 +168,22 @@ describe("HARNESS_APP_REGISTRY", () => {
     });
   });
 
+  it("covers changed Athena frontend source files with changed-file lint", () => {
+    const athena = HARNESS_APP_REGISTRY.find(
+      (entry) => entry.appName === "athena-webapp"
+    );
+    const frontendLintScenario = athena?.validationScenarios.find(
+      (scenario) => scenario.title === "Changed frontend source lint"
+    );
+
+    expect(frontendLintScenario).toMatchObject({
+      touchedPaths: ["src", "shared", "types.ts"],
+      commands: [{ kind: "script", script: "lint:frontend:changed" }],
+      note:
+        "Run this for changed browser-facing TypeScript or TSX files so introduced ESLint failures are caught before PR handoff.",
+    });
+  });
+
   it("runs the Athena browser-boundary regression for route runtime changes", () => {
     const athena = HARNESS_APP_REGISTRY.find(
       (entry) => entry.appName === "athena-webapp"
@@ -692,6 +708,7 @@ describe("HARNESS_APP_REGISTRY", () => {
         "package.json",
         "README.md",
         "eslint.config.js",
+        "scripts/frontend-lint-changed.sh",
         ".gitignore",
       ],
       commands: [

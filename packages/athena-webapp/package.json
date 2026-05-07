@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "lint:architecture": "bun ../../scripts/architecture-boundary-check.ts athena-webapp",
     "lint": "bash ./scripts/convex-lint-changed.sh",
+    "lint:frontend:changed": "bash ./scripts/frontend-lint-changed.sh",
     "lint:convex": "eslint convex && python3 scripts/convexPaginationAntiPatternCheck.py .",
     "lint:convex:changed": "bash ./scripts/convex-lint-changed.sh",
     "audit:convex": "bash ./scripts/convex-audit.sh",

@@ -284,6 +284,13 @@ export const HARNESS_APP_REGISTRY = [
           "Use this for authenticated dashboard flows, service-management screens, route trees, and UI behavior changes that stay inside the frontend shell.",
       },
       {
+        title: "Changed frontend source lint",
+        touchedPaths: ["src", "shared", "types.ts"],
+        commands: [{ kind: "script", script: "lint:frontend:changed" }],
+        note:
+          "Run this for changed browser-facing TypeScript or TSX files so introduced ESLint failures are caught before PR handoff.",
+      },
+      {
         title: "Stock-ops procurement and receiving edits",
         touchedPaths: [
           "convex/stockOps",
@@ -646,6 +653,7 @@ export const HARNESS_APP_REGISTRY = [
           "package.json",
           "README.md",
           "eslint.config.js",
+          "scripts/frontend-lint-changed.sh",
           ".gitignore",
         ],
         commands: [

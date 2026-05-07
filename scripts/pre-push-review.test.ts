@@ -774,6 +774,9 @@ describe("repo harness ergonomics", () => {
     expect(packageJson.scripts?.["pr:athena"]).toContain(
       "bun run harness:review --base origin/main"
     );
+    expect(packageJson.scripts?.["pr:athena"]).toContain(
+      "bun run --filter '@athena/webapp' lint:frontend:changed"
+    );
     expect(packageJson.scripts?.["pr:athena"]).toContain("bun run harness:audit");
     expect(packageJson.scripts?.["pr:athena"]).toContain(
       "bun run harness:inferential-review"

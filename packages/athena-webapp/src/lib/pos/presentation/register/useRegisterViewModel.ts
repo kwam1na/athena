@@ -476,7 +476,10 @@ export function useRegisterViewModel(): RegisterViewModel {
   const voidSessionRef = useRef<typeof voidSession>(voidSession);
 
   const operableActiveSession = activeSession;
-  const serverCartItems = operableActiveSession?.cartItems ?? [];
+  const serverCartItems = useMemo(
+    () => operableActiveSession?.cartItems ?? [],
+    [operableActiveSession?.cartItems],
+  );
   const activeCartItems = useMemo(() => {
     const cartItems = serverCartItems
       .map((item) => {
@@ -644,16 +647,6 @@ export function useRegisterViewModel(): RegisterViewModel {
     return true;
   }, [activeSessionConflict]);
 
-  const resetDrawerWorkflowState = useCallback(() => {
-    setIsCloseoutRequested(false);
-    setIsOpeningFloatCorrectionRequested(false);
-    setCloseoutCountedCash("");
-    setCloseoutNotes("");
-    setCorrectedOpeningFloat("");
-    setOpeningFloatCorrectionReason("");
-    setDrawerErrorMessage(null);
-  }, []);
-
   const resetDraftState = useCallback(
     (options?: {
       keepCashier?: boolean;
@@ -683,7 +676,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   }, []);
 
   useEffect(() => {
-    if (!registerState?.activeRegisterSession) {
+    if (!activeRegisterSessionId) {
       return;
     }
 
@@ -691,7 +684,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     setDrawerNotes("");
     setDrawerErrorMessage(null);
     setIsOpeningDrawer(false);
-  }, [registerState?.activeRegisterSession?._id]);
+  }, [activeRegisterSessionId]);
 
   useEffect(() => {
     return () => {
@@ -962,7 +955,11 @@ export function useRegisterViewModel(): RegisterViewModel {
         sessionId: operableActiveSession._id as Id<"posSession">,
         staffProfileId,
         checkoutStateVersion: args.checkoutStateVersion,
-        payments: args.nextPayments.map(({ id, ...payment }) => payment),
+        payments: args.nextPayments.map(({ method, amount, timestamp }) => ({
+          method,
+          amount,
+          timestamp,
+        })),
         stage: args.stage,
         paymentMethod: args.paymentMethod,
         amount: args.amount,
@@ -1183,7 +1180,6 @@ export function useRegisterViewModel(): RegisterViewModel {
     activeRegisterSessionId,
     activeStore?._id,
     staffProfileId,
-    customerInfo,
     guardActiveSessionConflict,
     holdCurrentSession,
     registerNumber,
@@ -2076,7 +2072,6 @@ export function useRegisterViewModel(): RegisterViewModel {
     resetDraftState();
   }, [
     operableActiveSession,
-    customerInfo,
     holdCurrentSession,
     resetDraftState,
     voidCurrentSession,
@@ -2152,6 +2147,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     customerInfo,
     persistSessionMetadata,
     registerNumber,
+    staffProfileId,
   ]);
 
   const handleStartNewTransaction = useCallback(() => {

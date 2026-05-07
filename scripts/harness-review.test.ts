@@ -32,6 +32,7 @@ async function createFixtureRepo() {
         scripts: {
           "audit:convex": "echo audit",
           "lint:convex:changed": "echo lint",
+          "lint:frontend:changed": "echo lint frontend",
           "storybook:build": "echo storybook",
           test: "echo test",
         },

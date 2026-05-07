@@ -7259,7 +7259,7 @@
       "relation": "calls",
       "source": "harness_review_test_rungit",
       "source_file": "scripts/harness-review.test.ts",
-      "source_location": "L260",
+      "source_location": "L261",
       "target": "harness_review_test_initializegithistory",
       "weight": 1
     },
@@ -44531,7 +44531,7 @@
       "relation": "contains",
       "source": "scripts_harness_app_registry_ts",
       "source_file": "scripts/harness-app-registry.ts",
-      "source_location": "L879",
+      "source_location": "L887",
       "target": "harness_app_registry_getharnesspackageregistration",
       "weight": 1
     },
@@ -47099,7 +47099,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_test_ts",
       "source_file": "scripts/harness-review.test.ts",
-      "source_location": "L1005",
+      "source_location": "L1006",
       "target": "harness_review_test_error",
       "weight": 1
     },
@@ -47111,7 +47111,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_test_ts",
       "source_file": "scripts/harness-review.test.ts",
-      "source_location": "L259",
+      "source_location": "L260",
       "target": "harness_review_test_initializegithistory",
       "weight": 1
     },
@@ -47123,7 +47123,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_test_ts",
       "source_file": "scripts/harness-review.test.ts",
-      "source_location": "L1004",
+      "source_location": "L1005",
       "target": "harness_review_test_log",
       "weight": 1
     },
@@ -47135,7 +47135,7 @@
       "relation": "contains",
       "source": "scripts_harness_review_test_ts",
       "source_file": "scripts/harness-review.test.ts",
-      "source_location": "L245",
+      "source_location": "L246",
       "target": "harness_review_test_rungit",
       "weight": 1
     },
@@ -52067,7 +52067,7 @@
       "relation": "calls",
       "source": "useregisterviewmodel_hascustomerdetails",
       "source_file": "packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts",
-      "source_location": "L556",
+      "source_location": "L559",
       "target": "useregisterviewmodel_useregisterviewmodel",
       "weight": 1
     },
@@ -59569,7 +59569,7 @@
       "label": "error()",
       "norm_label": "error()",
       "source_file": "scripts/harness-review.test.ts",
-      "source_location": "L290"
+      "source_location": "L291"
     },
     {
       "community": 135,
@@ -59578,7 +59578,7 @@
       "label": "initializeGitHistory()",
       "norm_label": "initializegithistory()",
       "source_file": "scripts/harness-review.test.ts",
-      "source_location": "L259"
+      "source_location": "L260"
     },
     {
       "community": 135,
@@ -59587,7 +59587,7 @@
       "label": "log()",
       "norm_label": "log()",
       "source_file": "scripts/harness-review.test.ts",
-      "source_location": "L289"
+      "source_location": "L290"
     },
     {
       "community": 135,
@@ -59596,7 +59596,7 @@
       "label": "runGit()",
       "norm_label": "rungit()",
       "source_file": "scripts/harness-review.test.ts",
-      "source_location": "L245"
+      "source_location": "L246"
     },
     {
       "community": 135,
@@ -72655,7 +72655,7 @@
       "label": "getHarnessPackageRegistration()",
       "norm_label": "getharnesspackageregistration()",
       "source_file": "scripts/harness-app-registry.ts",
-      "source_location": "L879"
+      "source_location": "L887"
     },
     {
       "community": 310,

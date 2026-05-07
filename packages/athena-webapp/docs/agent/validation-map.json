@@ -27,6 +27,21 @@
       "behaviorScenarios": []
     },
     {
+      "name": "changed-frontend-source-lint",
+      "pathPrefixes": [
+        "packages/athena-webapp/src",
+        "packages/athena-webapp/shared",
+        "packages/athena-webapp/types.ts"
+      ],
+      "commands": [
+        {
+          "kind": "script",
+          "script": "lint:frontend:changed"
+        }
+      ],
+      "behaviorScenarios": []
+    },
+    {
       "name": "stock-ops-procurement-and-receiving-edits",
       "pathPrefixes": [
         "packages/athena-webapp/convex/stockOps",
@@ -450,6 +465,7 @@
         "packages/athena-webapp/package.json",
         "packages/athena-webapp/README.md",
         "packages/athena-webapp/eslint.config.js",
+        "packages/athena-webapp/scripts/frontend-lint-changed.sh",
         "packages/athena-webapp/.gitignore"
       ],
       "commands": [

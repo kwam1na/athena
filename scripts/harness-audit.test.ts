@@ -88,6 +88,7 @@ async function createFixtureRepo() {
           "storybook:build": "echo storybook",
           "lint:architecture": "echo architecture",
           "lint:convex:changed": "echo lint",
+          "lint:frontend:changed": "echo lint frontend",
           test: "echo test",
         },
       },
@@ -1030,6 +1031,11 @@ async function createFixtureRepo() {
   );
   await write(
     "packages/athena-webapp/scripts/convex-lint-changed.sh",
+    "#!/usr/bin/env bash\nexit 0\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/scripts/frontend-lint-changed.sh",
     "#!/usr/bin/env bash\nexit 0\n",
     rootDir
   );

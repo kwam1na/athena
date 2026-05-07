@@ -26,6 +26,7 @@ async function createFixtureRepo() {
           test: "vitest run",
           "audit:convex": "bash ./scripts/convex-audit.sh",
           "lint:convex:changed": "bash ./scripts/convex-lint-changed.sh",
+          "lint:frontend:changed": "bash ./scripts/frontend-lint-changed.sh",
           build: "vite build && tsc --noEmit",
           "storybook:build": "storybook build",
           "lint:architecture": "bun ../../scripts/architecture-boundary-check.ts athena-webapp",
