@@ -10,6 +10,13 @@ import { toast } from "sonner";
 
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
+import {
+  PageLevelHeader,
+  PageWorkspace,
+  PageWorkspaceGrid,
+  PageWorkspaceMain,
+  PageWorkspaceRail,
+} from "../common/PageLevelHeader";
 import { EmptyState } from "../states/empty/empty-state";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
@@ -335,7 +342,6 @@ function getRecommendationStateNote(
   const inboundUnits =
     recommendation.inboundPurchaseOrderQuantity ??
     recommendation.pendingPurchaseOrderQuantity;
-  const plannedPurchaseOrderCount = recommendation.plannedPurchaseOrderCount;
 
   if (hasMixedPurchaseOrderCover(recommendation)) {
     return `${formatUnitCount(inboundUnits)} already inbound.`;
@@ -1088,514 +1094,529 @@ export function ProcurementViewContent({
   return (
     <View hideBorder hideHeaderBottomBorder>
       <FadeIn className="container mx-auto h-full min-h-0 overflow-hidden py-layout-xl">
-        <div className="grid h-full min-h-0 gap-layout-xl xl:grid-cols-[minmax(0,1fr)_360px]">
-          <section className="min-h-0 min-w-0 space-y-layout-2xl overflow-y-auto overscroll-contain pr-1 scrollbar-hide">
-            <div className="flex flex-wrap items-start justify-between gap-layout-xl">
-              <div className="max-w-2xl space-y-6">
-                <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                  Stock Ops
-                </p>
-                <div className="space-y-1">
-                  <h2 className="font-display text-2xl font-semibold tracking-tight text-foreground">
-                    Procurement
-                  </h2>
-                  <p className="text-sm text-muted-foreground">
-                    Review stock pressure, create vendor-backed orders, and
-                    track receiving in one workspace.
-                  </p>
-                </div>
-                <div className="grid max-w-2xl grid-cols-2 gap-2 sm:grid-cols-4">
-                  <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                      Needs action
-                    </p>
-                    <p className="mt-1 text-sm font-medium tabular-nums text-foreground">
-                      {summary.needsAction}
-                    </p>
-                  </div>
-                  <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                      Planned
-                    </p>
-                    <p className="mt-1 text-sm font-medium tabular-nums text-foreground">
-                      {summary.planned}
-                    </p>
-                  </div>
-                  <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                      Inbound
-                    </p>
-                    <p className="mt-1 text-sm font-medium tabular-nums text-foreground">
-                      {summary.inbound}
-                    </p>
-                  </div>
-                  <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                      Exceptions
-                    </p>
-                    <p className="mt-1 text-sm font-medium tabular-nums text-foreground">
-                      {summary.exceptions}
-                    </p>
+        <PageWorkspaceGrid className="h-full min-h-0 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <PageWorkspaceMain className="min-h-0 overflow-y-auto overscroll-contain pr-1 scrollbar-hide">
+            <PageWorkspace>
+              <PageLevelHeader
+                className="border-b-0 pb-0"
+                eyebrow="Stock Ops"
+                title="Procurement"
+                description="Review stock pressure, create vendor-backed orders, and track receiving in one workspace."
+              />
+
+              <div className="flex flex-wrap items-start justify-between gap-layout-xl">
+                <div className="max-w-2xl space-y-6">
+                  <div className="grid max-w-2xl grid-cols-2 gap-2 sm:grid-cols-4">
+                    <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
+                      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                        Needs action
+                      </p>
+                      <p className="mt-1 text-sm font-medium tabular-nums text-foreground">
+                        {summary.needsAction}
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
+                      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                        Planned
+                      </p>
+                      <p className="mt-1 text-sm font-medium tabular-nums text-foreground">
+                        {summary.planned}
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
+                      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                        Inbound
+                      </p>
+                      <p className="mt-1 text-sm font-medium tabular-nums text-foreground">
+                        {summary.inbound}
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
+                      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                        Exceptions
+                      </p>
+                      <p className="mt-1 text-sm font-medium tabular-nums text-foreground">
+                        {summary.exceptions}
+                      </p>
+                    </div>
                   </div>
                 </div>
+
+                <Tabs
+                  onValueChange={(value) =>
+                    handleModeChange(value as ProcurementMode)
+                  }
+                  value={mode}
+                >
+                  <TabsList>
+                    {MODE_OPTIONS.map((option) => (
+                      <TabsTrigger key={option.value} value={option.value}>
+                        {option.label}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                </Tabs>
               </div>
 
-              <Tabs
-                onValueChange={(value) =>
-                  handleModeChange(value as ProcurementMode)
-                }
-                value={mode}
+              <section
+                className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface"
+                ref={stockPressureSectionRef}
               >
-                <TabsList>
-                  {MODE_OPTIONS.map((option) => (
-                    <TabsTrigger key={option.value} value={option.value}>
-                      {option.label}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </Tabs>
-            </div>
-
-            <section
-              className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface"
-              ref={stockPressureSectionRef}
-            >
-              <div className="border-b border-border/70 px-layout-md py-layout-md">
-                <div className="flex flex-col gap-layout-sm lg:flex-row lg:items-end lg:justify-between">
-                  <div>
-                    <h3 className="text-lg font-medium text-foreground">
-                      Stock pressure
-                    </h3>
-                    <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-                      Review low-stock items and decide what needs a purchase
-                      order.
+                <div className="border-b border-border/70 px-layout-md py-layout-md">
+                  <div className="flex flex-col gap-layout-sm lg:flex-row lg:items-end lg:justify-between">
+                    <div>
+                      <h3 className="text-lg font-medium text-foreground">
+                        Stock pressure
+                      </h3>
+                      <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+                        Review low-stock items and decide what needs a purchase
+                        order.
+                      </p>
+                    </div>
+                    <p className="text-sm font-medium text-muted-foreground">
+                      {getRecommendationCountCopy(
+                        mode,
+                        visibleRecommendations.length,
+                      )}
                     </p>
                   </div>
-                  <p className="text-sm font-medium text-muted-foreground">
-                    {getRecommendationCountCopy(
-                      mode,
-                      visibleRecommendations.length,
-                    )}
-                  </p>
                 </div>
-              </div>
 
-              <div className="divide-y divide-border/70">
-                {visibleRecommendations.length === 0 ? (
-                  <div className="px-layout-md py-layout-xl">
-                    <EmptyState
-                      description={getModeEmptyStateCopy(mode).description}
-                      title={getModeEmptyStateCopy(mode).title}
-                    />
-                  </div>
-                ) : (
-                  paginatedRecommendations.map((recommendation) => {
-                    const statusCopy = getContinuityStateCopy(
-                      recommendation.status,
-                    );
-                    const statusLabel = hasMixedPurchaseOrderCover(
-                      recommendation,
-                    )
-                      ? "Planned + inbound"
-                      : statusCopy.label;
-                    const statusClassName = hasMixedPurchaseOrderCover(
-                      recommendation,
-                    )
-                      ? "border-border bg-muted/50 text-foreground"
-                      : statusCopy.badgeClassName;
-                    const isInDraft = draftLines.some(
-                      (line) => line.productSkuId === recommendation._id,
-                    );
-                    const stateNote =
-                      getRecommendationStateNote(recommendation);
-                    const rowNote =
-                      stateNote ??
-                      (PLANNED_STATES.includes(recommendation.status)
-                        ? null
-                        : recommendation.guidance);
-                    const hasSuggestedOrder =
-                      recommendation.suggestedOrderQuantity > 0;
-                    const canAddAnotherPurchaseOrder =
-                      PLANNED_STATES.includes(recommendation.status) ||
-                      INBOUND_STATES.includes(recommendation.status) ||
-                      hasPlannedPurchaseOrderCover(recommendation) ||
-                      hasInboundPurchaseOrderCover(recommendation);
-                    const showDraftAction =
-                      isInDraft ||
-                      hasSuggestedOrder ||
-                      canAddAnotherPurchaseOrder;
-                    const draftActionLabel = isInDraft
-                      ? "In draft"
-                      : canAddAnotherPurchaseOrder
-                        ? "Add purchase order"
-                        : "Add to draft";
-                    const plannedUnits =
-                      recommendation.plannedPurchaseOrderQuantity ?? 0;
-                    const linkedPurchaseOrders =
-                      getUniquePurchaseOrderReferences(recommendation);
-                    const linkedVendorCount =
-                      getUniqueVendorCount(linkedPurchaseOrders);
-                    const inboundUnits =
-                      recommendation.inboundPurchaseOrderQuantity ??
-                      recommendation.pendingPurchaseOrderQuantity;
-                    const nextEta = formatOptionalDate(
-                      recommendation.nextExpectedAt,
-                    );
+                <div className="divide-y divide-border/70">
+                  {visibleRecommendations.length === 0 ? (
+                    <div className="px-layout-md py-layout-xl">
+                      <EmptyState
+                        description={getModeEmptyStateCopy(mode).description}
+                        title={getModeEmptyStateCopy(mode).title}
+                      />
+                    </div>
+                  ) : (
+                    paginatedRecommendations.map((recommendation) => {
+                      const statusCopy = getContinuityStateCopy(
+                        recommendation.status,
+                      );
+                      const statusLabel = hasMixedPurchaseOrderCover(
+                        recommendation,
+                      )
+                        ? "Planned + inbound"
+                        : statusCopy.label;
+                      const statusClassName = hasMixedPurchaseOrderCover(
+                        recommendation,
+                      )
+                        ? "border-border bg-muted/50 text-foreground"
+                        : statusCopy.badgeClassName;
+                      const isInDraft = draftLines.some(
+                        (line) => line.productSkuId === recommendation._id,
+                      );
+                      const stateNote =
+                        getRecommendationStateNote(recommendation);
+                      const rowNote =
+                        stateNote ??
+                        (PLANNED_STATES.includes(recommendation.status)
+                          ? null
+                          : recommendation.guidance);
+                      const hasSuggestedOrder =
+                        recommendation.suggestedOrderQuantity > 0;
+                      const canAddAnotherPurchaseOrder =
+                        PLANNED_STATES.includes(recommendation.status) ||
+                        INBOUND_STATES.includes(recommendation.status) ||
+                        hasPlannedPurchaseOrderCover(recommendation) ||
+                        hasInboundPurchaseOrderCover(recommendation);
+                      const showDraftAction =
+                        isInDraft ||
+                        hasSuggestedOrder ||
+                        canAddAnotherPurchaseOrder;
+                      const draftActionLabel = isInDraft
+                        ? "In draft"
+                        : canAddAnotherPurchaseOrder
+                          ? "Add purchase order"
+                          : "Add to draft";
+                      const plannedUnits =
+                        recommendation.plannedPurchaseOrderQuantity ?? 0;
+                      const linkedPurchaseOrders =
+                        getUniquePurchaseOrderReferences(recommendation);
+                      const linkedVendorCount =
+                        getUniqueVendorCount(linkedPurchaseOrders);
+                      const inboundUnits =
+                        recommendation.inboundPurchaseOrderQuantity ??
+                        recommendation.pendingPurchaseOrderQuantity;
+                      const nextEta = formatOptionalDate(
+                        recommendation.nextExpectedAt,
+                      );
 
-                    return (
-                      <article
-                        aria-pressed={
-                          activeSelectedProductSkuId === recommendation._id
-                        }
-                        className={cn(
-                          "bg-background px-layout-md py-layout-lg text-left transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                          activeSelectedProductSkuId === recommendation._id ||
-                            linkedPurchaseOrders.some(
-                              (purchaseOrder) =>
-                                purchaseOrder.purchaseOrderId ===
-                                selectedPurchaseOrderId,
-                            )
-                            ? "bg-muted/30 hover:bg-muted/40"
-                            : undefined,
-                        )}
-                        key={recommendation._id}
-                        onClick={() => selectProductSku(recommendation)}
-                        ref={(element) => {
-                          if (element) {
-                            recommendationRowRefs.current.set(
+                      return (
+                        <article
+                          aria-pressed={
+                            activeSelectedProductSkuId === recommendation._id
+                          }
+                          className={cn(
+                            "bg-background px-layout-md py-layout-lg text-left transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                            activeSelectedProductSkuId === recommendation._id ||
+                              linkedPurchaseOrders.some(
+                                (purchaseOrder) =>
+                                  purchaseOrder.purchaseOrderId ===
+                                  selectedPurchaseOrderId,
+                              )
+                              ? "bg-muted/30 hover:bg-muted/40"
+                              : undefined,
+                          )}
+                          key={recommendation._id}
+                          onClick={() => selectProductSku(recommendation)}
+                          ref={(element) => {
+                            if (element) {
+                              recommendationRowRefs.current.set(
+                                recommendation._id,
+                                element,
+                              );
+                              return;
+                            }
+
+                            recommendationRowRefs.current.delete(
                               recommendation._id,
-                              element,
                             );
-                            return;
-                          }
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key !== "Enter" && event.key !== " ") {
+                              return;
+                            }
 
-                          recommendationRowRefs.current.delete(
-                            recommendation._id,
-                          );
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key !== "Enter" && event.key !== " ") {
-                            return;
-                          }
-
-                          event.preventDefault();
-                          selectProductSku(recommendation);
-                        }}
-                        role="button"
-                        tabIndex={0}
-                      >
-                        <div className="flex flex-col gap-layout-lg lg:flex-row lg:items-start lg:justify-between">
-                          <div className="min-w-0 flex-1 space-y-layout-lg">
-                            <div className="space-y-3">
-                              <div className="min-w-0 space-y-3">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <h4 className="text-base font-semibold capitalize text-foreground">
-                                    {recommendation.productName}
-                                  </h4>
-                                  {recommendation.sku ? (
-                                    <span className="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                                      {recommendation.sku}
+                            event.preventDefault();
+                            selectProductSku(recommendation);
+                          }}
+                          role="button"
+                          tabIndex={0}
+                        >
+                          <div className="flex flex-col gap-layout-lg lg:flex-row lg:items-start lg:justify-between">
+                            <div className="min-w-0 flex-1 space-y-layout-lg">
+                              <div className="space-y-3">
+                                <div className="min-w-0 space-y-3">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <h4 className="text-base font-semibold capitalize text-foreground">
+                                      {recommendation.productName}
+                                    </h4>
+                                    {recommendation.sku ? (
+                                      <span className="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                                        {recommendation.sku}
+                                      </span>
+                                    ) : null}
+                                    <span
+                                      className={`rounded-md border px-2 py-1 text-[11px] font-medium ${statusClassName}`}
+                                    >
+                                      {statusLabel}
                                     </span>
-                                  ) : null}
-                                  <span
-                                    className={`rounded-md border px-2 py-1 text-[11px] font-medium ${statusClassName}`}
-                                  >
-                                    {statusLabel}
-                                  </span>
-                                  {linkedPurchaseOrders.length > 0 ? (
-                                    <span className="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-medium text-foreground/70">
-                                      {formatPurchaseOrderCount(
-                                        linkedPurchaseOrders.length,
-                                      )}
-                                      {linkedVendorCount > 0
-                                        ? ` · ${linkedVendorCount} vendor${
-                                            linkedVendorCount === 1 ? "" : "s"
-                                          }`
-                                        : ""}
-                                    </span>
+                                    {linkedPurchaseOrders.length > 0 ? (
+                                      <span className="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-medium text-foreground/70">
+                                        {formatPurchaseOrderCount(
+                                          linkedPurchaseOrders.length,
+                                        )}
+                                        {linkedVendorCount > 0
+                                          ? ` · ${linkedVendorCount} vendor${
+                                              linkedVendorCount === 1 ? "" : "s"
+                                            }`
+                                          : ""}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  {rowNote ? (
+                                    <p className="max-w-3xl text-sm text-muted-foreground">
+                                      {rowNote}
+                                    </p>
                                   ) : null}
                                 </div>
-                                {rowNote ? (
-                                  <p className="max-w-3xl text-sm text-muted-foreground">
-                                    {rowNote}
-                                  </p>
-                                ) : null}
                               </div>
+
+                              <dl className="grid gap-layout-lg text-sm sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)]">
+                                <div className="space-y-3">
+                                  <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                                    Stock now
+                                  </dt>
+                                  <dd className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                                    <span className="text-lg font-semibold tabular-nums text-foreground">
+                                      {recommendation.inventoryCount}
+                                    </span>
+                                    <span className="text-muted-foreground">
+                                      on hand
+                                    </span>
+                                    <span
+                                      className="text-border"
+                                      aria-hidden="true"
+                                    >
+                                      /
+                                    </span>
+                                    <span className="font-medium tabular-nums text-foreground">
+                                      {recommendation.quantityAvailable}
+                                    </span>
+                                    <span className="text-muted-foreground">
+                                      available
+                                    </span>
+                                  </dd>
+                                </div>
+                                <div className="space-y-3 border-t border-border/70 pt-layout-md sm:border-l sm:border-t-0 sm:pl-layout-lg sm:pt-0">
+                                  <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                                    Cover
+                                  </dt>
+                                  <dd className="text-foreground">
+                                    <span className="font-medium tabular-nums">
+                                      {plannedUnits}
+                                    </span>{" "}
+                                    planned,{" "}
+                                    <span className="font-medium tabular-nums">
+                                      {inboundUnits}
+                                    </span>{" "}
+                                    inbound
+                                    <span className="text-muted-foreground">
+                                      {" "}
+                                      · ETA{" "}
+                                    </span>
+                                    <span className="font-medium">
+                                      {nextEta}
+                                    </span>
+                                  </dd>
+                                </div>
+                              </dl>
+
+                              {linkedPurchaseOrders.length > 0 ? (
+                                <div className="space-y-3">
+                                  <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                                    Purchase orders
+                                  </div>
+                                  <div className="space-y-2">
+                                    {linkedPurchaseOrders.map(
+                                      (purchaseOrder) => {
+                                        const lifecycleActions =
+                                          getNextLifecycleActions(
+                                            purchaseOrder.status,
+                                          );
+                                        const isReceivingActive =
+                                          selectedReceivingOrderId ===
+                                          purchaseOrder.purchaseOrderId;
+                                        const isUpdatingPurchaseOrder =
+                                          updatingPurchaseOrderId ===
+                                          purchaseOrder.purchaseOrderId;
+
+                                        return (
+                                          <div
+                                            className={cn(
+                                              "flex flex-col gap-layout-sm rounded-md border bg-surface px-3 py-2 transition-colors sm:flex-row sm:items-center sm:justify-between",
+                                              isReceivingActive
+                                                ? "border-action-workflow-border bg-action-workflow-soft/40"
+                                                : selectedPurchaseOrderId ===
+                                                    purchaseOrder.purchaseOrderId
+                                                  ? "border-action-workflow-border bg-action-workflow-soft/30"
+                                                  : "border-border",
+                                            )}
+                                            key={purchaseOrder.purchaseOrderId}
+                                          >
+                                            <div className="min-w-0 space-y-1">
+                                              <div className="flex flex-wrap items-center gap-2 text-sm">
+                                                <span className="font-medium capitalize text-foreground">
+                                                  {purchaseOrder.vendorName ??
+                                                    "Vendor not set"}
+                                                </span>
+                                                <span className="text-xs font-medium text-muted-foreground">
+                                                  {purchaseOrder.poNumber}
+                                                </span>
+                                              </div>
+                                              <div className="text-xs text-muted-foreground">
+                                                {formatUnitCount(
+                                                  purchaseOrder.pendingQuantity,
+                                                )}{" "}
+                                                ·{" "}
+                                                {formatStatus(
+                                                  purchaseOrder.status,
+                                                )}
+                                              </div>
+                                            </div>
+                                            <div className="flex flex-wrap gap-2 sm:justify-end">
+                                              {lifecycleActions.map(
+                                                (action) => (
+                                                  <Button
+                                                    disabled={
+                                                      isUpdatingPurchaseOrder
+                                                    }
+                                                    key={action.nextStatus}
+                                                    onClick={(event) => {
+                                                      event.stopPropagation();
+                                                      if (
+                                                        action.nextStatus ===
+                                                        "ordered"
+                                                      ) {
+                                                        void handleAdvancePurchaseOrderToOrdered(
+                                                          {
+                                                            _id: purchaseOrder.purchaseOrderId,
+                                                            poNumber:
+                                                              purchaseOrder.poNumber,
+                                                          },
+                                                        );
+                                                        return;
+                                                      }
+
+                                                      void handleUpdatePurchaseOrderStatus(
+                                                        {
+                                                          _id: purchaseOrder.purchaseOrderId,
+                                                          poNumber:
+                                                            purchaseOrder.poNumber,
+                                                        },
+                                                        action.nextStatus,
+                                                      );
+                                                    }}
+                                                    size="sm"
+                                                    variant={
+                                                      action.nextStatus ===
+                                                      "cancelled"
+                                                        ? "utility"
+                                                        : "workflow-soft"
+                                                    }
+                                                  >
+                                                    {action.label}
+                                                  </Button>
+                                                ),
+                                              )}
+                                              {canReceivePurchaseOrder(
+                                                purchaseOrder.status,
+                                              ) ? (
+                                                <Button
+                                                  aria-current={
+                                                    isReceivingActive
+                                                      ? "true"
+                                                      : undefined
+                                                  }
+                                                  className="w-[92px]"
+                                                  disabled={isReceivingActive}
+                                                  onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    setSelectedReceivingOrderId(
+                                                      purchaseOrder.purchaseOrderId,
+                                                    );
+                                                  }}
+                                                  size="sm"
+                                                  variant={
+                                                    isReceivingActive
+                                                      ? "utility"
+                                                      : "workflow-soft"
+                                                  }
+                                                >
+                                                  {isReceivingActive
+                                                    ? "Receiving"
+                                                    : "Receive"}
+                                                </Button>
+                                              ) : null}
+                                            </div>
+                                          </div>
+                                        );
+                                      },
+                                    )}
+                                  </div>
+                                </div>
+                              ) : null}
                             </div>
 
-                            <dl className="grid gap-layout-lg text-sm sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)]">
-                              <div className="space-y-3">
-                                <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                                  Stock now
-                                </dt>
-                                <dd className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                                  <span className="text-lg font-semibold tabular-nums text-foreground">
-                                    {recommendation.inventoryCount}
-                                  </span>
-                                  <span className="text-muted-foreground">
-                                    on hand
-                                  </span>
-                                  <span
-                                    className="text-border"
-                                    aria-hidden="true"
-                                  >
-                                    /
-                                  </span>
-                                  <span className="font-medium tabular-nums text-foreground">
-                                    {recommendation.quantityAvailable}
-                                  </span>
-                                  <span className="text-muted-foreground">
-                                    available
-                                  </span>
-                                </dd>
-                              </div>
-                              <div className="space-y-3 border-t border-border/70 pt-layout-md sm:border-l sm:border-t-0 sm:pl-layout-lg sm:pt-0">
-                                <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                                  Cover
-                                </dt>
-                                <dd className="text-foreground">
-                                  <span className="font-medium tabular-nums">
-                                    {plannedUnits}
-                                  </span>{" "}
-                                  planned,{" "}
-                                  <span className="font-medium tabular-nums">
-                                    {inboundUnits}
-                                  </span>{" "}
-                                  inbound
-                                  <span className="text-muted-foreground">
-                                    {" "}
-                                    · ETA{" "}
-                                  </span>
-                                  <span className="font-medium">{nextEta}</span>
-                                </dd>
-                              </div>
-                            </dl>
-
-                            {linkedPurchaseOrders.length > 0 ? (
-                              <div className="space-y-3">
-                                <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                                  Purchase orders
-                                </div>
-                                <div className="space-y-2">
-                                  {linkedPurchaseOrders.map((purchaseOrder) => {
-                                    const lifecycleActions =
-                                      getNextLifecycleActions(
-                                        purchaseOrder.status,
-                                      );
-                                    const isReceivingActive =
-                                      selectedReceivingOrderId ===
-                                      purchaseOrder.purchaseOrderId;
-                                    const isUpdatingPurchaseOrder =
-                                      updatingPurchaseOrderId ===
-                                      purchaseOrder.purchaseOrderId;
-
-                                    return (
-                                      <div
-                                        className={cn(
-                                          "flex flex-col gap-layout-sm rounded-md border bg-surface px-3 py-2 transition-colors sm:flex-row sm:items-center sm:justify-between",
-                                          isReceivingActive
-                                            ? "border-action-workflow-border bg-action-workflow-soft/40"
-                                            : selectedPurchaseOrderId ===
-                                                purchaseOrder.purchaseOrderId
-                                              ? "border-action-workflow-border bg-action-workflow-soft/30"
-                                              : "border-border",
-                                        )}
-                                        key={purchaseOrder.purchaseOrderId}
-                                      >
-                                        <div className="min-w-0 space-y-1">
-                                          <div className="flex flex-wrap items-center gap-2 text-sm">
-                                            <span className="font-medium capitalize text-foreground">
-                                              {purchaseOrder.vendorName ??
-                                                "Vendor not set"}
-                                            </span>
-                                            <span className="text-xs font-medium text-muted-foreground">
-                                              {purchaseOrder.poNumber}
-                                            </span>
-                                          </div>
-                                          <div className="text-xs text-muted-foreground">
-                                            {formatUnitCount(
-                                              purchaseOrder.pendingQuantity,
-                                            )}{" "}
-                                            ·{" "}
-                                            {formatStatus(purchaseOrder.status)}
-                                          </div>
-                                        </div>
-                                        <div className="flex flex-wrap gap-2 sm:justify-end">
-                                          {lifecycleActions.map((action) => (
-                                            <Button
-                                              disabled={isUpdatingPurchaseOrder}
-                                              key={action.nextStatus}
-                                              onClick={(event) => {
-                                                event.stopPropagation();
-                                                action.nextStatus === "ordered"
-                                                  ? void handleAdvancePurchaseOrderToOrdered(
-                                                      {
-                                                        _id: purchaseOrder.purchaseOrderId,
-                                                        poNumber:
-                                                          purchaseOrder.poNumber,
-                                                      },
-                                                    )
-                                                  : void handleUpdatePurchaseOrderStatus(
-                                                      {
-                                                        _id: purchaseOrder.purchaseOrderId,
-                                                        poNumber:
-                                                          purchaseOrder.poNumber,
-                                                      },
-                                                      action.nextStatus,
-                                                    );
-                                              }}
-                                              size="sm"
-                                              variant={
-                                                action.nextStatus ===
-                                                "cancelled"
-                                                  ? "utility"
-                                                  : "workflow-soft"
-                                              }
-                                            >
-                                              {action.label}
-                                            </Button>
-                                          ))}
-                                          {canReceivePurchaseOrder(
-                                            purchaseOrder.status,
-                                          ) ? (
-                                            <Button
-                                              aria-current={
-                                                isReceivingActive
-                                                  ? "true"
-                                                  : undefined
-                                              }
-                                              className="w-[92px]"
-                                              disabled={isReceivingActive}
-                                              onClick={(event) => {
-                                                event.stopPropagation();
-                                                setSelectedReceivingOrderId(
-                                                  purchaseOrder.purchaseOrderId,
-                                                );
-                                              }}
-                                              size="sm"
-                                              variant={
-                                                isReceivingActive
-                                                  ? "utility"
-                                                  : "workflow-soft"
-                                              }
-                                            >
-                                              {isReceivingActive
-                                                ? "Receiving"
-                                                : "Receive"}
-                                            </Button>
-                                          ) : null}
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
+                            {showDraftAction ? (
+                              <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">
+                                <Button
+                                  className="w-[160px] self-start"
+                                  disabled={isInDraft}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    addRecommendationToDraft(recommendation);
+                                  }}
+                                  size="sm"
+                                  variant={
+                                    canAddAnotherPurchaseOrder
+                                      ? "utility"
+                                      : "workflow-soft"
+                                  }
+                                >
+                                  {draftActionLabel}
+                                </Button>
                               </div>
                             ) : null}
                           </div>
-
-                          {showDraftAction ? (
-                            <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">
-                              <Button
-                                className="w-[160px] self-start"
-                                disabled={isInDraft}
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  addRecommendationToDraft(recommendation);
-                                }}
-                                size="sm"
-                                variant={
-                                  canAddAnotherPurchaseOrder
-                                    ? "utility"
-                                    : "workflow-soft"
-                                }
-                              >
-                                {draftActionLabel}
-                              </Button>
-                            </div>
-                          ) : null}
-                        </div>
-                      </article>
-                    );
-                  })
-                )}
-              </div>
-              {visibleRecommendations.length > RECOMMENDATIONS_PER_PAGE ? (
-                <div className="flex border-t border-border/70 px-layout-md py-layout-sm text-sm">
-                  <div className="ml-auto flex flex-col gap-layout-sm sm:flex-row sm:items-center sm:gap-layout-md">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium text-muted-foreground">
-                        Showing {paginationStart}-{paginationEnd} of{" "}
-                        {visibleRecommendations.length}
-                      </span>
-                      <span className="text-muted-foreground">
-                        Page {clampedRecommendationPage} of{" "}
-                        {recommendationPageCount}
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Button
-                        className="hidden h-8 w-8 p-0 lg:flex"
-                        disabled={clampedRecommendationPage === 1}
-                        onClick={() => handleRecommendationPageChange(1)}
-                        variant="outline"
-                      >
-                        <span className="sr-only">Go to first page</span>
-                        <ChevronsLeft />
-                      </Button>
-                      <Button
-                        className="h-8 w-8 p-0"
-                        disabled={clampedRecommendationPage === 1}
-                        onClick={() =>
-                          handleRecommendationPageChange(
-                            Math.max(1, clampedRecommendationPage - 1),
-                          )
-                        }
-                        variant="outline"
-                      >
-                        <span className="sr-only">Go to previous page</span>
-                        <ChevronLeft />
-                      </Button>
-                      <Button
-                        className="h-8 w-8 p-0"
-                        disabled={
-                          clampedRecommendationPage === recommendationPageCount
-                        }
-                        onClick={() =>
-                          handleRecommendationPageChange(
-                            Math.min(
+                        </article>
+                      );
+                    })
+                  )}
+                </div>
+                {visibleRecommendations.length > RECOMMENDATIONS_PER_PAGE ? (
+                  <div className="flex border-t border-border/70 px-layout-md py-layout-sm text-sm">
+                    <div className="ml-auto flex flex-col gap-layout-sm sm:flex-row sm:items-center sm:gap-layout-md">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium text-muted-foreground">
+                          Showing {paginationStart}-{paginationEnd} of{" "}
+                          {visibleRecommendations.length}
+                        </span>
+                        <span className="text-muted-foreground">
+                          Page {clampedRecommendationPage} of{" "}
+                          {recommendationPageCount}
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Button
+                          className="hidden h-8 w-8 p-0 lg:flex"
+                          disabled={clampedRecommendationPage === 1}
+                          onClick={() => handleRecommendationPageChange(1)}
+                          variant="outline"
+                        >
+                          <span className="sr-only">Go to first page</span>
+                          <ChevronsLeft />
+                        </Button>
+                        <Button
+                          className="h-8 w-8 p-0"
+                          disabled={clampedRecommendationPage === 1}
+                          onClick={() =>
+                            handleRecommendationPageChange(
+                              Math.max(1, clampedRecommendationPage - 1),
+                            )
+                          }
+                          variant="outline"
+                        >
+                          <span className="sr-only">Go to previous page</span>
+                          <ChevronLeft />
+                        </Button>
+                        <Button
+                          className="h-8 w-8 p-0"
+                          disabled={
+                            clampedRecommendationPage ===
+                            recommendationPageCount
+                          }
+                          onClick={() =>
+                            handleRecommendationPageChange(
+                              Math.min(
+                                recommendationPageCount,
+                                clampedRecommendationPage + 1,
+                              ),
+                            )
+                          }
+                          variant="outline"
+                        >
+                          <span className="sr-only">Go to next page</span>
+                          <ChevronRight />
+                        </Button>
+                        <Button
+                          className="hidden h-8 w-8 p-0 lg:flex"
+                          disabled={
+                            clampedRecommendationPage ===
+                            recommendationPageCount
+                          }
+                          onClick={() =>
+                            handleRecommendationPageChange(
                               recommendationPageCount,
-                              clampedRecommendationPage + 1,
-                            ),
-                          )
-                        }
-                        variant="outline"
-                      >
-                        <span className="sr-only">Go to next page</span>
-                        <ChevronRight />
-                      </Button>
-                      <Button
-                        className="hidden h-8 w-8 p-0 lg:flex"
-                        disabled={
-                          clampedRecommendationPage === recommendationPageCount
-                        }
-                        onClick={() =>
-                          handleRecommendationPageChange(
-                            recommendationPageCount,
-                          )
-                        }
-                        variant="outline"
-                      >
-                        <span className="sr-only">Go to last page</span>
-                        <ChevronsRight />
-                      </Button>
+                            )
+                          }
+                          variant="outline"
+                        >
+                          <span className="sr-only">Go to last page</span>
+                          <ChevronsRight />
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ) : null}
-            </section>
-          </section>
+                ) : null}
+              </section>
+            </PageWorkspace>
+          </PageWorkspaceMain>
 
-          <aside className="flex min-h-0 flex-col gap-layout-md overflow-y-auto overscroll-contain pr-1 scrollbar-hide">
+          <PageWorkspaceRail className="flex min-h-0 flex-col gap-layout-lg overflow-y-auto overscroll-contain pr-1 scrollbar-hide">
             {selectedInventoryItem ? (
               <section
                 className={cn(
@@ -1931,8 +1952,8 @@ export function ProcurementViewContent({
                 ))}
               </div>
             </section>
-          </aside>
-        </div>
+          </PageWorkspaceRail>
+        </PageWorkspaceGrid>
       </FadeIn>
     </View>
   );

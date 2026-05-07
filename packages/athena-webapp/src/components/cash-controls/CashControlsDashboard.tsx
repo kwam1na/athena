@@ -1,6 +1,6 @@
 import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
-import { ArrowRight, ArrowUpRight, Banknote, ShieldAlert } from "lucide-react";
+import { ArrowRight, ArrowUpRight } from "lucide-react";
 
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { capitalizeWords, cn, currencyFormatter } from "@/lib/utils";
@@ -8,6 +8,11 @@ import { formatStoredAmount } from "@/lib/pos/displayAmounts";
 import { api } from "~/convex/_generated/api";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
+import {
+  PageLevelHeader,
+  PageWorkspace,
+  PageWorkspaceMain,
+} from "../common/PageLevelHeader";
 import { EmptyState } from "../states/empty/empty-state";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
@@ -24,7 +29,6 @@ import {
 } from "../ui/table";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import { formatStaffDisplayName } from "~/shared/staffDisplayName";
-import { CashControlsWorkspaceHeader } from "./CashControlsWorkspaceHeader";
 
 const CLOSED_SESSION_PREVIEW_LIMIT = 3;
 
@@ -79,20 +83,6 @@ type CashControlsDashboardContentProps = {
   orgUrlSlug: string;
   storeUrlSlug: string;
 };
-
-function CashControlsHeaderSkeleton() {
-  return (
-    <div className="container mx-auto py-5">
-      <div className="max-w-2xl space-y-4">
-        <Skeleton className="h-3 w-20" />
-        <div className="space-y-2">
-          <Skeleton className="h-8 w-56 max-w-full" />
-          <Skeleton className="h-4 w-[40rem] max-w-full" />
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function MetricCardSkeleton() {
   return (
@@ -383,117 +373,6 @@ function CashPositionSummary({
         </div>
       ))}
     </dl>
-  );
-}
-
-function WorkflowJumpPoints({
-  dashboardSnapshot,
-  orgUrlSlug,
-  storeUrlSlug,
-}: {
-  dashboardSnapshot: CashControlsDashboardSnapshot;
-  orgUrlSlug: string;
-  storeUrlSlug: string;
-}) {
-  const firstOpenSession = dashboardSnapshot.openSessions[0];
-  const firstVarianceSession = dashboardSnapshot.unresolvedVariances[0];
-
-  const items = [
-    {
-      body: firstOpenSession
-        ? `${formatRegisterName(firstOpenSession.registerNumber)} is ready for review or deposit entry`
-        : "No live drawers are open right now",
-      cta: firstOpenSession ? "Open session" : "No open sessions",
-      disabled: !firstOpenSession,
-      icon: Banknote,
-      params: firstOpenSession
-        ? {
-            orgUrlSlug,
-            sessionId: firstOpenSession._id,
-            storeUrlSlug,
-          }
-        : undefined,
-      search: { o: getOrigin() },
-      title: "Register sessions",
-      to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
-    },
-    {
-      body: firstVarianceSession
-        ? `${formatRegisterName(firstVarianceSession.registerNumber)} needs variance review`
-        : "Variance exceptions stay quiet until a drawer needs attention",
-      cta: firstVarianceSession ? "Resolve variance" : "No action needed",
-      disabled: !firstVarianceSession,
-      icon: ShieldAlert,
-      params: firstVarianceSession
-        ? {
-            orgUrlSlug,
-            sessionId: firstVarianceSession._id,
-            storeUrlSlug,
-          }
-        : undefined,
-      search: { o: getOrigin() },
-      title: "Variance review",
-      to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
-    },
-  ];
-
-  return (
-    <section className="grid gap-layout-sm lg:grid-cols-2">
-      {items.map((item) => {
-        const Icon = item.icon;
-        const content = (
-          <>
-            <div className="flex items-start justify-between gap-layout-md">
-              <span className="flex h-10 w-10 items-center justify-center rounded-md bg-signal/10 text-signal">
-                <Icon aria-hidden className="h-5 w-5" />
-              </span>
-              <Badge
-                className="border-border bg-background text-muted-foreground"
-                size="sm"
-                variant="outline"
-              >
-                Workflow
-              </Badge>
-            </div>
-            <div className="space-y-layout-xs">
-              <h2 className="font-display text-lg font-semibold text-foreground">
-                {item.title}
-              </h2>
-              <p className="text-sm text-muted-foreground">{item.body}</p>
-            </div>
-            <span className="mt-auto inline-flex items-center gap-2 text-sm font-medium text-signal">
-              {item.cta}
-              {!item.disabled ? (
-                <ArrowRight aria-hidden className="h-4 w-4" />
-              ) : null}
-            </span>
-          </>
-        );
-
-        if (item.disabled || !item.params) {
-          return (
-            <article
-              className="flex min-h-44 flex-col gap-layout-md rounded-lg border border-dashed border-border bg-surface-raised p-layout-md"
-              key={item.title}
-            >
-              {content}
-            </article>
-          );
-        }
-
-        return (
-          <Link
-            className="group flex min-h-44 flex-col gap-layout-md rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface transition-colors hover:border-signal/50 hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            key={item.title}
-            params={item.params}
-            search={item.search}
-            to={item.to}
-          >
-            {content}
-          </Link>
-        );
-      })}
-    </section>
   );
 }
 
@@ -1098,7 +977,6 @@ function CashroomWorkflow({
   const closedSessions = sessions.filter(
     (session) => session.status === "closed",
   );
-  const { onHandTotal, unresolvedVarianceTotal } = getSnapshotTotals(snapshot);
   const hasNeedsAttention = needsAttention.length > 0;
   const hasLiveDrawers = liveDrawers.length > 0;
   const primaryLane = hasNeedsAttention
@@ -1292,70 +1170,57 @@ export function CashControlsDashboardContent({
   storeUrlSlug,
 }: CashControlsDashboardContentProps) {
   return (
-    <View
-      hideBorder
-      hideHeaderBottomBorder
-      scrollMode="page"
-      header={
-        <CashControlsWorkspaceHeader
-          activeView="cash-controls"
-          description="Track live drawers, review deposited totals, and move into session detail before shifting work into closeouts"
-          orgUrlSlug={orgUrlSlug}
-          storeUrlSlug={storeUrlSlug}
-          title="Cash controls"
-        />
-      }
-    >
+    <View hideBorder hideHeaderBottomBorder scrollMode="page">
       <FadeIn className="container mx-auto py-layout-xl">
-        {isLoading ? (
-          <CashControlsDashboardSkeleton />
-        ) : (
-          <div className="space-y-layout-3xl">
-            <section className="space-y-layout-md">
-              <div className="flex flex-col gap-layout-sm lg:flex-row lg:items-end lg:justify-between">
-                <div className="space-y-layout-2xs">
-                  <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                    Current control snapshot
-                  </p>
-                  <h2 className="font-display text-2xl font-semibold tracking-tight text-foreground">
-                    Cashroom Landing
-                  </h2>
+        <PageWorkspace>
+          <PageLevelHeader
+            className="border-b-0 pb-0"
+            eyebrow="Cash Ops"
+            title="Cash controls"
+            description="Track live drawers, review deposited totals, and move into session detail before shifting work into closeouts."
+          />
+
+          {isLoading ? (
+            <CashControlsDashboardSkeleton />
+          ) : (
+            <PageWorkspaceMain>
+              <section className="space-y-layout-md">
+                <div className="flex flex-col gap-layout-sm lg:flex-row lg:items-end lg:justify-between">
+                  <div className="space-y-layout-2xs">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                      Current control snapshot
+                    </p>
+                  </div>
+                  <div className="inline-flex items-center gap-2 rounded-md border border-border bg-surface-raised px-layout-sm py-layout-xs text-sm text-muted-foreground">
+                    <span
+                      aria-hidden
+                      className="h-2 w-2 rounded-full bg-signal"
+                    />
+                    Live drawers, recent deposits, and session history
+                  </div>
                 </div>
-                <div className="inline-flex items-center gap-2 rounded-md border border-border bg-surface-raised px-layout-sm py-layout-xs text-sm text-muted-foreground">
-                  <span
-                    aria-hidden
-                    className="h-2 w-2 rounded-full bg-signal"
-                  />
-                  Live drawers, recent deposits, and session history
-                </div>
-              </div>
-              <CashPositionSummary
+                <CashPositionSummary
+                  currency={currency}
+                  snapshot={dashboardSnapshot}
+                />
+              </section>
+
+              <CashroomWorkflow
                 currency={currency}
+                orgUrlSlug={orgUrlSlug}
                 snapshot={dashboardSnapshot}
+                storeUrlSlug={storeUrlSlug}
               />
-            </section>
 
-            {/* <WorkflowJumpPoints
-            dashboardSnapshot={dashboardSnapshot}
-            orgUrlSlug={orgUrlSlug}
-            storeUrlSlug={storeUrlSlug}
-          /> */}
-
-            <CashroomWorkflow
-              currency={currency}
-              orgUrlSlug={orgUrlSlug}
-              snapshot={dashboardSnapshot}
-              storeUrlSlug={storeUrlSlug}
-            />
-
-            <DepositsLedger
-              currency={currency}
-              deposits={dashboardSnapshot.recentDeposits}
-              orgUrlSlug={orgUrlSlug}
-              storeUrlSlug={storeUrlSlug}
-            />
-          </div>
-        )}
+              <DepositsLedger
+                currency={currency}
+                deposits={dashboardSnapshot.recentDeposits}
+                orgUrlSlug={orgUrlSlug}
+                storeUrlSlug={storeUrlSlug}
+              />
+            </PageWorkspaceMain>
+          )}
+        </PageWorkspace>
       </FadeIn>
     </View>
   );
@@ -1386,14 +1251,9 @@ export function CashControlsDashboard() {
 
   if (isLoadingAccess) {
     return (
-      <View
-        hideBorder
-        hideHeaderBottomBorder
-        scrollMode="page"
-        header={<CashControlsHeaderSkeleton />}
-      >
+      <View hideBorder hideHeaderBottomBorder scrollMode="page">
         <FadeIn className="container mx-auto py-layout-xl">
-          <CashControlsDashboardSkeleton />
+          <div aria-label="Loading cash controls workspace" />
         </FadeIn>
       </View>
     );

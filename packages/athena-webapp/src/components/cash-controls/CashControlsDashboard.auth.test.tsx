@@ -17,17 +17,24 @@ vi.mock("convex/react", () => ({
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
     children,
-    params: _params,
+    params,
+    search,
     to,
     ...props
   }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
     params?: unknown;
+    search?: unknown;
     to?: string;
-  }) => (
-    <a href={to ?? "#"} {...props}>
-      {children}
-    </a>
-  ),
+  }) => {
+    void params;
+    void search;
+
+    return (
+      <a href={to ?? "#"} {...props}>
+        {children}
+      </a>
+    );
+  },
   useParams: mockedHooks.useParams,
 }));
 

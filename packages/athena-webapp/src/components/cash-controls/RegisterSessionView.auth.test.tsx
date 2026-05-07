@@ -27,11 +27,15 @@ vi.mock("@tanstack/react-router", () => ({
   }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
     params?: unknown;
     to?: string;
-  }) => (
-    <a href={to ?? "#"} {...props}>
-      {children}
-    </a>
-  ),
+  }) => {
+    void _params;
+
+    return (
+      <a href={to ?? "#"} {...props}>
+        {children}
+      </a>
+    );
+  },
   useNavigate: mockedHooks.useNavigate,
   useParams: mockedHooks.useParams,
 }));
@@ -96,7 +100,6 @@ describe("RegisterSessionView auth readiness", () => {
 
     render(<RegisterSessionView />);
 
-    expect(screen.getByText("Loading register session...")).toBeInTheDocument();
     expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
       "skip",
     ]);

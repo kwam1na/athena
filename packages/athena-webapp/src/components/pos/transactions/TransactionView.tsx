@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   CreditCard,
   MoveRight,
-  ShieldAlert,
   WalletCards,
   Smartphone,
   User,
@@ -22,10 +21,7 @@ import { Badge } from "../../ui/badge";
 import { getRelativeTime } from "~/src/lib/utils";
 import { PosPaymentMethod } from "~/src/lib/pos/domain";
 import { OrderSummary } from "../OrderSummary";
-import {
-  PosReceiptShareControl,
-  type ReceiptDeliveryHistoryEntry,
-} from "../receipt/PosReceiptShareControl";
+import type { ReceiptDeliveryHistoryEntry } from "../receipt/PosReceiptShareControl";
 import { CartItems } from "../CartItems";
 import type { CartItem } from "../types";
 import type { Id } from "~/convex/_generated/dataModel";
@@ -308,15 +304,20 @@ export function TransactionView() {
       subtotal: transaction.subtotal,
       tax: transaction.tax,
       total: transaction.total,
-      payments: transaction.payments.map((payment: {
-        amount: number;
-        method: string;
-        timestamp: number;
-      }, index: number) => ({
-        id: `${payment.method}-${index}-${payment.timestamp}`,
-        ...payment,
-        method: payment.method as PosPaymentMethod,
-      })),
+      payments: transaction.payments.map(
+        (
+          payment: {
+            amount: number;
+            method: string;
+            timestamp: number;
+          },
+          index: number,
+        ) => ({
+          id: `${payment.method}-${index}-${payment.timestamp}`,
+          ...payment,
+          method: payment.method as PosPaymentMethod,
+        }),
+      ),
       customerInfo:
         transaction.customerInfo ??
         (transaction.customer
@@ -344,7 +345,13 @@ export function TransactionView() {
   }
 
   const completedPaymentMethods = transaction.payments?.length
-    ? Array.from(new Set(transaction.payments.map((payment: { method: string }) => payment.method)))
+    ? Array.from(
+        new Set(
+          transaction.payments.map(
+            (payment: { method: string }) => payment.method,
+          ),
+        ),
+      )
     : [transaction.paymentMethod || "Unknown"];
   const paymentMethodLabel =
     completedPaymentMethods.length > 1
@@ -478,6 +485,7 @@ export function TransactionView() {
   }
 
   async function runPaymentMethodCorrection(args?: {
+    approvalRequestId?: Id<"approvalRequest">;
     approvalProofId?: Id<"approvalProof">;
     sameSubmissionApproval?: {
       pinHash: string;
@@ -515,6 +523,8 @@ export function TransactionView() {
           () =>
             correctPaymentMethod({
               actorStaffProfileId: args?.staffProfileId,
+              approvalRequestId:
+                approvalArgs.approvalRequestId ?? args?.approvalRequestId,
               approvalProofId:
                 approvalArgs.approvalProofId ?? args?.approvalProofId,
               paymentMethod,
@@ -737,7 +747,7 @@ export function TransactionView() {
                     )}
                   </dl>
 
-                  <div className="grid gap-3 border-t border-border/70 bg-muted/20 p-6 sm:grid-cols-2">
+                  <div className="border-t border-border/70 bg-muted/20 p-6">
                     {isCompletedTransaction ? (
                       <Button
                         className="w-full"
@@ -756,17 +766,7 @@ export function TransactionView() {
                         Update
                       </Button>
                     ) : null}
-
                   </div>
-
-                  {isCompletedTransaction ? (
-                    <div className="border-t border-border/70 p-6">
-                      <PosReceiptShareControl
-                        compact
-                        messaging={receiptMessaging}
-                      />
-                    </div>
-                  ) : null}
 
                   {/* {transaction.notes && (
                     <div className="space-y-1">

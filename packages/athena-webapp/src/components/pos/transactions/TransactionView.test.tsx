@@ -1056,6 +1056,7 @@ describe("TransactionView", () => {
       });
       expect(paymentMutation).toHaveBeenCalledWith({
         actorStaffProfileId: "staff_1",
+        approvalRequestId: "approval-1",
         approvalProofId: "proof-1",
         paymentMethod: "card",
         reason: "Wrong tender selected.",

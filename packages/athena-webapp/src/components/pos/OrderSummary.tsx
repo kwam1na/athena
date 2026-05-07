@@ -22,10 +22,7 @@ import { capitalizeWords, cn } from "~/src/lib/utils";
 import config from "~/src/config";
 import PosReceiptEmail from "~/convex/emails/PosReceiptEmail";
 import { currencyFormatter } from "~/shared/currencyFormatter";
-import {
-  PosReceiptShareControl,
-  type ReceiptMessagingConfig,
-} from "./receipt/PosReceiptShareControl";
+import type { ReceiptMessagingConfig } from "./receipt/PosReceiptShareControl";
 import type { Id } from "~/convex/_generated/dataModel";
 
 import { PaymentView, type SelectedPaymentMethod } from "./PaymentView";
@@ -261,13 +258,9 @@ export function OrderSummary({
           customerPhone: effectiveCustomerInfo?.phone,
           transactionId: completedTransactionData.transactionId ?? null,
           transactionNumber: completedOrderNumber,
-        }
-      : null;
-  const shouldShowReceiptMessaging = Boolean(
-    effectiveReceiptMessaging?.transactionId ||
-    effectiveReceiptMessaging?.customerPhone ||
-    effectiveReceiptMessaging?.deliveryHistory?.length,
-  );
+      }
+    : null;
+  void effectiveReceiptMessaging;
   const summaryRows = [
     { label: "Transaction", value: `#${receiptLabel}` },
     {
@@ -604,12 +597,12 @@ export function OrderSummary({
             <Printer className="h-4 w-4" />
             Print receipt
           </Button>
-          {shouldShowReceiptMessaging && effectiveReceiptMessaging ? (
+          {/* {shouldShowReceiptMessaging && effectiveReceiptMessaging ? (
             <PosReceiptShareControl
               compact
               messaging={effectiveReceiptMessaging}
             />
-          ) : null}
+          ) : null} */}
         </div>
       </section>
     );
@@ -702,11 +695,11 @@ export function OrderSummary({
                     </Button>
                   )}
                 </div>
-                {shouldShowReceiptMessaging && effectiveReceiptMessaging ? (
+                {/* {shouldShowReceiptMessaging && effectiveReceiptMessaging ? (
                   <PosReceiptShareControl
                     messaging={effectiveReceiptMessaging}
                   />
-                ) : null}
+                ) : null} */}
               </div>
             </div>
           </div>

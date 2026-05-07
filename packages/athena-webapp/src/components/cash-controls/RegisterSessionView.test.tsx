@@ -225,22 +225,6 @@ describe("RegisterSessionViewContent", () => {
     onSubmitCloseout: vi.fn(),
   };
 
-  it("shows a loading state while the register session is loading", () => {
-    render(
-      <RegisterSessionViewContent
-        actorUserId="user-1"
-        currency="USD"
-        isLoading
-        onRecordDeposit={vi.fn()}
-        {...closeoutHandlers}
-        registerSessionSnapshot={baseSnapshot}
-        storeId="store-1"
-      />,
-    );
-
-    expect(screen.getByText("Loading register session...")).toBeInTheDocument();
-  });
-
   it("renders the register summary, closeout review, and deposits", () => {
     render(
       <RegisterSessionViewContent
@@ -760,15 +744,13 @@ describe("RegisterSessionViewContent", () => {
 
   it("submits an opening float correction after manager command approval", async () => {
     const user = userEvent.setup();
-    const onAuthenticateForApproval = vi
-      .fn()
-      .mockResolvedValue(
-        ok({
-          approvalProofId: "approval-proof-1",
-          approvedByStaffProfileId: "manager-1",
-          expiresAt: Date.now() + 60_000,
-        }),
-      );
+    const onAuthenticateForApproval = vi.fn().mockResolvedValue(
+      ok({
+        approvalProofId: "approval-proof-1",
+        approvedByStaffProfileId: "manager-1",
+        expiresAt: Date.now() + 60_000,
+      }),
+    );
     const onCorrectOpeningFloat = vi
       .fn()
       .mockResolvedValueOnce({
@@ -1065,7 +1047,8 @@ describe("RegisterSessionViewContent", () => {
               _id: "event-1",
               actorStaffName: "Kwamina Mensah",
               createdAt: new Date("2026-05-01T00:44:00.000Z").getTime(),
-              eventType: "pos_transaction_payment_method_approval_proof_consumed",
+              eventType:
+                "pos_transaction_payment_method_approval_proof_consumed",
               message:
                 "Manager approval proof consumed for Transaction #245072 payment method correction.",
               reason: "mistake at checkout",
@@ -1170,15 +1153,13 @@ describe("RegisterSessionViewContent", () => {
   it("reviews a pending closeout approval from the register detail page", async () => {
     const user = userEvent.setup();
     const onAuthenticateStaff = vi.fn();
-    const onAuthenticateCloseoutReviewApproval = vi
-      .fn()
-      .mockResolvedValue(
-        ok({
-          approvalProofId: "approval-proof-1",
-          staffProfile: { fullName: "Ato Kofi" },
-          staffProfileId: "staff-1",
-        }),
-      );
+    const onAuthenticateCloseoutReviewApproval = vi.fn().mockResolvedValue(
+      ok({
+        approvalProofId: "approval-proof-1",
+        staffProfile: { fullName: "Ato Kofi" },
+        staffProfileId: "staff-1",
+      }),
+    );
     const onReviewCloseout = vi
       .fn()
       .mockResolvedValue(ok({ action: "approved" }));

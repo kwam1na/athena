@@ -1,4 +1,5 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import type { AnchorHTMLAttributes, ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   OperationsQueueView,
@@ -21,6 +22,34 @@ const mockedHooks = vi.hoisted(() => ({
 const mockedToast = vi.hoisted(() => ({
   error: vi.fn(),
   success: vi.fn(),
+}));
+
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({
+    children,
+    params,
+    search,
+    to,
+    ...props
+  }: AnchorHTMLAttributes<HTMLAnchorElement> & {
+    children: ReactNode;
+    params?: unknown;
+    search?: Record<string, string>;
+    to?: string;
+  }) => {
+    void params;
+    const searchParams = search ? `?${new URLSearchParams(search)}` : "";
+
+    return (
+      <a href={`${to ?? "#"}${searchParams}`} {...props}>
+        {children}
+      </a>
+    );
+  },
+  useParams: () => ({
+    orgUrlSlug: "wigclub",
+    storeUrlSlug: "wigclub",
+  }),
 }));
 
 vi.mock("convex/react", () => ({
@@ -53,12 +82,92 @@ vi.mock("sonner", () => ({
   toast: mockedToast,
 }));
 
+vi.mock("@/lib/security/pinHash", () => ({
+  hashPin: vi.fn(async (pin: string) => `hashed:${pin}`),
+}));
+
+vi.mock("@/components/staff-auth/StaffAuthenticationDialog", () => ({
+  StaffAuthenticationDialog: ({
+    copy,
+    onAuthenticate,
+    onAuthenticated,
+    onDismiss,
+    open,
+  }: {
+    copy: { submitLabel: string; title: string };
+    onAuthenticate: (args: {
+      mode: "authenticate";
+      pinHash: string;
+      username: string;
+    }) => Promise<{ data?: unknown; kind: string }>;
+    onAuthenticated: (
+      data: unknown,
+      mode: "authenticate",
+      credentials: { pinHash: string; username: string },
+    ) => void;
+    onDismiss: () => void;
+    open: boolean;
+  }) =>
+    open ? (
+      <div role="dialog" aria-label={copy.title}>
+        <button
+          type="button"
+          onClick={async () => {
+            const credentials = {
+              pinHash: "hashed:123456",
+              username: "manager",
+            };
+            const result = await onAuthenticate({
+              mode: "authenticate",
+              ...credentials,
+            });
+
+            if (result.kind === "ok") {
+              onAuthenticated(result.data, "authenticate", credentials);
+            }
+          }}
+        >
+          {copy.submitLabel}
+        </button>
+        <button type="button" onClick={onDismiss}>
+          Cancel
+        </button>
+      </div>
+    ) : null,
+}));
+
 const baseProps = {
   approvalRequests: [] as {
     _id: Id<"approvalRequest">;
+    metadata?: {
+      amount?: number;
+      adjustmentType?: string;
+      largestAbsoluteDelta?: number;
+      lineItems?: Array<{
+        countedQuantity?: number;
+        productName?: string;
+        productSkuId?: Id<"productSku">;
+        quantityDelta?: number;
+        sku?: string;
+        systemQuantity?: number;
+      }>;
+      netQuantityDelta?: number;
+      paymentMethod?: string;
+      previousPaymentMethod?: string;
+      reasonCode?: string;
+      transactionId?: Id<"posTransaction">;
+    } | null;
     requestedByStaffName?: string | null;
     requestType: string;
     status: string;
+    transactionSummary?: {
+      completedAt?: number;
+      paymentMethod?: string | null;
+      total: number;
+      totalPaid: number;
+      transactionId: Id<"posTransaction">;
+      transactionNumber: string;
+    } | null;
     workItemTitle?: string | null;
   }[],
   hasFullAdminAccess: true,
@@ -93,6 +202,11 @@ const baseProps = {
 describe("OperationsQueueViewContent", () => {
   beforeEach(() => {
     window.scrollTo = vi.fn();
+    window.ResizeObserver ??= class ResizeObserver {
+      disconnect() {}
+      observe() {}
+      unobserve() {}
+    };
     vi.clearAllMocks();
     mockedToast.error.mockReset();
     mockedToast.success.mockReset();
@@ -134,7 +248,9 @@ describe("OperationsQueueViewContent", () => {
     );
 
     expect(container.firstChild).toBeNull();
-    expect(screen.queryByText("Loading operations queue...")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Loading operations queue..."),
+    ).not.toBeInTheDocument();
   });
 
   it("renders the denied state for users without operations access", () => {
@@ -146,7 +262,9 @@ describe("OperationsQueueViewContent", () => {
   });
 
   it("renders the open work route content without an in-page workflow rail", () => {
-    render(<OperationsQueueViewContent {...baseProps} activeWorkflow="queue" />);
+    render(
+      <OperationsQueueViewContent {...baseProps} activeWorkflow="queue" />,
+    );
 
     expect(screen.queryByText("Operations lanes")).not.toBeInTheDocument();
     expect(screen.getByText("No open work items")).toBeInTheDocument();
@@ -182,12 +300,14 @@ describe("OperationsQueueViewContent", () => {
             title: "Closure wig wash and style",
           },
         ]}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="wigclub"
       />,
     );
 
     expect(screen.getByText("Closure wig wash and style")).toBeInTheDocument();
-    expect(screen.getByText("Mary Aidoo")).toBeInTheDocument();
-    expect(screen.getByText("pending")).toBeInTheDocument();
+    expect(screen.getByText("Requested by Mary Aidoo")).toBeInTheDocument();
+    expect(screen.queryByText("pending")).not.toBeInTheDocument();
 
     rerender(
       <OperationsQueueViewContent
@@ -213,6 +333,8 @@ describe("OperationsQueueViewContent", () => {
             title: "Closure wig wash and style",
           },
         ]}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="wigclub"
       />,
     );
 
@@ -230,9 +352,31 @@ describe("OperationsQueueViewContent", () => {
         approvalRequests={[
           {
             _id: "approval-1" as Id<"approvalRequest">,
+            metadata: {
+              largestAbsoluteDelta: 4,
+              lineItems: [
+                {
+                  countedQuantity: 2,
+                  productName: "Closure wig",
+                  productSkuId: "sku-1" as Id<"productSku">,
+                  quantityDelta: -4,
+                  sku: "CW-18",
+                  systemQuantity: 6,
+                },
+                {
+                  countedQuantity: 9,
+                  productName: "lace tint",
+                  productSkuId: "sku-2" as Id<"productSku">,
+                  quantityDelta: 3,
+                  sku: "LT-01",
+                  systemQuantity: 6,
+                },
+              ],
+              netQuantityDelta: -1,
+            },
             requestType: "inventory_adjustment_review",
             status: "pending",
-            workItemTitle: "Cycle count review · 1 SKU",
+            workItemTitle: "Cycle count review · 2 SKUs",
           },
         ]}
       />,
@@ -243,6 +387,29 @@ describe("OperationsQueueViewContent", () => {
         /manager approval applies the queued inventory movement/i,
       ),
     ).toBeInTheDocument();
+    expect(screen.getByText("SKU review")).toBeInTheDocument();
+    expect(screen.getByText("Closure wig")).toBeInTheDocument();
+    expect(screen.getByText("CW-18")).toBeInTheDocument();
+    expect(screen.getByText("Lace tint")).toBeInTheDocument();
+    expect(screen.getByText("LT-01")).toBeInTheDocument();
+    expect(screen.getByText("Net -1")).toBeInTheDocument();
+    expect(screen.getByText("Max variance 4")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        (_, element) =>
+          element?.textContent?.replace(/\s+/g, " ").trim() ===
+          "2 counted against 6 on hand",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        (_, element) =>
+          element?.textContent?.replace(/\s+/g, " ").trim() ===
+          "9 counted against 6 on hand",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("-4")).toBeInTheDocument();
+    expect(screen.getByText("+3")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /approve batch/i }));
 
@@ -252,10 +419,61 @@ describe("OperationsQueueViewContent", () => {
     });
   });
 
+  it("renders linked transaction detail for payment correction approvals", () => {
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        approvalRequests={[
+          {
+            _id: "approval-1" as Id<"approvalRequest">,
+            metadata: {
+              amount: 19500,
+              paymentMethod: "card",
+              previousPaymentMethod: "cash",
+              transactionId: "txn-1" as Id<"posTransaction">,
+            },
+            requestedByStaffName: "Ato Kwamina",
+            requestType: "payment_method_correction",
+            status: "pending",
+            transactionSummary: {
+              completedAt: 1_714_620_000_000,
+              paymentMethod: "cash",
+              total: 19500,
+              totalPaid: 19500,
+              transactionId: "txn-1" as Id<"posTransaction">,
+              transactionNumber: "434898",
+            },
+            workItemTitle: "Payment Method Correction",
+          },
+        ]}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="wigclub"
+      />,
+    );
+
+    expect(screen.getByText("Linked transaction")).toBeInTheDocument();
+    expect(screen.getByText("Requested by Ato Kwamina")).toBeInTheDocument();
+    expect(screen.getByText("#434898")).toBeInTheDocument();
+    expect(screen.getByText("GH₵195")).toBeInTheDocument();
+    expect(screen.getByText("Current method")).toBeInTheDocument();
+    expect(screen.getByText("Cash")).toBeInTheDocument();
+    expect(screen.getByText("Requested method")).toBeInTheDocument();
+    expect(screen.getByText("Card")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /view transaction/i }),
+    ).toHaveAttribute(
+      "href",
+      "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId?o=%252F",
+    );
+  });
+
   it("renders the live operations page without the register closeout surface", () => {
     render(<OperationsQueueView />);
 
     expect(screen.getByText("No inventory loaded.")).toBeInTheDocument();
+    expect(
+      screen.getByText(/inventory appears here once skus are available/i),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Operations workspace")).not.toBeInTheDocument();
     expect(screen.queryByText(/register closeouts/i)).not.toBeInTheDocument();
   });
@@ -267,33 +485,101 @@ describe("OperationsQueueViewContent", () => {
     const decideApprovalRequest = vi
       .fn()
       .mockResolvedValue(ok({ _id: "approval-1" }));
+    const authenticateStaffCredential = vi.fn().mockResolvedValue(
+      ok({
+        activeRoles: ["manager"],
+        staffProfile: {},
+        staffProfileId: "staff-manager-1",
+      }),
+    );
+    const authenticateStaffCredentialForApproval = vi.fn().mockResolvedValue(
+      ok({
+        approvalProofId: "proof-1",
+        approvedByStaffProfileId: "staff-manager-1",
+        expiresAt: Date.now() + 60_000,
+      }),
+    );
 
     mockedHooks.useMutation.mockReset();
     mockedHooks.useQuery.mockReset();
-    mockedHooks.useMutation
-      .mockReturnValueOnce(submitStockBatch)
-      .mockReturnValueOnce(decideApprovalRequest);
-    mockedHooks.useQuery
-      .mockReturnValueOnce({
-        approvalRequests: [
-          {
-            _id: "approval-1",
-            requestType: "inventory_adjustment_review",
-            status: "pending",
-            workItemTitle: "Cycle count review · 1 SKU",
-          },
-        ],
-        workItems: [],
-      })
-      .mockReturnValueOnce(baseProps.inventoryItems);
+    const mutationOrder = [
+      submitStockBatch,
+      decideApprovalRequest,
+      authenticateStaffCredential,
+      authenticateStaffCredentialForApproval,
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+    ];
+    let mutationCallIndex = 0;
+    mockedHooks.useMutation.mockImplementation(
+      () => mutationOrder[mutationCallIndex++ % mutationOrder.length],
+    );
+    const queueSnapshot = {
+      approvalRequests: [
+        {
+          _id: "approval-1",
+          requestType: "inventory_adjustment_review",
+          status: "pending",
+          workItemTitle: "Cycle count review · 1 SKU",
+        },
+      ],
+      workItems: [],
+    };
+    let queryCallIndex = 0;
+    mockedHooks.useQuery.mockImplementation(() => {
+      queryCallIndex += 1;
+
+      return queryCallIndex % 2 === 1
+        ? queueSnapshot
+        : baseProps.inventoryItems;
+    });
 
     render(<OperationsQueueView />);
+
+    expect(
+      screen.getByRole("button", { name: /approve batch/i }),
+    ).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: /unlock approvals/i }));
+    await user.click(
+      within(
+        screen.getByRole("dialog", { name: /unlock approval decisions/i }),
+      ).getByRole("button", { name: /unlock approvals/i }),
+    );
+
+    await waitFor(() =>
+      expect(authenticateStaffCredential).toHaveBeenCalledWith({
+        allowedRoles: ["manager"],
+        pinHash: "hashed:123456",
+        storeId: "store-1",
+        username: "manager",
+      }),
+    );
 
     await user.click(screen.getByRole("button", { name: /approve batch/i }));
 
     await waitFor(() =>
+      expect(authenticateStaffCredentialForApproval).toHaveBeenCalledWith({
+        actionKey: "operations.approval_request.decide",
+        pinHash: "hashed:123456",
+        reason: "Resolve pending approval request.",
+        requiredRole: "manager",
+        storeId: "store-1",
+        subject: {
+          id: "approval-1",
+          label: "Cycle count review · 1 SKU",
+          type: "approval_request",
+        },
+        username: "manager",
+      }),
+    );
+    await waitFor(() =>
       expect(decideApprovalRequest).toHaveBeenCalledWith({
         approvalRequestId: "approval-1",
+        approvalProofId: "proof-1",
         decision: "approved",
       }),
     );
@@ -304,7 +590,10 @@ describe("OperationsQueueViewContent", () => {
 
     mockedHooks.useMutation.mockReset();
     mockedHooks.useQuery.mockReset();
+    mockedHooks.useMutation.mockReturnValue(vi.fn());
     mockedHooks.useMutation
+      .mockReturnValueOnce(vi.fn())
+      .mockReturnValueOnce(vi.fn())
       .mockReturnValueOnce(vi.fn())
       .mockReturnValueOnce(vi.fn())
       .mockReturnValueOnce(ensureCycleCountDraft)
@@ -377,30 +666,70 @@ describe("OperationsQueueViewContent", () => {
     const decideApprovalRequest = vi
       .fn()
       .mockRejectedValue(new Error("Leaked backend approval detail"));
+    const authenticateStaffCredential = vi.fn().mockResolvedValue(
+      ok({
+        activeRoles: ["manager"],
+        staffProfile: {},
+        staffProfileId: "staff-manager-1",
+      }),
+    );
+    const authenticateStaffCredentialForApproval = vi.fn().mockResolvedValue(
+      ok({
+        approvalProofId: "proof-1",
+        approvedByStaffProfileId: "staff-manager-1",
+        expiresAt: Date.now() + 60_000,
+      }),
+    );
     const consoleErrorSpy = vi
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
 
     mockedHooks.useMutation.mockReset();
     mockedHooks.useQuery.mockReset();
-    mockedHooks.useMutation
-      .mockReturnValueOnce(submitStockBatch)
-      .mockReturnValueOnce(decideApprovalRequest);
-    mockedHooks.useQuery
-      .mockReturnValueOnce({
-        approvalRequests: [
-          {
-            _id: "approval-1",
-            requestType: "inventory_adjustment_review",
-            status: "pending",
-            workItemTitle: "Cycle count review · 1 SKU",
-          },
-        ],
-        workItems: [],
-      })
-      .mockReturnValueOnce(baseProps.inventoryItems);
+    const mutationOrder = [
+      submitStockBatch,
+      decideApprovalRequest,
+      authenticateStaffCredential,
+      authenticateStaffCredentialForApproval,
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+    ];
+    let mutationCallIndex = 0;
+    mockedHooks.useMutation.mockImplementation(
+      () => mutationOrder[mutationCallIndex++ % mutationOrder.length],
+    );
+    const queueSnapshot = {
+      approvalRequests: [
+        {
+          _id: "approval-1",
+          requestType: "inventory_adjustment_review",
+          status: "pending",
+          workItemTitle: "Cycle count review · 1 SKU",
+        },
+      ],
+      workItems: [],
+    };
+    let queryCallIndex = 0;
+    mockedHooks.useQuery.mockImplementation(() => {
+      queryCallIndex += 1;
+
+      return queryCallIndex % 2 === 1
+        ? queueSnapshot
+        : baseProps.inventoryItems;
+    });
 
     render(<OperationsQueueView />);
+
+    await user.click(screen.getByRole("button", { name: /unlock approvals/i }));
+    await user.click(
+      within(
+        screen.getByRole("dialog", { name: /unlock approval decisions/i }),
+      ).getByRole("button", { name: /unlock approvals/i }),
+    );
+    await waitFor(() => expect(authenticateStaffCredential).toHaveBeenCalled());
 
     await user.click(screen.getByRole("button", { name: /approve batch/i }));
 

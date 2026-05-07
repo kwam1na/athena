@@ -47,6 +47,7 @@ const correctTransactionPaymentMethodResultValidator = commandResultValidator(
   v.object({
     approvalProofId: v.id("approvalProof"),
     approvalOperationalEventId: v.optional(v.id("operationalEvent")),
+    approvalRequestId: v.optional(v.id("approvalRequest")),
     approverStaffProfileId: v.id("staffProfile"),
     transactionId: v.id("posTransaction"),
     previousPaymentMethod: v.string(),
@@ -75,6 +76,11 @@ function mapCorrectionError(error: unknown): CommandResult<never> | null {
     message === "Manager approval proof is required." ||
     message === "Manager approval proof is invalid or expired." ||
     message === "Approval proof validation is not available." ||
+    message === "Payment method approval request not found." ||
+    message === "Payment method approval request has already been decided." ||
+    message === "Payment method approval request does not match this store." ||
+    message === "Payment method approval request does not match this correction." ||
+    message === "Payment method approval request is missing correction details." ||
     message.startsWith("Approval proof ")
   ) {
     return userError({ code: "precondition_failed", message });
@@ -354,6 +360,7 @@ export const correctTransactionCustomer = mutation({
 
 export const correctTransactionPaymentMethod = mutation({
   args: {
+    approvalRequestId: v.optional(v.id("approvalRequest")),
     approvalProofId: v.optional(v.id("approvalProof")),
     transactionId: v.id("posTransaction"),
     paymentMethod: v.string(),

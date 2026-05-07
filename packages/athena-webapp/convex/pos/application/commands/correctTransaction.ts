@@ -20,7 +20,8 @@ type CorrectionActor = {
 
 const PAYMENT_METHOD_CORRECTION_ACTION =
   APPROVAL_ACTIONS.transactionPaymentMethodCorrection;
-const PAYMENT_METHOD_CORRECTION_ACTION_KEY = PAYMENT_METHOD_CORRECTION_ACTION.key;
+const PAYMENT_METHOD_CORRECTION_ACTION_KEY =
+  PAYMENT_METHOD_CORRECTION_ACTION.key;
 const PAYMENT_METHOD_CORRECTION_REQUEST_TYPE = "payment_method_correction";
 
 type PaymentMethodCorrectionApprovalProof = {
@@ -108,6 +109,7 @@ async function createPaymentMethodCorrectionApprovalRequest(
         paymentMethod: args.paymentMethod,
         previousPaymentMethod: args.previousPaymentMethod,
         transactionId: args.transaction._id,
+        transactionNumber: args.transaction.transactionNumber,
       },
       notes: args.reason,
       organizationId: store?.organizationId,
@@ -436,6 +438,7 @@ export async function correctTransactionCustomer(
 export async function correctTransactionPaymentMethod(
   ctx: MutationCtx,
   args: {
+    approvalRequestId?: Id<"approvalRequest">;
     approvalProofId?: Id<"approvalProof">;
     transactionId: Id<"posTransaction">;
     paymentMethod: string;
@@ -493,6 +496,14 @@ export async function correctTransactionPaymentMethod(
     };
   }
 
+  const inlineApprovalRequest =
+    await requireMatchingPendingPaymentMethodCorrectionApprovalRequest(ctx, {
+      approvalRequestId: args.approvalRequestId,
+      paymentMethod: args.paymentMethod,
+      storeId: transaction.storeId,
+      transactionId: args.transactionId,
+    });
+
   const approvalProof = await consumePaymentMethodCorrectionApprovalProof(ctx, {
     actorStaffProfileId: args.actorStaffProfileId,
     approvalProofId: args.approvalProofId,
@@ -502,6 +513,7 @@ export async function correctTransactionPaymentMethod(
 
   const approvalEvent = await recordOperationalEventWithCtx(ctx, {
     storeId: transaction.storeId,
+    approvalRequestId: inlineApprovalRequest?._id,
     eventType: "pos_transaction_payment_method_approval_proof_consumed",
     subjectType: "pos_transaction",
     subjectId: args.transactionId,
@@ -510,6 +522,7 @@ export async function correctTransactionPaymentMethod(
     reason: args.reason,
     metadata: {
       actionKey: PAYMENT_METHOD_CORRECTION_ACTION_KEY,
+      approvalRequestId: inlineApprovalRequest?._id,
       approvalProofId: approvalProof.approvalProofId,
       approverStaffProfileId: approvalProof.approvedByStaffProfileId,
       correctionType: "payment_method",
@@ -524,16 +537,29 @@ export async function correctTransactionPaymentMethod(
     posTransactionId: args.transactionId,
   });
 
-  return applyPaymentMethodCorrection(ctx, {
+  const result = await applyPaymentMethodCorrection(ctx, {
     actorStaffProfileId: args.actorStaffProfileId,
     actorUserId: args.actorUserId,
     approvalOperationalEventId: approvalEvent?._id,
+    approvalRequestId: inlineApprovalRequest?._id,
     approvalProofId: approvalProof.approvalProofId,
     approverStaffProfileId: approvalProof.approvedByStaffProfileId,
     paymentMethod: args.paymentMethod,
     reason: args.reason,
     transaction,
   });
+
+  if (inlineApprovalRequest) {
+    await ctx.db.patch("approvalRequest", inlineApprovalRequest._id, {
+      status: "approved",
+      reviewedByUserId: args.actorUserId,
+      reviewedByStaffProfileId: approvalProof.approvedByStaffProfileId,
+      decisionNotes: args.reason,
+      decidedAt: Date.now(),
+    });
+  }
+
+  return result;
 }
 
 function getStringMetadata(
@@ -542,6 +568,67 @@ function getStringMetadata(
 ) {
   const value = metadata?.[key];
   return typeof value === "string" ? value : null;
+}
+
+async function requireMatchingPendingPaymentMethodCorrectionApprovalRequest(
+  ctx: MutationCtx,
+  args: {
+    approvalRequestId?: Id<"approvalRequest">;
+    paymentMethod: string;
+    storeId: Id<"store">;
+    transactionId: Id<"posTransaction">;
+  },
+) {
+  if (!args.approvalRequestId) {
+    return null;
+  }
+
+  const approvalRequest = await ctx.db.get(
+    "approvalRequest",
+    args.approvalRequestId,
+  );
+
+  if (
+    !approvalRequest ||
+    approvalRequest.requestType !== PAYMENT_METHOD_CORRECTION_REQUEST_TYPE ||
+    approvalRequest.subjectType !== "pos_transaction"
+  ) {
+    throw new Error("Payment method approval request not found.");
+  }
+
+  if (approvalRequest.status !== "pending") {
+    throw new Error(
+      "Payment method approval request has already been decided.",
+    );
+  }
+
+  if (
+    approvalRequest.storeId !== args.storeId ||
+    approvalRequest.subjectId !== args.transactionId
+  ) {
+    throw new Error(
+      "Payment method approval request does not match this store.",
+    );
+  }
+
+  const paymentMethod = getStringMetadata(
+    approvalRequest.metadata,
+    "paymentMethod",
+  );
+
+  if (!paymentMethod) {
+    throw new Error(
+      "Payment method approval request is missing correction details.",
+    );
+  }
+
+  if (paymentMethod !== args.paymentMethod) {
+    throw new Error(
+      "Payment method approval request does not match this correction.",
+    );
+  }
+
+  return approvalRequest;
 }
 
 export async function resolvePaymentMethodCorrectionApprovalDecisionWithCtx(
@@ -596,13 +683,17 @@ export async function resolvePaymentMethodCorrectionApprovalDecisionWithCtx(
   );
 
   if (!paymentMethod) {
-    throw new Error("Payment method approval request is missing correction details.");
+    throw new Error(
+      "Payment method approval request is missing correction details.",
+    );
   }
 
   const transaction = await requireCompletedTransaction(ctx, transactionId);
 
   if (transaction.storeId !== approvalRequest.storeId) {
-    throw new Error("Payment method approval request does not match this store.");
+    throw new Error(
+      "Payment method approval request does not match this store.",
+    );
   }
 
   if (transaction.payments.length !== 1) {

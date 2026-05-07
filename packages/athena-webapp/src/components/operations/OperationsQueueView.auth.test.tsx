@@ -16,6 +16,33 @@ vi.mock("convex/react", () => ({
   useQuery: mockedHooks.useQuery,
 }));
 
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({
+    children,
+    params,
+    search,
+    to,
+    ...props
+  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
+    params?: unknown;
+    search?: unknown;
+    to?: string;
+  }) => {
+    void params;
+    void search;
+
+    return (
+      <a href={to ?? "#"} {...props}>
+        {children}
+      </a>
+    );
+  },
+  useParams: () => ({
+    orgUrlSlug: "wigclub",
+    storeUrlSlug: "wigclub",
+  }),
+}));
+
 vi.mock("@/hooks/useProtectedAdminPageState", () => ({
   useProtectedAdminPageState: mockedHooks.useProtectedAdminPageState,
 }));

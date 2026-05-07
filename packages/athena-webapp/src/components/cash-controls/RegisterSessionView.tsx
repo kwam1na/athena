@@ -1017,7 +1017,8 @@ export function RegisterSessionViewContent({
               {registerSession.pendingApprovalRequest?.requestedByStaffName
                 ? formatStaffDisplayName({
                     fullName:
-                      registerSession.pendingApprovalRequest.requestedByStaffName,
+                      registerSession.pendingApprovalRequest
+                        .requestedByStaffName,
                   })
                 : "staff not recorded"}
             </p>
@@ -2446,13 +2447,7 @@ export function RegisterSessionView() {
   }
 
   if (isLoadingAccess) {
-    return (
-      <View>
-        <div className="container mx-auto py-10 text-sm text-muted-foreground">
-          Loading register session...
-        </div>
-      </View>
-    );
+    return null;
   }
 
   if (!isAuthenticated) {
@@ -2466,16 +2461,7 @@ export function RegisterSessionView() {
   }
 
   if (!activeStore) {
-    return (
-      <View>
-        <div className="container mx-auto py-8">
-          <EmptyState
-            description="Select a store before opening a register session"
-            title="No active store"
-          />
-        </div>
-      </View>
-    );
+    return null;
   }
 
   return (
