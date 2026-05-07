@@ -289,7 +289,7 @@ function buildShellCommandPattern(commandBody: string) {
 
 function hasHarnessReviewCommand(value: string, baseRef: string) {
   const pattern = buildShellCommandPattern(
-    `bun\\s+run\\s+harness:review\\s+--base(?:\\s+|=)${escapeRegExp(baseRef)}`
+    `bun\\s+run\\s+harness:review\\s+--base(?:\\s+|=)${escapeRegExp(baseRef)}(?:\\s+--repo-validation-provided-by\\s+pr:athena)?`
   );
   return pattern.test(value);
 }

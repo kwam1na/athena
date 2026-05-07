@@ -9,6 +9,10 @@ import {
   getChangedFilesForHarnessReview,
   runHarnessReview,
 } from "./harness-review";
+import {
+  evaluatePrePushValidationProof,
+  type PrePushValidationProofEvaluation,
+} from "./pre-push-validation-proof";
 
 const ROOT_DIR = process.cwd();
 const BASE_REF = "origin/main";
@@ -56,6 +60,9 @@ type PrePushReviewOptions = {
       getChangedFiles?: (rootDir: string, baseRef?: string) => Promise<string[]>;
     }
   ) => Promise<void>;
+  evaluatePrePushValidationProof?: (
+    rootDir: string
+  ) => Promise<PrePushValidationProofEvaluation>;
   validateHarnessDocs?: (rootDir: string) => Promise<string[]>;
   logger?: PrePushReviewLogger;
 };
@@ -219,12 +226,27 @@ export async function runPrePushReview(
     options.runHarnessInferentialReview ?? runHarnessInferentialReview;
   const runSelfReview = options.runHarnessSelfReview ?? runHarnessSelfReview;
   const review = options.runHarnessReview ?? runHarnessReview;
+  const evaluateValidationProof =
+    options.evaluatePrePushValidationProof ?? evaluatePrePushValidationProof;
   const validateHarnessDocsStep =
     options.validateHarnessDocs ?? validateHarnessDocs;
   let changedFilesPromise: Promise<string[]> | undefined;
   let repairedGraphifyArtifacts = false;
   let repairedGeneratedHarnessDocs = false;
   let usingWorkingTreeChangedFiles = false;
+
+  const proofEvaluation = await evaluateValidationProof(rootDir);
+  if (proofEvaluation.reusable) {
+    logger.log(
+      `[pre-push] Reusing current pr:athena validation proof for ${proofEvaluation.proof.headSha}.`
+    );
+    logger.log("[pre-push] All checks passed.");
+    return;
+  }
+
+  logger.log(
+    `[pre-push] pr:athena proof not reusable: ${proofEvaluation.reason}. Running validation suite.`
+  );
 
   const loadChangedFiles = () => {
     changedFilesPromise ??= getChangedFiles(rootDir);

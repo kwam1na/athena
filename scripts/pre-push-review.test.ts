@@ -107,6 +107,55 @@ describe("pre-push review wiring", () => {
     ]);
   });
 
+  it("reuses a current pr:athena proof before running expensive pre-push checks", async () => {
+    const steps: string[] = [];
+    const logs: string[] = [];
+
+    await prePushReview.runPrePushReview(ROOT_DIR, {
+      evaluatePrePushValidationProof: async () => ({
+        reusable: true,
+        proofPath: "/tmp/proof.json",
+        proof: {
+          schemaVersion: 1,
+          headSha: "head-sha",
+          baseRef: "origin/main",
+          baseSha: "base-sha",
+          cleanStatus: "",
+          bunVersion: "1.1.29",
+          prAthenaScript: "bun run pr:athena",
+          validationFingerprint: "fingerprint",
+        },
+      }),
+      runGraphifyCheck: async () => {
+        steps.push("graphify:check");
+      },
+      runHarnessSelfReview: async () => {
+        steps.push("harness:self-review");
+      },
+      runArchitectureCheck: async () => {
+        steps.push("architecture:check");
+      },
+      runHarnessReview: async () => {
+        steps.push("harness:review");
+      },
+      runHarnessInferentialReview: async () => {
+        steps.push("harness:inferential-review");
+      },
+      logger: {
+        log(message: string) {
+          logs.push(message);
+        },
+        warn() {},
+        error() {},
+      },
+    } as any);
+
+    expect(steps).toEqual([]);
+    expect(logs).toContain(
+      "[pre-push] Reusing current pr:athena validation proof for head-sha."
+    );
+  });
+
   it("lets harness review cover repo harness validations when harness-owned files change", async () => {
     const steps: string[] = [];
 
@@ -772,7 +821,10 @@ describe("repo harness ergonomics", () => {
     expect(packageJson.scripts?.["pr:athena"]).toContain("bun run compound:check");
     expect(packageJson.scripts?.["pr:athena"]).toContain("bun run harness:test");
     expect(packageJson.scripts?.["pr:athena"]).toContain(
-      "bun run harness:review --base origin/main"
+      "bun run harness:review --base origin/main --repo-validation-provided-by pr:athena"
+    );
+    expect(packageJson.scripts?.["pr:athena"]).toContain(
+      "bun scripts/pre-push-validation-proof.ts record-pr-athena"
     );
     expect(packageJson.scripts?.["pr:athena"]).toContain(
       "bun run --filter '@athena/webapp' lint:frontend:changed"
