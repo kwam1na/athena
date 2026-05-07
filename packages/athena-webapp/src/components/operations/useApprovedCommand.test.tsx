@@ -148,6 +148,62 @@ describe("useApprovedCommand", () => {
     expect(result.current.approvalDialog).toBeNull();
   });
 
+  it("retries same-submission approvals with the queued approval request id", async () => {
+    const approvalWithRequest = {
+      ...approval,
+      resolutionModes: [
+        { kind: "inline_manager_proof" },
+        {
+          approvalRequestId: "approval-1",
+          kind: "async_request",
+          requestType: "payment_method_correction",
+        },
+      ],
+    } satisfies ApprovalRequirement;
+    const onResult = vi.fn();
+    const onAuthenticateForApproval = vi.fn().mockResolvedValue(
+      ok({
+        approvalProofId: "proof-1" as Id<"approvalProof">,
+        approvedByStaffProfileId: "manager-1" as Id<"staffProfile">,
+        expiresAt: 123,
+      }),
+    );
+    const execute = vi
+      .fn()
+      .mockResolvedValueOnce({
+        kind: "approval_required",
+        approval: approvalWithRequest,
+      })
+      .mockResolvedValueOnce(ok({ action: "closed" }));
+    const { result } = renderHook(() =>
+      useApprovedCommand({
+        storeId,
+        onAuthenticateForApproval,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.run({
+        execute,
+        onResult,
+        requestedByStaffProfileId: requesterId,
+        sameSubmissionApproval: {
+          canAttemptInlineManagerProof: true,
+          pinHash: "pin-hash",
+          requestedByStaffProfileId: requesterId,
+          username: "manager",
+        },
+      });
+    });
+
+    expect(execute).toHaveBeenLastCalledWith({
+      approvalRequestId: "approval-1",
+      approvalProofId: "proof-1",
+    });
+    expect(onResult).toHaveBeenCalledWith(ok({ action: "closed" }));
+    expect(result.current.pendingApproval).toBeNull();
+  });
+
   it("falls back to approval UI when same-submission staff cannot approve", async () => {
     const onResult = vi.fn();
     const onAuthenticateForApproval = vi.fn();

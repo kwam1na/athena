@@ -21,20 +21,20 @@ semantic classes backed by those variables whenever possible.
 
 Core token map:
 
-| Role | Token | Default |
-| --- | --- | --- |
-| App canvas | `--background` / `--foreground` | light neutral canvas, dark ink |
-| Working surface | `--surface` | card and panel plane |
-| Raised surface | `--surface-raised` | dialogs, inspectors, important panels |
-| Shell | `--shell` / `--shell-foreground` | deep navigation and structural framing |
-| Primary action signal | `--signal` / `--signal-foreground` | one action accent |
-| Success | `--success` / `--success-foreground` | completed or healthy state |
-| Warning | `--warning` / `--warning-foreground` | pending risk or degraded state |
-| Danger | `--danger` / `--danger-foreground` | destructive or blocked state |
-| Border and inputs | `--border`, `--input`, `--ring` | low-contrast operational chrome |
-| Radius | `--radius` | `0.75rem` / 12px |
-| Surface shadow | `--shadow-surface` | soft panel elevation |
-| Overlay shadow | `--shadow-overlay` | stronger modal or shell elevation |
+| Role                  | Token                                | Default                                |
+| --------------------- | ------------------------------------ | -------------------------------------- |
+| App canvas            | `--background` / `--foreground`      | light neutral canvas, dark ink         |
+| Working surface       | `--surface`                          | card and panel plane                   |
+| Raised surface        | `--surface-raised`                   | dialogs, inspectors, important panels  |
+| Shell                 | `--shell` / `--shell-foreground`     | deep navigation and structural framing |
+| Primary action signal | `--signal` / `--signal-foreground`   | one action accent                      |
+| Success               | `--success` / `--success-foreground` | completed or healthy state             |
+| Warning               | `--warning` / `--warning-foreground` | pending risk or degraded state         |
+| Danger                | `--danger` / `--danger-foreground`   | destructive or blocked state           |
+| Border and inputs     | `--border`, `--input`, `--ring`      | low-contrast operational chrome        |
+| Radius                | `--radius`                           | `0.75rem` / 12px                       |
+| Surface shadow        | `--shadow-surface`                   | soft panel elevation                   |
+| Overlay shadow        | `--shadow-overlay`                   | stronger modal or shell elevation      |
 
 Tailwind aliases are already wired for these roles: `bg-background`, `text-foreground`,
 `bg-surface`, `bg-surface-raised`, `bg-shell`, `bg-signal`, `text-muted-foreground`,
@@ -109,6 +109,24 @@ Canonical structure:
 Use `PageLevelHeader` from `src/components/common/PageLevelHeader.tsx` when a page needs this
 orientation pattern. Keep actions outside the header unless the page has a true top-level
 primary action that belongs with the title.
+
+## Page Rhythm
+
+Use the page workspace rhythm primitives from `src/components/common/PageLevelHeader.tsx`
+for top-level operational workspaces:
+
+- `PageWorkspace` for the outer page stack. It separates the page header from the working
+  surface with `space-y-layout-2xl`.
+- `PageWorkspaceGrid` for the common work area plus side rail layout. It uses
+  `gap-layout-2xl` so the rail does not crowd the primary task.
+- `PageWorkspaceMain` for the primary task stack. It uses `space-y-layout-3xl` to give
+  filters, scope selectors, tables, and review queues distinct scan zones.
+- `PageWorkspaceRail` for inspector and summary rails. It uses a vertical flex stack with
+  `gap-layout-lg`, which keeps supporting panels connected without compressing them.
+
+Prefer these primitives over ad hoc page-level `space-y-*`, `gap-*`, and two-column grid
+classes when building or refreshing a workspace. Local component internals can still choose
+compact spacing when the surface is a dense table, queue item, or form control group.
 
 ## Spacing And Density
 

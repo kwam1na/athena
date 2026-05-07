@@ -14,6 +14,7 @@ import {
 } from "./CommandApprovalDialog";
 
 type ApprovalRetryArgs = {
+  approvalRequestId?: Id<"approvalRequest">;
   approvalProofId?: Id<"approvalProof">;
 };
 
@@ -68,6 +69,30 @@ function hasAsyncApprovalRequest(approval: ApprovalRequirement) {
   return approval.resolutionModes.some(
     (mode) => mode.kind === "async_request" && Boolean(mode.approvalRequestId),
   );
+}
+
+function getAsyncApprovalRequestId(approval: ApprovalRequirement) {
+  const mode = approval.resolutionModes.find(
+    (resolutionMode) =>
+      resolutionMode.kind === "async_request" &&
+      Boolean(resolutionMode.approvalRequestId),
+  );
+
+  return mode?.kind === "async_request"
+    ? (mode.approvalRequestId as Id<"approvalRequest"> | undefined)
+    : undefined;
+}
+
+function buildApprovalRetryArgs(
+  approval: ApprovalRequirement,
+  approvalProofId: Id<"approvalProof">,
+): ApprovalRetryArgs {
+  const approvalRequestId = getAsyncApprovalRequestId(approval);
+
+  return {
+    ...(approvalRequestId ? { approvalRequestId } : {}),
+    approvalProofId,
+  };
 }
 
 export function useApprovedCommand({ onAuthenticateForApproval, storeId }: UseApprovedCommandArgs) {
@@ -135,9 +160,12 @@ export function useApprovedCommand({ onAuthenticateForApproval, storeId }: UseAp
           return approvalResult as NormalizedApprovalCommandResult<T>;
         }
 
-        const retryResult = await args.execute({
-          approvalProofId: approvalResult.data.approvalProofId,
-        });
+        const retryResult = await args.execute(
+          buildApprovalRetryArgs(
+            result.approval,
+            approvalResult.data.approvalProofId,
+          ),
+        );
         return handleResult(retryResult, args);
       }
 
@@ -160,9 +188,9 @@ export function useApprovedCommand({ onAuthenticateForApproval, storeId }: UseAp
           return;
         }
 
-        const retryResult = await current.execute({
-          approvalProofId: result.approvalProofId,
-        });
+        const retryResult = await current.execute(
+          buildApprovalRetryArgs(current.approval, result.approvalProofId),
+        );
         await handleResult(retryResult, current);
       },
       onDismiss: () => setPendingApproval(null),

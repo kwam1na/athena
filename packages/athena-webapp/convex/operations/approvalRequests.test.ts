@@ -37,13 +37,33 @@ function createApprovalRequestMutationCtx(args: {
         },
       ],
     ]),
-    athenaUser: new Map<string, Record<string, unknown>>(
-      (args.athenaUsers ?? [
+    approvalProof: new Map<string, Record<string, unknown>>([
+      [
+        "proof-1",
         {
-          _id: "manager-1",
-          email: "manager@example.com",
+          _id: "proof-1",
+          actionKey: "operations.approval_request.decide",
+          approvedByCredentialId: "credential-1",
+          approvedByStaffProfileId: "staff-manager-1",
+          createdAt: 1,
+          expiresAt: Date.now() + 60_000,
+          requiredRole: "manager",
+          storeId: "store-1",
+          subjectId: "approval-1",
+          subjectLabel: "inventory_adjustment_review",
+          subjectType: "approval_request",
         },
-      ]).map((athenaUser) => [athenaUser._id, athenaUser])
+      ],
+    ]),
+    athenaUser: new Map<string, Record<string, unknown>>(
+      (
+        args.athenaUsers ?? [
+          {
+            _id: "manager-1",
+            email: "manager@example.com",
+          },
+        ]
+      ).map((athenaUser) => [athenaUser._id, athenaUser]),
     ),
     inventoryMovement: new Map<string, Record<string, unknown>>(),
     operationalEvent: new Map<string, Record<string, unknown>>(),
@@ -127,7 +147,10 @@ function createApprovalRequestMutationCtx(args: {
       ],
     ]),
   };
-  const insertCounters: Record<"inventoryMovement" | "operationalEvent", number> = {
+  const insertCounters: Record<
+    "inventoryMovement" | "operationalEvent",
+    number
+  > = {
     inventoryMovement: 0,
     operationalEvent: 0,
   };
@@ -148,7 +171,7 @@ function createApprovalRequestMutationCtx(args: {
             and: (...conditions: unknown[]) => unknown;
             eq: (field: string, value: unknown) => unknown;
             field: (fieldName: string) => string;
-          }) => unknown
+          }) => unknown,
         ) {
           const filters: Array<[string, unknown]> = [];
           const queryBuilder = {
@@ -167,7 +190,7 @@ function createApprovalRequestMutationCtx(args: {
           return {
             first: async () =>
               Array.from(tables.organizationMember.values()).find((record) =>
-                filters.every(([field, value]) => record[field] === value)
+                filters.every(([field, value]) => record[field] === value),
               ) ?? null,
           };
         },
@@ -180,7 +203,7 @@ function createApprovalRequestMutationCtx(args: {
           _index: string,
           applyIndex: (queryBuilder: {
             eq: (field: string, value: unknown) => unknown;
-          }) => unknown
+          }) => unknown,
         ) {
           const filters: Array<[string, unknown]> = [];
           const queryBuilder = {
@@ -195,7 +218,7 @@ function createApprovalRequestMutationCtx(args: {
           return {
             collect: async () =>
               Array.from(tables[table].values()).filter((record) =>
-                filters.every(([field, value]) => record[field] === value)
+                filters.every(([field, value]) => record[field] === value),
               ),
           };
         },
@@ -217,7 +240,7 @@ function createApprovalRequestMutationCtx(args: {
       },
       async insert(
         table: "inventoryMovement" | "operationalEvent",
-        value: Record<string, unknown>
+        value: Record<string, unknown>,
       ) {
         insertCounters[table] += 1;
         const id = `${table}-${insertCounters[table]}`;
@@ -227,7 +250,7 @@ function createApprovalRequestMutationCtx(args: {
       async patch(
         table: keyof typeof tables,
         id: string,
-        value: Record<string, unknown>
+        value: Record<string, unknown>,
       ) {
         const existingRecord = tables[table].get(id);
 
@@ -298,7 +321,7 @@ describe("approval request helpers", () => {
         approvalRequestId: "approval-1" as Id<"approvalRequest">,
         decision: "approved",
         reviewedByUserId: "manager-1" as Id<"athenaUser">,
-      })
+      }),
     ).rejects.toThrow("Only full admins can resolve approval requests.");
 
     expect(tables.approvalRequest.get("approval-1")).toMatchObject({
@@ -319,7 +342,7 @@ describe("approval request helpers", () => {
       decideApprovalRequestAsCommandWithCtx(ctx, {
         approvalRequestId: "approval-1" as Id<"approvalRequest">,
         decision: "approved",
-      })
+      }),
     ).resolves.toMatchObject({
       kind: "user_error",
       error: {
@@ -339,7 +362,7 @@ describe("approval request helpers", () => {
       decideApprovalRequestAsCommandWithCtx(ctx, {
         approvalRequestId: "approval-1" as Id<"approvalRequest">,
         decision: "approved",
-      })
+      }),
     ).resolves.toMatchObject({
       kind: "user_error",
       error: {
@@ -357,10 +380,12 @@ describe("approval request helpers", () => {
 
     await decideApprovalRequestAsAuthenticatedUserWithCtx(ctx, {
       approvalRequestId: "approval-1" as Id<"approvalRequest">,
+      approvalProofId: "proof-1" as Id<"approvalProof">,
       decision: "approved",
     });
 
     expect(tables.approvalRequest.get("approval-1")).toMatchObject({
+      reviewedByStaffProfileId: "staff-manager-1",
       reviewedByUserId: "manager-1",
       status: "approved",
     });
@@ -386,9 +411,9 @@ describe("approval request helpers", () => {
       decideApprovalRequestAsAuthenticatedUserWithCtx(ctx, {
         approvalRequestId: "approval-1" as Id<"approvalRequest">,
         decision: "approved",
-      })
+      }),
     ).rejects.toThrow(
-      "Multiple Athena users match this email. Resolve duplicate accounts before continuing."
+      "Multiple Athena users match this email. Resolve duplicate accounts before continuing.",
     );
   });
 
@@ -407,7 +432,7 @@ describe("approval request helpers", () => {
       decideApprovalRequestAsCommandWithCtx(ctx, {
         approvalRequestId: "approval-1" as Id<"approvalRequest">,
         decision: "approved",
-      })
+      }),
     ).resolves.toMatchObject({
       kind: "user_error",
       error: {

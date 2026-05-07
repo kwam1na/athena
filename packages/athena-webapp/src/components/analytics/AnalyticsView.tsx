@@ -4,6 +4,13 @@ import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
 import AnalyticsProducts from "./AnalyticsProducts";
 import { FadeIn } from "../common/FadeIn";
+import {
+  PageLevelHeader,
+  PageWorkspace,
+  PageWorkspaceGrid,
+  PageWorkspaceMain,
+  PageWorkspaceRail,
+} from "../common/PageLevelHeader";
 import { formatNumber } from "../../utils/formatNumber";
 import { Button } from "../ui/button";
 import AnalyticsCombinedUsers from "./AnalyticsCombinedUsers";
@@ -151,29 +158,6 @@ export default function AnalyticsView() {
     .size;
   const recentEvents = items.slice(0, 5);
 
-  const Navigation = () => {
-    return (
-      <div className="container mx-auto py-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="max-w-2xl space-y-4">
-            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              Storefront Ops
-            </p>
-            <div className="space-y-1">
-              <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
-                Storefront activity
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                See what customers are doing now, where checkout needs
-                attention, and which products are drawing interest.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   // Enhanced view
   // if (viewMode === "enhanced") {
   //   return (
@@ -195,101 +179,109 @@ export default function AnalyticsView() {
       hideBorder
       hideHeaderBottomBorder
       className="bg-background"
-      header={<Navigation />}
       scrollMode="page"
     >
-      <FadeIn className="space-y-layout-2xl py-layout-xl">
-        <section className="grid gap-layout-xl xl:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="space-y-layout-lg">
-            <section className="space-y-layout-lg">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="max-w-2xl space-y-2">
-                  <Badge variant="outline" className="rounded-full lowercase">
-                    {activeStore.name}.store
-                  </Badge>
-                  <h2 className="font-display text-2xl font-semibold text-foreground">
-                    Customers are browsing the storefront.
-                  </h2>
-                  <p className="text-sm text-muted-foreground">
-                    Start here for the live pulse. Use the detail sections below
-                    when you need to inspect specific customers, products, or
-                    journey failures.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm text-muted-foreground">
-                  <MonitorCheck className="h-4 w-4" />
-                  Live storefront signal
-                </div>
-              </div>
+      <FadeIn className="container mx-auto py-layout-xl">
+        <PageWorkspace>
+          <PageLevelHeader
+            className="border-b-0 pb-0"
+            eyebrow="Storefront Ops"
+            title="Storefront activity"
+            description="See what customers are doing now, where checkout needs attention, and which products are drawing interest."
+          />
 
-              <div className="grid gap-3 md:grid-cols-3">
-                <StorefrontSignalCard
-                  description="People with storefront activity in the current data set."
-                  icon={<Users className="h-4 w-4" />}
-                  label="Known shoppers"
-                  value={customerCount}
-                />
-                <StorefrontSignalCard
-                  description="Product interest captured from browsing behavior."
-                  icon={<Eye className="h-4 w-4" />}
-                  label="Product views"
-                  value={productViewCount}
-                />
-                <ActiveCheckoutSessions compact />
-              </div>
-            </section>
-
-            <StorefrontObservabilityPanel />
-          </div>
-
-          <aside className="space-y-layout-md">
-            <StoreVisitors compact />
-            <section className="rounded-lg border border-border bg-surface px-layout-md py-layout-lg shadow-surface">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-                <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                  Latest activity
-                </p>
-              </div>
-              <div className="mt-layout-md space-y-3">
-                {recentEvents.map((item) => (
-                  <div
-                    className="border-b border-border/70 pb-3 last:border-0 last:pb-0"
-                    key={item._id}
-                  >
-                    <p className="text-sm font-medium text-foreground">
-                      {item.action.replace(/_/g, " ")}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {new Date(item._creationTime).toLocaleTimeString([], {
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })}
+          <PageWorkspaceGrid>
+            <PageWorkspaceMain>
+              <section className="space-y-layout-lg">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="max-w-2xl space-y-2">
+                    <Badge variant="outline" className="rounded-full lowercase">
+                      {activeStore.name}.store
+                    </Badge>
+                    <h2 className="font-display text-2xl font-semibold text-foreground">
+                      Customers are browsing the storefront.
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      Start here for the live pulse. Use the detail sections
+                      below when you need to inspect specific customers,
+                      products, or journey failures.
                     </p>
                   </div>
-                ))}
-              </div>
-            </section>
-          </aside>
-        </section>
+                  <div className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm text-muted-foreground">
+                    <MonitorCheck className="h-4 w-4" />
+                    Live storefront signal
+                  </div>
+                </div>
 
-        <section className="space-y-layout-lg">
-          <div className="max-w-2xl space-y-1">
-            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              Detail
-            </p>
-            <h2 className="font-display text-2xl font-semibold text-foreground">
-              Customer and product detail
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              Use these tables after the pulse tells you where to look.
-            </p>
-          </div>
-          <div className="grid gap-layout-xl xl:grid-cols-2">
-            <AnalyticsCombinedUsers items={items} />
-            <AnalyticsProducts items={items} />
-          </div>
-        </section>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <StorefrontSignalCard
+                    description="People with storefront activity in the current data set."
+                    icon={<Users className="h-4 w-4" />}
+                    label="Known shoppers"
+                    value={customerCount}
+                  />
+                  <StorefrontSignalCard
+                    description="Product interest captured from browsing behavior."
+                    icon={<Eye className="h-4 w-4" />}
+                    label="Product views"
+                    value={productViewCount}
+                  />
+                  <ActiveCheckoutSessions compact />
+                </div>
+              </section>
+
+              <StorefrontObservabilityPanel />
+            </PageWorkspaceMain>
+
+            <PageWorkspaceRail>
+              <StoreVisitors compact />
+              <section className="rounded-lg border border-border bg-surface px-layout-md py-layout-lg shadow-surface">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+                  <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                    Latest activity
+                  </p>
+                </div>
+                <div className="mt-layout-md space-y-3">
+                  {recentEvents.map((item) => (
+                    <div
+                      className="border-b border-border/70 pb-3 last:border-0 last:pb-0"
+                      key={item._id}
+                    >
+                      <p className="text-sm font-medium text-foreground">
+                        {item.action.replace(/_/g, " ")}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {new Date(item._creationTime).toLocaleTimeString([], {
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </PageWorkspaceRail>
+          </PageWorkspaceGrid>
+
+          <section className="space-y-layout-lg">
+            <div className="max-w-2xl space-y-1">
+              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                Detail
+              </p>
+              <h2 className="font-display text-2xl font-semibold text-foreground">
+                Customer and product detail
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Use these tables after the pulse tells you where to look.
+              </p>
+            </div>
+            <div className="grid gap-layout-xl xl:grid-cols-2">
+              <AnalyticsCombinedUsers items={items} />
+              <AnalyticsProducts items={items} />
+            </div>
+          </section>
+        </PageWorkspace>
       </FadeIn>
     </View>
   );

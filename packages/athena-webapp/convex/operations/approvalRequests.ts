@@ -1,15 +1,28 @@
-import { internalMutation, mutation, type MutationCtx } from "../_generated/server";
+import {
+  internalMutation,
+  mutation,
+  type MutationCtx,
+} from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { resolveStockAdjustmentApprovalDecisionWithCtx } from "../stockOps/adjustments";
 import { resolvePaymentMethodCorrectionApprovalDecisionWithCtx } from "../pos/application/commands/correctTransaction";
 import {
-  requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
+  requireAuthenticatedAthenaUserWithCtx,
 } from "../lib/athenaUserAuth";
 import { buildApprovalRequest } from "./approvalRequestHelpers";
-import { ok, userError, type CommandResult } from "../../shared/commandResult";
+import {
+  approvalRequired,
+  ok,
+  userError,
+  type ApprovalCommandResult,
+  type CommandResult,
+} from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
+import { consumeApprovalProofWithCtx } from "./approvalProofs";
+
+const APPROVAL_DECISION_ACTION_KEY = "operations.approval_request.decide";
 
 type DecideApprovalRequestArgs = {
   approvalRequestId: Id<"approvalRequest">;
@@ -21,15 +34,82 @@ type DecideApprovalRequestArgs = {
 
 type PublicDecideApprovalRequestArgs = {
   approvalRequestId: Id<"approvalRequest">;
+  approvalProofId?: Id<"approvalProof">;
   decision: "approved" | "rejected" | "cancelled";
   decisionNotes?: string;
 };
 
+function buildApprovalDecisionSubject(approvalRequest: {
+  _id: Id<"approvalRequest">;
+  requestType: string;
+  workItemTitle?: string | null;
+}) {
+  return {
+    type: "approval_request",
+    id: String(approvalRequest._id),
+    label: approvalRequest.workItemTitle ?? approvalRequest.requestType,
+  };
+}
+
+function buildApprovalDecisionRequirement(approvalRequest: {
+  _id: Id<"approvalRequest">;
+  requestType: string;
+  workItemTitle?: string | null;
+}) {
+  return {
+    action: {
+      key: APPROVAL_DECISION_ACTION_KEY,
+      label: "Resolve approval request",
+    },
+    subject: buildApprovalDecisionSubject(approvalRequest),
+    requiredRole: "manager" as const,
+    reason: "Resolve pending approval request.",
+    copy: {
+      title: "Unlock approval decisions",
+      message:
+        "Use manager credentials before approving or rejecting requests.",
+      primaryActionLabel: "Unlock approvals",
+      secondaryActionLabel: "Cancel",
+    },
+    resolutionModes: [{ kind: "inline_manager_proof" as const }],
+  };
+}
+
+async function consumeApprovalDecisionProofWithCtx(
+  ctx: MutationCtx,
+  args: {
+    approvalProofId: Id<"approvalProof">;
+    approvalRequest: {
+      _id: Id<"approvalRequest">;
+      requestType: string;
+      storeId: Id<"store">;
+      workItemTitle?: string | null;
+    };
+  },
+) {
+  const result = await consumeApprovalProofWithCtx(ctx, {
+    actionKey: APPROVAL_DECISION_ACTION_KEY,
+    approvalProofId: args.approvalProofId,
+    requiredRole: "manager",
+    storeId: args.approvalRequest.storeId,
+    subject: buildApprovalDecisionSubject(args.approvalRequest),
+  });
+
+  if (result.kind !== "ok") {
+    throw new Error(result.error.message);
+  }
+
+  return result.data;
+}
+
 export async function decideApprovalRequestWithCtx(
   ctx: MutationCtx,
-  args: DecideApprovalRequestArgs
+  args: DecideApprovalRequestArgs,
 ) {
-  const approvalRequest = await ctx.db.get("approvalRequest", args.approvalRequestId);
+  const approvalRequest = await ctx.db.get(
+    "approvalRequest",
+    args.approvalRequestId,
+  );
 
   if (!approvalRequest) {
     throw new Error("Approval request not found.");
@@ -40,7 +120,9 @@ export async function decideApprovalRequestWithCtx(
   }
 
   if (!approvalRequest.organizationId || !args.reviewedByUserId) {
-    throw new Error("A full-admin reviewer is required to resolve approval requests.");
+    throw new Error(
+      "A full-admin reviewer is required to resolve approval requests.",
+    );
   }
 
   const reviewerMembership = await ctx.db
@@ -48,8 +130,8 @@ export async function decideApprovalRequestWithCtx(
     .filter((q) =>
       q.and(
         q.eq(q.field("organizationId"), approvalRequest.organizationId),
-        q.eq(q.field("userId"), args.reviewedByUserId)
-      )
+        q.eq(q.field("userId"), args.reviewedByUserId),
+      ),
     )
     .first();
 
@@ -84,16 +166,25 @@ export async function decideApprovalRequestWithCtx(
 
 export async function decideApprovalRequestAsAuthenticatedUserWithCtx(
   ctx: MutationCtx,
-  args: PublicDecideApprovalRequestArgs
+  args: PublicDecideApprovalRequestArgs,
 ) {
-  const approvalRequest = await ctx.db.get("approvalRequest", args.approvalRequestId);
+  const approvalRequest = await ctx.db.get(
+    "approvalRequest",
+    args.approvalRequestId,
+  );
 
   if (!approvalRequest) {
     throw new Error("Approval request not found.");
   }
 
   if (!approvalRequest.organizationId) {
-    throw new Error("A full-admin reviewer is required to resolve approval requests.");
+    throw new Error(
+      "A full-admin reviewer is required to resolve approval requests.",
+    );
+  }
+
+  if (approvalRequest.status !== "pending") {
+    throw new Error("Approval request has already been decided.");
   }
 
   const reviewer = await requireAuthenticatedAthenaUserWithCtx(ctx);
@@ -105,14 +196,26 @@ export async function decideApprovalRequestAsAuthenticatedUserWithCtx(
     userId: reviewer._id,
   });
 
+  if (!args.approvalProofId) {
+    throw new Error(
+      "Manager approval is required to resolve approval requests.",
+    );
+  }
+
+  const approvalProof = await consumeApprovalDecisionProofWithCtx(ctx, {
+    approvalProofId: args.approvalProofId,
+    approvalRequest,
+  });
+
   return decideApprovalRequestWithCtx(ctx, {
     ...args,
+    reviewedByStaffProfileId: approvalProof.approvedByStaffProfileId,
     reviewedByUserId: reviewer._id,
   });
 }
 
 function mapDecideApprovalRequestError(
-  error: unknown
+  error: unknown,
 ): CommandResult<never> | null {
   const message = error instanceof Error ? error.message : "";
 
@@ -125,7 +228,8 @@ function mapDecideApprovalRequestError(
 
   if (
     message === "Only full admins can resolve approval requests." ||
-    message === "A full-admin reviewer is required to resolve approval requests."
+    message ===
+      "A full-admin reviewer is required to resolve approval requests."
   ) {
     return userError({
       code: "authorization_failed",
@@ -154,8 +258,14 @@ function mapDecideApprovalRequestError(
 
   if (
     message === "Approval request has already been decided." ||
+    message === "Approval proof was not found." ||
+    message === "Approval proof does not match this command." ||
+    message === "Approval proof has already been used." ||
+    message === "Approval proof requester does not match this command." ||
+    message === "Approval proof has expired." ||
     message === "Stock adjustment batch has already been resolved." ||
-    message === "Payment method approval request is missing correction details." ||
+    message ===
+      "Payment method approval request is missing correction details." ||
     message === "Payment method approval request does not match this store." ||
     message === "Only single-payment transactions can be corrected." ||
     message === "Only same-amount payment method corrections are supported." ||
@@ -172,11 +282,28 @@ function mapDecideApprovalRequestError(
 
 export async function decideApprovalRequestAsCommandWithCtx(
   ctx: MutationCtx,
-  args: PublicDecideApprovalRequestArgs
-): Promise<CommandResult<any>> {
+  args: PublicDecideApprovalRequestArgs,
+): Promise<ApprovalCommandResult<any>> {
   try {
     return ok(await decideApprovalRequestAsAuthenticatedUserWithCtx(ctx, args));
   } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+
+    if (
+      message === "Manager approval is required to resolve approval requests."
+    ) {
+      const approvalRequest = await ctx.db.get(
+        "approvalRequest",
+        args.approvalRequestId,
+      );
+
+      if (approvalRequest) {
+        return approvalRequired(
+          buildApprovalDecisionRequirement(approvalRequest),
+        );
+      }
+    }
+
     const result = mapDecideApprovalRequestError(error);
 
     if (result) {
@@ -203,14 +330,22 @@ export const createApprovalRequest = internalMutation({
     metadata: v.optional(v.record(v.string(), v.any())),
   },
   handler: async (ctx, args) => {
-    const requestId = await ctx.db.insert("approvalRequest", buildApprovalRequest(args));
+    const requestId = await ctx.db.insert(
+      "approvalRequest",
+      buildApprovalRequest(args),
+    );
     return ctx.db.get("approvalRequest", requestId);
   },
 });
 
 const decideApprovalRequestArgs = {
   approvalRequestId: v.id("approvalRequest"),
-  decision: v.union(v.literal("approved"), v.literal("rejected"), v.literal("cancelled")),
+  approvalProofId: v.optional(v.id("approvalProof")),
+  decision: v.union(
+    v.literal("approved"),
+    v.literal("rejected"),
+    v.literal("cancelled"),
+  ),
   decisionNotes: v.optional(v.string()),
 };
 

@@ -217,7 +217,9 @@ describe("StockAdjustmentWorkspaceContent", () => {
       },
     });
 
-    expect(screen.getByLabelText(/counted quantity for .*closure wig/i)).toHaveValue(5);
+    expect(
+      screen.getByLabelText(/counted quantity for .*closure wig/i),
+    ).toHaveValue(5);
     expect(
       screen.getByText(/saved count: 1 SKU across 1 scope/i),
     ).toBeInTheDocument();
@@ -362,7 +364,9 @@ describe("StockAdjustmentWorkspaceContent", () => {
     await user.click(screen.getByRole("button", { name: /submit count/i }));
 
     await waitFor(() =>
-      expect(onSubmitCycleCountDraft).toHaveBeenCalledWith({ notes: undefined }),
+      expect(onSubmitCycleCountDraft).toHaveBeenCalledWith({
+        notes: undefined,
+      }),
     );
     expect(mockedToast.error).not.toHaveBeenCalledWith(
       "Enter at least one counted SKU that differs from the system stock",
@@ -541,14 +545,20 @@ describe("StockAdjustmentWorkspaceContent", () => {
 
     await user.click(screen.getByRole("button", { name: /submit count/i }));
 
-    expect(await screen.findByText("Inventory changed since this count started.")).toBeInTheDocument();
-    expect(screen.getByText(/Closure wig: 8 to 9 on hand/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText("Inventory changed since this count started."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Closure wig: 8 to 9 on hand/i),
+    ).toBeInTheDocument();
     expect(mockedToast.success).not.toHaveBeenCalledWith("Count applied");
   });
 
   it("refreshes a stale SKU baseline from the stale state", async () => {
     const user = userEvent.setup();
-    const onRefreshCycleCountDraftLineBaseline = vi.fn().mockResolvedValue(ok({}));
+    const onRefreshCycleCountDraftLineBaseline = vi
+      .fn()
+      .mockResolvedValue(ok({}));
     const onSubmitCycleCountDraft = vi.fn().mockResolvedValue(
       userError({
         code: "precondition_failed",
@@ -590,7 +600,9 @@ describe("StockAdjustmentWorkspaceContent", () => {
     });
 
     await user.click(screen.getByRole("button", { name: /submit count/i }));
-    await user.click(await screen.findByRole("button", { name: /use latest stock/i }));
+    await user.click(
+      await screen.findByRole("button", { name: /use latest stock/i }),
+    );
 
     await waitFor(() =>
       expect(onRefreshCycleCountDraftLineBaseline).toHaveBeenCalledWith({
@@ -735,10 +747,9 @@ describe("StockAdjustmentWorkspaceContent", () => {
 
     await user.click(screen.getByRole("button", { name: /books 1 sku/i }));
 
-    expect(screen.getByRole("button", { name: /books 1 sku/i })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    expect(
+      screen.getByRole("button", { name: /books 1 sku/i }),
+    ).toHaveAttribute("aria-pressed", "true");
     expect(within(table).getByText("Ai Engineering")).toBeInTheDocument();
     expect(within(table).queryByText("Closure Wig")).not.toBeInTheDocument();
   });
@@ -843,9 +854,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
     await user.click(
       screen.getByRole("combobox", { name: /filter by availability/i }),
     );
-    await user.click(
-      await screen.findByRole("option", { name: "Reserved" }),
-    );
+    await user.click(await screen.findByRole("option", { name: "Reserved" }));
 
     expect(
       within(table).getByText('18" Natural Black Closure Wig'),
@@ -977,12 +986,15 @@ describe("StockAdjustmentWorkspaceContent", () => {
       scope: "Books",
       sku: "sku-unavailable-books",
     });
-    expect(
-      screen.getByRole("button", { name: /reserved 4/i }),
-    ).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /reserved 4/i })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     expect(within(table).getByText("Ai Engineering")).toBeInTheDocument();
     expect(within(table).queryByText("Closure Wig")).not.toBeInTheDocument();
-    expect(within(table).queryByText("Body Wave Bundle")).not.toBeInTheDocument();
+    expect(
+      within(table).queryByText("Body Wave Bundle"),
+    ).not.toBeInTheDocument();
     expect(within(table).queryByText("Lip Gloss")).not.toBeInTheDocument();
     expect(screen.getByText("Showing 1 of 1 SKU.")).toBeInTheDocument();
 
@@ -995,9 +1007,10 @@ describe("StockAdjustmentWorkspaceContent", () => {
       scope: undefined,
       sku: undefined,
     });
-    expect(
-      screen.getByRole("button", { name: /reserved 4/i }),
-    ).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: /reserved 4/i })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
     expect(within(table).getByText("Ai Engineering")).toBeInTheDocument();
     expect(within(table).getByText("Closure Wig")).toBeInTheDocument();
   });
@@ -1025,9 +1038,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
     await user.click(
       screen.getByRole("combobox", { name: /filter by availability/i }),
     );
-    await user.click(
-      await screen.findByRole("option", { name: "Reserved" }),
-    );
+    await user.click(await screen.findByRole("option", { name: "Reserved" }));
 
     expect(onSearchStateChange).toHaveBeenLastCalledWith({
       availability: "unavailable",
@@ -1287,12 +1298,12 @@ describe("StockAdjustmentWorkspaceContent", () => {
 
     await user.click(screen.getByRole("tab", { name: /manual adjustment/i }));
 
-	    expect(onSearchStateChange).toHaveBeenCalledWith({
-	      mode: "manual",
-	      page: 1,
-	      scope: "Hair",
-	      sku: "sku-1",
-	    });
+    expect(onSearchStateChange).toHaveBeenCalledWith({
+      mode: "manual",
+      page: 1,
+      scope: "Hair",
+      sku: "sku-1",
+    });
   });
 
   it("shows the active SKU detail image in the right rail", async () => {
