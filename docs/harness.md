@@ -112,6 +112,10 @@ Freshness sensors catch stale generated artifacts.
   `graphify:rebuild`, then stages tracked source changes and generated outputs.
 - `pre-push:review` can attempt a narrow repair once, then blocks so the repaired
   files are reviewed and committed before push.
+- `pr:athena` records a git-private proof after the final graphify check only
+  when the branch head, `origin/main`, validation wiring, Bun version, and
+  working tree are clean and current. A later `pre-push:review` may reuse that
+  proof instead of rerunning the whole local suite.
 
 The important behavior is fail-closed repair. The harness may refresh files, but
 it does not silently push repaired evidence past review.
@@ -187,6 +191,19 @@ These commands reason about changed files and validation maps. If a change
 touches a registered surface, the harness can point to the commands or behavior
 scenarios that should prove the change.
 
+Repo-owned harness surfaces are handled separately from package validation maps.
+Changes under `scripts/`, package `docs/agent` guidance, package `AGENTS.md`,
+top-level repo wiring, GitHub workflows, Husky hooks, and `README.md` select the
+repo validation command set: `harness:test`, `compound:check`, `test:coverage`,
+and `harness:inferential-review`.
+
+Standalone `harness:review` runs that repo validation command set when those
+files change. Inside `pr:athena`, the same commands have already run directly,
+so `pr:athena` calls `harness:review` with an explicit parent-provider flag and
+`harness:review` reports that the repo validation commands were already
+provided. That removes duplicate expensive work without weakening standalone
+review or pre-push behavior.
+
 `bun run harness:inferential-review` adds a higher-level review pass. Its
 deterministic lane is blocking. Its semantic shadow mode can collect extra
 review telemetry without changing the merge decision.
@@ -237,6 +254,14 @@ bun run pr:athena
 That command repairs generated artifacts first, then runs the main repo ladder:
 Convex audits, architecture checks, coverage, harness tests, generated-doc
 checks, review sensors, audit, scorecard, and graphify freshness.
+
+After the final `graphify:check`, `pr:athena` records a worktree-local proof for
+the current `HEAD` and `origin/main`. `pre-push:review` reuses that proof only
+when the pushed head, base SHA, clean working tree, Bun version, `pr:athena`
+script, and validation wiring fingerprint still match. Any dirty file,
+generated-artifact repair, rebase, advanced `origin/main`, changed hook, changed
+harness script, or missing proof makes pre-push run the full validation suite
+normally and prints the reason.
 
 For harness-only changes, useful focused commands are:
 
@@ -300,3 +325,10 @@ The fastest response is usually:
 
 Avoid weakening the sensor to get past a failure. If the failure is noisy, fix
 the sensor's precision with a test so the repo learns from the false positive.
+
+Repeated validation work is noise only when a parent command has already
+provided the same repo-owned command set for the same head and base, or when
+`pre-push:review` prints that it reused a current `pr:athena` proof. It is not
+noise when the proof is missing or stale, when the working tree is dirty, when
+generated outputs were repaired, when `origin/main` advanced, or when the change
+touches validation wiring. In those cases rerunning is the fail-closed policy.

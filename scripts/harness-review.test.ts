@@ -674,6 +674,40 @@ describe("runHarnessReview", () => {
     ]);
   });
 
+  it("does not rerun repo-level validations when pr:athena already provides them", async () => {
+    const rootDir = await createFixtureRepo();
+    const steps: string[] = [
+      "raw:bun run compound:check",
+      "raw:bun run test:coverage",
+      "raw:bun run harness:test",
+    ];
+
+    await runHarnessReview(rootDir, {
+      getChangedFiles: async () => ["scripts/harness-review.ts"],
+      repoValidationProvidedBy: "pr:athena",
+      runHarnessCheck: async () => {
+        steps.push("harness:check");
+      },
+      runRawCommand: async (command) => {
+        steps.push(`raw:${command}`);
+      },
+      logger: {
+        log() {},
+        error() {},
+      },
+    });
+
+    steps.push("raw:bun run harness:inferential-review");
+
+    expect(steps).toEqual([
+      "raw:bun run compound:check",
+      "raw:bun run test:coverage",
+      "raw:bun run harness:test",
+      "harness:check",
+      "raw:bun run harness:inferential-review",
+    ]);
+  });
+
   it("runs command-based validation surfaces including raw repo-root commands", async () => {
     const rootDir = await createFixtureRepo();
     const steps: string[] = [];
@@ -1030,9 +1064,31 @@ describe("parseHarnessReviewArgs", () => {
     });
   });
 
+  it("accepts pr:athena as the parent repo-validation provider", () => {
+    expect(
+      parseHarnessReviewArgs([
+        "--base",
+        "origin/main",
+        "--repo-validation-provided-by",
+        "pr:athena",
+      ])
+    ).toEqual({
+      baseRef: "origin/main",
+      repoValidationProvidedBy: "pr:athena",
+    });
+  });
+
   it("rejects missing --base values", () => {
     expect(() => parseHarnessReviewArgs(["--base"])).toThrow(
       "Missing value for --base. Usage: bun run harness:review --base origin/main"
+    );
+  });
+
+  it("rejects unknown parent repo-validation providers", () => {
+    expect(() =>
+      parseHarnessReviewArgs(["--repo-validation-provided-by", "custom"])
+    ).toThrow(
+      "Missing or invalid value for --repo-validation-provided-by. Supported value: pr:athena"
     );
   });
 });

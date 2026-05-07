@@ -200,6 +200,9 @@ For repo-harness edits such as `scripts/harness-app-registry.ts`, keep
 `bun run harness:review --base origin/main` and
 `bun run harness:inferential-review` in the local ladder so a missing sibling
 test update like `scripts/harness-app-registry.test.ts` fails before push.
+`bun run pr:athena` passes an explicit provider flag to `harness:review` because
+the PR ladder already ran the repo-owned validation commands directly. Standalone
+`harness:review` and `pre-push:review` stay fail-closed for repo-harness edits.
 
 `bun run harness:test` is the canonical harness implementation gate for harness scripts, graphify tooling, and pre-push review wiring.
 It targets repo-root `scripts/*.test.ts` files only (excluding cloned worktree trees).
@@ -211,6 +214,11 @@ The repo pins Bun via `package.json` (`bun@1.1.29` today), and GitHub Actions re
 `pre-push:review` starts with `bun run graphify:check` before the rest of the local validation suite. If tracked graphify artifacts are stale, the hook runs `bun run graphify:rebuild` once, reruns `bun run graphify:check`, and then stops so you can review and commit the repaired graphify artifacts before pushing again.
 If `harness:self-review` or `harness:review` gets blocked by stale generated harness docs, the hook runs `bun run harness:generate` once, retries the blocked step on the repaired tree, and:
 - Blocks so you can review, commit, and push the repaired generated docs instead of sending a stale ref to CI.
+
+After a clean `bun run pr:athena`, the repo records a git-private proof for the
+current branch head and `origin/main`. `pre-push:review` reuses that proof only
+when the head, base, clean working tree, Bun version, command wiring, and
+validation fingerprint still match; otherwise it reruns and prints the reason.
 
 List runtime behavior scenarios with `bun run harness:behavior --list`.
 Bundled scenarios include:

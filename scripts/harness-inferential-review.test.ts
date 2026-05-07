@@ -260,6 +260,33 @@ describe("runHarnessInferentialReview", () => {
     expect(result.machine.findings).toEqual([]);
   });
 
+  it("accepts the pr:athena parent provider flag on harness review", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "package.json",
+      JSON.stringify(
+        {
+          scripts: {
+            "pr:athena":
+              "bun run harness:check && bun run harness:review --base origin/main --repo-validation-provided-by pr:athena && bun run harness:inferential-review && bun run harness:audit && bun run graphify:check",
+          },
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => ["package.json"],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.machine.status).toBe("pass");
+    expect(result.machine.findings).toEqual([]);
+  });
+
   it("does not treat echoed harness review text as a real pr:athena gate", async () => {
     const rootDir = await createFixtureRepo();
     await write(

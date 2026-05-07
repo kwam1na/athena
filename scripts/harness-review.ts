@@ -38,6 +38,7 @@ type HarnessReviewLogger = Pick<Console, "log" | "error">;
 
 type ParsedHarnessReviewArgs = {
   baseRef?: string;
+  repoValidationProvidedBy?: "pr:athena";
 };
 
 type HarnessReviewOptions = {
@@ -48,6 +49,7 @@ type HarnessReviewOptions = {
   runPackageScript?: (workspace: string, script: string) => Promise<void>;
   runRawCommand?: (command: string) => Promise<void>;
   runHarnessBehaviorScenario?: (scenario: string) => Promise<void>;
+  repoValidationProvidedBy?: "pr:athena";
 };
 
 function normalizeRepoPath(repoPath: string) {
@@ -624,12 +626,23 @@ export async function runHarnessReview(
   }
 
   const combinedCommands = [
-    ...repoValidation.selectedCommands.map((command) => ({
-      kind: "raw" as const,
-      command,
-    })),
+    ...(options.repoValidationProvidedBy === "pr:athena"
+      ? []
+      : repoValidation.selectedCommands.map((command) => ({
+          kind: "raw" as const,
+          command,
+        }))),
     ...selectedCommands,
   ];
+
+  if (
+    options.repoValidationProvidedBy === "pr:athena" &&
+    repoValidation.selectedCommands.length > 0
+  ) {
+    logger.log(
+      `Repo validation commands provided by pr:athena for ${repoValidation.matchedFiles.length} repo-owned changed file(s).`
+    );
+  }
 
   for (const command of combinedCommands) {
     if (command.kind === "script") {
@@ -667,6 +680,7 @@ export function parseHarnessReviewArgs(
   argv: string[]
 ): ParsedHarnessReviewArgs {
   let baseRef: string | undefined;
+  let repoValidationProvidedBy: "pr:athena" | undefined;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -694,20 +708,47 @@ export function parseHarnessReviewArgs(
       continue;
     }
 
+    if (arg === "--repo-validation-provided-by") {
+      const value = argv[index + 1]?.trim();
+      if (value !== "pr:athena") {
+        throw new Error(
+          "Missing or invalid value for --repo-validation-provided-by. Supported value: pr:athena"
+        );
+      }
+      repoValidationProvidedBy = value;
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith("--repo-validation-provided-by=")) {
+      const value = arg.slice("--repo-validation-provided-by=".length).trim();
+      if (value !== "pr:athena") {
+        throw new Error(
+          "Missing or invalid value for --repo-validation-provided-by. Supported value: pr:athena"
+        );
+      }
+      repoValidationProvidedBy = value;
+      continue;
+    }
+
     throw new Error(
-      `Unknown argument: ${arg}. Usage: bun run harness:review [--base <ref>]`
+      `Unknown argument: ${arg}. Usage: bun run harness:review [--base <ref>] [--repo-validation-provided-by pr:athena]`
     );
   }
 
   return {
     baseRef,
+    repoValidationProvidedBy,
   };
 }
 
 if (import.meta.main) {
   try {
     const parsed = parseHarnessReviewArgs(Bun.argv.slice(2));
-    await runHarnessReview(process.cwd(), { baseRef: parsed.baseRef });
+    await runHarnessReview(process.cwd(), {
+      baseRef: parsed.baseRef,
+      repoValidationProvidedBy: parsed.repoValidationProvidedBy,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`\n[harness:review] BLOCKED: ${message}`);
