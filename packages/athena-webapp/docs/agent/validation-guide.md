@@ -15,6 +15,16 @@ Run:
 
 Use this for authenticated dashboard flows, service-management screens, route trees, and UI behavior changes that stay inside the frontend shell.
 
+## Changed frontend source lint
+
+Touched surfaces: `src`, `shared`, `types.ts`
+
+Run:
+
+- `bun run --filter '@athena/webapp' lint:frontend:changed`
+
+Run this for changed browser-facing TypeScript or TSX files so introduced ESLint failures are caught before PR handoff.
+
 ## Stock-ops procurement and receiving edits
 
 Touched surfaces: `convex/stockOps`, `convex/operations/approvalRequests.ts`, `src/components/operations/OperationsQueueView.tsx`, `src/components/operations/StockAdjustmentWorkspace.tsx`, `src/components/procurement`, `src/components/app-sidebar.tsx`, `src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations`, `src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/procurement.index.tsx`
@@ -206,7 +216,7 @@ Run these when bootstrap, generated router state, or package build configuration
 
 ## Storybook and frontend tooling edits
 
-Touched surfaces: `.storybook`, `index.html`, `src/stories`, `src/index.css`, `src/design-system-build-config.test.ts`, `tailwind.config.js`, `postcss.config.js`, `package.json`, `README.md`, `eslint.config.js`, `.gitignore`
+Touched surfaces: `.storybook`, `index.html`, `src/stories`, `src/index.css`, `src/design-system-build-config.test.ts`, `tailwind.config.js`, `postcss.config.js`, `package.json`, `README.md`, `eslint.config.js`, `scripts/frontend-lint-changed.sh`, `.gitignore`
 
 Run:
 
