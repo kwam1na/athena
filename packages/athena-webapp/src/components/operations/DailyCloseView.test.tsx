@@ -93,6 +93,7 @@ const baseSummary = {
   carryForwardCount: 0,
   currentDayCashTransactionCount: 2,
   currentDayCashTotal: 45000,
+  expenseTransactionCount: 1,
   expenseTotal: 12500,
   registerCount: 2,
   registerVarianceCount: 0,
@@ -165,8 +166,8 @@ const readySnapshot: DailyCloseSnapshot = {
         completedAt: Date.UTC(2026, 4, 7, 16),
         notes: "Bought packing supplies.",
         owner: "Akosua Mensah",
-        register: "Register A1",
         report: "EXP-1",
+        terminal: "Front counter terminal / Register A1",
         total: 12500,
       },
       subject: {
@@ -420,6 +421,12 @@ describe("DailyCloseViewContent", () => {
       within(saleItem as HTMLElement).getByText("Kofi Mensah"),
     ).toBeInTheDocument();
     expect(
+      within(saleItem as HTMLElement).getByText("Staff"),
+    ).toBeInTheDocument();
+    expect(
+      within(saleItem as HTMLElement).queryByText("Owner"),
+    ).not.toBeInTheDocument();
+    expect(
       within(saleItem as HTMLElement).getByText("Cash, Mobile Money"),
     ).toBeInTheDocument();
     expect(
@@ -435,13 +442,26 @@ describe("DailyCloseViewContent", () => {
     const expenseItem = screen.getByText("Completed expense").closest("article");
     expect(expenseItem).not.toBeNull();
     expect(
-      within(expenseItem as HTMLElement).getByText("EXP-1"),
-    ).toBeInTheDocument();
+      within(expenseItem as HTMLElement).getByRole("link", {
+        name: "#EXP-1",
+      }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/pos/expense-reports/expense-1?o=%252F",
+    );
     expect(
       within(expenseItem as HTMLElement).getByText("Akosua Mensah"),
     ).toBeInTheDocument();
     expect(
-      within(expenseItem as HTMLElement).getByText("Register A1"),
+      within(expenseItem as HTMLElement).getByText("Staff"),
+    ).toBeInTheDocument();
+    expect(
+      within(expenseItem as HTMLElement).queryByText("Owner"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(expenseItem as HTMLElement).getByText(
+        "Front counter terminal / Register A1",
+      ),
     ).toBeInTheDocument();
     expect(
       within(expenseItem as HTMLElement).getByText("Bought packing supplies."),
@@ -545,6 +565,7 @@ describe("DailyCloseViewContent", () => {
         carryForwardCount: 0,
         carriedOverRegisterCount: 1,
         currentDayCashTransactionCount: 0,
+        expenseTransactionCount: 1,
         registerVarianceCount: 1,
         staffCount: 1,
         transactionCount: 1,
@@ -555,14 +576,15 @@ describe("DailyCloseViewContent", () => {
     expect(screen.getByText("No cash transactions")).toBeInTheDocument();
     expect(screen.getByText("1 register from a prior day")).toBeInTheDocument();
     expect(screen.getByText("1 register variance")).toBeInTheDocument();
-    expect(screen.getByText("1 staff member involved")).toBeInTheDocument();
+    expect(screen.getByText("1 expense transaction")).toBeInTheDocument();
   });
 
-  it("does not use pending approvals as the expenses staff count", () => {
+  it("reports expense transaction counts without falling back to staff or approvals", () => {
     renderContent({
       ...readySnapshot,
       summary: {
         ...baseSummary,
+        expenseTransactionCount: undefined,
         expenseStaffCount: undefined,
         expenseTotal: 0,
         pendingApprovalCount: 1,
@@ -570,9 +592,9 @@ describe("DailyCloseViewContent", () => {
       },
     });
 
-    expect(screen.getByText("No staff involved")).toBeInTheDocument();
+    expect(screen.getByText("No expense transactions")).toBeInTheDocument();
     expect(
-      screen.queryByText("1 staff member involved"),
+      screen.queryByText("1 expense transaction"),
     ).not.toBeInTheDocument();
   });
 

@@ -72,6 +72,7 @@ type DailyCloseSummary = {
   currentDayCashTotal: number;
   currentDayCashTransactionCount: number;
   expectedCashTotal: number;
+  expenseTransactionCount: number;
   expenseStaffCount: number;
   expenseTotal: number;
   netCashVariance: number;
@@ -365,6 +366,26 @@ async function buildRegisterSessionsById(
   );
 
   return new Map(registerSessionEntries);
+}
+
+async function buildExpenseSessionsById(
+  ctx: Pick<QueryCtx, "db">,
+  expenseSessionIds: Array<Id<"expenseSession"> | null | undefined>,
+) {
+  const uniqueExpenseSessionIds = Array.from(
+    new Set(expenseSessionIds.filter(Boolean) as Id<"expenseSession">[]),
+  );
+  const expenseSessionEntries = await Promise.all(
+    uniqueExpenseSessionIds.map(async (expenseSessionId) => {
+      const expenseSession = await ctx.db.get(
+        "expenseSession",
+        expenseSessionId,
+      );
+      return [expenseSessionId, expenseSession] as const;
+    }),
+  );
+
+  return new Map(expenseSessionEntries);
 }
 
 function asCarryForwardItem(
@@ -674,6 +695,7 @@ function emptySummary(): DailyCloseSummary {
     currentDayCashTotal: 0,
     currentDayCashTransactionCount: 0,
     expectedCashTotal: 0,
+    expenseTransactionCount: 0,
     expenseStaffCount: 0,
     expenseTotal: 0,
     netCashVariance: 0,
@@ -793,10 +815,18 @@ export async function buildDailyCloseSnapshotWithCtx(
   const approvalRegisterSessions = Array.from(
     approvalRegisterSessionsById.values(),
   ).filter((session): session is Doc<"registerSession"> => Boolean(session));
+  const expenseSessionsById = await buildExpenseSessionsById(
+    ctx,
+    expenseTransactions.map((transaction) => transaction.sessionId),
+  );
+  const expenseSessions = Array.from(expenseSessionsById.values()).filter(
+    (session): session is Doc<"expenseSession"> => Boolean(session),
+  );
   const terminalLabelsById = await buildTerminalLabelsById(ctx, [
     ...activeRegisterSessions.map((session) => session.terminalId),
     ...closedRegisterSessions.map((session) => session.terminalId),
     ...approvalRegisterSessions.map((session) => session.terminalId),
+    ...expenseSessions.map((session) => session.terminalId),
     ...openPosSessions.map((session) => session.terminalId),
     ...completedTransactions.map((transaction) => transaction.terminalId),
     ...voidedTransactions.map((transaction) => transaction.terminalId),
@@ -1166,8 +1196,17 @@ export async function buildDailyCloseSnapshotWithCtx(
 
   expenseTransactions.forEach((transaction) => {
     const staffName = staffNamesById.get(transaction.staffProfileId);
+    const expenseSession = expenseSessionsById.get(transaction.sessionId);
+    const terminalLabel = expenseSession?.terminalId
+      ? terminalLabelsById.get(expenseSession.terminalId)
+      : undefined;
+    const expenseSessionRegisterNumber = trimOptional(
+      expenseSession?.registerNumber,
+    );
     const registerLabel = trimOptional(transaction.registerNumber)
       ? `Register ${transaction.registerNumber}`
+      : expenseSessionRegisterNumber
+        ? `Register ${expenseSessionRegisterNumber}`
       : undefined;
 
     readyItems.push({
@@ -1188,8 +1227,15 @@ export async function buildDailyCloseSnapshotWithCtx(
       },
       metadata: {
         report: transaction.transactionNumber,
+        ...(terminalLabel
+          ? {
+              terminal: registerLabel
+                ? `${terminalLabel} / ${registerLabel}`
+                : terminalLabel,
+            }
+          : {}),
+        ...(!terminalLabel && registerLabel ? { register: registerLabel } : {}),
         ...(staffName ? { owner: staffName } : {}),
-        ...(registerLabel ? { register: registerLabel } : {}),
         ...(transaction.notes ? { notes: transaction.notes } : {}),
         total: transaction.totalValue,
         completedAt: transaction.completedAt,
@@ -1283,6 +1329,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       (sum, transaction) => sum + transaction.totalValue,
       0,
     ),
+    expenseTransactionCount: expenseTransactions.length,
     expenseStaffCount: new Set(
       expenseTransactions.map((transaction) => transaction.staffProfileId),
     ).size,

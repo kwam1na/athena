@@ -139,6 +139,7 @@ export type DailyCloseSnapshot = {
     currentDayCashTransactionCount?: number | null;
     currentDayCashTotal?: number | null;
     expectedCashTotal?: number | null;
+    expenseTransactionCount?: number | null;
     expenseStaffCount?: number | null;
     expenseTotal?: number | null;
     netCashVariance?: number | null;
@@ -356,10 +357,10 @@ function getBucketCountClassName(status: BucketStatus) {
   );
 }
 
-function formatStaffInvolvedCount(value: number) {
-  if (value === 0) return "No staff involved";
-  if (value === 1) return "1 staff member involved";
-  return `${value} staff involved`;
+function formatExpenseTransactionCount(value: number) {
+  if (value === 0) return "No expense transactions";
+  if (value === 1) return "1 expense transaction";
+  return `${value} expense transactions`;
 }
 
 function formatMoney(currency: string, amount?: number | null) {
@@ -614,6 +615,7 @@ const metadataLabelsByCategory: Record<string, string[]> = {
   ],
   expense: [
     "report",
+    "terminal",
     "register",
     "owner",
     "total",
@@ -692,6 +694,10 @@ function formatTimestampMetadata(value: number) {
 }
 
 function getDisplayMetadataLabel(label: string, value: unknown) {
+  if (normalizeMetadataLabel(label) === "owner") {
+    return "Staff";
+  }
+
   if (
     normalizeMetadataLabel(label) === "expiresat" &&
     typeof value === "number" &&
@@ -751,6 +757,10 @@ function formatMetadataValue(label: string, value: unknown, currency: string) {
       return value.startsWith("#") ? value : `#${value}`;
     }
 
+    if (normalizedLabel === "report") {
+      return value.startsWith("#") ? value : `#${value}`;
+    }
+
     if (
       isMoneyMetadataLabel(label) &&
       value.trim() !== "" &&
@@ -792,6 +802,9 @@ function formatMetadataDisplayValue({
   const transactionId =
     getMetadataStringValue(item.metadata, "transactionId") ??
     (item.subject?.type === "pos_transaction" ? item.subject.id : undefined);
+  const reportId =
+    getMetadataStringValue(item.metadata, "reportId") ??
+    (item.subject?.type === "expense_transaction" ? item.subject.id : undefined);
 
   if (normalizeMetadataLabel(label) === "transaction" && transactionId) {
     return (
@@ -806,6 +819,26 @@ function formatMetadataDisplayValue({
         }
         search={{ o: getOrigin() } as never}
         to="/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId"
+      >
+        {formattedValue}
+        <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
+      </Link>
+    );
+  }
+
+  if (normalizeMetadataLabel(label) === "report" && reportId) {
+    return (
+      <Link
+        className="inline-flex items-center gap-1 text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline"
+        params={
+          {
+            orgUrlSlug,
+            storeUrlSlug,
+            reportId,
+          } as never
+        }
+        search={{ o: getOrigin() } as never}
+        to="/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId"
       >
         {formattedValue}
         <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
@@ -1054,6 +1087,20 @@ function getExpenseStaffCount(summary: DailyCloseSnapshot["summary"]) {
   }
 
   return typeof summary.staffCount === "number" ? summary.staffCount : 0;
+}
+
+function getExpenseTransactionCount(summary: DailyCloseSnapshot["summary"]) {
+  if (typeof summary.expenseTransactionCount === "number") {
+    return summary.expenseTransactionCount;
+  }
+
+  if (summary.expenseTotal === 0) {
+    return 0;
+  }
+
+  return typeof summary.expenseStaffCount === "number"
+    ? summary.expenseStaffCount
+    : 0;
 }
 
 function isZeroActivityDailyClose(snapshot: DailyCloseSnapshot) {
@@ -1956,8 +2003,8 @@ export function DailyCloseViewContent({
                     )}
                   />
                   <SummaryMetric
-                    helper={formatStaffInvolvedCount(
-                      getExpenseStaffCount(snapshot.summary),
+                    helper={formatExpenseTransactionCount(
+                      getExpenseTransactionCount(snapshot.summary),
                     )}
                     label="Expenses"
                     value={formatMoney(currency, snapshot.summary.expenseTotal)}
