@@ -602,6 +602,16 @@ async function createFixtureRepo() {
     rootDir
   );
   await write(
+    "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/opening.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
     "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services/index.tsx",
     "export {};\n",
     rootDir
@@ -725,6 +735,16 @@ async function createFixtureRepo() {
   );
   await write(
     "packages/athena-webapp/src/components/operations/OperationsQueueView.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/components/operations/DailyOpeningView.tsx",
     "export {};\n",
     rootDir
   );
@@ -913,6 +933,16 @@ async function createFixtureRepo() {
     rootDir
   );
   await write(
+    "packages/athena-webapp/convex/operations/dailyClose.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/operations/dailyOpening.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
     "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
     "export {};\n",
     rootDir
@@ -1046,6 +1076,16 @@ async function createFixtureRepo() {
   );
   await write(
     "packages/athena-webapp/convex/schemas/observability/workflowTrace.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/schemas/operations/dailyClose.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/schemas/operations/dailyOpening.ts",
     "export {};\n",
     rootDir
   );

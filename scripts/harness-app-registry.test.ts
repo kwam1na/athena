@@ -215,6 +215,47 @@ describe("HARNESS_APP_REGISTRY", () => {
     });
   });
 
+  it("documents Daily store operations lifecycle validation coverage in Athena harness docs", () => {
+    const athena = HARNESS_APP_REGISTRY.find(
+      (entry) => entry.appName === "athena-webapp"
+    );
+    const dailyOperationsScenario = athena?.validationScenarios.find(
+      (scenario) => scenario.title === "Daily store operations lifecycle edits"
+    );
+
+    expect(dailyOperationsScenario).toMatchObject({
+      touchedPaths: [
+        "convex/operations/dailyClose.ts",
+        "convex/operations/dailyOpening.ts",
+        "convex/schemas/operations/dailyClose.ts",
+        "convex/schemas/operations/dailyOpening.ts",
+        "src/components/operations/DailyCloseView.tsx",
+        "src/components/operations/DailyOpeningView.tsx",
+        "src/components/app-sidebar.tsx",
+        "src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close.tsx",
+        "src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/opening.tsx",
+      ],
+      commands: [
+        {
+          kind: "raw",
+          command:
+            "bun run --filter '@athena/webapp' test -- convex/operations/dailyOpening.test.ts convex/operations/dailyClose.test.ts convex/operations/operationsQueryIndexes.test.ts src/components/operations/DailyOpeningView.test.tsx src/components/operations/DailyCloseView.test.tsx",
+        },
+        { kind: "script", script: "audit:convex" },
+        { kind: "script", script: "lint:convex:changed" },
+        { kind: "script", script: "lint:frontend:changed" },
+        {
+          kind: "raw",
+          command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+        },
+        { kind: "script", script: "build" },
+      ],
+      behaviorScenarios: ["athena-admin-shell-boot"],
+      note:
+        "Use this when Daily Opening, Daily Close, or the store-day operations route wiring changes. It validates the backend readiness gates, operator-facing acknowledgement views, generated Convex API surface, and route tree before broader package validation.",
+    });
+  });
+
   it("covers Athena frontend test harness surfaces including vitest setup", () => {
     const athena = HARNESS_APP_REGISTRY.find(
       (entry) => entry.appName === "athena-webapp"

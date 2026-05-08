@@ -42,6 +42,49 @@
       "behaviorScenarios": []
     },
     {
+      "name": "daily-store-operations-lifecycle-edits",
+      "pathPrefixes": [
+        "packages/athena-webapp/convex/operations/dailyClose.ts",
+        "packages/athena-webapp/convex/operations/dailyOpening.ts",
+        "packages/athena-webapp/convex/schemas/operations/dailyClose.ts",
+        "packages/athena-webapp/convex/schemas/operations/dailyOpening.ts",
+        "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
+        "packages/athena-webapp/src/components/operations/DailyOpeningView.tsx",
+        "packages/athena-webapp/src/components/app-sidebar.tsx",
+        "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close.tsx",
+        "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/opening.tsx"
+      ],
+      "commands": [
+        {
+          "kind": "raw",
+          "command": "bun run --filter '@athena/webapp' test -- convex/operations/dailyOpening.test.ts convex/operations/dailyClose.test.ts convex/operations/operationsQueryIndexes.test.ts src/components/operations/DailyOpeningView.test.tsx src/components/operations/DailyCloseView.test.tsx"
+        },
+        {
+          "kind": "script",
+          "script": "audit:convex"
+        },
+        {
+          "kind": "script",
+          "script": "lint:convex:changed"
+        },
+        {
+          "kind": "script",
+          "script": "lint:frontend:changed"
+        },
+        {
+          "kind": "raw",
+          "command": "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json"
+        },
+        {
+          "kind": "script",
+          "script": "build"
+        }
+      ],
+      "behaviorScenarios": [
+        "athena-admin-shell-boot"
+      ]
+    },
+    {
       "name": "stock-ops-procurement-and-receiving-edits",
       "pathPrefixes": [
         "packages/athena-webapp/convex/stockOps",
