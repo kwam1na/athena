@@ -5,6 +5,7 @@ export * from "./staffCredential";
 export * from "./operationalWorkItem";
 export * from "./operationalEvent";
 export * from "./dailyClose";
+export * from "./dailyOpening";
 export * from "./inventoryMovement";
 export * from "./paymentAllocation";
 export * from "./registerSession";

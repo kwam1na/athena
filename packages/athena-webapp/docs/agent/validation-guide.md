@@ -25,6 +25,25 @@ Run:
 
 Run this for changed browser-facing TypeScript or TSX files so introduced ESLint failures are caught before PR handoff.
 
+## Daily store operations lifecycle edits
+
+Touched surfaces: `convex/operations/dailyClose.ts`, `convex/operations/dailyOpening.ts`, `convex/schemas/operations/dailyClose.ts`, `convex/schemas/operations/dailyOpening.ts`, `src/components/operations/DailyCloseView.tsx`, `src/components/operations/DailyOpeningView.tsx`, `src/components/app-sidebar.tsx`, `src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close.tsx`, `src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/opening.tsx`
+
+Run:
+
+- `bun run --filter '@athena/webapp' test -- convex/operations/dailyOpening.test.ts convex/operations/dailyClose.test.ts convex/operations/operationsQueryIndexes.test.ts src/components/operations/DailyOpeningView.test.tsx src/components/operations/DailyCloseView.test.tsx`
+- `bun run --filter '@athena/webapp' audit:convex`
+- `bun run --filter '@athena/webapp' lint:convex:changed`
+- `bun run --filter '@athena/webapp' lint:frontend:changed`
+- `bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json`
+- `bun run --filter '@athena/webapp' build`
+
+Behavior scenarios:
+
+- `athena-admin-shell-boot`
+
+Use this when Daily Opening, Daily Close, or the store-day operations route wiring changes. It validates the backend readiness gates, operator-facing acknowledgement views, generated Convex API surface, and route tree before broader package validation.
+
 ## Stock-ops procurement and receiving edits
 
 Touched surfaces: `convex/stockOps`, `convex/operations/approvalRequests.ts`, `src/components/operations/OperationsQueueView.tsx`, `src/components/operations/StockAdjustmentWorkspace.tsx`, `src/components/procurement`, `src/components/app-sidebar.tsx`, `src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations`, `src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/procurement.index.tsx`

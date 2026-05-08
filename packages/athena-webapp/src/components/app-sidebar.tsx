@@ -278,6 +278,27 @@ export function AppSidebar() {
                       asChild
                     >
                       <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/operations/opening"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: activeOrganization?.slug,
+                          storeUrlSlug: activeStore?.slug,
+                        })}
+                        className="flex items-center"
+                      >
+                        <p className="font-medium">Daily Opening</p>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
+
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuButton
+                      disabled={!canAccessOperations()}
+                      asChild
+                    >
+                      <Link
                         to="/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close"
                         params={(p) => ({
                           ...p,

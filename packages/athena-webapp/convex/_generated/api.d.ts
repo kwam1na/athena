@@ -128,6 +128,7 @@ import type * as operations_approvalRequestHelpers from "../operations/approvalR
 import type * as operations_approvalRequests from "../operations/approvalRequests.js";
 import type * as operations_customerProfiles from "../operations/customerProfiles.js";
 import type * as operations_dailyClose from "../operations/dailyClose.js";
+import type * as operations_dailyOpening from "../operations/dailyOpening.js";
 import type * as operations_helpers_eventBuilders from "../operations/helpers/eventBuilders.js";
 import type * as operations_helpers_linking from "../operations/helpers/linking.js";
 import type * as operations_inventoryMovements from "../operations/inventoryMovements.js";
@@ -208,6 +209,7 @@ import type * as schemas_observability_workflowTraceLookup from "../schemas/obse
 import type * as schemas_operations_approvalRequest from "../schemas/operations/approvalRequest.js";
 import type * as schemas_operations_customerProfile from "../schemas/operations/customerProfile.js";
 import type * as schemas_operations_dailyClose from "../schemas/operations/dailyClose.js";
+import type * as schemas_operations_dailyOpening from "../schemas/operations/dailyOpening.js";
 import type * as schemas_operations_index from "../schemas/operations/index.js";
 import type * as schemas_operations_inventoryMovement from "../schemas/operations/inventoryMovement.js";
 import type * as schemas_operations_operationalEvent from "../schemas/operations/operationalEvent.js";
@@ -440,6 +442,7 @@ declare const fullApi: ApiFromModules<{
   "operations/approvalRequests": typeof operations_approvalRequests;
   "operations/customerProfiles": typeof operations_customerProfiles;
   "operations/dailyClose": typeof operations_dailyClose;
+  "operations/dailyOpening": typeof operations_dailyOpening;
   "operations/helpers/eventBuilders": typeof operations_helpers_eventBuilders;
   "operations/helpers/linking": typeof operations_helpers_linking;
   "operations/inventoryMovements": typeof operations_inventoryMovements;
@@ -520,6 +523,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/operations/approvalRequest": typeof schemas_operations_approvalRequest;
   "schemas/operations/customerProfile": typeof schemas_operations_customerProfile;
   "schemas/operations/dailyClose": typeof schemas_operations_dailyClose;
+  "schemas/operations/dailyOpening": typeof schemas_operations_dailyOpening;
   "schemas/operations/index": typeof schemas_operations_index;
   "schemas/operations/inventoryMovement": typeof schemas_operations_inventoryMovement;
   "schemas/operations/operationalEvent": typeof schemas_operations_operationalEvent;
