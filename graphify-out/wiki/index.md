@@ -8,8 +8,8 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 
 ## Repo Summary
 - Code files discovered: 1636
-- Graph nodes: 4788
-- Graph edges: 4695
+- Graph nodes: 4795
+- Graph edges: 4708
 - Communities: 1564
 
 ## Graph Hotspots
@@ -20,7 +20,7 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 - `dailyClose.ts` (40 edges, Community 3) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../packages/athena-webapp/convex/operations/dailyClose.ts)
 - `ProcurementView.tsx` (39 edges, Community 4) - [`packages/athena-webapp/src/components/procurement/ProcurementView.tsx`](../../packages/athena-webapp/src/components/procurement/ProcurementView.tsx)
 - `harness-check.ts` (32 edges, Community 5) - [`scripts/harness-check.ts`](../../scripts/harness-check.ts)
-- `harness-behavior.ts` (30 edges, Community 6) - [`scripts/harness-behavior.ts`](../../scripts/harness-behavior.ts)
+- `DailyOpeningView.tsx` (31 edges, Community 6) - [`packages/athena-webapp/src/components/operations/DailyOpeningView.tsx`](../../packages/athena-webapp/src/components/operations/DailyOpeningView.tsx)
 
 ## Registered Packages
 - [Athena Webapp](packages/athena-webapp.md)

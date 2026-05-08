@@ -65,7 +65,9 @@ type DailyOpeningSnapshot = {
   carryForwardItems: DailyOpeningItem[];
   readyItems: DailyOpeningItem[];
   readiness: DailyOpeningReadiness;
-  startedOpening: Doc<"dailyOpening"> | null;
+  startedOpening:
+    | (Doc<"dailyOpening"> & { startedByStaffName?: string | null })
+    | null;
   startAt: number;
   sourceSubjects: DailyOpeningItem["subject"][];
   summary: Omit<DailyOpeningReadiness, "status">;
@@ -185,6 +187,32 @@ async function getStartedDailyOpeningForDate(
     .first();
 }
 
+function getStaffDisplayName(staffProfile: Doc<"staffProfile"> | null) {
+  if (!staffProfile) return null;
+
+  const name =
+    staffProfile.fullName ||
+    [staffProfile.firstName, staffProfile.lastName].filter(Boolean).join(" ");
+
+  return name || null;
+}
+
+async function hydrateStartedOpening(
+  ctx: Pick<QueryCtx, "db">,
+  opening: Doc<"dailyOpening"> | null,
+) {
+  if (!opening) return null;
+
+  const staffProfile = opening.actorStaffProfileId
+    ? await ctx.db.get("staffProfile", opening.actorStaffProfileId)
+    : null;
+
+  return {
+    ...opening,
+    startedByStaffName: getStaffDisplayName(staffProfile),
+  };
+}
+
 async function listPendingOpeningBlockerApprovals(
   ctx: Pick<QueryCtx, "db">,
   storeId: Id<"store">,
@@ -232,17 +260,17 @@ function pendingApprovalItem(
   };
 }
 
-function missingPriorCloseItem(args: {
+function missingPriorCloseReviewItem(args: {
   operatingDate: string;
   storeId: Id<"store">;
 }): DailyOpeningItem {
   return {
     key: "daily_close:prior:missing",
-    severity: "blocker",
+    severity: "review",
     category: "prior_close",
-    title: "Prior Daily Close is missing",
+    title: "Prior Daily Close not found",
     message:
-      "Opening needs the prior completed Daily Close before the store day can be acknowledged.",
+      "No completed Daily Close was found for the prior store day. Acknowledge this before starting the store day.",
     subject: {
       type: DAILY_CLOSE_SUBJECT_TYPE,
       id: `${args.storeId}:${args.operatingDate}:prior`,
@@ -484,6 +512,7 @@ export async function buildDailyOpeningSnapshotWithCtx(
 ): Promise<DailyOpeningSnapshot> {
   const store = await getStore(ctx, args.storeId);
   const existingOpening = await getDailyOpeningForDate(ctx, args);
+  const startedOpening = await hydrateStartedOpening(ctx, existingOpening);
   const operatingDateRange = resolveOperatingDateRange(args);
 
   if (!isValidOperatingDate(args.operatingDate)) {
@@ -508,7 +537,7 @@ export async function buildDailyOpeningSnapshotWithCtx(
         carryForwardCount: 0,
         readyCount: 0,
       },
-      startedOpening: existingOpening,
+      startedOpening,
       startAt: operatingDateRange.startAt,
       sourceSubjects: [blocker.subject],
       summary: {
@@ -543,7 +572,7 @@ export async function buildDailyOpeningSnapshotWithCtx(
       reviewItems.push(notesItem);
     }
   } else {
-    blockers.push(missingPriorCloseItem(args));
+    reviewItems.push(missingPriorCloseReviewItem(args));
   }
 
   blockers.push(...pendingApprovals.map(pendingApprovalItem));
@@ -574,7 +603,7 @@ export async function buildDailyOpeningSnapshotWithCtx(
     carryForwardItems,
     readyItems,
     readiness,
-    startedOpening: existingOpening,
+    startedOpening,
     startAt: operatingDateRange.startAt,
     sourceSubjects: uniqueSourceSubjects(allItems),
     summary: {

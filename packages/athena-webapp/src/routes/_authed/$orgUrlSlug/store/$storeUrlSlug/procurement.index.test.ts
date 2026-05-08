@@ -4,6 +4,7 @@ import {
   getNextProcurementModeSearch,
   getNextProcurementPageSearch,
   getNextProcurementSelectedSkuSearch,
+  procurementSearchSchema,
 } from "./procurement.index";
 
 describe("procurement route search state", () => {
@@ -38,6 +39,15 @@ describe("procurement route search state", () => {
         "needs_action",
       ),
     ).toEqual({ page: 1, sku: "6N2Y-XEH-P6B" });
+  });
+
+  it("normalizes the removed handled mode to the default queue", () => {
+    expect(
+      procurementSearchSchema.parse({
+        page: "2",
+        procurementMode: "resolved",
+      }),
+    ).toEqual({ page: 2, procurementMode: undefined });
   });
 
   it("encodes the visible recommendation page in the URL search state", () => {

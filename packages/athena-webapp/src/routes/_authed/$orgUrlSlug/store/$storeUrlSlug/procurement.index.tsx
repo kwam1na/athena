@@ -2,10 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { ProcurementView } from "~/src/components/procurement/ProcurementView";
 
-const procurementSearchSchema = z.object({
-  procurementMode: z
-    .enum(["needs_action", "planned", "inbound", "exceptions", "resolved", "all"])
-    .optional(),
+const procurementModeSchema = z.preprocess(
+  (value) => (value === "resolved" ? undefined : value),
+  z.enum(["needs_action", "planned", "inbound", "exceptions", "all"]).optional(),
+);
+
+export const procurementSearchSchema = z.object({
+  procurementMode: procurementModeSchema,
   page: z.coerce.number().int().positive().optional(),
   sku: z.string().optional(),
 });

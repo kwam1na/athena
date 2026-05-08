@@ -155,7 +155,6 @@ const MODE_OPTIONS = [
   { label: "Planned", value: "planned" as const },
   { label: "Inbound", value: "inbound" as const },
   { label: "Exceptions", value: "exceptions" as const },
-  { label: "Handled", value: "resolved" as const },
   { label: "All", value: "all" as const },
 ] as const;
 
@@ -392,10 +391,6 @@ function isRecommendationVisible(
     );
   }
 
-  if (mode === "resolved") {
-    return recommendation.status === "resolved";
-  }
-
   return (
     recommendation.needsAction ||
     recommendation.status === "exposed" ||
@@ -437,12 +432,6 @@ function getModeEmptyStateCopy(mode: ProcurementMode) {
           "No draft, submitted, or approved purchase orders are currently planned against pressure",
         title: "No planned procurement work",
       };
-    case "resolved":
-      return {
-        description:
-          "No rows have enough stock or purchase order cover right now",
-        title: "No handled rows",
-      };
     default:
       return {
         description:
@@ -467,8 +456,6 @@ function getRecommendationCountCopy(mode: ProcurementMode, count: number) {
       return `${countCopy} need${count === 1 ? "s" : ""} action`;
     case "planned":
       return `${countCopy} planned stock item${count === 1 ? "" : "s"}`;
-    case "resolved":
-      return `${countCopy} handled stock item${count === 1 ? "" : "s"}`;
   }
 }
 
@@ -493,7 +480,7 @@ function canReceivePurchaseOrder(status: PurchaseOrderStatus) {
   return status === "ordered" || status === "partially_received";
 }
 
-function getPurchaseOrderMode(status: PurchaseOrderStatus): ProcurementMode {
+function getPurchaseOrderMode(status: PurchaseOrderStatus) {
   switch (status) {
     case "draft":
     case "submitted":
@@ -503,7 +490,7 @@ function getPurchaseOrderMode(status: PurchaseOrderStatus): ProcurementMode {
     case "partially_received":
       return "inbound";
     case "received":
-      return "resolved";
+      return null;
     case "cancelled":
       return "exceptions";
   }
@@ -735,15 +722,17 @@ export function ProcurementViewContent({
     inbound: countRecommendationsForMode(recommendations, "inbound"),
     needs_action: countRecommendationsForMode(recommendations, "needs_action"),
     planned: countRecommendationsForMode(recommendations, "planned"),
-    resolved: countRecommendationsForMode(recommendations, "resolved"),
   };
+  const resolvedRecommendationCount = recommendations.filter(
+    (recommendation) => recommendation.status === "resolved",
+  ).length;
   const summary = {
     activePurchaseOrders: activePurchaseOrders.length,
     exceptions: recommendationCounts.exceptions,
     inbound: recommendationCounts.inbound,
     needsAction: recommendationCounts.needs_action,
     planned: recommendationCounts.planned,
-    resolved: recommendationCounts.resolved,
+    resolved: resolvedRecommendationCount,
   };
   const shouldPrioritizeReorderDraft = draftLines.length > 0;
   const plannedPurchaseOrderActionCount = visibleRecommendations.reduce(
@@ -806,6 +795,9 @@ export function ProcurementViewContent({
     if (recommendation) {
       selectProductSku(recommendation);
       setScrollTargetProductSkuId(recommendation._id);
+    }
+    if (!nextMode) {
+      return;
     }
     handleModeChange(nextMode);
     if (recommendation) {

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { AnchorHTMLAttributes, ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -18,6 +18,7 @@ const mockedHooks = vi.hoisted(() => ({
 }));
 
 const mockedApi = vi.hoisted(() => ({
+  authenticateStaffCredentialForApproval: "authenticateStaffCredentialForApproval",
   getDailyOpeningSnapshot: "getDailyOpeningSnapshot",
   startStoreDay: "startStoreDay",
 }));
@@ -72,10 +73,82 @@ vi.mock("@/hooks/useProtectedAdminPageState", () => ({
   useProtectedAdminPageState: mockedHooks.useProtectedAdminPageState,
 }));
 
+vi.mock("./CommandApprovalDialog", () => ({
+  CommandApprovalDialog: ({
+    approval,
+    onApproved,
+    onAuthenticateForApproval,
+    onDismiss,
+    open,
+  }: {
+    approval: {
+      action: { key: string };
+      reason: string;
+      requiredRole: "manager";
+      subject: { id: string; label?: string; type: string };
+    };
+    onApproved: (result: {
+      approvalProofId: Id<"approvalProof">;
+      approvedByStaffProfileId: Id<"staffProfile">;
+      expiresAt: number;
+    }) => void;
+    onAuthenticateForApproval: (args: {
+      actionKey: string;
+      pinHash: string;
+      reason: string;
+      requiredRole: "manager";
+      storeId: Id<"store">;
+      subject: { id: string; label?: string; type: string };
+      username: string;
+    }) => Promise<{
+      data?: {
+        approvalProofId: Id<"approvalProof">;
+        approvedByStaffProfileId: Id<"staffProfile">;
+        expiresAt: number;
+      };
+      kind: string;
+    }>;
+    onDismiss: () => void;
+    open: boolean;
+  }) =>
+    open ? (
+      <div aria-label="Manager sign-in required" role="dialog">
+        <p>Manager sign-in required</p>
+        <button
+          onClick={async () => {
+            const result = await onAuthenticateForApproval({
+              actionKey: approval.action.key,
+              pinHash: "pin-hash",
+              reason: approval.reason,
+              requiredRole: approval.requiredRole,
+              storeId: "store-1" as Id<"store">,
+              subject: approval.subject,
+              username: "manager",
+            });
+
+            if (result.kind === "ok" && result.data) {
+              onApproved(result.data);
+            }
+          }}
+          type="button"
+        >
+          Confirm manager
+        </button>
+        <button onClick={onDismiss} type="button">
+          Cancel
+        </button>
+      </div>
+    ) : null,
+}));
+
 vi.mock("~/convex/_generated/api", () => ({
   api: {
     operations: {
       dailyOpening: mockedApi,
+      staffCredentials: {
+        authenticateStaffCredentialForApproval:
+          mockedApi.authenticateStaffCredentialForApproval,
+      },
     },
   },
 }));
@@ -246,6 +319,40 @@ describe("DailyOpeningViewContent", () => {
     expect(screen.getByRole("button", { name: /start day/i })).toBeDisabled();
   });
 
+  it("explains the store day when prior Daily Close is missing", () => {
+    renderContent({
+      ...readySnapshot,
+      blockers: [],
+      priorClose: null,
+      readyItems: [],
+      reviewItems: [
+        {
+          category: "prior_close",
+          id: "missing-prior-close",
+          key: "daily_close:prior:missing",
+          metadata: {
+            operatingDate: "2026-05-08",
+          },
+          statusLabel: "Needs review",
+          title: "Prior Daily Close not found",
+        },
+      ],
+      status: "needs_attention",
+      summary: {
+        blockerCount: 0,
+        carryForwardCount: 0,
+        readyCount: 0,
+        reviewCount: 1,
+      },
+    });
+
+    const storeDayLabel = screen.getByText("Store day being opened");
+    expect(storeDayLabel).toBeInTheDocument();
+    expect(within(storeDayLabel.closest("div")!).getByText("May 8, 2026"))
+      .toBeInTheDocument();
+    expect(screen.queryByText("Operating Date")).not.toBeInTheDocument();
+  });
+
   it("requires review and carry-forward acknowledgements before starting", async () => {
     const user = userEvent.setup();
     const onStartDay = vi.fn(async () => ok({ openingId: "opening-1" }));
@@ -305,6 +412,56 @@ describe("DailyOpeningViewContent", () => {
     ).toBeInTheDocument();
   });
 
+  it("presents manager approval before starting the store day", async () => {
+    const user = userEvent.setup();
+    const onAuthenticateForApproval = vi.fn(async () =>
+      ok({
+        approvalProofId: "proof-1" as Id<"approvalProof">,
+        approvedByStaffProfileId: "staff-manager" as Id<"staffProfile">,
+        expiresAt: 1_800_000_000_000,
+      }),
+    );
+    const onStartDay = vi.fn(async () => ok({ openingId: "opening-1" }));
+
+    renderContent(readySnapshot, {
+      onAuthenticateForApproval,
+      onStartDay,
+    });
+
+    await user.click(screen.getByRole("button", { name: /start day/i }));
+
+    expect(
+      screen.getByRole("dialog", { name: /manager sign-in required/i }),
+    ).toBeInTheDocument();
+    expect(onStartDay).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: /confirm manager/i }));
+
+    await waitFor(() => {
+      expect(onAuthenticateForApproval).toHaveBeenCalledWith({
+        actionKey: "operations.daily_opening.start_day",
+        pinHash: "pin-hash",
+        reason: "Manager approval is required to start the store day.",
+        requiredRole: "manager",
+        storeId: "store-1",
+        subject: {
+          id: "store-1:2026-05-08",
+          label: "Opening May 8, 2026",
+          type: "daily_opening",
+        },
+        username: "manager",
+      });
+      expect(onStartDay).toHaveBeenCalledWith({
+        acknowledgedItemKeys: [],
+        actorStaffProfileId: "staff-manager",
+        endAt: readySnapshot.endAt,
+        notes: "",
+        operatingDate: "2026-05-08",
+        startAt: readySnapshot.startAt,
+      });
+    });
+  });
+
   it("shows already-started state without offering a duplicate start", () => {
     renderContent({
       ...readySnapshot,
@@ -317,7 +474,15 @@ describe("DailyOpeningViewContent", () => {
     });
 
     expect(screen.getByText("Store day started")).toBeInTheDocument();
-    expect(screen.getByText(/Kofi Mensah/)).toBeInTheDocument();
+    expect(
+      screen.getAllByText(
+        "Opening handoff is complete. The store day is ready to run.",
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByText("Opening handoff complete")).toBeInTheDocument();
+    expect(screen.getByText("Started by")).toBeInTheDocument();
+    expect(screen.getByText("Kofi Mensah")).toBeInTheDocument();
+    expect(screen.getByText("Started at")).toBeInTheDocument();
     expect(screen.getByText("Morning handoff reviewed.")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /start day/i }),
