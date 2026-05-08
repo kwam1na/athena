@@ -11,6 +11,7 @@ type TableName =
   | "approvalProof"
   | "approvalRequest"
   | "dailyClose"
+  | "expenseSession"
   | "expenseTransaction"
   | "operationalEvent"
   | "operationalWorkItem"
@@ -300,6 +301,21 @@ describe("daily close backend foundation", () => {
           storeId: "store-1",
           totalValue: 9000,
           transactionNumber: "EXP-PRIOR",
+        },
+      ],
+      expenseSession: [
+        {
+          _id: "expense-session-1",
+          completedAt: Date.UTC(2026, 4, 7, 17),
+          createdAt: Date.UTC(2026, 4, 7, 16),
+          expiresAt: Date.UTC(2026, 4, 7, 17, 5),
+          registerNumber: "A3",
+          sessionNumber: "EXP-SESSION-1",
+          staffProfileId: "staff-1",
+          status: "completed",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          updatedAt: Date.UTC(2026, 4, 7, 17),
         },
       ],
       paymentAllocation: [
@@ -618,8 +634,8 @@ describe("daily close backend foundation", () => {
         completedAt: Date.UTC(2026, 4, 7, 17),
         notes: "Restocked petty cash supplies.",
         owner: "Kofi Mensah",
-        register: "Register A3",
         report: "EXP-1",
+        terminal: "Front counter terminal / Register A3",
         total: 4500,
       },
       subject: {
@@ -638,6 +654,7 @@ describe("daily close backend foundation", () => {
       currentDayCashTransactionCount: 1,
       expectedCashTotal: 39500,
       expenseStaffCount: 1,
+      expenseTransactionCount: 2,
       expenseTotal: 7000,
       netCashVariance: -2500,
       openWorkItemCount: 1,
@@ -840,6 +857,7 @@ describe("daily close backend foundation", () => {
     );
     expect(localSnapshot.summary).toMatchObject({
       expenseStaffCount: 1,
+      expenseTransactionCount: 1,
       expenseTotal: 25000,
     });
   });
