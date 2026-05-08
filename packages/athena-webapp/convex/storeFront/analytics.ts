@@ -22,6 +22,29 @@ const MAX_ANALYTICS_WORKSPACE_PRODUCTS = 10;
 const MAX_ANALYTICS_WORKSPACE_RECENT_EVENTS = 8;
 const MAX_ACTIVE_CHECKOUT_SESSIONS = 500;
 
+type StoreFrontActor =
+  | { kind: "registered"; doc: Doc<"storeFrontUser"> }
+  | { kind: "guest"; doc: Doc<"guest"> };
+
+async function getStoreFrontActor(
+  ctx: QueryCtx,
+  actorId: Id<"storeFrontUser"> | Id<"guest">,
+): Promise<StoreFrontActor | null> {
+  const storeFrontUserId = ctx.db.normalizeId("storeFrontUser", actorId);
+  if (storeFrontUserId) {
+    const doc = await ctx.db.get("storeFrontUser", storeFrontUserId);
+    return doc ? { kind: "registered", doc } : null;
+  }
+
+  const guestId = ctx.db.normalizeId("guest", actorId);
+  if (guestId) {
+    const doc = await ctx.db.get("guest", guestId);
+    return doc ? { kind: "guest", doc } : null;
+  }
+
+  return null;
+}
+
 function extractPromoCodeId(
   data: Record<string, any>,
 ): Id<"promoCode"> | undefined {
@@ -385,9 +408,9 @@ export const getWorkspaceSummary = query({
       todayAnalytics.map((item) => item.storeFrontUserId),
     );
     const shoppers = new Map<
-      string,
+      Id<"storeFrontUser"> | Id<"guest">,
       {
-        userId: string;
+        userId: Id<"storeFrontUser"> | Id<"guest">;
         totalActions: number;
         lastActive: number;
         firstSeen: number;
@@ -465,32 +488,24 @@ export const getWorkspaceSummary = query({
     const topShopperMetrics = [...shoppers.values()]
       .sort((a, b) => b.lastActive - a.lastActive)
       .slice(0, MAX_ANALYTICS_WORKSPACE_USERS);
-    const shopperDocs = await Promise.all(
-      topShopperMetrics.map(async (shopper) => {
-        const storeFrontUser = await ctx.db.get(
-          "storeFrontUser",
-          shopper.userId as Id<"storeFrontUser">,
-        );
-
-        if (storeFrontUser) {
-          return storeFrontUser;
-        }
-
-        return ctx.db.get("guest", shopper.userId as Id<"guest">);
-      }),
+    const shopperActors = await Promise.all(
+      topShopperMetrics.map((shopper) =>
+        getStoreFrontActor(ctx, shopper.userId),
+      ),
     );
 
     const topUsers = topShopperMetrics.map((shopper, index) => {
-      const user = shopperDocs[index];
+      const actor = shopperActors[index];
+      const user = actor?.doc;
       const devicePreference =
         Object.entries(shopper.deviceCounts).sort(([, a], [, b]) => b - a)[0]
           ?.[0] ?? "unknown";
 
       return {
         userId: shopper.userId,
-        email: user && "email" in user ? user.email : undefined,
+        email: user?.email,
         userType:
-          user && "storeId" in user && "email" in user
+          actor?.kind === "registered"
             ? ("Registered" as const)
             : ("Guest" as const),
         isNewUser: user ? user._creationTime > sevenDaysAgo : false,

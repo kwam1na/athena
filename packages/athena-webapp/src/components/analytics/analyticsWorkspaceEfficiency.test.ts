@@ -29,10 +29,15 @@ describe("analytics workspace query efficiency", () => {
     const schemaSource = readSource("convex/schema.ts");
 
     expect(analyticsSource).toContain("export const getWorkspaceSummary");
+    expect(analyticsSource).toContain('ctx.db.normalizeId("storeFrontUser"');
+    expect(analyticsSource).toContain('ctx.db.normalizeId("guest"');
     expect(analyticsSource).toContain(
       '.withIndex("by_storeId_hasCompletedCheckoutSession"',
     );
     expect(analyticsSource).not.toContain('ctx.db.get(shopper.userId as');
+    expect(analyticsSource).not.toContain(
+      'shopper.userId as Id<"storeFrontUser">',
+    );
     expect(schemaSource).toContain(
       '.index("by_storeId_hasCompletedCheckoutSession"',
     );
