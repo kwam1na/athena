@@ -38,6 +38,8 @@ function createInventorySnapshotQueryCtx() {
     color: new Map<string, Record<string, unknown>>([
       ["color-1", { _id: "color-1", name: "Black" }],
     ]),
+    checkoutSession: new Map<string, Record<string, unknown>>(),
+    checkoutSessionItem: new Map<string, Record<string, unknown>>(),
     inventoryHold: new Map<string, Record<string, unknown>>([
       [
         "hold-active",
@@ -540,6 +542,64 @@ describe("stock ops adjustments", () => {
         inventoryCount: 10,
         quantityAvailable: 6,
         reservedQuantity: 2,
+      }),
+    ]);
+  });
+
+  it("labels active checkout reservations without double subtracting availability", async () => {
+    const { ctx, tables } = createInventorySnapshotQueryCtx();
+
+    tables.checkoutSession.set("checkout-active", {
+      _id: "checkout-active",
+      expiresAt: 2_000,
+      hasCompletedCheckoutSession: false,
+      storeId: "store-1",
+    });
+    tables.checkoutSession.set("checkout-completed", {
+      _id: "checkout-completed",
+      expiresAt: 2_000,
+      hasCompletedCheckoutSession: true,
+      storeId: "store-1",
+    });
+    tables.checkoutSession.set("checkout-expired", {
+      _id: "checkout-expired",
+      expiresAt: 500,
+      hasCompletedCheckoutSession: false,
+      storeId: "store-1",
+    });
+    tables.checkoutSessionItem.set("checkout-item-active", {
+      _id: "checkout-item-active",
+      productSkuId: "sku-1",
+      quantity: 1,
+      sesionId: "checkout-active",
+    });
+    tables.checkoutSessionItem.set("checkout-item-completed", {
+      _id: "checkout-item-completed",
+      productSkuId: "sku-1",
+      quantity: 3,
+      sesionId: "checkout-completed",
+    });
+    tables.checkoutSessionItem.set("checkout-item-expired", {
+      _id: "checkout-item-expired",
+      productSkuId: "sku-1",
+      quantity: 5,
+      sesionId: "checkout-expired",
+    });
+
+    const rows = await listInventorySnapshotWithCtx(ctx, {
+      now: 1_000,
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        _id: "sku-1",
+        checkoutReservedQuantity: 1,
+        durableQuantityAvailable: 8,
+        inventoryCount: 10,
+        posReservedQuantity: 2,
+        quantityAvailable: 6,
+        reservedQuantity: 3,
       }),
     ]);
   });

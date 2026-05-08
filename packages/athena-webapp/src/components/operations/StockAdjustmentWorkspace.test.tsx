@@ -777,6 +777,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
           _id: "sku-held" as Id<"productSku">,
           durableQuantityAvailable: 8,
           inventoryCount: 10,
+          posReservedQuantity: 2,
           productCategory: "Hair",
           productName: "Held Closure",
           quantityAvailable: 6,
@@ -791,7 +792,32 @@ describe("StockAdjustmentWorkspaceContent", () => {
         /6 of 10 units are available to sell\. 2 reserved in POS sessions\./i,
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText("2 reserved")).toBeInTheDocument();
+    expect(screen.getByText("2 POS")).toBeInTheDocument();
+  });
+
+  it("shows active checkout reservations beside reduced availability", () => {
+    renderStockAdjustmentWorkspace({
+      inventoryItems: [
+        {
+          _id: "sku-checkout-held" as Id<"productSku">,
+          checkoutReservedQuantity: 1,
+          durableQuantityAvailable: 9,
+          inventoryCount: 10,
+          productCategory: "Hair",
+          productName: "Checkout Held Closure",
+          quantityAvailable: 9,
+          reservedQuantity: 1,
+          sku: "CHC-18",
+        },
+      ],
+    });
+
+    expect(
+      screen.getByText(
+        /9 of 10 units are available to sell\. 1 reserved in active checkout sessions\./i,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("1 checkout")).toBeInTheDocument();
   });
 
   it("formats inventory status numbers with compact k notation", () => {
