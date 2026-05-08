@@ -121,6 +121,7 @@ This index enumerates the current automated test files and ties them back to the
 
 ## Section `src`
 
+- [`src/components/analytics/analyticsWorkspaceEfficiency.test.ts`](../../src/components/analytics/analyticsWorkspaceEfficiency.test.ts)
 - [`src/components/auth/DefaultCatchBoundary.test.tsx`](../../src/components/auth/DefaultCatchBoundary.test.tsx)
 - [`src/components/auth/Login/InputOTP.test.tsx`](../../src/components/auth/Login/InputOTP.test.tsx)
 - [`src/components/auth/Login/LoginForm.test.tsx`](../../src/components/auth/Login/LoginForm.test.tsx)

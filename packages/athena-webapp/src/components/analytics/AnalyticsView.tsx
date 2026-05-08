@@ -1,4 +1,5 @@
 import { useQuery } from "convex/react";
+import { useMemo } from "react";
 import View from "../View";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
@@ -12,14 +13,11 @@ import {
   PageWorkspaceRail,
 } from "../common/PageLevelHeader";
 import { formatNumber } from "../../utils/formatNumber";
-import { Button } from "../ui/button";
 import AnalyticsCombinedUsers from "./AnalyticsCombinedUsers";
-import { Link } from "@tanstack/react-router";
 import StorefrontObservabilityPanel from "./StorefrontObservabilityPanel";
 import { Badge } from "../ui/badge";
 import {
-  AlertTriangle,
-  ArrowRight,
+  Activity,
   Eye,
   MonitorCheck,
   ShoppingBag,
@@ -28,6 +26,49 @@ import {
 
 function formatMetric(value: number | undefined) {
   return value === undefined ? "..." : formatNumber(value);
+}
+
+function AnalyticsWorkspaceSkeleton() {
+  return (
+    <View
+      hideBorder
+      hideHeaderBottomBorder
+      className="bg-background"
+      scrollMode="page"
+    >
+      <FadeIn className="container mx-auto py-layout-xl">
+        <PageWorkspace>
+          <PageLevelHeader
+            className="border-b-0 pb-0"
+            eyebrow="Storefront Ops"
+            title="Storefront activity"
+            description="Loading the latest storefront signal."
+          />
+          <PageWorkspaceGrid>
+            <PageWorkspaceMain>
+              <div className="grid gap-3 md:grid-cols-3">
+                {[0, 1, 2].map((index) => (
+                  <div
+                    key={index}
+                    className="h-36 animate-pulse rounded-lg border border-border bg-surface"
+                  />
+                ))}
+              </div>
+              <div className="h-80 animate-pulse rounded-lg border border-border bg-surface" />
+            </PageWorkspaceMain>
+            <PageWorkspaceRail>
+              {[0, 1].map((index) => (
+                <div
+                  key={index}
+                  className="h-36 animate-pulse rounded-lg border border-border bg-surface"
+                />
+              ))}
+            </PageWorkspaceRail>
+          </PageWorkspaceGrid>
+        </PageWorkspace>
+      </FadeIn>
+    </View>
+  );
 }
 
 function StorefrontSignalCard({
@@ -48,7 +89,7 @@ function StorefrontSignalCard({
           <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
             {label}
           </p>
-          <p className="font-display text-3xl font-semibold text-foreground">
+          <p className="font-numeric text-3xl font-semibold tabular-nums text-foreground">
             {formatMetric(value)}
           </p>
         </div>
@@ -63,116 +104,18 @@ function StorefrontSignalCard({
   );
 }
 
-const StoreVisitors = ({ compact = false }: { compact?: boolean }) => {
+export default function AnalyticsView() {
   const { activeStore } = useGetActiveStore();
-  const startOfDay = new Date(new Date().setHours(0, 0, 0, 0)).getTime();
-  const endOfDay = startOfDay + 24 * 60 * 60 * 1000;
+  const currentTimeMs = useMemo(() => Date.now(), []);
 
-  const uniqueVisitorsToday = useQuery(
-    api.storeFront.guest.getUniqueVisitorsForDay,
+  const summary = useQuery(
+    api.storeFront.analytics.getWorkspaceSummary,
     activeStore?._id
-      ? {
-          storeId: activeStore._id,
-          startTimeMs: startOfDay,
-          endTimeMs: endOfDay,
-        }
+      ? { storeId: activeStore._id, currentTimeMs }
       : "skip",
   );
 
-  if (compact) {
-    return (
-      <StorefrontSignalCard
-        description="Distinct people seen since opening today."
-        icon={<Users className="h-4 w-4" />}
-        label="Visitors today"
-        value={uniqueVisitorsToday}
-      />
-    );
-  }
-
-  return null;
-};
-
-const ActiveCheckoutSessions = ({ compact = false }: { compact?: boolean }) => {
-  const { activeStore } = useGetActiveStore();
-
-  const activeCheckoutSessions = useQuery(
-    api.storeFront.checkoutSession.getActiveCheckoutSessionsForStore,
-    activeStore?._id ? { storeId: activeStore._id } : "skip",
-  );
-
-  if (compact) {
-    return (
-      <div className="rounded-lg border border-border bg-surface px-layout-md py-layout-sm shadow-surface">
-        <div className="flex items-start justify-between gap-3">
-          <div className="space-y-1">
-            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              Active checkouts
-            </p>
-            <p className="font-display text-3xl font-semibold text-foreground">
-              {formatMetric(activeCheckoutSessions?.length)}
-            </p>
-          </div>
-          <div className="rounded-md border border-border bg-surface-raised p-2 text-muted-foreground">
-            <ShoppingBag className="h-4 w-4" />
-          </div>
-        </div>
-        <p className="mt-layout-sm text-sm text-muted-foreground">
-          Carts currently moving through the storefront.
-        </p>
-        <Link
-          to="/$orgUrlSlug/store/$storeUrlSlug/checkout-sessions"
-          params={(p) => ({
-            ...p,
-            orgUrlSlug: p.orgUrlSlug!,
-            storeUrlSlug: p.storeUrlSlug!,
-          })}
-        >
-          <Button variant="link" className="mt-layout-sm h-auto p-0 text-sm">
-            Review sessions <ArrowRight className="ml-1 h-3.5 w-3.5" />
-          </Button>
-        </Link>
-      </div>
-    );
-  }
-
-  return null;
-};
-
-export default function AnalyticsView() {
-  const { activeStore } = useGetActiveStore();
-
-  const analytics = useQuery(
-    api.storeFront.analytics.getAll,
-    activeStore?._id ? { storeId: activeStore._id } : "skip",
-  );
-
-  const items = analytics?.sort((a, b) => b._creationTime - a._creationTime);
-
-  if (!activeStore || !analytics || !items) return null;
-
-  const productViewCount = items.filter((item) =>
-    item.action.includes("product"),
-  ).length;
-  const customerCount = new Set(items.map((item) => item.storeFrontUserId))
-    .size;
-  const recentEvents = items.slice(0, 5);
-
-  // Enhanced view
-  // if (viewMode === "enhanced") {
-  //   return (
-  //     <View
-  //       hideBorder
-  //       hideHeaderBottomBorder
-  //       className="bg-background"
-  //       header={<Navigation />}
-  //     >
-  //       <EnhancedAnalyticsView />
-  //     </View>
-  //   );
-  // }
-
-  // Classic view
+  if (!activeStore || !summary) return <AnalyticsWorkspaceSkeleton />;
 
   return (
     <View
@@ -199,12 +142,11 @@ export default function AnalyticsView() {
                       {activeStore.name}.store
                     </Badge>
                     <h2 className="font-display text-2xl font-semibold text-foreground">
-                      Customers are browsing the storefront.
+                      Live storefront pulse
                     </h2>
                     <p className="text-sm text-muted-foreground">
-                      Start here for the live pulse. Use the detail sections
-                      below when you need to inspect specific customers,
-                      products, or journey failures.
+                      Start with current movement, then inspect shoppers,
+                      products, and journey health when the signal changes.
                     </p>
                   </div>
                   <div className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm text-muted-foreground">
@@ -218,15 +160,20 @@ export default function AnalyticsView() {
                     description="People with storefront activity in the current data set."
                     icon={<Users className="h-4 w-4" />}
                     label="Known shoppers"
-                    value={customerCount}
+                    value={summary.overview.knownShoppers}
                   />
                   <StorefrontSignalCard
                     description="Product interest captured from browsing behavior."
                     icon={<Eye className="h-4 w-4" />}
                     label="Product views"
-                    value={productViewCount}
+                    value={summary.overview.productViews}
                   />
-                  <ActiveCheckoutSessions compact />
+                  <StorefrontSignalCard
+                    description="Carts currently moving through the storefront."
+                    icon={<ShoppingBag className="h-4 w-4" />}
+                    label="Active checkouts"
+                    value={summary.overview.activeCheckoutSessions}
+                  />
                 </div>
               </section>
 
@@ -234,31 +181,45 @@ export default function AnalyticsView() {
             </PageWorkspaceMain>
 
             <PageWorkspaceRail>
-              <StoreVisitors compact />
+              <StorefrontSignalCard
+                description="Distinct shoppers seen since opening today."
+                icon={<Users className="h-4 w-4" />}
+                label="Visitors today"
+                value={summary.overview.visitorsToday}
+              />
               <section className="rounded-lg border border-border bg-surface px-layout-md py-layout-lg shadow-surface">
                 <div className="flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+                  <Activity className="h-4 w-4 text-muted-foreground" />
                   <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
                     Latest activity
                   </p>
                 </div>
                 <div className="mt-layout-md space-y-3">
-                  {recentEvents.map((item) => (
-                    <div
-                      className="border-b border-border/70 pb-3 last:border-0 last:pb-0"
-                      key={item._id}
-                    >
-                      <p className="text-sm font-medium text-foreground">
-                        {item.action.replace(/_/g, " ")}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {new Date(item._creationTime).toLocaleTimeString([], {
-                          hour: "numeric",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                    </div>
-                  ))}
+                  {summary.recentEvents.length > 0 ? (
+                    summary.recentEvents.map((item) => (
+                      <div
+                        className="border-b border-border/70 pb-3 last:border-0 last:pb-0"
+                        key={item._id}
+                      >
+                        <p className="text-sm font-medium capitalize text-foreground">
+                          {item.action.replace(/_/g, " ")}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {new Date(item._creationTime).toLocaleTimeString(
+                            [],
+                            {
+                              hour: "numeric",
+                              minute: "2-digit",
+                            },
+                          )}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      No storefront activity has been recorded yet.
+                    </p>
+                  )}
                 </div>
               </section>
             </PageWorkspaceRail>
@@ -277,8 +238,8 @@ export default function AnalyticsView() {
               </p>
             </div>
             <div className="grid gap-layout-xl xl:grid-cols-2">
-              <AnalyticsCombinedUsers items={items} />
-              <AnalyticsProducts items={items} />
+              <AnalyticsCombinedUsers items={summary.topUsers} />
+              <AnalyticsProducts items={summary.topProducts} />
             </div>
           </section>
         </PageWorkspace>
