@@ -523,7 +523,10 @@ async function loadSessionRegister(
     return null;
   }
 
-  const registerSession = await ctx.db.get("registerSession", registerSessionId);
+  const registerSession = await ctx.db.get(
+    "registerSession",
+    registerSessionId,
+  );
   if (!registerSession) {
     return {
       registerSessionId,
@@ -586,27 +589,23 @@ async function listStoreSessionsForOperationsStatus(
 
 async function buildSessionOperationsRow(
   ctx: QueryCtx,
-  session: Awaited<ReturnType<typeof listStoreSessionsForOperationsStatus>>[number],
+  session: Awaited<
+    ReturnType<typeof listStoreSessionsForOperationsStatus>
+  >[number],
   now: number,
 ) {
-  const [
-    operator,
-    terminal,
-    register,
-    customer,
-    cartItems,
-    activeHoldDetails,
-  ] = await Promise.all([
-    loadSessionOperator(ctx, session.staffProfileId),
-    loadSessionTerminal(ctx, session.terminalId),
-    loadSessionRegister(ctx, session.registerSessionId),
-    loadSessionCustomer(ctx, session),
-    loadPosSessionItems(ctx, session._id),
-    readActiveInventoryHoldDetailsForSession(ctx.db, {
-      sessionId: session._id,
-      now,
-    }),
-  ]);
+  const [operator, terminal, register, customer, cartItems, activeHoldDetails] =
+    await Promise.all([
+      loadSessionOperator(ctx, session.staffProfileId),
+      loadSessionTerminal(ctx, session.terminalId),
+      loadSessionRegister(ctx, session.registerSessionId),
+      loadSessionCustomer(ctx, session),
+      loadPosSessionItems(ctx, session._id),
+      readActiveInventoryHoldDetailsForSession(ctx.db, {
+        sessionId: session._id,
+        now,
+      }),
+    ]);
   const activeHoldQuantity = activeHoldDetails.reduce(
     (sum, hold) => sum + hold.quantity,
     0,
@@ -1229,6 +1228,11 @@ export const completeSession = mutation({
       payments: args.payments,
       recordRegisterSale: false,
       notes: args.notes,
+      submittedTotals: {
+        subtotal: args.subtotal,
+        tax: args.tax,
+        total: args.total,
+      },
     });
 
     if (transactionResult.kind === "user_error") {

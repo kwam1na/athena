@@ -6,7 +6,7 @@ export const Route = createFileRoute(
   beforeLoad: ({ params }) => {
     throw redirect({
       params,
-      to: "/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments",
+      to: "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work",
     });
   },
 });

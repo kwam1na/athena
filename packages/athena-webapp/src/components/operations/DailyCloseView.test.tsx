@@ -22,6 +22,11 @@ const mockedApi = vi.hoisted(() => ({
   getDailyCloseSnapshot: "getDailyCloseSnapshot",
 }));
 
+const mockedRouter = vi.hoisted(() => ({
+  navigate: vi.fn(),
+  search: {} as Record<string, unknown>,
+}));
+
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
     children,
@@ -54,6 +59,8 @@ vi.mock("@tanstack/react-router", () => ({
     orgUrlSlug: "wigclub",
     storeUrlSlug: "osu",
   }),
+  useNavigate: () => mockedRouter.navigate,
+  useSearch: () => mockedRouter.search,
 }));
 
 vi.mock("convex/react", () => ({
@@ -74,11 +81,16 @@ vi.mock("~/convex/_generated/api", () => ({
 }));
 
 const baseSummary = {
+  carriedOverCashTotal: 0,
+  carriedOverRegisterCount: 0,
   cashDeposited: 45000,
   cashExpected: 45000,
   carryForwardCount: 0,
+  currentDayCashTransactionCount: 2,
+  currentDayCashTotal: 45000,
   expenseTotal: 12500,
   registerCount: 2,
+  registerVarianceCount: 0,
   staffCount: 3,
   totalSales: 125500,
   transactionCount: 14,
@@ -89,13 +101,51 @@ const readySnapshot: DailyCloseSnapshot = {
   blockers: [],
   carryForwardItems: [],
   completedClose: null,
+  endAt: Date.UTC(2026, 4, 8, 4),
   operatingDate: "2026-05-07",
   readyItems: [
     {
       description: "2 register sessions reconciled.",
       id: "ready-1",
+      metadata: {
+        closedAt: Date.UTC(2026, 4, 7, 19),
+        closedBy: "Ama Boateng",
+        countedCash: 95500,
+        expectedCash: 95500,
+        openedAt: Date.UTC(2026, 4, 5, 9),
+        openedBy: "Ama Boateng",
+        operatingScope: "Carried over from prior day",
+        status: "closed",
+        terminal: "Back counter terminal",
+        variance: 0,
+      },
+      subject: {
+        id: "session-2",
+        label: "Register 2",
+        type: "register_session",
+      },
       statusLabel: "Ready",
       title: "Register closeouts complete",
+    },
+    {
+      category: "sale",
+      description: "Completed sale is included in Daily Close.",
+      id: "ready-2",
+      metadata: {
+        completedAt: Date.UTC(2026, 4, 7, 14),
+        owner: "Kofi Mensah",
+        paymentMethods: "Cash, Mobile Money",
+        terminal: "Front counter terminal / Register A1",
+        total: 49500,
+        totalPaid: 50000,
+        transaction: "TXN-1",
+      },
+      subject: {
+        id: "txn-1",
+        label: "TXN-1",
+        type: "pos_transaction",
+      },
+      title: "Completed sale",
     },
   ],
   reviewItems: [
@@ -107,6 +157,7 @@ const readySnapshot: DailyCloseSnapshot = {
     },
   ],
   status: "ready",
+  startAt: Date.UTC(2026, 4, 7, 4),
   summary: baseSummary,
 };
 
@@ -114,14 +165,79 @@ const blockedSnapshot: DailyCloseSnapshot = {
   ...readySnapshot,
   blockers: [
     {
-      description: "Close Register 1 before completing Daily Close.",
+      category: "register_session",
+      description: "Close the register session before completing Daily Close.",
       id: "blocker-1",
       link: {
-        href: "/wigclub/store/osu/cash-controls/registers/session-1",
-        label: "View drawer",
+        label: "View session",
+        params: { sessionId: "session-1" },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+      },
+      metadata: {
+        expectedCash: 40000,
+        openedAt: Date.UTC(2026, 4, 6, 20),
+        operatingScope: "Carried over from prior day",
+        status: "open",
+        terminal: "Front counter terminal",
+        variance: -20000,
+      },
+      subject: {
+        id: "session-1",
+        label: "Register 1",
+        type: "register_session",
       },
       statusLabel: "Blocks close",
-      title: "Open drawer at Register 1",
+      title: "Register session is still open",
+    },
+    {
+      category: "approval",
+      description:
+        "Resolve pending closeout approval before completing Daily Close.",
+      id: "approval-1",
+      link: {
+        label: "View approvals",
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/approvals",
+      },
+      metadata: {
+        amount: 49500,
+        approval: "Payment method correction",
+        currentMethod: "Mobile Money",
+        notes: "Customer paid cash after mobile money failed.",
+        reason: "Variance of -20000 exceeded the closeout approval threshold.",
+        register: "Register 3",
+        requestedAt: Date.UTC(2026, 4, 7, 16),
+        requestedBy: "Ato Kwamina",
+        requestedMethod: "Cash",
+        terminal: "Codex",
+        transaction: "354477",
+        transactionId: "txn-approval-1",
+      },
+      subject: {
+        id: "approval-1",
+        type: "approval_request",
+      },
+      title: "Payment method correction pending",
+    },
+    {
+      category: "pos_session",
+      description:
+        "Complete, void, or release held POS sessions before Daily Close.",
+      id: "blocker-2",
+      metadata: {
+        customer: "Ama Mensah",
+        expiresAt: 1,
+        owner: "Kofi Mensah",
+        session: "SES-194",
+        status: "held",
+        terminal: "Safari QA / Register 6",
+        total: 33500,
+      },
+      subject: {
+        id: "pos-1",
+        label: "SES-194",
+        type: "pos_session",
+      },
+      title: "POS session is still unresolved",
     },
   ],
   readyItems: [],
@@ -130,9 +246,7 @@ const blockedSnapshot: DailyCloseSnapshot = {
 
 function renderContent(
   snapshot: DailyCloseSnapshot | undefined,
-  overrides: Partial<
-    React.ComponentProps<typeof DailyCloseViewContent>
-  > = {},
+  overrides: Partial<React.ComponentProps<typeof DailyCloseViewContent>> = {},
 ) {
   return render(
     <DailyCloseViewContent
@@ -155,26 +269,78 @@ function renderContent(
 describe("DailyCloseViewContent", () => {
   beforeEach(() => {
     window.scrollTo = vi.fn();
+    mockedRouter.search = {};
     vi.clearAllMocks();
   });
 
-  it("renders a skeleton matching the workspace structure while loading", () => {
+  it("renders the workspace frame while loading", () => {
     renderContent(undefined);
 
     expect(screen.getByText("Daily Close")).toBeInTheDocument();
     expect(
-      screen.getByLabelText("Loading daily close workspace"),
-    ).toBeInTheDocument();
+      screen.queryByLabelText("Loading daily close workspace"),
+    ).not.toBeInTheDocument();
   });
 
   it("shows blocked items, links to source workflows, and disables completion", () => {
     renderContent(blockedSnapshot);
 
-    expect(screen.getByText("Open drawer at Register 1")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /view drawer/i })).toHaveAttribute(
+    expect(
+      screen.getByText("Register session is still open"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /view session/i })).toHaveAttribute(
       "href",
-      "/wigclub/store/osu/cash-controls/registers/session-1",
+      "/wigclub/store/osu/cash-controls/registers/session-1?o=%252F",
     );
+    expect(screen.getByText("Register Session")).toBeInTheDocument();
+    expect(screen.queryByText("Register 1")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Front counter terminal / Register 1"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Operating Scope")).toBeInTheDocument();
+    expect(screen.getByText("Carried over from prior day")).toBeInTheDocument();
+    expect(screen.getByText("Opened At")).toBeInTheDocument();
+    expect(screen.getByText("GH₵400")).toBeInTheDocument();
+    expect(screen.getByText("GH₵-200")).toHaveClass("text-danger");
+    expect(screen.getByText("Open")).toBeInTheDocument();
+    expect(
+      screen.getByText("Payment method correction pending"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /view approvals/i }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/operations/approvals?o=%252F",
+    );
+    expect(screen.getByText("Payment method correction")).toBeInTheDocument();
+    expect(screen.getByText("Ato Kwamina")).toBeInTheDocument();
+    expect(
+      screen.getAllByText((_, element) =>
+        Boolean(element?.textContent?.includes("Codex / Register 3")),
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getByText(
+        "Variance of GH₵-200 exceeded the closeout approval threshold",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/-20000/)).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "#354477" })).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/pos/transactions/txn-approval-1?o=%252F",
+    );
+    expect(screen.getByText("Mobile Money")).toBeInTheDocument();
+    expect(screen.getByText("Cash")).toBeInTheDocument();
+    expect(
+      screen.getByText("POS session is still unresolved"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("SES-194")).toBeInTheDocument();
+    expect(screen.getByText("Safari QA / Register 6")).toBeInTheDocument();
+    expect(screen.getByText("Kofi Mensah")).toBeInTheDocument();
+    expect(screen.getByText("Ama Mensah")).toBeInTheDocument();
+    expect(screen.getByText("GH₵335")).toBeInTheDocument();
+    expect(screen.getByText("Held")).toBeInTheDocument();
+    expect(screen.getByText("Expired At")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /complete daily close/i }),
     ).toBeDisabled();
@@ -185,13 +351,67 @@ describe("DailyCloseViewContent", () => {
 
     expect(screen.getByText("Ready to close")).toBeInTheDocument();
     expect(screen.getByText("14 transactions")).toBeInTheDocument();
+    expect(screen.getByText("2 cash transactions")).toBeInTheDocument();
+    expect(
+      screen.getByText("No registers from prior days"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("No register variances")).toBeInTheDocument();
     expect(screen.getByText("Register closeouts complete")).toBeInTheDocument();
+    const closedRegisterItem = screen
+      .getByText("Register closeouts complete")
+      .closest("article");
+    expect(closedRegisterItem).not.toBeNull();
+    expect(
+      within(closedRegisterItem as HTMLElement).getAllByText("GH₵955"),
+    ).toHaveLength(2);
+    expect(
+      within(closedRegisterItem as HTMLElement).queryByText("Variance"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(closedRegisterItem as HTMLElement).queryByText("GH₵0"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Completed sale")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "#TXN-1" })).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/pos/transactions/txn-1?o=%252F",
+    );
+    expect(
+      screen.getByText("Front counter terminal / Register A1"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Kofi Mensah")).toBeInTheDocument();
+    expect(screen.getByText("Cash, Mobile Money")).toBeInTheDocument();
+    expect(screen.getByText("Completed At")).toBeInTheDocument();
+    expect(screen.getByText("GH₵495")).toBeInTheDocument();
+    expect(screen.getByText("GH₵500")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /complete daily close/i }),
     ).toBeEnabled();
   });
 
-  it("keeps review context visible in the ready state", () => {
+  it("uses natural count grammar in summary helpers", () => {
+    renderContent({
+      ...readySnapshot,
+      summary: {
+        ...baseSummary,
+        carryForwardCount: 0,
+        carriedOverRegisterCount: 1,
+        currentDayCashTransactionCount: 0,
+        registerVarianceCount: 1,
+        staffCount: 1,
+        transactionCount: 1,
+      },
+    });
+
+    expect(screen.getByText("1 transaction")).toBeInTheDocument();
+    expect(screen.getByText("No cash transactions")).toBeInTheDocument();
+    expect(screen.getByText("1 register from a prior day")).toBeInTheDocument();
+    expect(screen.getByText("1 register variance")).toBeInTheDocument();
+    expect(screen.getByText("1 staff member involved")).toBeInTheDocument();
+  });
+
+  it("keeps review context available from the ready state", () => {
+    mockedRouter.search = { tab: "review" };
+
     renderContent(readySnapshot);
 
     const reviewSection = screen.getByRole("region", {
@@ -201,7 +421,46 @@ describe("DailyCloseViewContent", () => {
     expect(
       within(reviewSection).getByText("Small cash variance reviewed"),
     ).toBeInTheDocument();
-    expect(within(reviewSection).getByText("Reviewed")).toBeInTheDocument();
+    expect(
+      within(reviewSection).getByText("Reviewed by manager before close."),
+    ).toBeInTheDocument();
+    expect(
+      within(reviewSection).queryByText("Reviewed"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("restores the selected bucket from the URL and preserves search params when changing tabs", async () => {
+    const user = userEvent.setup();
+    mockedRouter.search = {
+      o: "%2Fwigclub%2Fstore%2Fwigclub%2Foperations",
+      tab: "ready",
+    };
+
+    renderContent(blockedSnapshot);
+
+    expect(screen.getByRole("tab", { name: /ready/i })).toHaveAttribute(
+      "data-state",
+      "active",
+    );
+
+    await user.click(screen.getByRole("tab", { name: /blocked/i }));
+
+    expect(mockedRouter.navigate).toHaveBeenCalledWith({
+      search: expect.any(Function),
+    });
+
+    const searchUpdater = mockedRouter.navigate.mock.calls[0]?.[0]
+      ?.search as (current: Record<string, unknown>) => Record<string, unknown>;
+
+    expect(
+      searchUpdater({
+        o: "%2Fwigclub%2Fstore%2Fwigclub%2Foperations",
+        tab: "ready",
+      }),
+    ).toEqual({
+      o: "%2Fwigclub%2Fstore%2Fwigclub%2Foperations",
+      tab: "blocked",
+    });
   });
 
   it("includes selected carry-forward items in completion args", async () => {
@@ -233,9 +492,11 @@ describe("DailyCloseViewContent", () => {
     await waitFor(() => {
       expect(onComplete).toHaveBeenCalledWith({
         carryForwardWorkItemIds: ["carry-1"],
+        endAt: readySnapshot.endAt,
         notes: "",
         operatingDate: "2026-05-07",
         reviewedItemKeys: ["review-1"],
+        startAt: readySnapshot.startAt,
       });
     });
   });
@@ -309,7 +570,12 @@ describe("DailyCloseView", () => {
 
     expect(mockedHooks.useQuery).toHaveBeenCalledWith(
       mockedApi.getDailyCloseSnapshot,
-      { operatingDate: expect.any(String), storeId: "store-1" },
+      {
+        endAt: expect.any(Number),
+        operatingDate: expect.any(String),
+        startAt: expect.any(Number),
+        storeId: "store-1",
+      },
     );
     expect(screen.getByText("Daily Close")).toBeInTheDocument();
   });

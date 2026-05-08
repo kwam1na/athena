@@ -46,7 +46,9 @@ let mockRegisterState:
         _id: string;
         firstName: string;
         lastName: string;
-        activeRoles?: Array<"manager" | "front_desk" | "stylist" | "technician" | "cashier">;
+        activeRoles?: Array<
+          "manager" | "front_desk" | "stylist" | "technician" | "cashier"
+        >;
       } | null;
       activeRegisterSession: {
         _id: string;
@@ -180,7 +182,8 @@ vi.mock("@/hooks/usePOSProducts", () => ({
 
 vi.mock("@/lib/pos/infrastructure/convex/catalogGateway", () => ({
   useConvexRegisterCatalog: () => mockRegisterCatalogRows,
-  useConvexRegisterCatalogAvailability: () => mockRegisterCatalogAvailabilityRows,
+  useConvexRegisterCatalogAvailability: () =>
+    mockRegisterCatalogAvailabilityRows,
 }));
 
 vi.mock("@/hooks/useDebounce", () => ({
@@ -955,9 +958,9 @@ describe("useRegisterViewModel", () => {
     expect(result.current.sessionPanel?.hasExpiredSession).toBe(false);
     expect(result.current.sessionPanel?.disableNewSession).toBe(false);
     expect(result.current.closeoutControl?.canCloseout).toBe(true);
-    expect(
-      result.current.closeoutControl?.canShowOpeningFloatCorrection,
-    ).toBe(true);
+    expect(result.current.closeoutControl?.canShowOpeningFloatCorrection).toBe(
+      true,
+    );
     expect(result.current.closeoutControl?.canCorrectOpeningFloat).toBe(true);
 
     await act(async () => {
@@ -1011,9 +1014,9 @@ describe("useRegisterViewModel", () => {
       );
     });
 
-    expect(
-      result.current.closeoutControl?.canShowOpeningFloatCorrection,
-    ).toBe(true);
+    expect(result.current.closeoutControl?.canShowOpeningFloatCorrection).toBe(
+      true,
+    );
     expect(result.current.closeoutControl?.canCorrectOpeningFloat).toBe(true);
 
     act(() => {
@@ -1339,7 +1342,9 @@ describe("useRegisterViewModel", () => {
 
   it("adds an exact in-stock catalog match once from local register search", async () => {
     mockRegisterCatalogRows = [buildRegisterCatalogRow()];
-    mockRegisterCatalogAvailabilityRows = [buildRegisterCatalogAvailabilityRow()];
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow(),
+    ];
 
     const { useRegisterViewModel } = await import("./useRegisterViewModel");
     const { result } = renderHook(() => useRegisterViewModel());
@@ -1373,6 +1378,55 @@ describe("useRegisterViewModel", () => {
     });
 
     expect(mockAddItem).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not repeat exact barcode auto-add while the first add is pending", async () => {
+    mockActiveSession = {
+      ...mockActiveSession!,
+      cartItems: [],
+    };
+    mockRegisterCatalogRows = [buildRegisterCatalogRow()];
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow({ quantityAvailable: 1 }),
+    ];
+    const pendingAdd = deferred<ReturnType<typeof ok>>();
+    mockAddItem.mockReturnValueOnce(pendingAdd.promise);
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result, rerender } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("1234567890123");
+    });
+
+    await waitFor(() => expect(mockAddItem).toHaveBeenCalledTimes(1));
+    expect(result.current.cart.items).toEqual([
+      expect.objectContaining({
+        name: "Deep Wave",
+        quantity: 1,
+        skuId: "sku-2",
+      }),
+    ]);
+
+    rerender();
+
+    expect(mockAddItem).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      pendingAdd.resolve(
+        ok({
+          itemId: "item-2" as Id<"posSessionItem">,
+          expiresAt: Date.now() + 60_000,
+        }),
+      );
+      await pendingAdd.promise;
+    });
   });
 
   it("keeps out-of-stock exact catalog matches visible without auto-adding", async () => {
@@ -1445,7 +1499,9 @@ describe("useRegisterViewModel", () => {
 
   it("adds an exact in-stock SKU match on submit without auto-adding first", async () => {
     mockRegisterCatalogRows = [buildRegisterCatalogRow()];
-    mockRegisterCatalogAvailabilityRows = [buildRegisterCatalogAvailabilityRow()];
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow(),
+    ];
 
     const { useRegisterViewModel } = await import("./useRegisterViewModel");
     const { result } = renderHook(() => useRegisterViewModel());
@@ -1705,9 +1761,9 @@ describe("useRegisterViewModel", () => {
     expect(result.current.drawerGate?.mode).toBe("initialSetup");
     expect(result.current.drawerGate?.canOpenDrawer).toBe(false);
     expect(result.current.drawerGate?.canOpenCashControls).toBe(false);
-    expect(
-      result.current.closeoutControl?.canShowOpeningFloatCorrection,
-    ).toBe(false);
+    expect(result.current.closeoutControl?.canShowOpeningFloatCorrection).toBe(
+      false,
+    );
     expect(result.current.closeoutControl?.canCorrectOpeningFloat).toBe(false);
     expect(result.current.productEntry.canQuickAddProduct).toBe(false);
   });
@@ -2326,7 +2382,9 @@ describe("useRegisterViewModel", () => {
   });
 
   it("rolls back optimistic quantity changes when the server update fails", async () => {
-    let resolveAddItem: (value: ReturnType<typeof userError>) => void = () => {};
+    let resolveAddItem: (
+      value: ReturnType<typeof userError>,
+    ) => void = () => {};
     mockAddItem.mockReturnValueOnce(
       new Promise((resolve) => {
         resolveAddItem = resolve as typeof resolveAddItem;
@@ -2368,7 +2426,9 @@ describe("useRegisterViewModel", () => {
   });
 
   it("rolls back optimistic product selections when the server update fails", async () => {
-    let resolveAddItem: (value: ReturnType<typeof userError>) => void = () => {};
+    let resolveAddItem: (
+      value: ReturnType<typeof userError>,
+    ) => void = () => {};
     mockAddItem.mockReturnValueOnce(
       new Promise((resolve) => {
         resolveAddItem = resolve as typeof resolveAddItem;
@@ -2434,7 +2494,9 @@ describe("useRegisterViewModel", () => {
   });
 
   it("rolls back optimistic existing product selections when the server update fails", async () => {
-    let resolveAddItem: (value: ReturnType<typeof userError>) => void = () => {};
+    let resolveAddItem: (
+      value: ReturnType<typeof userError>,
+    ) => void = () => {};
     mockAddItem.mockReturnValueOnce(
       new Promise((resolve) => {
         resolveAddItem = resolve as typeof resolveAddItem;
@@ -2488,7 +2550,9 @@ describe("useRegisterViewModel", () => {
   });
 
   it("rolls back optimistic remove-to-zero changes when remove fails", async () => {
-    let resolveRemoveItem: (value: ReturnType<typeof userError>) => void = () => {};
+    let resolveRemoveItem: (
+      value: ReturnType<typeof userError>,
+    ) => void = () => {};
     mockRemoveItem.mockReturnValueOnce(
       new Promise((resolve) => {
         resolveRemoveItem = resolve as typeof resolveRemoveItem;
@@ -2569,7 +2633,9 @@ describe("useRegisterViewModel", () => {
   });
 
   it("rolls back optimistic cart item removals when remove fails", async () => {
-    let resolveRemoveItem: (value: ReturnType<typeof userError>) => void = () => {};
+    let resolveRemoveItem: (
+      value: ReturnType<typeof userError>,
+    ) => void = () => {};
     mockRemoveItem.mockReturnValueOnce(
       new Promise((resolve) => {
         resolveRemoveItem = resolve as typeof resolveRemoveItem;
@@ -2648,7 +2714,9 @@ describe("useRegisterViewModel", () => {
   });
 
   it("rolls back optimistic clear-cart removals when bulk removal fails", async () => {
-    let resolveClearCart: (value: ReturnType<typeof userError>) => void = () => {};
+    let resolveClearCart: (
+      value: ReturnType<typeof userError>,
+    ) => void = () => {};
     mockReleaseSessionInventoryHoldsAndDeleteItems.mockReturnValueOnce(
       new Promise((resolve) => {
         resolveClearCart = resolve as typeof resolveClearCart;
@@ -2895,9 +2963,7 @@ describe("useRegisterViewModel", () => {
       await result.current.cart.onClearCart();
     });
 
-    expect(
-      mockReleaseSessionInventoryHoldsAndDeleteItems,
-    ).toHaveBeenCalledWith(
+    expect(mockReleaseSessionInventoryHoldsAndDeleteItems).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: "session-1",
         staffProfileId: "staff-1",

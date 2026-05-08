@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import {
@@ -15,8 +15,10 @@ type TableName =
   | "operationalWorkItem"
   | "paymentAllocation"
   | "posSession"
+  | "posTerminal"
   | "posTransaction"
   | "registerSession"
+  | "staffProfile"
   | "store";
 
 type Row = Record<string, unknown> & { _id: string };
@@ -24,7 +26,11 @@ type Row = Record<string, unknown> & { _id: string };
 function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
   const tables = new Map<TableName, Map<string, Row>>();
   const inserts: Array<{ table: TableName; value: Row }> = [];
-  const patches: Array<{ id: string; table: TableName; value: Record<string, unknown> }> = [];
+  const patches: Array<{
+    id: string;
+    table: TableName;
+    value: Record<string, unknown>;
+  }> = [];
 
   const tableFor = (table: TableName) => {
     if (!tables.has(table)) {
@@ -40,21 +46,35 @@ function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
   });
 
   const query = (table: TableName) => {
-    const filters: Array<[string, unknown | { gte?: number; lt?: number; lte?: number }]> = [];
+    const filters: Array<
+      [string, unknown | { gte?: number; lt?: number; lte?: number }]
+    > = [];
     let sortDirection: "asc" | "desc" = "asc";
     const filteredRows = () => {
       const rows = Array.from(tableFor(table).values()).filter((row) =>
         filters.every(([field, value]) => {
           if (value && typeof value === "object" && !Array.isArray(value)) {
-            if ("gte" in value && typeof value.gte === "number" && Number(row[field]) < value.gte) {
+            if (
+              "gte" in value &&
+              typeof value.gte === "number" &&
+              Number(row[field]) < value.gte
+            ) {
               return false;
             }
 
-            if ("lt" in value && typeof value.lt === "number" && Number(row[field]) >= value.lt) {
+            if (
+              "lt" in value &&
+              typeof value.lt === "number" &&
+              Number(row[field]) >= value.lt
+            ) {
               return false;
             }
 
-            if ("lte" in value && typeof value.lte === "number" && Number(row[field]) > value.lte) {
+            if (
+              "lte" in value &&
+              typeof value.lte === "number" &&
+              Number(row[field]) > value.lte
+            ) {
               return false;
             }
 
@@ -68,7 +88,9 @@ function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
       return rows.sort((left, right) => {
         const leftValue = Number(left.createdAt ?? left.completedAt ?? 0);
         const rightValue = Number(right.createdAt ?? right.completedAt ?? 0);
-        return sortDirection === "desc" ? rightValue - leftValue : leftValue - rightValue;
+        return sortDirection === "desc"
+          ? rightValue - leftValue
+          : leftValue - rightValue;
       });
     };
 
@@ -136,7 +158,11 @@ function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
       inserts.push({ table, value: row });
       return id;
     },
-    async patch(tableOrId: string, maybeIdOrPatch: string | Record<string, unknown>, maybePatch?: Record<string, unknown>) {
+    async patch(
+      tableOrId: string,
+      maybeIdOrPatch: string | Record<string, unknown>,
+      maybePatch?: Record<string, unknown>,
+    ) {
       const [table, id, patch] =
         maybePatch === undefined
           ? findTableById(tableOrId, maybeIdOrPatch as Record<string, unknown>)
@@ -153,7 +179,10 @@ function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
     query,
   };
 
-  function findTableById(id: string, patch: Record<string, unknown>): [TableName, string, Record<string, unknown>] {
+  function findTableById(
+    id: string,
+    patch: Record<string, unknown>,
+  ): [TableName, string, Record<string, unknown>] {
     for (const [tableName, table] of tables.entries()) {
       if (table.has(id)) {
         return [tableName, id, patch];
@@ -176,18 +205,35 @@ const store = {
 };
 
 describe("daily close backend foundation", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("classifies blockers, review items, carry-forward items, ready items, and summary totals", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 7, 19));
+
     const { db } = createDb({
       approvalRequest: [
         {
           _id: "approval-1",
-          createdAt: 3,
+          createdAt: Date.UTC(2026, 4, 7, 16),
+          metadata: {
+            amount: 12000,
+            paymentMethod: "cash",
+            previousPaymentMethod: "mobile_money",
+            transactionId: "txn-1",
+            transactionNumber: "TXN-1",
+          },
+          notes: "Customer paid cash after mobile money failed.",
+          reason:
+            "Manager approval is required to correct a completed transaction payment method.",
           registerSessionId: "register-closing",
-          requestType: "variance_review",
+          requestedByStaffProfileId: "staff-1",
+          requestType: "payment_method_correction",
           status: "pending",
           storeId: "store-1",
-          subjectId: "register-closing",
-          subjectType: "register_session",
+          subjectId: "txn-1",
+          subjectType: "pos_transaction",
         },
       ],
       operationalWorkItem: [
@@ -220,28 +266,86 @@ describe("daily close backend foundation", () => {
       ],
       posSession: [
         {
-          _id: "pos-held",
-          createdAt: 2,
-          expiresAt: Date.UTC(2026, 4, 7, 20),
-          sessionNumber: "SES-1",
+          _id: "pos-expired-held",
+          createdAt: 1,
+          expiresAt: Date.UTC(2026, 4, 7, 18),
+          sessionNumber: "SES-expired",
           status: "held",
           storeId: "store-1",
           terminalId: "terminal-1",
+          updatedAt: 1,
+        },
+        {
+          _id: "pos-held",
+          customerInfo: {
+            name: "Ama Mensah",
+          },
+          createdAt: 2,
+          expiresAt: Date.UTC(2026, 4, 7, 20),
+          registerNumber: "A1",
+          sessionNumber: "SES-1",
+          staffProfileId: "staff-1",
+          status: "held",
+          storeId: "store-1",
+          total: 33500,
+          terminalId: "terminal-1",
           updatedAt: 2,
+        },
+      ],
+      posTerminal: [
+        {
+          _id: "terminal-1",
+          displayName: "Front counter terminal",
+          storeId: "store-1",
+        },
+      ],
+      staffProfile: [
+        {
+          _id: "staff-1",
+          firstName: "Kofi",
+          fullName: "Kofi Mensah",
+          lastName: "Mensah",
+          organizationId: "org-1",
+          status: "active",
+          storeId: "store-1",
         },
       ],
       posTransaction: [
         {
           _id: "txn-1",
+          changeGiven: 500,
           completedAt: Date.UTC(2026, 4, 7, 14),
-          payments: [{ amount: 12000, method: "cash", timestamp: 1 }],
+          customerInfo: {
+            phone: "0240000000",
+          },
+          payments: [
+            { amount: 10000, method: "cash", timestamp: 1 },
+            { amount: 2500, method: "mobile_money", timestamp: 2 },
+          ],
+          registerNumber: "A1",
+          registerSessionId: "register-open",
+          staffProfileId: "staff-1",
           status: "completed",
           storeId: "store-1",
           subtotal: 12000,
           tax: 0,
           total: 12000,
-          totalPaid: 12000,
+          terminalId: "terminal-1",
+          totalPaid: 12500,
           transactionNumber: "TXN-1",
+        },
+        {
+          _id: "txn-prior-day",
+          completedAt: Date.UTC(2026, 4, 6, 21),
+          payments: [{ amount: 9000, method: "cash", timestamp: 1 }],
+          registerSessionId: "register-open",
+          status: "completed",
+          storeId: "store-1",
+          subtotal: 9000,
+          tax: 0,
+          total: 9000,
+          totalPaid: 9000,
+          transactionNumber: "TXN-PRIOR",
         },
         {
           _id: "txn-void",
@@ -259,34 +363,40 @@ describe("daily close backend foundation", () => {
       registerSession: [
         {
           _id: "register-open",
-          expectedCash: 10000,
-          openedAt: Date.UTC(2026, 4, 7, 9),
+          expectedCash: 19500,
+          openedAt: Date.UTC(2026, 4, 6, 20),
           openingFloat: 10000,
           registerNumber: "A1",
           status: "open",
           storeId: "store-1",
+          terminalId: "terminal-1",
         },
         {
           _id: "register-closing",
           countedCash: 8000,
           expectedCash: 10000,
+          openedByStaffProfileId: "staff-1",
           openedAt: Date.UTC(2026, 4, 7, 10),
           openingFloat: 10000,
           registerNumber: "A2",
           status: "closing",
           storeId: "store-1",
+          terminalId: "terminal-1",
           variance: -2000,
         },
         {
           _id: "register-closed",
           closedAt: Date.UTC(2026, 4, 7, 19),
+          closedByStaffProfileId: "staff-1",
           countedCash: 9500,
           expectedCash: 10000,
+          openedByStaffProfileId: "staff-1",
           openedAt: Date.UTC(2026, 4, 7, 10),
           openingFloat: 10000,
           registerNumber: "A3",
           status: "closed",
           storeId: "store-1",
+          terminalId: "terminal-1",
           variance: -500,
         },
       ],
@@ -305,17 +415,201 @@ describe("daily close backend foundation", () => {
       "approval_request:approval-1:pending",
       "pos_session:pos-held:held",
     ]);
-    expect(snapshot.reviewItems.map((item) => item.key)).toContain("register_session:register-closed:variance");
-    expect(snapshot.reviewItems.map((item) => item.key)).toContain("pos_transaction:txn-void:void");
+    expect(snapshot.blockers[0].metadata).toMatchObject({
+      openedAt: Date.UTC(2026, 4, 6, 20),
+      operatingScope: "Carried over from prior day",
+      terminal: "Front counter terminal",
+    });
+    expect(snapshot.blockers[1].metadata).toMatchObject({
+      countedCash: 8000,
+      expectedCash: 10000,
+      openedAt: Date.UTC(2026, 4, 7, 10),
+      openedBy: "Kofi Mensah",
+      operatingScope: "Opened today",
+      status: "closing",
+      terminal: "Front counter terminal",
+      variance: -2000,
+    });
+    expect(snapshot.blockers[0].link).toEqual({
+      label: "View session",
+      params: { sessionId: "register-open" },
+      to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+    });
+    expect(snapshot.blockers[2]).toMatchObject({
+      link: {
+        label: "View approvals",
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/approvals",
+      },
+      metadata: {
+        amount: 12000,
+        approval: "Payment method correction",
+        currentMethod: "Mobile Money",
+        notes: "Customer paid cash after mobile money failed.",
+        reason:
+          "Manager approval is required to correct a completed transaction payment method.",
+        register: "Register A2",
+        requestedAt: Date.UTC(2026, 4, 7, 16),
+        requestedBy: "Kofi Mensah",
+        requestedMethod: "Cash",
+        transactionId: "txn-1",
+        transaction: "TXN-1",
+      },
+      title: "Payment method correction pending",
+    });
+    expect(snapshot.blockers[3].metadata).toMatchObject({
+      customer: "Ama Mensah",
+      expiresAt: Date.UTC(2026, 4, 7, 20),
+      owner: "Kofi Mensah",
+      session: "SES-1",
+      status: "held",
+      terminal: "Front counter terminal / Register A1",
+      total: 33500,
+    });
+    expect(snapshot.reviewItems.map((item) => item.key)).toContain(
+      "register_session:register-closed:variance",
+    );
+    expect(
+      snapshot.reviewItems.find(
+        (item) => item.key === "register_session:register-closed:variance",
+      )?.metadata,
+    ).toMatchObject({
+      closedAt: Date.UTC(2026, 4, 7, 19),
+      countedCash: 9500,
+      expectedCash: 10000,
+      openedAt: Date.UTC(2026, 4, 7, 10),
+      operatingScope: "Opened today",
+      status: "closed",
+      terminal: "Front counter terminal",
+      variance: -500,
+    });
+    expect(snapshot.reviewItems.map((item) => item.key)).toContain(
+      "pos_transaction:txn-void:void",
+    );
+    expect(
+      snapshot.reviewItems.find(
+        (item) => item.key === "pos_transaction:txn-void:void",
+      )?.metadata,
+    ).toMatchObject({
+      completedAt: Date.UTC(2026, 4, 7, 15),
+      paymentMethods: "Card",
+      total: 5000,
+      totalPaid: 5000,
+      transaction: "TXN-2",
+    });
     expect(snapshot.carryForwardItems).toHaveLength(1);
-    expect(snapshot.readyItems.map((item) => item.key)).toContain("pos_transaction:txn-1:completed");
+    expect(snapshot.readyItems.map((item) => item.key)).toContain(
+      "pos_transaction:txn-1:completed",
+    );
+    expect(
+      snapshot.readyItems.find(
+        (item) => item.key === "pos_transaction:txn-1:completed",
+      )?.metadata,
+    ).toMatchObject({
+      changeGiven: 500,
+      completedAt: Date.UTC(2026, 4, 7, 14),
+      customer: "0240000000",
+      owner: "Kofi Mensah",
+      paymentMethods: "Cash, Mobile Money",
+      terminal: "Front counter terminal / Register A1",
+      total: 12000,
+      totalPaid: 12500,
+      transaction: "TXN-1",
+    });
+    expect(
+      snapshot.readyItems.find(
+        (item) => item.key === "register_session:register-closed:closed",
+      )?.metadata,
+    ).toMatchObject({
+      closedAt: Date.UTC(2026, 4, 7, 19),
+      closedBy: "Kofi Mensah",
+      countedCash: 9500,
+      expectedCash: 10000,
+      openedAt: Date.UTC(2026, 4, 7, 10),
+      openedBy: "Kofi Mensah",
+      operatingScope: "Opened today",
+      status: "closed",
+      terminal: "Front counter terminal",
+      variance: -500,
+    });
+    expect(
+      snapshot.readyItems.find(
+        (item) => item.key === "pos_transaction:txn-1:completed",
+      )?.link,
+    ).toEqual({
+      label: "View transaction",
+      params: { transactionId: "txn-1" },
+      to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId",
+    });
     expect(snapshot.summary).toMatchObject({
+      carriedOverCashTotal: 10000,
+      carriedOverRegisterCount: 1,
       cashDepositTotal: 3000,
       closedRegisterSessionCount: 1,
+      currentDayCashTotal: 9500,
+      currentDayCashTransactionCount: 1,
+      expectedCashTotal: 39500,
+      netCashVariance: -2500,
       openWorkItemCount: 1,
       pendingApprovalCount: 1,
+      registerCount: 3,
+      registerVarianceCount: 2,
       salesTotal: 12000,
+      transactionCount: 1,
       voidedTransactionCount: 1,
+    });
+    expect(snapshot.readyItems.map((item) => item.key)).not.toContain(
+      "pos_transaction:txn-prior-day:completed",
+    );
+  });
+
+  it("uses the supplied operating-day range for same-local-day transactions after UTC midnight", async () => {
+    const { db } = createDb({
+      posTransaction: [
+        {
+          _id: "txn-after-utc-midnight",
+          changeGiven: 5000,
+          completedAt: Date.UTC(2026, 4, 8, 1, 3),
+          payments: [{ amount: 30000, method: "cash", timestamp: 1 }],
+          status: "completed",
+          storeId: "store-1",
+          subtotal: 25000,
+          tax: 0,
+          total: 25000,
+          totalPaid: 30000,
+          transactionNumber: "022332",
+        },
+      ],
+      store: [store],
+    });
+
+    const utcSnapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      {
+        operatingDate: "2026-05-07",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+    const localSnapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      {
+        endAt: Date.UTC(2026, 4, 8, 4),
+        operatingDate: "2026-05-07",
+        startAt: Date.UTC(2026, 4, 7, 4),
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(utcSnapshot.readyItems.map((item) => item.key)).not.toContain(
+      "pos_transaction:txn-after-utc-midnight:completed",
+    );
+    expect(localSnapshot.readyItems.map((item) => item.key)).toContain(
+      "pos_transaction:txn-after-utc-midnight:completed",
+    );
+    expect(localSnapshot.summary).toMatchObject({
+      currentDayCashTotal: 25000,
+      currentDayCashTransactionCount: 1,
+      salesTotal: 25000,
+      transactionCount: 1,
     });
   });
 
@@ -386,7 +680,10 @@ describe("daily close backend foundation", () => {
       kind: "user_error",
       error: {
         code: "precondition_failed",
-        metadata: { reviewItemCount: 1, unreviewedItemKeys: ["pos_transaction:txn-void:void"] },
+        metadata: {
+          reviewItemCount: 1,
+          unreviewedItemKeys: ["pos_transaction:txn-void:void"],
+        },
       },
     });
   });
@@ -430,7 +727,9 @@ describe("daily close backend foundation", () => {
         actorStaffProfileId: "staff-1" as Id<"staffProfile">,
         actorUserId: "user-1" as Id<"athenaUser">,
         carryForwardWorkItemIds: ["work-existing" as Id<"operationalWorkItem">],
-        createCarryForwardWorkItems: [{ notes: "Check display case.", title: "Count front display" }],
+        createCarryForwardWorkItems: [
+          { notes: "Check display case.", title: "Count front display" },
+        ],
         notes: "Close reviewed.",
         operatingDate: "2026-05-07",
         storeId: "store-1" as Id<"store">,
@@ -452,17 +751,20 @@ describe("daily close backend foundation", () => {
         },
       },
     });
-    expect(result.kind === "ok" ? result.data.dailyClose.carryForwardWorkItemIds : []).toEqual([
-      "work-existing",
-      "operationalWorkItem-2",
-    ]);
+    expect(
+      result.kind === "ok"
+        ? result.data.dailyClose.carryForwardWorkItemIds
+        : [],
+    ).toEqual(["work-existing", "operationalWorkItem-2"]);
     expect(inserts.map((insert) => insert.table)).toEqual([
       "operationalWorkItem",
       "dailyClose",
       "operationalEvent",
       "operationalEvent",
     ]);
-    expect(inserts.find((insert) => insert.table === "operationalEvent")?.value).toMatchObject({
+    expect(
+      inserts.find((insert) => insert.table === "operationalEvent")?.value,
+    ).toMatchObject({
       eventType: "daily_close_completed",
       subjectType: "daily_close",
     });
@@ -479,7 +781,13 @@ describe("daily close backend foundation", () => {
           isCurrent: false,
           operatingDate: "2026-05-06",
           organizationId: "org-1",
-          readiness: { blockerCount: 0, carryForwardCount: 1, readyCount: 1, reviewCount: 0, status: "ready" },
+          readiness: {
+            blockerCount: 0,
+            carryForwardCount: 1,
+            readyCount: 1,
+            reviewCount: 0,
+            status: "ready",
+          },
           sourceSubjects: [],
           status: "completed",
           storeId: "store-1",
@@ -509,6 +817,8 @@ describe("daily close backend foundation", () => {
     );
 
     expect(context.priorClose?._id).toBe("daily-close-1");
-    expect(context.carryForwardWorkItems.map((item) => item._id)).toEqual(["work-1"]);
+    expect(context.carryForwardWorkItems.map((item) => item._id)).toEqual([
+      "work-1",
+    ]);
   });
 });

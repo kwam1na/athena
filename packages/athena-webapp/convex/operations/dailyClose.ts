@@ -1,4 +1,9 @@
-import { mutation, query, type MutationCtx, type QueryCtx } from "../_generated/server";
+import {
+  mutation,
+  query,
+  type MutationCtx,
+  type QueryCtx,
+} from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { commandResultValidator } from "../lib/commandResultValidators";
@@ -8,6 +13,7 @@ import { ok, userError, type CommandResult } from "../../shared/commandResult";
 
 const DAILY_CLOSE_QUERY_LIMIT = 200;
 const DAY_MS = 24 * 60 * 60 * 1000;
+const MAX_OPERATING_DATE_RANGE_MS = 36 * 60 * 60 * 1000;
 const DAILY_CLOSE_SUBJECT_TYPE = "daily_close";
 const DAILY_CLOSE_CARRY_FORWARD_TYPE = "daily_close_carry_forward";
 const TERMINAL_WORK_ITEM_STATUSES = new Set(["completed", "cancelled"]);
@@ -27,6 +33,13 @@ type DailyCloseItem = {
     id: string;
     label?: string;
   };
+  link?: {
+    href?: string;
+    label?: string;
+    params?: Record<string, string>;
+    search?: Record<string, string>;
+    to?: string;
+  };
   metadata?: Record<string, unknown>;
 };
 
@@ -41,13 +54,19 @@ type DailyCloseReadiness = {
 };
 
 type DailyCloseSummary = {
+  carriedOverCashTotal: number;
+  carriedOverRegisterCount: number;
   cashDepositTotal: number;
   closedRegisterSessionCount: number;
+  currentDayCashTotal: number;
+  currentDayCashTransactionCount: number;
   expectedCashTotal: number;
   expenseTotal: number;
   netCashVariance: number;
   openWorkItemCount: number;
   pendingApprovalCount: number;
+  registerCount: number;
+  registerVarianceCount: number;
   salesTotal: number;
   transactionCount: number;
   voidedTransactionCount: number;
@@ -99,9 +118,11 @@ type CompleteDailyCloseArgs = {
     metadata?: Record<string, unknown>;
   }>;
   notes?: string;
+  endAt?: number;
   operatingDate: string;
   organizationId?: Id<"organization">;
   reviewedItemKeys?: string[];
+  startAt?: number;
   storeId: Id<"store">;
 };
 
@@ -133,15 +154,157 @@ function safeOperatingDateRange(operatingDate: string) {
   };
 }
 
+function isValidOperatingDateRange(startAt: unknown, endAt: unknown) {
+  return (
+    typeof startAt === "number" &&
+    typeof endAt === "number" &&
+    Number.isFinite(startAt) &&
+    Number.isFinite(endAt) &&
+    endAt > startAt &&
+    endAt - startAt <= MAX_OPERATING_DATE_RANGE_MS
+  );
+}
+
+function resolveOperatingDateRange(args: {
+  endAt?: number;
+  operatingDate: string;
+  startAt?: number;
+}) {
+  const dateRange = safeOperatingDateRange(args.operatingDate);
+
+  if (!dateRange) {
+    return null;
+  }
+
+  if (isValidOperatingDateRange(args.startAt, args.endAt)) {
+    return {
+      startAt: args.startAt!,
+      endAt: args.endAt!,
+    };
+  }
+
+  return dateRange;
+}
+
 function isInRange(value: unknown, startAt: number, endAt: number) {
   return typeof value === "number" && value >= startAt && value < endAt;
 }
 
-function registerSessionLabel(session: Pick<Doc<"registerSession">, "registerNumber">) {
-  return session.registerNumber ? `Register ${session.registerNumber}` : "Register";
+function registerSessionLabel(
+  session: Pick<Doc<"registerSession">, "registerNumber">,
+) {
+  return session.registerNumber
+    ? `Register ${session.registerNumber}`
+    : "Register";
 }
 
-function asCarryForwardItem(workItem: Doc<"operationalWorkItem">): DailyCloseItem {
+function formatPaymentMethodLabel(method: string) {
+  return method
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function transactionPaymentSummary(
+  transaction: Pick<Doc<"posTransaction">, "paymentMethod" | "payments">,
+) {
+  if (transaction.payments.length > 0) {
+    return Array.from(
+      new Set(
+        transaction.payments.map((payment) =>
+          formatPaymentMethodLabel(payment.method),
+        ),
+      ),
+    ).join(", ");
+  }
+
+  return transaction.paymentMethod
+    ? formatPaymentMethodLabel(transaction.paymentMethod)
+    : undefined;
+}
+
+function nonZeroVarianceMetadata(variance?: number) {
+  return typeof variance === "number" && variance !== 0 ? { variance } : {};
+}
+
+function approvalRequestTypeLabel(requestType: string) {
+  if (requestType === "payment_method_correction") {
+    return "Payment method correction";
+  }
+
+  if (requestType === "variance_review") {
+    return "Register closeout variance review";
+  }
+
+  if (requestType === "inventory_adjustment_review") {
+    return "Stock adjustment review";
+  }
+
+  return formatPaymentMethodLabel(requestType);
+}
+
+async function buildTerminalLabelsById(
+  ctx: Pick<QueryCtx, "db">,
+  terminalIds: Array<Id<"posTerminal"> | null | undefined>,
+) {
+  const uniqueTerminalIds = Array.from(
+    new Set(terminalIds.filter(Boolean) as Id<"posTerminal">[]),
+  );
+  const terminalEntries = await Promise.all(
+    uniqueTerminalIds.map(async (terminalId) => {
+      const terminal = await ctx.db.get("posTerminal", terminalId);
+      return [
+        terminalId,
+        trimOptional(terminal?.displayName) ?? terminalId,
+      ] as const;
+    }),
+  );
+
+  return new Map(terminalEntries);
+}
+
+async function buildStaffNamesById(
+  ctx: Pick<QueryCtx, "db">,
+  staffProfileIds: Array<Id<"staffProfile"> | null | undefined>,
+) {
+  const uniqueStaffProfileIds = Array.from(
+    new Set(staffProfileIds.filter(Boolean) as Id<"staffProfile">[]),
+  );
+  const staffEntries = await Promise.all(
+    uniqueStaffProfileIds.map(async (staffProfileId) => {
+      const staffProfile = await ctx.db.get("staffProfile", staffProfileId);
+      return [
+        staffProfileId,
+        trimOptional(staffProfile?.fullName) ?? "Unknown operator",
+      ] as const;
+    }),
+  );
+
+  return new Map(staffEntries);
+}
+
+async function buildRegisterSessionsById(
+  ctx: Pick<QueryCtx, "db">,
+  registerSessionIds: Array<Id<"registerSession"> | null | undefined>,
+) {
+  const uniqueRegisterSessionIds = Array.from(
+    new Set(registerSessionIds.filter(Boolean) as Id<"registerSession">[]),
+  );
+  const registerSessionEntries = await Promise.all(
+    uniqueRegisterSessionIds.map(async (registerSessionId) => {
+      const registerSession = await ctx.db.get(
+        "registerSession",
+        registerSessionId,
+      );
+      return [registerSessionId, registerSession] as const;
+    }),
+  );
+
+  return new Map(registerSessionEntries);
+}
+
+function asCarryForwardItem(
+  workItem: Doc<"operationalWorkItem">,
+): DailyCloseItem {
   return {
     key: `operational_work_item:${workItem._id}:carry_forward`,
     severity: "carry_forward",
@@ -262,7 +425,11 @@ async function listPendingCloseoutApprovals(
   );
 }
 
-async function listOpenPosSessions(ctx: Pick<QueryCtx, "db">, storeId: Id<"store">) {
+async function listOpenPosSessions(
+  ctx: Pick<QueryCtx, "db">,
+  storeId: Id<"store">,
+) {
+  const now = Date.now();
   const sessions = await Promise.all(
     OPEN_POS_SESSION_STATUSES.map((status) =>
       ctx.db
@@ -274,7 +441,9 @@ async function listOpenPosSessions(ctx: Pick<QueryCtx, "db">, storeId: Id<"store
     ),
   );
 
-  return sessions.flat();
+  return sessions
+    .flat()
+    .filter((session) => !session.expiresAt || session.expiresAt >= now);
 }
 
 async function listOpenOperationalWorkItems(
@@ -372,6 +541,35 @@ function buildPaymentTotals(transactions: Array<Doc<"posTransaction">>) {
   }));
 }
 
+function transactionCashDelta(
+  transaction: Pick<Doc<"posTransaction">, "changeGiven" | "payments">,
+) {
+  const cashTendered = transaction.payments.reduce(
+    (sum, payment) => (payment.method === "cash" ? sum + payment.amount : sum),
+    0,
+  );
+
+  return Math.max(0, cashTendered - (transaction.changeGiven ?? 0));
+}
+
+function cashDeltasByRegisterSessionId(
+  transactions: Array<Doc<"posTransaction">>,
+) {
+  const totals = new Map<Id<"registerSession">, number>();
+
+  transactions.forEach((transaction) => {
+    if (!transaction.registerSessionId) return;
+
+    totals.set(
+      transaction.registerSessionId,
+      (totals.get(transaction.registerSessionId) ?? 0) +
+        transactionCashDelta(transaction),
+    );
+  });
+
+  return totals;
+}
+
 function buildReadiness(args: {
   blockers: DailyCloseItem[];
   carryForwardItems: DailyCloseItem[];
@@ -404,13 +602,19 @@ function uniqueSourceSubjects(items: DailyCloseItem[]) {
 
 function emptySummary(): DailyCloseSummary {
   return {
+    carriedOverCashTotal: 0,
+    carriedOverRegisterCount: 0,
     cashDepositTotal: 0,
     closedRegisterSessionCount: 0,
+    currentDayCashTotal: 0,
+    currentDayCashTransactionCount: 0,
     expectedCashTotal: 0,
     expenseTotal: 0,
     netCashVariance: 0,
     openWorkItemCount: 0,
     pendingApprovalCount: 0,
+    registerCount: 0,
+    registerVarianceCount: 0,
     salesTotal: 0,
     transactionCount: 0,
     voidedTransactionCount: 0,
@@ -421,11 +625,13 @@ function emptySummary(): DailyCloseSummary {
 export async function buildDailyCloseSnapshotWithCtx(
   ctx: Pick<QueryCtx, "db">,
   args: {
+    endAt?: number;
     operatingDate: string;
+    startAt?: number;
     storeId: Id<"store">;
   },
 ): Promise<DailyCloseSnapshot> {
-  const range = safeOperatingDateRange(args.operatingDate);
+  const range = resolveOperatingDateRange(args);
   const store = await getStore(ctx, args.storeId);
 
   if (!range) {
@@ -468,7 +674,7 @@ export async function buildDailyCloseSnapshotWithCtx(
   }
 
   const [
-    activeRegisterSessions,
+    activeRegisterSessionsForStore,
     closedRegisterSessions,
     pendingApprovals,
     openPosSessions,
@@ -501,12 +707,63 @@ export async function buildDailyCloseSnapshotWithCtx(
     getPriorCompletedDailyClose(ctx, args),
   ]);
 
+  const activeRegisterSessions = activeRegisterSessionsForStore.filter(
+    (session) => session.openedAt < range.endAt,
+  );
+  const relevantRegisterSessions = [
+    ...activeRegisterSessions,
+    ...closedRegisterSessions,
+  ];
+  const carriedOverRegisterSessions = relevantRegisterSessions.filter(
+    (session) => session.openedAt < range.startAt,
+  );
+  const cashCollectedTodayByRegisterSessionId = cashDeltasByRegisterSessionId(
+    completedTransactions,
+  );
+  const approvalRegisterSessionsById = await buildRegisterSessionsById(
+    ctx,
+    pendingApprovals.map((approval) => approval.registerSessionId),
+  );
+  const approvalRegisterSessions = Array.from(
+    approvalRegisterSessionsById.values(),
+  ).filter((session): session is Doc<"registerSession"> => Boolean(session));
+  const terminalLabelsById = await buildTerminalLabelsById(ctx, [
+    ...activeRegisterSessions.map((session) => session.terminalId),
+    ...closedRegisterSessions.map((session) => session.terminalId),
+    ...approvalRegisterSessions.map((session) => session.terminalId),
+    ...openPosSessions.map((session) => session.terminalId),
+    ...completedTransactions.map((transaction) => transaction.terminalId),
+    ...voidedTransactions.map((transaction) => transaction.terminalId),
+  ]);
+  const staffNamesById = await buildStaffNamesById(ctx, [
+    ...activeRegisterSessions.map((session) => session.openedByStaffProfileId),
+    ...activeRegisterSessions.map((session) => session.closedByStaffProfileId),
+    ...closedRegisterSessions.map((session) => session.openedByStaffProfileId),
+    ...closedRegisterSessions.map((session) => session.closedByStaffProfileId),
+    ...approvalRegisterSessions.map((session) => session.openedByStaffProfileId),
+    ...approvalRegisterSessions.map((session) => session.closedByStaffProfileId),
+    ...openPosSessions.map((session) => session.staffProfileId),
+    ...completedTransactions.map((transaction) => transaction.staffProfileId),
+    ...voidedTransactions.map((transaction) => transaction.staffProfileId),
+    ...pendingApprovals.map((approval) => approval.requestedByStaffProfileId),
+  ]);
   const blockers: DailyCloseItem[] = [];
   const reviewItems: DailyCloseItem[] = [];
   const readyItems: DailyCloseItem[] = [];
   const carryForwardItems = openWorkItems.map(asCarryForwardItem);
 
   activeRegisterSessions.forEach((session) => {
+    const terminalLabel = session.terminalId
+      ? terminalLabelsById.get(session.terminalId)
+      : undefined;
+    const openedBy = session.openedByStaffProfileId
+      ? staffNamesById.get(session.openedByStaffProfileId)
+      : undefined;
+    const closedBy = session.closedByStaffProfileId
+      ? staffNamesById.get(session.closedByStaffProfileId)
+      : undefined;
+    const isCarriedOver = session.openedAt < range.startAt;
+
     blockers.push({
       key: `register_session:${session._id}:${session.status}`,
       severity: "blocker",
@@ -518,58 +775,186 @@ export async function buildDailyCloseSnapshotWithCtx(
       message:
         session.status === "closing"
           ? "Finish the register closeout before completing Daily Close."
-          : "Close the register session before completing Daily Close.",
+          : isCarriedOver
+            ? "Close the register session carried over from a prior operating day before completing Daily Close."
+            : "Close the register session before completing Daily Close.",
       subject: {
         type: "register_session",
         id: session._id,
         label: registerSessionLabel(session),
       },
+      link: {
+        label: "View session",
+        params: { sessionId: session._id },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+      },
       metadata: {
-        status: session.status,
+        ...(terminalLabel ? { terminal: terminalLabel } : {}),
+        operatingScope: isCarriedOver
+          ? "Carried over from prior day"
+          : "Opened today",
+        openedAt: session.openedAt,
+        ...(openedBy ? { openedBy } : {}),
         expectedCash: session.expectedCash,
-        variance: session.variance,
+        ...(typeof session.countedCash === "number"
+          ? { countedCash: session.countedCash }
+          : {}),
+        status: session.status,
+        ...nonZeroVarianceMetadata(session.variance),
+        ...(typeof session.closedAt === "number"
+          ? { closedAt: session.closedAt }
+          : {}),
+        ...(closedBy ? { closedBy } : {}),
       },
     });
   });
 
   pendingApprovals.forEach((approval) => {
+    const requestedBy = approval.requestedByStaffProfileId
+      ? staffNamesById.get(approval.requestedByStaffProfileId)
+      : undefined;
+    const approvalRegisterSession = approval.registerSessionId
+      ? approvalRegisterSessionsById.get(approval.registerSessionId)
+      : undefined;
+    const approvalRegisterLabel = approvalRegisterSession
+      ? registerSessionLabel(approvalRegisterSession)
+      : undefined;
+    const terminalLabel = approvalRegisterSession?.terminalId
+      ? terminalLabelsById.get(approvalRegisterSession.terminalId)
+      : undefined;
+    const metadata = approval.metadata ?? {};
+    const previousPaymentMethod =
+      typeof metadata.previousPaymentMethod === "string"
+        ? metadata.previousPaymentMethod
+        : undefined;
+    const paymentMethod =
+      typeof metadata.paymentMethod === "string"
+        ? metadata.paymentMethod
+        : undefined;
+    const transactionNumber =
+      typeof metadata.transactionNumber === "string"
+        ? metadata.transactionNumber
+        : undefined;
+    const transactionId =
+      typeof metadata.transactionId === "string"
+        ? metadata.transactionId
+        : approval.subjectType === "pos_transaction"
+          ? approval.subjectId
+          : undefined;
+    const amount =
+      typeof metadata.amount === "number" ? metadata.amount : undefined;
+
     blockers.push({
       key: `approval_request:${approval._id}:pending`,
       severity: "blocker",
       category: "approval",
-      title: "Closeout approval is pending",
-      message: "Resolve pending closeout approval before completing Daily Close.",
+      title: `${approvalRequestTypeLabel(approval.requestType)} pending`,
+      message:
+        "Resolve pending closeout approval before completing Daily Close.",
       subject: {
         type: "approval_request",
         id: approval._id,
       },
+      link: {
+        label: "View approvals",
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/approvals",
+      },
       metadata: {
-        requestType: approval.requestType,
-        registerSessionId: approval.registerSessionId,
+        approval: approvalRequestTypeLabel(approval.requestType),
+        ...(requestedBy ? { requestedBy } : {}),
+        requestedAt: approval.createdAt,
+        ...(approval.reason ? { reason: approval.reason } : {}),
+        ...(approval.notes ? { notes: approval.notes } : {}),
+        ...(terminalLabel ? { terminal: terminalLabel } : {}),
+        ...(approvalRegisterLabel ? { register: approvalRegisterLabel } : {}),
+        ...(approvalRegisterSession
+          ? {
+              openedAt: approvalRegisterSession.openedAt,
+              expectedCash: approvalRegisterSession.expectedCash,
+              ...(typeof approvalRegisterSession.countedCash === "number"
+                ? { countedCash: approvalRegisterSession.countedCash }
+                : {}),
+              status: approvalRegisterSession.status,
+              ...nonZeroVarianceMetadata(approvalRegisterSession.variance),
+              ...(typeof approvalRegisterSession.closedAt === "number"
+                ? { closedAt: approvalRegisterSession.closedAt }
+                : {}),
+            }
+          : {}),
+        ...(transactionNumber ? { transaction: transactionNumber } : {}),
+        ...(transactionId ? { transactionId } : {}),
+        ...(previousPaymentMethod
+          ? {
+              currentMethod: formatPaymentMethodLabel(previousPaymentMethod),
+            }
+          : {}),
+        ...(paymentMethod
+          ? { requestedMethod: formatPaymentMethodLabel(paymentMethod) }
+          : {}),
+        ...(typeof amount === "number" ? { amount } : {}),
       },
     });
   });
 
   openPosSessions.forEach((session) => {
+    const terminalLabel = session.terminalId
+      ? terminalLabelsById.get(session.terminalId)
+      : undefined;
+    const registerLabel = trimOptional(session.registerNumber)
+      ? `Register ${session.registerNumber}`
+      : undefined;
+    const customerLabel =
+      trimOptional(session.customerInfo?.name) ??
+      trimOptional(session.customerInfo?.phone) ??
+      trimOptional(session.customerInfo?.email);
+    const staffName = session.staffProfileId
+      ? staffNamesById.get(session.staffProfileId)
+      : undefined;
+
     blockers.push({
       key: `pos_session:${session._id}:${session.status}`,
       severity: "blocker",
       category: "pos_session",
       title: "POS session is still unresolved",
-      message: "Complete, void, or release held POS sessions before Daily Close.",
+      message:
+        "Complete, void, or release held POS sessions before Daily Close.",
       subject: {
         type: "pos_session",
         id: session._id,
         label: session.sessionNumber,
       },
       metadata: {
+        session: session.sessionNumber,
+        ...(terminalLabel
+          ? {
+              terminal: registerLabel
+                ? `${terminalLabel} / ${registerLabel}`
+                : terminalLabel,
+            }
+          : {}),
+        ...(customerLabel ? { customer: customerLabel } : {}),
+        ...(staffName ? { owner: staffName } : {}),
         status: session.status,
-        total: session.total,
+        ...(typeof session.total === "number" ? { total: session.total } : {}),
+        ...(typeof session.expiresAt === "number"
+          ? { expiresAt: session.expiresAt }
+          : {}),
       },
     });
   });
 
   closedRegisterSessions.forEach((session) => {
+    const terminalLabel = session.terminalId
+      ? terminalLabelsById.get(session.terminalId)
+      : undefined;
+    const openedBy = session.openedByStaffProfileId
+      ? staffNamesById.get(session.openedByStaffProfileId)
+      : undefined;
+    const closedBy = session.closedByStaffProfileId
+      ? staffNamesById.get(session.closedByStaffProfileId)
+      : undefined;
+    const isCarriedOver = session.openedAt < range.startAt;
+
     readyItems.push({
       key: `register_session:${session._id}:closed`,
       severity: "ready",
@@ -580,6 +965,29 @@ export async function buildDailyCloseSnapshotWithCtx(
         type: "register_session",
         id: session._id,
         label: registerSessionLabel(session),
+      },
+      link: {
+        label: "View session",
+        params: { sessionId: session._id },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+      },
+      metadata: {
+        ...(terminalLabel ? { terminal: terminalLabel } : {}),
+        operatingScope: isCarriedOver
+          ? "Carried over from prior day"
+          : "Opened today",
+        openedAt: session.openedAt,
+        ...(openedBy ? { openedBy } : {}),
+        expectedCash: session.expectedCash,
+        ...(typeof session.countedCash === "number"
+          ? { countedCash: session.countedCash }
+          : {}),
+        status: session.status,
+        ...nonZeroVarianceMetadata(session.variance),
+        ...(typeof session.closedAt === "number"
+          ? { closedAt: session.closedAt }
+          : {}),
+        ...(closedBy ? { closedBy } : {}),
       },
     });
 
@@ -595,16 +1003,45 @@ export async function buildDailyCloseSnapshotWithCtx(
           id: session._id,
           label: registerSessionLabel(session),
         },
+        link: {
+          label: "View session",
+          params: { sessionId: session._id },
+          to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+        },
         metadata: {
-          countedCash: session.countedCash,
+          ...(terminalLabel ? { terminal: terminalLabel } : {}),
+          operatingScope: isCarriedOver
+            ? "Carried over from prior day"
+            : "Opened today",
+          openedAt: session.openedAt,
           expectedCash: session.expectedCash,
+          countedCash: session.countedCash,
+          status: session.status,
           variance: session.variance,
+          ...(typeof session.closedAt === "number"
+            ? { closedAt: session.closedAt }
+            : {}),
         },
       });
     }
   });
 
   completedTransactions.forEach((transaction) => {
+    const terminalLabel = transaction.terminalId
+      ? terminalLabelsById.get(transaction.terminalId)
+      : undefined;
+    const registerLabel = trimOptional(transaction.registerNumber)
+      ? `Register ${transaction.registerNumber}`
+      : undefined;
+    const customerLabel =
+      trimOptional(transaction.customerInfo?.name) ??
+      trimOptional(transaction.customerInfo?.phone) ??
+      trimOptional(transaction.customerInfo?.email);
+    const staffName = transaction.staffProfileId
+      ? staffNamesById.get(transaction.staffProfileId)
+      : undefined;
+    const paymentSummary = transactionPaymentSummary(transaction);
+
     readyItems.push({
       key: `pos_transaction:${transaction._id}:completed`,
       severity: "ready",
@@ -616,13 +1053,49 @@ export async function buildDailyCloseSnapshotWithCtx(
         id: transaction._id,
         label: transaction.transactionNumber,
       },
+      link: {
+        label: "View transaction",
+        params: { transactionId: transaction._id },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId",
+      },
       metadata: {
+        transaction: transaction.transactionNumber,
+        ...(terminalLabel
+          ? {
+              terminal: registerLabel
+                ? `${terminalLabel} / ${registerLabel}`
+                : terminalLabel,
+            }
+          : {}),
+        ...(staffName ? { owner: staffName } : {}),
+        ...(customerLabel ? { customer: customerLabel } : {}),
+        ...(paymentSummary ? { paymentMethods: paymentSummary } : {}),
+        completedAt: transaction.completedAt,
         total: transaction.total,
+        totalPaid: transaction.totalPaid,
+        ...(typeof transaction.changeGiven === "number"
+          ? { changeGiven: transaction.changeGiven }
+          : {}),
       },
     });
   });
 
   voidedTransactions.forEach((transaction) => {
+    const terminalLabel = transaction.terminalId
+      ? terminalLabelsById.get(transaction.terminalId)
+      : undefined;
+    const registerLabel = trimOptional(transaction.registerNumber)
+      ? `Register ${transaction.registerNumber}`
+      : undefined;
+    const customerLabel =
+      trimOptional(transaction.customerInfo?.name) ??
+      trimOptional(transaction.customerInfo?.phone) ??
+      trimOptional(transaction.customerInfo?.email);
+    const staffName = transaction.staffProfileId
+      ? staffNamesById.get(transaction.staffProfileId)
+      : undefined;
+    const paymentSummary = transactionPaymentSummary(transaction);
+
     reviewItems.push({
       key: `pos_transaction:${transaction._id}:void`,
       severity: "review",
@@ -634,16 +1107,58 @@ export async function buildDailyCloseSnapshotWithCtx(
         id: transaction._id,
         label: transaction.transactionNumber,
       },
+      link: {
+        label: "View transaction",
+        params: { transactionId: transaction._id },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId",
+      },
       metadata: {
+        transaction: transaction.transactionNumber,
+        ...(terminalLabel
+          ? {
+              terminal: registerLabel
+                ? `${terminalLabel} / ${registerLabel}`
+                : terminalLabel,
+            }
+          : {}),
+        ...(staffName ? { owner: staffName } : {}),
+        ...(customerLabel ? { customer: customerLabel } : {}),
+        ...(paymentSummary ? { paymentMethods: paymentSummary } : {}),
         total: transaction.total,
+        totalPaid: transaction.totalPaid,
+        completedAt: transaction.completedAt,
+        ...(typeof transaction.voidedAt === "number"
+          ? { voidedAt: transaction.voidedAt }
+          : {}),
       },
     });
   });
 
   const summary: DailyCloseSummary = {
-    cashDepositTotal: cashDeposits.reduce((sum, deposit) => sum + deposit.amount, 0),
+    carriedOverCashTotal: carriedOverRegisterSessions.reduce(
+      (sum, session) =>
+        sum +
+        Math.max(
+          0,
+          session.expectedCash -
+            (cashCollectedTodayByRegisterSessionId.get(session._id) ?? 0),
+        ),
+      0,
+    ),
+    carriedOverRegisterCount: carriedOverRegisterSessions.length,
+    cashDepositTotal: cashDeposits.reduce(
+      (sum, deposit) => sum + deposit.amount,
+      0,
+    ),
     closedRegisterSessionCount: closedRegisterSessions.length,
-    expectedCashTotal: closedRegisterSessions.reduce(
+    currentDayCashTotal: completedTransactions.reduce(
+      (sum, transaction) => sum + transactionCashDelta(transaction),
+      0,
+    ),
+    currentDayCashTransactionCount: completedTransactions.filter(
+      (transaction) => transactionCashDelta(transaction) > 0,
+    ).length,
+    expectedCashTotal: relevantRegisterSessions.reduce(
       (sum, session) => sum + session.expectedCash,
       0,
     ),
@@ -651,12 +1166,16 @@ export async function buildDailyCloseSnapshotWithCtx(
       (sum, transaction) => sum + transaction.totalValue,
       0,
     ),
-    netCashVariance: closedRegisterSessions.reduce(
+    netCashVariance: relevantRegisterSessions.reduce(
       (sum, session) => sum + (session.variance ?? 0),
       0,
     ),
     openWorkItemCount: openWorkItems.length,
     pendingApprovalCount: pendingApprovals.length,
+    registerCount: relevantRegisterSessions.length,
+    registerVarianceCount: relevantRegisterSessions.filter(
+      (session) => Boolean(session.variance),
+    ).length,
     salesTotal: completedTransactions.reduce(
       (sum, transaction) => sum + transaction.total,
       0,
@@ -671,7 +1190,12 @@ export async function buildDailyCloseSnapshotWithCtx(
     readyItems,
     reviewItems,
   });
-  const allItems = [...blockers, ...reviewItems, ...carryForwardItems, ...readyItems];
+  const allItems = [
+    ...blockers,
+    ...reviewItems,
+    ...carryForwardItems,
+    ...readyItems,
+  ];
   const completedClose =
     existingClose?.status === "completed"
       ? {
@@ -832,7 +1356,7 @@ export async function completeDailyCloseWithCtx(
     });
   }
 
-  const range = safeOperatingDateRange(args.operatingDate);
+  const range = resolveOperatingDateRange(args);
 
   if (!range) {
     return userError({
@@ -842,7 +1366,9 @@ export async function completeDailyCloseWithCtx(
   }
 
   const snapshot = await buildDailyCloseSnapshotWithCtx(ctx, {
+    endAt: args.endAt,
     operatingDate: args.operatingDate,
+    startAt: args.startAt,
     storeId: args.storeId,
   });
 
@@ -856,9 +1382,9 @@ export async function completeDailyCloseWithCtx(
     return ok({
       action: "already_completed",
       dailyClose: snapshot.existingClose,
-      carryForwardWorkItems: carryForwardWorkItems.filter(
-        Boolean,
-      ) as Array<Doc<"operationalWorkItem">>,
+      carryForwardWorkItems: carryForwardWorkItems.filter(Boolean) as Array<
+        Doc<"operationalWorkItem">
+      >,
     });
   }
 
@@ -880,7 +1406,8 @@ export async function completeDailyCloseWithCtx(
   if (unreviewedItemKeys.length > 0) {
     return userError({
       code: "precondition_failed",
-      message: "Daily Close review items must be acknowledged before completion.",
+      message:
+        "Daily Close review items must be acknowledged before completion.",
       metadata: {
         reviewItemCount: snapshot.reviewItems.length,
         unreviewedItemKeys,
@@ -1055,7 +1582,9 @@ export async function getDailyCloseOpeningContextWithCtx(
 
 export const getDailyCloseSnapshot = query({
   args: {
+    endAt: v.optional(v.number()),
     operatingDate: v.string(),
+    startAt: v.optional(v.number()),
     storeId: v.id("store"),
   },
   handler: (ctx, args) => buildDailyCloseSnapshotWithCtx(ctx, args),
@@ -1078,10 +1607,12 @@ export const completeDailyClose = mutation({
         }),
       ),
     ),
+    endAt: v.optional(v.number()),
     notes: v.optional(v.string()),
     operatingDate: v.string(),
     organizationId: v.optional(v.id("organization")),
     reviewedItemKeys: v.optional(v.array(v.string())),
+    startAt: v.optional(v.number()),
     storeId: v.id("store"),
   },
   returns: commandResultValidator(v.any()),

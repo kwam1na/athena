@@ -13,7 +13,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("./pos", () => ({
-  createTransactionFromSessionHandler: mocks.createTransactionFromSessionHandler,
+  createTransactionFromSessionHandler:
+    mocks.createTransactionFromSessionHandler,
   recordRegisterSessionSale: mocks.recordRegisterSessionSale,
 }));
 
@@ -212,9 +213,7 @@ function createMutationCtx(seed?: {
       }
 
       if (tableName === "registerSession") {
-        return (
-          registerSessions.find((session) => session._id === id) ?? null
-        );
+        return registerSessions.find((session) => session._id === id) ?? null;
       }
 
       if (tableName === "staffProfile") {
@@ -230,9 +229,7 @@ function createMutationCtx(seed?: {
       }
 
       if (tableName === "customerProfile") {
-        return (
-          customerProfiles.find((profile) => profile._id === id) ?? null
-        );
+        return customerProfiles.find((profile) => profile._id === id) ?? null;
       }
 
       return null;
@@ -262,10 +259,13 @@ function createMutationCtx(seed?: {
       }
     }),
     query: vi.fn((tableName: string) => ({
-      withIndex(indexName: string, apply: (builder: {
-        eq(field: string, value: unknown): unknown;
-        lt(field: string, value: unknown): unknown;
-      }) => void) {
+      withIndex(
+        indexName: string,
+        apply: (builder: {
+          eq(field: string, value: unknown): unknown;
+          lt(field: string, value: unknown): unknown;
+        }) => void,
+      ) {
         const filters: QueryBuilderFilters = {};
         const builder = {
           eq(field: string, value: unknown) {
@@ -295,7 +295,10 @@ function createMutationCtx(seed?: {
 
         apply(builder);
 
-        if (tableName === "posSession" && indexName === "by_storeId_and_status") {
+        if (
+          tableName === "posSession" &&
+          indexName === "by_storeId_and_status"
+        ) {
           const page = sessions.filter(
             (session) =>
               session.storeId === filters.storeId &&
@@ -310,15 +313,20 @@ function createMutationCtx(seed?: {
           };
         }
 
-        if (tableName === "posSession" && indexName === "by_status_and_expiresAt") {
+        if (
+          tableName === "posSession" &&
+          indexName === "by_status_and_expiresAt"
+        ) {
           const page = sessions.filter(
             (session) =>
               session.status === filters.status &&
-              session.expiresAt < (filters.expiresBefore ?? Number.POSITIVE_INFINITY),
+              session.expiresAt <
+                (filters.expiresBefore ?? Number.POSITIVE_INFINITY),
           );
 
           return {
-            take: async (limit?: number) => limit ? page.slice(0, limit) : page,
+            take: async (limit?: number) =>
+              limit ? page.slice(0, limit) : page,
             paginate: async () => ({
               page,
               isDone: true,
@@ -330,7 +338,8 @@ function createMutationCtx(seed?: {
         if (tableName === "posSession" && indexName === "by_expiresAt") {
           const page = sessions.filter(
             (session) =>
-              session.expiresAt < (filters.expiresBefore ?? Number.POSITIVE_INFINITY),
+              session.expiresAt <
+              (filters.expiresBefore ?? Number.POSITIVE_INFINITY),
           );
 
           return {
@@ -343,10 +352,13 @@ function createMutationCtx(seed?: {
         }
 
         if (tableName === "posSessionItem" && indexName === "by_sessionId") {
-          const page = items.filter((item) => item.sessionId === filters.sessionId);
+          const page = items.filter(
+            (item) => item.sessionId === filters.sessionId,
+          );
 
           return {
-            take: async (limit?: number) => limit ? page.slice(0, limit) : page,
+            take: async (limit?: number) =>
+              limit ? page.slice(0, limit) : page,
           };
         }
 
@@ -355,11 +367,13 @@ function createMutationCtx(seed?: {
           indexName === "by_staffProfileId"
         ) {
           const page = staffRoleAssignments.filter(
-            (assignment) => assignment.staffProfileId === filters.staffProfileId,
+            (assignment) =>
+              assignment.staffProfileId === filters.staffProfileId,
           );
 
           return {
-            take: async (limit?: number) => limit ? page.slice(0, limit) : page,
+            take: async (limit?: number) =>
+              limit ? page.slice(0, limit) : page,
           };
         }
 
@@ -547,10 +561,9 @@ describe("pos session lifecycle trace handlers", () => {
       },
     );
 
-    expect(result.rows.map((row: { sessionNumber: string }) => row.sessionNumber)).toEqual([
-      "SES-101",
-      "SES-100",
-    ]);
+    expect(
+      result.rows.map((row: { sessionNumber: string }) => row.sessionNumber),
+    ).toEqual(["SES-101", "SES-100"]);
     expect(result.rows[0]).toEqual(
       expect.objectContaining({
         sessionId: "session-held",
@@ -1034,6 +1047,11 @@ describe("pos session lifecycle trace handlers", () => {
         sessionId: "session-1",
         staffProfileId: "cashier-1",
         recordRegisterSale: false,
+        submittedTotals: {
+          subtotal: 100,
+          tax: 15,
+          total: 115,
+        },
       }),
     );
     expect(mocks.traceRecord).toHaveBeenNthCalledWith(
@@ -1305,7 +1323,9 @@ describe("pos session lifecycle trace handlers", () => {
     });
 
     expect(
-      ctx.sessions.find((session) => session._id === "session-customer-profile"),
+      ctx.sessions.find(
+        (session) => session._id === "session-customer-profile",
+      ),
     ).toEqual(
       expect.objectContaining({
         customerProfileId: "profile-1",
@@ -1745,14 +1765,13 @@ describe("pos session lifecycle trace handlers", () => {
         ],
       });
 
-      const result = await getHandler(releaseSessionInventoryHoldsAndDeleteItems)(
-        ctx as never,
-        {
-          sessionId: `session-clear-${label}`,
-          staffProfileId: "cashier-1",
-          checkoutStateVersion: 4,
-        },
-      );
+      const result = await getHandler(
+        releaseSessionInventoryHoldsAndDeleteItems,
+      )(ctx as never, {
+        sessionId: `session-clear-${label}`,
+        staffProfileId: "cashier-1",
+        checkoutStateVersion: 4,
+      });
 
       expect(result).toEqual({
         kind: "user_error",
@@ -1883,15 +1902,18 @@ describe("pos session lifecycle trace handlers", () => {
       ],
     });
 
-    const paymentResult = await getHandler(syncSessionCheckoutState)(ctx as never, {
-      sessionId: "session-checkout",
-      staffProfileId: "cashier-1",
-      checkoutStateVersion: 1,
-      payments: [{ method: "cash", amount: 115, timestamp: 1_000 }],
-      stage: "paymentAdded",
-      paymentMethod: "cash",
-      amount: 115,
-    });
+    const paymentResult = await getHandler(syncSessionCheckoutState)(
+      ctx as never,
+      {
+        sessionId: "session-checkout",
+        staffProfileId: "cashier-1",
+        checkoutStateVersion: 1,
+        payments: [{ method: "cash", amount: 115, timestamp: 1_000 }],
+        stage: "paymentAdded",
+        paymentMethod: "cash",
+        amount: 115,
+      },
+    );
 
     expect(paymentResult).toEqual({
       kind: "ok",
@@ -2145,7 +2167,9 @@ describe("pos session lifecycle trace handlers", () => {
       }),
     );
     expect(
-      ctx.sessions.find((session) => session._id === "session-payment-mutations")?.payments,
+      ctx.sessions.find(
+        (session) => session._id === "session-payment-mutations",
+      )?.payments,
     ).toEqual([]);
   });
 
@@ -2184,7 +2208,8 @@ describe("pos session lifecycle trace handlers", () => {
     });
 
     expect(
-      ctx.sessions.find((session) => session._id === "session-payment-ordering")?.payments,
+      ctx.sessions.find((session) => session._id === "session-payment-ordering")
+        ?.payments,
     ).toEqual([
       { method: "cash", amount: 60, timestamp: 1_000 },
       { method: "card", amount: 55, timestamp: 2_000 },
@@ -2230,7 +2255,8 @@ describe("pos session lifecycle trace handlers", () => {
       },
     });
     expect(
-      ctx.sessions.find((session) => session._id === "session-trace-failure")?.payments,
+      ctx.sessions.find((session) => session._id === "session-trace-failure")
+        ?.payments,
     ).toEqual([{ method: "cash", amount: 115, timestamp: 1_000 }]);
     expect(consoleError).toHaveBeenCalledWith(
       "[workflow-trace] pos.session.lifecycle.paymentAdded",
@@ -2299,9 +2325,9 @@ describe("pos session lifecycle trace handlers", () => {
         }),
       }),
     );
-    expect(ctx.sessions.find((session) => session._id === "session-void")?.notes).toBe(
-      "Cashier voided this session",
-    );
+    expect(
+      ctx.sessions.find((session) => session._id === "session-void")?.notes,
+    ).toBe("Cashier voided this session");
     expect(consoleLog).toHaveBeenCalledWith(
       "[POS] Found 2 expired sessions to process",
     );
@@ -2397,7 +2423,9 @@ describe("pos session lifecycle trace handlers", () => {
       success: true,
       data: { staffProfileId: "cashier-1" },
     });
-    expect(ctx.sessions.find((session) => session._id === "session-current")).toEqual(
+    expect(
+      ctx.sessions.find((session) => session._id === "session-current"),
+    ).toEqual(
       expect.objectContaining({
         status: "active",
         terminalId: "terminal-1",

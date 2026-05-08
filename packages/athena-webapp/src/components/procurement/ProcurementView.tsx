@@ -1408,7 +1408,7 @@ export function ProcurementViewContent({
                                             key={purchaseOrder.purchaseOrderId}
                                           >
                                             <div className="min-w-0 space-y-1">
-                                              <div className="flex flex-wrap items-center gap-2 text-sm">
+                                              <div className="flex flex-wrap items-baseline gap-2 text-sm">
                                                 <span className="font-medium capitalize text-foreground">
                                                   {purchaseOrder.vendorName ??
                                                     "Vendor not set"}

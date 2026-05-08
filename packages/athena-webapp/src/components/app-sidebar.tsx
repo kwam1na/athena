@@ -60,7 +60,6 @@ function SidebarMenuCollapsible({
   label,
   disabled,
   defaultOpen = false,
-  isActive = false,
   onClick,
   children,
 }: {
@@ -68,7 +67,6 @@ function SidebarMenuCollapsible({
   label: string;
   disabled?: boolean;
   defaultOpen?: boolean;
-  isActive?: boolean;
   onClick?: MouseEventHandler<HTMLButtonElement>;
   children: ReactNode;
 }) {
@@ -82,7 +80,6 @@ function SidebarMenuCollapsible({
           <SidebarMenuButton
             disabled={disabled}
             className="w-full"
-            isActive={isActive}
             onClick={onClick}
           >
             <Icon className="w-4 h-4" />
@@ -200,11 +197,10 @@ export function AppSidebar() {
                 defaultOpen={isOperationsRoute}
                 disabled={!canAccessOperations()}
                 icon={Layers}
-                isActive={isOperationsRoute}
                 label="Operations"
                 onClick={() => {
                   void navigate({
-                    to: "/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments",
+                    to: "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work",
                     params: {
                       orgUrlSlug: activeOrganization.slug,
                       storeUrlSlug: activeStore.slug,
@@ -212,48 +208,6 @@ export function AppSidebar() {
                   });
                 }}
               >
-                <SidebarMenuSub>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuButton
-                      disabled={!canAccessOperations()}
-                      asChild
-                    >
-                      <Link
-                        to="/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments"
-                        params={(p) => ({
-                          ...p,
-                          orgUrlSlug: activeOrganization?.slug,
-                          storeUrlSlug: activeStore?.slug,
-                        })}
-                        className="flex items-center"
-                      >
-                        <p className="font-medium">Stock adjustments</p>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuSubItem>
-                </SidebarMenuSub>
-
-                <SidebarMenuSub>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuButton
-                      disabled={!canAccessOperations()}
-                      asChild
-                    >
-                      <Link
-                        to="/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close"
-                        params={(p) => ({
-                          ...p,
-                          orgUrlSlug: activeOrganization?.slug,
-                          storeUrlSlug: activeStore?.slug,
-                        })}
-                        className="flex items-center"
-                      >
-                        <p className="font-medium">Daily Close</p>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuSubItem>
-                </SidebarMenuSub>
-
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
                     <SidebarMenuButton
@@ -291,6 +245,48 @@ export function AppSidebar() {
                         className="flex items-center"
                       >
                         <p className="font-medium">Approvals</p>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
+
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuButton
+                      disabled={!canAccessOperations()}
+                      asChild
+                    >
+                      <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: activeOrganization?.slug,
+                          storeUrlSlug: activeStore?.slug,
+                        })}
+                        className="flex items-center"
+                      >
+                        <p className="font-medium">Stock adjustments</p>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
+
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuButton
+                      disabled={!canAccessOperations()}
+                      asChild
+                    >
+                      <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: activeOrganization?.slug,
+                          storeUrlSlug: activeStore?.slug,
+                        })}
+                        className="flex items-center"
+                      >
+                        <p className="font-medium">Daily Close</p>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuSubItem>
@@ -354,7 +350,6 @@ export function AppSidebar() {
               <SidebarMenuCollapsible
                 defaultOpen={isOrdersRoute}
                 icon={ShoppingBag}
-                isActive={isOrdersRoute}
                 label="Orders"
                 disabled={!hasFullAdminAccess}
                 onClick={() => {
@@ -528,7 +523,6 @@ export function AppSidebar() {
               <SidebarMenuCollapsible
                 defaultOpen={isProductsRoute}
                 icon={Tag}
-                isActive={isProductsRoute}
                 label="Products"
                 onClick={() => {
                   void navigate({

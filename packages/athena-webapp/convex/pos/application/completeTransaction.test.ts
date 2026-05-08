@@ -424,18 +424,24 @@ describe("completeTransaction trace ordering", () => {
     );
 
     const traceEvents: string[] = [];
-    vi.mocked(createWorkflowTraceWithCtx).mockImplementation(async (_ctx, input) => {
-      traceEvents.push(`trace:create:${input.status}`);
-      return "trace-1" as never;
-    });
-    vi.mocked(registerWorkflowTraceLookupWithCtx).mockImplementation(async () => {
-      traceEvents.push("trace:lookup");
-      return "lookup-1" as never;
-    });
-    vi.mocked(appendWorkflowTraceEventWithCtx).mockImplementation(async (_ctx, input) => {
-      traceEvents.push(`trace:event:${input.step}`);
-      return "event-1" as never;
-    });
+    vi.mocked(createWorkflowTraceWithCtx).mockImplementation(
+      async (_ctx, input) => {
+        traceEvents.push(`trace:create:${input.status}`);
+        return "trace-1" as never;
+      },
+    );
+    vi.mocked(registerWorkflowTraceLookupWithCtx).mockImplementation(
+      async () => {
+        traceEvents.push("trace:lookup");
+        return "lookup-1" as never;
+      },
+    );
+    vi.mocked(appendWorkflowTraceEventWithCtx).mockImplementation(
+      async (_ctx, input) => {
+        traceEvents.push(`trace:event:${input.step}`);
+        return "event-1" as never;
+      },
+    );
 
     await expect(
       completeTransaction({} as never, {
@@ -530,18 +536,24 @@ describe("completeTransaction trace ordering", () => {
     );
 
     const traceEvents: string[] = [];
-    vi.mocked(createWorkflowTraceWithCtx).mockImplementation(async (_ctx, input) => {
-      traceEvents.push(`trace:create:${input.status}`);
-      return "trace-1" as never;
-    });
-    vi.mocked(registerWorkflowTraceLookupWithCtx).mockImplementation(async () => {
-      traceEvents.push("trace:lookup");
-      return "lookup-1" as never;
-    });
-    vi.mocked(appendWorkflowTraceEventWithCtx).mockImplementation(async (_ctx, input) => {
-      traceEvents.push(`trace:event:${input.step}`);
-      return "event-1" as never;
-    });
+    vi.mocked(createWorkflowTraceWithCtx).mockImplementation(
+      async (_ctx, input) => {
+        traceEvents.push(`trace:create:${input.status}`);
+        return "trace-1" as never;
+      },
+    );
+    vi.mocked(registerWorkflowTraceLookupWithCtx).mockImplementation(
+      async () => {
+        traceEvents.push("trace:lookup");
+        return "lookup-1" as never;
+      },
+    );
+    vi.mocked(appendWorkflowTraceEventWithCtx).mockImplementation(
+      async (_ctx, input) => {
+        traceEvents.push(`trace:event:${input.step}`);
+        return "event-1" as never;
+      },
+    );
 
     await expect(
       createTransactionFromSessionHandler(ctx, {
@@ -678,6 +690,221 @@ describe("completeTransaction trace ordering", () => {
       quantityAvailable: 9,
       inventoryCount: 9,
     });
+  });
+
+  it("rejects session checkout when submitted totals no longer match persisted items", async () => {
+    vi.mocked(getPosSessionById).mockResolvedValue({
+      _id: "session-1",
+      storeId: "store-1",
+      customerId: undefined,
+      staffProfileId: "staff-1",
+      registerNumber: "1",
+      registerSessionId: "register-1",
+      subtotal: 191_000,
+      tax: 0,
+      total: 191_000,
+      terminalId: "terminal-1",
+      customerInfo: undefined,
+    } as never);
+    vi.mocked(listSessionItems).mockResolvedValue([
+      {
+        _id: "session-item-1",
+        sessionId: "session-1",
+        storeId: "store-1",
+        productId: "product-1",
+        productSkuId: "sku-1",
+        productSku: "SKU-1",
+        productName: "Nugs",
+        price: 8_000,
+        quantity: 1,
+        image: undefined,
+      },
+      {
+        _id: "session-item-2",
+        sessionId: "session-1",
+        storeId: "store-1",
+        productId: "product-2",
+        productSkuId: "sku-2",
+        productSku: "SKU-2",
+        productName: "Agya",
+        price: 25_000,
+        quantity: 1,
+        image: undefined,
+      },
+      {
+        _id: "session-item-3",
+        sessionId: "session-1",
+        storeId: "store-1",
+        productId: "product-3",
+        productSkuId: "sku-3",
+        productSku: "SKU-3",
+        productName: "Vibes",
+        price: 50_000,
+        quantity: 1,
+        image: undefined,
+      },
+      {
+        _id: "session-item-4",
+        sessionId: "session-1",
+        storeId: "store-1",
+        productId: "product-4",
+        productSkuId: "sku-4",
+        productSku: "SKU-4",
+        productName: "Modelo",
+        price: 2_400,
+        quantity: 1,
+        image: undefined,
+      },
+    ] as never);
+
+    const result = await createTransactionFromSessionHandler({} as never, {
+      sessionId: "session-1" as Id<"posSession">,
+      staffProfileId: "staff-1" as Id<"staffProfile">,
+      payments: [{ method: "cash", amount: 191_000, timestamp: 1 }],
+      submittedTotals: {
+        subtotal: 191_000,
+        tax: 0,
+        total: 191_000,
+      },
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        kind: "user_error",
+        error: expect.objectContaining({
+          code: "conflict",
+          message:
+            "Sale total changed. Review the cart and take payment again.",
+        }),
+      }),
+    );
+    expectNoCompletionSideEffects();
+  });
+
+  it("uses persisted session items as the canonical sale total", async () => {
+    const runMutation = vi.fn().mockResolvedValue(undefined);
+    const ctx = {
+      runMutation,
+    } as never;
+
+    vi.mocked(getStoreById).mockResolvedValue({
+      _id: "store-1",
+      organizationId: "org-1",
+    } as never);
+    vi.mocked(getPosSessionById).mockResolvedValue({
+      _id: "session-1",
+      storeId: "store-1",
+      customerId: undefined,
+      staffProfileId: "staff-1",
+      registerNumber: "1",
+      registerSessionId: "register-1",
+      subtotal: 191_000,
+      tax: 0,
+      total: 191_000,
+      terminalId: "terminal-1",
+      customerInfo: undefined,
+    } as never);
+    vi.mocked(getRegisterSessionById).mockResolvedValue({
+      _id: "register-1",
+      storeId: "store-1",
+      status: "open",
+      terminalId: "terminal-1",
+      registerNumber: "1",
+    } as never);
+    vi.mocked(listSessionItems).mockResolvedValue([
+      {
+        _id: "session-item-1",
+        sessionId: "session-1",
+        storeId: "store-1",
+        productId: "product-1",
+        productSkuId: "sku-1",
+        productSku: "SKU-1",
+        productName: "Nugs",
+        price: 8_000,
+        quantity: 1,
+        image: undefined,
+      },
+      {
+        _id: "session-item-2",
+        sessionId: "session-1",
+        storeId: "store-1",
+        productId: "product-2",
+        productSkuId: "sku-2",
+        productSku: "SKU-2",
+        productName: "Agya",
+        price: 25_000,
+        quantity: 1,
+        image: undefined,
+      },
+      {
+        _id: "session-item-3",
+        sessionId: "session-1",
+        storeId: "store-1",
+        productId: "product-3",
+        productSkuId: "sku-3",
+        productSku: "SKU-3",
+        productName: "Vibes",
+        price: 50_000,
+        quantity: 1,
+        image: undefined,
+      },
+      {
+        _id: "session-item-4",
+        sessionId: "session-1",
+        storeId: "store-1",
+        productId: "product-4",
+        productSkuId: "sku-4",
+        productSku: "SKU-4",
+        productName: "Modelo",
+        price: 2_400,
+        quantity: 1,
+        image: undefined,
+      },
+    ] as never);
+    vi.mocked(getProductSkuById).mockResolvedValue({
+      _id: "sku-1",
+      images: [],
+      inventoryCount: 10,
+      productId: "product-1",
+      quantityAvailable: 10,
+      sku: "SKU-1",
+    } as never);
+    vi.mocked(createPosTransaction).mockResolvedValue("txn-1" as never);
+    vi.mocked(recordRetailSalePaymentAllocations).mockResolvedValue(true);
+    vi.mocked(createPosTransactionItem).mockResolvedValue(
+      "txn-item-1" as never,
+    );
+    vi.mocked(patchProductSku).mockResolvedValue(undefined as never);
+    vi.mocked(patchPosSession).mockResolvedValue(undefined as never);
+
+    const result = await createTransactionFromSessionHandler(ctx, {
+      sessionId: "session-1" as Id<"posSession">,
+      staffProfileId: "staff-1" as Id<"staffProfile">,
+      payments: [{ method: "cash", amount: 85_400, timestamp: 1 }],
+      submittedTotals: {
+        subtotal: 85_400,
+        tax: 0,
+        total: 85_400,
+      },
+    });
+
+    expect(result).toEqual(expect.objectContaining({ kind: "ok" }));
+    expect(createPosTransaction).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        subtotal: 85_400,
+        tax: 0,
+        total: 85_400,
+        totalPaid: 85_400,
+        changeGiven: undefined,
+      }),
+    );
+    expect(recordRetailSalePaymentAllocations).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        payments: [{ method: "cash", amount: 85_400, timestamp: 1 }],
+      }),
+    );
   });
 
   it("keeps legacy pre-ledger session availability unchanged when no hold row exists", async () => {
