@@ -1,0 +1,529 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { Id } from "../_generated/dataModel";
+import type { QueryCtx } from "../_generated/server";
+import { buildDailyOperationsSnapshotWithCtx } from "./dailyOperations";
+
+type TableName =
+  | "approvalRequest"
+  | "dailyClose"
+  | "dailyOpening"
+  | "expenseTransaction"
+  | "operationalEvent"
+  | "operationalWorkItem"
+  | "paymentAllocation"
+  | "posSession"
+  | "posTerminal"
+  | "posTransaction"
+  | "registerSession"
+  | "staffProfile"
+  | "store";
+
+type Row = Record<string, unknown> & { _id: string };
+
+function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
+  const tables = new Map<TableName, Map<string, Row>>();
+
+  const tableFor = (table: TableName) => {
+    if (!tables.has(table)) {
+      tables.set(table, new Map());
+    }
+
+    return tables.get(table)!;
+  };
+
+  Object.entries(seed).forEach(([tableName, rows]) => {
+    const table = tableFor(tableName as TableName);
+    rows?.forEach((row) => table.set(row._id, { ...row }));
+  });
+
+  const query = (table: TableName) => {
+    const filters: Array<
+      [string, unknown | { gte?: number; lt?: number; lte?: number }]
+    > = [];
+    let sortDirection: "asc" | "desc" = "asc";
+    const filteredRows = () => {
+      const rows = Array.from(tableFor(table).values()).filter((row) =>
+        filters.every(([field, value]) => {
+          if (value && typeof value === "object" && !Array.isArray(value)) {
+            if (
+              "gte" in value &&
+              typeof value.gte === "number" &&
+              Number(row[field]) < value.gte
+            ) {
+              return false;
+            }
+
+            if (
+              "lt" in value &&
+              typeof value.lt === "number" &&
+              Number(row[field]) >= value.lt
+            ) {
+              return false;
+            }
+
+            if (
+              "lte" in value &&
+              typeof value.lte === "number" &&
+              Number(row[field]) > value.lte
+            ) {
+              return false;
+            }
+
+            return true;
+          }
+
+          return row[field] === value;
+        }),
+      );
+
+      return rows.sort((left, right) => {
+        const leftValue = Number(
+          left.createdAt ?? left.completedAt ?? left.startedAt ?? 0,
+        );
+        const rightValue = Number(
+          right.createdAt ?? right.completedAt ?? right.startedAt ?? 0,
+        );
+        return sortDirection === "desc"
+          ? rightValue - leftValue
+          : leftValue - rightValue;
+      });
+    };
+
+    const chain = {
+      collect: async () => filteredRows(),
+      first: async () => filteredRows()[0] ?? null,
+      order(direction: "asc" | "desc") {
+        sortDirection = direction;
+        return chain;
+      },
+      take: async (limit: number) => filteredRows().slice(0, limit),
+      withIndex(
+        _index: string,
+        applyIndex: (builder: {
+          eq: (field: string, value: unknown) => typeof builder;
+          gte: (field: string, value: number) => typeof builder;
+          lt: (field: string, value: number) => typeof builder;
+          lte: (field: string, value: number) => typeof builder;
+        }) => unknown,
+      ) {
+        const builder = {
+          eq(field: string, value: unknown) {
+            filters.push([field, value]);
+            return builder;
+          },
+          gte(field: string, value: number) {
+            filters.push([field, { gte: value }]);
+            return builder;
+          },
+          lt(field: string, value: number) {
+            filters.push([field, { lt: value }]);
+            return builder;
+          },
+          lte(field: string, value: number) {
+            filters.push([field, { lte: value }]);
+            return builder;
+          },
+        };
+
+        applyIndex(builder);
+        return chain;
+      },
+    };
+
+    return chain;
+  };
+
+  const db = {
+    async get(tableOrId: string, maybeId?: string) {
+      if (maybeId !== undefined) {
+        return tableFor(tableOrId as TableName).get(maybeId) ?? null;
+      }
+
+      for (const table of tables.values()) {
+        const row = table.get(tableOrId);
+        if (row) return row;
+      }
+
+      return null;
+    },
+    query,
+  };
+
+  return { db };
+}
+
+const store = {
+  _id: "store-1",
+  createdByUserId: "user-1",
+  currency: "GHS",
+  name: "Osu",
+  organizationId: "org-1",
+  slug: "osu",
+};
+
+const startedOpening = {
+  _id: "opening-1",
+  acknowledgedItemKeys: [],
+  actorStaffProfileId: "staff-1",
+  carryForwardWorkItemIds: [],
+  createdAt: Date.UTC(2026, 4, 8, 8),
+  operatingDate: "2026-05-08",
+  organizationId: "org-1",
+  priorDailyCloseId: "close-prior",
+  readiness: {
+    blockerCount: 0,
+    carryForwardCount: 0,
+    readyCount: 1,
+    reviewCount: 0,
+    status: "ready",
+  },
+  sourceSubjects: [],
+  startedAt: Date.UTC(2026, 4, 8, 8),
+  status: "started",
+  storeId: "store-1",
+  updatedAt: Date.UTC(2026, 4, 8, 8),
+};
+
+const priorClose = {
+  _id: "close-prior",
+  carryForwardWorkItemIds: [],
+  completedAt: Date.UTC(2026, 4, 7, 22),
+  completedByStaffProfileId: "staff-1",
+  completedByUserId: "user-1",
+  createdAt: Date.UTC(2026, 4, 7, 22),
+  isCurrent: false,
+  operatingDate: "2026-05-07",
+  organizationId: "org-1",
+  readiness: {
+    blockerCount: 0,
+    carryForwardCount: 0,
+    readyCount: 1,
+    reviewCount: 0,
+    status: "ready",
+  },
+  sourceSubjects: [],
+  status: "completed",
+  storeId: "store-1",
+  summary: { salesTotal: 45000 },
+  updatedAt: Date.UTC(2026, 4, 7, 22),
+};
+
+function buildCtx(seed: Partial<Record<TableName, Row[]>>) {
+  const { db } = createDb(seed);
+  return { db } as unknown as QueryCtx;
+}
+
+describe("daily operations overview read model", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("treats a store day with no opening as not opened and points to Daily Opening", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [priorClose],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.lifecycle.status).toBe("not_opened");
+    expect(snapshot.primaryAction).toMatchObject({
+      label: "Start Daily Opening",
+      to: "/$orgUrlSlug/store/$storeUrlSlug/operations/opening",
+    });
+    expect(snapshot.attentionItems[0]).toMatchObject({
+      owner: "daily_opening",
+      severity: "warning",
+    });
+    expect(snapshot.lanes.find((lane) => lane.key === "opening")).toMatchObject(
+      {
+        status: "needs_attention",
+      },
+    );
+  });
+
+  it("marks an opened store day as ready to close when close has no blockers", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.lifecycle.status).toBe("ready_to_close");
+    expect(snapshot.primaryAction).toMatchObject({
+      label: "Start Daily Close",
+      to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+    });
+    expect(snapshot.lanes.find((lane) => lane.key === "close")).toMatchObject({
+      count: 0,
+      status: "ready",
+    });
+  });
+
+  it("keeps the store day operating while close review items remain", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        posTransaction: [
+          {
+            _id: "txn-void",
+            completedAt: Date.UTC(2026, 4, 8, 16),
+            paymentMethod: "cash",
+            paymentAllocations: [],
+            payments: [],
+            status: "void",
+            storeId: "store-1",
+            terminalId: "terminal-1",
+            total: 12000,
+            totalPaid: 12000,
+            transactionNumber: "TXN-VOID",
+          },
+        ],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.lifecycle.status).toBe("operating");
+    expect(snapshot.lanes.find((lane) => lane.key === "close")).toMatchObject({
+      count: 0,
+      status: "needs_attention",
+    });
+    expect(snapshot.attentionItems[0]).toMatchObject({
+      owner: "daily_close",
+      source: {
+        id: "txn-void",
+        type: "pos_transaction",
+      },
+    });
+  });
+
+  it("elevates close blockers while preserving source workflow ownership", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 8, 18));
+
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        registerSession: [
+          {
+            _id: "register-1",
+            expectedCash: 25000,
+            openedAt: Date.UTC(2026, 4, 8, 9),
+            registerNumber: "1",
+            status: "open",
+            storeId: "store-1",
+          },
+        ],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.lifecycle.status).toBe("close_blocked");
+    expect(snapshot.primaryAction).toMatchObject({
+      label: "Review close blockers",
+      to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+    });
+    expect(snapshot.attentionItems[0]).toMatchObject({
+      owner: "daily_close",
+      source: {
+        type: "register_session",
+        id: "register-1",
+      },
+      severity: "critical",
+    });
+    expect(
+      snapshot.lanes.find((lane) => lane.key === "registers"),
+    ).toMatchObject({
+      count: 1,
+      status: "blocked",
+    });
+  });
+
+  it("surfaces open queue work and pending approvals without counting terminal work", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        approvalRequest: [
+          {
+            _id: "approval-pending",
+            createdAt: Date.UTC(2026, 4, 8, 10),
+            reason: "Cash variance review",
+            requestType: "variance_review",
+            status: "pending",
+            storeId: "store-1",
+            subjectId: "register-1",
+            subjectType: "register_session",
+          },
+          {
+            _id: "approval-approved",
+            createdAt: Date.UTC(2026, 4, 8, 11),
+            reason: "Resolved",
+            requestType: "variance_review",
+            status: "approved",
+            storeId: "store-1",
+            subjectId: "register-2",
+            subjectType: "register_session",
+          },
+        ],
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        operationalWorkItem: [
+          {
+            _id: "work-open",
+            approvalState: "not_required",
+            createdAt: 1,
+            organizationId: "org-1",
+            priority: "normal",
+            status: "open",
+            storeId: "store-1",
+            title: "Call customer",
+            type: "customer_follow_up",
+          },
+          {
+            _id: "work-progress",
+            approvalState: "not_required",
+            createdAt: 2,
+            organizationId: "org-1",
+            priority: "normal",
+            status: "in_progress",
+            storeId: "store-1",
+            title: "Receive order",
+            type: "purchase_order",
+          },
+          {
+            _id: "work-completed",
+            approvalState: "not_required",
+            createdAt: 3,
+            organizationId: "org-1",
+            priority: "normal",
+            status: "completed",
+            storeId: "store-1",
+            title: "Already done",
+            type: "customer_follow_up",
+          },
+        ],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.lanes.find((lane) => lane.key === "queue")).toMatchObject({
+      count: 2,
+      countLabel: "2",
+      status: "needs_attention",
+    });
+    expect(
+      snapshot.lanes.find((lane) => lane.key === "approvals"),
+    ).toMatchObject({
+      count: 1,
+      countLabel: "1",
+      status: "blocked",
+    });
+    expect(snapshot.attentionItems.map((item) => item.id)).toEqual(
+      expect.arrayContaining([
+        "approval_request:approval-pending:pending",
+        "operational_work_item:work-open:open",
+        "operational_work_item:work-progress:in_progress",
+      ]),
+    );
+    expect(snapshot.attentionItems.map((item) => item.id)).not.toContain(
+      "operational_work_item:work-completed:completed",
+    );
+    expect(
+      snapshot.attentionItems.filter(
+        (item) => item.owner === "operations_queue",
+      ),
+    ).toHaveLength(3);
+  });
+
+  it("keeps a completed store day reviewable and scopes timeline events to the day", async () => {
+    const completedClose = {
+      ...priorClose,
+      _id: "close-current",
+      completedAt: Date.UTC(2026, 4, 8, 22),
+      isCurrent: true,
+      operatingDate: "2026-05-08",
+    };
+
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [priorClose, completedClose],
+        dailyOpening: [startedOpening],
+        operationalEvent: [
+          {
+            _id: "event-1",
+            createdAt: Date.UTC(2026, 4, 8, 8),
+            eventType: "daily_opening.started",
+            message: "Store day started.",
+            storeId: "store-1",
+            subjectId: "opening-1",
+            subjectType: "daily_opening",
+          },
+          {
+            _id: "event-2",
+            createdAt: Date.UTC(2026, 4, 8, 22),
+            eventType: "daily_close.completed",
+            message: "Daily Close completed.",
+            storeId: "store-1",
+            subjectId: "close-current",
+            subjectType: "daily_close",
+          },
+          {
+            _id: "event-other-day",
+            createdAt: Date.UTC(2026, 4, 9, 8),
+            eventType: "daily_opening.started",
+            message: "Next day started.",
+            storeId: "store-1",
+            subjectId: "opening-next",
+            subjectType: "daily_opening",
+          },
+        ],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.lifecycle.status).toBe("closed");
+    expect(snapshot.primaryAction).toMatchObject({
+      label: "Review Daily Close",
+      to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+    });
+    expect(snapshot.timeline.map((event) => event.id)).toEqual([
+      "event-2",
+      "event-1",
+    ]);
+    expect(snapshot.attentionItems).toEqual([]);
+  });
+
+  it("returns the newest timeline events before applying the timeline limit", async () => {
+    const events = Array.from({ length: 201 }, (_, index) => ({
+      _id: `event-${index}`,
+      createdAt: Date.UTC(2026, 4, 8, 8, index),
+      eventType: "operations.event",
+      message: `Event ${index}`,
+      storeId: "store-1",
+      subjectId: `subject-${index}`,
+      subjectType: "operations",
+    }));
+
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        operationalEvent: events,
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.timeline).toHaveLength(200);
+    expect(snapshot.timeline[0].id).toBe("event-200");
+    expect(snapshot.timeline.map((event) => event.id)).not.toContain("event-0");
+  });
+});

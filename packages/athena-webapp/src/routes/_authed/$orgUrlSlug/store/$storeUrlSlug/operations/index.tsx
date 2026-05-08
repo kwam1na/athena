@@ -1,12 +1,8 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
+import { DailyOperationsView } from "~/src/components/operations/DailyOperationsView";
 
 export const Route = createFileRoute(
-  "/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/"
+  "/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/",
 )({
-  beforeLoad: ({ params }) => {
-    throw redirect({
-      params,
-      to: "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work",
-    });
-  },
+  component: DailyOperationsView,
 });

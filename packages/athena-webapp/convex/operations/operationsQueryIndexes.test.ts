@@ -95,6 +95,11 @@ describe("operations query indexing", () => {
         fields: ["storeId", "subjectType", "subjectId"],
       },
       {
+        table: "operationalEvent",
+        descriptor: "by_storeId_createdAt",
+        fields: ["storeId", "createdAt"],
+      },
+      {
         table: "inventoryMovement",
         descriptor: "by_storeId_productSkuId",
         fields: ["storeId", "productSkuId"],
@@ -188,45 +193,71 @@ describe("operations query indexing", () => {
     const inventoryMovementsSource = getSource("./inventoryMovements.ts");
     const paymentAllocationsSource = getSource("./paymentAllocations.ts");
     const operationalEventsSource = getSource("./operationalEvents.ts");
+    const dailyOperationsSource = getSource("./dailyOperations.ts");
     const dailyCloseSource = getSource("./dailyClose.ts");
     const dailyOpeningSource = getSource("./dailyOpening.ts");
 
-    expect(customerProfilesSource).toContain('.withIndex("by_storeFrontUserId"');
+    expect(customerProfilesSource).toContain(
+      '.withIndex("by_storeFrontUserId"',
+    );
     expect(customerProfilesSource).toContain('.withIndex("by_guestId"');
     expect(customerProfilesSource).toContain('.withIndex("by_posCustomerId"');
     expect(customerProfilesSource).toContain('.withIndex("by_storeId_email"');
-    expect(customerProfilesSource).toContain('.withIndex("by_storeId_phoneNumber"');
+    expect(customerProfilesSource).toContain(
+      '.withIndex("by_storeId_phoneNumber"',
+    );
 
-    expect(staffProfilesSource).toContain('.withIndex("by_storeId_linkedUserId"');
+    expect(staffProfilesSource).toContain(
+      '.withIndex("by_storeId_linkedUserId"',
+    );
     expect(staffProfilesSource).toContain('.withIndex("by_staffProfileId"');
     expect(inventoryMovementsSource).toContain(
-      '.withIndex("by_storeId_productSkuId"'
+      '.withIndex("by_storeId_productSkuId"',
     );
-    expect(paymentAllocationsSource).toContain('.withIndex("by_storeId_target"');
-    expect(operationalEventsSource).toContain('.withIndex("by_storeId_subject"');
+    expect(paymentAllocationsSource).toContain(
+      '.withIndex("by_storeId_target"',
+    );
+    expect(operationalEventsSource).toContain(
+      '.withIndex("by_storeId_subject"',
+    );
+    expect(dailyOperationsSource).toContain(
+      '.withIndex("by_storeId_createdAt"',
+    );
     expect(dailyCloseSource).toContain('.withIndex("by_storeId_operatingDate"');
-    expect(dailyCloseSource).toContain('.withIndex("by_storeId_status_operatingDate"');
+    expect(dailyCloseSource).toContain(
+      '.withIndex("by_storeId_status_operatingDate"',
+    );
     expect(dailyCloseSource).toContain('.withIndex("by_storeId_isCurrent"');
-    expect(dailyOpeningSource).toContain('.withIndex("by_storeId_operatingDate"');
-    expect(dailyOpeningSource).toContain('.withIndex("by_storeId_status_operatingDate"');
+    expect(dailyOpeningSource).toContain(
+      '.withIndex("by_storeId_operatingDate"',
+    );
+    expect(dailyOpeningSource).toContain(
+      '.withIndex("by_storeId_status_operatingDate"',
+    );
 
     const cycleCountDraftsSource = getSource("../stockOps/cycleCountDrafts.ts");
 
     expect(cycleCountDraftsSource).toContain(
-      '.withIndex("by_storeId_status_scope_owner"'
+      '.withIndex("by_storeId_status_scope_owner"',
     );
     expect(cycleCountDraftsSource).toContain(
-      '.withIndex("by_draftId_productSkuId"'
+      '.withIndex("by_draftId_productSkuId"',
     );
   });
 
   it("threads operations roles into membership and POS customer linking surfaces", () => {
-    const organizationMemberSource = getSource("../schemas/inventory/organizationMember.ts");
-    const posCustomersSource = getSource("../pos/infrastructure/repositories/customerRepository.ts");
+    const organizationMemberSource = getSource(
+      "../schemas/inventory/organizationMember.ts",
+    );
+    const posCustomersSource = getSource(
+      "../pos/infrastructure/repositories/customerRepository.ts",
+    );
     const typesSource = getSource("../schema.ts");
 
     expect(organizationMemberSource).toContain("operationalRoles");
-    expect(posCustomersSource).toContain("ensureCustomerProfileFromSourcesWithCtx");
+    expect(posCustomersSource).toContain(
+      "ensureCustomerProfileFromSourcesWithCtx",
+    );
     expect(typesSource).toContain("customerProfileSchema");
     expect(typesSource).toContain("staffProfileSchema");
     expect(typesSource).toContain("staffCredentialSchema");

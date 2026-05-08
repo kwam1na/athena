@@ -129,6 +129,7 @@ import type * as operations_approvalRequests from "../operations/approvalRequest
 import type * as operations_customerProfiles from "../operations/customerProfiles.js";
 import type * as operations_dailyClose from "../operations/dailyClose.js";
 import type * as operations_dailyOpening from "../operations/dailyOpening.js";
+import type * as operations_dailyOperations from "../operations/dailyOperations.js";
 import type * as operations_helpers_eventBuilders from "../operations/helpers/eventBuilders.js";
 import type * as operations_helpers_linking from "../operations/helpers/linking.js";
 import type * as operations_inventoryMovements from "../operations/inventoryMovements.js";
@@ -443,6 +444,7 @@ declare const fullApi: ApiFromModules<{
   "operations/customerProfiles": typeof operations_customerProfiles;
   "operations/dailyClose": typeof operations_dailyClose;
   "operations/dailyOpening": typeof operations_dailyOpening;
+  "operations/dailyOperations": typeof operations_dailyOperations;
   "operations/helpers/eventBuilders": typeof operations_helpers_eventBuilders;
   "operations/helpers/linking": typeof operations_helpers_linking;
   "operations/inventoryMovements": typeof operations_inventoryMovements;

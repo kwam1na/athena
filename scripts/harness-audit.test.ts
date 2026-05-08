@@ -749,6 +749,11 @@ async function createFixtureRepo() {
     rootDir
   );
   await write(
+    "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
     "packages/athena-webapp/src/components/operations/StockAdjustmentWorkspace.tsx",
     "export {};\n",
     rootDir
@@ -939,6 +944,11 @@ async function createFixtureRepo() {
   );
   await write(
     "packages/athena-webapp/convex/operations/dailyOpening.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/operations/dailyOperations.ts",
     "export {};\n",
     rootDir
   );
