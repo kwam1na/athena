@@ -1,8 +1,25 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { HARNESS_APP_REGISTRY } from "./harness-app-registry";
 
 describe("HARNESS_APP_REGISTRY", () => {
+  it("keeps Convex changed-file lint aware of worktree edits", async () => {
+    const script = await readFile(
+      path.join(
+        process.cwd(),
+        "packages/athena-webapp/scripts/convex-lint-changed.sh"
+      ),
+      "utf8"
+    );
+
+    expect(script).toContain('"$MERGE_BASE"...HEAD');
+    expect(script).toContain("git -C \"$REPO_ROOT\" diff --name-only --diff-filter=ACMR --");
+    expect(script).toContain("git -C \"$REPO_ROOT\" diff --cached --name-only --diff-filter=ACMR --");
+    expect(script).toContain("git -C \"$REPO_ROOT\" ls-files --others --exclude-standard --");
+  });
+
   it("keeps the valkey proxy service registered as a service-package archetype", () => {
     const valkeyProxy = HARNESS_APP_REGISTRY.find(
       (entry) => entry.appName === "valkey-proxy-server"

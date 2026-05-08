@@ -20,7 +20,7 @@ Landing page for packages/athena-webapp. Use this page to orient around graph ho
 - `DailyCloseView.tsx` (50 edges, Community 0) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)
 - `dailyClose.ts` (41 edges, Community 3) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../../packages/athena-webapp/convex/operations/dailyClose.ts)
 - `ProcurementView.tsx` (39 edges, Community 4) - [`packages/athena-webapp/src/components/procurement/ProcurementView.tsx`](../../../packages/athena-webapp/src/components/procurement/ProcurementView.tsx)
-- `DailyOpeningView.tsx` (31 edges, Community 6) - [`packages/athena-webapp/src/components/operations/DailyOpeningView.tsx`](../../../packages/athena-webapp/src/components/operations/DailyOpeningView.tsx)
+- `DailyOpeningView.tsx` (30 edges, Community 7) - [`packages/athena-webapp/src/components/operations/DailyOpeningView.tsx`](../../../packages/athena-webapp/src/components/operations/DailyOpeningView.tsx)
 - `RegisterSessionView.tsx` (27 edges, Community 10) - [`packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx`](../../../packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx)
 
 ## Navigation

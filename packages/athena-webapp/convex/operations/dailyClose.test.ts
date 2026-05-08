@@ -218,13 +218,13 @@ function dailyCloseApprovalProof(overrides: Partial<Row> = {}): Row {
     requestedByStaffProfileId: "staff-1",
     storeId: "store-1",
     subjectId: "store-1:2026-05-07",
-    subjectLabel: "Daily Close 2026-05-07",
+    subjectLabel: "End-of-Day Review 2026-05-07",
     subjectType: "daily_close",
     ...overrides,
   };
 }
 
-describe("daily close backend foundation", () => {
+describe("end-of-day review backend foundation", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -891,7 +891,7 @@ describe("daily close backend foundation", () => {
       kind: "user_error",
       error: {
         code: "precondition_failed",
-        message: "Daily Close cannot be completed while blocker items remain.",
+        message: "End-of-Day Review cannot be completed while blocker items remain.",
         metadata: { blockerCount: 1 },
       },
     });
@@ -971,11 +971,11 @@ describe("daily close backend foundation", () => {
       approval: {
         action: {
           key: "operations.daily_close.complete",
-          label: "Complete Daily Close",
+          label: "Complete End-of-Day Review",
         },
         copy: {
           message:
-            "A manager needs to approve this Daily Close before the operating day is saved.",
+            "A manager needs to approve this End-of-Day Review before the operating day is saved.",
           primaryActionLabel: "Approve and complete",
           secondaryActionLabel: "Cancel",
           title: "Manager approval required",
@@ -983,13 +983,13 @@ describe("daily close backend foundation", () => {
         metadata: {
           operatingDate: "2026-05-07",
         },
-        reason: "Manager approval is required to complete Daily Close.",
+        reason: "Manager approval is required to complete End-of-Day Review.",
         requiredRole: "manager",
         resolutionModes: [{ kind: "inline_manager_proof" }],
         selfApproval: "allowed",
         subject: {
           id: "store-1:2026-05-07",
-          label: "Daily Close 2026-05-07",
+          label: "End-of-Day Review 2026-05-07",
           type: "daily_close",
         },
       },

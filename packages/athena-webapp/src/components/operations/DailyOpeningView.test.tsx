@@ -165,7 +165,7 @@ const readySnapshot: DailyOpeningSnapshot = {
   },
   readyItems: [
     {
-      description: "Daily Close for 7 May is complete.",
+      description: "End-of-Day Review for 7 May is complete.",
       id: "ready-1",
       statusLabel: "Ready",
       title: "Prior close complete",
@@ -283,7 +283,7 @@ describe("DailyOpeningViewContent", () => {
   it("renders a loading workspace while the snapshot loads", () => {
     renderContent(undefined);
 
-    expect(screen.getByText("Daily Opening")).toBeInTheDocument();
+    expect(screen.getByText("Opening Handoff")).toBeInTheDocument();
     expect(
       screen.getByLabelText("Loading daily opening workspace"),
     ).toBeInTheDocument();
@@ -319,7 +319,7 @@ describe("DailyOpeningViewContent", () => {
     expect(screen.getByRole("button", { name: /start day/i })).toBeDisabled();
   });
 
-  it("explains the store day when prior Daily Close is missing", () => {
+  it("explains the store day when prior End-of-Day Review is missing", () => {
     renderContent({
       ...readySnapshot,
       blockers: [],
@@ -334,7 +334,7 @@ describe("DailyOpeningViewContent", () => {
             operatingDate: "2026-05-08",
           },
           statusLabel: "Needs review",
-          title: "Prior Daily Close not found",
+          title: "Prior End-of-Day Review not found",
         },
       ],
       status: "needs_attention",
@@ -514,7 +514,7 @@ describe("DailyOpeningView", () => {
     mockedHooks.useQuery.mockReturnValue(readySnapshot);
   });
 
-  it("queries Daily Opening with the active store and route params", () => {
+  it("queries Opening Handoff with the active store and route params", () => {
     render(<DailyOpeningView />);
 
     expect(mockedHooks.useQuery).toHaveBeenCalledWith(
@@ -526,6 +526,6 @@ describe("DailyOpeningView", () => {
         storeId: "store-1",
       },
     );
-    expect(screen.getByText("Daily Opening")).toBeInTheDocument();
+    expect(screen.getByText("Opening Handoff")).toBeInTheDocument();
   });
 });

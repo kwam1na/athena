@@ -38,6 +38,7 @@ import {
   Layers,
   Banknote,
   ChevronRight,
+  Workflow,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import useGetActiveStore from "../hooks/useGetActiveStore";
@@ -196,7 +197,7 @@ export function AppSidebar() {
               <SidebarMenuCollapsible
                 defaultOpen={isOperationsRoute}
                 disabled={!canAccessOperations()}
-                icon={Layers}
+                icon={Workflow}
                 label="Operations"
                 onClick={() => {
                   void navigate({
@@ -307,7 +308,7 @@ export function AppSidebar() {
                         })}
                         className="flex items-center"
                       >
-                        <p className="font-medium">Daily Opening</p>
+                        <p className="font-medium">Opening Handoff</p>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuSubItem>
@@ -328,7 +329,7 @@ export function AppSidebar() {
                         })}
                         className="flex items-center"
                       >
-                        <p className="font-medium">Daily Close</p>
+                        <p className="font-medium">End-of-Day Review</p>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuSubItem>

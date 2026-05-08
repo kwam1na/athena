@@ -23,7 +23,7 @@ export default function OrganizationView() {
       const store = stores[0];
 
       navigate({
-        to: "/$orgUrlSlug/store/$storeUrlSlug/products",
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations",
         params: (prev) => ({
           ...prev,
           orgUrlSlug,
@@ -31,7 +31,7 @@ export default function OrganizationView() {
         }),
       });
     }
-  }, [stores, orgUrlSlug]);
+  }, [stores, orgUrlSlug, navigate]);
 
   return (
     <View header={<Navigation />}>

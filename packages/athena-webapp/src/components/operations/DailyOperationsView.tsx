@@ -1,18 +1,19 @@
+import { useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import {
-  AlertTriangle,
   ArrowUpRight,
-  CheckCircle2,
-  CircleDashed,
   Clock3,
   ListChecks,
 } from "lucide-react";
 
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
+import { getOrigin } from "@/lib/navigationUtils";
+import { formatStoredAmount } from "@/lib/pos/displayAmounts";
 import { cn } from "@/lib/utils";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
+import { currencyFormatter } from "~/shared/currencyFormatter";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
 import {
@@ -27,6 +28,14 @@ import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "../ui/sheet";
+import { OperationsSummaryMetric } from "./OperationsSummaryMetric";
 
 type DailyOperationsApi = {
   getDailyOperationsSnapshot?: unknown;
@@ -67,6 +76,18 @@ export type DailyOperationsSnapshot = {
     };
     to?: string;
   }>;
+  closeSummary: {
+    carriedOverCashTotal: number;
+    carriedOverRegisterCount: number;
+    currentDayCashTotal: number;
+    currentDayCashTransactionCount: number;
+    expenseTotal: number;
+    expenseTransactionCount: number;
+    netCashVariance: number;
+    registerVarianceCount: number;
+    salesTotal: number;
+    transactionCount: number;
+  };
   currency: string;
   endAt?: number;
   lanes: Array<{
@@ -113,6 +134,8 @@ type DailyOperationsViewContentProps = {
   snapshot?: DailyOperationsSnapshot;
   storeUrlSlug: string;
 };
+
+const TIMELINE_PREVIEW_LIMIT = 5;
 
 function getDailyOperationsApi(): DailyOperationsApi {
   return (
@@ -174,11 +197,66 @@ function formatEventTime(timestamp: number) {
   }).format(new Date(timestamp));
 }
 
+function formatTimelineMessage(message: string) {
+  return message.replace(
+    /\b(\d{4})-(\d{2})-(\d{2})\b/g,
+    (value, year, month, day) => {
+      const parsed = new Date(
+        Number(year),
+        Number(month) - 1,
+        Number(day),
+      );
+
+      if (Number.isNaN(parsed.getTime())) {
+        return value;
+      }
+
+      return parsed.toLocaleDateString([], {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      });
+    },
+  );
+}
+
+function formatEntityCount(
+  value: number,
+  singular: string,
+  plural = `${singular}s`,
+) {
+  if (value === 0) return `No ${plural}`;
+  if (value === 1) return `1 ${singular}`;
+  return `${value} ${plural}`;
+}
+
+function formatTodayCashTransactionCount(value: number) {
+  if (value === 0) return "No cash transactions";
+  if (value === 1) return "1 cash transaction";
+  return `${value} cash transactions`;
+}
+
+function formatCarriedOverRegisterCount(value: number) {
+  if (value === 0) return "No registers from prior days";
+  if (value === 1) return "1 register from a prior day";
+  return `${value} registers from prior days`;
+}
+
+function formatRegisterVarianceCount(value: number) {
+  if (value === 0) return "No register variances";
+  if (value === 1) return "1 register variance";
+  return `${value} register variances`;
+}
+
+function formatMoney(currency: string, amount: number) {
+  return formatStoredAmount(currencyFormatter(currency), amount);
+}
+
 function ownerLabel(
   owner: DailyOperationsSnapshot["attentionItems"][number]["owner"],
 ) {
-  if (owner === "daily_opening") return "Daily opening";
-  if (owner === "daily_close") return "Daily close";
+  if (owner === "daily_opening") return "Opening Handoff";
+  if (owner === "daily_close") return "End-of-Day Review";
   return "Operations queue";
 }
 
@@ -197,26 +275,6 @@ function statusClassName(status: DailyOperationsLaneStatus) {
 function statusLabel(status: DailyOperationsLaneStatus) {
   if (status === "needs_attention") return "Needs attention";
   return status.charAt(0).toUpperCase() + status.slice(1);
-}
-
-function lifecycleClassName(status: DailyOperationsLifecycleStatus) {
-  if (status === "close_blocked") return "text-danger";
-  if (status === "not_opened" || status === "operating") {
-    return "text-warning-foreground";
-  }
-  return "text-success";
-}
-
-function LifecycleIcon({ status }: { status: DailyOperationsLifecycleStatus }) {
-  if (status === "close_blocked") {
-    return <AlertTriangle aria-hidden="true" className="h-5 w-5" />;
-  }
-
-  if (status === "closed" || status === "ready_to_close") {
-    return <CheckCircle2 aria-hidden="true" className="h-5 w-5" />;
-  }
-
-  return <CircleDashed aria-hidden="true" className="h-5 w-5" />;
 }
 
 function buildParams(
@@ -246,16 +304,20 @@ function LoadingWorkspace() {
   );
 }
 
-function Metric({ label, value }: { label: string; value: string | number }) {
+function TimelineEventItem({
+  event,
+}: {
+  event: DailyOperationsSnapshot["timeline"][number];
+}) {
   return (
-    <div className="rounded-lg border border-border bg-surface px-layout-md py-layout-sm shadow-surface">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
+    <article className="border-l border-border py-layout-xs pl-layout-md">
+      <p className="text-xs text-muted-foreground">
+        {formatEventTime(event.createdAt)}
       </p>
-      <p className="mt-1 font-numeric text-2xl tabular-nums text-foreground">
-        {value}
+      <p className="mt-1 text-sm text-foreground">
+        {formatTimelineMessage(event.message)}
       </p>
-    </div>
+    </article>
   );
 }
 
@@ -301,6 +363,7 @@ function LaneCard({
 }
 
 export function DailyOperationsViewContent({
+  currency,
   hasFullAdminAccess,
   isAuthenticated,
   isLoadingAccess,
@@ -309,6 +372,8 @@ export function DailyOperationsViewContent({
   snapshot,
   storeUrlSlug,
 }: DailyOperationsViewContentProps) {
+  const [isTimelineSheetOpen, setIsTimelineSheetOpen] = useState(false);
+
   if (isLoadingAccess) {
     return (
       <View hideBorder hideHeaderBottomBorder scrollMode="page">
@@ -329,6 +394,10 @@ export function DailyOperationsViewContent({
     return <NoPermissionView />;
   }
 
+  const previewTimeline = snapshot?.timeline.slice(0, TIMELINE_PREVIEW_LIMIT);
+  const hasMoreTimelineEvents =
+    (snapshot?.timeline.length ?? 0) > TIMELINE_PREVIEW_LIMIT;
+
   return (
     <View hideBorder hideHeaderBottomBorder scrollMode="page">
       <FadeIn className="container mx-auto py-layout-xl">
@@ -344,45 +413,100 @@ export function DailyOperationsViewContent({
           ) : (
             <PageWorkspace>
               <section className="space-y-layout-md">
-                <div className="flex flex-col gap-layout-sm lg:flex-row lg:items-end lg:justify-between">
-                  <div>
-                    <h2
-                      className={cn(
-                        "flex items-center gap-layout-xs text-2xl",
-                        lifecycleClassName(snapshot.lifecycle.status),
-                      )}
+                <div className="flex flex-col gap-layout-sm lg:flex-row lg:items-center lg:justify-end">
+                  <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-center">
+                    <div className="rounded-lg border border-border bg-surface-raised px-layout-md py-layout-sm text-sm text-muted-foreground shadow-surface">
+                      Operating date{" "}
+                      <span className="font-medium text-foreground">
+                        {formatOperatingDate(snapshot.operatingDate)}
+                      </span>
+                    </div>
+                    <Button
+                      asChild
+                      className="w-full sm:w-auto"
+                      variant="outline"
                     >
-                      <LifecycleIcon status={snapshot.lifecycle.status} />
-                      {snapshot.lifecycle.label}
-                    </h2>
-                    <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-                      {snapshot.lifecycle.description}
-                    </p>
+                      <Link
+                        params={buildParams(orgUrlSlug, storeUrlSlug)}
+                        to={snapshot.primaryAction.to}
+                      >
+                        {snapshot.primaryAction.label}
+                        <ArrowUpRight
+                          aria-hidden="true"
+                          className="ml-2 h-4 w-4"
+                        />
+                      </Link>
+                    </Button>
                   </div>
-                  <Button asChild className="w-full sm:w-auto">
-                    <Link
-                      params={buildParams(orgUrlSlug, storeUrlSlug)}
-                      to={snapshot.primaryAction.to}
-                    >
-                      {snapshot.primaryAction.label}
-                      <ArrowUpRight
-                        aria-hidden="true"
-                        className="ml-2 h-4 w-4"
-                      />
-                    </Link>
-                  </Button>
                 </div>
 
-                <div className="grid gap-layout-sm md:grid-cols-3">
-                  <Metric
-                    label="Operating date"
-                    value={formatOperatingDate(snapshot.operatingDate)}
+                <div className="grid gap-layout-sm md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+                  <OperationsSummaryMetric
+                    helper={formatEntityCount(
+                      snapshot.closeSummary.transactionCount,
+                      "transaction",
+                    )}
+                    label="Today's net sales"
+                    link={{
+                      ariaLabel: "Open transactions",
+                      orgUrlSlug,
+                      search: { o: getOrigin() },
+                      storeUrlSlug,
+                      to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
+                    }}
+                    value={formatMoney(
+                      snapshot.currency ?? currency,
+                      snapshot.closeSummary.salesTotal,
+                    )}
                   />
-                  <Metric
-                    label="Needs attention"
-                    value={snapshot.attentionItems.length}
+                  <OperationsSummaryMetric
+                    helper={formatTodayCashTransactionCount(
+                      snapshot.closeSummary.currentDayCashTransactionCount,
+                    )}
+                    label="Today's cash"
+                    link={{
+                      ariaLabel: "Open cash transactions",
+                      orgUrlSlug,
+                      search: { o: getOrigin(), paymentMethod: "cash" },
+                      storeUrlSlug,
+                      to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
+                    }}
+                    value={formatMoney(
+                      snapshot.currency ?? currency,
+                      snapshot.closeSummary.currentDayCashTotal,
+                    )}
                   />
-                  <Metric label="Timeline" value={snapshot.timeline.length} />
+                  <OperationsSummaryMetric
+                    helper={formatCarriedOverRegisterCount(
+                      snapshot.closeSummary.carriedOverRegisterCount,
+                    )}
+                    label="Carried-over cash"
+                    value={formatMoney(
+                      snapshot.currency ?? currency,
+                      snapshot.closeSummary.carriedOverCashTotal,
+                    )}
+                  />
+                  <OperationsSummaryMetric
+                    helper={formatEntityCount(
+                      snapshot.closeSummary.expenseTransactionCount,
+                      "expense transaction",
+                    )}
+                    label="Expenses"
+                    value={formatMoney(
+                      snapshot.currency ?? currency,
+                      snapshot.closeSummary.expenseTotal,
+                    )}
+                  />
+                  <OperationsSummaryMetric
+                    helper={formatRegisterVarianceCount(
+                      snapshot.closeSummary.registerVarianceCount,
+                    )}
+                    label="Variance"
+                    value={formatMoney(
+                      snapshot.currency ?? currency,
+                      snapshot.closeSummary.netCashVariance,
+                    )}
+                  />
                 </div>
               </section>
 
@@ -483,36 +607,64 @@ export function DailyOperationsViewContent({
                     </div>
                   </section>
 
-                  <section className="rounded-lg border border-border bg-surface p-layout-md shadow-surface">
+                  <section
+                    aria-label="Store-day timeline"
+                    className="rounded-lg border border-border bg-surface p-layout-md shadow-surface"
+                  >
                     <h3 className="flex items-center gap-layout-xs font-medium text-foreground">
                       <Clock3 aria-hidden="true" className="h-4 w-4" />
                       Store-day timeline
                     </h3>
-                    <div className="mt-layout-md space-y-layout-sm">
+                    <div className="mt-layout-md space-y-layout-md">
                       {snapshot.timeline.length === 0 ? (
                         <EmptyState
                           description="No operational events have been recorded for this store day."
                           title="No timeline yet"
                         />
                       ) : (
-                        snapshot.timeline.map((event) => (
-                          <article
-                            className="border-l border-border pl-layout-sm"
-                            key={event.id}
-                          >
-                            <p className="text-xs text-muted-foreground">
-                              {formatEventTime(event.createdAt)}
-                            </p>
-                            <p className="mt-1 text-sm text-foreground">
-                              {event.message}
-                            </p>
-                          </article>
+                        previewTimeline?.map((event) => (
+                          <TimelineEventItem event={event} key={event.id} />
                         ))
                       )}
                     </div>
+                    {hasMoreTimelineEvents ? (
+                      <Button
+                        className="mt-layout-md w-full"
+                        onClick={() => setIsTimelineSheetOpen(true)}
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                      >
+                        Show more
+                      </Button>
+                    ) : null}
                   </section>
                 </PageWorkspaceRail>
               </PageWorkspaceGrid>
+              <Sheet
+                open={isTimelineSheetOpen}
+                onOpenChange={setIsTimelineSheetOpen}
+              >
+                <SheetContent
+                  className="flex w-[min(100vw,30rem)] max-w-[calc(100vw-1rem)] flex-col overflow-hidden border-border bg-surface-raised p-0 shadow-overlay sm:max-w-md"
+                  side="right"
+                >
+                  <SheetHeader className="border-b border-border px-layout-lg py-layout-md">
+                    <SheetTitle>Store-day timeline</SheetTitle>
+                    <SheetDescription>
+                      All recorded events for{" "}
+                      {formatOperatingDate(snapshot.operatingDate)}.
+                    </SheetDescription>
+                  </SheetHeader>
+                  <div className="min-h-0 flex-1 overflow-y-auto px-layout-lg py-layout-md">
+                    <div className="space-y-layout-md">
+                      {snapshot.timeline.map((event) => (
+                        <TimelineEventItem event={event} key={event.id} />
+                      ))}
+                    </div>
+                  </div>
+                </SheetContent>
+              </Sheet>
             </PageWorkspace>
           )}
         </PageWorkspace>

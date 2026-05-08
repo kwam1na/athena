@@ -7,10 +7,10 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 - [packages/AGENTS.md](../../packages/AGENTS.md) - package router plus the operational guides for each harnessed package
 
 ## Repo Summary
-- Code files discovered: 1640
-- Graph nodes: 4837
-- Graph edges: 4761
-- Communities: 1568
+- Code files discovered: 1643
+- Graph nodes: 4847
+- Graph edges: 4769
+- Communities: 1571
 
 ## Graph Hotspots
 - `DailyCloseView.tsx` (50 edges, Community 0) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)
@@ -20,7 +20,7 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 - `createJourneyEvent()` (40 edges, Community 2) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)
 - `ProcurementView.tsx` (39 edges, Community 4) - [`packages/athena-webapp/src/components/procurement/ProcurementView.tsx`](../../packages/athena-webapp/src/components/procurement/ProcurementView.tsx)
 - `harness-check.ts` (32 edges, Community 5) - [`scripts/harness-check.ts`](../../scripts/harness-check.ts)
-- `DailyOpeningView.tsx` (31 edges, Community 6) - [`packages/athena-webapp/src/components/operations/DailyOpeningView.tsx`](../../packages/athena-webapp/src/components/operations/DailyOpeningView.tsx)
+- `DailyOpeningView.tsx` (30 edges, Community 7) - [`packages/athena-webapp/src/components/operations/DailyOpeningView.tsx`](../../packages/athena-webapp/src/components/operations/DailyOpeningView.tsx)
 
 ## Registered Packages
 - [Athena Webapp](packages/athena-webapp.md)

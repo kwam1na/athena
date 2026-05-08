@@ -21,7 +21,7 @@ describe("PageLevelHeader", () => {
 
     const header = screen.getByRole("banner");
     expect(header).toHaveClass("max-w-4xl");
-    expect(header).toHaveClass("border-b");
+    expect(header).not.toHaveClass("border-b");
 
     expect(screen.getByText("Guidance")).toHaveClass("uppercase");
     expect(
@@ -32,6 +32,21 @@ describe("PageLevelHeader", () => {
         "Written guidance keeps the reference templates aligned.",
       ),
     ).toHaveClass("text-muted-foreground");
+  });
+
+  it("renders the bottom divider only when requested", () => {
+    render(
+      <PageLevelHeader
+        eyebrow="Guidance"
+        showBottomBorder
+        title="Athena rollout guidance"
+        description="Written guidance keeps the reference templates aligned."
+      />,
+    );
+
+    const header = screen.getByRole("banner");
+    expect(header).toHaveClass("border-b");
+    expect(header).toHaveClass("pb-layout-lg");
   });
 
   it("exposes the canonical workspace rhythm primitives", () => {

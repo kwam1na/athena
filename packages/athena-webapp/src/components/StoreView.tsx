@@ -31,7 +31,7 @@ export default function StoreView() {
       const s = stores?.[0];
 
       navigate({
-        to: "/$orgUrlSlug/store/$storeUrlSlug/products",
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations",
         params: (prev) => ({
           ...prev,
           orgUrlSlug: prev.orgUrlSlug!,
@@ -39,7 +39,7 @@ export default function StoreView() {
         }),
       });
     }
-  }, [stores]);
+  }, [stores, navigate]);
 
   const noStoresPresent = stores && stores.length == 0;
 

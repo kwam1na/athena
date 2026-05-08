@@ -157,6 +157,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/pos/SessionManager.test.tsx`](../../src/components/pos/SessionManager.test.tsx)
 - [`src/components/pos/TotalsDisplay.test.tsx`](../../src/components/pos/TotalsDisplay.test.tsx)
 - [`src/components/pos/expense-reports/ExpenseReportsView.test.ts`](../../src/components/pos/expense-reports/ExpenseReportsView.test.ts)
+- [`src/components/pos/expense-reports/ExpenseReportsView.test.tsx`](../../src/components/pos/expense-reports/ExpenseReportsView.test.tsx)
 - [`src/components/pos/receipt/PosReceiptShareControl.test.tsx`](../../src/components/pos/receipt/PosReceiptShareControl.test.tsx)
 - [`src/components/pos/register/POSRegisterView.test.tsx`](../../src/components/pos/register/POSRegisterView.test.tsx)
 - [`src/components/pos/register/RegisterActionBar.test.tsx`](../../src/components/pos/register/RegisterActionBar.test.tsx)

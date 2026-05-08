@@ -1356,7 +1356,6 @@ export function StockAdjustmentWorkspaceContent({
   return (
     <PageWorkspace>
       <PageLevelHeader
-        className="border-b-0 pb-0"
         eyebrow="Operations"
         title={inventoryState.title}
         description={

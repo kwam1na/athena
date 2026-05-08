@@ -3,7 +3,13 @@ import { describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { backfillUndefinedSkuVisibilityFromProducts } from "./productSku";
-import { archive, createSku, getAll, updateSku } from "./products";
+import {
+  archive,
+  createSku,
+  getAll,
+  getByIdOrSlug,
+  updateSku,
+} from "./products";
 
 const mocks = vi.hoisted(() => ({
   requireStoreFullAdminAccess: vi.fn(),
@@ -13,8 +19,18 @@ vi.mock("../stockOps/access", () => ({
   requireStoreFullAdminAccess: mocks.requireStoreFullAdminAccess,
 }));
 
-type TableName = "category" | "product" | "productSku" | "subcategory";
+type TableName =
+  | "category"
+  | "inventoryHold"
+  | "product"
+  | "productSku"
+  | "subcategory";
 type Row = Record<string, unknown> & { _id: string };
+type QueryFilter = {
+  field: string;
+  op: "eq" | "gt";
+  value: unknown;
+};
 
 function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
@@ -23,6 +39,9 @@ function getHandler(definition: unknown) {
 function createSkuMutationCtx(seed: Partial<Record<TableName, Row[]>>) {
   const tables: Record<TableName, Map<string, Row>> = {
     category: new Map((seed.category ?? []).map((row) => [row._id, row])),
+    inventoryHold: new Map(
+      (seed.inventoryHold ?? []).map((row) => [row._id, row]),
+    ),
     product: new Map((seed.product ?? []).map((row) => [row._id, row])),
     productSku: new Map((seed.productSku ?? []).map((row) => [row._id, row])),
     subcategory: new Map(
@@ -31,6 +50,7 @@ function createSkuMutationCtx(seed: Partial<Record<TableName, Row[]>>) {
   };
   const counters: Record<TableName, number> = {
     category: 0,
+    inventoryHold: seed.inventoryHold?.length ?? 0,
     product: 0,
     productSku: seed.productSku?.length ?? 0,
     subcategory: 0,
@@ -38,15 +58,22 @@ function createSkuMutationCtx(seed: Partial<Record<TableName, Row[]>>) {
 
   function createIndexedQuery(
     table: TableName,
-    filters: Array<[string, unknown]>,
+    filters: QueryFilter[],
   ) {
     const matches = Array.from(tables[table].values()).filter((row) =>
-      filters.every(([field, value]) => row[field] === value),
+      filters.every((filter) => {
+        if (filter.op === "gt") {
+          return Number(row[filter.field]) > Number(filter.value);
+        }
+
+        return row[filter.field] === filter.value;
+      }),
     );
 
     return {
       first: async () => matches[0] ?? null,
       collect: async () => matches,
+      take: async (count: number) => matches.slice(0, count),
     };
   }
 
@@ -78,19 +105,26 @@ function createSkuMutationCtx(seed: Partial<Record<TableName, Row[]>>) {
           filter() {
             return createIndexedQuery(
               table,
-              table === "product" ? [["_id", "product001"]] : [],
+              table === "product"
+                ? [{ field: "_id", op: "eq", value: "product001" }]
+                : [],
             );
           },
           withIndex(
             _index: string,
             applyIndex: (queryBuilder: {
               eq: (field: string, value: unknown) => unknown;
+              gt: (field: string, value: unknown) => unknown;
             }) => unknown,
           ) {
-            const filters: Array<[string, unknown]> = [];
+            const filters: QueryFilter[] = [];
             const queryBuilder = {
               eq(field: string, value: unknown) {
-                filters.push([field, value]);
+                filters.push({ field, op: "eq", value });
+                return queryBuilder;
+              },
+              gt(field: string, value: unknown) {
+                filters.push({ field, op: "gt", value });
                 return queryBuilder;
               },
             };
@@ -141,23 +175,35 @@ function createProductsQueryCtx(seed: Partial<Record<TableName, Row[]>>) {
       _index: string,
       applyIndex: (queryBuilder: {
         eq: (field: string, value: unknown) => unknown;
+        gt: (field: string, value: unknown) => unknown;
       }) => unknown,
     ) {
-      const filters: Array<[string, unknown]> = [];
+      const filters: QueryFilter[] = [];
       const queryBuilder = {
         eq(field: string, value: unknown) {
-          filters.push([field, value]);
+          filters.push({ field, op: "eq", value });
+          return queryBuilder;
+        },
+        gt(field: string, value: unknown) {
+          filters.push({ field, op: "gt", value });
           return queryBuilder;
         },
       };
 
       applyIndex(queryBuilder);
       const matches = Array.from(tables[table].values()).filter((row) =>
-        filters.every(([field, value]) => row[field] === value),
+        filters.every((filter) => {
+          if (filter.op === "gt") {
+            return Number(row[filter.field]) > Number(filter.value);
+          }
+
+          return row[filter.field] === filter.value;
+        }),
       );
       return {
         collect: async () => matches,
         first: async () => matches[0] ?? null,
+        take: async (count: number) => matches.slice(0, count),
       };
     },
   })) as unknown as QueryCtx["db"]["query"];
@@ -323,6 +369,95 @@ describe("product catalog visibility", () => {
     expect(archivedProducts.map((product: Row) => product._id)).toEqual([
       "product-archived",
     ]);
+  });
+});
+
+describe("product detail availability", () => {
+  it("returns hold-adjusted sellable SKU availability for product detail queries", async () => {
+    const future = Date.now() + 60_000;
+    const past = Date.now() - 60_000;
+    const { ctx } = createProductsQueryCtx({
+      category: [
+        {
+          _id: "category-1",
+          name: "Hair",
+          slug: "hair",
+        },
+      ],
+      subcategory: [
+        {
+          _id: "subcategory-1",
+          name: "Frontals",
+          slug: "frontals",
+        },
+      ],
+      product: [
+        {
+          _id: "product-1",
+          availability: "live",
+          categoryId: "category-1",
+          isVisible: true,
+          name: "Agya",
+          slug: "agya",
+          storeId: "storezzzz",
+          subcategoryId: "subcategory-1",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku-1",
+          images: [],
+          inventoryCount: 10,
+          isVisible: true,
+          price: 7500,
+          productId: "product-1",
+          quantityAvailable: 8,
+          sku: "6N2Y-FRF-SQF",
+          storeId: "storezzzz",
+        },
+      ],
+      inventoryHold: [
+        {
+          _id: "hold-active",
+          expiresAt: future,
+          productSkuId: "sku-1",
+          quantity: 3,
+          sourceSessionId: "pos-session-1",
+          status: "active",
+          storeId: "storezzzz",
+        },
+        {
+          _id: "hold-expired",
+          expiresAt: past,
+          productSkuId: "sku-1",
+          quantity: 2,
+          sourceSessionId: "pos-session-2",
+          status: "active",
+          storeId: "storezzzz",
+        },
+        {
+          _id: "hold-released",
+          expiresAt: future,
+          productSkuId: "sku-1",
+          quantity: 1,
+          sourceSessionId: "pos-session-3",
+          status: "released",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    const product = await getHandler(getByIdOrSlug)(ctx, {
+      identifier: "product-1" as Id<"product">,
+      storeId: "storezzzz" as Id<"store">,
+    });
+
+    expect(product.skus[0]).toMatchObject({
+      durableQuantityAvailable: 8,
+      inventoryCount: 10,
+      quantityAvailable: 5,
+      reservedQuantity: 3,
+    });
   });
 });
 

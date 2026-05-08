@@ -14,6 +14,7 @@ export type CompletedTransactionRow = {
   formattedTotal: string;
   paymentMethodLabel: string;
   paymentMethod: string;
+  paymentMethods?: string[];
   hasMultiplePaymentMethods?: boolean;
   cashierName: string | null;
   customerName: string | null;

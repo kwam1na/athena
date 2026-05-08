@@ -3,8 +3,12 @@ import { useMutation, useQuery } from "convex/react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/ui/loading-button";
-import { NavigateBackButton } from "../../common/PageHeader";
 import { FadeIn } from "../../common/FadeIn";
+import {
+  PageLevelHeader,
+  PageWorkspace,
+} from "../../common/PageLevelHeader";
+import View from "../../View";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
@@ -404,26 +408,17 @@ export function POSSettingsView() {
   };
 
   return (
-    <FadeIn className="min-h-full bg-background">
-      <main className="container mx-auto py-layout-2xl">
-        <div className="mb-layout-lg">
-          <NavigateBackButton />
-        </div>
+    <View hideBorder hideHeaderBottomBorder scrollMode="page">
+      <FadeIn className="container mx-auto py-layout-xl">
+        <PageWorkspace>
+          <PageLevelHeader
+            eyebrow="Point of sale"
+            showBackButton
+            title="POS settings"
+            description="Configure the register details this checkout station uses before staff start in-store sales."
+          />
 
-        <header className="max-w-4xl space-y-layout-sm">
-          <p className="text-xs font-medium uppercase tracking-[0.28em] text-muted-foreground">
-            Point of sale
-          </p>
-          <h1 className="font-display text-4xl font-light leading-tight text-foreground">
-            POS settings
-          </h1>
-          <p className="max-w-3xl text-md leading-8 text-muted-foreground">
-            Configure the register details this checkout station uses before
-            staff start in-store sales.
-          </p>
-        </header>
-
-        <div className="mt-layout-xl border-t border-border">
+          <section className="border-t border-border">
           <FingerprintRegistrationCard
             displayName={displayName}
             onDisplayNameChange={(value) => {
@@ -449,8 +444,9 @@ export function POSSettingsView() {
               registrationState.existingTerminalRegisterNumber
             }
           />
-        </div>
-      </main>
-    </FadeIn>
+          </section>
+        </PageWorkspace>
+      </FadeIn>
+    </View>
   );
 }

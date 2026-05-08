@@ -7,12 +7,11 @@ import {
 } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import {
-  AlertTriangle,
   ArrowUpRight,
+  Ban,
   CheckCircle2,
   ClipboardCheck,
   ListChecks,
-  Lock,
   RotateCcw,
 } from "lucide-react";
 
@@ -55,6 +54,7 @@ import {
   useApprovedCommand,
   type ApprovalRetryArgs,
 } from "./useApprovedCommand";
+import { OperationsSummaryMetric } from "./OperationsSummaryMetric";
 
 type DailyCloseApi = {
   completeDailyClose?: unknown;
@@ -245,7 +245,7 @@ const statusCopy: Record<
   completed: {
     badge: "Completed",
     description: "The operating day has a saved close summary.",
-    title: "Daily close completed",
+    title: "End-of-day review completed",
   },
   needs_review: {
     badge: "Needs review",
@@ -308,20 +308,15 @@ function formatRegisterVarianceCount(value: number) {
   return `${value} register variances`;
 }
 
-function getStatusIcon(status: DailyCloseStatus) {
-  if (status === "blocked") return AlertTriangle;
-  if (status === "needs_review") return ClipboardCheck;
-  if (status === "carry_forward") return RotateCcw;
-  return CheckCircle2;
-}
-
 function getStatusLabelClassName(status: DailyCloseStatus) {
   return cn(
-    "inline-flex items-center gap-2 font-medium",
-    status === "blocked" && "text-danger",
-    status === "needs_review" && "text-warning-foreground",
-    status === "carry_forward" && "text-action-workflow",
-    (status === "ready" || status === "completed") && "text-success",
+    "inline-flex w-fit rounded-md px-layout-sm py-1 text-base font-medium",
+    status === "blocked" && "bg-danger/10 text-danger",
+    status === "needs_review" && "bg-warning/15 text-warning-foreground",
+    status === "carry_forward" &&
+      "bg-action-workflow-soft text-action-workflow",
+    (status === "ready" || status === "completed") &&
+      "bg-success/10 text-success",
   );
 }
 
@@ -1221,30 +1216,6 @@ function getBucketConfigs(snapshot: DailyCloseSnapshot): BucketConfig[] {
   ];
 }
 
-function SummaryMetric({
-  label,
-  value,
-  helper,
-}: {
-  helper?: string;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
-      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-        {label}
-      </p>
-      <p className="mt-layout-xs font-numeric text-2xl font-semibold tabular-nums text-foreground">
-        {value}
-      </p>
-      {helper ? (
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">{helper}</p>
-      ) : null}
-    </div>
-  );
-}
-
 function ItemLink({
   link,
   orgUrlSlug,
@@ -1418,7 +1389,7 @@ function BucketSection({
   );
   const Icon =
     status === "blocked"
-      ? AlertTriangle
+      ? Ban
       : status === "review"
         ? ClipboardCheck
         : status === "carry-forward"
@@ -1519,7 +1490,7 @@ function BucketTabs({
       value={value}
     >
       <TabsList
-        aria-label="Daily close buckets"
+        aria-label="End-of-day review buckets"
         className="h-auto w-full flex-wrap justify-start gap-1 border border-border bg-surface-raised p-1 text-muted-foreground shadow-surface"
       >
         {buckets.map((bucket) => (
@@ -1630,7 +1601,7 @@ function CompletionRail({
               )}
             >
               {isBlocked ? (
-                <Lock className="h-4 w-4" />
+                <Ban className="h-4 w-4" />
               ) : (
                 <ListChecks className="h-4 w-4" />
               )}
@@ -1741,7 +1712,7 @@ function CompletionRail({
               type="button"
               variant="workflow"
             >
-              Complete Daily Close
+              Complete End-of-Day Review
             </LoadingButton>
           </div>
         )}
@@ -1814,7 +1785,7 @@ export function DailyCloseViewContent({
     return (
       <View hideBorder hideHeaderBottomBorder scrollMode="page">
         <FadeIn className="container mx-auto py-layout-xl">
-          <div aria-label="Loading daily close access" />
+          <div aria-label="Loading end-of-day review access" />
         </FadeIn>
       </View>
     );
@@ -1822,7 +1793,7 @@ export function DailyCloseViewContent({
 
   if (!isAuthenticated) {
     return (
-      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before Daily Close can load protected operating-day data" />
+      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before End-of-Day Review can load protected operating-day data" />
     );
   }
 
@@ -1834,7 +1805,7 @@ export function DailyCloseViewContent({
     return (
       <div className="container mx-auto py-8">
         <EmptyState
-          description="Select a store before opening Daily Close."
+          description="Select a store before opening End-of-Day Review."
           title="No active store"
         />
       </div>
@@ -1847,7 +1818,6 @@ export function DailyCloseViewContent({
   const displayCopy = snapshot
     ? getStatusDisplayCopy(snapshot, status)
     : statusCopy[status];
-  const StatusIcon = getStatusIcon(status);
   const buckets = snapshot ? getBucketConfigs(snapshot) : [];
   const defaultBucketValue = snapshot
     ? getDefaultBucketValue(snapshot, status)
@@ -1885,7 +1855,7 @@ export function DailyCloseViewContent({
         if (commandResult.kind === "ok") {
           setCommandMessage({
             kind: "success",
-            message: "Daily close completed.",
+            message: "End-of-day review completed.",
           });
           return;
         }
@@ -1914,27 +1884,20 @@ export function DailyCloseViewContent({
       <FadeIn className="container mx-auto py-layout-xl">
         <PageWorkspace>
           <PageLevelHeader
-            className="border-b-0 pb-0"
             eyebrow="Operations"
-            title="Daily Close"
+            title="End-of-Day Review"
             description="Review the operating day, resolve blockers, and preserve follow-ups before saving the close summary."
           />
 
           {isLoadingSnapshot || !snapshot ? null : (
             <PageWorkspace>
-              <section className="space-y-layout-md">
-                <div className="flex flex-col gap-layout-sm lg:flex-row lg:items-end lg:justify-between">
-                  <div>
-                    <h2
-                      className={cn(
-                        "text-2xl",
-                        getStatusLabelClassName(status),
-                      )}
-                    >
-                      <StatusIcon aria-hidden="true" className="h-5 w-5" />
+              <section className="space-y-layout-lg">
+                <div className="flex flex-col gap-layout-md lg:flex-row lg:items-end lg:justify-between">
+                  <div className="space-y-layout-xs">
+                    <h2 className={getStatusLabelClassName(status)}>
                       {displayCopy.title}
                     </h2>
-                    <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+                    <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
                       {displayCopy.description}
                     </p>
                   </div>
@@ -1947,7 +1910,7 @@ export function DailyCloseViewContent({
                 </div>
 
                 <div className="grid gap-layout-sm md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
-                  <SummaryMetric
+                  <OperationsSummaryMetric
                     helper={formatEntityCount(
                       getSummaryCount(
                         snapshot.summary,
@@ -1957,6 +1920,13 @@ export function DailyCloseViewContent({
                       "transaction",
                     )}
                     label="Today's net sales"
+                    link={{
+                      ariaLabel: "Open transactions",
+                      orgUrlSlug,
+                      search: { o: getOrigin() },
+                      storeUrlSlug,
+                      to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
+                    }}
                     value={formatMoney(
                       currency,
                       getSummaryAmount(
@@ -1966,7 +1936,7 @@ export function DailyCloseViewContent({
                       ),
                     )}
                   />
-                  <SummaryMetric
+                  <OperationsSummaryMetric
                     helper={formatTodayCashTransactionCount(
                       getSummaryCount(
                         snapshot.summary,
@@ -1975,6 +1945,13 @@ export function DailyCloseViewContent({
                       ),
                     )}
                     label="Today's cash"
+                    link={{
+                      ariaLabel: "Open cash transactions",
+                      orgUrlSlug,
+                      search: { o: getOrigin(), paymentMethod: "cash" },
+                      storeUrlSlug,
+                      to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
+                    }}
                     value={formatMoney(
                       currency,
                       getSummaryAmount(
@@ -1984,7 +1961,7 @@ export function DailyCloseViewContent({
                       ),
                     )}
                   />
-                  <SummaryMetric
+                  <OperationsSummaryMetric
                     helper={formatCarriedOverRegisterCount(
                       getSummaryCount(
                         snapshot.summary,
@@ -2002,14 +1979,14 @@ export function DailyCloseViewContent({
                       ),
                     )}
                   />
-                  <SummaryMetric
+                  <OperationsSummaryMetric
                     helper={formatExpenseTransactionCount(
                       getExpenseTransactionCount(snapshot.summary),
                     )}
                     label="Expenses"
                     value={formatMoney(currency, snapshot.summary.expenseTotal)}
                   />
-                  <SummaryMetric
+                  <OperationsSummaryMetric
                     helper={formatRegisterVarianceCount(
                       getSummaryRegisterVarianceCount(snapshot.summary),
                     )}
@@ -2067,14 +2044,13 @@ function DailyCloseApiPendingView() {
       <FadeIn className="container mx-auto py-layout-xl">
         <PageWorkspace>
           <PageLevelHeader
-            className="border-b-0 pb-0"
             eyebrow="Operations"
-            title="Daily Close"
-            description="Daily Close is waiting for the server close snapshot and completion command."
+            title="End-of-Day Review"
+            description="End-of-Day Review is waiting for the server close snapshot and completion command."
           />
           <EmptyState
             description="The frontend is wired to api.operations.dailyClose.getDailyCloseSnapshot and completeDailyClose."
-            title="Daily Close server API pending"
+            title="End-of-Day Review server API pending"
           />
         </PageWorkspace>
       </FadeIn>
@@ -2124,7 +2100,7 @@ function DailyCloseConnectedView({
         kind: "user_error",
         error: {
           code: "validation_failed",
-          message: "Select a store before completing Daily Close.",
+          message: "Select a store before completing End-of-Day Review.",
         },
       } as NormalizedCommandResult<unknown>;
     }

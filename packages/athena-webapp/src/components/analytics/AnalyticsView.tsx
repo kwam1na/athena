@@ -39,7 +39,6 @@ function AnalyticsWorkspaceSkeleton() {
       <FadeIn className="container mx-auto py-layout-xl">
         <PageWorkspace>
           <PageLevelHeader
-            className="border-b-0 pb-0"
             eyebrow="Storefront Ops"
             title="Storefront activity"
             description="Loading the latest storefront signal."
@@ -127,7 +126,6 @@ export default function AnalyticsView() {
       <FadeIn className="container mx-auto py-layout-xl">
         <PageWorkspace>
           <PageLevelHeader
-            className="border-b-0 pb-0"
             eyebrow="Storefront Ops"
             title="Storefront activity"
             description="See what customers are doing now, where checkout needs attention, and which products are drawing interest."
