@@ -152,6 +152,30 @@ const readySnapshot: DailyCloseSnapshot = {
       },
       title: "Completed sale",
     },
+    {
+      category: "expense",
+      description: "Completed expense is included in Daily Close.",
+      id: "ready-3",
+      link: {
+        label: "View expense",
+        params: { reportId: "expense-1" },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId",
+      },
+      metadata: {
+        completedAt: Date.UTC(2026, 4, 7, 16),
+        notes: "Bought packing supplies.",
+        owner: "Akosua Mensah",
+        register: "Register A1",
+        report: "EXP-1",
+        total: 12500,
+      },
+      subject: {
+        id: "expense-1",
+        label: "EXP-1",
+        type: "expense_transaction",
+      },
+      title: "Completed expense",
+    },
   ],
   reviewItems: [
     {
@@ -385,14 +409,54 @@ describe("DailyCloseViewContent", () => {
       "href",
       "/wigclub/store/osu/pos/transactions/txn-1?o=%252F",
     );
+    const saleItem = screen.getByText("Completed sale").closest("article");
+    expect(saleItem).not.toBeNull();
     expect(
-      screen.getByText("Front counter terminal / Register A1"),
+      within(saleItem as HTMLElement).getByText(
+        "Front counter terminal / Register A1",
+      ),
     ).toBeInTheDocument();
-    expect(screen.getByText("Kofi Mensah")).toBeInTheDocument();
-    expect(screen.getByText("Cash, Mobile Money")).toBeInTheDocument();
-    expect(screen.getByText("Completed At")).toBeInTheDocument();
-    expect(screen.getByText("GH₵495")).toBeInTheDocument();
-    expect(screen.getByText("GH₵500")).toBeInTheDocument();
+    expect(
+      within(saleItem as HTMLElement).getByText("Kofi Mensah"),
+    ).toBeInTheDocument();
+    expect(
+      within(saleItem as HTMLElement).getByText("Cash, Mobile Money"),
+    ).toBeInTheDocument();
+    expect(
+      within(saleItem as HTMLElement).getByText("Completed At"),
+    ).toBeInTheDocument();
+    expect(
+      within(saleItem as HTMLElement).getByText("GH₵495"),
+    ).toBeInTheDocument();
+    expect(
+      within(saleItem as HTMLElement).getByText("GH₵500"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Completed expense")).toBeInTheDocument();
+    const expenseItem = screen.getByText("Completed expense").closest("article");
+    expect(expenseItem).not.toBeNull();
+    expect(
+      within(expenseItem as HTMLElement).getByText("EXP-1"),
+    ).toBeInTheDocument();
+    expect(
+      within(expenseItem as HTMLElement).getByText("Akosua Mensah"),
+    ).toBeInTheDocument();
+    expect(
+      within(expenseItem as HTMLElement).getByText("Register A1"),
+    ).toBeInTheDocument();
+    expect(
+      within(expenseItem as HTMLElement).getByText("Bought packing supplies."),
+    ).toBeInTheDocument();
+    expect(
+      within(expenseItem as HTMLElement).getByText("GH₵125"),
+    ).toBeInTheDocument();
+    expect(
+      within(expenseItem as HTMLElement).getByRole("link", {
+        name: /view expense/i,
+      }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/pos/expense-reports/expense-1?o=%252F",
+    );
     expect(
       screen.getByRole("button", { name: /complete daily close/i }),
     ).toBeEnabled();

@@ -272,6 +272,8 @@ describe("daily close backend foundation", () => {
         {
           _id: "expense-1",
           completedAt: Date.UTC(2026, 4, 7, 17),
+          notes: "Restocked petty cash supplies.",
+          registerNumber: "A3",
           sessionId: "expense-session-1",
           staffProfileId: "staff-1",
           status: "completed",
@@ -554,6 +556,12 @@ describe("daily close backend foundation", () => {
     expect(snapshot.readyItems.map((item) => item.key)).toContain(
       "pos_transaction:txn-1:completed",
     );
+    expect(snapshot.readyItems.map((item) => item.key)).toEqual(
+      expect.arrayContaining([
+        "expense_transaction:expense-1:completed",
+        "expense_transaction:expense-2:completed",
+      ]),
+    );
     expect(
       snapshot.readyItems.find(
         (item) => item.key === "pos_transaction:txn-1:completed",
@@ -595,6 +603,32 @@ describe("daily close backend foundation", () => {
       params: { transactionId: "txn-1" },
       to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId",
     });
+    expect(
+      snapshot.readyItems.find(
+        (item) => item.key === "expense_transaction:expense-1:completed",
+      ),
+    ).toMatchObject({
+      category: "expense",
+      link: {
+        label: "View expense",
+        params: { reportId: "expense-1" },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId",
+      },
+      metadata: {
+        completedAt: Date.UTC(2026, 4, 7, 17),
+        notes: "Restocked petty cash supplies.",
+        owner: "Kofi Mensah",
+        register: "Register A3",
+        report: "EXP-1",
+        total: 4500,
+      },
+      subject: {
+        id: "expense-1",
+        label: "EXP-1",
+        type: "expense_transaction",
+      },
+      title: "Completed expense",
+    });
     expect(snapshot.summary).toMatchObject({
       carriedOverCashTotal: 10000,
       carriedOverRegisterCount: 1,
@@ -616,6 +650,18 @@ describe("daily close backend foundation", () => {
     });
     expect(snapshot.readyItems.map((item) => item.key)).not.toContain(
       "pos_transaction:txn-prior-day:completed",
+    );
+    expect(snapshot.readyItems.map((item) => item.key)).not.toContain(
+      "expense_transaction:expense-prior-day:completed",
+    );
+    expect(snapshot.sourceSubjects).toEqual(
+      expect.arrayContaining([
+        {
+          id: "expense-1",
+          label: "EXP-1",
+          type: "expense_transaction",
+        },
+      ]),
     );
   });
 
@@ -712,6 +758,89 @@ describe("daily close backend foundation", () => {
       currentDayCashTransactionCount: 1,
       salesTotal: 25000,
       transactionCount: 1,
+    });
+  });
+
+  it("uses the supplied operating-day range for completed expense transactions", async () => {
+    const { db } = createDb({
+      expenseTransaction: [
+        {
+          _id: "expense-after-utc-midnight",
+          completedAt: Date.UTC(2026, 4, 8, 1, 3),
+          sessionId: "expense-session-1",
+          staffProfileId: "staff-1",
+          status: "completed",
+          storeId: "store-1",
+          totalValue: 25000,
+          transactionNumber: "EXP-LOCAL",
+        },
+        {
+          _id: "expense-void",
+          completedAt: Date.UTC(2026, 4, 8, 1, 4),
+          sessionId: "expense-session-void",
+          staffProfileId: "staff-1",
+          status: "void",
+          storeId: "store-1",
+          totalValue: 10000,
+          transactionNumber: "EXP-VOID",
+        },
+        {
+          _id: "expense-other-store",
+          completedAt: Date.UTC(2026, 4, 8, 1, 5),
+          sessionId: "expense-session-other-store",
+          staffProfileId: "staff-1",
+          status: "completed",
+          storeId: "store-2",
+          totalValue: 9000,
+          transactionNumber: "EXP-OTHER",
+        },
+      ],
+      staffProfile: [
+        {
+          _id: "staff-1",
+          firstName: "Kofi",
+          fullName: "Kofi Mensah",
+          lastName: "Mensah",
+          organizationId: "org-1",
+          status: "active",
+          storeId: "store-1",
+        },
+      ],
+      store: [store],
+    });
+
+    const utcSnapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      {
+        operatingDate: "2026-05-07",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+    const localSnapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      {
+        endAt: Date.UTC(2026, 4, 8, 4),
+        operatingDate: "2026-05-07",
+        startAt: Date.UTC(2026, 4, 7, 4),
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(utcSnapshot.readyItems.map((item) => item.key)).not.toContain(
+      "expense_transaction:expense-after-utc-midnight:completed",
+    );
+    expect(localSnapshot.readyItems.map((item) => item.key)).toContain(
+      "expense_transaction:expense-after-utc-midnight:completed",
+    );
+    expect(localSnapshot.readyItems.map((item) => item.key)).not.toContain(
+      "expense_transaction:expense-void:completed",
+    );
+    expect(localSnapshot.readyItems.map((item) => item.key)).not.toContain(
+      "expense_transaction:expense-other-store:completed",
+    );
+    expect(localSnapshot.summary).toMatchObject({
+      expenseStaffCount: 1,
+      expenseTotal: 25000,
     });
   });
 

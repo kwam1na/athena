@@ -514,6 +514,7 @@ const timestampMetadataLabels = new Set([
 const metadataLabelOrder = [
   "approval",
   "transaction",
+  "report",
   "session",
   "terminal",
   "register",
@@ -610,6 +611,14 @@ const metadataLabelsByCategory: Record<string, string[]> = {
     "totalPaid",
     "changeGiven",
     "completedAt",
+  ],
+  expense: [
+    "report",
+    "register",
+    "owner",
+    "total",
+    "completedAt",
+    "notes",
   ],
   voidedsale: [
     "transaction",

@@ -554,16 +554,16 @@ async function listExpensesForDay(
     storeId: Id<"store">;
   },
 ) {
-  const expenses = await ctx.db
+  return ctx.db
     .query("expenseTransaction")
-    .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+    .withIndex("by_storeId_status_completedAt", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("status", "completed")
+        .gte("completedAt", args.startAt)
+        .lt("completedAt", args.endAt),
+    )
     .take(DAILY_CLOSE_QUERY_LIMIT);
-
-  return expenses.filter(
-    (expense) =>
-      expense.status === "completed" &&
-      isInRange(expense.completedAt, args.startAt, args.endAt),
-  );
 }
 
 async function listDepositsForDay(
@@ -811,6 +811,7 @@ export async function buildDailyCloseSnapshotWithCtx(
     ...openPosSessions.map((session) => session.staffProfileId),
     ...completedTransactions.map((transaction) => transaction.staffProfileId),
     ...voidedTransactions.map((transaction) => transaction.staffProfileId),
+    ...expenseTransactions.map((transaction) => transaction.staffProfileId),
     ...pendingApprovals.map((approval) => approval.requestedByStaffProfileId),
   ]);
   const blockers: DailyCloseItem[] = [];
@@ -1159,6 +1160,39 @@ export async function buildDailyCloseSnapshotWithCtx(
         ...(typeof transaction.changeGiven === "number"
           ? { changeGiven: transaction.changeGiven }
           : {}),
+      },
+    });
+  });
+
+  expenseTransactions.forEach((transaction) => {
+    const staffName = staffNamesById.get(transaction.staffProfileId);
+    const registerLabel = trimOptional(transaction.registerNumber)
+      ? `Register ${transaction.registerNumber}`
+      : undefined;
+
+    readyItems.push({
+      key: `expense_transaction:${transaction._id}:completed`,
+      severity: "ready",
+      category: "expense",
+      title: "Completed expense",
+      message: "Completed expense is included in Daily Close.",
+      subject: {
+        type: "expense_transaction",
+        id: transaction._id,
+        label: transaction.transactionNumber,
+      },
+      link: {
+        label: "View expense",
+        params: { reportId: transaction._id },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId",
+      },
+      metadata: {
+        report: transaction.transactionNumber,
+        ...(staffName ? { owner: staffName } : {}),
+        ...(registerLabel ? { register: registerLabel } : {}),
+        ...(transaction.notes ? { notes: transaction.notes } : {}),
+        total: transaction.totalValue,
+        completedAt: transaction.completedAt,
       },
     });
   });
