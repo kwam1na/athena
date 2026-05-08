@@ -51,7 +51,7 @@ import { useProductDiscount } from "@/hooks/useProductDiscount";
 import { DiscountBadge } from "../product-page/DiscountBadge";
 import { useInventoryStatus } from "@/hooks/useInventoryStatus";
 import { getStoreConfigV2 } from "@/lib/storeConfig";
-import { toDisplayAmount } from "@/lib/currency";
+import { formatStoredAmount } from "@/lib/currency";
 import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
 import {
   createBagRemoveSucceededEvent,
@@ -182,13 +182,12 @@ const BagItemWithDiscount = ({
 
   if (item.price && item.price > 0) {
     if (showDiscount) {
-      priceLabel = formatter.format(
-        toDisplayAmount(discountInfo.discountedPrice * item.quantity),
+      priceLabel = formatStoredAmount(
+        formatter,
+        discountInfo.discountedPrice * item.quantity,
       );
     } else {
-      priceLabel = formatter.format(
-        toDisplayAmount(item.price * item.quantity),
-      );
+      priceLabel = formatStoredAmount(formatter, item.price * item.quantity);
     }
   } else if (discountInfo.hasDiscount && discountInfo.discountedPrice === 0) {
     priceLabel = "Free";
@@ -275,8 +274,9 @@ const BagItemWithDiscount = ({
                   className="flex items-center gap-2"
                 >
                   <p className="text-xs text-muted-foreground line-through">
-                    {formatter.format(
-                      toDisplayAmount(item.price * item.quantity),
+                    {formatStoredAmount(
+                      formatter,
+                      item.price * item.quantity,
                     )}
                   </p>
                   <p className="text-xs font-medium text-accent2">
@@ -286,8 +286,9 @@ const BagItemWithDiscount = ({
               ) : priceLabel === "Free" ? (
                 <div className="flex items-center gap-2 text-xs">
                   <p className="text-muted-foreground line-through">
-                    {formatter.format(
-                      toDisplayAmount((item.price || 0) * item.quantity),
+                    {formatStoredAmount(
+                      formatter,
+                      (item.price || 0) * item.quantity,
                     )}
                   </p>
                   <p className="text-xs font-medium text-accent2">Free</p>
@@ -739,7 +740,7 @@ export default function ShoppingBag() {
                   <div className="space-y-2">
                     <div className="flex gap-4 md:gap-8 text-md font-medium text-accent2">
                       <p>TOTAL</p>
-                      <p>{formatter.format(toDisplayAmount(total))}</p>
+                      <p>{formatStoredAmount(formatter, total)}</p>
                     </div>
 
                     <p className="text-xs text-gray-500">

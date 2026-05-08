@@ -3,6 +3,7 @@ import { getProductName } from "@/lib/productUtils";
 import placeholder from "@/assets/placeholder.png";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { getStoreFallbackImageUrl } from "@/lib/storeConfig";
+import { formatStoredAmount } from "@/lib/currency";
 
 interface OrderItemProps {
   item: any;
@@ -11,7 +12,7 @@ interface OrderItemProps {
 
 export const OrderItem = ({ item, formatter }: OrderItemProps) => {
   const priceLabel = item.price
-    ? formatter.format(item.price * item.quantity)
+    ? formatStoredAmount(formatter, item.price * item.quantity)
     : "Free";
 
   const { store } = useStoreContext();

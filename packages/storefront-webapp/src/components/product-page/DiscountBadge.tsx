@@ -1,5 +1,6 @@
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useProductDiscount } from "@/hooks/useProductDiscount";
+import { formatStoredAmount } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import { ProductSku } from "@athena/webapp";
 import { motion } from "framer-motion";
@@ -39,7 +40,7 @@ export const DiscountBadge = ({
     >
       {discountInfo.discount.type === "percentage"
         ? `${discountInfo.discount.value}% OFF`
-        : `${formatter.format(discountInfo.discount.value)} OFF`}
+        : `${formatStoredAmount(formatter, discountInfo.discount.value)} OFF`}
     </motion.span>
   );
 };

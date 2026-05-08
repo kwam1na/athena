@@ -16,8 +16,11 @@ import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { useAuth } from "~/src/hooks/useAuth";
 import { api } from "~/convex/_generated/api";
 import { presentCommandToast } from "~/src/lib/errors/presentCommandToast";
+import { parseDisplayAmountInput } from "~/src/lib/pos/displayAmounts";
 import { runCommand } from "~/src/lib/errors/runCommand";
 import { currencyFormatter, getRelativeTime } from "~/src/lib/utils";
+import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
+import type { Id } from "~/convex/_generated/dataModel";
 
 export type ReturnExchangePayload = {
   operationType: "exchange" | "return";
@@ -44,13 +47,26 @@ type ReturnExchangeOverview = {
   refundTotal: number;
 };
 
+type ReturnExchangeOrderItem = {
+  _id?: string;
+  isRefunded?: boolean;
+  price: number;
+  productName?: string;
+  productSku?: string;
+  quantity: number;
+};
+
+type ReturnExchangeOrder = {
+  items?: ReturnExchangeOrderItem[];
+};
+
 type ReturnExchangeViewContentProps = {
   activity?: ReturnExchangeOverview["recentEvents"];
   balanceCollectedTotal?: number;
   currency?: string;
   isSubmitting: boolean;
   onSubmit: (payload: ReturnExchangePayload) => Promise<void>;
-  order: any;
+  order: ReturnExchangeOrder;
   pendingApprovalCount: number;
   refundTotal?: number;
 };
@@ -78,7 +94,11 @@ export function ReturnExchangeViewContent({
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const formatter = currencyFormatter(currency);
-  const availableItems = order?.items?.filter((item: any) => !item.isRefunded) ?? [];
+  const availableItems =
+    order?.items?.filter(
+      (item): item is ReturnExchangeOrderItem & { _id: string } =>
+        Boolean(item._id) && !item.isRefunded,
+    ) ?? [];
 
   const toggleItem = (itemId: string) => {
     setSelectedItemIds((previous) => {
@@ -117,7 +137,7 @@ export function ReturnExchangeViewContent({
 
     if (operationType === "exchange") {
       const quantity = Number(replacementQuantity);
-      const unitPrice = Number(replacementUnitPrice);
+      const unitPrice = parseDisplayAmountInput(replacementUnitPrice);
 
       if (!replacementProductSkuId || !replacementProductName || !replacementUnitPrice) {
         setValidationError("Provide the replacement item details");
@@ -129,7 +149,7 @@ export function ReturnExchangeViewContent({
         return;
       }
 
-      if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+      if (unitPrice === undefined || unitPrice <= 0) {
         setValidationError("Replacement price must be greater than zero");
         return;
       }
@@ -140,7 +160,7 @@ export function ReturnExchangeViewContent({
           productName: replacementProductName,
           productSkuId: replacementProductSkuId,
           quantity,
-          unitPrice: Math.round(unitPrice * 100),
+          unitPrice,
         },
       ];
     }
@@ -168,7 +188,7 @@ export function ReturnExchangeViewContent({
             Refunds recorded
           </p>
           <p className="mt-2 text-lg font-medium">
-            {formatter.format(refundTotal / 100)}
+            {formatStoredAmount(formatter, refundTotal)}
           </p>
         </div>
         <div className="rounded-md border p-3">
@@ -176,7 +196,7 @@ export function ReturnExchangeViewContent({
             Exchange balance collected
           </p>
           <p className="mt-2 text-lg font-medium">
-            {formatter.format(balanceCollectedTotal / 100)}
+            {formatStoredAmount(formatter, balanceCollectedTotal)}
           </p>
         </div>
         <div className="rounded-md border p-3">
@@ -202,7 +222,7 @@ export function ReturnExchangeViewContent({
               Choose the purchased items being returned or exchanged.
             </p>
           </div>
-          {availableItems.map((item: any) => {
+          {availableItems.map((item) => {
             const checkboxId = `return-item-${item._id}`;
 
             return (
@@ -221,7 +241,7 @@ export function ReturnExchangeViewContent({
                   </Label>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  {item.quantity} x {formatter.format(item.price)}
+                  {item.quantity} x {formatStoredAmount(formatter, item.price)}
                 </p>
               </div>
             );
@@ -378,17 +398,19 @@ export function ReturnExchangeView() {
       setIsSubmitting(true);
       const result = await runCommand(() =>
         processReturnExchange({
-          orderId: order._id,
-          operationType: payload.operationType,
-          replacementItems: payload.replacementItems.map((item) => ({
-            productId: item.productId as any,
+            orderId: order._id,
+            operationType: payload.operationType,
+            replacementItems: payload.replacementItems.map((item) => ({
+            productId: item.productId as Id<"product"> | undefined,
             productName: item.productName,
-            productSkuId: item.productSkuId as any,
+            productSkuId: item.productSkuId as Id<"productSku">,
             quantity: item.quantity,
             unitPrice: item.unitPrice,
           })),
           restockReturnedItems: payload.restockReturnedItems,
-          returnItemIds: payload.returnItemIds.map((itemId) => itemId as any),
+          returnItemIds: payload.returnItemIds.map(
+            (itemId) => itemId as Id<"onlineOrderItem">,
+          ),
           signedInAthenaUser: user
             ? {
                 id: user._id,

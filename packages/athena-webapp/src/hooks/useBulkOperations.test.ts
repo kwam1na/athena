@@ -3,20 +3,22 @@ import {
   applyOperation,
   calculatePriceWithFee,
   computePreview,
+  parseOperationValue,
   validateOperationValue,
   type SkuRow,
 } from "./useBulkOperations";
+import type { Id } from "~/convex/_generated/dataModel";
 
 // --- applyOperation ---
 
 describe("applyOperation", () => {
   describe("multiply", () => {
     it("multiplies the price by the given value", () => {
-      expect(applyOperation("multiply", 100, 2)).toBe(200);
+      expect(applyOperation("multiply", 10000, 2)).toBe(20000);
     });
 
     it("handles decimal multipliers", () => {
-      expect(applyOperation("multiply", 100, 0.5)).toBe(50);
+      expect(applyOperation("multiply", 10000, 0.5)).toBe(5000);
     });
 
     it("returns null for zero value", () => {
@@ -30,11 +32,11 @@ describe("applyOperation", () => {
 
   describe("divide", () => {
     it("divides the price by the given value", () => {
-      expect(applyOperation("divide", 200, 2)).toBe(100);
+      expect(applyOperation("divide", 20000, 2)).toBe(10000);
     });
 
     it("handles division resulting in decimals", () => {
-      expect(applyOperation("divide", 100, 3)).toBeCloseTo(33.333, 2);
+      expect(applyOperation("divide", 10000, 3)).toBeCloseTo(3333.333, 2);
     });
 
     it("returns null for zero value (divide by zero)", () => {
@@ -48,7 +50,7 @@ describe("applyOperation", () => {
 
   describe("set", () => {
     it("sets the price to the given value", () => {
-      expect(applyOperation("set", 100, 50)).toBe(50);
+      expect(applyOperation("set", 10000, 5000)).toBe(5000);
     });
 
     it("allows setting to zero", () => {
@@ -58,41 +60,41 @@ describe("applyOperation", () => {
 
   describe("increase_percent", () => {
     it("increases price by percentage", () => {
-      expect(applyOperation("increase_percent", 100, 15)).toBeCloseTo(115);
+      expect(applyOperation("increase_percent", 10000, 15)).toBeCloseTo(11500);
     });
 
     it("handles 100% increase", () => {
-      expect(applyOperation("increase_percent", 50, 100)).toBe(100);
+      expect(applyOperation("increase_percent", 5000, 100)).toBe(10000);
     });
   });
 
   describe("decrease_percent", () => {
     it("decreases price by percentage", () => {
-      expect(applyOperation("decrease_percent", 100, 25)).toBe(75);
+      expect(applyOperation("decrease_percent", 10000, 25)).toBe(7500);
     });
 
     it("handles 100% decrease (results in zero)", () => {
-      expect(applyOperation("decrease_percent", 100, 100)).toBe(0);
+      expect(applyOperation("decrease_percent", 10000, 100)).toBe(0);
     });
 
     it("can result in negative for >100% decrease", () => {
-      expect(applyOperation("decrease_percent", 100, 150)).toBe(-50);
+      expect(applyOperation("decrease_percent", 10000, 150)).toBe(-5000);
     });
   });
 
   describe("increase_fixed", () => {
     it("adds a fixed amount to the price", () => {
-      expect(applyOperation("increase_fixed", 100, 20)).toBe(120);
+      expect(applyOperation("increase_fixed", 10000, 2000)).toBe(12000);
     });
   });
 
   describe("decrease_fixed", () => {
     it("subtracts a fixed amount from the price", () => {
-      expect(applyOperation("decrease_fixed", 100, 20)).toBe(80);
+      expect(applyOperation("decrease_fixed", 10000, 2000)).toBe(8000);
     });
 
     it("can result in negative", () => {
-      expect(applyOperation("decrease_fixed", 10, 20)).toBe(-10);
+      expect(applyOperation("decrease_fixed", 1000, 2000)).toBe(-1000);
     });
   });
 });
@@ -101,23 +103,42 @@ describe("applyOperation", () => {
 
 describe("calculatePriceWithFee", () => {
   it("returns the net price when fees are absorbed", () => {
-    expect(calculatePriceWithFee(100, true)).toBe(100);
+    expect(calculatePriceWithFee(10000, true)).toBe(10000);
   });
 
   it("adds processing fee when not absorbed", () => {
     // PAYSTACK_PROCESSING_FEE is 1.95%
     // 100 + (100 * 1.95 / 100) = 100 + 1.95 = 101.95, rounded to 102
-    expect(calculatePriceWithFee(100, false)).toBe(102);
+    expect(calculatePriceWithFee(10000, false)).toBe(10200);
   });
 
   it("rounds the fee result", () => {
     // 50 + (50 * 1.95 / 100) = 50 + 0.975 = 50.975, rounded to 51
-    expect(calculatePriceWithFee(50, false)).toBe(51);
+    expect(calculatePriceWithFee(5000, false)).toBe(5100);
   });
 
   it("handles zero price", () => {
     expect(calculatePriceWithFee(0, false)).toBe(0);
     expect(calculatePriceWithFee(0, true)).toBe(0);
+  });
+});
+
+describe("parseOperationValue", () => {
+  it("parses money operations as display amounts into pesewas", () => {
+    expect(parseOperationValue("set", "12.34")).toBe(1234);
+    expect(parseOperationValue("increase_fixed", "0.75")).toBe(75);
+    expect(parseOperationValue("decrease_fixed", "GHS 1,234.56")).toBe(123456);
+  });
+
+  it("leaves raw numeric operations as raw numbers", () => {
+    expect(parseOperationValue("multiply", "1.075")).toBe(1.075);
+    expect(parseOperationValue("divide", "2")).toBe(2);
+    expect(parseOperationValue("increase_percent", "12.5")).toBe(12.5);
+  });
+
+  it("rejects invalid and negative money operation values", () => {
+    expect(parseOperationValue("set", "-12")).toBeUndefined();
+    expect(parseOperationValue("increase_fixed", "not an amount")).toBeUndefined();
   });
 });
 
@@ -142,7 +163,7 @@ describe("validateOperationValue", () => {
 
   it("returns error for NaN", () => {
     expect(validateOperationValue("set", NaN)).toBe(
-      "Please enter a valid number"
+      "Please enter a valid amount"
     );
   });
 
@@ -168,7 +189,7 @@ describe("computePreview", () => {
   const makeSku = (
     overrides: Partial<SkuRow> = {}
   ): SkuRow => ({
-    skuId: "test-sku-1" as any,
+    skuId: "test-sku-1" as Id<"productSku">,
     productName: "Test Product",
     sku: "SKU-001",
     currentPricePesewas: 10000, // 100.00 display
@@ -196,9 +217,9 @@ describe("computePreview", () => {
     expect(result[0].hasWarning).toBe(false);
   });
 
-  it("computes correct preview for set operation", () => {
+  it("computes correct preview for set operation from a parsed money value", () => {
     const skus = [makeSku()];
-    const result = computePreview(skus, "set", 50);
+    const result = computePreview(skus, "set", 5000);
 
     // Set to 50 display = 5000 pesewas
     expect(result[0].newNetPricePesewas).toBe(5000);
@@ -207,7 +228,7 @@ describe("computePreview", () => {
 
   it("flags negative results with warning", () => {
     const skus = [makeSku({ currentNetPricePesewas: 1000 })]; // 10.00 display
-    const result = computePreview(skus, "decrease_fixed", 20);
+    const result = computePreview(skus, "decrease_fixed", 2000);
 
     // 10 - 20 = -10 display = -1000 pesewas
     expect(result[0].newNetPricePesewas).toBe(-1000);
@@ -225,7 +246,7 @@ describe("computePreview", () => {
 
   it("applies processing fees when not absorbed", () => {
     const skus = [makeSku({ areProcessingFeesAbsorbed: false })];
-    const result = computePreview(skus, "set", 100);
+    const result = computePreview(skus, "set", 10000);
 
     // netPrice = 100 display = 10000 pesewas
     expect(result[0].newNetPricePesewas).toBe(10000);
@@ -235,8 +256,14 @@ describe("computePreview", () => {
 
   it("handles multiple SKUs", () => {
     const skus = [
-      makeSku({ skuId: "sku-1" as any, currentNetPricePesewas: 10000 }),
-      makeSku({ skuId: "sku-2" as any, currentNetPricePesewas: 20000 }),
+      makeSku({
+        skuId: "sku-1" as Id<"productSku">,
+        currentNetPricePesewas: 10000,
+      }),
+      makeSku({
+        skuId: "sku-2" as Id<"productSku">,
+        currentNetPricePesewas: 20000,
+      }),
     ];
     const result = computePreview(skus, "multiply", 2);
 

@@ -43,11 +43,11 @@ export function currencyFormatter(currency: string): Intl.NumberFormat {
   if (displaySymbol) {
     const numberFormatter = new Intl.NumberFormat("en-US", {
       minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
+      maximumFractionDigits: 2,
     });
     const formatter = new Intl.NumberFormat("en-US", {
       minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
+      maximumFractionDigits: 2,
     });
 
     Object.defineProperty(formatter, "format", {
@@ -63,7 +63,7 @@ export function currencyFormatter(currency: string): Intl.NumberFormat {
     style: "currency",
     currency,
     minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    maximumFractionDigits: 2,
   });
 }
 

@@ -1,4 +1,4 @@
-import { ZodError, z } from "zod";
+import { z } from "zod";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -23,8 +23,10 @@ describe("utils", () => {
   });
 
   it("merges class names with tailwind precedence", () => {
-    expect(cn("px-2", false && "hidden", "px-4", "text-sm")).toBe(
-      "px-4 text-sm"
+    const hidden = false;
+
+    expect(cn("px-2", hidden && "hidden", "px-4", "text-sm")).toBe(
+      "px-4 text-sm",
     );
   });
 
@@ -65,6 +67,7 @@ describe("utils", () => {
   it("formats and normalizes display strings", () => {
     expect(currencyFormatter("USD").format(1250)).toBe("$1,250");
     expect(currencyFormatter("GHS").format(1250)).toBe("GH₵1,250");
+    expect(currencyFormatter("GHS").format(100.02)).toBe("GH₵100.02");
     expect(toSlug("  Raw Hair Bundle! Deal  ")).toBe("raw-hair-bundle-deal");
     expect(slugToWords("same-day-delivery")).toBe("same day delivery");
   });

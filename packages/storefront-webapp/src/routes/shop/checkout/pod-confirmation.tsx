@@ -23,6 +23,7 @@ import { useBagQueries } from "@/lib/queries/bag";
 import { useEffect } from "react";
 import { getDiscountValue, getOrderAmount } from "@/components/checkout/utils";
 import { Discount } from "@/components/checkout/types";
+import { formatStoredAmount } from "@/lib/currency";
 
 export const Route = createFileRoute("/shop/checkout/pod-confirmation")({
   component: PODConfirmationPage,
@@ -63,7 +64,7 @@ const PODPaymentDetails = ({
   const discountText =
     discount?.type === "percentage"
       ? `${discount.value}%`
-      : `${formatter.format(discountValue)}`;
+      : `${formatStoredAmount(formatter, discountValue)}`;
 
   const discountSpan =
     discount?.span == "entire-order" ? "entire order" : "select items";
@@ -88,14 +89,16 @@ const PODPaymentDetails = ({
             {hasDiscount ? (
               <div className="flex items-center gap-2">
                 <p className="text-sm text-muted-foreground line-through">
-                  {formatter.format(originalAmount / 100)}
+                  {formatStoredAmount(formatter, originalAmount)}
                 </p>
                 <p className="text-sm font-medium">
-                  {formatter.format(amountCharged / 100)}
+                  {formatStoredAmount(formatter, amountCharged)}
                 </p>
               </div>
             ) : (
-              <p className="text-sm">{formatter.format(amountCharged / 100)}</p>
+              <p className="text-sm">
+                {formatStoredAmount(formatter, amountCharged)}
+              </p>
             )}
             {discount && (
               <p className="text-sm font-medium">

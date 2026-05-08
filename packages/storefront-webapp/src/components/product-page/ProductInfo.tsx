@@ -6,7 +6,7 @@ import { EyeIcon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useGetProductReviewsQuery } from "@/hooks/useGetProductReviews";
 import { ReviewSummary } from "./ReviewSummary";
-import { toDisplayAmount } from "@/lib/currency";
+import { formatStoredAmount } from "@/lib/currency";
 
 interface ProductInfoProps {
   selectedSku: ProductSku;
@@ -102,17 +102,17 @@ export function ProductInfo({
 
         {!hasDiscount && (
           <p className="text-md md:text-2xl font-medium">
-            {formatter.format(toDisplayAmount(selectedSku.price))}
+            {formatStoredAmount(formatter, selectedSku.price)}
           </p>
         )}
 
         {hasDiscount && !isFree && (
           <div className="flex items-center gap-3 font-medium">
             <p className="text-md md:text-2xl line-through text-muted-foreground">
-              {formatter.format(toDisplayAmount(originalPrice))}
+              {formatStoredAmount(formatter, originalPrice)}
             </p>
             <p className="text-md md:text-2xl text-accent2">
-              {formatter.format(toDisplayAmount(discountedPrice))}
+              {formatStoredAmount(formatter, discountedPrice)}
             </p>
           </div>
         )}
@@ -120,7 +120,7 @@ export function ProductInfo({
         {isFree && (
           <div className="flex items-center gap-3 font-medium">
             <p className="text-md md:text-2xl line-through text-muted-foreground">
-              {formatter.format(toDisplayAmount(originalPrice))}
+              {formatStoredAmount(formatter, originalPrice)}
             </p>
             <p className="text-md md:text-2xl">Free</p>
           </div>

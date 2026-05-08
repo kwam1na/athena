@@ -4,6 +4,7 @@ import { Button } from "./ui/button";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { capitalizeWords } from "@/lib/utils";
 import { getProductName } from "@/lib/productUtils";
+import { formatStoredAmount } from "@/lib/currency";
 
 interface UpsellProps {
   product: ProductSku;
@@ -42,7 +43,9 @@ export function Upsell({ product, isOpen, onClose }: UpsellProps) {
             </div>
             <div className="flex flex-col items-start space-y-2">
               <p className="font-medium">{productName}</p>
-              <p className="text-sm">{formatter.format(product.price)}</p>
+              <p className="text-sm">
+                {formatStoredAmount(formatter, product.price)}
+              </p>
             </div>
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">

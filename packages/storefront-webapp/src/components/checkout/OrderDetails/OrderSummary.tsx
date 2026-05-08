@@ -6,7 +6,7 @@ import { getDiscountValue } from "../utils";
 import { BagSummaryItems } from "../BagSummary";
 import { Tag } from "lucide-react";
 import { isFeeWaived, getRemainingForFreeDelivery } from "@/lib/feeUtils";
-import { toDisplayAmount } from "@/lib/currency";
+import { formatStoredAmount } from "@/lib/currency";
 import { Badge } from "@/components/ui/badge";
 import InputWithEndButton from "@/components/ui/input-with-end-button";
 import { useState } from "react";
@@ -93,7 +93,7 @@ export default function OrderSummary() {
   const discountText =
     checkoutState.discount?.type === "percentage"
       ? `${checkoutState.discount.value}%`
-      : `${formatter.format(toDisplayAmount(discountValue))}`;
+      : `${formatStoredAmount(formatter, discountValue)}`;
 
   const handleRedeemPromoCode = (promoCode?: string) => {
     const storeFrontUserId = userId || guestId;
@@ -156,7 +156,7 @@ export default function OrderSummary() {
 
         <div className="flex justify-between">
           <p className="text-sm">Subtotal</p>
-          <p className="text-sm">{formatter.format(toDisplayAmount(bagSubtotal))}</p>
+          <p className="text-sm">{formatStoredAmount(formatter, bagSubtotal)}</p>
         </div>
 
         {checkoutState.deliveryMethod === "delivery" &&
@@ -167,7 +167,7 @@ export default function OrderSummary() {
               <p className="text-sm">
                 {isFeeWaivedForCurrentOption
                   ? "Free"
-                  : formatter.format(toDisplayAmount(checkoutState.deliveryFee || 0))}
+                  : formatStoredAmount(formatter, checkoutState.deliveryFee || 0)}
               </p>
             </div>
           )}
@@ -175,14 +175,14 @@ export default function OrderSummary() {
         {remainingForFreeDelivery !== null &&
           checkoutState.deliveryMethod === "delivery" && (
             <p className="text-xs text-muted-foreground">
-              Add {formatter.format(toDisplayAmount(remainingForFreeDelivery))} more to get free delivery
+              Add {formatStoredAmount(formatter, remainingForFreeDelivery)} more to get free delivery
             </p>
           )}
 
         {Boolean(discountValue) && (
           <div className="flex justify-between">
             <p className="text-sm">Discount</p>
-            <p className="text-sm">- {formatter.format(toDisplayAmount(discountValue))}</p>
+            <p className="text-sm">- {formatStoredAmount(formatter, discountValue)}</p>
           </div>
         )}
 
@@ -222,7 +222,7 @@ export default function OrderSummary() {
         </div>
         <div className="flex justify-between font-medium">
           <p className="text-lg">Total</p>
-          <p className="text-lg">{formatter.format(toDisplayAmount(total))}</p>
+          <p className="text-lg">{formatStoredAmount(formatter, total)}</p>
         </div>
       </div>
     </div>

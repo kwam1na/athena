@@ -2,8 +2,9 @@ import { useState, useMemo, useCallback } from "react";
 import { useMutation } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
-import { toPesewas, toDisplayAmount } from "~/convex/lib/currency";
+import { toDisplayAmount } from "~/convex/lib/currency";
 import { PAYSTACK_PROCESSING_FEE } from "~/src/lib/constants";
+import { parseDisplayAmountInput } from "~/src/lib/pos/displayAmounts";
 import { toast } from "sonner";
 
 // --- Types ---
@@ -49,50 +50,76 @@ export const OPERATION_LABELS: Record<BulkOperationType, string> = {
 // --- Pure calculation functions (exported for testing) ---
 
 /**
- * Apply a bulk operation to a display-amount price.
- * Input and output are in display units (e.g. GHS, not pesewas).
- * Returns the new display-amount, or null if the operation is invalid.
+ * Apply a bulk operation to a stored minor-unit price.
+ * Money operation values are minor units; raw operation values are multipliers
+ * or percentages.
+ * Returns the new minor-unit amount, or null if the operation is invalid.
  */
 export function applyOperation(
   operation: BulkOperationType,
-  currentDisplayPrice: number,
+  currentPricePesewas: number,
   value: number
 ): number | null {
   switch (operation) {
     case "multiply":
       if (value <= 0) return null;
-      return currentDisplayPrice * value;
+      return currentPricePesewas * value;
     case "divide":
       if (value <= 0) return null;
-      return currentDisplayPrice / value;
+      return currentPricePesewas / value;
     case "set":
       return value;
     case "increase_percent":
-      return currentDisplayPrice * (1 + value / 100);
+      return currentPricePesewas * (1 + value / 100);
     case "decrease_percent":
-      return currentDisplayPrice * (1 - value / 100);
+      return currentPricePesewas * (1 - value / 100);
     case "increase_fixed":
-      return currentDisplayPrice + value;
+      return currentPricePesewas + value;
     case "decrease_fixed":
-      return currentDisplayPrice - value;
+      return currentPricePesewas - value;
     default:
       return null;
   }
 }
 
 /**
- * Calculate the final price (with processing fee) from a net price.
- * Both input and output are in display units.
+ * Calculate the final stored price (with processing fee) from a net stored price.
  */
 export function calculatePriceWithFee(
-  netDisplayPrice: number,
+  netPricePesewas: number,
   areProcessingFeesAbsorbed: boolean
 ): number {
   if (areProcessingFeesAbsorbed) {
-    return netDisplayPrice;
+    return netPricePesewas;
   }
+
+  const netDisplayPrice = toDisplayAmount(netPricePesewas);
   const fee = (netDisplayPrice * PAYSTACK_PROCESSING_FEE) / 100;
-  return Math.round(netDisplayPrice + fee);
+  return parseDisplayAmountInput(String(Math.round(netDisplayPrice + fee))) ?? 0;
+}
+
+export function isMoneyOperation(operation: BulkOperationType): boolean {
+  return (
+    operation === "set" ||
+    operation === "increase_fixed" ||
+    operation === "decrease_fixed"
+  );
+}
+
+export function parseOperationValue(
+  operation: BulkOperationType,
+  rawValue: string,
+): number | undefined {
+  if (rawValue.trim().length === 0) {
+    return undefined;
+  }
+
+  if (isMoneyOperation(operation)) {
+    return parseDisplayAmountInput(rawValue);
+  }
+
+  const value = Number.parseFloat(rawValue);
+  return Number.isFinite(value) ? value : undefined;
 }
 
 /**
@@ -104,10 +131,13 @@ export function computePreview(
   value: number
 ): PreviewRow[] {
   return skus.map((sku) => {
-    const currentNetDisplay = toDisplayAmount(sku.currentNetPricePesewas);
-    const newNetDisplay = applyOperation(operation, currentNetDisplay, value);
+    const newNetPrice = applyOperation(
+      operation,
+      sku.currentNetPricePesewas,
+      value,
+    );
 
-    if (newNetDisplay === null) {
+    if (newNetPrice === null) {
       return {
         ...sku,
         newNetPricePesewas: sku.currentNetPricePesewas,
@@ -116,13 +146,11 @@ export function computePreview(
       };
     }
 
-    const newPriceDisplay = calculatePriceWithFee(
-      newNetDisplay,
-      sku.areProcessingFeesAbsorbed
+    const newNetPesewas = Math.round(newNetPrice);
+    const newPricePesewas = calculatePriceWithFee(
+      newNetPesewas,
+      sku.areProcessingFeesAbsorbed,
     );
-
-    const newNetPesewas = toPesewas(newNetDisplay);
-    const newPricePesewas = toPesewas(newPriceDisplay);
 
     return {
       ...sku,
@@ -138,15 +166,19 @@ export function computePreview(
  */
 export function validateOperationValue(
   operation: BulkOperationType,
-  value: number
+  value: number | undefined
 ): string | null {
-  if (isNaN(value)) return "Please enter a valid number";
+  if (value === undefined || Number.isNaN(value)) {
+    return isMoneyOperation(operation)
+      ? "Please enter a valid amount"
+      : "Please enter a valid number";
+  }
 
   if (operation === "multiply" || operation === "divide") {
     if (value <= 0) return "Value must be greater than 0";
   }
 
-  if (operation === "set" && value < 0) {
+  if (isMoneyOperation(operation) && value < 0) {
     return "Price cannot be negative";
   }
 
@@ -167,15 +199,15 @@ export function useBulkOperations() {
     api.inventory.products.batchUpdateSkuPrices
   );
 
-  const parsedValue = parseFloat(operationValue);
-  const validationError = isNaN(parsedValue)
+  const parsedValue = parseOperationValue(operation, operationValue);
+  const validationError = parsedValue === undefined
     ? operationValue.length > 0
-      ? "Please enter a valid number"
+      ? validateOperationValue(operation, parsedValue)
       : null
     : validateOperationValue(operation, parsedValue);
 
   const previewRows = useMemo(() => {
-    if (!hasPreview || isNaN(parsedValue) || validationError) return [];
+    if (parsedValue === undefined || !hasPreview || validationError) return [];
     return computePreview(skus, operation, parsedValue);
   }, [skus, operation, parsedValue, hasPreview, validationError]);
 

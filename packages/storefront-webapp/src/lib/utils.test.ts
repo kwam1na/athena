@@ -6,6 +6,7 @@ import {
   currencyFormatter,
   slugToWords,
 } from "./utils";
+import { formatStoredAmount, toDisplayAmount } from "./currency";
 
 describe("utils", () => {
   it("capitalizes the first letter of a string", () => {
@@ -29,5 +30,20 @@ describe("utils", () => {
 
   it("uses the Athena Ghana cedi symbol for GHS", () => {
     expect(currencyFormatter("GHS").format(1250)).toBe("GH₵1,250");
+  });
+
+  it("preserves fractional cedi values after minor-unit conversion", () => {
+    expect(currencyFormatter("GHS").format(toDisplayAmount(2999))).toBe(
+      "GH₵29.99"
+    );
+  });
+
+  it("formats stored minor-unit order amounts for display", () => {
+    const formatter = currencyFormatter("GHS");
+
+    expect(formatStoredAmount(formatter, 10000)).toBe("GH₵100");
+    expect(formatStoredAmount(formatter, 500)).toBe("GH₵5");
+    expect(formatStoredAmount(formatter, 2999)).toBe("GH₵29.99");
+    expect(formatStoredAmount(formatter, 2999 * 2)).toBe("GH₵59.98");
   });
 });

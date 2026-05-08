@@ -16,6 +16,7 @@ import {
 import { CardTitle } from "@/components/ui/card";
 import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
 import { createCheckoutCompletionBlockedEvent } from "@/lib/storefrontJourneyEvents";
+import { formatStoredAmount } from "@/lib/currency";
 import { useEffect, useRef } from "react";
 
 export const Route = createFileRoute(
@@ -102,21 +103,24 @@ function CheckoutIncompleteView() {
                   <div className="flex items-center gap-1">
                     <p className="font-light">Subtotal</p>
                     <p className="font-medium">
-                      {formatter.format(amountPaid / 100)}
+                      {formatStoredAmount(formatter, amountPaid)}
                     </p>
                   </div>
 
                   <div className="flex items-center gap-1">
                     <p className="font-light">Delivery</p>
                     <p className="font-medium">
-                      {formatter.format((onlineOrder?.deliveryFee || 0) / 100)}
+                      {formatStoredAmount(
+                        formatter,
+                        onlineOrder?.deliveryFee || 0,
+                      )}
                     </p>
                   </div>
 
                   <div className="flex items-center gap-1">
                     <p className="font-light">Paid</p>
                     <p className="font-medium">
-                      {formatter.format(amountCharged / 100)}
+                      {formatStoredAmount(formatter, amountCharged)}
                     </p>
                   </div>
                 </div>

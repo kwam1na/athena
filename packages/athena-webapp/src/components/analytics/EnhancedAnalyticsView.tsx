@@ -5,12 +5,10 @@ import useGetActiveStore from "@/hooks/useGetActiveStore";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "../ui/card";
 import { Badge } from "../ui/badge";
-import { Button } from "../ui/button";
 import {
   Select,
   SelectContent,
@@ -36,6 +34,8 @@ import { ConversionFunnelChart } from "./ConversionFunnelChart";
 import { RevenueChart } from "./RevenueChart";
 import { VisitorChart } from "./VisitorChart";
 import { ActivityTimeline } from "./ActivityTimeline";
+import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
+import { currencyFormatter } from "~/src/lib/utils";
 
 type DateRange = "7d" | "30d" | "90d" | "all";
 
@@ -81,7 +81,9 @@ const MetricCard = ({
       {icon}
     </CardHeader>
     <CardContent>
-      <div className="text-2xl font-bold">{formatNumber(value as number)}</div>
+      <div className="text-2xl font-bold">
+        {typeof value === "number" ? formatNumber(value) : value}
+      </div>
       {trend && <p className="text-xs text-muted-foreground">{trend}</p>}
       {description && (
         <p className="text-xs text-muted-foreground mt-1">{description}</p>
@@ -96,7 +98,7 @@ export default function EnhancedAnalyticsView() {
 
   const { startDate, endDate } = useMemo(
     () => getDateRangeMilliseconds(dateRange),
-    [dateRange]
+    [dateRange],
   );
 
   // OPTIMIZATION: Use single consolidated query instead of 4 separate queries
@@ -108,7 +110,7 @@ export default function EnhancedAnalyticsView() {
           startDate,
           endDate,
         }
-      : "skip"
+      : "skip",
   );
 
   // Check if query is loading or has errors
@@ -157,6 +159,7 @@ export default function EnhancedAnalyticsView() {
 
   const { overview, conversions, deviceBreakdown, revenue, visitors } =
     consolidatedAnalytics;
+  const formatter = currencyFormatter(activeStore.currency);
 
   return (
     <div className="p-6 space-y-6">
@@ -205,7 +208,7 @@ export default function EnhancedAnalyticsView() {
 
         <MetricCard
           title="Total Revenue"
-          value={`$${formatNumber(revenue.totalRevenue)}`}
+          value={formatStoredAmount(formatter, revenue.totalRevenue)}
           icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
           description={`${revenue.totalOrders} orders`}
         />
@@ -236,7 +239,7 @@ export default function EnhancedAnalyticsView() {
 
         <MetricCard
           title="Average Order Value"
-          value={`$${formatNumber(revenue.averageOrderValue)}`}
+          value={formatStoredAmount(formatter, revenue.averageOrderValue)}
           icon={<BarChart3 className="h-4 w-4 text-muted-foreground" />}
         />
 
@@ -247,7 +250,7 @@ export default function EnhancedAnalyticsView() {
               ? (deviceBreakdown.mobile /
                   (deviceBreakdown.mobile + deviceBreakdown.desktop)) *
                   100
-              : 0
+              : 0,
           )}%`}
           icon={<Smartphone className="h-4 w-4 text-muted-foreground" />}
           description="Mobile usage"
@@ -270,7 +273,10 @@ export default function EnhancedAnalyticsView() {
         </TabsContent>
 
         <TabsContent value="revenue">
-          <RevenueChart revenueData={revenue.revenueByDay} />
+          <RevenueChart
+            revenueData={revenue.revenueByDay}
+            formatter={formatter}
+          />
         </TabsContent>
 
         <TabsContent value="visitors">
@@ -300,7 +306,7 @@ export default function EnhancedAnalyticsView() {
                   {Math.round(
                     overview.totalViews > 0
                       ? (deviceBreakdown.desktop / overview.totalViews) * 100
-                      : 0
+                      : 0,
                   )}
                   %
                 </Badge>
@@ -318,7 +324,7 @@ export default function EnhancedAnalyticsView() {
                   {Math.round(
                     overview.totalViews > 0
                       ? (deviceBreakdown.mobile / overview.totalViews) * 100
-                      : 0
+                      : 0,
                   )}
                   %
                 </Badge>
@@ -344,7 +350,7 @@ export default function EnhancedAnalyticsView() {
                   {Math.round(
                     visitors.totalVisitors > 0
                       ? (visitors.newVisitors / visitors.totalVisitors) * 100
-                      : 0
+                      : 0,
                   )}
                   %
                 </Badge>
@@ -362,7 +368,7 @@ export default function EnhancedAnalyticsView() {
                     visitors.totalVisitors > 0
                       ? (visitors.returningVisitors / visitors.totalVisitors) *
                           100
-                      : 0
+                      : 0,
                   )}
                   %
                 </Badge>

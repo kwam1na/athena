@@ -30,6 +30,8 @@ import {
 } from "./refundUtils";
 import { presentCommandToast } from "~/src/lib/errors/presentCommandToast";
 import { runCommand } from "~/src/lib/errors/runCommand";
+import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
+import type { Id } from "~/convex/_generated/dataModel";
 
 export function RefundsView() {
   const { order } = useOnlineOrder();
@@ -42,12 +44,12 @@ export function RefundsView() {
       includeDeliveryFee: false,
       returnToStock: false,
       showModal: false,
-    }
+    },
   );
 
   const [isRefundingOrder, toggleIsRefundingOrder] = useReducer(
     (state: boolean) => !state,
-    false
+    false,
   );
 
   const { user } = useAuth();
@@ -67,7 +69,7 @@ export function RefundsView() {
     order,
     state.mode,
     state.selectedItemIds,
-    state.includeDeliveryFee
+    state.includeDeliveryFee,
   );
   const availableItems = getAvailableItems(order);
 
@@ -75,7 +77,7 @@ export function RefundsView() {
 
   const refundText =
     refundAmount > 0
-      ? `Refund ${formatter.format(refundAmount / 100)}`
+      ? `Refund ${formatStoredAmount(formatter, refundAmount)}`
       : "Refund";
 
   const handleRefundOrder = async () => {
@@ -84,7 +86,7 @@ export function RefundsView() {
       order,
       state.mode,
       state.selectedItemIds,
-      state.includeDeliveryFee
+      state.includeDeliveryFee,
     );
     if (!validation.isValid) {
       toast("Invalid refund", {
@@ -100,7 +102,7 @@ export function RefundsView() {
       const itemIds = getItemsToRefund(
         order,
         state.mode,
-        state.selectedItemIds
+        state.selectedItemIds,
       );
 
       // Include delivery fee in refund items if selected
@@ -114,7 +116,7 @@ export function RefundsView() {
           externalTransactionId: order.externalTransactionId!,
           amount: refundAmount,
           returnItemsToStock: state.returnToStock,
-          onlineOrderItemIds: itemIds as any,
+          onlineOrderItemIds: itemIds as Array<Id<"onlineOrderItem">>,
           refundItems,
           signedInAthenaUser: user
             ? {
@@ -197,7 +199,7 @@ export function RefundsView() {
       <ActionModal
         isOpen={state.showModal}
         loading={isRefundingOrder}
-        title={`Refund ${formatter.format(refundAmount / 100)}`}
+        title={`Refund ${formatStoredAmount(formatter, refundAmount)}`}
         description="This action cannot be undone. The refund will be processed immediately."
         declineText="Cancel"
         confirmText="Proceed with Refund"
@@ -218,7 +220,7 @@ export function RefundsView() {
             <div className="flex justify-between">
               <span className="text-muted-foreground">Refund amount:</span>
               <span className="font-medium">
-                {formatter.format(refundAmount / 100)}
+                {formatStoredAmount(formatter, refundAmount)}
               </span>
             </div>
           </div>
@@ -246,19 +248,19 @@ export function RefundsView() {
         <div className="bg-muted/50 rounded-lg p-4 space-y-2 text-sm">
           <div className="flex justify-between">
             <span className="text-muted-foreground">Original amount:</span>
-            <span>{formatter.format(order.amount / 100)}</span>
+            <span>{formatStoredAmount(formatter, order.amount)}</span>
           </div>
           {amountRefunded > 0 && (
             <div className="flex justify-between">
               <span className="text-muted-foreground">Already refunded:</span>
               <span className="text-destructive">
-                -{formatter.format(amountRefunded / 100)}
+                -{formatStoredAmount(formatter, amountRefunded)}
               </span>
             </div>
           )}
           <div className="flex justify-between font-medium pt-2 border-t">
             <span>Available to refund:</span>
-            <span>{formatter.format(netAmount / 100)}</span>
+            <span>{formatStoredAmount(formatter, netAmount)}</span>
           </div>
         </div>
 
@@ -278,7 +280,7 @@ export function RefundsView() {
                 Entire order
                 <span className="ml-2 text-xs text-muted-foreground">
                   (Refund all {availableItems.length} items -{" "}
-                  {formatter.format(netAmount / 100)})
+                  {formatStoredAmount(formatter, netAmount)})
                 </span>
               </Label>
             </div>
@@ -299,7 +301,7 @@ export function RefundsView() {
                 <Label htmlFor="remaining" className="cursor-pointer">
                   Remaining balance
                   <span className="ml-2 text-xs text-muted-foreground">
-                    ({formatter.format(netAmount / 100)})
+                    ({formatStoredAmount(formatter, netAmount)})
                   </span>
                 </Label>
               </div>
@@ -340,12 +342,16 @@ export function RefundsView() {
                     <div className="flex-1 space-y-1 text-sm">
                       <p className="font-medium">{getProductName(item)}</p>
                       <p className="text-xs text-muted-foreground">
-                        Qty: {item.quantity} × {formatter.format(item.price)}
+                        Qty: {item.quantity} ×{" "}
+                        {formatStoredAmount(formatter, item.price)}
                       </p>
                     </div>
 
                     <div className="text-sm font-medium">
-                      {formatter.format(item.price * item.quantity)}
+                      {formatStoredAmount(
+                        formatter,
+                        item.price * item.quantity,
+                      )}
                     </div>
                   </div>
                 ))
@@ -372,7 +378,7 @@ export function RefundsView() {
                   </div>
 
                   <div className="text-sm font-medium">
-                    {formatter.format(order.deliveryFee)}
+                    {formatStoredAmount(formatter, order.deliveryFee)}
                   </div>
                 </div>
               )}
@@ -386,7 +392,7 @@ export function RefundsView() {
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground">Refund amount</p>
               <p className="text-2xl font-semibold">
-                {formatter.format(refundAmount / 100)}
+                {formatStoredAmount(formatter, refundAmount)}
               </p>
             </div>
 

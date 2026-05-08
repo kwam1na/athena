@@ -29,6 +29,7 @@ import {
   promoDiscountDisplayText,
   promoDiscountInputValue,
 } from "./promoCodeMoney";
+import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 
 function PromoCodeView() {
   const products = useGetProducts();
@@ -78,12 +79,12 @@ function PromoCodeView() {
 
   const activePromoCode = useQuery(
     api.inventory.promoCode.getById,
-    promoCodeSlug ? { id: promoCodeSlug as Id<"promoCode"> } : "skip"
+    promoCodeSlug ? { id: promoCodeSlug as Id<"promoCode"> } : "skip",
   );
 
   const promoCodeProductSkus = useQuery(
     api.inventory.promoCode.getPromoCodeItemsLightweight,
-    promoCodeSlug ? { promoCodeId: promoCodeSlug as Id<"promoCode"> } : "skip"
+    promoCodeSlug ? { promoCodeId: promoCodeSlug as Id<"promoCode"> } : "skip",
   );
 
   useEffect(() => {
@@ -92,8 +93,8 @@ function PromoCodeView() {
       setDiscount(
         promoDiscountInputValue(
           activePromoCode.discountValue,
-          activePromoCode.discountType
-        )
+          activePromoCode.discountType,
+        ),
       );
       setDiscountType(activePromoCode.discountType);
       setPromoCodeSpan(activePromoCode.span);
@@ -109,8 +110,8 @@ function PromoCodeView() {
 
       // Check if this promo code is set as homepage discount code
       if (
-        storeConfig.promotions.homepageDiscountCodeModalPromoCode?.promoCodeId ===
-        activePromoCode._id
+        storeConfig.promotions.homepageDiscountCodeModalPromoCode
+          ?.promoCodeId === activePromoCode._id
       ) {
         setIsHomepageDiscountCode(true);
       }
@@ -129,7 +130,7 @@ function PromoCodeView() {
   useEffect(() => {
     if (promoCodeProductSkus && promoCodeProductSkus.length > 0) {
       setSelectedProductSkus(
-        new Set(promoCodeProductSkus.map((sku) => sku._id))
+        new Set(promoCodeProductSkus.map((sku) => sku._id)),
       );
     }
   }, [promoCodeProductSkus, setSelectedProductSkus]);
@@ -143,7 +144,7 @@ function PromoCodeView() {
         skus: product.skus.map((sku) => {
           return {
             ...sku,
-            price: formatter.format(sku.price),
+            price: formatStoredAmount(formatter, sku.price),
           };
         }),
       };
@@ -170,7 +171,7 @@ function PromoCodeView() {
     const displayText = promoDiscountDisplayText(
       parsedDiscountValue,
       discountType,
-      formatter
+      formatter,
     );
 
     try {
@@ -220,7 +221,7 @@ function PromoCodeView() {
           orgUrlSlug: prev.orgUrlSlug!,
         }),
       });
-    } catch (e) {
+    } catch {
       presentUnexpectedErrorToast("Failed to add promo code");
     } finally {
       setIsAddingPromoCode(false);
@@ -243,7 +244,7 @@ function PromoCodeView() {
     const displayText = promoDiscountDisplayText(
       parsedDiscountValue,
       discountType,
-      formatter
+      formatter,
     );
 
     try {
@@ -270,7 +271,8 @@ function PromoCodeView() {
       // Update store config for homepage discount code if needed
       if (activeStore && promoCodeSlug) {
         const currentHomepagePromoCodeId =
-          storeConfig.promotions.homepageDiscountCodeModalPromoCode?.promoCodeId;
+          storeConfig.promotions.homepageDiscountCodeModalPromoCode
+            ?.promoCodeId;
         const isCurrentlyHomepageCode =
           currentHomepagePromoCodeId === promoCodeSlug;
 
@@ -312,7 +314,7 @@ function PromoCodeView() {
           orgUrlSlug: prev.orgUrlSlug!,
         }),
       });
-    } catch (e) {
+    } catch {
       presentUnexpectedErrorToast("Failed to update promo code");
     } finally {
       setIsUpdatingPromoCode(false);
@@ -336,7 +338,7 @@ function PromoCodeView() {
           promoDiscountDisplayText(
             parsePromoDiscountInput(discount, discountType) ?? 0,
             discountType,
-            formatter
+            formatter,
           ),
         discountType: activePromoCode?.discountType ?? discountType,
       };
@@ -367,7 +369,7 @@ function PromoCodeView() {
       }
 
       setIsHomepageDiscountCode(checked);
-    } catch (e) {
+    } catch {
       presentUnexpectedErrorToast("Failed to update homepage discount code");
     } finally {
       setIsUpdatingStoreConfig(false);
@@ -391,7 +393,7 @@ function PromoCodeView() {
           promoDiscountDisplayText(
             parsePromoDiscountInput(discount, discountType) ?? 0,
             discountType,
-            formatter
+            formatter,
           ),
         discountType: activePromoCode?.discountType ?? discountType,
       };
@@ -422,7 +424,7 @@ function PromoCodeView() {
       }
 
       setIsLeaveAReviewDiscountCode(checked);
-    } catch (e) {
+    } catch {
       presentUnexpectedErrorToast(
         "Failed to update leave a review discount code",
       );
@@ -439,11 +441,6 @@ function PromoCodeView() {
   const hasEnteredCode =
     Boolean(promoCode && discount && discountType) &&
     (isEntireOrder || hasSelectedProducts);
-
-  // Get currently selected product SKUs (flatten all products' SKUs and filter by selected)
-  const currentlySelectedProductSkus = products
-    .flatMap((product: Product) => product.skus)
-    .filter((sku) => selectedProductSkus.has(sku._id));
 
   return (
     <View

@@ -22,6 +22,7 @@ import {
 import { useGetCurrencyFormatter } from "~/src/hooks/useGetCurrencyFormatter";
 import { Link } from "@tanstack/react-router";
 import { getOrigin } from "~/src/lib/navigationUtils";
+import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 
 interface ActivityTimelineProps {
   storeId: Id<"store">;
@@ -103,7 +104,7 @@ export function ActivityTimeline({
                 icon: MousePointerClick,
                 color: "text-gray-600 bg-gray-50 border-gray-200",
                 label: capitalizeFirstLetter(
-                  activity.action.replace(/_/g, " ")
+                  activity.action.replace(/_/g, " "),
                 ),
               };
 
@@ -151,7 +152,10 @@ export function ActivityTimeline({
                         {capitalizeFirstLetter(activity.productInfo.name)}
                         {activity.productInfo.price && (
                           <span className="text-green-600 ml-1">
-                            {formatter.format(activity.productInfo.price)}
+                            {formatStoredAmount(
+                              formatter,
+                              activity.productInfo.price,
+                            )}
                           </span>
                         )}
                       </p>
@@ -184,7 +188,7 @@ export function ActivityTimeline({
                           <p className="text-xs px-1 py-0">
                             from{" "}
                             {capitalizeFirstLetter(
-                              snakeCaseToWords(activity.origin)
+                              snakeCaseToWords(activity.origin),
                             )}
                           </p>
                         )}

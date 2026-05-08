@@ -11,9 +11,9 @@ import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, CardContent } from "../ui/card";
 import { useGetCurrencyFormatter } from "~/src/hooks/useGetCurrencyFormatter";
-import { toDisplayAmount } from "~/convex/lib/currency";
 import { Link } from "@tanstack/react-router";
 import { getOrigin } from "~/src/lib/navigationUtils";
+import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 
 interface TimelineEventCardProps {
   event: CustomerObservabilityTimelineEvent;
@@ -26,7 +26,9 @@ export function TimelineEventCard({ event }: TimelineEventCardProps) {
   const productLabel = event.productInfo?.name ?? event.productSku;
   const subjectReference = event.subjectLabel ?? event.orderId;
   const eventMessage =
-    event.message && event.message !== event.eventType ? event.message : undefined;
+    event.message && event.message !== event.eventType
+      ? event.message
+      : undefined;
 
   const formatter = useGetCurrencyFormatter();
 
@@ -102,8 +104,9 @@ export function TimelineEventCard({ event }: TimelineEventCardProps) {
                     </p>
                     {event.productInfo?.price && (
                       <p className="text-xs font-medium">
-                        {formatter.format(
-                          toDisplayAmount(event.productInfo?.price || 0),
+                        {formatStoredAmount(
+                          formatter,
+                          event.productInfo?.price || 0,
                         )}
                       </p>
                     )}

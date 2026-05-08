@@ -5,13 +5,14 @@ import { api } from "~/convex/_generated/api";
 import PromoCodes from "./PromoCodes";
 import { currencyFormatter } from "~/src/lib/utils";
 import { PromoCode } from "~/types";
+import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 
 export default function PromoCodesView() {
   const { activeStore } = useGetActiveStore();
 
   const promoCodes = useQuery(
     api.inventory.promoCode.getAll,
-    activeStore?._id ? { storeId: activeStore._id } : "skip"
+    activeStore?._id ? { storeId: activeStore._id } : "skip",
   );
 
   if (!activeStore || !promoCodes) return null;
@@ -35,7 +36,7 @@ export default function PromoCodesView() {
       ...promoCode,
       discountValue:
         promoCode.discountType === "amount"
-          ? formatter.format(promoCode.discountValue)
+          ? formatStoredAmount(formatter, promoCode.discountValue)
           : `${promoCode.discountValue}%`,
     };
   });

@@ -19,6 +19,7 @@ afterEach(() => {
 describe("POS display amounts", () => {
   it("formats stored pesewas values in display units", () => {
     expect(formatStoredAmount(formatter, 15000)).toBe(formatter.format(150));
+    expect(formatStoredAmount(formatter, 10002)).toBe(formatter.format(100.02));
     expect(formatStoredAmount(formatter, 15000)).not.toBe(
       formatter.format(15000)
     );

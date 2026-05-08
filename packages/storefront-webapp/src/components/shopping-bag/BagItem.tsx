@@ -1,6 +1,7 @@
 import { ProductSku } from "@athena/webapp";
 import { motion } from "framer-motion";
 import ImageWithFallback from "../ui/image-with-fallback";
+import { formatStoredAmount } from "@/lib/currency";
 
 type BagItemProps = {
   item: any; // The product item object
@@ -65,7 +66,7 @@ export function BagItem({
             <h2>{item.productName}</h2>
             <p className="text-sm text-muted-foreground">
               {item.price
-                ? formatter.format(item.price * item.quantity)
+                ? formatStoredAmount(formatter, item.price * item.quantity)
                 : "Product unavailable"}
             </p>
             <select

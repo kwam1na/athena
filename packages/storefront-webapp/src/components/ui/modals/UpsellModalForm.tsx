@@ -9,6 +9,7 @@ import { validateEmail } from "@/lib/validations/email";
 import { WelcomeBackModalConfig } from "./config/welcomeBackModalConfig";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { PromoCode } from "./types";
+import { formatStoredAmount } from "@/lib/currency";
 
 interface UpsellModalFormProps {
   onClose: () => void;
@@ -81,17 +82,20 @@ export const UpsellModalForm: React.FC<UpsellModalFormProps> = ({
           <div className="space-y-2">
             <p className="text-xs sm:text-sm text-accent2/60">Orig. price</p>
             <p className="text-3xl line-through text-white font-medium">
-              {formatter.format(upsell.price)}
+              {formatStoredAmount(formatter, upsell.price)}
             </p>
           </div>
 
           <div className="space-y-2">
             <p className="text-xs sm:text-sm text-accent2/60">You pay</p>
             <p className="text-3xl text-white font-medium">
-              {formatter.format(
+              {formatStoredAmount(
+                formatter,
                 isPromoActive
-                  ? upsell.price - (upsell.price * promoCode.value) / 100
-                  : upsell.price
+                  ? promoCode.discountType === "amount"
+                    ? Math.max(0, upsell.price - promoCode.value)
+                    : upsell.price - (upsell.price * promoCode.value) / 100
+                  : upsell.price,
               )}
             </p>
           </div>

@@ -4,7 +4,7 @@ import {
   useProductDiscount,
   useProductDiscounts,
 } from "@/hooks/useProductDiscount";
-import { toDisplayAmount } from "@/lib/currency";
+import { formatStoredAmount } from "@/lib/currency";
 
 export function ProductCard({
   product,
@@ -73,23 +73,23 @@ export function ProductCard({
         <div className="flex gap-2">
           {!hasDiscount && (
             <p className="text-sm">
-              {currencyFormatter.format(toDisplayAmount(displayedSku.price))}
+              {formatStoredAmount(currencyFormatter, displayedSku.price)}
             </p>
           )}
           {hasDiscount && !isFree && (
             <div className="flex items-center gap-2 text-sm">
               <p className="line-through text-muted-foreground">
-                {currencyFormatter.format(toDisplayAmount(originalPrice))}
+                {formatStoredAmount(currencyFormatter, originalPrice)}
               </p>
               <p>
-                {currencyFormatter.format(toDisplayAmount(discountedPrice))}
+                {formatStoredAmount(currencyFormatter, discountedPrice)}
               </p>
             </div>
           )}
           {isFree && (
             <div className="flex items-center gap-2 text-sm">
               <p className="line-through text-muted-foreground">
-                {currencyFormatter.format(toDisplayAmount(originalPrice))}
+                {formatStoredAmount(currencyFormatter, originalPrice)}
               </p>
               <p>Free</p>
             </div>
@@ -151,21 +151,21 @@ export function ProductSkuCard({
         </p>
         {!hasDiscount && (
           <p className="text-xs">
-            {currencyFormatter.format(toDisplayAmount(sku.price))}
+            {formatStoredAmount(currencyFormatter, sku.price)}
           </p>
         )}
         {hasDiscount && !isFree && (
           <div className="flex items-center gap-2 text-xs">
             <p className="line-through text-muted-foreground">
-              {currencyFormatter.format(toDisplayAmount(originalPrice))}
+              {formatStoredAmount(currencyFormatter, originalPrice)}
             </p>
-            <p>{currencyFormatter.format(toDisplayAmount(discountedPrice))}</p>
+            <p>{formatStoredAmount(currencyFormatter, discountedPrice)}</p>
           </div>
         )}
         {isFree && (
           <div className="flex items-center gap-2 text-xs">
             <p className="line-through text-muted-foreground">
-              {currencyFormatter.format(toDisplayAmount(originalPrice))}
+              {formatStoredAmount(currencyFormatter, originalPrice)}
             </p>
             <p>Free</p>
           </div>

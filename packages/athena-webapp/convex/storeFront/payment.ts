@@ -16,19 +16,30 @@ import {
 } from "../services/paystackService";
 import {
   generatePODReference,
-  extractOrderItems,
+  calculateItemsSubtotal,
   calculateOrderAmount,
   calculateRewardPoints,
   validatePaymentAmount,
   getOrderDiscountValue,
+  resolveServerDeliveryFee,
 } from "./helpers/paymentHelpers";
 import {
   sendPODOrderEmails,
   sendPaymentVerificationEmails,
 } from "../services/orderEmailService";
-import { ok, userError } from "../../shared/commandResult";
+import { ok, userError, type CommandResult } from "../../shared/commandResult";
 
 const appUrl = process.env.APP_URL;
+
+type RefundReservationResult = {
+  customerProfileId?: string;
+  message?: string;
+  orderId?: string;
+  refundAmount?: number;
+  reservationId?: string;
+  storeId?: string;
+  success: boolean;
+};
 
 /**
  * Create a Paystack transaction for online payment
@@ -82,10 +93,28 @@ export const createTransaction = action({
           quantity: item.quantity,
           price: item.price!,
         }));
+      const subtotal = calculateItemsSubtotal(items);
+      const store = await ctx.runQuery(internal.inventory.stores.findById, {
+        id: session.storeId,
+      });
+      const deliveryFee = resolveServerDeliveryFee({
+        deliveryDetails: args.orderDetails.deliveryDetails,
+        deliveryMethod: args.orderDetails.deliveryMethod,
+        deliveryOption: args.orderDetails.deliveryOption,
+        storeConfig: store?.config,
+        subtotal,
+      });
+
+      if (deliveryFee === null) {
+        return {
+          success: false,
+          message: "Delivery details are required before payment can be created",
+        };
+      }
 
       // Log calculation inputs
       console.log(
-        `[CHECKOUT-CALCULATION] Amount calculation inputs | Session: ${args.checkoutSessionId} | Items count: ${items.length} | Subtotal: ${session.amount} | Delivery fee: ${args.orderDetails.deliveryFee || 0} | Has discount: ${!!discount}`,
+        `[CHECKOUT-CALCULATION] Amount calculation inputs | Session: ${args.checkoutSessionId} | Items count: ${items.length} | Subtotal: ${subtotal} | Delivery fee: ${deliveryFee} | Has discount: ${!!discount}`,
       );
       console.log(
         `[CHECKOUT-CALCULATION] Items breakdown:`,
@@ -108,8 +137,8 @@ export const createTransaction = action({
       const amountToCharge = calculateOrderAmount({
         items,
         discount,
-        deliveryFee: args.orderDetails.deliveryFee || 0, // already pesewas
-        subtotal: session.amount, // already pesewas
+        deliveryFee,
+        subtotal,
       });
 
       // Log calculation result
@@ -130,9 +159,10 @@ export const createTransaction = action({
         metadata: {
           cancel_action: `${appUrl}/shop/checkout?origin=paystack`,
           checkout_session_id: args.checkoutSessionId,
-          checkout_session_amount: session.amount.toString(),
+          checkout_session_amount: subtotal.toString(),
           order_details: {
             ...args.orderDetails,
+            deliveryFee,
             discount: session.discount ?? null,
           },
           amount_to_charge: amountToCharge.toString(),
@@ -154,6 +184,7 @@ export const createTransaction = action({
             externalReference: response.data.reference,
             orderDetails: {
               ...args.orderDetails,
+              deliveryFee,
               discount: session.discount ?? null,
             },
           },
@@ -223,6 +254,36 @@ export const createPODOrder = action({
         podPaymentMethod: args.orderDetails.podPaymentMethod || "cash",
         channel: args.orderDetails.podPaymentMethod || "cash",
       };
+      const items = (session.items || [])
+        .filter(
+          (item) =>
+            item.productSkuId !== undefined &&
+            item.quantity !== undefined &&
+            item.price !== undefined,
+        )
+        .map((item) => ({
+          productSkuId: item.productSkuId,
+          quantity: item.quantity,
+          price: item.price!,
+        }));
+      const subtotal = calculateItemsSubtotal(items);
+      const storeForFee = await ctx.runQuery(internal.inventory.stores.findById, {
+        id: session.storeId,
+      });
+      const deliveryFee = resolveServerDeliveryFee({
+        deliveryDetails: args.orderDetails.deliveryDetails,
+        deliveryMethod: args.orderDetails.deliveryMethod,
+        deliveryOption: args.orderDetails.deliveryOption,
+        storeConfig: storeForFee?.config,
+        subtotal,
+      });
+
+      if (deliveryFee === null) {
+        return {
+          success: false,
+          message: "Delivery details are required before payment on delivery can be created",
+        };
+      }
 
       // Update checkout session with order details
       await ctx.runMutation(
@@ -234,6 +295,7 @@ export const createPODOrder = action({
           externalReference: podReference,
           orderDetails: {
             ...args.orderDetails,
+            deliveryFee,
             paymentMethod: "payment_on_delivery",
             discount: session.discount ?? null,
           },
@@ -265,8 +327,8 @@ export const createPODOrder = action({
         const amountToCharge = calculateOrderAmount({
           items: order.items || [],
           discount: order.discount || 0,
-          deliveryFee: args.orderDetails.deliveryFee || 0, // already pesewas
-          subtotal: session.amount, // already pesewas
+          deliveryFee,
+          subtotal,
         });
 
         // Send confirmation and admin notification emails
@@ -513,23 +575,58 @@ export const refundPayment = action({
       message: v.string(),
     })
   ),
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    args,
+  ): Promise<CommandResult<{ message: string }>> => {
+    let refundReservation: RefundReservationResult | undefined;
+    let refundFinalized = false;
+
     try {
+      const reservation = (await ctx.runMutation(
+        internal.storeFront.onlineOrder.reserveRefundInternal,
+        {
+          externalTransactionId: args.externalTransactionId,
+          requestedAmount: args.amount,
+        },
+      )) as RefundReservationResult;
+      refundReservation = reservation;
+
+      if (
+        !reservation.success ||
+        !reservation.refundAmount ||
+        !reservation.reservationId
+      ) {
+        return userError({
+          code:
+            reservation.message === "Order not found."
+              ? "not_found"
+              : "validation_failed",
+          message:
+            reservation.message ??
+            "Unable to reserve the requested refund amount.",
+        });
+      }
+
+      const refundAmount = reservation.refundAmount;
+
       // Initiate refund with Paystack
       const refundResponse = await initiateRefund({
         transactionReference: args.externalTransactionId,
-        amount: args.amount,
+        amount: refundAmount,
       });
+      const refundId =
+        refundResponse.data?.transaction?.reference ?? `refund-${Date.now()}`;
 
-      // Update order status to refund-submitted
-      await ctx.runMutation(internal.storeFront.onlineOrder.updateInternal, {
-        externalReference: refundResponse.data?.transaction?.reference,
-        update: {
-          status: "refund-submitted",
-          didRefundDeliveryFee: args.refundItems?.includes("delivery-fee"),
-        },
+      await ctx.runMutation(internal.storeFront.onlineOrder.finalizeRefundInternal, {
+        didRefundDeliveryFee: args.refundItems?.includes("delivery-fee"),
+        externalTransactionId: args.externalTransactionId,
+        refundAmount,
+        refundId,
+        reservationId: reservation.reservationId,
         signedInAthenaUser: args.signedInAthenaUser,
       });
+      refundFinalized = true;
 
       console.log('Updated order status to "refund-submitted"');
 
@@ -570,7 +667,7 @@ export const refundPayment = action({
         await ctx.runMutation(internal.operations.paymentAllocations.recordPaymentAllocation, {
           actorUserId: args.signedInAthenaUser?.id,
           allocationType: "refund",
-          amount: args.amount ?? order.paymentDue ?? order.amount,
+          amount: refundAmount,
           customerProfileId: order.customerProfileId,
           direction: "out",
           externalReference:
@@ -595,6 +692,28 @@ export const refundPayment = action({
       });
     } catch (error) {
       console.error("Failed to refund payment", error);
+      const message = error instanceof Error ? error.message : "";
+
+      if (refundReservation?.reservationId && !refundFinalized) {
+        await ctx.runMutation(
+          internal.storeFront.onlineOrder.releaseRefundReservationInternal,
+          {
+            externalTransactionId: args.externalTransactionId,
+            reservationId: refundReservation.reservationId,
+          },
+        );
+      }
+
+      if (
+        message === "Refund amount must be a positive integer minor-unit amount." ||
+        message === "Refund amount exceeds the remaining refundable balance."
+      ) {
+        return userError({
+          code: "validation_failed",
+          message,
+        });
+      }
+
       return userError({
         code: "unavailable",
         message: "Failed to refund payment.",

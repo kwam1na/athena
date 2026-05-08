@@ -95,6 +95,7 @@
     {
       "name": "full-browser-journeys-and-payment-redirects",
       "pathPrefixes": [
+        "packages/storefront-webapp/playwright.config.ts",
         "packages/storefront-webapp/tests/e2e",
         "packages/storefront-webapp/src/routes/shop/checkout"
       ],

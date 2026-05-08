@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
 import { Award } from "lucide-react";
 import { useCheckout } from "@/hooks/useCheckout";
+import { formatStoredAmount } from "@/lib/currency";
 
 export const PickupDetails = ({ session }: { session: any }) => {
   if (session.deliveryMethod == "pickup") {
@@ -75,7 +76,7 @@ export const PaymentDetails = ({ session }: { session?: CheckoutSession }) => {
   const discountText =
     discount?.type === "percentage"
       ? `${discount.value}%`
-      : `${formatter.format(discountValue)}`;
+      : `${formatStoredAmount(formatter, discountValue)}`;
 
   const discountSpan =
     discount?.span == "entire-order" ? "entire order" : "select items";
@@ -91,14 +92,16 @@ export const PaymentDetails = ({ session }: { session?: CheckoutSession }) => {
           {hasDiscount ? (
             <div className="flex items-center gap-2">
               <p className="text-sm text-muted-foreground line-through">
-                {formatter.format(originalAmount / 100)}
+                {formatStoredAmount(formatter, originalAmount)}
               </p>
               <p className="text-sm font-medium">
-                {formatter.format(amountCharged / 100)}
+                {formatStoredAmount(formatter, amountCharged)}
               </p>
             </div>
           ) : (
-            <p className="text-sm">{formatter.format(amountCharged / 100)}</p>
+            <p className="text-sm">
+              {formatStoredAmount(formatter, amountCharged)}
+            </p>
           )}
           {discount && (
             <p className="text-sm font-medium">

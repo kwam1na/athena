@@ -8,9 +8,6 @@ import type { RegisterDrawerGateState } from "@/lib/pos/presentation/register/re
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
     children,
-    params: _params,
-    search: _search,
-    to: _to,
     ...props
   }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
     params?: unknown;
@@ -63,5 +60,31 @@ describe("RegisterDrawerGate", () => {
     await user.click(screen.getByRole("button", { name: "Open drawer" }));
 
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("shows pesewa-level submitted closeout variances while whole cedi counts stay compact", () => {
+    renderGate({
+      closeoutSubmittedCountedCash: 10000,
+      closeoutSubmittedVariance: 2,
+      expectedCash: 10002,
+      hasPendingCloseoutApproval: true,
+      mode: "closeoutBlocked",
+    });
+
+    expect(screen.getByText("GH₵100.02")).toBeInTheDocument();
+    expect(screen.getByText("GH₵100")).toBeInTheDocument();
+    expect(screen.getByText("GH₵0.02")).toHaveClass("text-emerald-700");
+  });
+
+  it("shows pesewa-level draft closeout variances while whole cedi expected cash stays compact", () => {
+    renderGate({
+      closeoutCountedCash: "100.00",
+      closeoutDraftVariance: -2,
+      expectedCash: 10002,
+      mode: "closeoutBlocked",
+    });
+
+    expect(screen.getByText("GH₵100.02")).toBeInTheDocument();
+    expect(screen.getByText("GH₵-0.02")).toHaveClass("text-red-700");
   });
 });

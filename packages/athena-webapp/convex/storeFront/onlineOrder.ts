@@ -37,6 +37,10 @@ import {
 } from "./helpers/orderOperations";
 import { buildOnlineOrderReturnExchangePlan } from "./helpers/returnExchangeOperations";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
+import {
+  getRemainingRefundableBalance,
+  resolveRefundAmount,
+} from "./helpers/paymentHelpers";
 
 const entity = "onlineOrder";
 const MAX_ORDER_ITEMS = 200;
@@ -764,6 +768,152 @@ export const updateInternal = internalMutation({
   },
 });
 
+export const reserveRefundInternal = internalMutation({
+  args: {
+    externalTransactionId: v.string(),
+    requestedAmount: v.optional(v.number()),
+  },
+  returns: v.object({
+    customerProfileId: v.optional(v.id("customerProfile")),
+    message: v.optional(v.string()),
+    orderId: v.optional(v.id("onlineOrder")),
+    refundAmount: v.optional(v.number()),
+    reservationId: v.optional(v.string()),
+    storeId: v.optional(v.id("store")),
+    success: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    const order = await findOrderByExternalTransactionId(
+      ctx,
+      args.externalTransactionId,
+    );
+
+    if (!order) {
+      return {
+        success: false,
+        message: "Order not found.",
+      };
+    }
+
+    try {
+      const refundAmount = resolveRefundAmount({
+        requestedAmount: args.requestedAmount,
+        remainingRefundableBalance: getRemainingRefundableBalance(order),
+      });
+
+      if (refundAmount <= 0) {
+        return {
+          success: false,
+          message: "This order has no remaining refundable balance.",
+        };
+      }
+
+      const reservationId = `refund-reservation-${crypto.randomUUID()}`;
+      await ctx.db.patch("onlineOrder", order._id, {
+        refunds: [
+          ...(order.refunds ?? []),
+          {
+            amount: refundAmount,
+            date: Date.now(),
+            id: reservationId,
+          },
+        ],
+      });
+
+      return {
+        customerProfileId: order.customerProfileId,
+        orderId: order._id,
+        refundAmount,
+        reservationId,
+        storeId: order.storeId,
+        success: true,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      return {
+        success: false,
+        message:
+          message ||
+          "Unable to reserve the requested refund amount for this order.",
+      };
+    }
+  },
+});
+
+export const finalizeRefundInternal = internalMutation({
+  args: {
+    didRefundDeliveryFee: v.optional(v.boolean()),
+    externalTransactionId: v.string(),
+    refundAmount: v.number(),
+    refundId: v.string(),
+    reservationId: v.string(),
+    signedInAthenaUser: v.optional(
+      v.object({
+        id: v.id("athenaUser"),
+        email: v.string(),
+      }),
+    ),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const order = await findOrderByExternalTransactionId(
+      ctx,
+      args.externalTransactionId,
+    );
+
+    if (!order) {
+      return false;
+    }
+
+    const refunds = (order.refunds ?? []).map((refund) =>
+      refund.id === args.reservationId
+        ? {
+            amount: args.refundAmount,
+            date: Date.now(),
+            id: args.refundId,
+          }
+        : refund,
+    );
+
+    await applyOnlineOrderUpdate(ctx, order, {
+      signedInAthenaUser: args.signedInAthenaUser,
+      update: {
+        didRefundDeliveryFee: args.didRefundDeliveryFee,
+        refunds,
+        status: "refund-submitted",
+      },
+    });
+
+    return true;
+  },
+});
+
+export const releaseRefundReservationInternal = internalMutation({
+  args: {
+    externalTransactionId: v.string(),
+    reservationId: v.string(),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const order = await findOrderByExternalTransactionId(
+      ctx,
+      args.externalTransactionId,
+    );
+
+    if (!order) {
+      return false;
+    }
+
+    await ctx.db.patch("onlineOrder", order._id, {
+      refunds: (order.refunds ?? []).filter(
+        (refund) => refund.id !== args.reservationId,
+      ),
+    });
+
+    return true;
+  },
+});
+
 export const getReturnExchangeOverview = query({
   args: {
     orderId: v.id("onlineOrder"),
@@ -931,7 +1081,7 @@ export const processReturnExchange = mutation({
             quantity: replacement.quantity,
             quantityAvailable: productSku.quantityAvailable,
             skuLabel: productSku.sku,
-            unitPrice: replacement.unitPrice,
+            unitPrice: Math.round(productSku.price),
           };
         }),
       );

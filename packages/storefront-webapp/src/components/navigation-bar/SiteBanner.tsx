@@ -7,6 +7,7 @@ import { PromoCode, BannerMessage } from "@athena/webapp";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
+import { formatStoredAmount } from "@/lib/currency";
 import {
   getBannerTextClass,
   getBannerBGClass,
@@ -40,8 +41,8 @@ export const SiteBanner = () => {
         : `up to ${value}% off`;
     } else {
       return promoCode.span === "selected-products"
-        ? `${formatter.format(value)} off select items`
-        : `${formatter.format(value)} off`;
+        ? `${formatStoredAmount(formatter, value)} off select items`
+        : `${formatStoredAmount(formatter, value)} off`;
     }
   };
 
