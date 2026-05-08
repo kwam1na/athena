@@ -8,17 +8,17 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 
 ## Repo Summary
 - Code files discovered: 1629
-- Graph nodes: 4712
-- Graph edges: 4587
+- Graph nodes: 4714
+- Graph edges: 4589
 - Communities: 1557
 
 ## Graph Hotspots
 - `harness-inferential-review.ts` (46 edges, Community 0) - [`scripts/harness-inferential-review.ts`](../../scripts/harness-inferential-review.ts)
-- `storefrontJourneyEvents.ts` (45 edges, Community 1) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)
-- `DailyCloseView.tsx` (44 edges, Community 2) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)
-- `createJourneyEvent()` (40 edges, Community 1) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)
+- `DailyCloseView.tsx` (45 edges, Community 1) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)
+- `storefrontJourneyEvents.ts` (45 edges, Community 2) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)
+- `createJourneyEvent()` (40 edges, Community 2) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)
 - `ProcurementView.tsx` (39 edges, Community 3) - [`packages/athena-webapp/src/components/procurement/ProcurementView.tsx`](../../packages/athena-webapp/src/components/procurement/ProcurementView.tsx)
-- `dailyClose.ts` (37 edges, Community 4) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../packages/athena-webapp/convex/operations/dailyClose.ts)
+- `dailyClose.ts` (38 edges, Community 4) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../packages/athena-webapp/convex/operations/dailyClose.ts)
 - `harness-check.ts` (32 edges, Community 5) - [`scripts/harness-check.ts`](../../scripts/harness-check.ts)
 - `harness-behavior.ts` (30 edges, Community 6) - [`scripts/harness-behavior.ts`](../../scripts/harness-behavior.ts)
 

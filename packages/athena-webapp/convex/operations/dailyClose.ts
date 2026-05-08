@@ -61,6 +61,7 @@ type DailyCloseSummary = {
   currentDayCashTotal: number;
   currentDayCashTransactionCount: number;
   expectedCashTotal: number;
+  expenseStaffCount: number;
   expenseTotal: number;
   netCashVariance: number;
   openWorkItemCount: number;
@@ -196,6 +197,19 @@ function registerSessionLabel(
   return session.registerNumber
     ? `Register ${session.registerNumber}`
     : "Register";
+}
+
+function registerMetadataLabel(
+  terminalLabel: string | undefined,
+  registerLabel: string | undefined,
+) {
+  if (!registerLabel) return undefined;
+
+  return terminalLabel
+    ?.toLocaleLowerCase()
+    .includes(registerLabel.toLocaleLowerCase())
+    ? undefined
+    : registerLabel;
 }
 
 function formatPaymentMethodLabel(method: string) {
@@ -609,6 +623,7 @@ function emptySummary(): DailyCloseSummary {
     currentDayCashTotal: 0,
     currentDayCashTransactionCount: 0,
     expectedCashTotal: 0,
+    expenseStaffCount: 0,
     expenseTotal: 0,
     netCashVariance: 0,
     openWorkItemCount: 0,
@@ -756,6 +771,13 @@ export async function buildDailyCloseSnapshotWithCtx(
     const terminalLabel = session.terminalId
       ? terminalLabelsById.get(session.terminalId)
       : undefined;
+    const registerLabel = trimOptional(session.registerNumber)
+      ? registerSessionLabel(session)
+      : undefined;
+    const registerMetadata = registerMetadataLabel(
+      terminalLabel,
+      registerLabel,
+    );
     const openedBy = session.openedByStaffProfileId
       ? staffNamesById.get(session.openedByStaffProfileId)
       : undefined;
@@ -790,6 +812,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       },
       metadata: {
         ...(terminalLabel ? { terminal: terminalLabel } : {}),
+        ...(registerMetadata ? { register: registerMetadata } : {}),
         operatingScope: isCarriedOver
           ? "Carried over from prior day"
           : "Opened today",
@@ -947,6 +970,13 @@ export async function buildDailyCloseSnapshotWithCtx(
     const terminalLabel = session.terminalId
       ? terminalLabelsById.get(session.terminalId)
       : undefined;
+    const registerLabel = trimOptional(session.registerNumber)
+      ? registerSessionLabel(session)
+      : undefined;
+    const registerMetadata = registerMetadataLabel(
+      terminalLabel,
+      registerLabel,
+    );
     const openedBy = session.openedByStaffProfileId
       ? staffNamesById.get(session.openedByStaffProfileId)
       : undefined;
@@ -973,6 +1003,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       },
       metadata: {
         ...(terminalLabel ? { terminal: terminalLabel } : {}),
+        ...(registerMetadata ? { register: registerMetadata } : {}),
         operatingScope: isCarriedOver
           ? "Carried over from prior day"
           : "Opened today",
@@ -1010,6 +1041,7 @@ export async function buildDailyCloseSnapshotWithCtx(
         },
         metadata: {
           ...(terminalLabel ? { terminal: terminalLabel } : {}),
+          ...(registerMetadata ? { register: registerMetadata } : {}),
           operatingScope: isCarriedOver
             ? "Carried over from prior day"
             : "Opened today",
@@ -1166,6 +1198,9 @@ export async function buildDailyCloseSnapshotWithCtx(
       (sum, transaction) => sum + transaction.totalValue,
       0,
     ),
+    expenseStaffCount: new Set(
+      expenseTransactions.map((transaction) => transaction.staffProfileId),
+    ).size,
     netCashVariance: relevantRegisterSessions.reduce(
       (sum, session) => sum + (session.variance ?? 0),
       0,

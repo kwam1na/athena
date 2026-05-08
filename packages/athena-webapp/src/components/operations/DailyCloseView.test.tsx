@@ -388,6 +388,32 @@ describe("DailyCloseViewContent", () => {
     ).toBeEnabled();
   });
 
+  it("uses explicit register metadata instead of also appending the subject register", () => {
+    renderContent({
+      ...readySnapshot,
+      readyItems: [
+        {
+          ...readySnapshot.readyItems[0],
+          metadata: {
+            ...readySnapshot.readyItems[0].metadata,
+            register: "Register 3",
+            terminal: "Codex",
+          },
+          subject: {
+            id: "session-3",
+            label: "Register 3",
+            type: "register_session",
+          },
+        },
+      ],
+    });
+
+    expect(screen.getByText("Codex / Register 3")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Codex / Register 3 / Register 3"),
+    ).not.toBeInTheDocument();
+  });
+
   it("uses natural count grammar in summary helpers", () => {
     renderContent({
       ...readySnapshot,
@@ -407,6 +433,24 @@ describe("DailyCloseViewContent", () => {
     expect(screen.getByText("1 register from a prior day")).toBeInTheDocument();
     expect(screen.getByText("1 register variance")).toBeInTheDocument();
     expect(screen.getByText("1 staff member involved")).toBeInTheDocument();
+  });
+
+  it("does not use pending approvals as the expenses staff count", () => {
+    renderContent({
+      ...readySnapshot,
+      summary: {
+        ...baseSummary,
+        expenseStaffCount: undefined,
+        expenseTotal: 0,
+        pendingApprovalCount: 1,
+        staffCount: undefined,
+      },
+    });
+
+    expect(screen.getByText("No staff involved")).toBeInTheDocument();
+    expect(
+      screen.queryByText("1 staff member involved"),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps review context available from the ready state", () => {

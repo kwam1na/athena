@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 4712 nodes · 4587 edges · 1557 communities detected
+- 4714 nodes · 4589 edges · 1557 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1599,12 +1599,12 @@ Cohesion: 0.1
 Nodes (45): buildFinding(), buildHumanReport(), buildSemanticPrompt(), buildShadowSummary(), buildShellCommandPattern(), collectHarnessSafetySignalFindings(), collectHarnessScriptTestUpdateFindings(), createOutput() (+37 more)
 
 ### Community 1 - "Community 1"
-Cohesion: 0.09
-Nodes (45): compactContext(), createAuthEntryViewedEvent(), createAuthRequestStartedEvent(), createAuthVerificationSucceededEvent(), createAuthVerificationViewedEvent(), createBagAddSucceededEvent(), createBagMoveToSavedEvent(), createBagRemoveSucceededEvent() (+37 more)
-
-### Community 2 - "Community 2"
 Cohesion: 0.07
 Nodes (25): cn(), formatMetadataDisplayValue(), formatMetadataValue(), formatMoney(), formatTimestampMetadata(), getBucketCountClassName(), getCarryForwardWorkItemId(), getDisplayMetadataLabel() (+17 more)
+
+### Community 2 - "Community 2"
+Cohesion: 0.09
+Nodes (45): compactContext(), createAuthEntryViewedEvent(), createAuthRequestStartedEvent(), createAuthVerificationSucceededEvent(), createAuthVerificationViewedEvent(), createBagAddSucceededEvent(), createBagMoveToSavedEvent(), createBagRemoveSucceededEvent() (+37 more)
 
 ### Community 3 - "Community 3"
 Cohesion: 0.07
@@ -1735,12 +1735,12 @@ Cohesion: 0.23
 Nodes (14): acquireInventoryHold(), acquireInventoryHoldsBatch(), adjustInventoryHold(), consumeInventoryHoldsForSession(), getActiveHoldForSessionSku(), listActiveSessionHolds(), markHoldExpired(), readActiveInventoryHoldDetailsForSession() (+6 more)
 
 ### Community 35 - "Community 35"
-Cohesion: 0.25
-Nodes (14): buildCompleteTransactionResult(), calculateCanonicalTransactionTotals(), calculateTotalPaid(), completeTransaction(), createTransactionFromSessionHandler(), isUsableRegisterSession(), recordRegisterSessionSale(), recordRegisterSessionVoid() (+6 more)
-
-### Community 36 - "Community 36"
 Cohesion: 0.12
 Nodes (1): DataTableViewOptions()
+
+### Community 36 - "Community 36"
+Cohesion: 0.25
+Nodes (14): buildCompleteTransactionResult(), calculateCanonicalTransactionTotals(), calculateTotalPaid(), completeTransaction(), createTransactionFromSessionHandler(), isUsableRegisterSession(), recordRegisterSessionSale(), recordRegisterSessionVoid() (+6 more)
 
 ### Community 37 - "Community 37"
 Cohesion: 0.19
@@ -1968,39 +1968,39 @@ Nodes (6): findAthenaUserByEmailWithCtx(), getAuthenticatedAthenaUserWithCtx(), 
 
 ### Community 93 - "Community 93"
 Cohesion: 0.43
-Nodes (6): sendDiscountCodeEmail(), sendDiscountReminderEmail(), sendFeedbackRequestEmail(), sendNewOrderEmail(), sendOrderEmail(), sendVerificationCode()
-
-### Community 94 - "Community 94"
-Cohesion: 0.43
 Nodes (6): buildMtnCollectionsLookupPrefixes(), isTargetEnvironment(), readScopedValue(), resolveConfigForPrefix(), resolveMtnCollectionsConfigFromEnv(), toEnvSegment()
 
-### Community 95 - "Community 95"
+### Community 94 - "Community 94"
 Cohesion: 0.46
 Nodes (7): recordApprovalAuditEventWithCtx(), recordApprovalDecisionRecordedAuditEventWithCtx(), recordApprovalProofConsumedAuditEventWithCtx(), recordApprovalRequiredAuditEventWithCtx(), recordApprovedCommandAppliedAuditEventWithCtx(), recordAsyncApprovalRequestCreatedAuditEventWithCtx(), recordManagerApprovalGrantedAuditEventWithCtx()
 
-### Community 96 - "Community 96"
+### Community 95 - "Community 95"
 Cohesion: 0.5
 Nodes (7): buildApprovalDecisionRequirement(), buildApprovalDecisionSubject(), consumeApprovalDecisionProofWithCtx(), decideApprovalRequestAsAuthenticatedUserWithCtx(), decideApprovalRequestAsCommandWithCtx(), decideApprovalRequestWithCtx(), mapDecideApprovalRequestError()
 
-### Community 97 - "Community 97"
+### Community 96 - "Community 96"
 Cohesion: 0.36
 Nodes (5): buildPaymentAllocation(), correctSameAmountSinglePaymentAllocationWithCtx(), findSameAmountSinglePaymentAllocation(), listPaymentAllocationsForTargetWithCtx(), recordPaymentAllocationWithCtx()
 
-### Community 98 - "Community 98"
+### Community 97 - "Community 97"
 Cohesion: 0.43
 Nodes (6): buildPosSessionTraceEvent(), buildPosSessionTraceRecord(), buildTraceSummary(), formatPaymentMethod(), recordPosSessionTraceBestEffort(), safeTraceWrite()
 
-### Community 99 - "Community 99"
+### Community 98 - "Community 98"
 Cohesion: 0.5
 Nodes (7): findExistingSku(), findOrCreateQuickAddCategory(), findOrCreateQuickAddSubcategory(), generateSKU(), isBarcodeLike(), mapSkuToCatalogResult(), quickAddCatalogItem()
+
+### Community 99 - "Community 99"
+Cohesion: 0.25
+Nodes (0):
 
 ### Community 100 - "Community 100"
 Cohesion: 0.25
 Nodes (0):
 
 ### Community 101 - "Community 101"
-Cohesion: 0.25
-Nodes (0):
+Cohesion: 0.43
+Nodes (6): sendDiscountCodeEmail(), sendDiscountReminderEmail(), sendFeedbackRequestEmail(), sendNewOrderEmail(), sendOrderEmail(), sendVerificationCode()
 
 ### Community 102 - "Community 102"
 Cohesion: 0.25
@@ -2388,7 +2388,7 @@ Nodes (0):
 
 ### Community 198 - "Community 198"
 Cohesion: 0.4
-Nodes (1): Header()
+Nodes (0):
 
 ### Community 199 - "Community 199"
 Cohesion: 0.4
@@ -2403,12 +2403,12 @@ Cohesion: 0.4
 Nodes (0):
 
 ### Community 202 - "Community 202"
-Cohesion: 0.4
-Nodes (0):
-
-### Community 203 - "Community 203"
 Cohesion: 0.5
 Nodes (2): handleFileSelect(), validateFile()
+
+### Community 203 - "Community 203"
+Cohesion: 0.4
+Nodes (0):
 
 ### Community 204 - "Community 204"
 Cohesion: 0.4
@@ -2420,7 +2420,7 @@ Nodes (0):
 
 ### Community 206 - "Community 206"
 Cohesion: 0.4
-Nodes (0):
+Nodes (1): Header()
 
 ### Community 207 - "Community 207"
 Cohesion: 0.5
@@ -10016,9 +10016,9 @@ _Questions this graph is uniquely positioned to answer:_
 - **Should `Community 0` be split into smaller, more focused modules?**
   _Cohesion score 0.1 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**
-  _Cohesion score 0.09 - nodes in this community are weakly interconnected._
-- **Should `Community 2` be split into smaller, more focused modules?**
   _Cohesion score 0.07 - nodes in this community are weakly interconnected._
+- **Should `Community 2` be split into smaller, more focused modules?**
+  _Cohesion score 0.09 - nodes in this community are weakly interconnected._
 - **Should `Community 3` be split into smaller, more focused modules?**
   _Cohesion score 0.07 - nodes in this community are weakly interconnected._
 - **Should `Community 4` be split into smaller, more focused modules?**

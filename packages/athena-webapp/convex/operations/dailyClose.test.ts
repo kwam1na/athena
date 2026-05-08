@@ -249,6 +249,38 @@ describe("daily close backend foundation", () => {
           type: "customer_follow_up",
         },
       ],
+      expenseTransaction: [
+        {
+          _id: "expense-1",
+          completedAt: Date.UTC(2026, 4, 7, 17),
+          sessionId: "expense-session-1",
+          staffProfileId: "staff-1",
+          status: "completed",
+          storeId: "store-1",
+          totalValue: 4500,
+          transactionNumber: "EXP-1",
+        },
+        {
+          _id: "expense-2",
+          completedAt: Date.UTC(2026, 4, 7, 18),
+          sessionId: "expense-session-2",
+          staffProfileId: "staff-1",
+          status: "completed",
+          storeId: "store-1",
+          totalValue: 2500,
+          transactionNumber: "EXP-2",
+        },
+        {
+          _id: "expense-prior-day",
+          completedAt: Date.UTC(2026, 4, 6, 18),
+          sessionId: "expense-session-prior",
+          staffProfileId: "staff-1",
+          status: "completed",
+          storeId: "store-1",
+          totalValue: 9000,
+          transactionNumber: "EXP-PRIOR",
+        },
+      ],
       paymentAllocation: [
         {
           _id: "deposit-1",
@@ -418,6 +450,7 @@ describe("daily close backend foundation", () => {
     expect(snapshot.blockers[0].metadata).toMatchObject({
       openedAt: Date.UTC(2026, 4, 6, 20),
       operatingScope: "Carried over from prior day",
+      register: "Register A1",
       terminal: "Front counter terminal",
     });
     expect(snapshot.blockers[1].metadata).toMatchObject({
@@ -426,6 +459,7 @@ describe("daily close backend foundation", () => {
       openedAt: Date.UTC(2026, 4, 7, 10),
       openedBy: "Kofi Mensah",
       operatingScope: "Opened today",
+      register: "Register A2",
       status: "closing",
       terminal: "Front counter terminal",
       variance: -2000,
@@ -478,6 +512,7 @@ describe("daily close backend foundation", () => {
       expectedCash: 10000,
       openedAt: Date.UTC(2026, 4, 7, 10),
       operatingScope: "Opened today",
+      register: "Register A3",
       status: "closed",
       terminal: "Front counter terminal",
       variance: -500,
@@ -527,6 +562,7 @@ describe("daily close backend foundation", () => {
       openedAt: Date.UTC(2026, 4, 7, 10),
       openedBy: "Kofi Mensah",
       operatingScope: "Opened today",
+      register: "Register A3",
       status: "closed",
       terminal: "Front counter terminal",
       variance: -500,
@@ -548,6 +584,8 @@ describe("daily close backend foundation", () => {
       currentDayCashTotal: 9500,
       currentDayCashTransactionCount: 1,
       expectedCashTotal: 39500,
+      expenseStaffCount: 1,
+      expenseTotal: 7000,
       netCashVariance: -2500,
       openWorkItemCount: 1,
       pendingApprovalCount: 1,
@@ -560,6 +598,51 @@ describe("daily close backend foundation", () => {
     expect(snapshot.readyItems.map((item) => item.key)).not.toContain(
       "pos_transaction:txn-prior-day:completed",
     );
+  });
+
+  it("does not repeat the register when the terminal label already includes it", async () => {
+    const { db } = createDb({
+      posTerminal: [
+        {
+          _id: "terminal-codex",
+          displayName: "Codex / Register 3",
+          storeId: "store-1",
+        },
+      ],
+      registerSession: [
+        {
+          _id: "register-3",
+          closedAt: Date.UTC(2026, 4, 8, 1),
+          countedCash: 39099,
+          expectedCash: 39099,
+          openedAt: Date.UTC(2026, 4, 6, 4, 42),
+          openingFloat: 10000,
+          registerNumber: "3",
+          status: "closed",
+          storeId: "store-1",
+          terminalId: "terminal-codex",
+        },
+      ],
+      store: [store],
+    });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      {
+        endAt: Date.UTC(2026, 4, 8, 4),
+        operatingDate: "2026-05-07",
+        startAt: Date.UTC(2026, 4, 7, 4),
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+    const metadata = snapshot.readyItems.find(
+      (item) => item.key === "register_session:register-3:closed",
+    )?.metadata;
+
+    expect(metadata).toMatchObject({
+      terminal: "Codex / Register 3",
+    });
+    expect(metadata).not.toHaveProperty("register");
   });
 
   it("uses the supplied operating-day range for same-local-day transactions after UTC midnight", async () => {
