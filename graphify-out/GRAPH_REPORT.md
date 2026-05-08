@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 4854 nodes · 4779 edges · 1572 communities detected
+- 4866 nodes · 4801 edges · 1572 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1610,8 +1610,8 @@
 ## Communities
 
 ### Community 0 - "Community 0"
-Cohesion: 0.06
-Nodes (32): cn(), formatMetadataDisplayValue(), formatMetadataValue(), formatMoney(), formatTimestampMetadata(), getBucketConfigs(), getBucketCountClassName(), getCarryForwardWorkItemId() (+24 more)
+Cohesion: 0.05
+Nodes (38): cn(), formatMetadataDisplayValue(), formatMetadataValue(), formatMoney(), formatTimestampMetadata(), getBucketConfigs(), getBucketCountClassName(), getCarryForwardWorkItemId() (+30 more)
 
 ### Community 1 - "Community 1"
 Cohesion: 0.1
@@ -2266,16 +2266,16 @@ Cohesion: 0.33
 Nodes (0):
 
 ### Community 164 - "Community 164"
-Cohesion: 0.47
-Nodes (3): onDrop(), removeImage(), unmarkForDeletion()
-
-### Community 165 - "Community 165"
 Cohesion: 0.33
 Nodes (0):
 
-### Community 166 - "Community 166"
+### Community 165 - "Community 165"
 Cohesion: 0.4
 Nodes (2): useBulkOperations(), validateOperationValue()
+
+### Community 166 - "Community 166"
+Cohesion: 0.33
+Nodes (0):
 
 ### Community 167 - "Community 167"
 Cohesion: 0.33
@@ -2290,12 +2290,12 @@ Cohesion: 0.33
 Nodes (0):
 
 ### Community 170 - "Community 170"
-Cohesion: 0.33
-Nodes (0):
-
-### Community 171 - "Community 171"
 Cohesion: 0.53
 Nodes (4): calculatePosChange(), calculatePosRemainingDue(), calculatePosTotalPaid(), roundPosAmount()
+
+### Community 171 - "Community 171"
+Cohesion: 0.33
+Nodes (0):
 
 ### Community 172 - "Community 172"
 Cohesion: 0.33
@@ -2306,40 +2306,40 @@ Cohesion: 0.33
 Nodes (0):
 
 ### Community 174 - "Community 174"
-Cohesion: 0.33
-Nodes (0):
+Cohesion: 0.4
+Nodes (2): onSubmit(), saveStoreChanges()
 
 ### Community 175 - "Community 175"
 Cohesion: 0.4
 Nodes (2): onSubmit(), saveStoreChanges()
 
 ### Community 176 - "Community 176"
-Cohesion: 0.4
-Nodes (2): onSubmit(), saveStoreChanges()
-
-### Community 177 - "Community 177"
 Cohesion: 0.33
 Nodes (0):
 
-### Community 178 - "Community 178"
+### Community 177 - "Community 177"
 Cohesion: 0.47
 Nodes (4): fetchPosTransaction(), getBaseUrl(), getPosTransactionByReceiptToken(), PosTransactionReceiptError
 
-### Community 179 - "Community 179"
+### Community 178 - "Community 178"
 Cohesion: 0.47
 Nodes (3): getBaseUrl(), getPromoCodes(), redeemPromoCode()
 
-### Community 180 - "Community 180"
+### Community 179 - "Community 179"
 Cohesion: 0.33
 Nodes (0):
 
-### Community 181 - "Community 181"
+### Community 180 - "Community 180"
 Cohesion: 0.4
 Nodes (2): handleConfirm(), handlePrimaryAction()
 
-### Community 182 - "Community 182"
+### Community 181 - "Community 181"
 Cohesion: 0.33
 Nodes (0):
+
+### Community 182 - "Community 182"
+Cohesion: 0.47
+Nodes (3): onDrop(), removeImage(), unmarkForDeletion()
 
 ### Community 183 - "Community 183"
 Cohesion: 0.53
@@ -10097,7 +10097,7 @@ _Questions this graph is uniquely positioned to answer:_
 - **What connects `HelpRequested` to the rest of the system?**
   _1 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**
-  _Cohesion score 0.06 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.05 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**
   _Cohesion score 0.1 - nodes in this community are weakly interconnected._
 - **Should `Community 2` be split into smaller, more focused modules?**

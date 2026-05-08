@@ -421,12 +421,17 @@ describe("DailyCloseViewContent", () => {
     expect(
       within(closedRegisterItem as HTMLElement).queryByText("GH₵0"),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("Completed sale")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "#TXN-1" })).toHaveAttribute(
+    const readySection = screen.getByRole("region", {
+      name: "Ready close items",
+    });
+    expect(within(readySection).getByText("Completed sale")).toBeInTheDocument();
+    expect(within(readySection).getByRole("link", { name: "#TXN-1" })).toHaveAttribute(
       "href",
       "/wigclub/store/osu/pos/transactions/txn-1?o=%252F",
     );
-    const saleItem = screen.getByText("Completed sale").closest("article");
+    const saleItem = within(readySection)
+      .getByText("Completed sale")
+      .closest("article");
     expect(saleItem).not.toBeNull();
     await user.click(
       within(saleItem as HTMLElement).getByRole("button", {
@@ -459,8 +464,12 @@ describe("DailyCloseViewContent", () => {
     expect(
       within(saleItem as HTMLElement).getByText("GH₵500"),
     ).toBeInTheDocument();
-    expect(screen.getByText("Completed expense")).toBeInTheDocument();
-    const expenseItem = screen.getByText("Completed expense").closest("article");
+    expect(
+      within(readySection).getByText("Completed expense"),
+    ).toBeInTheDocument();
+    const expenseItem = within(readySection)
+      .getByText("Completed expense")
+      .closest("article");
     expect(expenseItem).not.toBeNull();
     await user.click(
       within(expenseItem as HTMLElement).getByRole("button", {
@@ -644,6 +653,60 @@ describe("DailyCloseViewContent", () => {
         name: /go to next page/i,
       }),
     ).toBeDisabled();
+  });
+
+  it("opens a POS and expense transaction report as line items", async () => {
+    const user = userEvent.setup();
+
+    renderContent(readySnapshot);
+
+    const launcher = screen.getByRole("region", {
+      name: "POS and expense transaction report",
+    });
+
+    expect(
+      within(launcher).getByText("POS and expense transactions"),
+    ).toBeInTheDocument();
+    expect(
+      within(launcher).getByText(
+        "14 POS sales, 1 expense transaction, no voided sales available for review.",
+      ),
+    ).toBeInTheDocument();
+
+    expect(within(launcher).queryByText("POS sale")).not.toBeInTheDocument();
+
+    await user.click(within(launcher).getByRole("button", { name: /view report/i }));
+
+    const report = await screen.findByRole("dialog");
+
+    expect(within(report).getByText("Item")).toBeInTheDocument();
+    expect(within(report).getByText("Staff")).toBeInTheDocument();
+    expect(within(report).getByText("Payment")).toBeInTheDocument();
+    expect(within(report).getByText("Completed")).toBeInTheDocument();
+    expect(within(report).getByText("Amount")).toBeInTheDocument();
+    expect(within(report).queryByText("POS sale")).not.toBeInTheDocument();
+    expect(within(report).getByText("#TXN-1")).toBeInTheDocument();
+    expect(within(report).getByText("#EXP-1")).toBeInTheDocument();
+    expect(within(report).getByText("Kofi Mensah")).toBeInTheDocument();
+    expect(within(report).getByText("Akosua Mensah")).toBeInTheDocument();
+    expect(within(report).getByText("Cash, Mobile Money")).toBeInTheDocument();
+    expect(within(report).getByText("Expense")).toBeInTheDocument();
+    expect(report.querySelector(".lucide-wallet-cards")).not.toBeNull();
+    expect(report.querySelector(".lucide-file-text")).not.toBeNull();
+    expect(within(report).getByText("GH₵495")).toBeInTheDocument();
+    expect(within(report).getByText("GH₵125")).toBeInTheDocument();
+    expect(
+      within(report).getByRole("link", { name: "#TXN-1" }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/pos/transactions/txn-1?o=%252F",
+    );
+    expect(
+      within(report).getByRole("link", { name: "#EXP-1" }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/pos/expense-reports/expense-1?o=%252F",
+    );
   });
 
   it("labels a ready zero-activity day explicitly", () => {

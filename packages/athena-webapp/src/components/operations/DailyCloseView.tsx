@@ -8,12 +8,17 @@ import {
 import { useMutation, useQuery } from "convex/react";
 import {
   ArrowUpRight,
+  Banknote,
   Ban,
   CheckCircle2,
   ChevronDown,
   ClipboardCheck,
+  CreditCardIcon,
+  FileText,
   ListChecks,
   RotateCcw,
+  Smartphone,
+  WalletCards,
 } from "lucide-react";
 
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
@@ -52,6 +57,13 @@ import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { LoadingButton } from "../ui/loading-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "../ui/sheet";
 import {
   useApprovedCommand,
   type ApprovalRetryArgs,
@@ -359,6 +371,18 @@ function formatExpenseTransactionCount(value: number) {
   if (value === 0) return "No expense transactions";
   if (value === 1) return "1 expense transaction";
   return `${value} expense transactions`;
+}
+
+function formatPosSaleCount(value: number) {
+  if (value === 0) return "no POS sales";
+  if (value === 1) return "1 POS sale";
+  return `${value} POS sales`;
+}
+
+function formatVoidedSaleCount(value: number) {
+  if (value === 0) return "no voided sales";
+  if (value === 1) return "1 voided sale";
+  return `${value} voided sales`;
 }
 
 function formatMoney(currency: string, amount?: number | null) {
@@ -1283,6 +1307,177 @@ function getBucketConfigs(snapshot: DailyCloseSnapshot): BucketConfig[] {
   ];
 }
 
+function getTransactionReportItems(snapshot: DailyCloseSnapshot) {
+  return [
+    ...snapshot.readyItems.filter((item) => item.category === "sale"),
+    ...snapshot.readyItems.filter((item) => item.category === "expense"),
+    ...snapshot.reviewItems.filter((item) => item.category === "voided_sale"),
+  ].sort((left, right) => {
+    const leftCompletedAt = getNumericMetadataValue(
+      getMetadataStringOrNumber(left.metadata, "completedAt") ??
+        getMetadataStringOrNumber(left.metadata, "voidedAt"),
+    );
+    const rightCompletedAt = getNumericMetadataValue(
+      getMetadataStringOrNumber(right.metadata, "completedAt") ??
+        getMetadataStringOrNumber(right.metadata, "voidedAt"),
+    );
+
+    return (rightCompletedAt ?? 0) - (leftCompletedAt ?? 0);
+  });
+}
+
+function getMetadataStringOrNumber(
+  metadata: DailyCloseItem["metadata"],
+  label: string,
+) {
+  if (!metadata || Array.isArray(metadata)) return undefined;
+
+  const entry = getMetadataValue(metadata, label);
+  return entry?.[1];
+}
+
+function getTransactionReportIdentifier(item: DailyCloseItem) {
+  const metadataLabel =
+    getMetadataStringOrNumber(item.metadata, "transaction") ??
+    getMetadataStringOrNumber(item.metadata, "report");
+
+  return typeof metadataLabel === "string" || typeof metadataLabel === "number"
+    ? String(metadataLabel)
+    : item.subject?.label ?? item.title;
+}
+
+function getTransactionReportAmount(item: DailyCloseItem, currency: string) {
+  const amount = getNumericMetadataValue(
+    getMetadataStringOrNumber(item.metadata, "total"),
+  );
+
+  return amount === null ? "Not set" : formatMoney(currency, amount);
+}
+
+function getTransactionReportStaff(item: DailyCloseItem) {
+  const staff = getMetadataStringOrNumber(item.metadata, "owner");
+  return typeof staff === "string" && staff.trim() !== "" ? staff : "Not set";
+}
+
+function getTransactionReportPayment(item: DailyCloseItem) {
+  const paymentMethods = getMetadataStringOrNumber(
+    item.metadata,
+    "paymentMethods",
+  );
+
+  return typeof paymentMethods === "string" && paymentMethods.trim() !== ""
+    ? paymentMethods
+    : item.category === "expense"
+      ? "Expense"
+      : "Not set";
+}
+
+function normalizeTransactionReportPaymentMethod(value: string) {
+  return value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+function TransactionReportPaymentIcon({
+  payment,
+}: {
+  payment: string;
+}) {
+  const paymentParts = payment
+    .split(",")
+    .map(normalizeTransactionReportPaymentMethod)
+    .filter(Boolean);
+  const uniquePaymentParts = Array.from(new Set(paymentParts));
+  const iconClassName = "h-4 w-4 shrink-0 text-muted-foreground";
+
+  if (payment === "Expense") {
+    return <FileText aria-hidden="true" className={iconClassName} />;
+  }
+
+  if (uniquePaymentParts.length > 1) {
+    return <WalletCards aria-hidden="true" className={iconClassName} />;
+  }
+
+  switch (uniquePaymentParts[0]) {
+    case "cash":
+      return <Banknote aria-hidden="true" className={iconClassName} />;
+    case "card":
+      return <CreditCardIcon aria-hidden="true" className={iconClassName} />;
+    case "mobile_money":
+      return <Smartphone aria-hidden="true" className={iconClassName} />;
+    default:
+      return null;
+  }
+}
+
+function getTransactionReportTime(item: DailyCloseItem) {
+  const timestamp = getNumericMetadataValue(
+    getMetadataStringOrNumber(item.metadata, "completedAt") ??
+      getMetadataStringOrNumber(item.metadata, "voidedAt"),
+  );
+
+  return timestamp === null ? "Not set" : formatTimestampMetadata(timestamp);
+}
+
+function getTransactionReportLink(item: DailyCloseItem): DailyCloseItemLink | null {
+  if (item.link) return item.link;
+
+  if (item.subject?.type === "pos_transaction") {
+    return {
+      params: { transactionId: item.subject.id },
+      to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId",
+    };
+  }
+
+  if (item.subject?.type === "expense_transaction") {
+    return {
+      params: { reportId: item.subject.id },
+      to: "/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId",
+    };
+  }
+
+  return null;
+}
+
+function TransactionReportIdentifierLink({
+  item,
+  orgUrlSlug,
+  storeUrlSlug,
+}: {
+  item: DailyCloseItem;
+  orgUrlSlug: string;
+  storeUrlSlug: string;
+}) {
+  const identifier = getTransactionReportIdentifier(item);
+  const link = getTransactionReportLink(item);
+  const label = identifier.startsWith("#") ? identifier : `#${identifier}`;
+
+  if (!link?.to) {
+    return <span className="font-medium text-foreground">{label}</span>;
+  }
+
+  return (
+    <Link
+      className="inline-flex items-center gap-1 font-medium text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline"
+      params={
+        {
+          orgUrlSlug,
+          storeUrlSlug,
+          ...(link.params ?? {}),
+        } as never
+      }
+      search={
+        {
+          o: getOrigin(),
+          ...(link.search ?? {}),
+        } as never
+      }
+      to={link.to as never}
+    >
+      {label}
+      <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
+    </Link>
+  );
+}
+
 function ItemLink({
   link,
   orgUrlSlug,
@@ -1688,6 +1883,131 @@ function BucketTabs({
         </TabsContent>
       ))}
     </Tabs>
+  );
+}
+
+function TransactionReportSection({
+  currency,
+  orgUrlSlug,
+  snapshot,
+  storeUrlSlug,
+}: {
+  currency: string;
+  orgUrlSlug: string;
+  snapshot: DailyCloseSnapshot;
+  storeUrlSlug: string;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const items = getTransactionReportItems(snapshot);
+  const reportSummary = [
+    formatPosSaleCount(
+      getSummaryCount(snapshot.summary, "transactionCount", "transactionCount"),
+    ),
+    formatExpenseTransactionCount(getExpenseTransactionCount(snapshot.summary)),
+    formatVoidedSaleCount(snapshot.summary.voidedTransactionCount ?? 0),
+  ].join(", ");
+
+  return (
+    <>
+      <section
+        aria-label="POS and expense transaction report"
+        className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface"
+      >
+        <div className="flex flex-col gap-layout-md lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 gap-layout-sm">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-transaction-signal/10 text-transaction-signal">
+              <FileText aria-hidden="true" className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                Transaction report
+              </p>
+              <h2 className="mt-1 text-lg font-semibold text-foreground">
+                POS and expense transactions
+              </h2>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
+                {reportSummary} available for review.
+              </p>
+            </div>
+          </div>
+          <Button
+            className="shrink-0"
+            onClick={() => setIsOpen(true)}
+            type="button"
+            variant="outline"
+          >
+            <FileText aria-hidden="true" />
+            View report
+          </Button>
+        </div>
+      </section>
+
+      <Sheet open={isOpen} onOpenChange={setIsOpen}>
+        <SheetContent
+          className="flex w-[min(100vw,72rem)] max-w-[calc(100vw-1rem)] flex-col overflow-hidden border-border bg-surface-raised p-0 shadow-overlay sm:max-w-6xl"
+          side="right"
+        >
+          <SheetHeader className="border-b border-border px-layout-xl py-layout-lg">
+            <SheetTitle>POS and expense transactions</SheetTitle>
+            <SheetDescription>
+              {reportSummary} available from the End-of-Day Review workspace.
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="divide-y divide-border bg-surface">
+              {items.length === 0 ? (
+                <p className="p-layout-lg text-sm text-muted-foreground">
+                  No POS or expense transactions were recorded for this operating
+                  day.
+                </p>
+              ) : (
+                <div className="divide-y divide-border">
+                  <div className="hidden grid-cols-[minmax(10rem,1.25fr)_minmax(8rem,0.9fr)_minmax(10rem,1fr)_minmax(10rem,0.9fr)_minmax(7rem,0.7fr)] gap-layout-lg px-layout-xl py-layout-md text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground md:grid">
+                    <span>Item</span>
+                    <span>Staff</span>
+                    <span>Payment</span>
+                    <span>Completed</span>
+                    <span className="text-right">Amount</span>
+                  </div>
+                  {items.map((item) => {
+                    const payment = getTransactionReportPayment(item);
+
+                    return (
+                      <div
+                        className="grid grid-cols-1 gap-layout-sm px-layout-xl py-layout-md text-sm md:grid-cols-[minmax(10rem,1.25fr)_minmax(8rem,0.9fr)_minmax(10rem,1fr)_minmax(10rem,0.9fr)_minmax(7rem,0.7fr)] md:items-center md:gap-layout-lg"
+                        key={getItemId(item)}
+                      >
+                        <div className="min-w-0">
+                          <TransactionReportIdentifierLink
+                            item={item}
+                            orgUrlSlug={orgUrlSlug}
+                            storeUrlSlug={storeUrlSlug}
+                          />
+                        </div>
+                        <div className="min-w-0 text-muted-foreground md:text-foreground">
+                          {getTransactionReportStaff(item)}
+                        </div>
+                        <div className="flex min-w-0 items-center gap-layout-xs leading-6 text-muted-foreground md:text-foreground">
+                          <TransactionReportPaymentIcon payment={payment} />
+                          <span className="min-w-0">{payment}</span>
+                        </div>
+                        <div className="min-w-0 font-numeric leading-6 text-muted-foreground tabular-nums md:text-foreground">
+                          {getTransactionReportTime(item)}
+                        </div>
+                        <div className="font-numeric font-semibold text-foreground tabular-nums md:text-right">
+                          {getTransactionReportAmount(item, currency)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }
 
@@ -2168,6 +2488,13 @@ export function DailyCloseViewContent({
                     )}
                   />
                 </div>
+
+                <TransactionReportSection
+                  currency={currency}
+                  orgUrlSlug={orgUrlSlug}
+                  snapshot={snapshot}
+                  storeUrlSlug={storeUrlSlug}
+                />
               </section>
 
               <PageWorkspaceGrid>
