@@ -27035,7 +27035,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L2121",
+      "source_location": "L2098",
       "target": "dailycloseview_cn",
       "weight": 1
     },
@@ -27659,7 +27659,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L2593",
+      "source_location": "L2571",
       "target": "dailycloseview_handlecomplete",
       "weight": 1
     },
@@ -58693,7 +58693,7 @@
       "label": "handleComplete()",
       "norm_label": "handlecomplete()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L2593"
+      "source_location": "L2571"
     },
     {
       "community": 0,

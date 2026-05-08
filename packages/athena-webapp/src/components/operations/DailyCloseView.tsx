@@ -1886,7 +1886,7 @@ function BucketTabs({
   );
 }
 
-function TransactionReportSection({
+function TransactionReportAction({
   currency,
   orgUrlSlug,
   snapshot,
@@ -1909,38 +1909,15 @@ function TransactionReportSection({
 
   return (
     <>
-      <section
-        aria-label="POS and expense transaction report"
-        className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface"
+      <Button
+        className="shrink-0"
+        onClick={() => setIsOpen(true)}
+        type="button"
+        variant="outline"
       >
-        <div className="flex flex-col gap-layout-md lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 gap-layout-sm">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-transaction-signal/10 text-transaction-signal">
-              <FileText aria-hidden="true" className="h-4 w-4" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                Transaction report
-              </p>
-              <h2 className="mt-1 text-lg font-semibold text-foreground">
-                POS and expense transactions
-              </h2>
-              <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
-                {reportSummary} available for review.
-              </p>
-            </div>
-          </div>
-          <Button
-            className="shrink-0"
-            onClick={() => setIsOpen(true)}
-            type="button"
-            variant="outline"
-          >
-            <FileText aria-hidden="true" />
-            View report
-          </Button>
-        </div>
-      </section>
+        <FileText aria-hidden="true" />
+        View report
+      </Button>
 
       <Sheet open={isOpen} onOpenChange={setIsOpen}>
         <SheetContent
@@ -2388,11 +2365,19 @@ export function DailyCloseViewContent({
                       {displayCopy.description}
                     </p>
                   </div>
-                  <div className="rounded-lg border border-border bg-surface-raised px-layout-md py-layout-sm text-sm text-muted-foreground shadow-surface">
-                    Operating date{" "}
-                    <span className="font-medium text-foreground">
-                      {formatOperatingDate(snapshot.operatingDate)}
-                    </span>
+                  <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-center">
+                    <TransactionReportAction
+                      currency={currency}
+                      orgUrlSlug={orgUrlSlug}
+                      snapshot={snapshot}
+                      storeUrlSlug={storeUrlSlug}
+                    />
+                    <div className="rounded-lg border border-border bg-surface-raised px-layout-md py-layout-sm text-sm text-muted-foreground shadow-surface">
+                      Operating date{" "}
+                      <span className="font-medium text-foreground">
+                        {formatOperatingDate(snapshot.operatingDate)}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -2488,13 +2473,6 @@ export function DailyCloseViewContent({
                     )}
                   />
                 </div>
-
-                <TransactionReportSection
-                  currency={currency}
-                  orgUrlSlug={orgUrlSlug}
-                  snapshot={snapshot}
-                  storeUrlSlug={storeUrlSlug}
-                />
               </section>
 
               <PageWorkspaceGrid>

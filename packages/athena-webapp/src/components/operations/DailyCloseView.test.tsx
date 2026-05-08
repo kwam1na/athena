@@ -660,25 +660,38 @@ describe("DailyCloseViewContent", () => {
 
     renderContent(readySnapshot);
 
-    const launcher = screen.getByRole("region", {
-      name: "POS and expense transaction report",
+    expect(
+      screen.queryByRole("region", {
+        name: "POS and expense transaction report",
+      }),
+    ).not.toBeInTheDocument();
+
+    const operatingDate = screen.getAllByText("May 7, 2026")[0];
+    const actionGroup = operatingDate.closest("div")?.parentElement;
+    expect(actionGroup).not.toBeNull();
+
+    const reportButton = within(actionGroup as HTMLElement).getByRole("button", {
+      name: /view report/i,
     });
 
     expect(
-      within(launcher).getByText("POS and expense transactions"),
-    ).toBeInTheDocument();
+      screen.queryByText("POS and expense transactions"),
+    ).not.toBeInTheDocument();
     expect(
-      within(launcher).getByText(
+      screen.queryByText(
         "14 POS sales, 1 expense transaction, no voided sales available for review.",
       ),
-    ).toBeInTheDocument();
+    ).not.toBeInTheDocument();
 
-    expect(within(launcher).queryByText("POS sale")).not.toBeInTheDocument();
-
-    await user.click(within(launcher).getByRole("button", { name: /view report/i }));
+    await user.click(reportButton);
 
     const report = await screen.findByRole("dialog");
 
+    expect(
+      within(report).getByText(
+        "14 POS sales, 1 expense transaction, no voided sales available from the End-of-Day Review workspace.",
+      ),
+    ).toBeInTheDocument();
     expect(within(report).getByText("Item")).toBeInTheDocument();
     expect(within(report).getByText("Staff")).toBeInTheDocument();
     expect(within(report).getByText("Payment")).toBeInTheDocument();
