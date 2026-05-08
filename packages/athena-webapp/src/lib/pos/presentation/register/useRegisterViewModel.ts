@@ -63,9 +63,13 @@ import {
 } from "./selectors";
 import {
   searchRegisterCatalog,
-  type RegisterCatalogSearchRow,
   type RegisterCatalogSearchResult,
 } from "./catalogSearch";
+import {
+  mapCatalogRowToProduct,
+  normalizeExactInput,
+  type RegisterCatalogAvailability,
+} from "./catalogSearchPresentation";
 import { useRegisterCatalogIndex } from "./useRegisterCatalogIndex";
 
 function hasCustomerDetails(
@@ -132,40 +136,6 @@ function presentOperatorError(message: string): void {
   toast.error(toOperatorMessage(message));
 }
 
-type RegisterCatalogAvailability = {
-  inStock: boolean;
-  quantityAvailable: number;
-};
-
-function mapCatalogRowToProduct(
-  row: RegisterCatalogSearchRow,
-  availability: RegisterCatalogAvailability | undefined,
-): Product {
-  return {
-    id: row.productSkuId,
-    name: row.name,
-    sku: row.sku ?? "",
-    barcode: row.barcode ?? "",
-    price: row.price ?? 0,
-    category: row.category ?? "",
-    description: row.description ?? "",
-    image: row.image ?? null,
-    inStock: availability?.inStock ?? false,
-    quantityAvailable: availability?.quantityAvailable ?? 0,
-    size: row.size ?? "",
-    length:
-      typeof row.length === "number"
-        ? row.length
-        : row.length
-          ? Number(row.length)
-          : null,
-    color: row.color ?? "",
-    productId: row.productId as Id<"product">,
-    skuId: row.productSkuId as Id<"productSku">,
-    areProcessingFeesAbsorbed: Boolean(row.areProcessingFeesAbsorbed),
-  };
-}
-
 function mapProductToOptimisticCartItem(
   product: Product,
   quantity: number,
@@ -185,10 +155,6 @@ function mapProductToOptimisticCartItem(
     skuId: product.skuId,
     areProcessingFeesAbsorbed: product.areProcessingFeesAbsorbed,
   };
-}
-
-function normalizeExactInput(value: string | undefined): string {
-  return (value ?? "").trim().toLowerCase();
 }
 
 type StaffProfileRosterRow = {

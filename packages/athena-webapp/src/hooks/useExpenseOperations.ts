@@ -112,7 +112,7 @@ export const useExpenseOperations = () => {
           errors: validation.errors,
         });
         showValidationError(validation.errors);
-        return;
+        return false;
       }
 
       try {
@@ -157,7 +157,7 @@ export const useExpenseOperations = () => {
 
         if (result.kind !== "ok") {
           presentCommandToast(result);
-          return;
+          return false;
         }
 
         if (existingItem) {
@@ -192,6 +192,7 @@ export const useExpenseOperations = () => {
             sessionExpiresAt: result.data.expiresAt,
           });
         }
+        return true;
       } catch (error) {
         logger.error("[Expense] Exception while adding product", {
           productName: product.name,
