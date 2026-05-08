@@ -401,7 +401,7 @@ export function OperationsQueueViewContent({
         {resolvedWorkflow === "queue" ? (
           <PageWorkspace>
             <PageLevelHeader
-              eyebrow="Operations"
+              eyebrow="Store Ops"
               title="Open work"
               description="Service intake and stock review work that still needs progress or completion."
             />
@@ -496,7 +496,7 @@ export function OperationsQueueViewContent({
         {resolvedWorkflow === "approvals" ? (
           <PageWorkspace>
             <PageLevelHeader
-              eyebrow="Operations"
+              eyebrow="Store Ops"
               title="Pending approvals"
               description="Review manager approval requests before queued stock and payment changes are applied."
             />

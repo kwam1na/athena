@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 4850 nodes · 4775 edges · 1571 communities detected
+- 4849 nodes · 4774 edges · 1571 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1753,20 +1753,20 @@ Cohesion: 0.16
 Nodes (9): checkIfItemsHaveChanged(), createOnlineOrder(), findBestValuePromoCode(), handleExistingSession(), handleOrderCreation(), handlePlaceOrder(), listSessionItems(), updateExistingSession() (+1 more)
 
 ### Community 36 - "Community 36"
-Cohesion: 0.12
-Nodes (2): getLocalOperatingDate(), getLocalOperatingDateRange()
-
-### Community 37 - "Community 37"
 Cohesion: 0.22
 Nodes (16): buildDegreeIndex(), buildHotspotLines(), buildPackagePage(), buildRootIndexPage(), collectRepoCodeFiles(), compareHotspots(), countCommunities(), fileExists() (+8 more)
 
-### Community 38 - "Community 38"
+### Community 37 - "Community 37"
 Cohesion: 0.25
 Nodes (14): buildCompleteTransactionResult(), calculateCanonicalTransactionTotals(), calculateTotalPaid(), completeTransaction(), createTransactionFromSessionHandler(), isUsableRegisterSession(), recordRegisterSessionSale(), recordRegisterSessionVoid() (+6 more)
 
-### Community 39 - "Community 39"
+### Community 38 - "Community 38"
 Cohesion: 0.12
 Nodes (1): DataTableViewOptions()
+
+### Community 39 - "Community 39"
+Cohesion: 0.12
+Nodes (2): getLocalOperatingDate(), getLocalOperatingDateRange()
 
 ### Community 40 - "Community 40"
 Cohesion: 0.19
@@ -2169,16 +2169,16 @@ Cohesion: 0.29
 Nodes (0):
 
 ### Community 140 - "Community 140"
+Cohesion: 0.33
+Nodes (2): getProductName(), sortProduct()
+
+### Community 141 - "Community 141"
 Cohesion: 0.29
 Nodes (0):
 
-### Community 141 - "Community 141"
+### Community 142 - "Community 142"
 Cohesion: 0.52
 Nodes (6): addItemToSavedBag(), getActiveSavedBag(), getBaseUrl(), removeItemFromSavedBag(), updateSavedBagItem(), updateSavedBagOwner()
-
-### Community 142 - "Community 142"
-Cohesion: 0.33
-Nodes (2): getProductName(), sortProduct()
 
 ### Community 143 - "Community 143"
 Cohesion: 0.43

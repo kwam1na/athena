@@ -278,26 +278,14 @@ describe("DailyOperationsViewContent", () => {
     expect(screen.getByText("Open work")).toBeInTheDocument();
   });
 
-  it("keeps attention items source-owned and action-linked", () => {
+  it("keeps attention items out of the right rail", () => {
     renderContent(blockedSnapshot);
 
     expect(
       screen.getByRole("link", { name: "Review close blockers" }),
     ).toHaveAttribute("href", "/wigclub/store/osu/operations/daily-close");
-
-    const attention = screen.getByLabelText("Operator attention");
-    expect(
-      within(attention).getByText("Register session is still open"),
-    ).toBeInTheDocument();
-    expect(within(attention).getByText("End-of-Day Review")).toBeInTheDocument();
-    expect(
-      within(attention).getByRole("link", {
-        name: "Open source for Register session is still open",
-      }),
-    ).toHaveAttribute(
-      "href",
-      "/wigclub/store/osu/cash-controls/registers/register-1",
-    );
+    expect(screen.queryByLabelText("Operator attention")).not.toBeInTheDocument();
+    expect(screen.queryByText("Register session is still open")).not.toBeInTheDocument();
   });
 
   it("renders closed-day review timeline without mutation copy", () => {

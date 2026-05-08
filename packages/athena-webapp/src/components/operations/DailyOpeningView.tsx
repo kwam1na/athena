@@ -1262,7 +1262,7 @@ export function DailyOpeningViewContent({
       <FadeIn className="container mx-auto py-layout-xl">
         <PageWorkspace>
           <PageLevelHeader
-            eyebrow="Operations"
+            eyebrow="Store Ops"
             title="Opening Handoff"
             description="Review prior close handoff, acknowledge carry-forward work, and confirm whether the store day can start."
           />
@@ -1388,7 +1388,7 @@ function DailyOpeningApiPendingView() {
       <FadeIn className="container mx-auto py-layout-xl">
         <PageWorkspace>
           <PageLevelHeader
-            eyebrow="Operations"
+            eyebrow="Store Ops"
             title="Opening Handoff"
             description="Opening Handoff is waiting for the server readiness snapshot and start-day command."
           />
