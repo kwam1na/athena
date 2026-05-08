@@ -130,6 +130,7 @@ export type DailyCloseSnapshot = {
     currentDayCashTransactionCount?: number | null;
     currentDayCashTotal?: number | null;
     expectedCashTotal?: number | null;
+    expenseStaffCount?: number | null;
     expenseTotal?: number | null;
     netCashVariance?: number | null;
     openWorkItemCount?: number | null;
@@ -812,9 +813,20 @@ function getMetadataEntries(
       value: ReactNode;
     }>,
   ) => {
+    const hasExplicitRegister = entries.some(
+      (entry) => normalizeMetadataLabel(entry.label) === "register",
+    );
+    const appendRegister = (value: ReactNode, nextRegisterLabel: ReactNode) => (
+      <>
+        {value} / {nextRegisterLabel}
+      </>
+    );
+
     let combinedEntries = entries.map((entry) =>
-      registerLabel && normalizeMetadataLabel(entry.label) === "terminal"
-        ? { ...entry, value: `${entry.value} / ${registerLabel}` }
+      registerLabel &&
+      normalizeMetadataLabel(entry.label) === "terminal" &&
+      !hasExplicitRegister
+        ? { ...entry, value: appendRegister(entry.value, registerLabel) }
         : entry,
     );
     const terminalEntry = combinedEntries.find(
@@ -832,11 +844,7 @@ function getMetadataEntries(
           return [
             {
               ...entry,
-              value: (
-                <>
-                  {entry.value} / {registerEntry.value}
-                </>
-              ),
+              value: appendRegister(entry.value, registerEntry.value),
             },
           ];
         }
@@ -975,6 +983,18 @@ function getSummaryRegisterVarianceCount(
     "netCashVariance",
   );
   return variance === 0 ? 0 : 1;
+}
+
+function getExpenseStaffCount(summary: DailyCloseSnapshot["summary"]) {
+  if (typeof summary.expenseStaffCount === "number") {
+    return summary.expenseStaffCount;
+  }
+
+  if (summary.expenseTotal === 0) {
+    return 0;
+  }
+
+  return typeof summary.staffCount === "number" ? summary.staffCount : 0;
 }
 
 function getDefaultBucketValue(
@@ -1791,11 +1811,7 @@ export function DailyCloseViewContent({
                   />
                   <SummaryMetric
                     helper={formatStaffInvolvedCount(
-                      getSummaryCount(
-                        snapshot.summary,
-                        "staffCount",
-                        "pendingApprovalCount",
-                      ),
+                      getExpenseStaffCount(snapshot.summary),
                     )}
                     label="Expenses"
                     value={formatMoney(currency, snapshot.summary.expenseTotal)}
