@@ -68,6 +68,8 @@ const UNCATEGORIZED_SCOPE_KEY = "__uncategorized";
 const TEMPORARY_DELETE_SCOPE_CONFIRMATION =
   "delete-stock-adjustment-scope-skus";
 const ACTIVE_STORE_HOLD_SUM_LIMIT = 5000;
+const ACTIVE_CHECKOUT_SESSION_SUM_LIMIT = 1000;
+const ACTIVE_CHECKOUT_ITEM_SUM_LIMIT = 5000;
 
 function trimOptional(value?: string | null) {
   const nextValue = value?.trim();
@@ -398,6 +400,58 @@ async function readActiveHeldQuantitiesForStockOpsSnapshot(
   }, new Map<Id<"productSku">, number>());
 }
 
+async function readActiveCheckoutReservedQuantitiesForStockOpsSnapshot(
+  ctx: QueryCtx,
+  args: {
+    now: number;
+    storeId: Id<"store">;
+  }
+) {
+  const activeSessionCandidates = await ctx.db
+    .query("checkoutSession")
+    .withIndex("by_storeId_hasCompletedCheckoutSession", (q) =>
+      q.eq("storeId", args.storeId).eq("hasCompletedCheckoutSession", false)
+    )
+    .take(ACTIVE_CHECKOUT_SESSION_SUM_LIMIT + 1);
+
+  if (activeSessionCandidates.length > ACTIVE_CHECKOUT_SESSION_SUM_LIMIT) {
+    throw new Error(
+      "Stock operations has too many active checkout sessions to summarize. Expire stale checkout sessions and retry."
+    );
+  }
+
+  const activeSessions = activeSessionCandidates.filter(
+    (session) => session.expiresAt > args.now
+  );
+
+  const checkoutItemGroups = await Promise.all(
+    activeSessions.map((session) =>
+      ctx.db
+        .query("checkoutSessionItem")
+        .withIndex("by_sessionId", (q) => q.eq("sesionId", session._id))
+        .take(ACTIVE_CHECKOUT_ITEM_SUM_LIMIT + 1)
+    )
+  );
+
+  for (const items of checkoutItemGroups) {
+    if (items.length > ACTIVE_CHECKOUT_ITEM_SUM_LIMIT) {
+      throw new Error(
+        "Stock operations has too many checkout items in one active session to summarize. Expire stale checkout sessions and retry."
+      );
+    }
+  }
+
+  const checkoutItems = checkoutItemGroups.flat();
+
+  return checkoutItems.reduce((quantities, item) => {
+    quantities.set(
+      item.productSkuId,
+      (quantities.get(item.productSkuId) ?? 0) + Math.max(0, item.quantity)
+    );
+    return quantities;
+  }, new Map<Id<"productSku">, number>());
+}
+
 export async function listInventorySnapshotWithCtx(
   ctx: QueryCtx,
   args: {
@@ -415,6 +469,11 @@ export async function listInventorySnapshotWithCtx(
     now,
     storeId: args.storeId,
   });
+  const checkoutReservedQuantities =
+    await readActiveCheckoutReservedQuantitiesForStockOpsSnapshot(ctx, {
+      now,
+      storeId: args.storeId,
+    });
 
   const productIds = Array.from(
     new Set(productSkus.map((productSku) => productSku.productId))
@@ -471,11 +530,15 @@ export async function listInventorySnapshotWithCtx(
           ? categoryMap.get(product.categoryId)
           : null;
         const color = productSku.color ? colorMap.get(productSku.color) : null;
-        const reservedQuantity = heldQuantities.get(productSku._id) ?? 0;
+        const posReservedQuantity = heldQuantities.get(productSku._id) ?? 0;
+        const checkoutReservedQuantity =
+          checkoutReservedQuantities.get(productSku._id) ?? 0;
+        const reservedQuantity =
+          posReservedQuantity + checkoutReservedQuantity;
         const durableQuantityAvailable = productSku.quantityAvailable;
         const quantityAvailable = Math.max(
           0,
-          durableQuantityAvailable - reservedQuantity
+          durableQuantityAvailable - posReservedQuantity
         );
 
         return {
@@ -493,6 +556,8 @@ export async function listInventorySnapshotWithCtx(
             productSku.productName ??
             productSku.sku ??
             String(productSku._id),
+          checkoutReservedQuantity,
+          posReservedQuantity,
           quantityAvailable,
           reservedQuantity,
           sku: productSku.sku ?? null,

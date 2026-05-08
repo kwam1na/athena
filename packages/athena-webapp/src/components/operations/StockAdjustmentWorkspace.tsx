@@ -52,10 +52,12 @@ export type InventorySnapshotItem = {
   _id: Id<"productSku">;
   barcode?: string | null;
   colorName?: string | null;
+  checkoutReservedQuantity?: number;
   durableQuantityAvailable?: number;
   imageUrl?: string | null;
   inventoryCount: number;
   length?: number | null;
+  posReservedQuantity?: number;
   productCategory?: string | null;
   productId?: Id<"product"> | null;
   productName: string;
@@ -259,8 +261,64 @@ function getInventoryItemDisplayName(item: InventorySnapshotItem) {
   return getProductName(item) || item.sku || String(item._id);
 }
 
+function getReservationLabels(item: InventorySnapshotItem) {
+  const checkoutReservedQuantity = item.checkoutReservedQuantity ?? 0;
+  const posReservedQuantity = item.posReservedQuantity ?? 0;
+  const knownReservedQuantity =
+    checkoutReservedQuantity + posReservedQuantity;
+  const fallbackReservedQuantity = Math.max(
+    0,
+    (item.reservedQuantity ?? 0) - knownReservedQuantity,
+  );
+
+  return [
+    checkoutReservedQuantity > 0
+      ? {
+          title: `${formatInventoryNumber(checkoutReservedQuantity)} reserved in active checkout sessions`,
+          value: `${formatInventoryNumber(checkoutReservedQuantity)} checkout`,
+        }
+      : null,
+    posReservedQuantity > 0
+      ? {
+          title: `${formatInventoryNumber(posReservedQuantity)} reserved in POS sessions`,
+          value: `${formatInventoryNumber(posReservedQuantity)} POS`,
+        }
+      : null,
+    fallbackReservedQuantity > 0
+      ? {
+          title: `${formatInventoryNumber(fallbackReservedQuantity)} reserved`,
+          value: `${formatInventoryNumber(fallbackReservedQuantity)} reserved`,
+        }
+      : null,
+  ].filter(
+    (label): label is { title: string; value: string } => label !== null,
+  );
+}
+
+function formatReservationSourceSummary(args: {
+  checkoutReservedUnits: number;
+  fallbackReservedUnits: number;
+  posReservedUnits: number;
+}) {
+  return [
+    args.checkoutReservedUnits > 0
+      ? `${formatInventoryNumber(
+          args.checkoutReservedUnits,
+        )} reserved in active checkout sessions.`
+      : null,
+    args.posReservedUnits > 0
+      ? `${formatInventoryNumber(args.posReservedUnits)} reserved in POS sessions.`
+      : null,
+    args.fallbackReservedUnits > 0
+      ? `${formatInventoryNumber(args.fallbackReservedUnits)} reserved.`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
 function getSkuDetailEntries(item: InventorySnapshotItem) {
-  const reservedQuantity = item.reservedQuantity ?? 0;
+  const reservationLabels = getReservationLabels(item);
 
   return [
     item.sku ? { label: "SKU", value: item.sku } : null,
@@ -272,10 +330,10 @@ function getSkuDetailEntries(item: InventorySnapshotItem) {
       ? { label: "Length", value: `${item.length}"` }
       : null,
     item.colorName ? { label: "Color", value: item.colorName } : null,
-    reservedQuantity > 0
+    reservationLabels.length > 0
       ? {
           label: "Reserved",
-          value: `${formatInventoryNumber(reservedQuantity)} in POS sessions`,
+          value: reservationLabels.map((entry) => entry.title).join(", "),
         }
       : null,
   ].filter(
@@ -775,10 +833,24 @@ export function StockAdjustmentWorkspaceContent({
           item.inventoryCount - item.quantityAvailable,
         );
         const reservedUnits = Math.max(0, item.reservedQuantity ?? 0);
+        const checkoutReservedUnits = Math.max(
+          0,
+          item.checkoutReservedQuantity ?? 0,
+        );
+        const posReservedUnits = Math.max(0, item.posReservedQuantity ?? 0);
+        const fallbackReservedUnits = Math.max(
+          0,
+          reservedUnits - checkoutReservedUnits - posReservedUnits,
+        );
 
         return {
           availableUnits: current.availableUnits + item.quantityAvailable,
+          checkoutReservedUnits:
+            current.checkoutReservedUnits + checkoutReservedUnits,
+          fallbackReservedUnits:
+            current.fallbackReservedUnits + fallbackReservedUnits,
           onHandUnits: current.onHandUnits + item.inventoryCount,
+          posReservedUnits: current.posReservedUnits + posReservedUnits,
           reservedUnits: current.reservedUnits + reservedUnits,
           unavailableSkuCount:
             current.unavailableSkuCount + (unavailableUnits > 0 ? 1 : 0),
@@ -787,7 +859,10 @@ export function StockAdjustmentWorkspaceContent({
       },
       {
         availableUnits: 0,
+        checkoutReservedUnits: 0,
+        fallbackReservedUnits: 0,
         onHandUnits: 0,
+        posReservedUnits: 0,
         reservedUnits: 0,
         unavailableSkuCount: 0,
         unavailableUnits: 0,
@@ -796,6 +871,7 @@ export function StockAdjustmentWorkspaceContent({
 
     const itemCount = inventoryItems.length;
     const hasUnavailableUnits = totals.unavailableUnits > 0;
+    const reservationSummary = formatReservationSourceSummary(totals);
 
     return {
       ...totals,
@@ -810,9 +886,7 @@ export function StockAdjustmentWorkspaceContent({
               "unit",
             )} are available to sell.${
               totals.reservedUnits > 0
-                ? ` ${formatInventoryNumber(
-                    totals.reservedUnits,
-                  )} reserved in POS sessions.`
+                ? ` ${reservationSummary}`
                 : ""
             }`,
       title:
@@ -984,6 +1058,7 @@ export function StockAdjustmentWorkspaceContent({
         ),
         cell: ({ row }) => {
           const item = row.original.inventoryItem;
+          const reservationLabels = getReservationLabels(item);
           const availabilityMatchesOnHand =
             item.quantityAvailable === item.inventoryCount;
 
@@ -1020,11 +1095,15 @@ export function StockAdjustmentWorkspaceContent({
                 <span className="block">
                   {formatInventoryNumber(item.quantityAvailable)}
                 </span>
-                {(item.reservedQuantity ?? 0) > 0 ? (
-                  <span className="block text-[11px] font-medium uppercase tracking-[0.12em] text-warning">
-                    {formatInventoryNumber(item.reservedQuantity ?? 0)} reserved
+                {reservationLabels.map((label) => (
+                  <span
+                    className="block text-[11px] font-medium uppercase tracking-[0.12em] text-warning"
+                    key={label.value}
+                    title={label.title}
+                  >
+                    {label.value}
                   </span>
-                ) : null}
+                ))}
               </span>
             </div>
           );
