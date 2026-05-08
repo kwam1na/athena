@@ -165,7 +165,11 @@ const schema = defineSchema({
   ]),
   checkoutSession: defineTable(checkoutSessionSchema)
     .index("by_storeFrontUserId", ["storeFrontUserId"])
-    .index("by_storeId", ["storeId"]),
+    .index("by_storeId", ["storeId"])
+    .index("by_storeId_hasCompletedCheckoutSession", [
+      "storeId",
+      "hasCompletedCheckoutSession",
+    ]),
   checkoutSessionItem: defineTable(checkoutSessionItemSchema).index(
     "by_sessionId",
     ["sesionId"]

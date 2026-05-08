@@ -15,6 +15,12 @@ const MAX_PROMO_CODE_ANALYTICS_RESULTS = 2000;
 const MAX_REPORTING_ORDERS = 1000;
 const MAX_PRODUCT_SKUS_PER_PRODUCT = 50;
 const MAX_STOREFRONT_OBSERVABILITY_RESULTS = 2000;
+const MAX_ANALYTICS_WORKSPACE_EVENTS = 500;
+const MAX_ANALYTICS_WORKSPACE_TODAY_EVENTS = 1000;
+const MAX_ANALYTICS_WORKSPACE_USERS = 10;
+const MAX_ANALYTICS_WORKSPACE_PRODUCTS = 10;
+const MAX_ANALYTICS_WORKSPACE_RECENT_EVENTS = 8;
+const MAX_ACTIVE_CHECKOUT_SESSIONS = 500;
 
 function extractPromoCodeId(
   data: Record<string, any>,
@@ -338,6 +344,219 @@ export const getAllInternal = internalQuery({
       .filter((q) => q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN))
       .order("desc")
       .take(250);
+  },
+});
+
+export const getWorkspaceSummary = query({
+  args: {
+    storeId: v.id("store"),
+    currentTimeMs: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const startOfDay = new Date(args.currentTimeMs).setHours(0, 0, 0, 0);
+    const sevenDaysAgo = args.currentTimeMs - 7 * 24 * 60 * 60 * 1000;
+
+    const [analytics, todayAnalytics, activeCheckoutSessions] =
+      await Promise.all([
+        getAnalyticsByStoreQuery(ctx, args.storeId)
+          .order("desc")
+          .take(MAX_ANALYTICS_WORKSPACE_EVENTS),
+        getAnalyticsByStoreQuery(ctx, args.storeId, startOfDay)
+          .order("desc")
+          .take(MAX_ANALYTICS_WORKSPACE_TODAY_EVENTS),
+        ctx.db
+          .query("checkoutSession")
+          .withIndex("by_storeId_hasCompletedCheckoutSession", (q) =>
+            q
+              .eq("storeId", args.storeId)
+              .eq("hasCompletedCheckoutSession", false),
+          )
+          .filter((q) =>
+            q.or(
+              q.gt(q.field("expiresAt"), args.currentTimeMs),
+              q.eq(q.field("isFinalizingPayment"), true),
+            ),
+          )
+          .take(MAX_ACTIVE_CHECKOUT_SESSIONS),
+      ]);
+
+    const productViewActions = new Set(["viewed_product", "view_product"]);
+    const shopperIdsToday = new Set(
+      todayAnalytics.map((item) => item.storeFrontUserId),
+    );
+    const shoppers = new Map<
+      string,
+      {
+        userId: string;
+        totalActions: number;
+        lastActive: number;
+        firstSeen: number;
+        deviceCounts: Record<string, number>;
+        uniqueProducts: Set<string>;
+        mostRecentAction: string;
+        mostRecentActionTime: number;
+        mostRecentActionData: Record<string, any>;
+      }
+    >();
+    const productViews = new Map<
+      string,
+      {
+        productId: Id<"product">;
+        productSku: string;
+        views: number;
+        lastViewed: number;
+      }
+    >();
+
+    for (const item of analytics) {
+      const userId = item.storeFrontUserId;
+      const shopper = shoppers.get(userId) ?? {
+        userId,
+        totalActions: 0,
+        lastActive: item._creationTime,
+        firstSeen: item._creationTime,
+        deviceCounts: {},
+        uniqueProducts: new Set<string>(),
+        mostRecentAction: item.action,
+        mostRecentActionTime: item._creationTime,
+        mostRecentActionData: item.data,
+      };
+
+      shopper.totalActions += 1;
+      shopper.lastActive = Math.max(shopper.lastActive, item._creationTime);
+      shopper.firstSeen = Math.min(shopper.firstSeen, item._creationTime);
+
+      if (item._creationTime >= shopper.mostRecentActionTime) {
+        shopper.mostRecentAction = item.action;
+        shopper.mostRecentActionTime = item._creationTime;
+        shopper.mostRecentActionData = item.data;
+      }
+
+      const device = item.device || "unknown";
+      shopper.deviceCounts[device] = (shopper.deviceCounts[device] || 0) + 1;
+
+      if (item.data?.product) {
+        shopper.uniqueProducts.add(item.data.product as string);
+      }
+
+      shoppers.set(userId, shopper);
+
+      if (productViewActions.has(item.action) && item.data?.product) {
+        const productId = item.data.product as Id<"product">;
+        const productSku =
+          typeof item.data.productSku === "string" ? item.data.productSku : "";
+        const productKey = `${productId}:${productSku}`;
+        const productView = productViews.get(productKey) ?? {
+          productId,
+          productSku,
+          views: 0,
+          lastViewed: item._creationTime,
+        };
+
+        productView.views += 1;
+        productView.lastViewed = Math.max(
+          productView.lastViewed,
+          item._creationTime,
+        );
+        productViews.set(productKey, productView);
+      }
+    }
+
+    const topShopperMetrics = [...shoppers.values()]
+      .sort((a, b) => b.lastActive - a.lastActive)
+      .slice(0, MAX_ANALYTICS_WORKSPACE_USERS);
+    const shopperDocs = await Promise.all(
+      topShopperMetrics.map(async (shopper) => {
+        const storeFrontUser = await ctx.db.get(
+          "storeFrontUser",
+          shopper.userId as Id<"storeFrontUser">,
+        );
+
+        if (storeFrontUser) {
+          return storeFrontUser;
+        }
+
+        return ctx.db.get("guest", shopper.userId as Id<"guest">);
+      }),
+    );
+
+    const topUsers = topShopperMetrics.map((shopper, index) => {
+      const user = shopperDocs[index];
+      const devicePreference =
+        Object.entries(shopper.deviceCounts).sort(([, a], [, b]) => b - a)[0]
+          ?.[0] ?? "unknown";
+
+      return {
+        userId: shopper.userId,
+        email: user && "email" in user ? user.email : undefined,
+        userType:
+          user && "storeId" in user && "email" in user
+            ? ("Registered" as const)
+            : ("Guest" as const),
+        isNewUser: user ? user._creationTime > sevenDaysAgo : false,
+        isNewActivity: shopper.firstSeen > sevenDaysAgo,
+        totalActions: shopper.totalActions,
+        lastActive: shopper.lastActive,
+        firstSeen: shopper.firstSeen,
+        devicePreference: devicePreference as "mobile" | "desktop" | "unknown",
+        mostRecentAction: shopper.mostRecentAction,
+        uniqueProducts: shopper.uniqueProducts.size,
+        mostRecentActionData: shopper.mostRecentActionData,
+        user: user ?? undefined,
+      };
+    });
+
+    const topProductMetrics = [...productViews.values()]
+      .sort((a, b) => b.views - a.views)
+      .slice(0, MAX_ANALYTICS_WORKSPACE_PRODUCTS);
+    const topProducts = (
+      await Promise.all(
+        topProductMetrics.map(async (productMetric) => {
+          const product = await ctx.db.get("product", productMetric.productId);
+
+          if (!product || product.storeId !== args.storeId) {
+            return null;
+          }
+
+          const skus = await ctx.db
+            .query("productSku")
+            .withIndex("by_productId", (q) =>
+              q.eq("productId", productMetric.productId),
+            )
+            .take(MAX_PRODUCT_SKUS_PER_PRODUCT);
+
+          return {
+            ...productMetric,
+            product: {
+              ...product,
+              skus,
+            },
+          };
+        }),
+      )
+    ).filter((product): product is NonNullable<typeof product> => !!product);
+
+    const productViewCount = analytics.filter((item) =>
+      productViewActions.has(item.action),
+    ).length;
+
+    return {
+      overview: {
+        knownShoppers: shoppers.size,
+        productViews: productViewCount,
+        visitorsToday: shopperIdsToday.size,
+        activeCheckoutSessions: activeCheckoutSessions.length,
+      },
+      recentEvents: analytics
+        .slice(0, MAX_ANALYTICS_WORKSPACE_RECENT_EVENTS)
+        .map((item) => ({
+          _id: item._id,
+          _creationTime: item._creationTime,
+          action: item.action,
+        })),
+      topUsers,
+      topProducts,
+    };
   },
 });
 
