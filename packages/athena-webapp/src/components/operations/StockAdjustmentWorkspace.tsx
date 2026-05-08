@@ -1435,7 +1435,7 @@ export function StockAdjustmentWorkspaceContent({
   return (
     <PageWorkspace>
       <PageLevelHeader
-        eyebrow="Operations"
+        eyebrow="Store Ops"
         title={inventoryState.title}
         description={
           <>

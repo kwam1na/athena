@@ -252,14 +252,6 @@ function formatMoney(currency: string, amount: number) {
   return formatStoredAmount(currencyFormatter(currency), amount);
 }
 
-function ownerLabel(
-  owner: DailyOperationsSnapshot["attentionItems"][number]["owner"],
-) {
-  if (owner === "daily_opening") return "Opening Handoff";
-  if (owner === "daily_close") return "End-of-Day Review";
-  return "Operations queue";
-}
-
 function statusClassName(status: DailyOperationsLaneStatus) {
   if (status === "blocked") return "border-danger/30 bg-danger/10 text-danger";
   if (status === "needs_attention") {
@@ -403,7 +395,7 @@ export function DailyOperationsViewContent({
       <FadeIn className="container mx-auto py-layout-xl">
         <PageWorkspace>
           <PageLevelHeader
-            eyebrow="Operations"
+            eyebrow="Store Ops"
             title="Daily Operations"
             description="Review the store day, see what needs attention, and move into the workflow that owns the next action."
           />
@@ -537,77 +529,6 @@ export function DailyOperationsViewContent({
 
                 <PageWorkspaceRail>
                   <section
-                    aria-label="Operator attention"
-                    className="rounded-lg border border-border bg-surface p-layout-md shadow-surface"
-                  >
-                    <div className="flex items-center justify-between gap-layout-sm">
-                      <h3 className="font-medium text-foreground">
-                        Operator attention
-                      </h3>
-                      <Badge variant="outline">
-                        {snapshot.attentionItems.length}
-                      </Badge>
-                    </div>
-                    <div className="mt-layout-md space-y-layout-sm">
-                      {snapshot.attentionItems.length === 0 ? (
-                        <EmptyState
-                          description="No source workflow needs immediate attention."
-                          title="No attention items"
-                        />
-                      ) : (
-                        snapshot.attentionItems.map((item) => (
-                          <article
-                            className="rounded-lg border border-border/80 bg-background p-layout-sm"
-                            key={item.id}
-                          >
-                            <div className="flex items-start justify-between gap-layout-sm">
-                              <div>
-                                <p className="font-medium text-foreground">
-                                  {item.label}
-                                </p>
-                                <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                                  {item.message}
-                                </p>
-                              </div>
-                              <Badge
-                                className={cn(
-                                  "border",
-                                  item.severity === "critical"
-                                    ? "border-danger/30 bg-danger/10 text-danger"
-                                    : "border-warning/40 bg-warning/10 text-warning-foreground",
-                                )}
-                              >
-                                {ownerLabel(item.owner)}
-                              </Badge>
-                            </div>
-                            {item.to ? (
-                              <Button
-                                asChild
-                                className="mt-layout-sm"
-                                size="sm"
-                                variant="outline"
-                              >
-                                <Link
-                                  aria-label={`Open source for ${item.label}`}
-                                  params={buildParams(
-                                    orgUrlSlug,
-                                    storeUrlSlug,
-                                    item.params,
-                                  )}
-                                  search={item.search}
-                                  to={item.to}
-                                >
-                                  Open source
-                                </Link>
-                              </Button>
-                            ) : null}
-                          </article>
-                        ))
-                      )}
-                    </div>
-                  </section>
-
-                  <section
                     aria-label="Store-day timeline"
                     className="rounded-lg border border-border bg-surface p-layout-md shadow-surface"
                   >
@@ -679,7 +600,7 @@ function DailyOperationsApiPendingView() {
       <FadeIn className="container mx-auto py-layout-xl">
         <PageWorkspace>
           <PageLevelHeader
-            eyebrow="Operations"
+            eyebrow="Store Ops"
             title="Daily Operations"
             description="Daily Operations is waiting for the current store-day view."
           />

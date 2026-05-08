@@ -1884,7 +1884,7 @@ export function DailyCloseViewContent({
       <FadeIn className="container mx-auto py-layout-xl">
         <PageWorkspace>
           <PageLevelHeader
-            eyebrow="Operations"
+            eyebrow="Store Ops"
             title="End-of-Day Review"
             description="Review the operating day, resolve blockers, and preserve follow-ups before saving the close summary."
           />
@@ -2044,7 +2044,7 @@ function DailyCloseApiPendingView() {
       <FadeIn className="container mx-auto py-layout-xl">
         <PageWorkspace>
           <PageLevelHeader
-            eyebrow="Operations"
+            eyebrow="Store Ops"
             title="End-of-Day Review"
             description="End-of-Day Review is waiting for the server close snapshot and completion command."
           />

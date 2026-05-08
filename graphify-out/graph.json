@@ -27623,7 +27623,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailyoperationsview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
-      "source_location": "L592",
+      "source_location": "L272",
       "target": "dailyoperationsview_buildparams",
       "weight": 1
     },
@@ -27767,20 +27767,8 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailyoperationsview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
-      "source_location": "L292",
+      "source_location": "L284",
       "target": "dailyoperationsview_loadingworkspace",
-      "weight": 1
-    },
-    {
-      "_src": "packages_athena_webapp_src_components_operations_dailyoperationsview_tsx",
-      "_tgt": "dailyoperationsview_ownerlabel",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1,
-      "relation": "contains",
-      "source": "packages_athena_webapp_src_components_operations_dailyoperationsview_tsx",
-      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
-      "source_location": "L255",
-      "target": "dailyoperationsview_ownerlabel",
       "weight": 1
     },
     {
@@ -27791,7 +27779,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailyoperationsview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
-      "source_location": "L263",
+      "source_location": "L255",
       "target": "dailyoperationsview_statusclassname",
       "weight": 1
     },
@@ -27803,7 +27791,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailyoperationsview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
-      "source_location": "L275",
+      "source_location": "L267",
       "target": "dailyoperationsview_statuslabel",
       "weight": 1
     },
@@ -27815,7 +27803,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailyoperationsview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
-      "source_location": "L307",
+      "source_location": "L299",
       "target": "dailyoperationsview_timelineeventitem",
       "weight": 1
     },
@@ -65652,65 +65640,65 @@
     {
       "community": 140,
       "file_type": "code",
-      "id": "packages_athena_webapp_src_stories_templates_reference_fixtures_tsx",
-      "label": "reference-fixtures.tsx",
-      "norm_label": "reference-fixtures.tsx",
-      "source_file": "packages/athena-webapp/src/stories/Templates/reference-fixtures.tsx",
+      "id": "packages_athena_webapp_src_lib_productutils_ts",
+      "label": "productUtils.ts",
+      "norm_label": "productutils.ts",
+      "source_file": "packages/athena-webapp/src/lib/productUtils.ts",
       "source_location": "L1"
     },
     {
       "community": 140,
       "file_type": "code",
-      "id": "reference_fixtures_compacttable",
-      "label": "CompactTable()",
-      "norm_label": "compacttable()",
-      "source_file": "packages/athena-webapp/src/stories/Templates/reference-fixtures.tsx",
-      "source_location": "L263"
+      "id": "packages_storefront_webapp_src_lib_productutils_ts",
+      "label": "productUtils.ts",
+      "norm_label": "productutils.ts",
+      "source_file": "packages/storefront-webapp/src/lib/productUtils.ts",
+      "source_location": "L1"
     },
     {
       "community": 140,
       "file_type": "code",
-      "id": "reference_fixtures_framecard",
-      "label": "FrameCard()",
-      "norm_label": "framecard()",
-      "source_file": "packages/athena-webapp/src/stories/Templates/reference-fixtures.tsx",
-      "source_location": "L163"
+      "id": "productutils_getproductname",
+      "label": "getProductName()",
+      "norm_label": "getproductname()",
+      "source_file": "packages/storefront-webapp/src/lib/productUtils.ts",
+      "source_location": "L18"
     },
     {
       "community": 140,
       "file_type": "code",
-      "id": "reference_fixtures_lanecard",
-      "label": "LaneCard()",
-      "norm_label": "lanecard()",
-      "source_file": "packages/athena-webapp/src/stories/Templates/reference-fixtures.tsx",
-      "source_location": "L213"
+      "id": "productutils_haslowstock",
+      "label": "hasLowStock()",
+      "norm_label": "haslowstock()",
+      "source_file": "packages/storefront-webapp/src/lib/productUtils.ts",
+      "source_location": "L52"
     },
     {
       "community": 140,
       "file_type": "code",
-      "id": "reference_fixtures_metrictile",
-      "label": "MetricTile()",
-      "norm_label": "metrictile()",
-      "source_file": "packages/athena-webapp/src/stories/Templates/reference-fixtures.tsx",
-      "source_location": "L194"
+      "id": "productutils_issoldout",
+      "label": "isSoldOut()",
+      "norm_label": "issoldout()",
+      "source_file": "packages/storefront-webapp/src/lib/productUtils.ts",
+      "source_location": "L45"
     },
     {
       "community": 140,
       "file_type": "code",
-      "id": "reference_fixtures_minitrendchart",
-      "label": "MiniTrendChart()",
-      "norm_label": "minitrendchart()",
-      "source_file": "packages/athena-webapp/src/stories/Templates/reference-fixtures.tsx",
-      "source_location": "L240"
+      "id": "productutils_sortproduct",
+      "label": "sortProduct()",
+      "norm_label": "sortproduct()",
+      "source_file": "packages/storefront-webapp/src/lib/productUtils.ts",
+      "source_location": "L66"
     },
     {
       "community": 140,
       "file_type": "code",
-      "id": "reference_fixtures_referencepageshell",
-      "label": "ReferencePageShell()",
-      "norm_label": "referencepageshell()",
-      "source_file": "packages/athena-webapp/src/stories/Templates/reference-fixtures.tsx",
-      "source_location": "L145"
+      "id": "productutils_sortskusbylength",
+      "label": "sortSkusByLength()",
+      "norm_label": "sortskusbylength()",
+      "source_file": "packages/storefront-webapp/src/lib/productUtils.ts",
+      "source_location": "L62"
     },
     {
       "community": 1400,
@@ -65805,65 +65793,65 @@
     {
       "community": 141,
       "file_type": "code",
-      "id": "packages_storefront_webapp_src_api_savedbag_ts",
-      "label": "savedBag.ts",
-      "norm_label": "savedbag.ts",
-      "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
+      "id": "packages_athena_webapp_src_stories_templates_reference_fixtures_tsx",
+      "label": "reference-fixtures.tsx",
+      "norm_label": "reference-fixtures.tsx",
+      "source_file": "packages/athena-webapp/src/stories/Templates/reference-fixtures.tsx",
       "source_location": "L1"
     },
     {
       "community": 141,
       "file_type": "code",
-      "id": "savedbag_additemtosavedbag",
-      "label": "addItemToSavedBag()",
-      "norm_label": "additemtosavedbag()",
-      "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
-      "source_location": "L25"
+      "id": "reference_fixtures_compacttable",
+      "label": "CompactTable()",
+      "norm_label": "compacttable()",
+      "source_file": "packages/athena-webapp/src/stories/Templates/reference-fixtures.tsx",
+      "source_location": "L263"
     },
     {
       "community": 141,
       "file_type": "code",
-      "id": "savedbag_getactivesavedbag",
-      "label": "getActiveSavedBag()",
-      "norm_label": "getactivesavedbag()",
-      "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
-      "source_location": "L10"
+      "id": "reference_fixtures_framecard",
+      "label": "FrameCard()",
+      "norm_label": "framecard()",
+      "source_file": "packages/athena-webapp/src/stories/Templates/reference-fixtures.tsx",
+      "source_location": "L163"
     },
     {
       "community": 141,
       "file_type": "code",
-      "id": "savedbag_getbaseurl",
-      "label": "getBaseUrl()",
-      "norm_label": "getbaseurl()",
-      "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
-      "source_location": "L8"
+      "id": "reference_fixtures_lanecard",
+      "label": "LaneCard()",
+      "norm_label": "lanecard()",
+      "source_file": "packages/athena-webapp/src/stories/Templates/reference-fixtures.tsx",
+      "source_location": "L213"
     },
     {
       "community": 141,
       "file_type": "code",
-      "id": "savedbag_removeitemfromsavedbag",
-      "label": "removeItemFromSavedBag()",
-      "norm_label": "removeitemfromsavedbag()",
-      "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
-      "source_location": "L91"
+      "id": "reference_fixtures_metrictile",
+      "label": "MetricTile()",
+      "norm_label": "metrictile()",
+      "source_file": "packages/athena-webapp/src/stories/Templates/reference-fixtures.tsx",
+      "source_location": "L194"
     },
     {
       "community": 141,
       "file_type": "code",
-      "id": "savedbag_updatesavedbagitem",
-      "label": "updateSavedBagItem()",
-      "norm_label": "updatesavedbagitem()",
-      "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
-      "source_location": "L61"
+      "id": "reference_fixtures_minitrendchart",
+      "label": "MiniTrendChart()",
+      "norm_label": "minitrendchart()",
+      "source_file": "packages/athena-webapp/src/stories/Templates/reference-fixtures.tsx",
+      "source_location": "L240"
     },
     {
       "community": 141,
       "file_type": "code",
-      "id": "savedbag_updatesavedbagowner",
-      "label": "updateSavedBagOwner()",
-      "norm_label": "updatesavedbagowner()",
-      "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
-      "source_location": "L109"
+      "id": "reference_fixtures_referencepageshell",
+      "label": "ReferencePageShell()",
+      "norm_label": "referencepageshell()",
+      "source_file": "packages/athena-webapp/src/stories/Templates/reference-fixtures.tsx",
+      "source_location": "L145"
     },
     {
       "community": 1410,
@@ -65958,65 +65946,65 @@
     {
       "community": 142,
       "file_type": "code",
-      "id": "packages_athena_webapp_src_lib_productutils_ts",
-      "label": "productUtils.ts",
-      "norm_label": "productutils.ts",
-      "source_file": "packages/athena-webapp/src/lib/productUtils.ts",
+      "id": "packages_storefront_webapp_src_api_savedbag_ts",
+      "label": "savedBag.ts",
+      "norm_label": "savedbag.ts",
+      "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
       "source_location": "L1"
     },
     {
       "community": 142,
       "file_type": "code",
-      "id": "packages_storefront_webapp_src_lib_productutils_ts",
-      "label": "productUtils.ts",
-      "norm_label": "productutils.ts",
-      "source_file": "packages/storefront-webapp/src/lib/productUtils.ts",
-      "source_location": "L1"
+      "id": "savedbag_additemtosavedbag",
+      "label": "addItemToSavedBag()",
+      "norm_label": "additemtosavedbag()",
+      "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
+      "source_location": "L25"
     },
     {
       "community": 142,
       "file_type": "code",
-      "id": "productutils_getproductname",
-      "label": "getProductName()",
-      "norm_label": "getproductname()",
-      "source_file": "packages/storefront-webapp/src/lib/productUtils.ts",
-      "source_location": "L18"
+      "id": "savedbag_getactivesavedbag",
+      "label": "getActiveSavedBag()",
+      "norm_label": "getactivesavedbag()",
+      "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
+      "source_location": "L10"
     },
     {
       "community": 142,
       "file_type": "code",
-      "id": "productutils_haslowstock",
-      "label": "hasLowStock()",
-      "norm_label": "haslowstock()",
-      "source_file": "packages/storefront-webapp/src/lib/productUtils.ts",
-      "source_location": "L52"
+      "id": "savedbag_getbaseurl",
+      "label": "getBaseUrl()",
+      "norm_label": "getbaseurl()",
+      "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
+      "source_location": "L8"
     },
     {
       "community": 142,
       "file_type": "code",
-      "id": "productutils_issoldout",
-      "label": "isSoldOut()",
-      "norm_label": "issoldout()",
-      "source_file": "packages/storefront-webapp/src/lib/productUtils.ts",
-      "source_location": "L45"
+      "id": "savedbag_removeitemfromsavedbag",
+      "label": "removeItemFromSavedBag()",
+      "norm_label": "removeitemfromsavedbag()",
+      "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
+      "source_location": "L91"
     },
     {
       "community": 142,
       "file_type": "code",
-      "id": "productutils_sortproduct",
-      "label": "sortProduct()",
-      "norm_label": "sortproduct()",
-      "source_file": "packages/storefront-webapp/src/lib/productUtils.ts",
-      "source_location": "L66"
+      "id": "savedbag_updatesavedbagitem",
+      "label": "updateSavedBagItem()",
+      "norm_label": "updatesavedbagitem()",
+      "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
+      "source_location": "L61"
     },
     {
       "community": 142,
       "file_type": "code",
-      "id": "productutils_sortskusbylength",
-      "label": "sortSkusByLength()",
-      "norm_label": "sortskusbylength()",
-      "source_file": "packages/storefront-webapp/src/lib/productUtils.ts",
-      "source_location": "L62"
+      "id": "savedbag_updatesavedbagowner",
+      "label": "updateSavedBagOwner()",
+      "norm_label": "updatesavedbagowner()",
+      "source_file": "packages/storefront-webapp/src/api/savedBag.ts",
+      "source_location": "L109"
     },
     {
       "community": 1420,
@@ -80835,163 +80823,163 @@
     {
       "community": 36,
       "file_type": "code",
-      "id": "dailyoperationsview_buildparams",
-      "label": "buildParams()",
-      "norm_label": "buildparams()",
-      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
-      "source_location": "L280"
+      "id": "graphify_wiki_builddegreeindex",
+      "label": "buildDegreeIndex()",
+      "norm_label": "builddegreeindex()",
+      "source_file": "scripts/graphify-wiki.ts",
+      "source_location": "L152"
     },
     {
       "community": 36,
       "file_type": "code",
-      "id": "dailyoperationsview_formatcarriedoverregistercount",
-      "label": "formatCarriedOverRegisterCount()",
-      "norm_label": "formatcarriedoverregistercount()",
-      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
-      "source_location": "L239"
+      "id": "graphify_wiki_buildhotspotlines",
+      "label": "buildHotspotLines()",
+      "norm_label": "buildhotspotlines()",
+      "source_file": "scripts/graphify-wiki.ts",
+      "source_location": "L190"
     },
     {
       "community": 36,
       "file_type": "code",
-      "id": "dailyoperationsview_formatentitycount",
-      "label": "formatEntityCount()",
-      "norm_label": "formatentitycount()",
-      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
-      "source_location": "L223"
+      "id": "graphify_wiki_buildpackagepage",
+      "label": "buildPackagePage()",
+      "norm_label": "buildpackagepage()",
+      "source_file": "scripts/graphify-wiki.ts",
+      "source_location": "L272"
     },
     {
       "community": 36,
       "file_type": "code",
-      "id": "dailyoperationsview_formateventtime",
-      "label": "formatEventTime()",
-      "norm_label": "formateventtime()",
-      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
-      "source_location": "L193"
+      "id": "graphify_wiki_buildrootindexpage",
+      "label": "buildRootIndexPage()",
+      "norm_label": "buildrootindexpage()",
+      "source_file": "scripts/graphify-wiki.ts",
+      "source_location": "L227"
     },
     {
       "community": 36,
       "file_type": "code",
-      "id": "dailyoperationsview_formatmoney",
-      "label": "formatMoney()",
-      "norm_label": "formatmoney()",
-      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
-      "source_location": "L251"
+      "id": "graphify_wiki_collectrepocodefiles",
+      "label": "collectRepoCodeFiles()",
+      "norm_label": "collectrepocodefiles()",
+      "source_file": "scripts/graphify-wiki.ts",
+      "source_location": "L88"
     },
     {
       "community": 36,
       "file_type": "code",
-      "id": "dailyoperationsview_formatoperatingdate",
-      "label": "formatOperatingDate()",
-      "norm_label": "formatoperatingdate()",
-      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
-      "source_location": "L177"
+      "id": "graphify_wiki_comparehotspots",
+      "label": "compareHotspots()",
+      "norm_label": "comparehotspots()",
+      "source_file": "scripts/graphify-wiki.ts",
+      "source_location": "L170"
     },
     {
       "community": 36,
       "file_type": "code",
-      "id": "dailyoperationsview_formatregistervariancecount",
-      "label": "formatRegisterVarianceCount()",
-      "norm_label": "formatregistervariancecount()",
-      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
-      "source_location": "L245"
+      "id": "graphify_wiki_countcommunities",
+      "label": "countCommunities()",
+      "norm_label": "countcommunities()",
+      "source_file": "scripts/graphify-wiki.ts",
+      "source_location": "L148"
     },
     {
       "community": 36,
       "file_type": "code",
-      "id": "dailyoperationsview_formattimelinemessage",
-      "label": "formatTimelineMessage()",
-      "norm_label": "formattimelinemessage()",
-      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
-      "source_location": "L200"
+      "id": "graphify_wiki_fileexists",
+      "label": "fileExists()",
+      "norm_label": "fileexists()",
+      "source_file": "scripts/graphify-wiki.ts",
+      "source_location": "L79"
     },
     {
       "community": 36,
       "file_type": "code",
-      "id": "dailyoperationsview_formattodaycashtransactioncount",
-      "label": "formatTodayCashTransactionCount()",
-      "norm_label": "formattodaycashtransactioncount()",
-      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
-      "source_location": "L233"
+      "id": "graphify_wiki_formatlist",
+      "label": "formatList()",
+      "norm_label": "formatlist()",
+      "source_file": "scripts/graphify-wiki.ts",
+      "source_location": "L144"
     },
     {
       "community": 36,
       "file_type": "code",
-      "id": "dailyoperationsview_getdailyoperationsapi",
-      "label": "getDailyOperationsApi()",
-      "norm_label": "getdailyoperationsapi()",
-      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
-      "source_location": "L140"
+      "id": "graphify_wiki_generategraphifywikipages",
+      "label": "generateGraphifyWikiPages()",
+      "norm_label": "generategraphifywikipages()",
+      "source_file": "scripts/graphify-wiki.ts",
+      "source_location": "L339"
     },
     {
       "community": 36,
       "file_type": "code",
-      "id": "dailyoperationsview_getlocaloperatingdate",
-      "label": "getLocalOperatingDate()",
-      "norm_label": "getlocaloperatingdate()",
-      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
-      "source_location": "L150"
+      "id": "graphify_wiki_loadgraphifygraph",
+      "label": "loadGraphifyGraph()",
+      "norm_label": "loadgraphifygraph()",
+      "source_file": "scripts/graphify-wiki.ts",
+      "source_location": "L213"
     },
     {
       "community": 36,
       "file_type": "code",
-      "id": "dailyoperationsview_getlocaloperatingdaterange",
-      "label": "getLocalOperatingDateRange()",
-      "norm_label": "getlocaloperatingdaterange()",
-      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
-      "source_location": "L158"
+      "id": "graphify_wiki_normalizerepopath",
+      "label": "normalizeRepoPath()",
+      "norm_label": "normalizerepopath()",
+      "source_file": "scripts/graphify-wiki.ts",
+      "source_location": "L127"
     },
     {
       "community": 36,
       "file_type": "code",
-      "id": "dailyoperationsview_loadingworkspace",
-      "label": "LoadingWorkspace()",
-      "norm_label": "loadingworkspace()",
-      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
-      "source_location": "L292"
+      "id": "graphify_wiki_readdir",
+      "label": "readDir()",
+      "norm_label": "readdir()",
+      "source_file": "scripts/graphify-wiki.ts",
+      "source_location": "L122"
     },
     {
       "community": 36,
       "file_type": "code",
-      "id": "dailyoperationsview_ownerlabel",
-      "label": "ownerLabel()",
-      "norm_label": "ownerlabel()",
-      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
-      "source_location": "L255"
+      "id": "graphify_wiki_scorenode",
+      "label": "scoreNode()",
+      "norm_label": "scorenode()",
+      "source_file": "scripts/graphify-wiki.ts",
+      "source_location": "L163"
     },
     {
       "community": 36,
       "file_type": "code",
-      "id": "dailyoperationsview_statusclassname",
-      "label": "statusClassName()",
-      "norm_label": "statusclassname()",
-      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
-      "source_location": "L263"
+      "id": "graphify_wiki_tomarkdownlink",
+      "label": "toMarkdownLink()",
+      "norm_label": "tomarkdownlink()",
+      "source_file": "scripts/graphify-wiki.ts",
+      "source_location": "L131"
     },
     {
       "community": 36,
       "file_type": "code",
-      "id": "dailyoperationsview_statuslabel",
-      "label": "statusLabel()",
-      "norm_label": "statuslabel()",
-      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
-      "source_location": "L275"
+      "id": "graphify_wiki_tosourcelink",
+      "label": "toSourceLink()",
+      "norm_label": "tosourcelink()",
+      "source_file": "scripts/graphify-wiki.ts",
+      "source_location": "L139"
     },
     {
       "community": 36,
       "file_type": "code",
-      "id": "dailyoperationsview_timelineeventitem",
-      "label": "TimelineEventItem()",
-      "norm_label": "timelineeventitem()",
-      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
-      "source_location": "L307"
+      "id": "graphify_wiki_writegraphifywikipages",
+      "label": "writeGraphifyWikiPages()",
+      "norm_label": "writegraphifywikipages()",
+      "source_file": "scripts/graphify-wiki.ts",
+      "source_location": "L371"
     },
     {
       "community": 36,
       "file_type": "code",
-      "id": "packages_athena_webapp_src_components_operations_dailyoperationsview_tsx",
-      "label": "DailyOperationsView.tsx",
-      "norm_label": "dailyoperationsview.tsx",
-      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
+      "id": "scripts_graphify_wiki_ts",
+      "label": "graphify-wiki.ts",
+      "norm_label": "graphify-wiki.ts",
+      "source_file": "scripts/graphify-wiki.ts",
       "source_location": "L1"
     },
     {
@@ -81267,163 +81255,154 @@
     {
       "community": 37,
       "file_type": "code",
-      "id": "graphify_wiki_builddegreeindex",
-      "label": "buildDegreeIndex()",
-      "norm_label": "builddegreeindex()",
-      "source_file": "scripts/graphify-wiki.ts",
-      "source_location": "L152"
+      "id": "completetransaction_buildcompletetransactionresult",
+      "label": "buildCompleteTransactionResult()",
+      "norm_label": "buildcompletetransactionresult()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
+      "source_location": "L57"
     },
     {
       "community": 37,
       "file_type": "code",
-      "id": "graphify_wiki_buildhotspotlines",
-      "label": "buildHotspotLines()",
-      "norm_label": "buildhotspotlines()",
-      "source_file": "scripts/graphify-wiki.ts",
-      "source_location": "L190"
+      "id": "completetransaction_calculatecanonicaltransactiontotals",
+      "label": "calculateCanonicalTransactionTotals()",
+      "norm_label": "calculatecanonicaltransactiontotals()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
+      "source_location": "L86"
     },
     {
       "community": 37,
       "file_type": "code",
-      "id": "graphify_wiki_buildpackagepage",
-      "label": "buildPackagePage()",
-      "norm_label": "buildpackagepage()",
-      "source_file": "scripts/graphify-wiki.ts",
-      "source_location": "L272"
+      "id": "completetransaction_calculatetotalpaid",
+      "label": "calculateTotalPaid()",
+      "norm_label": "calculatetotalpaid()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
+      "source_location": "L78"
     },
     {
       "community": 37,
       "file_type": "code",
-      "id": "graphify_wiki_buildrootindexpage",
-      "label": "buildRootIndexPage()",
-      "norm_label": "buildrootindexpage()",
-      "source_file": "scripts/graphify-wiki.ts",
-      "source_location": "L227"
+      "id": "completetransaction_completetransaction",
+      "label": "completeTransaction()",
+      "norm_label": "completetransaction()",
+      "source_file": "packages/athena-webapp/src/lib/pos/application/useCases/completeTransaction.ts",
+      "source_location": "L5"
     },
     {
       "community": 37,
       "file_type": "code",
-      "id": "graphify_wiki_collectrepocodefiles",
-      "label": "collectRepoCodeFiles()",
-      "norm_label": "collectrepocodefiles()",
-      "source_file": "scripts/graphify-wiki.ts",
-      "source_location": "L88"
+      "id": "completetransaction_createtransactionfromsessionhandler",
+      "label": "createTransactionFromSessionHandler()",
+      "norm_label": "createtransactionfromsessionhandler()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
+      "source_location": "L564"
     },
     {
       "community": 37,
       "file_type": "code",
-      "id": "graphify_wiki_comparehotspots",
-      "label": "compareHotspots()",
-      "norm_label": "comparehotspots()",
-      "source_file": "scripts/graphify-wiki.ts",
-      "source_location": "L170"
+      "id": "completetransaction_isusableregistersession",
+      "label": "isUsableRegisterSession()",
+      "norm_label": "isusableregistersession()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
+      "source_location": "L137"
     },
     {
       "community": 37,
       "file_type": "code",
-      "id": "graphify_wiki_countcommunities",
-      "label": "countCommunities()",
-      "norm_label": "countcommunities()",
-      "source_file": "scripts/graphify-wiki.ts",
-      "source_location": "L148"
+      "id": "completetransaction_recordregistersessionsale",
+      "label": "recordRegisterSessionSale()",
+      "norm_label": "recordregistersessionsale()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
+      "source_location": "L191"
     },
     {
       "community": 37,
       "file_type": "code",
-      "id": "graphify_wiki_fileexists",
-      "label": "fileExists()",
-      "norm_label": "fileexists()",
-      "source_file": "scripts/graphify-wiki.ts",
-      "source_location": "L79"
+      "id": "completetransaction_recordregistersessionvoid",
+      "label": "recordRegisterSessionVoid()",
+      "norm_label": "recordregistersessionvoid()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
+      "source_location": "L216"
     },
     {
       "community": 37,
       "file_type": "code",
-      "id": "graphify_wiki_formatlist",
-      "label": "formatList()",
-      "norm_label": "formatlist()",
-      "source_file": "scripts/graphify-wiki.ts",
-      "source_location": "L144"
-    },
-    {
-      "community": 37,
-      "file_type": "code",
-      "id": "graphify_wiki_generategraphifywikipages",
-      "label": "generateGraphifyWikiPages()",
-      "norm_label": "generategraphifywikipages()",
-      "source_file": "scripts/graphify-wiki.ts",
-      "source_location": "L339"
-    },
-    {
-      "community": 37,
-      "file_type": "code",
-      "id": "graphify_wiki_loadgraphifygraph",
-      "label": "loadGraphifyGraph()",
-      "norm_label": "loadgraphifygraph()",
-      "source_file": "scripts/graphify-wiki.ts",
-      "source_location": "L213"
-    },
-    {
-      "community": 37,
-      "file_type": "code",
-      "id": "graphify_wiki_normalizerepopath",
-      "label": "normalizeRepoPath()",
-      "norm_label": "normalizerepopath()",
-      "source_file": "scripts/graphify-wiki.ts",
-      "source_location": "L127"
-    },
-    {
-      "community": 37,
-      "file_type": "code",
-      "id": "graphify_wiki_readdir",
-      "label": "readDir()",
-      "norm_label": "readdir()",
-      "source_file": "scripts/graphify-wiki.ts",
+      "id": "completetransaction_registersessionmatchesidentity",
+      "label": "registerSessionMatchesIdentity()",
+      "norm_label": "registersessionmatchesidentity()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
       "source_location": "L122"
     },
     {
       "community": 37,
       "file_type": "code",
-      "id": "graphify_wiki_scorenode",
-      "label": "scoreNode()",
-      "norm_label": "scorenode()",
-      "source_file": "scripts/graphify-wiki.ts",
-      "source_location": "L163"
+      "id": "completetransaction_resolvesessionregistersessionid",
+      "label": "resolveSessionRegisterSessionId()",
+      "norm_label": "resolvesessionregistersessionid()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
+      "source_location": "L141"
     },
     {
       "community": 37,
       "file_type": "code",
-      "id": "graphify_wiki_tomarkdownlink",
-      "label": "toMarkdownLink()",
-      "norm_label": "tomarkdownlink()",
-      "source_file": "scripts/graphify-wiki.ts",
-      "source_location": "L131"
+      "id": "completetransaction_roundstoredamount",
+      "label": "roundStoredAmount()",
+      "norm_label": "roundstoredamount()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
+      "source_location": "L82"
     },
     {
       "community": 37,
       "file_type": "code",
-      "id": "graphify_wiki_tosourcelink",
-      "label": "toSourceLink()",
-      "norm_label": "tosourcelink()",
-      "source_file": "scripts/graphify-wiki.ts",
-      "source_location": "L139"
+      "id": "completetransaction_stalesaletotalerror",
+      "label": "staleSaleTotalError()",
+      "norm_label": "stalesaletotalerror()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
+      "source_location": "L115"
     },
     {
       "community": 37,
       "file_type": "code",
-      "id": "graphify_wiki_writegraphifywikipages",
-      "label": "writeGraphifyWikiPages()",
-      "norm_label": "writegraphifywikipages()",
-      "source_file": "scripts/graphify-wiki.ts",
-      "source_location": "L371"
+      "id": "completetransaction_totalsmatch",
+      "label": "totalsMatch()",
+      "norm_label": "totalsmatch()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
+      "source_location": "L104"
     },
     {
       "community": 37,
       "file_type": "code",
-      "id": "scripts_graphify_wiki_ts",
-      "label": "graphify-wiki.ts",
-      "norm_label": "graphify-wiki.ts",
-      "source_file": "scripts/graphify-wiki.ts",
+      "id": "completetransaction_updateinventory",
+      "label": "updateInventory()",
+      "norm_label": "updateinventory()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
+      "source_location": "L241"
+    },
+    {
+      "community": 37,
+      "file_type": "code",
+      "id": "completetransaction_voidtransaction",
+      "label": "voidTransaction()",
+      "norm_label": "voidtransaction()",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
+      "source_location": "L488"
+    },
+    {
+      "community": 37,
+      "file_type": "code",
+      "id": "packages_athena_webapp_convex_pos_application_commands_completetransaction_ts",
+      "label": "completeTransaction.ts",
+      "norm_label": "completetransaction.ts",
+      "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
+      "source_location": "L1"
+    },
+    {
+      "community": 37,
+      "file_type": "code",
+      "id": "packages_athena_webapp_src_lib_pos_application_usecases_completetransaction_ts",
+      "label": "completeTransaction.ts",
+      "norm_label": "completetransaction.ts",
+      "source_file": "packages/athena-webapp/src/lib/pos/application/useCases/completeTransaction.ts",
       "source_location": "L1"
     },
     {
@@ -81699,154 +81678,154 @@
     {
       "community": 38,
       "file_type": "code",
-      "id": "completetransaction_buildcompletetransactionresult",
-      "label": "buildCompleteTransactionResult()",
-      "norm_label": "buildcompletetransactionresult()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
-      "source_location": "L57"
+      "id": "data_table_view_options_datatableviewoptions",
+      "label": "DataTableViewOptions()",
+      "norm_label": "datatableviewoptions()",
+      "source_file": "packages/athena-webapp/src/components/user-bags/user-bags-table/data-table-view-options.tsx",
+      "source_location": "L18"
     },
     {
       "community": 38,
       "file_type": "code",
-      "id": "completetransaction_calculatecanonicaltransactiontotals",
-      "label": "calculateCanonicalTransactionTotals()",
-      "norm_label": "calculatecanonicaltransactiontotals()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
-      "source_location": "L86"
-    },
-    {
-      "community": 38,
-      "file_type": "code",
-      "id": "completetransaction_calculatetotalpaid",
-      "label": "calculateTotalPaid()",
-      "norm_label": "calculatetotalpaid()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
-      "source_location": "L78"
-    },
-    {
-      "community": 38,
-      "file_type": "code",
-      "id": "completetransaction_completetransaction",
-      "label": "completeTransaction()",
-      "norm_label": "completetransaction()",
-      "source_file": "packages/athena-webapp/src/lib/pos/application/useCases/completeTransaction.ts",
-      "source_location": "L5"
-    },
-    {
-      "community": 38,
-      "file_type": "code",
-      "id": "completetransaction_createtransactionfromsessionhandler",
-      "label": "createTransactionFromSessionHandler()",
-      "norm_label": "createtransactionfromsessionhandler()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
-      "source_location": "L564"
-    },
-    {
-      "community": 38,
-      "file_type": "code",
-      "id": "completetransaction_isusableregistersession",
-      "label": "isUsableRegisterSession()",
-      "norm_label": "isusableregistersession()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
-      "source_location": "L137"
-    },
-    {
-      "community": 38,
-      "file_type": "code",
-      "id": "completetransaction_recordregistersessionsale",
-      "label": "recordRegisterSessionSale()",
-      "norm_label": "recordregistersessionsale()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
-      "source_location": "L191"
-    },
-    {
-      "community": 38,
-      "file_type": "code",
-      "id": "completetransaction_recordregistersessionvoid",
-      "label": "recordRegisterSessionVoid()",
-      "norm_label": "recordregistersessionvoid()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
-      "source_location": "L216"
-    },
-    {
-      "community": 38,
-      "file_type": "code",
-      "id": "completetransaction_registersessionmatchesidentity",
-      "label": "registerSessionMatchesIdentity()",
-      "norm_label": "registersessionmatchesidentity()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
-      "source_location": "L122"
-    },
-    {
-      "community": 38,
-      "file_type": "code",
-      "id": "completetransaction_resolvesessionregistersessionid",
-      "label": "resolveSessionRegisterSessionId()",
-      "norm_label": "resolvesessionregistersessionid()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
-      "source_location": "L141"
-    },
-    {
-      "community": 38,
-      "file_type": "code",
-      "id": "completetransaction_roundstoredamount",
-      "label": "roundStoredAmount()",
-      "norm_label": "roundstoredamount()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
-      "source_location": "L82"
-    },
-    {
-      "community": 38,
-      "file_type": "code",
-      "id": "completetransaction_stalesaletotalerror",
-      "label": "staleSaleTotalError()",
-      "norm_label": "stalesaletotalerror()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
-      "source_location": "L115"
-    },
-    {
-      "community": 38,
-      "file_type": "code",
-      "id": "completetransaction_totalsmatch",
-      "label": "totalsMatch()",
-      "norm_label": "totalsmatch()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
-      "source_location": "L104"
-    },
-    {
-      "community": 38,
-      "file_type": "code",
-      "id": "completetransaction_updateinventory",
-      "label": "updateInventory()",
-      "norm_label": "updateinventory()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
-      "source_location": "L241"
-    },
-    {
-      "community": 38,
-      "file_type": "code",
-      "id": "completetransaction_voidtransaction",
-      "label": "voidTransaction()",
-      "norm_label": "voidtransaction()",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
-      "source_location": "L488"
-    },
-    {
-      "community": 38,
-      "file_type": "code",
-      "id": "packages_athena_webapp_convex_pos_application_commands_completetransaction_ts",
-      "label": "completeTransaction.ts",
-      "norm_label": "completetransaction.ts",
-      "source_file": "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
+      "id": "packages_athena_webapp_src_components_add_product_copy_images_table_data_table_view_options_tsx",
+      "label": "data-table-view-options.tsx",
+      "norm_label": "data-table-view-options.tsx",
+      "source_file": "packages/athena-webapp/src/components/add-product/copy-images/table/data-table-view-options.tsx",
       "source_location": "L1"
     },
     {
       "community": 38,
       "file_type": "code",
-      "id": "packages_athena_webapp_src_lib_pos_application_usecases_completetransaction_ts",
-      "label": "completeTransaction.ts",
-      "norm_label": "completetransaction.ts",
-      "source_file": "packages/athena-webapp/src/lib/pos/application/useCases/completeTransaction.ts",
+      "id": "packages_athena_webapp_src_components_analytics_analytics_data_table_data_table_view_options_tsx",
+      "label": "data-table-view-options.tsx",
+      "norm_label": "data-table-view-options.tsx",
+      "source_file": "packages/athena-webapp/src/components/analytics/analytics-data-table/data-table-view-options.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 38,
+      "file_type": "code",
+      "id": "packages_athena_webapp_src_components_analytics_analytics_products_table_data_table_view_options_tsx",
+      "label": "data-table-view-options.tsx",
+      "norm_label": "data-table-view-options.tsx",
+      "source_file": "packages/athena-webapp/src/components/analytics/analytics-products-table/data-table-view-options.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 38,
+      "file_type": "code",
+      "id": "packages_athena_webapp_src_components_analytics_table_data_table_view_options_tsx",
+      "label": "data-table-view-options.tsx",
+      "norm_label": "data-table-view-options.tsx",
+      "source_file": "packages/athena-webapp/src/components/analytics/table/data-table-view-options.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 38,
+      "file_type": "code",
+      "id": "packages_athena_webapp_src_components_app_logs_analytics_data_table_data_table_view_options_tsx",
+      "label": "data-table-view-options.tsx",
+      "norm_label": "data-table-view-options.tsx",
+      "source_file": "packages/athena-webapp/src/components/app-logs/analytics-data-table/data-table-view-options.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 38,
+      "file_type": "code",
+      "id": "packages_athena_webapp_src_components_assets_assets_table_data_table_view_options_tsx",
+      "label": "data-table-view-options.tsx",
+      "norm_label": "data-table-view-options.tsx",
+      "source_file": "packages/athena-webapp/src/components/assets/assets-table/data-table-view-options.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 38,
+      "file_type": "code",
+      "id": "packages_athena_webapp_src_components_base_selectable_products_table_data_table_view_options_tsx",
+      "label": "data-table-view-options.tsx",
+      "norm_label": "data-table-view-options.tsx",
+      "source_file": "packages/athena-webapp/src/components/base/selectable-products-table/data-table-view-options.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 38,
+      "file_type": "code",
+      "id": "packages_athena_webapp_src_components_base_table_data_table_view_options_tsx",
+      "label": "data-table-view-options.tsx",
+      "norm_label": "data-table-view-options.tsx",
+      "source_file": "packages/athena-webapp/src/components/base/table/data-table-view-options.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 38,
+      "file_type": "code",
+      "id": "packages_athena_webapp_src_components_orders_orders_table_components_data_table_view_options_tsx",
+      "label": "data-table-view-options.tsx",
+      "norm_label": "data-table-view-options.tsx",
+      "source_file": "packages/athena-webapp/src/components/orders/orders-table/components/data-table-view-options.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 38,
+      "file_type": "code",
+      "id": "packages_athena_webapp_src_components_organization_members_invites_table_components_data_table_view_options_tsx",
+      "label": "data-table-view-options.tsx",
+      "norm_label": "data-table-view-options.tsx",
+      "source_file": "packages/athena-webapp/src/components/organization-members/invites-table/components/data-table-view-options.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 38,
+      "file_type": "code",
+      "id": "packages_athena_webapp_src_components_organization_members_members_table_components_data_table_view_options_tsx",
+      "label": "data-table-view-options.tsx",
+      "norm_label": "data-table-view-options.tsx",
+      "source_file": "packages/athena-webapp/src/components/organization-members/members-table/components/data-table-view-options.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 38,
+      "file_type": "code",
+      "id": "packages_athena_webapp_src_components_products_products_table_components_data_table_view_options_tsx",
+      "label": "data-table-view-options.tsx",
+      "norm_label": "data-table-view-options.tsx",
+      "source_file": "packages/athena-webapp/src/components/products/products-table/components/data-table-view-options.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 38,
+      "file_type": "code",
+      "id": "packages_athena_webapp_src_components_promo_codes_selectable_products_table_data_table_view_options_tsx",
+      "label": "data-table-view-options.tsx",
+      "norm_label": "data-table-view-options.tsx",
+      "source_file": "packages/athena-webapp/src/components/promo-codes/selectable-products-table/data-table-view-options.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 38,
+      "file_type": "code",
+      "id": "packages_athena_webapp_src_components_promo_codes_table_data_table_view_options_tsx",
+      "label": "data-table-view-options.tsx",
+      "norm_label": "data-table-view-options.tsx",
+      "source_file": "packages/athena-webapp/src/components/promo-codes/table/data-table-view-options.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 38,
+      "file_type": "code",
+      "id": "packages_athena_webapp_src_components_user_bags_table_data_table_view_options_tsx",
+      "label": "data-table-view-options.tsx",
+      "norm_label": "data-table-view-options.tsx",
+      "source_file": "packages/athena-webapp/src/components/user-bags/table/data-table-view-options.tsx",
+      "source_location": "L1"
+    },
+    {
+      "community": 38,
+      "file_type": "code",
+      "id": "packages_athena_webapp_src_components_user_bags_user_bags_table_data_table_view_options_tsx",
+      "label": "data-table-view-options.tsx",
+      "norm_label": "data-table-view-options.tsx",
+      "source_file": "packages/athena-webapp/src/components/user-bags/user-bags-table/data-table-view-options.tsx",
       "source_location": "L1"
     },
     {
@@ -82122,154 +82101,154 @@
     {
       "community": 39,
       "file_type": "code",
-      "id": "data_table_view_options_datatableviewoptions",
-      "label": "DataTableViewOptions()",
-      "norm_label": "datatableviewoptions()",
-      "source_file": "packages/athena-webapp/src/components/user-bags/user-bags-table/data-table-view-options.tsx",
-      "source_location": "L18"
+      "id": "dailyoperationsview_buildparams",
+      "label": "buildParams()",
+      "norm_label": "buildparams()",
+      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
+      "source_location": "L272"
     },
     {
       "community": 39,
       "file_type": "code",
-      "id": "packages_athena_webapp_src_components_add_product_copy_images_table_data_table_view_options_tsx",
-      "label": "data-table-view-options.tsx",
-      "norm_label": "data-table-view-options.tsx",
-      "source_file": "packages/athena-webapp/src/components/add-product/copy-images/table/data-table-view-options.tsx",
-      "source_location": "L1"
+      "id": "dailyoperationsview_formatcarriedoverregistercount",
+      "label": "formatCarriedOverRegisterCount()",
+      "norm_label": "formatcarriedoverregistercount()",
+      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
+      "source_location": "L239"
     },
     {
       "community": 39,
       "file_type": "code",
-      "id": "packages_athena_webapp_src_components_analytics_analytics_data_table_data_table_view_options_tsx",
-      "label": "data-table-view-options.tsx",
-      "norm_label": "data-table-view-options.tsx",
-      "source_file": "packages/athena-webapp/src/components/analytics/analytics-data-table/data-table-view-options.tsx",
-      "source_location": "L1"
+      "id": "dailyoperationsview_formatentitycount",
+      "label": "formatEntityCount()",
+      "norm_label": "formatentitycount()",
+      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
+      "source_location": "L223"
     },
     {
       "community": 39,
       "file_type": "code",
-      "id": "packages_athena_webapp_src_components_analytics_analytics_products_table_data_table_view_options_tsx",
-      "label": "data-table-view-options.tsx",
-      "norm_label": "data-table-view-options.tsx",
-      "source_file": "packages/athena-webapp/src/components/analytics/analytics-products-table/data-table-view-options.tsx",
-      "source_location": "L1"
+      "id": "dailyoperationsview_formateventtime",
+      "label": "formatEventTime()",
+      "norm_label": "formateventtime()",
+      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
+      "source_location": "L193"
     },
     {
       "community": 39,
       "file_type": "code",
-      "id": "packages_athena_webapp_src_components_analytics_table_data_table_view_options_tsx",
-      "label": "data-table-view-options.tsx",
-      "norm_label": "data-table-view-options.tsx",
-      "source_file": "packages/athena-webapp/src/components/analytics/table/data-table-view-options.tsx",
-      "source_location": "L1"
+      "id": "dailyoperationsview_formatmoney",
+      "label": "formatMoney()",
+      "norm_label": "formatmoney()",
+      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
+      "source_location": "L251"
     },
     {
       "community": 39,
       "file_type": "code",
-      "id": "packages_athena_webapp_src_components_app_logs_analytics_data_table_data_table_view_options_tsx",
-      "label": "data-table-view-options.tsx",
-      "norm_label": "data-table-view-options.tsx",
-      "source_file": "packages/athena-webapp/src/components/app-logs/analytics-data-table/data-table-view-options.tsx",
-      "source_location": "L1"
+      "id": "dailyoperationsview_formatoperatingdate",
+      "label": "formatOperatingDate()",
+      "norm_label": "formatoperatingdate()",
+      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
+      "source_location": "L177"
     },
     {
       "community": 39,
       "file_type": "code",
-      "id": "packages_athena_webapp_src_components_assets_assets_table_data_table_view_options_tsx",
-      "label": "data-table-view-options.tsx",
-      "norm_label": "data-table-view-options.tsx",
-      "source_file": "packages/athena-webapp/src/components/assets/assets-table/data-table-view-options.tsx",
-      "source_location": "L1"
+      "id": "dailyoperationsview_formatregistervariancecount",
+      "label": "formatRegisterVarianceCount()",
+      "norm_label": "formatregistervariancecount()",
+      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
+      "source_location": "L245"
     },
     {
       "community": 39,
       "file_type": "code",
-      "id": "packages_athena_webapp_src_components_base_selectable_products_table_data_table_view_options_tsx",
-      "label": "data-table-view-options.tsx",
-      "norm_label": "data-table-view-options.tsx",
-      "source_file": "packages/athena-webapp/src/components/base/selectable-products-table/data-table-view-options.tsx",
-      "source_location": "L1"
+      "id": "dailyoperationsview_formattimelinemessage",
+      "label": "formatTimelineMessage()",
+      "norm_label": "formattimelinemessage()",
+      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
+      "source_location": "L200"
     },
     {
       "community": 39,
       "file_type": "code",
-      "id": "packages_athena_webapp_src_components_base_table_data_table_view_options_tsx",
-      "label": "data-table-view-options.tsx",
-      "norm_label": "data-table-view-options.tsx",
-      "source_file": "packages/athena-webapp/src/components/base/table/data-table-view-options.tsx",
-      "source_location": "L1"
+      "id": "dailyoperationsview_formattodaycashtransactioncount",
+      "label": "formatTodayCashTransactionCount()",
+      "norm_label": "formattodaycashtransactioncount()",
+      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
+      "source_location": "L233"
     },
     {
       "community": 39,
       "file_type": "code",
-      "id": "packages_athena_webapp_src_components_orders_orders_table_components_data_table_view_options_tsx",
-      "label": "data-table-view-options.tsx",
-      "norm_label": "data-table-view-options.tsx",
-      "source_file": "packages/athena-webapp/src/components/orders/orders-table/components/data-table-view-options.tsx",
-      "source_location": "L1"
+      "id": "dailyoperationsview_getdailyoperationsapi",
+      "label": "getDailyOperationsApi()",
+      "norm_label": "getdailyoperationsapi()",
+      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
+      "source_location": "L140"
     },
     {
       "community": 39,
       "file_type": "code",
-      "id": "packages_athena_webapp_src_components_organization_members_invites_table_components_data_table_view_options_tsx",
-      "label": "data-table-view-options.tsx",
-      "norm_label": "data-table-view-options.tsx",
-      "source_file": "packages/athena-webapp/src/components/organization-members/invites-table/components/data-table-view-options.tsx",
-      "source_location": "L1"
+      "id": "dailyoperationsview_getlocaloperatingdate",
+      "label": "getLocalOperatingDate()",
+      "norm_label": "getlocaloperatingdate()",
+      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
+      "source_location": "L150"
     },
     {
       "community": 39,
       "file_type": "code",
-      "id": "packages_athena_webapp_src_components_organization_members_members_table_components_data_table_view_options_tsx",
-      "label": "data-table-view-options.tsx",
-      "norm_label": "data-table-view-options.tsx",
-      "source_file": "packages/athena-webapp/src/components/organization-members/members-table/components/data-table-view-options.tsx",
-      "source_location": "L1"
+      "id": "dailyoperationsview_getlocaloperatingdaterange",
+      "label": "getLocalOperatingDateRange()",
+      "norm_label": "getlocaloperatingdaterange()",
+      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
+      "source_location": "L158"
     },
     {
       "community": 39,
       "file_type": "code",
-      "id": "packages_athena_webapp_src_components_products_products_table_components_data_table_view_options_tsx",
-      "label": "data-table-view-options.tsx",
-      "norm_label": "data-table-view-options.tsx",
-      "source_file": "packages/athena-webapp/src/components/products/products-table/components/data-table-view-options.tsx",
-      "source_location": "L1"
+      "id": "dailyoperationsview_loadingworkspace",
+      "label": "LoadingWorkspace()",
+      "norm_label": "loadingworkspace()",
+      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
+      "source_location": "L284"
     },
     {
       "community": 39,
       "file_type": "code",
-      "id": "packages_athena_webapp_src_components_promo_codes_selectable_products_table_data_table_view_options_tsx",
-      "label": "data-table-view-options.tsx",
-      "norm_label": "data-table-view-options.tsx",
-      "source_file": "packages/athena-webapp/src/components/promo-codes/selectable-products-table/data-table-view-options.tsx",
-      "source_location": "L1"
+      "id": "dailyoperationsview_statusclassname",
+      "label": "statusClassName()",
+      "norm_label": "statusclassname()",
+      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
+      "source_location": "L255"
     },
     {
       "community": 39,
       "file_type": "code",
-      "id": "packages_athena_webapp_src_components_promo_codes_table_data_table_view_options_tsx",
-      "label": "data-table-view-options.tsx",
-      "norm_label": "data-table-view-options.tsx",
-      "source_file": "packages/athena-webapp/src/components/promo-codes/table/data-table-view-options.tsx",
-      "source_location": "L1"
+      "id": "dailyoperationsview_statuslabel",
+      "label": "statusLabel()",
+      "norm_label": "statuslabel()",
+      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
+      "source_location": "L267"
     },
     {
       "community": 39,
       "file_type": "code",
-      "id": "packages_athena_webapp_src_components_user_bags_table_data_table_view_options_tsx",
-      "label": "data-table-view-options.tsx",
-      "norm_label": "data-table-view-options.tsx",
-      "source_file": "packages/athena-webapp/src/components/user-bags/table/data-table-view-options.tsx",
-      "source_location": "L1"
+      "id": "dailyoperationsview_timelineeventitem",
+      "label": "TimelineEventItem()",
+      "norm_label": "timelineeventitem()",
+      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
+      "source_location": "L299"
     },
     {
       "community": 39,
       "file_type": "code",
-      "id": "packages_athena_webapp_src_components_user_bags_user_bags_table_data_table_view_options_tsx",
-      "label": "data-table-view-options.tsx",
-      "norm_label": "data-table-view-options.tsx",
-      "source_file": "packages/athena-webapp/src/components/user-bags/user-bags-table/data-table-view-options.tsx",
+      "id": "packages_athena_webapp_src_components_operations_dailyoperationsview_tsx",
+      "label": "DailyOperationsView.tsx",
+      "norm_label": "dailyoperationsview.tsx",
+      "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
       "source_location": "L1"
     },
     {
