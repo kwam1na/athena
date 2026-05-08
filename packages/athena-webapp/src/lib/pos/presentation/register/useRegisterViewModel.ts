@@ -294,8 +294,8 @@ export function useRegisterViewModel(): RegisterViewModel {
   const staffRoster = Array.isArray(staffRosterResult)
     ? (staffRosterResult as StaffProfileRosterRow[])
     : [];
-  const activeRegisterOperatorCount = staffRoster.filter(canOperateRegister)
-    .length;
+  const activeRegisterOperatorCount =
+    staffRoster.filter(canOperateRegister).length;
   const activeSession = useConvexActiveSession({
     storeId: activeStore?._id,
     terminalId: terminal?._id ?? null,
@@ -343,8 +343,8 @@ export function useRegisterViewModel(): RegisterViewModel {
       ...registerMetadataSearchState,
       canAutoAdd: Boolean(
         registerMetadataSearchState.exactMatch &&
-          exactAvailability &&
-          exactAvailability.quantityAvailable > 0,
+        exactAvailability &&
+        exactAvailability.quantityAvailable > 0,
       ),
     };
   }, [registerCatalogAvailabilityBySkuId, registerMetadataSearchState]);
@@ -560,7 +560,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   const hasActiveCartDraft = activeCartItems.length > 0;
   const hasClearableSaleState = Boolean(
     operableActiveSession &&
-      (hasActiveCartDraft || hasActiveCustomerDetails || payments.length > 0),
+    (hasActiveCartDraft || hasActiveCustomerDetails || payments.length > 0),
   );
   const hasActivePosSession = Boolean(operableActiveSession?._id);
   const activeSessionNeedsRegisterBinding = Boolean(
@@ -746,7 +746,9 @@ export function useRegisterViewModel(): RegisterViewModel {
     }
 
     checkoutStateVersionRef.current = 0;
-    setCustomerInfo(mapSessionCustomer(operableActiveSession?.customer ?? null));
+    setCustomerInfo(
+      mapSessionCustomer(operableActiveSession?.customer ?? null),
+    );
     setPaymentState(
       combinePaymentsByMethod(
         (operableActiveSession?.payments ?? []).map((payment) => ({
@@ -1755,31 +1757,33 @@ export function useRegisterViewModel(): RegisterViewModel {
     ],
   );
 
-  const addExactSearchProductOnce = useCallback(async (options?: {
-    allowAnyExactIdentifier?: boolean;
-  }) => {
-    if (!exactSearchProduct || !registerSearchState.canAutoAdd) {
-      return false;
-    }
+  const addExactSearchProductOnce = useCallback(
+    async (options?: { allowAnyExactIdentifier?: boolean }) => {
+      if (!exactSearchProduct || !registerSearchState.canAutoAdd) {
+        return false;
+      }
 
-    const isBarcodeExact =
-      normalizeExactInput(exactSearchProduct.barcode) ===
-      normalizeExactInput(registerSearchState.query);
-    if (!options?.allowAnyExactIdentifier && !isBarcodeExact) {
-      return false;
-    }
+      const isBarcodeExact =
+        normalizeExactInput(exactSearchProduct.barcode) ===
+        normalizeExactInput(registerSearchState.query);
+      if (!options?.allowAnyExactIdentifier && !isBarcodeExact) {
+        return false;
+      }
 
-    const exactAddKey = `${registerSearchState.query}:${exactSearchProduct.skuId}`;
-    if (exactAddKeyRef.current === exactAddKey) {
-      return true;
-    }
+      const exactAddKey = `${registerSearchState.query}:${exactSearchProduct.skuId}`;
+      if (exactAddKeyRef.current === exactAddKey) {
+        return true;
+      }
 
-    const wasAdded = await handleAddProduct(exactSearchProduct);
-    if (wasAdded) {
       exactAddKeyRef.current = exactAddKey;
-    }
-    return wasAdded;
-  }, [exactSearchProduct, handleAddProduct, registerSearchState]);
+      const wasAdded = await handleAddProduct(exactSearchProduct);
+      if (!wasAdded) {
+        exactAddKeyRef.current = null;
+      }
+      return wasAdded;
+    },
+    [exactSearchProduct, handleAddProduct, registerSearchState],
+  );
 
   useEffect(() => {
     if (!productSearchQuery.trim()) {
@@ -2005,11 +2009,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         toast.error("Item not found. Scan again or search by name.");
       }
     },
-    [
-      addExactSearchProductOnce,
-      productSearchQuery,
-      registerSearchState,
-    ],
+    [addExactSearchProductOnce, productSearchQuery, registerSearchState],
   );
 
   useEffect(() => {
@@ -2299,10 +2299,10 @@ export function useRegisterViewModel(): RegisterViewModel {
       (isStaffRosterLoaded && activeRegisterOperatorCount === 0);
     const nextStep =
       isTerminalLookupResolved && !terminalReady
-      ? "terminal"
-      : isStaffRosterLoaded && activeRegisterOperatorCount === 0
-        ? "cashierSetup"
-        : "ready";
+        ? "terminal"
+        : isStaffRosterLoaded && activeRegisterOperatorCount === 0
+          ? "cashierSetup"
+          : "ready";
 
     return {
       shouldShow,
@@ -2434,7 +2434,8 @@ export function useRegisterViewModel(): RegisterViewModel {
                   : undefined,
               closeoutSubmittedCountedCash:
                 activeCloseoutRegisterSession?.countedCash,
-              closeoutSubmittedVariance: activeCloseoutRegisterSession?.variance,
+              closeoutSubmittedVariance:
+                activeCloseoutRegisterSession?.variance,
               closeoutNotes,
               closeoutSecondaryActionLabel: closeoutBlockedRegisterSession
                 ? "Reopen register"

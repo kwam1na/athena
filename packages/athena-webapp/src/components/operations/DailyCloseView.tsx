@@ -1,5 +1,10 @@
-import { useMemo, useState } from "react";
-import { Link, useParams } from "@tanstack/react-router";
+import { type ReactNode, useMemo, useState } from "react";
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useSearch,
+} from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import {
   AlertTriangle,
@@ -12,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
+import { formatReviewReason } from "@/components/cash-controls/formatReviewReason";
 import { cn } from "@/lib/utils";
 import { toOperatorMessage } from "@/lib/errors/operatorMessages";
 import {
@@ -39,7 +45,7 @@ import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSig
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { LoadingButton } from "../ui/loading-button";
-import { Skeleton } from "../ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 
 type DailyCloseApi = {
   completeDailyClose?: unknown;
@@ -102,6 +108,8 @@ export type DailyCloseSnapshot = {
   } | null;
   operatingDate: string;
   readyItems: DailyCloseItem[];
+  startAt: number;
+  endAt: number;
   readiness?: {
     blockerCount: number;
     carryForwardCount: number;
@@ -112,11 +120,15 @@ export type DailyCloseSnapshot = {
   reviewItems: DailyCloseItem[];
   status?: DailyCloseStatus;
   summary: {
+    carriedOverCashTotal?: number | null;
+    carriedOverRegisterCount?: number | null;
     cashDeposited?: number | null;
     cashDepositTotal?: number | null;
     cashExpected?: number | null;
     closedRegisterSessionCount?: number | null;
     carryForwardCount?: number | null;
+    currentDayCashTransactionCount?: number | null;
+    currentDayCashTotal?: number | null;
     expectedCashTotal?: number | null;
     expenseTotal?: number | null;
     netCashVariance?: number | null;
@@ -127,6 +139,7 @@ export type DailyCloseSnapshot = {
     }>;
     pendingApprovalCount?: number | null;
     registerCount?: number | null;
+    registerVarianceCount?: number | null;
     staffCount?: number | null;
     salesTotal?: number | null;
     totalSales?: number | null;
@@ -138,9 +151,30 @@ export type DailyCloseSnapshot = {
 
 type CompletionArgs = {
   carryForwardWorkItemIds: string[];
+  endAt: number;
   notes: string;
   operatingDate: string;
   reviewedItemKeys: string[];
+  startAt: number;
+};
+
+type BucketStatus = "blocked" | "carry-forward" | "ready" | "review";
+
+const bucketTabValues: BucketStatus[] = [
+  "blocked",
+  "carry-forward",
+  "ready",
+  "review",
+];
+
+type BucketConfig = {
+  ariaLabel: string;
+  description: string;
+  emptyText: string;
+  items: DailyCloseItem[];
+  status: BucketStatus;
+  title: string;
+  value: BucketStatus;
 };
 
 type DailyCloseViewContentProps = {
@@ -150,7 +184,9 @@ type DailyCloseViewContentProps = {
   isCompleting: boolean;
   isLoadingAccess: boolean;
   isLoadingSnapshot: boolean;
-  onComplete: (args: CompletionArgs) => Promise<NormalizedCommandResult<unknown>>;
+  onComplete: (
+    args: CompletionArgs,
+  ) => Promise<NormalizedCommandResult<unknown>>;
   orgUrlSlug: string;
   snapshot?: DailyCloseSnapshot;
   storeId?: Id<"store">;
@@ -168,7 +204,7 @@ const statusCopy: Record<
   blocked: {
     badge: "Blocked",
     description:
-      "Resolve blocker items before the store day can be marked closed.",
+      "Resolve blocker items before the operating day can be marked closed.",
     title: "Close blocked",
   },
   carry_forward: {
@@ -179,13 +215,12 @@ const statusCopy: Record<
   },
   completed: {
     badge: "Completed",
-    description: "The store day has a saved close summary.",
+    description: "The operating day has a saved close summary.",
     title: "Daily close completed",
   },
   needs_review: {
     badge: "Needs review",
-    description:
-      "Review exceptions before completing the store-day close.",
+    description: "Review exceptions before completing the operating-day close.",
     title: "Review required",
   },
   ready: {
@@ -197,14 +232,86 @@ const statusCopy: Record<
 
 function getDailyCloseApi(): DailyCloseApi {
   return (
-    (api.operations as typeof api.operations & {
-      dailyClose?: DailyCloseApi;
-    }).dailyClose ?? {}
+    (
+      api.operations as typeof api.operations & {
+        dailyClose?: DailyCloseApi;
+      }
+    ).dailyClose ?? {}
   );
 }
 
-function formatCount(value?: number | null) {
-  return typeof value === "number" ? String(value) : "0";
+function formatEntityCount(
+  value: number,
+  singular: string,
+  plural = `${singular}s`,
+) {
+  if (value === 0) return `No ${plural}`;
+  if (value === 1) return `1 ${singular}`;
+  return `${value} ${plural}`;
+}
+
+function formatChecklistCount(
+  value: number,
+  singular: string,
+  clearLabel = "Clear",
+  plural = `${singular}s`,
+) {
+  if (value === 0) return clearLabel;
+  if (value === 1) return `1 ${singular}`;
+  return `${value} ${plural}`;
+}
+
+function formatTodayCashTransactionCount(value: number) {
+  if (value === 0) return "No cash transactions";
+  if (value === 1) return "1 cash transaction";
+  return `${value} cash transactions`;
+}
+
+function formatCarriedOverRegisterCount(value: number) {
+  if (value === 0) return "No registers from prior days";
+  if (value === 1) return "1 register from a prior day";
+  return `${value} registers from prior days`;
+}
+
+function formatRegisterVarianceCount(value: number) {
+  if (value === 0) return "No register variances";
+  if (value === 1) return "1 register variance";
+  return `${value} register variances`;
+}
+
+function getStatusIcon(status: DailyCloseStatus) {
+  if (status === "blocked") return AlertTriangle;
+  if (status === "needs_review") return ClipboardCheck;
+  if (status === "carry_forward") return RotateCcw;
+  return CheckCircle2;
+}
+
+function getStatusLabelClassName(status: DailyCloseStatus) {
+  return cn(
+    "inline-flex items-center gap-2 font-medium",
+    status === "blocked" && "text-danger",
+    status === "needs_review" && "text-warning-foreground",
+    status === "carry_forward" && "text-action-workflow",
+    (status === "ready" || status === "completed") && "text-success",
+  );
+}
+
+function getBucketCountClassName(status: BucketStatus) {
+  return cn(
+    "shadow-sm",
+    status === "blocked" && "border-danger/20 bg-danger/10 text-danger",
+    status === "review" &&
+      "border-warning/30 bg-warning/15 text-warning-foreground",
+    status === "carry-forward" &&
+      "border-action-workflow/20 bg-action-workflow-soft text-action-workflow",
+    status === "ready" && "border-success/20 bg-success/10 text-success",
+  );
+}
+
+function formatStaffInvolvedCount(value: number) {
+  if (value === 0) return "No staff involved";
+  if (value === 1) return "1 staff member involved";
+  return `${value} staff involved`;
 }
 
 function formatMoney(currency: string, amount?: number | null) {
@@ -240,15 +347,35 @@ function formatCompletedAt(completedAt?: number | null) {
 }
 
 function getLocalOperatingDate(date = new Date()) {
-  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  const localDate = new Date(
+    date.getTime() - date.getTimezoneOffset() * 60_000,
+  );
 
   return localDate.toISOString().slice(0, 10);
 }
 
-function normalizeCommandMessage(result: Exclude<
-  NormalizedCommandResult<unknown>,
-  { kind: "ok" }
->) {
+function getLocalOperatingDateRange(date = new Date()) {
+  const localStart = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+  );
+  const localEnd = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate() + 1,
+  );
+
+  return {
+    operatingDate: getLocalOperatingDate(date),
+    startAt: localStart.getTime(),
+    endAt: localEnd.getTime(),
+  };
+}
+
+function normalizeCommandMessage(
+  result: Exclude<NormalizedCommandResult<unknown>, { kind: "ok" }>,
+) {
   if (result.kind === "user_error") {
     return toOperatorMessage(result.error.message);
   }
@@ -271,7 +398,11 @@ function getDailyCloseStatus(snapshot: DailyCloseSnapshot): DailyCloseStatus {
 }
 
 function getItemId(item: DailyCloseItem) {
-  return item.id ?? item.key ?? `${item.subject?.type ?? "item"}:${item.subject?.id ?? item.title}`;
+  return (
+    item.id ??
+    item.key ??
+    `${item.subject?.type ?? "item"}:${item.subject?.id ?? item.title}`
+  );
 }
 
 function getReviewedItemKeys(items: DailyCloseItem[]) {
@@ -292,19 +423,12 @@ function getItemDescription(item: DailyCloseItem) {
   return item.description ?? item.message;
 }
 
-function getStatusLabel(item: DailyCloseItem) {
-  return (
-    item.statusLabel ??
-    (item.severity === "carry_forward"
-      ? "Carry forward"
-      : item.severity === "ready"
-        ? "Ready"
-        : item.severity === "review"
-          ? "Review"
-          : item.severity === "blocker"
-            ? "Blocks close"
-            : null)
-  );
+function getItemContextLabel(item: DailyCloseItem) {
+  return item.category
+    ? humanizeMetadataLabel(item.category)
+    : item.subject?.type
+      ? humanizeMetadataLabel(item.subject.type)
+      : "Close item";
 }
 
 function humanizeMetadataLabel(label: string) {
@@ -314,27 +438,498 @@ function humanizeMetadataLabel(label: string) {
     .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
-function formatMetadataValue(value: unknown) {
+const moneyMetadataLabels = new Set([
+  "amount",
+  "changegiven",
+  "countedcash",
+  "expectedcash",
+  "total",
+  "totalpaid",
+  "variance",
+]);
+
+const timestampMetadataLabels = new Set([
+  "completedat",
+  "createdat",
+  "expiredat",
+  "expiresat",
+  "heldat",
+  "openedat",
+  "requestedat",
+  "closedat",
+  "voidedat",
+]);
+
+const metadataLabelOrder = [
+  "approval",
+  "transaction",
+  "session",
+  "terminal",
+  "register",
+  "requestedby",
+  "requestedat",
+  "operatingscope",
+  "openedat",
+  "openedby",
+  "owner",
+  "customer",
+  "reason",
+  "notes",
+  "paymentmethods",
+  "currentmethod",
+  "requestedmethod",
+  "amount",
+  "expectedcash",
+  "countedcash",
+  "status",
+  "total",
+  "totalpaid",
+  "changegiven",
+  "closedby",
+  "closedat",
+  "expiredat",
+  "expiresat",
+  "heldat",
+  "variance",
+  "voidedat",
+  "completedat",
+];
+
+const metadataLabelsByCategory: Record<string, string[]> = {
+  approval: [
+    "approval",
+    "register",
+    "terminal",
+    "transaction",
+    "requestedBy",
+    "requestedAt",
+    "reason",
+    "notes",
+    "openedAt",
+    "currentMethod",
+    "requestedMethod",
+    "expectedCash",
+    "countedCash",
+    "status",
+    "variance",
+    "amount",
+    "closedAt",
+  ],
+  cashvariance: [
+    "terminal",
+    "register",
+    "operatingScope",
+    "openedAt",
+    "expectedCash",
+    "countedCash",
+    "status",
+    "variance",
+    "closedAt",
+  ],
+  possession: [
+    "session",
+    "terminal",
+    "owner",
+    "customer",
+    "status",
+    "total",
+    "expiresAt",
+    "heldAt",
+  ],
+  registersession: [
+    "terminal",
+    "register",
+    "operatingScope",
+    "openedAt",
+    "openedBy",
+    "expectedCash",
+    "countedCash",
+    "status",
+    "variance",
+    "closedAt",
+    "closedBy",
+  ],
+  sale: [
+    "transaction",
+    "terminal",
+    "owner",
+    "customer",
+    "paymentMethods",
+    "total",
+    "totalPaid",
+    "changeGiven",
+    "completedAt",
+  ],
+  voidedsale: [
+    "transaction",
+    "terminal",
+    "owner",
+    "customer",
+    "paymentMethods",
+    "total",
+    "totalPaid",
+    "voidedAt",
+    "completedAt",
+  ],
+};
+
+function normalizeMetadataLabel(label: string) {
+  return label.replace(/[\s_-]+/g, "").toLowerCase();
+}
+
+function isMoneyMetadataLabel(label: string) {
+  return moneyMetadataLabels.has(normalizeMetadataLabel(label));
+}
+
+function isTimestampMetadataLabel(label: string) {
+  return timestampMetadataLabels.has(normalizeMetadataLabel(label));
+}
+
+function getVarianceTone(variance?: number) {
+  if (!variance) {
+    return "text-foreground";
+  }
+
+  return variance > 0 ? "text-success" : "text-danger";
+}
+
+function getNumericMetadataValue(value: unknown) {
+  if (typeof value === "number") {
+    return value;
+  }
+
+  if (typeof value !== "string" || value.trim() === "") {
+    return null;
+  }
+
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : null;
+}
+
+function shouldShowMetadataEntry(label: string, value: unknown) {
+  const normalizedLabel = normalizeMetadataLabel(label);
+
+  if (normalizedLabel === "transactionid") {
+    return false;
+  }
+
+  if (normalizedLabel === "variance") {
+    const variance = getNumericMetadataValue(value);
+    return variance !== 0;
+  }
+
+  return true;
+}
+
+function formatTimestampMetadata(value: number) {
+  return new Date(value).toLocaleString([], {
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function getDisplayMetadataLabel(label: string, value: unknown) {
+  if (
+    normalizeMetadataLabel(label) === "expiresat" &&
+    typeof value === "number" &&
+    value < Date.now()
+  ) {
+    return "Expired At";
+  }
+
+  return humanizeMetadataLabel(label);
+}
+
+function getMetadataStringValue(
+  metadata: DailyCloseItem["metadata"],
+  label: string,
+) {
+  if (!metadata || Array.isArray(metadata)) return undefined;
+
+  const value = metadata[label];
+  return typeof value === "string" && value.trim() !== "" ? value : undefined;
+}
+
+function getMetadataValue(metadata: Record<string, unknown>, label: string) {
+  const normalizedLabel = normalizeMetadataLabel(label);
+
+  return Object.entries(metadata).find(
+    ([entryLabel]) => normalizeMetadataLabel(entryLabel) === normalizedLabel,
+  );
+}
+
+function formatMetadataValue(label: string, value: unknown, currency: string) {
   if (value === null || value === undefined || value === "") return "Not set";
 
-  if (typeof value === "number" || typeof value === "boolean") {
+  const normalizedLabel = normalizeMetadataLabel(label);
+
+  if (typeof value === "number") {
+    if (normalizedLabel === "transaction") {
+      return `#${value}`;
+    }
+
+    if (isTimestampMetadataLabel(label)) {
+      return formatTimestampMetadata(value);
+    }
+
+    return isMoneyMetadataLabel(label)
+      ? formatMoney(currency, value)
+      : String(value);
+  }
+
+  if (typeof value === "boolean") {
     return String(value);
   }
 
-  if (typeof value === "string") return value;
+  if (typeof value === "string") {
+    const numericValue = Number(value);
+
+    if (normalizedLabel === "transaction") {
+      return value.startsWith("#") ? value : `#${value}`;
+    }
+
+    if (
+      isMoneyMetadataLabel(label) &&
+      value.trim() !== "" &&
+      Number.isFinite(numericValue)
+    ) {
+      return formatMoney(currency, numericValue);
+    }
+
+    if (normalizedLabel === "status") {
+      return humanizeMetadataLabel(value);
+    }
+
+    if (normalizedLabel === "reason") {
+      return formatReviewReason(currencyFormatter(currency), value) ?? value;
+    }
+
+    return value;
+  }
 
   return JSON.stringify(value);
 }
 
-function getMetadataEntries(item: DailyCloseItem) {
+function formatMetadataDisplayValue({
+  currency,
+  item,
+  label,
+  orgUrlSlug,
+  storeUrlSlug,
+  value,
+}: {
+  currency: string;
+  item: DailyCloseItem;
+  label: string;
+  orgUrlSlug: string;
+  storeUrlSlug: string;
+  value: unknown;
+}): ReactNode {
+  const formattedValue = formatMetadataValue(label, value, currency);
+  const transactionId =
+    getMetadataStringValue(item.metadata, "transactionId") ??
+    (item.subject?.type === "pos_transaction" ? item.subject.id : undefined);
+
+  if (normalizeMetadataLabel(label) === "transaction" && transactionId) {
+    return (
+      <Link
+        className="inline-flex items-center gap-1 text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline"
+        params={
+          {
+            orgUrlSlug,
+            storeUrlSlug,
+            transactionId,
+          } as never
+        }
+        search={{ o: getOrigin() } as never}
+        to="/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId"
+      >
+        {formattedValue}
+        <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
+      </Link>
+    );
+  }
+
+  if (normalizeMetadataLabel(label) === "variance") {
+    const variance = getNumericMetadataValue(value);
+
+    if (variance !== null) {
+      return (
+        <span
+          className={cn("font-numeric tabular-nums", getVarianceTone(variance))}
+        >
+          {formattedValue}
+        </span>
+      );
+    }
+  }
+
+  return formattedValue;
+}
+
+function getMetadataEntries(
+  item: DailyCloseItem,
+  currency: string,
+  orgUrlSlug: string,
+  storeUrlSlug: string,
+) {
   if (!item.metadata) return [];
+  const registerLabel =
+    normalizeMetadataLabel(item.category ?? item.subject?.type ?? "") ===
+    "registersession"
+      ? item.subject?.label
+      : undefined;
+  const categoryKey = normalizeMetadataLabel(
+    item.category ?? item.subject?.type ?? "",
+  );
+  const preferredLabels = metadataLabelsByCategory[categoryKey] ?? [];
 
-  if (Array.isArray(item.metadata)) return item.metadata;
+  const sortEntries = (
+    entries: Array<{
+      label: string;
+      value: ReactNode;
+    }>,
+  ) =>
+    entries.sort((left, right) => {
+      const leftIndex = metadataLabelOrder.indexOf(
+        normalizeMetadataLabel(left.label),
+      );
+      const rightIndex = metadataLabelOrder.indexOf(
+        normalizeMetadataLabel(right.label),
+      );
 
-  return Object.entries(item.metadata).map(([label, value]) => ({
-    label: humanizeMetadataLabel(label),
-    value: formatMetadataValue(value),
-  }));
+      return (
+        (leftIndex === -1 ? 100 : leftIndex) -
+        (rightIndex === -1 ? 100 : rightIndex)
+      );
+    });
+  const combineTerminalAndRegister = (
+    entries: Array<{
+      label: string;
+      value: ReactNode;
+    }>,
+  ) => {
+    let combinedEntries = entries.map((entry) =>
+      registerLabel && normalizeMetadataLabel(entry.label) === "terminal"
+        ? { ...entry, value: `${entry.value} / ${registerLabel}` }
+        : entry,
+    );
+    const terminalEntry = combinedEntries.find(
+      (entry) => normalizeMetadataLabel(entry.label) === "terminal",
+    );
+    const registerEntry = combinedEntries.find(
+      (entry) => normalizeMetadataLabel(entry.label) === "register",
+    );
+
+    if (terminalEntry && registerEntry) {
+      combinedEntries = combinedEntries.flatMap((entry) => {
+        const normalizedLabel = normalizeMetadataLabel(entry.label);
+
+        if (normalizedLabel === "terminal") {
+          return [
+            {
+              ...entry,
+              value: (
+                <>
+                  {entry.value} / {registerEntry.value}
+                </>
+              ),
+            },
+          ];
+        }
+
+        return normalizedLabel === "register" ? [] : [entry];
+      });
+    }
+
+    if (
+      registerLabel &&
+      !combinedEntries.some(
+        (entry) => normalizeMetadataLabel(entry.label) === "terminal",
+      ) &&
+      !combinedEntries.some(
+        (entry) => normalizeMetadataLabel(entry.label) === "register",
+      )
+    ) {
+      return [
+        ...combinedEntries,
+        {
+          label: "Register",
+          value: registerLabel,
+        },
+      ];
+    }
+
+    return combinedEntries;
+  };
+
+  if (Array.isArray(item.metadata)) {
+    return sortEntries(
+      combineTerminalAndRegister(
+        item.metadata
+          .filter((entry) => shouldShowMetadataEntry(entry.label, entry.value))
+          .map((entry) => ({
+            label: getDisplayMetadataLabel(entry.label, entry.value),
+            value: formatMetadataDisplayValue({
+              currency,
+              item,
+              label: entry.label,
+              orgUrlSlug,
+              storeUrlSlug,
+              value: entry.value,
+            }),
+          })),
+      ),
+    );
+  }
+
+  const objectMetadata = item.metadata;
+  const metadataEntries = preferredLabels.length
+    ? preferredLabels
+        .map((preferredLabel) => {
+          const entry = getMetadataValue(objectMetadata, preferredLabel);
+
+          if (!entry) return null;
+
+          const [label, value] = entry;
+
+          if (!shouldShowMetadataEntry(label, value)) return null;
+
+          return {
+            label: getDisplayMetadataLabel(label, value),
+            value: formatMetadataDisplayValue({
+              currency,
+              item,
+              label,
+              orgUrlSlug,
+              storeUrlSlug,
+              value,
+            }),
+          };
+        })
+        .filter((entry): entry is { label: string; value: ReactNode } =>
+          Boolean(entry),
+        )
+    : Object.entries(objectMetadata)
+        .filter(([label, value]) => shouldShowMetadataEntry(label, value))
+        .map(([label, value]) => ({
+          label: getDisplayMetadataLabel(label, value),
+          value: formatMetadataDisplayValue({
+            currency,
+            item,
+            label,
+            orgUrlSlug,
+            storeUrlSlug,
+            value,
+          }),
+        }));
+
+  return sortEntries(
+    combineTerminalAndRegister(metadataEntries),
+  );
 }
 
 function getSummaryAmount(
@@ -367,53 +962,80 @@ function getSummaryCount(
       : 0;
 }
 
-function DailyCloseSkeleton() {
-  return (
-    <div
-      aria-label="Loading daily close workspace"
-      className="space-y-layout-3xl"
-    >
-      <div className="grid gap-layout-sm md:grid-cols-2 2xl:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, index) => (
-          <div
-            className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface"
-            key={index}
-          >
-            <Skeleton className="h-3 w-28" />
-            <Skeleton className="mt-layout-xs h-8 w-24" />
-            <Skeleton className="mt-2 h-3 w-36" />
-          </div>
-        ))}
-      </div>
+function getSummaryRegisterVarianceCount(
+  summary: DailyCloseSnapshot["summary"],
+) {
+  if (typeof summary.registerVarianceCount === "number") {
+    return summary.registerVarianceCount;
+  }
 
-      <PageWorkspaceGrid>
-        <PageWorkspaceMain>
-          {Array.from({ length: 3 }).map((_, index) => (
-            <section
-              className="rounded-lg border border-border bg-surface-raised shadow-surface"
-              key={index}
-            >
-              <div className="border-b border-border px-layout-md py-layout-md">
-                <Skeleton className="h-3 w-32" />
-                <Skeleton className="mt-layout-xs h-6 w-48" />
-              </div>
-              <div className="space-y-layout-sm p-layout-md">
-                <Skeleton className="h-20 w-full" />
-                <Skeleton className="h-20 w-full" />
-              </div>
-            </section>
-          ))}
-        </PageWorkspaceMain>
-        <PageWorkspaceRail>
-          <div className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
-            <Skeleton className="h-3 w-24" />
-            <Skeleton className="mt-layout-sm h-8 w-40" />
-            <Skeleton className="mt-layout-md h-24 w-full" />
-          </div>
-        </PageWorkspaceRail>
-      </PageWorkspaceGrid>
-    </div>
+  const variance = getSummaryAmount(
+    summary,
+    "varianceTotal",
+    "netCashVariance",
   );
+  return variance === 0 ? 0 : 1;
+}
+
+function getDefaultBucketValue(
+  snapshot: DailyCloseSnapshot,
+  status: DailyCloseStatus,
+): BucketStatus {
+  if (snapshot.blockers.length > 0) return "blocked";
+  if (status === "needs_review") return "review";
+  if (status === "carry_forward") return "carry-forward";
+  return "ready";
+}
+
+function normalizeBucketTab(value: unknown): BucketStatus | null {
+  return typeof value === "string" &&
+    bucketTabValues.includes(value as BucketStatus)
+    ? (value as BucketStatus)
+    : null;
+}
+
+function getBucketConfigs(snapshot: DailyCloseSnapshot): BucketConfig[] {
+  return [
+    {
+      ariaLabel: "Blocked close items",
+      description: "These items keep the operating day from closing cleanly.",
+      emptyText: "No hard blockers are currently reported.",
+      items: snapshot.blockers,
+      status: "blocked",
+      title: "Blocked",
+      value: "blocked",
+    },
+    {
+      ariaLabel: "Review before close",
+      description:
+        "These items stay visible in the close summary after review.",
+      emptyText: "No review items are currently reported.",
+      items: snapshot.reviewItems,
+      status: "review",
+      title: "Needs review",
+      value: "review",
+    },
+    {
+      ariaLabel: "Carry-forward items",
+      description:
+        "Selected items are preserved for follow-up during the next opening workflow.",
+      emptyText: "No carry-forward items are currently reported.",
+      items: snapshot.carryForwardItems,
+      status: "carry-forward",
+      title: "Carry forward",
+      value: "carry-forward",
+    },
+    {
+      ariaLabel: "Ready close items",
+      description:
+        "Completed close inputs that support the operating-day summary.",
+      emptyText: "Ready items will appear after close inputs are reconciled.",
+      items: snapshot.readyItems,
+      status: "ready",
+      title: "Ready",
+      value: "ready",
+    },
+  ];
 }
 
 function SummaryMetric({
@@ -434,9 +1056,7 @@ function SummaryMetric({
         {value}
       </p>
       {helper ? (
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">
-          {helper}
-        </p>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">{helper}</p>
       ) : null}
     </div>
   );
@@ -496,6 +1116,7 @@ function ItemLink({
 }
 
 function DailyCloseItemCard({
+  currency,
   item,
   orgUrlSlug,
   selectable,
@@ -503,6 +1124,7 @@ function DailyCloseItemCard({
   storeUrlSlug,
   onSelectedChange,
 }: {
+  currency: string;
   item: DailyCloseItem;
   onSelectedChange?: (selected: boolean) => void;
   orgUrlSlug: string;
@@ -511,13 +1133,19 @@ function DailyCloseItemCard({
   storeUrlSlug: string;
 }) {
   const itemId = getItemId(item);
+  const contextLabel = getItemContextLabel(item);
   const description = getItemDescription(item);
-  const metadataEntries = getMetadataEntries(item);
-  const statusLabel = getStatusLabel(item);
+  const metadataEntries = getMetadataEntries(
+    item,
+    currency,
+    orgUrlSlug,
+    storeUrlSlug,
+  );
+  const hasSourceLink = Boolean(item.link);
 
   return (
-    <article className="rounded-lg border border-border bg-background p-layout-md">
-      <div className="flex flex-col gap-layout-sm md:flex-row md:items-start md:justify-between">
+    <article className="rounded-lg border border-border/80 bg-surface-raised p-layout-md shadow-surface transition-[border-color,box-shadow] hover:border-border">
+      <div className="flex flex-col gap-layout-md md:flex-row md:items-start md:justify-between">
         <div className="flex min-w-0 gap-layout-sm">
           {selectable ? (
             <input
@@ -528,35 +1156,34 @@ function DailyCloseItemCard({
               type="checkbox"
             />
           ) : null}
-          <div className="min-w-0">
+          <div className="min-w-0 space-y-layout-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                {contextLabel}
+              </p>
+            </div>
             <p className="font-medium text-foreground">{item.title}</p>
             {description ? (
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              <p className="text-sm leading-6 text-muted-foreground">
                 {description}
               </p>
             ) : null}
           </div>
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center gap-2 md:justify-end">
-          {statusLabel ? (
-            <Badge
-              className="border-border bg-surface text-muted-foreground shadow-sm"
-              variant="outline"
-            >
-              {statusLabel}
-            </Badge>
-          ) : null}
-          <ItemLink
-            link={item.link}
-            orgUrlSlug={orgUrlSlug}
-            storeUrlSlug={storeUrlSlug}
-          />
-        </div>
+        {hasSourceLink ? (
+          <div className="flex shrink-0 flex-wrap items-center gap-2 md:justify-end">
+            <ItemLink
+              link={item.link}
+              orgUrlSlug={orgUrlSlug}
+              storeUrlSlug={storeUrlSlug}
+            />
+          </div>
+        ) : null}
       </div>
 
       {metadataEntries.length > 0 ? (
-        <dl className="mt-layout-sm grid gap-layout-sm border-t border-border/70 pt-layout-sm text-sm md:grid-cols-3">
+        <dl className="mt-layout-md grid gap-layout-md rounded-lg border border-border/70 bg-surface px-layout-md py-layout-sm text-sm md:grid-cols-3">
           {metadataEntries.map((entry) => (
             <div key={`${itemId}-${entry.label}`}>
               <dt className="text-xs text-muted-foreground">{entry.label}</dt>
@@ -573,23 +1200,27 @@ function DailyCloseItemCard({
 
 function BucketSection({
   ariaLabel,
+  currency,
   description,
   emptyText,
   items,
   orgUrlSlug,
   selectedIds,
+  showCountBadge = true,
   status,
   storeUrlSlug,
   title,
   onSelectedIdsChange,
 }: {
   ariaLabel: string;
+  currency: string;
   description: string;
   emptyText: string;
   items: DailyCloseItem[];
   onSelectedIdsChange?: (ids: string[]) => void;
   orgUrlSlug: string;
   selectedIds?: string[];
+  showCountBadge?: boolean;
   status: "blocked" | "carry-forward" | "ready" | "review";
   storeUrlSlug: string;
   title: string;
@@ -598,7 +1229,8 @@ function BucketSection({
     "flex h-10 w-10 shrink-0 items-center justify-center rounded-md",
     status === "blocked" && "bg-danger/10 text-danger",
     status === "review" && "bg-warning/15 text-warning-foreground",
-    status === "carry-forward" && "bg-action-workflow-soft text-action-workflow",
+    status === "carry-forward" &&
+      "bg-action-workflow-soft text-action-workflow",
     status === "ready" && "bg-success/10 text-success",
   );
   const Icon =
@@ -617,7 +1249,7 @@ function BucketSection({
       role="region"
     >
       <div className="flex flex-col gap-layout-sm border-b border-border px-layout-md py-layout-md md:flex-row md:items-start md:justify-between">
-        <div className="flex items-start gap-layout-sm">
+        <div className="flex items-center gap-layout-sm">
           <div className={iconClassName}>
             <Icon className="h-4 w-4" />
           </div>
@@ -630,14 +1262,16 @@ function BucketSection({
             </p>
           </div>
         </div>
-        <Badge className="border-border bg-background shadow-sm" variant="outline">
-          {items.length}
-        </Badge>
+        {showCountBadge ? (
+          <Badge className={getBucketCountClassName(status)} variant="outline">
+            {items.length}
+          </Badge>
+        ) : null}
       </div>
 
-      <div className="space-y-layout-sm p-layout-md">
+      <div className="space-y-layout-md bg-surface p-layout-md">
         {items.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border bg-background p-layout-md text-sm text-muted-foreground">
+          <p className="rounded-lg border border-dashed border-border bg-surface-raised p-layout-md text-sm text-muted-foreground shadow-sm">
             {emptyText}
           </p>
         ) : (
@@ -646,6 +1280,7 @@ function BucketSection({
 
             return (
               <DailyCloseItemCard
+                currency={currency}
                 item={item}
                 key={getItemId(item)}
                 onSelectedChange={(isSelected) => {
@@ -667,6 +1302,85 @@ function BucketSection({
         )}
       </div>
     </section>
+  );
+}
+
+function BucketTabs({
+  buckets,
+  currency,
+  value,
+  orgUrlSlug,
+  selectedIds,
+  storeUrlSlug,
+  onValueChange,
+  onSelectedIdsChange,
+}: {
+  buckets: BucketConfig[];
+  currency: string;
+  value: BucketStatus;
+  onValueChange: (value: BucketStatus) => void;
+  onSelectedIdsChange: (ids: string[]) => void;
+  orgUrlSlug: string;
+  selectedIds: string[];
+  storeUrlSlug: string;
+}) {
+  return (
+    <Tabs
+      className="space-y-layout-md"
+      onValueChange={(nextValue) => {
+        const nextBucket = normalizeBucketTab(nextValue);
+        if (nextBucket) {
+          onValueChange(nextBucket);
+        }
+      }}
+      value={value}
+    >
+      <TabsList
+        aria-label="Daily close buckets"
+        className="h-auto w-full flex-wrap justify-start gap-1 border border-border bg-surface-raised p-1 text-muted-foreground shadow-surface"
+      >
+        {buckets.map((bucket) => (
+          <TabsTrigger
+            className="min-h-9 gap-2 px-3 data-[state=active]:bg-background"
+            key={bucket.value}
+            value={bucket.value}
+          >
+            <span>{bucket.title}</span>
+            <span
+              className={cn(
+                "inline-flex min-w-5 items-center justify-center rounded-full border px-1.5 py-0.5 font-numeric text-[11px] font-semibold leading-none tabular-nums",
+                getBucketCountClassName(bucket.status),
+              )}
+            >
+              {bucket.items.length}
+            </span>
+          </TabsTrigger>
+        ))}
+      </TabsList>
+
+      {buckets.map((bucket) => (
+        <TabsContent className="mt-0" key={bucket.value} value={bucket.value}>
+          <BucketSection
+            ariaLabel={bucket.ariaLabel}
+            currency={currency}
+            description={bucket.description}
+            emptyText={bucket.emptyText}
+            items={bucket.items}
+            onSelectedIdsChange={
+              bucket.value === "carry-forward" ? onSelectedIdsChange : undefined
+            }
+            orgUrlSlug={orgUrlSlug}
+            selectedIds={
+              bucket.value === "carry-forward" ? selectedIds : undefined
+            }
+            showCountBadge={false}
+            status={bucket.status}
+            storeUrlSlug={storeUrlSlug}
+            title={bucket.title}
+          />
+        </TabsContent>
+      ))}
+    </Tabs>
   );
 }
 
@@ -695,64 +1409,116 @@ function CompletionRail({
   status: DailyCloseStatus;
 }) {
   const copy = statusCopy[status];
+  const checklistItems = [
+    {
+      label: "Resolve blockers",
+      tone: snapshot.blockers.length > 0 ? "danger" : "success",
+      value: formatChecklistCount(snapshot.blockers.length, "blocker"),
+    },
+    {
+      label: "Review exceptions",
+      tone: "warning",
+      value: formatChecklistCount(snapshot.reviewItems.length, "item"),
+    },
+    {
+      label: "Carry forward",
+      tone: "workflow",
+      value: formatChecklistCount(
+        snapshot.carryForwardItems.length,
+        "item",
+        "None",
+      ),
+    },
+  ];
 
   return (
     <PageWorkspaceRail>
       <aside className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
-        <div className="flex items-start gap-layout-sm">
-          <div
+        <div className="flex items-center justify-between gap-layout-md">
+          <div className="flex min-w-0 items-center gap-layout-sm">
+            <div
+              className={cn(
+                "flex h-9 w-9 shrink-0 items-center justify-center rounded-md",
+                isBlocked
+                  ? "bg-danger/10 text-danger"
+                  : isCompleted
+                    ? "bg-success/10 text-success"
+                    : "bg-signal/10 text-signal",
+              )}
+            >
+              {isBlocked ? (
+                <Lock className="h-4 w-4" />
+              ) : (
+                <ListChecks className="h-4 w-4" />
+              )}
+            </div>
+            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              Close status
+            </p>
+          </div>
+          <p
             className={cn(
-              "flex h-10 w-10 shrink-0 items-center justify-center rounded-md",
+              "shrink-0 text-sm font-semibold",
               isBlocked
-                ? "bg-danger/10 text-danger"
+                ? "text-danger"
                 : isCompleted
-                  ? "bg-success/10 text-success"
-                  : "bg-signal/10 text-signal",
+                  ? "text-success"
+                  : "text-signal",
             )}
           >
-            {isBlocked ? (
-              <Lock className="h-4 w-4" />
-            ) : (
-              <ListChecks className="h-4 w-4" />
-            )}
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Close status</p>
-            <h2 className="mt-1 text-xl font-medium text-foreground">
-              {copy.badge}
-            </h2>
-          </div>
+            {copy.badge}
+          </p>
         </div>
         <p className="mt-layout-sm text-sm leading-6 text-muted-foreground">
           {copy.description}
         </p>
 
-        <div className="mt-layout-md rounded-lg border border-border bg-background p-layout-sm">
-          <dl className="space-y-layout-sm text-sm">
-            <div className="flex items-center justify-between gap-layout-md">
-              <dt className="text-muted-foreground">Operating date</dt>
-              <dd className="font-medium text-foreground">
-                {formatOperatingDate(snapshot.operatingDate)}
-              </dd>
-            </div>
-            <div className="flex items-center justify-between gap-layout-md">
-              <dt className="text-muted-foreground">Blockers</dt>
-              <dd className="font-numeric font-semibold tabular-nums text-foreground">
-                {snapshot.blockers.length}
-              </dd>
-            </div>
-            <div className="flex items-center justify-between gap-layout-md">
-              <dt className="text-muted-foreground">Review items</dt>
-              <dd className="font-numeric font-semibold tabular-nums text-foreground">
-                {snapshot.reviewItems.length}
-              </dd>
-            </div>
-            <div className="flex items-center justify-between gap-layout-md">
-              <dt className="text-muted-foreground">Carry forward</dt>
-              <dd className="font-numeric font-semibold tabular-nums text-foreground">
-                {snapshot.carryForwardItems.length}
-              </dd>
-            </div>
+        <div className="mt-layout-md border-t border-border pt-layout-md">
+          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+            Operating date
+          </p>
+          <p className="mt-1 text-sm font-medium text-foreground">
+            {formatOperatingDate(snapshot.operatingDate)}
+          </p>
+        </div>
+
+        <div className="mt-layout-md border-t border-border pt-layout-md">
+          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+            Close checklist
+          </p>
+          <dl className="mt-layout-sm space-y-layout-sm text-sm">
+            {checklistItems.map((item) => (
+              <div
+                className="flex items-center justify-between gap-layout-md"
+                key={item.label}
+              >
+                <dt className="flex min-w-0 items-center gap-2 text-muted-foreground">
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "h-2 w-2 shrink-0 rounded-full",
+                      item.tone === "danger" && "bg-danger",
+                      item.tone === "warning" && "bg-warning",
+                      item.tone === "workflow" && "bg-action-workflow",
+                      item.tone === "success" && "bg-success",
+                      item.tone === "muted" && "bg-muted-foreground/35",
+                    )}
+                  />
+                  <span>{item.label}</span>
+                </dt>
+                <dd
+                  className={cn(
+                    "shrink-0 text-right font-medium text-foreground",
+                    item.tone === "danger" && "text-danger",
+                    item.tone === "warning" && "text-warning-foreground",
+                    item.tone === "workflow" && "text-action-workflow",
+                    item.tone === "success" && "text-success",
+                  )}
+                >
+                  {item.value}
+                </dd>
+              </div>
+            ))}
           </dl>
         </div>
 
@@ -840,6 +1606,8 @@ export function DailyCloseViewContent({
   const [selectedCarryForwardIds, setSelectedCarryForwardIds] = useState<
     string[] | null
   >(null);
+  const navigate = useNavigate();
+  const search = useSearch({ strict: false }) as { tab?: unknown };
   const carryForwardWorkItemIds = useMemo(
     () => getCarryForwardWorkItemIds(snapshot?.carryForwardItems ?? []),
     [snapshot?.carryForwardItems],
@@ -861,7 +1629,7 @@ export function DailyCloseViewContent({
 
   if (!isAuthenticated) {
     return (
-      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before Daily Close can load protected store-day data" />
+      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before Daily Close can load protected operating-day data" />
     );
   }
 
@@ -883,6 +1651,13 @@ export function DailyCloseViewContent({
   const status = snapshot ? getDailyCloseStatus(snapshot) : "ready";
   const isBlocked = status === "blocked";
   const isCompleted = status === "completed";
+  const StatusIcon = getStatusIcon(status);
+  const buckets = snapshot ? getBucketConfigs(snapshot) : [];
+  const defaultBucketValue = snapshot
+    ? getDefaultBucketValue(snapshot, status)
+    : "ready";
+  const selectedBucketValue =
+    normalizeBucketTab(search.tab) ?? defaultBucketValue;
 
   const handleComplete = async () => {
     if (!snapshot || isBlocked || isCompleted) return;
@@ -891,9 +1666,11 @@ export function DailyCloseViewContent({
 
     const result = await onComplete({
       carryForwardWorkItemIds: selectedIds,
+      endAt: snapshot.endAt,
       notes,
       operatingDate: snapshot.operatingDate,
       reviewedItemKeys: getReviewedItemKeys(snapshot.reviewItems),
+      startAt: snapshot.startAt,
     });
 
     if (result.kind === "ok") {
@@ -910,6 +1687,15 @@ export function DailyCloseViewContent({
     });
   };
 
+  const handleBucketValueChange = (value: BucketStatus) => {
+    void navigate({
+      search: ((current: Record<string, unknown>) => ({
+        ...current,
+        tab: value,
+      })) as never,
+    });
+  };
+
   return (
     <View hideBorder hideHeaderBottomBorder scrollMode="page">
       <FadeIn className="container mx-auto py-layout-xl">
@@ -918,30 +1704,21 @@ export function DailyCloseViewContent({
             className="border-b-0 pb-0"
             eyebrow="Operations"
             title="Daily Close"
-            description="Review the store day, resolve blockers, and preserve follow-ups before saving the close summary."
+            description="Review the operating day, resolve blockers, and preserve follow-ups before saving the close summary."
           />
 
-          {isLoadingSnapshot || !snapshot ? (
-            <DailyCloseSkeleton />
-          ) : (
+          {isLoadingSnapshot || !snapshot ? null : (
             <PageWorkspace>
               <section className="space-y-layout-md">
                 <div className="flex flex-col gap-layout-sm lg:flex-row lg:items-end lg:justify-between">
                   <div>
-                    <Badge
+                    <h2
                       className={cn(
-                        "border-border shadow-sm",
-                        isBlocked
-                          ? "bg-danger/10 text-danger"
-                          : isCompleted
-                            ? "bg-success/10 text-success"
-                            : "bg-surface text-muted-foreground",
+                        "text-2xl",
+                        getStatusLabelClassName(status),
                       )}
-                      variant="outline"
                     >
-                      {statusCopy[status].badge}
-                    </Badge>
-                    <h2 className="mt-layout-sm text-2xl font-medium text-foreground">
+                      <StatusIcon aria-hidden="true" className="h-5 w-5" />
                       {statusCopy[status].title}
                     </h2>
                     <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
@@ -949,65 +1726,84 @@ export function DailyCloseViewContent({
                     </p>
                   </div>
                   <div className="rounded-lg border border-border bg-surface-raised px-layout-md py-layout-sm text-sm text-muted-foreground shadow-surface">
-                    Store day{" "}
+                    Operating date{" "}
                     <span className="font-medium text-foreground">
                       {formatOperatingDate(snapshot.operatingDate)}
                     </span>
                   </div>
                 </div>
 
-                <div className="grid gap-layout-sm md:grid-cols-2 2xl:grid-cols-4">
+                <div className="grid gap-layout-sm md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
                   <SummaryMetric
-                    helper={`${formatCount(
+                    helper={formatEntityCount(
                       getSummaryCount(
                         snapshot.summary,
                         "transactionCount",
                         "transactionCount",
                       ),
-                    )} transactions`}
-                    label="Net sales"
-                    value={formatMoney(
-                      currency,
-                      getSummaryAmount(snapshot.summary, "totalSales", "salesTotal"),
+                      "transaction",
                     )}
-                  />
-                  <SummaryMetric
-                    helper={`${formatCount(
-                      getSummaryCount(
-                        snapshot.summary,
-                        "registerCount",
-                        "closedRegisterSessionCount",
-                      ),
-                    )} registers`}
-                    label="Expected cash"
+                    label="Today's net sales"
                     value={formatMoney(
                       currency,
                       getSummaryAmount(
                         snapshot.summary,
-                        "cashExpected",
-                        "expectedCashTotal",
+                        "totalSales",
+                        "salesTotal",
                       ),
                     )}
                   />
                   <SummaryMetric
-                    helper={`${formatCount(
+                    helper={formatTodayCashTransactionCount(
+                      getSummaryCount(
+                        snapshot.summary,
+                        "currentDayCashTransactionCount",
+                        "transactionCount",
+                      ),
+                    )}
+                    label="Today's cash"
+                    value={formatMoney(
+                      currency,
+                      getSummaryAmount(
+                        snapshot.summary,
+                        "currentDayCashTotal",
+                        "cashExpected",
+                      ),
+                    )}
+                  />
+                  <SummaryMetric
+                    helper={formatCarriedOverRegisterCount(
+                      getSummaryCount(
+                        snapshot.summary,
+                        "carriedOverRegisterCount",
+                        "carriedOverRegisterCount",
+                      ),
+                    )}
+                    label="Carried-over cash"
+                    value={formatMoney(
+                      currency,
+                      getSummaryAmount(
+                        snapshot.summary,
+                        "carriedOverCashTotal",
+                        "carriedOverCashTotal",
+                      ),
+                    )}
+                  />
+                  <SummaryMetric
+                    helper={formatStaffInvolvedCount(
                       getSummaryCount(
                         snapshot.summary,
                         "staffCount",
                         "pendingApprovalCount",
                       ),
-                    )} staff involved`}
+                    )}
                     label="Expenses"
                     value={formatMoney(currency, snapshot.summary.expenseTotal)}
                   />
                   <SummaryMetric
-                    helper={`${formatCount(
-                      getSummaryCount(
-                        snapshot.summary,
-                        "carryForwardCount",
-                        "openWorkItemCount",
-                      ),
-                    )} follow-ups`}
+                    helper={formatRegisterVarianceCount(
+                      getSummaryRegisterVarianceCount(snapshot.summary),
+                    )}
                     label="Variance"
                     value={formatMoney(
                       currency,
@@ -1023,50 +1819,15 @@ export function DailyCloseViewContent({
 
               <PageWorkspaceGrid>
                 <PageWorkspaceMain>
-                  <BucketSection
-                    ariaLabel="Blocked close items"
-                    description="These items keep the store day from closing cleanly."
-                    emptyText="No hard blockers are currently reported."
-                    items={snapshot.blockers}
-                    orgUrlSlug={orgUrlSlug}
-                    status="blocked"
-                    storeUrlSlug={storeUrlSlug}
-                    title="Blocked"
-                  />
-
-                  <BucketSection
-                    ariaLabel="Review before close"
-                    description="These items stay visible in the close summary after review."
-                    emptyText="No review items are currently reported."
-                    items={snapshot.reviewItems}
-                    orgUrlSlug={orgUrlSlug}
-                    status="review"
-                    storeUrlSlug={storeUrlSlug}
-                    title="Needs review"
-                  />
-
-                  <BucketSection
-                    ariaLabel="Carry-forward items"
-                    description="Selected items are preserved for follow-up during the next opening workflow."
-                    emptyText="No carry-forward items are currently reported."
-                    items={snapshot.carryForwardItems}
+                  <BucketTabs
+                    buckets={buckets}
+                    currency={currency}
                     onSelectedIdsChange={setSelectedCarryForwardIds}
+                    onValueChange={handleBucketValueChange}
                     orgUrlSlug={orgUrlSlug}
                     selectedIds={selectedIds}
-                    status="carry-forward"
                     storeUrlSlug={storeUrlSlug}
-                    title="Carry forward"
-                  />
-
-                  <BucketSection
-                    ariaLabel="Ready close items"
-                    description="Completed close inputs that support the store-day summary."
-                    emptyText="Ready items will appear after close inputs are reconciled."
-                    items={snapshot.readyItems}
-                    orgUrlSlug={orgUrlSlug}
-                    status="ready"
-                    storeUrlSlug={storeUrlSlug}
-                    title="Ready"
+                    value={selectedBucketValue}
                   />
                 </PageWorkspaceMain>
 
@@ -1134,11 +1895,11 @@ function DailyCloseConnectedView({
       }
     | undefined;
   const [isCompleting, setIsCompleting] = useState(false);
-  const operatingDate = getLocalOperatingDate();
+  const operatingDateRange = useMemo(() => getLocalOperatingDateRange(), []);
   const snapshot = useExpectedDailyCloseQuery(
     getDailyCloseSnapshot,
     canQueryProtectedData
-      ? { operatingDate, storeId: activeStore!._id }
+      ? { ...operatingDateRange, storeId: activeStore!._id }
       : "skip",
   ) as DailyCloseSnapshot | undefined;
   const completeDailyCloseMutation =
@@ -1158,14 +1919,17 @@ function DailyCloseConnectedView({
     setIsCompleting(true);
 
     try {
-      return await runCommand(() =>
-        completeDailyCloseMutation({
-          carryForwardWorkItemIds: args.carryForwardWorkItemIds,
-          notes: args.notes || undefined,
-          operatingDate: args.operatingDate,
-          reviewedItemKeys: args.reviewedItemKeys,
-          storeId: activeStore._id,
-        }) as Promise<CommandResult<unknown>>,
+      return await runCommand(
+        () =>
+          completeDailyCloseMutation({
+            carryForwardWorkItemIds: args.carryForwardWorkItemIds,
+            endAt: args.endAt,
+            notes: args.notes || undefined,
+            operatingDate: args.operatingDate,
+            reviewedItemKeys: args.reviewedItemKeys,
+            startAt: args.startAt,
+            storeId: activeStore._id,
+          }) as Promise<CommandResult<unknown>>,
       );
     } finally {
       setIsCompleting(false);

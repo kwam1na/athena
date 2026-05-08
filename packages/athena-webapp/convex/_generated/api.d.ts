@@ -30,6 +30,7 @@ import type * as customerMessaging_token from "../customerMessaging/token.js";
 import type * as customerMessaging_webhookSecurity from "../customerMessaging/webhookSecurity.js";
 import type * as customerMessaging_whatsappClient from "../customerMessaging/whatsappClient.js";
 import type * as customerMessaging_whatsappConfig from "../customerMessaging/whatsappConfig.js";
+import type * as devPatchBadTransaction from "../devPatchBadTransaction.js";
 import type * as emails_DiscountCode from "../emails/DiscountCode.js";
 import type * as emails_DiscountReminder from "../emails/DiscountReminder.js";
 import type * as emails_FeedbackRequest from "../emails/FeedbackRequest.js";
@@ -341,6 +342,7 @@ declare const fullApi: ApiFromModules<{
   "customerMessaging/webhookSecurity": typeof customerMessaging_webhookSecurity;
   "customerMessaging/whatsappClient": typeof customerMessaging_whatsappClient;
   "customerMessaging/whatsappConfig": typeof customerMessaging_whatsappConfig;
+  devPatchBadTransaction: typeof devPatchBadTransaction;
   "emails/DiscountCode": typeof emails_DiscountCode;
   "emails/DiscountReminder": typeof emails_DiscountReminder;
   "emails/FeedbackRequest": typeof emails_FeedbackRequest;

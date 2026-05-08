@@ -48,6 +48,12 @@ type DirectTransactionItemInput = {
   image?: string;
 };
 
+type TransactionTotals = {
+  subtotal: number;
+  tax: number;
+  total: number;
+};
+
 export function buildCompleteTransactionResult(input: {
   transactionId: Id<"posTransaction"> | null;
   transactionNumber: string | null;
@@ -71,6 +77,46 @@ export function buildCompleteTransactionResult(input: {
 
 function calculateTotalPaid(payments: PosPaymentInput[]) {
   return payments.reduce((sum, payment) => sum + payment.amount, 0);
+}
+
+function roundStoredAmount(amount: number) {
+  return Number(amount.toFixed(2));
+}
+
+function calculateCanonicalTransactionTotals(
+  items: Array<{
+    price: number;
+    quantity: number;
+  }>,
+): TransactionTotals {
+  const subtotal = roundStoredAmount(
+    items.reduce((sum, item) => sum + item.price * item.quantity, 0),
+  );
+  const tax = 0;
+
+  return {
+    subtotal,
+    tax,
+    total: roundStoredAmount(subtotal + tax),
+  };
+}
+
+function totalsMatch(
+  submittedTotals: TransactionTotals,
+  canonicalTotals: TransactionTotals,
+) {
+  return (
+    roundStoredAmount(submittedTotals.subtotal) === canonicalTotals.subtotal &&
+    roundStoredAmount(submittedTotals.tax) === canonicalTotals.tax &&
+    roundStoredAmount(submittedTotals.total) === canonicalTotals.total
+  );
+}
+
+function staleSaleTotalError() {
+  return userError({
+    code: "conflict" as const,
+    message: "Sale total changed. Review the cart and take payment again.",
+  });
 }
 
 function registerSessionMatchesIdentity(
@@ -249,6 +295,20 @@ export async function completeTransaction(
     transactionItems: Array<Id<"posTransactionItem">>;
   }>
 > {
+  const canonicalTotals = calculateCanonicalTransactionTotals(args.items);
+  if (
+    !totalsMatch(
+      {
+        subtotal: args.subtotal,
+        tax: args.tax,
+        total: args.total,
+      },
+      canonicalTotals,
+    )
+  ) {
+    return staleSaleTotalError();
+  }
+
   const skuQuantityMap = new Map<Id<"productSku">, number>();
 
   for (const item of args.items) {
@@ -310,15 +370,17 @@ export async function completeTransaction(
   }
 
   const totalPaid = calculateTotalPaid(args.payments);
-  if (totalPaid < args.total) {
+  if (totalPaid < canonicalTotals.total) {
     return userError({
       code: "validation_failed",
-      message: `Insufficient payment. Total: ${args.total.toFixed(2)}, Paid: ${totalPaid.toFixed(2)}`,
+      message: `Insufficient payment. Total: ${canonicalTotals.total.toFixed(2)}, Paid: ${totalPaid.toFixed(2)}`,
     });
   }
 
   const changeGiven =
-    totalPaid > args.total ? totalPaid - args.total : undefined;
+    totalPaid > canonicalTotals.total
+      ? totalPaid - canonicalTotals.total
+      : undefined;
   const primaryPaymentMethod = args.payments[0]?.method || "cash";
   const transactionNumber = generateTransactionNumber();
   const completedAt = Date.now();
@@ -331,9 +393,9 @@ export async function completeTransaction(
     staffProfileId: args.staffProfileId,
     registerNumber: args.registerNumber,
     terminalId: args.terminalId,
-    subtotal: args.subtotal,
-    tax: args.tax,
-    total: args.total,
+    subtotal: canonicalTotals.subtotal,
+    tax: canonicalTotals.tax,
+    total: canonicalTotals.total,
     customerProfileId: args.customerProfileId,
     payments: args.payments,
     totalPaid,
@@ -508,6 +570,7 @@ export async function createTransactionFromSessionHandler(
     registerSessionId?: Id<"registerSession">;
     recordRegisterSale?: boolean;
     notes?: string;
+    submittedTotals?: TransactionTotals;
   },
 ): Promise<
   CommandResult<{
@@ -537,6 +600,19 @@ export async function createTransactionFromSessionHandler(
       code: "precondition_failed",
       message: "Cannot complete session with no items.",
     });
+  }
+
+  const canonicalTotals = calculateCanonicalTransactionTotals(
+    items.map((item) => ({
+      price: item.price,
+      quantity: item.quantity,
+    })),
+  );
+  if (
+    args.submittedTotals &&
+    !totalsMatch(args.submittedTotals, canonicalTotals)
+  ) {
+    return staleSaleTotalError();
   }
 
   const resolvedRegisterSessionId = await resolveSessionRegisterSessionId(ctx, {
@@ -627,9 +703,9 @@ export async function createTransactionFromSessionHandler(
   }
 
   const totalPaid = calculateTotalPaid(args.payments);
-  const subtotal = session.subtotal || 0;
-  const tax = session.tax || 0;
-  const total = session.total || 0;
+  const subtotal = canonicalTotals.subtotal;
+  const tax = canonicalTotals.tax;
+  const total = canonicalTotals.total;
 
   if (totalPaid < total) {
     return userError({

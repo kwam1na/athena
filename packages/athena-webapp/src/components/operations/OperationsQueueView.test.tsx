@@ -156,8 +156,22 @@ const baseProps = {
       previousPaymentMethod?: string;
       reasonCode?: string;
       transactionId?: Id<"posTransaction">;
+      countedCash?: number;
+      expectedCash?: number;
+      variance?: number;
     } | null;
     requestedByStaffName?: string | null;
+    createdAt?: number;
+    reason?: string | null;
+    registerSessionSummary?: {
+      countedCash?: number | null;
+      expectedCash: number;
+      registerNumber?: string | null;
+      registerSessionId: Id<"registerSession">;
+      status: string;
+      terminalName?: string | null;
+      variance?: number | null;
+    } | null;
     requestType: string;
     status: string;
     transactionSummary?: {
@@ -459,12 +473,78 @@ describe("OperationsQueueViewContent", () => {
     expect(screen.getByText("Cash")).toBeInTheDocument();
     expect(screen.getByText("Requested method")).toBeInTheDocument();
     expect(screen.getByText("Card")).toBeInTheDocument();
+    expect(screen.getByText("Amount")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /view transaction/i }),
     ).toHaveAttribute(
       "href",
       "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId?o=%252F",
     );
+  });
+
+  it("renders register closeout detail for variance review approvals", () => {
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        approvalRequests={[
+          {
+            _id: "approval-variance-1" as Id<"approvalRequest">,
+            createdAt: 1_714_620_000_000,
+            metadata: {
+              countedCash: 20000,
+              expectedCash: 40000,
+              variance: -20000,
+            },
+            reason:
+              "Variance of -20000 exceeded the closeout approval threshold.",
+            registerSessionSummary: {
+              countedCash: 20000,
+              expectedCash: 40000,
+              registerNumber: "6",
+              registerSessionId: "register-6" as Id<"registerSession">,
+              status: "closing",
+              terminalName: "Safari QA",
+              variance: -20000,
+            },
+            requestedByStaffName: "Skank Hunt",
+            requestType: "variance_review",
+            status: "pending",
+            workItemTitle: "Variance Review",
+          },
+        ]}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="wigclub"
+      />,
+    );
+
+    expect(screen.getByText("Register closeout")).toBeInTheDocument();
+    expect(
+      screen.getByText("Closeout variance queued for manager review"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Requested by Skank Hunt")).toBeInTheDocument();
+    expect(screen.getByText("Terminal")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /safari qa \/ register 6/i }),
+    ).toHaveAttribute(
+      "href",
+      "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId?o=%252F",
+    );
+    expect(screen.getByText("GH₵400")).toBeInTheDocument();
+    expect(screen.getByText("GH₵200")).toBeInTheDocument();
+    expect(screen.getByText("GH₵-200")).toHaveClass("text-danger");
+    expect(screen.getByText("Closing")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Variance of GH₵-200 exceeded the closeout approval threshold",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/variance of -20000/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /approve variance/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /reject variance/i }),
+    ).toBeInTheDocument();
   });
 
   it("renders the live operations page without the register closeout surface", () => {

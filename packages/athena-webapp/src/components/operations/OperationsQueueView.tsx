@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import {
+  ArrowUpRight,
   ClipboardCheck,
   Clock3,
   ExternalLink,
@@ -21,6 +22,7 @@ import { EmptyState } from "../states/empty/empty-state";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
+import { formatReviewReason } from "@/components/cash-controls/formatReviewReason";
 import {
   StaffAuthenticationDialog,
   type StaffAuthenticationResult,
@@ -36,6 +38,7 @@ import {
 import { getOrigin } from "@/lib/navigationUtils";
 import type { CommandResult } from "~/shared/commandResult";
 import { currencyFormatter } from "~/shared/currencyFormatter";
+import { cn } from "@/lib/utils";
 import { StockAdjustmentWorkspaceContent } from "./StockAdjustmentWorkspace";
 import type {
   CycleCountDraftSummary,
@@ -84,9 +87,23 @@ type QueueApprovalRequest = {
     previousPaymentMethod?: string;
     reasonCode?: string;
     transactionId?: Id<"posTransaction">;
+    countedCash?: number;
+    expectedCash?: number;
+    variance?: number;
   } | null;
   requestedByStaffName?: string | null;
+  createdAt?: number;
   requestType: string;
+  reason?: string | null;
+  registerSessionSummary?: {
+    countedCash?: number | null;
+    expectedCash: number;
+    registerNumber?: string | null;
+    registerSessionId: Id<"registerSession">;
+    status: string;
+    terminalName?: string | null;
+    variance?: number | null;
+  } | null;
   status: string;
   transactionSummary?: {
     completedAt?: number;
@@ -130,6 +147,17 @@ function getApprovalRequestCopy(requestType: string) {
         "Manager approval applies the queued payment method update. Reject it to leave the completed transaction unchanged.",
       rejectedToast: "Payment method update rejected",
       rejectLabel: "Reject update",
+    };
+  }
+
+  if (requestType === "variance_review") {
+    return {
+      approveLabel: "Approve variance",
+      approvedToast: "Variance review approved",
+      description:
+        "Manager approval accepts the register closeout variance. Reject it to keep the register closeout pending.",
+      rejectedToast: "Variance review rejected",
+      rejectLabel: "Reject variance",
     };
   }
 
@@ -181,6 +209,56 @@ function getPaymentCorrectionSummary(request: QueueApprovalRequest) {
       undefined,
     transaction: request.transactionSummary ?? null,
   };
+}
+
+function getVarianceReviewSummary(request: QueueApprovalRequest) {
+  if (request.requestType !== "variance_review") {
+    return null;
+  }
+
+  const registerSession = request.registerSessionSummary;
+  const variance = registerSession?.variance ?? request.metadata?.variance;
+  const expectedCash =
+    registerSession?.expectedCash ?? request.metadata?.expectedCash;
+  const countedCash =
+    registerSession?.countedCash ?? request.metadata?.countedCash;
+
+  return {
+    countedCash,
+    expectedCash,
+    reason: request.reason
+      ? (formatReviewReason(ghsCurrencyFormatter, request.reason) ??
+        request.reason)
+      : undefined,
+    registerSessionId: registerSession?.registerSessionId,
+    requestedAt: request.createdAt,
+    status: registerSession?.status,
+    terminalLabel:
+      registerSession?.terminalName && registerSession.registerNumber
+        ? `${registerSession.terminalName} / Register ${registerSession.registerNumber}`
+        : (registerSession?.terminalName ??
+          (registerSession?.registerNumber
+            ? `Register ${registerSession.registerNumber}`
+            : "Register")),
+    variance,
+  };
+}
+
+function formatApprovalDate(timestamp?: number) {
+  if (typeof timestamp !== "number") return "Unknown";
+
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(timestamp));
+}
+
+function getVarianceAmountClassName(variance?: number | null) {
+  if (typeof variance !== "number" || variance === 0) {
+    return "text-foreground";
+  }
+
+  return variance > 0 ? "text-success" : "text-danger";
 }
 
 function getQuantityDeltaBadgeClass(delta?: number) {
@@ -535,6 +613,8 @@ export function OperationsQueueViewContent({
                           getInventoryApprovalLineItems(request);
                         const paymentCorrectionSummary =
                           getPaymentCorrectionSummary(request);
+                        const varianceReviewSummary =
+                          getVarianceReviewSummary(request);
 
                         return (
                           <article
@@ -666,18 +746,6 @@ export function OperationsQueueViewContent({
                                     </p>
                                   </div>
                                   <div className="flex flex-wrap items-center gap-2">
-                                    {typeof paymentCorrectionSummary.amount ===
-                                    "number" ? (
-                                      <Badge
-                                        className="border-success/30 bg-success/10 text-success shadow-sm"
-                                        variant="outline"
-                                      >
-                                        {formatStoredAmount(
-                                          ghsCurrencyFormatter,
-                                          paymentCorrectionSummary.amount,
-                                        )}
-                                      </Badge>
-                                    ) : null}
                                     {paymentCorrectionSummary.transaction &&
                                     orgUrlSlug &&
                                     storeUrlSlug ? (
@@ -705,7 +773,7 @@ export function OperationsQueueViewContent({
                                   </div>
                                 </div>
 
-                                <dl className="mt-layout-sm grid gap-layout-sm rounded-lg border border-border bg-background p-layout-sm text-sm md:grid-cols-3">
+                                <dl className="mt-layout-sm grid gap-layout-sm rounded-lg border border-border bg-background p-layout-sm text-sm md:grid-cols-4">
                                   <div>
                                     <dt className="text-xs text-muted-foreground">
                                       Transaction
@@ -740,6 +808,147 @@ export function OperationsQueueViewContent({
                                         : "Unknown"}
                                     </dd>
                                   </div>
+                                  {typeof paymentCorrectionSummary.amount ===
+                                  "number" ? (
+                                    <div>
+                                      <dt className="text-xs text-muted-foreground">
+                                        Amount
+                                      </dt>
+                                      <dd className="mt-1 font-medium text-foreground">
+                                        {formatStoredAmount(
+                                          ghsCurrencyFormatter,
+                                          paymentCorrectionSummary.amount,
+                                        )}
+                                      </dd>
+                                    </div>
+                                  ) : null}
+                                </dl>
+                              </div>
+                            ) : null}
+
+                            {varianceReviewSummary ? (
+                              <div className="border-t border-border/70 bg-surface px-layout-md py-layout-md">
+                                <div>
+                                  <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                                    Register closeout
+                                  </p>
+                                  <p className="mt-1 text-sm text-muted-foreground">
+                                    Closeout variance queued for manager review
+                                  </p>
+                                </div>
+
+                                <dl className="mt-layout-sm grid gap-layout-sm rounded-lg border border-border bg-background p-layout-sm text-sm md:grid-cols-3">
+                                  <div>
+                                    <dt className="text-xs text-muted-foreground">
+                                      Terminal
+                                    </dt>
+                                    <dd className="mt-1 font-medium text-foreground">
+                                      {varianceReviewSummary.registerSessionId &&
+                                      orgUrlSlug &&
+                                      storeUrlSlug ? (
+                                        <Link
+                                          className="inline-flex items-center gap-1 underline-offset-4 hover:underline"
+                                          params={{
+                                            orgUrlSlug,
+                                            sessionId:
+                                              varianceReviewSummary.registerSessionId,
+                                            storeUrlSlug,
+                                          }}
+                                          search={{ o: getOrigin() }}
+                                          to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId"
+                                        >
+                                          {varianceReviewSummary.terminalLabel}
+                                          <ArrowUpRight
+                                            aria-hidden="true"
+                                            className="h-3 w-3"
+                                          />
+                                        </Link>
+                                      ) : (
+                                        varianceReviewSummary.terminalLabel
+                                      )}
+                                    </dd>
+                                  </div>
+                                  <div>
+                                    <dt className="text-xs text-muted-foreground">
+                                      Expected cash
+                                    </dt>
+                                    <dd className="mt-1 font-medium text-foreground">
+                                      {typeof varianceReviewSummary.expectedCash ===
+                                      "number"
+                                        ? formatStoredAmount(
+                                            ghsCurrencyFormatter,
+                                            varianceReviewSummary.expectedCash,
+                                          )
+                                        : "Unknown"}
+                                    </dd>
+                                  </div>
+                                  <div>
+                                    <dt className="text-xs text-muted-foreground">
+                                      Counted cash
+                                    </dt>
+                                    <dd className="mt-1 font-medium text-foreground">
+                                      {typeof varianceReviewSummary.countedCash ===
+                                      "number"
+                                        ? formatStoredAmount(
+                                            ghsCurrencyFormatter,
+                                            varianceReviewSummary.countedCash,
+                                          )
+                                        : "Not recorded"}
+                                    </dd>
+                                  </div>
+                                  <div>
+                                    <dt className="text-xs text-muted-foreground">
+                                      Variance
+                                    </dt>
+                                    <dd
+                                      className={cn(
+                                        "mt-1 font-medium",
+                                        getVarianceAmountClassName(
+                                          varianceReviewSummary.variance,
+                                        ),
+                                      )}
+                                    >
+                                      {typeof varianceReviewSummary.variance ===
+                                      "number"
+                                        ? formatStoredAmount(
+                                            ghsCurrencyFormatter,
+                                            varianceReviewSummary.variance,
+                                          )
+                                        : "Unknown"}
+                                    </dd>
+                                  </div>
+                                  <div>
+                                    <dt className="text-xs text-muted-foreground">
+                                      Requested at
+                                    </dt>
+                                    <dd className="mt-1 font-medium text-foreground">
+                                      {formatApprovalDate(
+                                        varianceReviewSummary.requestedAt,
+                                      )}
+                                    </dd>
+                                  </div>
+                                  <div>
+                                    <dt className="text-xs text-muted-foreground">
+                                      Register status
+                                    </dt>
+                                    <dd className="mt-1 font-medium text-foreground">
+                                      {varianceReviewSummary.status
+                                        ? formatApprovalRequestType(
+                                            varianceReviewSummary.status,
+                                          )
+                                        : "Unknown"}
+                                    </dd>
+                                  </div>
+                                  {varianceReviewSummary.reason ? (
+                                    <div className="md:col-span-3">
+                                      <dt className="text-xs text-muted-foreground">
+                                        Reason
+                                      </dt>
+                                      <dd className="mt-1 font-medium text-foreground">
+                                        {varianceReviewSummary.reason}
+                                      </dd>
+                                    </div>
+                                  ) : null}
                                 </dl>
                               </div>
                             ) : null}

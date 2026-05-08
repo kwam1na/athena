@@ -143,7 +143,9 @@ export const getQueueSnapshot = query({
 
     const customerIds = new Set<string>();
     const posTransactionIds = new Set<string>();
+    const registerSessionIds = new Set<string>();
     const staffIds = new Set<string>();
+    const terminalIds = new Set<string>();
     const workItemIds = new Set<string>();
 
     for (const item of openWorkItems) {
@@ -179,10 +181,23 @@ export const getQueueSnapshot = query({
       ) {
         posTransactionIds.add(request.subjectId);
       }
+
+      if (request.requestType === "variance_review") {
+        if (request.registerSessionId) {
+          registerSessionIds.add(request.registerSessionId);
+        } else if (request.subjectType === "register_session") {
+          registerSessionIds.add(request.subjectId);
+        }
+      }
     }
 
-    const [customers, staffProfiles, relatedWorkItems, posTransactions] =
-      await Promise.all([
+    const [
+      customers,
+      staffProfiles,
+      relatedWorkItems,
+      posTransactions,
+      registerSessions,
+    ] = await Promise.all([
         Promise.all(
           Array.from(customerIds).map(async (customerId) => {
             const customer = await ctx.db.get(
@@ -219,6 +234,17 @@ export const getQueueSnapshot = query({
             return transaction ? [transaction._id, transaction] : null;
           }),
         ),
+        Promise.all(
+          Array.from(registerSessionIds).map(async (registerSessionId) => {
+            const registerSession = await ctx.db.get(
+              "registerSession",
+              registerSessionId as Id<"registerSession">,
+            );
+            return registerSession
+              ? [registerSession._id, registerSession]
+              : null;
+          }),
+        ),
       ]);
 
     const customerMap = new Map<Id<"customerProfile">, Doc<"customerProfile">>(
@@ -247,12 +273,47 @@ export const getQueueSnapshot = query({
         [Id<"posTransaction">, Doc<"posTransaction">]
       >,
     );
+    const registerSessionMap = new Map<
+      Id<"registerSession">,
+      Doc<"registerSession">
+    >(
+      registerSessions.filter(Boolean) as Array<
+        [Id<"registerSession">, Doc<"registerSession">]
+      >,
+    );
+    for (const registerSession of registerSessionMap.values()) {
+      if (registerSession.terminalId) {
+        terminalIds.add(registerSession.terminalId);
+      }
+    }
+
+    const terminals = await Promise.all(
+      Array.from(terminalIds).map(async (terminalId) => {
+        const terminal = await ctx.db.get(
+          "posTerminal",
+          terminalId as Id<"posTerminal">,
+        );
+        return terminal ? [terminal._id, terminal] : null;
+      }),
+    );
+    const terminalMap = new Map<Id<"posTerminal">, Doc<"posTerminal">>(
+      terminals.filter(Boolean) as Array<
+        [Id<"posTerminal">, Doc<"posTerminal">]
+      >,
+    );
 
     return {
       approvalRequests: approvalRequests.map((request) => {
         const linkedTransaction =
           request.subjectType === "pos_transaction"
             ? posTransactionMap.get(request.subjectId as Id<"posTransaction">)
+            : null;
+        const linkedRegisterSession =
+          request.requestType === "variance_review"
+            ? registerSessionMap.get(
+                (request.registerSessionId ??
+                  request.subjectId) as Id<"registerSession">,
+              )
             : null;
 
         return {
@@ -268,6 +329,21 @@ export const getQueueSnapshot = query({
                 totalPaid: linkedTransaction.totalPaid,
                 transactionId: linkedTransaction._id,
                 transactionNumber: linkedTransaction.transactionNumber,
+              }
+            : null,
+          registerSessionSummary: linkedRegisterSession
+            ? {
+                countedCash: linkedRegisterSession.countedCash ?? null,
+                expectedCash: linkedRegisterSession.expectedCash,
+                registerNumber: linkedRegisterSession.registerNumber ?? null,
+                registerSessionId: linkedRegisterSession._id,
+                status: linkedRegisterSession.status,
+                terminalName: linkedRegisterSession.terminalId
+                  ? (terminalMap
+                      .get(linkedRegisterSession.terminalId)
+                      ?.displayName?.trim() ?? null)
+                  : null,
+                variance: linkedRegisterSession.variance ?? null,
               }
             : null,
           workItemTitle: request.workItemId
