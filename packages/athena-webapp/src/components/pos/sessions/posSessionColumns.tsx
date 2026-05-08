@@ -1,9 +1,7 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Ban } from "lucide-react";
 
 import { DataTableColumnHeader } from "@/components/base/table/data-table-column-header";
 import { WorkflowTraceRouteLink } from "@/components/traces/WorkflowTraceRouteLink";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -18,7 +16,6 @@ export type POSSessionOperationsRow = {
   holdDetailLabel: string;
   holdLabel: string;
   holdQuantity: number;
-  onExpire: () => Promise<void>;
   operatorLabel: string;
   registerLabel: string;
   sessionCode: string;
@@ -30,10 +27,7 @@ export type POSSessionOperationsRow = {
   workflowTraceId: string | null;
 };
 
-export function posSessionColumns(
-  pendingSessionId: string | null,
-): ColumnDef<POSSessionOperationsRow>[] {
-  return [
+export const posSessionColumns: ColumnDef<POSSessionOperationsRow>[] = [
     {
       accessorKey: "sessionCode",
       header: ({ column }) => (
@@ -143,34 +137,4 @@ export function posSessionColumns(
         </span>
       ),
     },
-    {
-      id: "actions",
-      header: ({ column }) => (
-        <DataTableColumnHeader
-          className="justify-end"
-          column={column}
-          title="Action"
-        />
-      ),
-      cell: ({ row }) => {
-        const isPending = pendingSessionId === row.original._id;
-
-        return (
-          <div className="flex justify-end">
-            <Button
-              aria-label={`Expire POS session ${row.original.sessionCode} and release holds`}
-              disabled={isPending}
-              onClick={() => void row.original.onExpire()}
-              size="sm"
-              variant="outline"
-            >
-              <Ban className="h-4 w-4" />
-              {isPending ? "Expiring" : "Expire"}
-            </Button>
-          </div>
-        );
-      },
-      enableSorting: false,
-    },
   ];
-}

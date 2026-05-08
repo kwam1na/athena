@@ -155,7 +155,7 @@ const blockedSnapshot: DailyOperationsSnapshot = {
   ],
   lifecycle: {
     description: "Resolve close blockers before ending the store day.",
-    label: "Close blocked",
+    label: "Close has blockers",
     status: "close_blocked",
   },
   primaryAction: {

@@ -34,7 +34,7 @@ import {
 import { getOrigin } from "@/lib/navigationUtils";
 import { capitalizeWords, currencyFormatter } from "@/lib/utils";
 import {
-  formatStoredAmount,
+  formatStoredCurrencyAmount,
   parseDisplayAmountInput,
 } from "@/lib/pos/displayAmounts";
 import { api } from "~/convex/_generated/api";
@@ -282,7 +282,9 @@ function formatCurrency(currency: string, amount?: number | null) {
     return "Pending";
   }
 
-  return formatStoredAmount(currencyFormatter(currency), amount);
+  return formatStoredCurrencyAmount(currency, amount, {
+    revealMinorUnits: true,
+  });
 }
 
 function formatStoredAmountForInput(amount: number) {

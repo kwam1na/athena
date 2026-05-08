@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { formatStoredAmount, parseDisplayAmountInput } from "./displayAmounts";
+import {
+  formatStoredAmount,
+  formatStoredCurrencyAmount,
+  parseDisplayAmountInput,
+} from "./displayAmounts";
 import { validatePaymentAmount, validatePayments } from "./validation";
 
 const formatter = new Intl.NumberFormat("en-GH", {
@@ -18,6 +22,19 @@ describe("POS display amounts", () => {
     expect(formatStoredAmount(formatter, 15000)).not.toBe(
       formatter.format(15000)
     );
+  });
+
+  it("reveals minor units only when operational cash values need them", () => {
+    expect(
+      formatStoredCurrencyAmount("GHS", 1897598, { revealMinorUnits: true }),
+    ).toBe("GH₵18,975.98");
+    expect(
+      formatStoredCurrencyAmount("GHS", 1897600, { revealMinorUnits: true }),
+    ).toBe("GH₵18,976");
+    expect(formatStoredCurrencyAmount("GHS", 2)).toBe("GH₵0");
+    expect(
+      formatStoredCurrencyAmount("GHS", 2, { revealMinorUnits: true }),
+    ).toBe("GH₵0.02");
   });
 
   it("parses display input back to stored pesewas", () => {

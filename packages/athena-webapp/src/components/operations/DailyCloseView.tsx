@@ -10,6 +10,7 @@ import {
   ArrowUpRight,
   Ban,
   CheckCircle2,
+  ChevronDown,
   ClipboardCheck,
   ListChecks,
   RotateCcw,
@@ -24,7 +25,7 @@ import {
   type NormalizedApprovalCommandResult,
   type NormalizedCommandResult,
 } from "@/lib/errors/runCommand";
-import { formatStoredAmount } from "@/lib/pos/displayAmounts";
+import { formatStoredCurrencyAmount } from "@/lib/pos/displayAmounts";
 import { getOrigin } from "@/lib/navigationUtils";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
@@ -36,6 +37,7 @@ import type { ApprovalRequirement } from "~/shared/approvalPolicy";
 import { currencyFormatter } from "~/shared/currencyFormatter";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
+import { ListPagination } from "../common/ListPagination";
 import {
   PageLevelHeader,
   PageWorkspace,
@@ -178,6 +180,7 @@ const bucketTabValues: BucketStatus[] = [
   "ready",
   "review",
 ];
+const DAILY_CLOSE_ITEMS_PER_PAGE = 5;
 
 type BucketConfig = {
   ariaLabel: string;
@@ -234,7 +237,7 @@ const statusCopy: Record<
     badge: "Blocked",
     description:
       "Resolve blocker items before the operating day can be marked closed.",
-    title: "Close blocked",
+    title: "Close has blockers",
   },
   carry_forward: {
     badge: "Carry forward",
@@ -361,7 +364,9 @@ function formatExpenseTransactionCount(value: number) {
 function formatMoney(currency: string, amount?: number | null) {
   if (typeof amount !== "number") return "Pending";
 
-  return formatStoredAmount(currencyFormatter(currency), amount);
+  return formatStoredCurrencyAmount(currency, amount, {
+    revealMinorUnits: true,
+  });
 }
 
 function formatOperatingDate(operatingDate: string) {
@@ -468,6 +473,12 @@ function getCarryForwardWorkItemIds(items: DailyCloseItem[]) {
 
 function getItemDescription(item: DailyCloseItem) {
   return item.description ?? item.message;
+}
+
+function shouldShowCollapsedDescription(description?: string | null) {
+  if (!description) return false;
+
+  return !/included in End-of-Day Review\.?$/i.test(description.trim());
 }
 
 function getItemContextLabel(item: DailyCloseItem) {
@@ -1027,6 +1038,56 @@ function getMetadataEntries(
   );
 }
 
+const collapsedMetadataPriority = [
+  "transaction",
+  "report",
+  "session",
+  "approval",
+  "terminal",
+  "operatingscope",
+  "paymentmethods",
+  "status",
+  "variance",
+  "totalpaid",
+  "total",
+  "amount",
+  "expectedcash",
+  "countedcash",
+  "owner",
+  "staff",
+  "requestedby",
+  "closedby",
+  "customer",
+  "completedat",
+  "closedat",
+  "expiredat",
+  "expiresat",
+];
+
+function getCollapsedMetadataEntries(
+  entries: Array<{
+    label: string;
+    value: ReactNode;
+  }>,
+) {
+  const selectedEntries = collapsedMetadataPriority
+    .map((priorityLabel) =>
+      entries.find(
+        (entry) => normalizeMetadataLabel(entry.label) === priorityLabel,
+      ),
+    )
+    .filter(
+      (
+        entry,
+      ): entry is {
+        label: string;
+        value: ReactNode;
+      } => Boolean(entry),
+    );
+
+  return selectedEntries.slice(0, 4);
+}
+
 function getSummaryAmount(
   summary: DailyCloseSnapshot["summary"],
   primary: keyof DailyCloseSnapshot["summary"],
@@ -1168,6 +1229,12 @@ function normalizeBucketTab(value: unknown): BucketStatus | null {
     : null;
 }
 
+function normalizePage(value: unknown) {
+  const page = typeof value === "number" ? value : Number(value);
+
+  return Number.isInteger(page) && page > 0 ? page : 1;
+}
+
 function getBucketConfigs(snapshot: DailyCloseSnapshot): BucketConfig[] {
   const readyEmptyText = isZeroActivityDailyClose(snapshot)
     ? "No activity was recorded for this operating day."
@@ -1289,13 +1356,20 @@ function DailyCloseItemCard({
   const itemId = getItemId(item);
   const contextLabel = getItemContextLabel(item);
   const description = getItemDescription(item);
+  const showCollapsedDescription = shouldShowCollapsedDescription(description);
+  const [isExpanded, setIsExpanded] = useState(false);
   const metadataEntries = getMetadataEntries(
     item,
     currency,
     orgUrlSlug,
     storeUrlSlug,
   );
+  const collapsedMetadataEntries = getCollapsedMetadataEntries(metadataEntries);
   const hasSourceLink = Boolean(item.link);
+  const detailsId = `daily-close-item-details-${itemId.replace(
+    /[^a-zA-Z0-9_-]/g,
+    "-",
+  )}`;
 
   return (
     <article className="rounded-lg border border-border/80 bg-surface-raised p-layout-md shadow-surface transition-[border-color,box-shadow] hover:border-border">
@@ -1316,28 +1390,76 @@ function DailyCloseItemCard({
                 {contextLabel}
               </p>
             </div>
-            <p className="font-medium text-foreground">{item.title}</p>
-            {description ? (
-              <p className="text-sm leading-6 text-muted-foreground">
-                {description}
-              </p>
-            ) : null}
+            <div className="flex flex-wrap items-baseline gap-x-layout-md gap-y-layout-xs">
+              <p className="font-medium text-foreground">{item.title}</p>
+              {showCollapsedDescription ? (
+                <p className="text-sm leading-6 text-muted-foreground">
+                  {description}
+                </p>
+              ) : null}
+            </div>
           </div>
         </div>
 
-        {hasSourceLink ? (
-          <div className="flex shrink-0 flex-wrap items-center gap-2 md:justify-end">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 md:justify-end">
+          {hasSourceLink ? (
             <ItemLink
               link={item.link}
               orgUrlSlug={orgUrlSlug}
               storeUrlSlug={storeUrlSlug}
             />
-          </div>
-        ) : null}
+          ) : null}
+          {metadataEntries.length > 0 ? (
+            <Button
+              aria-controls={detailsId}
+              aria-expanded={isExpanded}
+              onClick={() => setIsExpanded((current) => !current)}
+              size="sm"
+              type="button"
+              variant="utility"
+            >
+              <ChevronDown
+                aria-hidden="true"
+                className={cn(
+                  "transition-transform",
+                  isExpanded && "rotate-180",
+                )}
+              />
+              {isExpanded ? "Hide details" : "Show details"}
+            </Button>
+          ) : null}
+        </div>
       </div>
 
-      {metadataEntries.length > 0 ? (
-        <dl className="mt-layout-md grid gap-layout-md rounded-lg border border-border/70 bg-surface px-layout-md py-layout-sm text-sm md:grid-cols-3">
+      {collapsedMetadataEntries.length > 0 && !isExpanded ? (
+        <dl className="mt-layout-sm grid gap-x-layout-lg gap-y-layout-sm border-t border-border/70 pt-layout-sm text-sm sm:grid-cols-2 lg:grid-cols-4">
+          {collapsedMetadataEntries.map((entry) => (
+            <div key={`${itemId}-summary-${entry.label}`} className="min-w-0">
+              <dt className="text-xs text-muted-foreground">{entry.label}</dt>
+              <dd className="mt-1 truncate font-medium text-foreground">
+                {entry.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+
+      {description && !showCollapsedDescription && isExpanded ? (
+        <p className="mt-layout-sm border-t border-border/70 pt-layout-sm text-sm leading-6 text-muted-foreground">
+          {description}
+        </p>
+      ) : null}
+
+      {metadataEntries.length > 0 && isExpanded ? (
+        <dl
+          className={cn(
+            "grid gap-layout-md border-t border-border/70 pt-layout-md text-sm md:grid-cols-3",
+            description && !showCollapsedDescription
+              ? "mt-layout-sm"
+              : "mt-layout-md",
+          )}
+          id={detailsId}
+        >
           {metadataEntries.map((entry) => (
             <div key={`${itemId}-${entry.label}`}>
               <dt className="text-xs text-muted-foreground">{entry.label}</dt>
@@ -1361,9 +1483,11 @@ function BucketSection({
   orgUrlSlug,
   selectedIds,
   showCountBadge = true,
+  page,
   status,
   storeUrlSlug,
   title,
+  onPageChange,
   onSelectedIdsChange,
 }: {
   ariaLabel: string;
@@ -1371,8 +1495,10 @@ function BucketSection({
   description: string;
   emptyText: string;
   items: DailyCloseItem[];
+  onPageChange: (page: number) => void;
   onSelectedIdsChange?: (ids: string[]) => void;
   orgUrlSlug: string;
+  page: number;
   selectedIds?: string[];
   showCountBadge?: boolean;
   status: "blocked" | "carry-forward" | "ready" | "review";
@@ -1395,6 +1521,18 @@ function BucketSection({
         : status === "carry-forward"
           ? RotateCcw
           : CheckCircle2;
+  const pageCount = Math.max(
+    Math.ceil(items.length / DAILY_CLOSE_ITEMS_PER_PAGE),
+    1,
+  );
+  const clampedPage = Math.min(page, pageCount);
+  const paginatedItems = items.slice(
+    (clampedPage - 1) * DAILY_CLOSE_ITEMS_PER_PAGE,
+    clampedPage * DAILY_CLOSE_ITEMS_PER_PAGE,
+  );
+  const handlePageChange = (nextPage: number) => {
+    onPageChange(Math.min(Math.max(nextPage, 1), pageCount));
+  };
 
   return (
     <section
@@ -1429,7 +1567,7 @@ function BucketSection({
             {emptyText}
           </p>
         ) : (
-          items.map((item) => {
+          paginatedItems.map((item) => {
             const selectionId = getCarryForwardWorkItemId(item);
 
             return (
@@ -1455,6 +1593,15 @@ function BucketSection({
           })
         )}
       </div>
+      {items.length > DAILY_CLOSE_ITEMS_PER_PAGE ? (
+        <ListPagination
+          onPageChange={handlePageChange}
+          page={clampedPage}
+          pageCount={pageCount}
+          pageSize={DAILY_CLOSE_ITEMS_PER_PAGE}
+          totalItems={items.length}
+        />
+      ) : null}
     </section>
   );
 }
@@ -1464,17 +1611,21 @@ function BucketTabs({
   currency,
   value,
   orgUrlSlug,
+  page,
   selectedIds,
   storeUrlSlug,
+  onPageChange,
   onValueChange,
   onSelectedIdsChange,
 }: {
   buckets: BucketConfig[];
   currency: string;
   value: BucketStatus;
+  onPageChange: (page: number) => void;
   onValueChange: (value: BucketStatus) => void;
   onSelectedIdsChange: (ids: string[]) => void;
   orgUrlSlug: string;
+  page: number;
   selectedIds: string[];
   storeUrlSlug: string;
 }) {
@@ -1520,10 +1671,12 @@ function BucketTabs({
             description={bucket.description}
             emptyText={bucket.emptyText}
             items={bucket.items}
+            onPageChange={onPageChange}
             onSelectedIdsChange={
               bucket.value === "carry-forward" ? onSelectedIdsChange : undefined
             }
             orgUrlSlug={orgUrlSlug}
+            page={page}
             selectedIds={
               bucket.value === "carry-forward" ? selectedIds : undefined
             }
@@ -1758,7 +1911,10 @@ export function DailyCloseViewContent({
     string[] | null
   >(null);
   const navigate = useNavigate();
-  const search = useSearch({ strict: false }) as { tab?: unknown };
+  const search = useSearch({ strict: false }) as {
+    page?: unknown;
+    tab?: unknown;
+  };
   const carryForwardWorkItemIds = useMemo(
     () => getCarryForwardWorkItemIds(snapshot?.carryForwardItems ?? []),
     [snapshot?.carryForwardItems],
@@ -1824,6 +1980,7 @@ export function DailyCloseViewContent({
     : "ready";
   const selectedBucketValue =
     normalizeBucketTab(search.tab) ?? defaultBucketValue;
+  const selectedBucketPage = normalizePage(search.page);
 
   const handleComplete = async () => {
     if (!snapshot || isBlocked || isCompleted) return;
@@ -1874,7 +2031,17 @@ export function DailyCloseViewContent({
     void navigate({
       search: ((current: Record<string, unknown>) => ({
         ...current,
+        page: 1,
         tab: value,
+      })) as never,
+    });
+  };
+
+  const handleBucketPageChange = (page: number) => {
+    void navigate({
+      search: ((current: Record<string, unknown>) => ({
+        ...current,
+        page,
       })) as never,
     });
   };
@@ -2008,9 +2175,11 @@ export function DailyCloseViewContent({
                   <BucketTabs
                     buckets={buckets}
                     currency={currency}
+                    onPageChange={handleBucketPageChange}
                     onSelectedIdsChange={setSelectedCarryForwardIds}
                     onValueChange={handleBucketValueChange}
                     orgUrlSlug={orgUrlSlug}
+                    page={selectedBucketPage}
                     selectedIds={selectedIds}
                     storeUrlSlug={storeUrlSlug}
                     value={selectedBucketValue}

@@ -1,15 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import {
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
-} from "lucide-react";
 import { toast } from "sonner";
 
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
+import { ListPagination } from "../common/ListPagination";
 import {
   PageLevelHeader,
   PageWorkspace,
@@ -670,14 +665,6 @@ export function ProcurementViewContent({
   const paginatedRecommendations = visibleRecommendations.slice(
     (clampedRecommendationPage - 1) * RECOMMENDATIONS_PER_PAGE,
     clampedRecommendationPage * RECOMMENDATIONS_PER_PAGE,
-  );
-  const paginationStart =
-    visibleRecommendations.length === 0
-      ? 0
-      : (clampedRecommendationPage - 1) * RECOMMENDATIONS_PER_PAGE + 1;
-  const paginationEnd = Math.min(
-    clampedRecommendationPage * RECOMMENDATIONS_PER_PAGE,
-    visibleRecommendations.length,
   );
   const activePurchaseOrders = purchaseOrders
     .filter((order) =>
@@ -1523,79 +1510,13 @@ export function ProcurementViewContent({
                   )}
                 </div>
                 {visibleRecommendations.length > RECOMMENDATIONS_PER_PAGE ? (
-                  <div className="flex border-t border-border/70 px-layout-md py-layout-sm text-sm">
-                    <div className="ml-auto flex flex-col gap-layout-sm sm:flex-row sm:items-center sm:gap-layout-md">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-medium text-muted-foreground">
-                          Showing {paginationStart}-{paginationEnd} of{" "}
-                          {visibleRecommendations.length}
-                        </span>
-                        <span className="text-muted-foreground">
-                          Page {clampedRecommendationPage} of{" "}
-                          {recommendationPageCount}
-                        </span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Button
-                          className="hidden h-8 w-8 p-0 lg:flex"
-                          disabled={clampedRecommendationPage === 1}
-                          onClick={() => handleRecommendationPageChange(1)}
-                          variant="outline"
-                        >
-                          <span className="sr-only">Go to first page</span>
-                          <ChevronsLeft />
-                        </Button>
-                        <Button
-                          className="h-8 w-8 p-0"
-                          disabled={clampedRecommendationPage === 1}
-                          onClick={() =>
-                            handleRecommendationPageChange(
-                              Math.max(1, clampedRecommendationPage - 1),
-                            )
-                          }
-                          variant="outline"
-                        >
-                          <span className="sr-only">Go to previous page</span>
-                          <ChevronLeft />
-                        </Button>
-                        <Button
-                          className="h-8 w-8 p-0"
-                          disabled={
-                            clampedRecommendationPage ===
-                            recommendationPageCount
-                          }
-                          onClick={() =>
-                            handleRecommendationPageChange(
-                              Math.min(
-                                recommendationPageCount,
-                                clampedRecommendationPage + 1,
-                              ),
-                            )
-                          }
-                          variant="outline"
-                        >
-                          <span className="sr-only">Go to next page</span>
-                          <ChevronRight />
-                        </Button>
-                        <Button
-                          className="hidden h-8 w-8 p-0 lg:flex"
-                          disabled={
-                            clampedRecommendationPage ===
-                            recommendationPageCount
-                          }
-                          onClick={() =>
-                            handleRecommendationPageChange(
-                              recommendationPageCount,
-                            )
-                          }
-                          variant="outline"
-                        >
-                          <span className="sr-only">Go to last page</span>
-                          <ChevronsRight />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
+                  <ListPagination
+                    onPageChange={handleRecommendationPageChange}
+                    page={clampedRecommendationPage}
+                    pageCount={recommendationPageCount}
+                    pageSize={RECOMMENDATIONS_PER_PAGE}
+                    totalItems={visibleRecommendations.length}
+                  />
                 ) : null}
               </section>
             </PageWorkspace>

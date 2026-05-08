@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useParams } from "@tanstack/react-router";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
+import type { FunctionReference } from "convex/server";
 import { AlertTriangle, ClipboardList } from "lucide-react";
 
 import { GenericDataTable } from "@/components/base/table/data-table";
@@ -15,8 +16,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { currencyFormatter } from "@/lib/utils";
 import { formatStoredAmount } from "@/lib/pos/displayAmounts";
-import { presentCommandToast } from "@/lib/errors/presentCommandToast";
-import { runCommand } from "@/lib/errors/runCommand";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import {
@@ -101,19 +100,16 @@ type POSSessionOperationsResult =
 type POSSessionsViewContentProps = {
   currency: string;
   isLoading: boolean;
-  onExpireSession: (session: POSSessionOperationsDto) => Promise<void>;
-  orgUrlSlug: string;
-  pendingSessionId: string | null;
   sessions: POSSessionOperationsDto[];
-  storeUrlSlug: string;
 };
 
-const RELEASE_REASON =
-  "Operator expired session from POS sessions operations view";
-
 const posSessionsApi = api.inventory.posSessions as unknown as {
-  expireSessionFromOperations: any;
-  getStoreActiveSessionOperations: any;
+  getStoreActiveSessionOperations: FunctionReference<
+    "query",
+    "public",
+    { storeId: Id<"store"> },
+    POSSessionOperationsResult
+  >;
 };
 
 function getSessions(result: POSSessionOperationsResult | undefined) {
@@ -138,10 +134,6 @@ function getSessionCode(session: POSSessionOperationsDto) {
     session.sessionNumber ||
     String(session.sessionId ?? session._id).slice(-6).toUpperCase()
   );
-}
-
-function getSessionId(session: POSSessionOperationsDto) {
-  return String(session.sessionId ?? session._id);
 }
 
 function getOperatorLabel(session: POSSessionOperationsDto) {
@@ -330,11 +322,7 @@ function SummaryMetric({
 export function POSSessionsViewContent({
   currency,
   isLoading,
-  onExpireSession,
-  orgUrlSlug: _orgUrlSlug,
-  pendingSessionId,
   sessions,
-  storeUrlSlug: _storeUrlSlug,
 }: POSSessionsViewContentProps) {
   const formatter = useMemo(() => currencyFormatter(currency), [currency]);
   const rows = useMemo<POSSessionOperationsRow[]>(
@@ -357,7 +345,6 @@ export function POSSessionsViewContent({
           holdDetailLabel: holds.detail,
           holdLabel: holds.label,
           holdQuantity: holds.quantity,
-          onExpire: () => onExpireSession(session),
           operatorLabel: getOperatorLabel(session),
           registerLabel: getRegisterLabel(session),
           sessionCode: getSessionCode(session),
@@ -370,7 +357,7 @@ export function POSSessionsViewContent({
             session.workflowTrace?.traceId ?? session.workflowTraceId ?? null,
         };
       }),
-    [formatter, onExpireSession, sessions],
+    [formatter, sessions],
   );
   const activeCount = rows.filter((row) => row.status === "active").length;
   const heldCount = rows.filter((row) => row.status === "held").length;
@@ -434,7 +421,7 @@ export function POSSessionsViewContent({
           </div>
         ) : (
           <GenericDataTable
-            columns={posSessionColumns(pendingSessionId)}
+            columns={posSessionColumns}
             data={rows}
             paginationRangeItemLabel="session"
             paginationRangeItemPluralLabel="sessions"
@@ -460,30 +447,11 @@ export function POSSessionsView() {
         storeUrlSlug?: string;
       }
     | undefined;
-  const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
-  const expireSession = useMutation(posSessionsApi.expireSessionFromOperations);
 
   const sessionResult = useQuery(
     posSessionsApi.getStoreActiveSessionOperations,
     canQueryProtectedData ? { storeId: activeStore!._id } : "skip",
   ) as POSSessionOperationsResult | undefined;
-
-  async function handleExpireSession(session: POSSessionOperationsDto) {
-    setPendingSessionId(getSessionId(session));
-    const result = await runCommand(() =>
-      expireSession({
-        reason: RELEASE_REASON,
-        sessionId: session.sessionId ?? session._id,
-        storeId: activeStore!._id,
-      }),
-    );
-
-    setPendingSessionId(null);
-
-    if (result.kind !== "ok") {
-      presentCommandToast(result);
-    }
-  }
 
   if (isLoadingAccess) {
     return <POSSessionsLoadingState />;
@@ -517,11 +485,7 @@ export function POSSessionsView() {
     <POSSessionsViewContent
       currency={activeStore.currency || "USD"}
       isLoading={sessionResult === undefined}
-      onExpireSession={handleExpireSession}
-      orgUrlSlug={params.orgUrlSlug}
-      pendingSessionId={pendingSessionId}
       sessions={getSessions(sessionResult)}
-      storeUrlSlug={params.storeUrlSlug}
     />
   );
 }

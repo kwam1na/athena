@@ -4,8 +4,8 @@ import { useQuery } from "convex/react";
 import { Landmark } from "lucide-react";
 
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
-import { capitalizeWords, currencyFormatter } from "@/lib/utils";
-import { formatStoredAmount } from "@/lib/pos/displayAmounts";
+import { capitalizeWords } from "@/lib/utils";
+import { formatStoredCurrencyAmount } from "@/lib/pos/displayAmounts";
 import { api } from "~/convex/_generated/api";
 import { formatStaffDisplayName } from "~/shared/staffDisplayName";
 import View from "../View";
@@ -38,7 +38,9 @@ function formatCurrency(currency: string, amount?: number | null) {
     return "Pending";
   }
 
-  return formatStoredAmount(currencyFormatter(currency), amount);
+  return formatStoredCurrencyAmount(currency, amount, {
+    revealMinorUnits: true,
+  });
 }
 
 function formatRegisterName(registerNumber?: string | null) {
