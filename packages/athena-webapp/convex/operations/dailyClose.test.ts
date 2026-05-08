@@ -8,6 +8,7 @@ import {
 } from "./dailyClose";
 
 type TableName =
+  | "approvalProof"
   | "approvalRequest"
   | "dailyClose"
   | "expenseTransaction"
@@ -203,6 +204,24 @@ const store = {
   organizationId: "org-1",
   slug: "accra",
 };
+
+function dailyCloseApprovalProof(overrides: Partial<Row> = {}): Row {
+  return {
+    _id: "approval-proof-1",
+    actionKey: "operations.daily_close.complete",
+    approvedByCredentialId: "credential-manager-1",
+    approvedByStaffProfileId: "staff-manager-1",
+    createdAt: Date.UTC(2026, 4, 7, 21),
+    expiresAt: Date.UTC(2026, 4, 7, 23),
+    requiredRole: "manager",
+    requestedByStaffProfileId: "staff-1",
+    storeId: "store-1",
+    subjectId: "store-1:2026-05-07",
+    subjectLabel: "Daily Close 2026-05-07",
+    subjectType: "daily_close",
+    ...overrides,
+  };
+}
 
 describe("daily close backend foundation", () => {
   afterEach(() => {
@@ -771,9 +790,70 @@ describe("daily close backend foundation", () => {
     });
   });
 
+  it("requires manager approval before completing a ready day", async () => {
+    const { db, inserts } = createDb({
+      posTransaction: [
+        {
+          _id: "txn-1",
+          completedAt: Date.UTC(2026, 4, 7, 14),
+          payments: [{ amount: 12000, method: "cash", timestamp: 1 }],
+          status: "completed",
+          storeId: "store-1",
+          subtotal: 12000,
+          tax: 0,
+          total: 12000,
+          totalPaid: 12000,
+          transactionNumber: "TXN-1",
+        },
+      ],
+      store: [store],
+    });
+
+    const result = await completeDailyCloseWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        actorUserId: "user-1" as Id<"athenaUser">,
+        operatingDate: "2026-05-07",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toEqual({
+      kind: "approval_required",
+      approval: {
+        action: {
+          key: "operations.daily_close.complete",
+          label: "Complete Daily Close",
+        },
+        copy: {
+          message:
+            "A manager needs to approve this Daily Close before the operating day is saved.",
+          primaryActionLabel: "Approve and complete",
+          secondaryActionLabel: "Cancel",
+          title: "Manager approval required",
+        },
+        metadata: {
+          operatingDate: "2026-05-07",
+        },
+        reason: "Manager approval is required to complete Daily Close.",
+        requiredRole: "manager",
+        resolutionModes: [{ kind: "inline_manager_proof" }],
+        selfApproval: "allowed",
+        subject: {
+          id: "store-1:2026-05-07",
+          label: "Daily Close 2026-05-07",
+          type: "daily_close",
+        },
+      },
+    });
+    expect(inserts).toEqual([]);
+  });
+
   it("completes a ready day, persists carry-forward links, and records audit events", async () => {
     vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 7, 22));
     const { db, inserts } = createDb({
+      approvalProof: [dailyCloseApprovalProof()],
       operationalWorkItem: [
         {
           _id: "work-existing",
@@ -809,6 +889,7 @@ describe("daily close backend foundation", () => {
       {
         actorStaffProfileId: "staff-1" as Id<"staffProfile">,
         actorUserId: "user-1" as Id<"athenaUser">,
+        approvalProofId: "approval-proof-1" as Id<"approvalProof">,
         carryForwardWorkItemIds: ["work-existing" as Id<"operationalWorkItem">],
         createCarryForwardWorkItems: [
           { notes: "Check display case.", title: "Count front display" },
@@ -840,16 +921,25 @@ describe("daily close backend foundation", () => {
         : [],
     ).toEqual(["work-existing", "operationalWorkItem-2"]);
     expect(inserts.map((insert) => insert.table)).toEqual([
+      "operationalEvent",
       "operationalWorkItem",
       "dailyClose",
       "operationalEvent",
       "operationalEvent",
     ]);
     expect(
-      inserts.find((insert) => insert.table === "operationalEvent")?.value,
+      inserts.find(
+        (insert) =>
+          insert.table === "operationalEvent" &&
+          insert.value.eventType === "daily_close_completed",
+      )?.value,
     ).toMatchObject({
       eventType: "daily_close_completed",
       subjectType: "daily_close",
+      metadata: {
+        approvalProofId: "approval-proof-1",
+        approvedByStaffProfileId: "staff-manager-1",
+      },
     });
   });
 

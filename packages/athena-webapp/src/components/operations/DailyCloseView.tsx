@@ -22,13 +22,18 @@ import { cn } from "@/lib/utils";
 import { toOperatorMessage } from "@/lib/errors/operatorMessages";
 import {
   runCommand,
+  type NormalizedApprovalCommandResult,
   type NormalizedCommandResult,
 } from "@/lib/errors/runCommand";
 import { formatStoredAmount } from "@/lib/pos/displayAmounts";
 import { getOrigin } from "@/lib/navigationUtils";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
-import type { CommandResult } from "~/shared/commandResult";
+import type {
+  ApprovalCommandResult,
+  CommandResult,
+} from "~/shared/commandResult";
+import type { ApprovalRequirement } from "~/shared/approvalPolicy";
 import { currencyFormatter } from "~/shared/currencyFormatter";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
@@ -46,6 +51,10 @@ import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { LoadingButton } from "../ui/loading-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
+import {
+  useApprovedCommand,
+  type ApprovalRetryArgs,
+} from "./useApprovedCommand";
 
 type DailyCloseApi = {
   completeDailyClose?: unknown;
@@ -151,6 +160,7 @@ export type DailyCloseSnapshot = {
 };
 
 type CompletionArgs = {
+  approvalProofId?: Id<"approvalProof">;
   carryForwardWorkItemIds: string[];
   endAt: number;
   notes: string;
@@ -187,7 +197,24 @@ type DailyCloseViewContentProps = {
   isLoadingSnapshot: boolean;
   onComplete: (
     args: CompletionArgs,
-  ) => Promise<NormalizedCommandResult<unknown>>;
+  ) => Promise<NormalizedApprovalCommandResult<unknown>>;
+  onAuthenticateForApproval?: (args: {
+    actionKey: string;
+    pinHash: string;
+    reason?: string;
+    requiredRole: ApprovalRequirement["requiredRole"];
+    requestedByStaffProfileId?: Id<"staffProfile">;
+    storeId: Id<"store">;
+    subject: ApprovalRequirement["subject"];
+    username: string;
+  }) => Promise<
+    NormalizedCommandResult<{
+      approvalProofId: Id<"approvalProof">;
+      approvedByStaffProfileId: Id<"staffProfile">;
+      expiresAt: number;
+      requestedByStaffProfileId?: Id<"staffProfile">;
+    }>
+  >;
   orgUrlSlug: string;
   snapshot?: DailyCloseSnapshot;
   storeId?: Id<"store">;
@@ -297,6 +324,26 @@ function getStatusLabelClassName(status: DailyCloseStatus) {
   );
 }
 
+function getStatusRailIconClassName(status: DailyCloseStatus) {
+  return cn(
+    status === "blocked" && "bg-danger/10 text-danger",
+    status === "needs_review" && "bg-warning/15 text-warning-foreground",
+    status === "carry_forward" &&
+      "bg-action-workflow-soft text-action-workflow",
+    (status === "ready" || status === "completed") &&
+      "bg-success/10 text-success",
+  );
+}
+
+function getStatusRailBadgeClassName(status: DailyCloseStatus) {
+  return cn(
+    status === "blocked" && "text-danger",
+    status === "needs_review" && "text-warning-foreground",
+    status === "carry_forward" && "text-action-workflow",
+    (status === "ready" || status === "completed") && "text-success",
+  );
+}
+
 function getBucketCountClassName(status: BucketStatus) {
   return cn(
     "shadow-sm",
@@ -375,7 +422,10 @@ function getLocalOperatingDateRange(date = new Date()) {
 }
 
 function normalizeCommandMessage(
-  result: Exclude<NormalizedCommandResult<unknown>, { kind: "ok" }>,
+  result: Exclude<
+    NormalizedApprovalCommandResult<unknown>,
+    { kind: "approval_required" | "ok" }
+  >,
 ) {
   if (result.kind === "user_error") {
     return toOperatorMessage(result.error.message);
@@ -997,6 +1047,59 @@ function getExpenseStaffCount(summary: DailyCloseSnapshot["summary"]) {
   return typeof summary.staffCount === "number" ? summary.staffCount : 0;
 }
 
+function isZeroActivityDailyClose(snapshot: DailyCloseSnapshot) {
+  return (
+    snapshot.blockers.length === 0 &&
+    snapshot.reviewItems.length === 0 &&
+    snapshot.carryForwardItems.length === 0 &&
+    snapshot.readyItems.length === 0 &&
+    getSummaryCount(snapshot.summary, "transactionCount", "transactionCount") ===
+      0 &&
+    getSummaryCount(
+      snapshot.summary,
+      "currentDayCashTransactionCount",
+      "transactionCount",
+    ) === 0 &&
+    getSummaryCount(
+      snapshot.summary,
+      "carriedOverRegisterCount",
+      "carriedOverRegisterCount",
+    ) === 0 &&
+    getExpenseStaffCount(snapshot.summary) === 0 &&
+    getSummaryRegisterVarianceCount(snapshot.summary) === 0 &&
+    getSummaryAmount(snapshot.summary, "totalSales", "salesTotal") === 0 &&
+    getSummaryAmount(
+      snapshot.summary,
+      "currentDayCashTotal",
+      "cashExpected",
+    ) === 0 &&
+    getSummaryAmount(
+      snapshot.summary,
+      "carriedOverCashTotal",
+      "carriedOverCashTotal",
+    ) === 0 &&
+    snapshot.summary.expenseTotal === 0 &&
+    getSummaryAmount(snapshot.summary, "varianceTotal", "netCashVariance") ===
+      0
+  );
+}
+
+function getStatusDisplayCopy(
+  snapshot: DailyCloseSnapshot,
+  status: DailyCloseStatus,
+) {
+  if (status === "ready" && isZeroActivityDailyClose(snapshot)) {
+    return {
+      ...statusCopy.ready,
+      title: "No activity to close",
+      description:
+        "No sales, register activity, expenses, or follow-ups were recorded for this operating day.",
+    };
+  }
+
+  return statusCopy[status];
+}
+
 function getDefaultBucketValue(
   snapshot: DailyCloseSnapshot,
   status: DailyCloseStatus,
@@ -1015,6 +1118,10 @@ function normalizeBucketTab(value: unknown): BucketStatus | null {
 }
 
 function getBucketConfigs(snapshot: DailyCloseSnapshot): BucketConfig[] {
+  const readyEmptyText = isZeroActivityDailyClose(snapshot)
+    ? "No activity was recorded for this operating day."
+    : "Ready items will appear after close inputs are reconciled.";
+
   return [
     {
       ariaLabel: "Blocked close items",
@@ -1049,7 +1156,7 @@ function getBucketConfigs(snapshot: DailyCloseSnapshot): BucketConfig[] {
       ariaLabel: "Ready close items",
       description:
         "Completed close inputs that support the operating-day summary.",
-      emptyText: "Ready items will appear after close inputs are reconciled.",
+      emptyText: readyEmptyText,
       items: snapshot.readyItems,
       status: "ready",
       title: "Ready",
@@ -1434,11 +1541,13 @@ function CompletionRail({
       label: "Resolve blockers",
       tone: snapshot.blockers.length > 0 ? "danger" : "success",
       value: formatChecklistCount(snapshot.blockers.length, "blocker"),
+      valueTone: snapshot.blockers.length > 0 ? "danger" : "plain",
     },
     {
       label: "Review exceptions",
       tone: "warning",
       value: formatChecklistCount(snapshot.reviewItems.length, "item"),
+      valueTone: snapshot.reviewItems.length > 0 ? "warning" : "plain",
     },
     {
       label: "Carry forward",
@@ -1448,6 +1557,8 @@ function CompletionRail({
         "item",
         "None",
       ),
+      valueTone:
+        snapshot.carryForwardItems.length > 0 ? "workflow" : "plain",
     },
   ];
 
@@ -1459,11 +1570,7 @@ function CompletionRail({
             <div
               className={cn(
                 "flex h-9 w-9 shrink-0 items-center justify-center rounded-md",
-                isBlocked
-                  ? "bg-danger/10 text-danger"
-                  : isCompleted
-                    ? "bg-success/10 text-success"
-                    : "bg-signal/10 text-signal",
+                getStatusRailIconClassName(status),
               )}
             >
               {isBlocked ? (
@@ -1479,11 +1586,7 @@ function CompletionRail({
           <p
             className={cn(
               "shrink-0 text-sm font-semibold",
-              isBlocked
-                ? "text-danger"
-                : isCompleted
-                  ? "text-success"
-                  : "text-signal",
+              getStatusRailBadgeClassName(status),
             )}
           >
             {copy.badge}
@@ -1529,10 +1632,10 @@ function CompletionRail({
                 <dd
                   className={cn(
                     "shrink-0 text-right font-medium text-foreground",
-                    item.tone === "danger" && "text-danger",
-                    item.tone === "warning" && "text-warning-foreground",
-                    item.tone === "workflow" && "text-action-workflow",
-                    item.tone === "success" && "text-success",
+                    item.valueTone === "danger" && "text-danger",
+                    item.valueTone === "warning" &&
+                      "text-warning-foreground",
+                    item.valueTone === "workflow" && "text-action-workflow",
                   )}
                 >
                   {item.value}
@@ -1613,6 +1716,7 @@ export function DailyCloseViewContent({
   isLoadingAccess,
   isLoadingSnapshot,
   onComplete,
+  onAuthenticateForApproval,
   orgUrlSlug,
   snapshot,
   storeId,
@@ -1636,6 +1740,19 @@ export function DailyCloseViewContent({
     selectedCarryForwardIds !== null
       ? selectedCarryForwardIds
       : carryForwardWorkItemIds;
+  const completionApprovalRunner = useApprovedCommand({
+    storeId,
+    onAuthenticateForApproval:
+      onAuthenticateForApproval ??
+      (() =>
+        Promise.resolve({
+          kind: "user_error",
+          error: {
+            code: "unavailable",
+            message: "Manager approval is not available yet.",
+          },
+        })),
+  });
 
   if (isLoadingAccess) {
     return (
@@ -1671,6 +1788,9 @@ export function DailyCloseViewContent({
   const status = snapshot ? getDailyCloseStatus(snapshot) : "ready";
   const isBlocked = status === "blocked";
   const isCompleted = status === "completed";
+  const displayCopy = snapshot
+    ? getStatusDisplayCopy(snapshot, status)
+    : statusCopy[status];
   const StatusIcon = getStatusIcon(status);
   const buckets = snapshot ? getBucketConfigs(snapshot) : [];
   const defaultBucketValue = snapshot
@@ -1684,27 +1804,44 @@ export function DailyCloseViewContent({
 
     setCommandMessage(null);
 
-    const result = await onComplete({
+    const completionArgs = {
       carryForwardWorkItemIds: selectedIds,
       endAt: snapshot.endAt,
       notes,
       operatingDate: snapshot.operatingDate,
       reviewedItemKeys: getReviewedItemKeys(snapshot.reviewItems),
       startAt: snapshot.startAt,
+    };
+
+    const result = await completionApprovalRunner.run({
+      execute: (approvalArgs: ApprovalRetryArgs) =>
+        onComplete({
+          ...completionArgs,
+          ...(approvalArgs.approvalProofId
+            ? { approvalProofId: approvalArgs.approvalProofId }
+            : {}),
+        }),
+      onResult: (commandResult) => {
+        if (commandResult.kind === "approval_required") {
+          return;
+        }
+
+        if (commandResult.kind === "ok") {
+          setCommandMessage({
+            kind: "success",
+            message: "Daily close completed.",
+          });
+          return;
+        }
+
+        setCommandMessage({
+          kind: "error",
+          message: normalizeCommandMessage(commandResult),
+        });
+      },
     });
 
-    if (result.kind === "ok") {
-      setCommandMessage({
-        kind: "success",
-        message: "Daily close completed.",
-      });
-      return;
-    }
-
-    setCommandMessage({
-      kind: "error",
-      message: normalizeCommandMessage(result),
-    });
+    if (result.kind === "approval_required") return;
   };
 
   const handleBucketValueChange = (value: BucketStatus) => {
@@ -1739,10 +1876,10 @@ export function DailyCloseViewContent({
                       )}
                     >
                       <StatusIcon aria-hidden="true" className="h-5 w-5" />
-                      {statusCopy[status].title}
+                      {displayCopy.title}
                     </h2>
                     <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
-                      {statusCopy[status].description}
+                      {displayCopy.description}
                     </p>
                   </div>
                   <div className="rounded-lg border border-border bg-surface-raised px-layout-md py-layout-sm text-sm text-muted-foreground shadow-surface">
@@ -1863,6 +2000,7 @@ export function DailyCloseViewContent({
           )}
         </PageWorkspace>
       </FadeIn>
+      {completionApprovalRunner.dialog}
     </View>
   );
 }
@@ -1920,6 +2058,9 @@ function DailyCloseConnectedView({
   ) as DailyCloseSnapshot | undefined;
   const completeDailyCloseMutation =
     useExpectedDailyCloseMutation(completeDailyClose);
+  const authenticateForApproval = useMutation(
+    api.operations.staffCredentials.authenticateStaffCredentialForApproval,
+  );
 
   const handleComplete = async (args: CompletionArgs) => {
     if (!activeStore?._id) {
@@ -1938,6 +2079,7 @@ function DailyCloseConnectedView({
       return await runCommand(
         () =>
           completeDailyCloseMutation({
+            approvalProofId: args.approvalProofId,
             carryForwardWorkItemIds: args.carryForwardWorkItemIds,
             endAt: args.endAt,
             notes: args.notes || undefined,
@@ -1945,7 +2087,7 @@ function DailyCloseConnectedView({
             reviewedItemKeys: args.reviewedItemKeys,
             startAt: args.startAt,
             storeId: activeStore._id,
-          }) as Promise<CommandResult<unknown>>,
+          }) as Promise<ApprovalCommandResult<unknown>>,
       );
     } finally {
       setIsCompleting(false);
@@ -1961,6 +2103,28 @@ function DailyCloseConnectedView({
       isLoadingAccess={isLoadingAccess}
       isLoadingSnapshot={snapshot === undefined}
       onComplete={handleComplete}
+      onAuthenticateForApproval={(args) =>
+        runCommand(
+          () =>
+            authenticateForApproval({
+              actionKey: args.actionKey,
+              pinHash: args.pinHash,
+              reason: args.reason,
+              requiredRole: args.requiredRole,
+              requestedByStaffProfileId: args.requestedByStaffProfileId,
+              storeId: args.storeId,
+              subject: args.subject,
+              username: args.username,
+            }) as Promise<
+              CommandResult<{
+                approvalProofId: Id<"approvalProof">;
+                approvedByStaffProfileId: Id<"staffProfile">;
+                expiresAt: number;
+                requestedByStaffProfileId?: Id<"staffProfile">;
+              }>
+            >,
+        )
+      }
       orgUrlSlug={params?.orgUrlSlug ?? ""}
       snapshot={snapshot}
       storeId={activeStore?._id}

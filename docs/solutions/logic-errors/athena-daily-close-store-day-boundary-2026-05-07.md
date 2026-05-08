@@ -10,6 +10,7 @@ symptoms:
   - "Opening handoff work can be lost if Daily Close is treated as a transient screen summary"
   - "Register, POS session, and store-day close data can drift without a server-owned snapshot"
   - "Late-night local transactions can be omitted when the server interprets an operating date as a UTC day"
+  - "An empty operating day can look accidentally ready instead of intentionally closable"
 root_cause: store_day_lifecycle_missing_authoritative_close_record
 resolution_type: domain_model_plus_command_boundary
 severity: medium
@@ -19,6 +20,7 @@ tags:
   - cash-controls
   - register-session
   - operating-date
+  - approval-policy
   - convex
 ---
 
@@ -51,6 +53,19 @@ ids, then write a completed summary and operational events. Opening should read
 the prior completed close and unresolved carry-forward work rather than
 rebuilding yesterday's close from live operational state.
 
+Completing Daily Close is still a store-day lifecycle mutation even when the
+readiness snapshot is clean. Gate it through the shared command approval layer:
+the mutation returns `approval_required`, the UI presents the manager approval
+dialog through `useApprovedCommand`, and the mutation consumes the one-use
+approval proof before persisting the close record. Do not rely on a
+screen-local manager prompt as the enforcement boundary.
+
+An all-zero store day is allowed to close when the server snapshot has no
+blockers, review items, carry-forward work, ready inputs, sales, cash activity,
+expenses, or variances. Treat that as an explicit zero-activity close in the UI
+so operators understand they are recording "nothing happened today," not
+bypassing missing reconciliation work.
+
 Use an explicit operating-day time range for the snapshot and completion
 mutation. A local operating date is not the same as a UTC calendar day: a cash
 sale completed after midnight UTC can still belong to the current local
@@ -67,10 +82,13 @@ server-side item totals, not from stale client cart state.
 
 - Do not complete Daily Close from client-side readiness alone; re-read the
   snapshot in the mutation.
+- Require a consumed manager approval proof before persisting a completed close.
 - Do not let open register sessions, pending closeout approvals, or unresolved
   POS sessions be soft warnings. They block completion.
 - Keep variance, void, and exception records visible as review items so the
   operator acknowledges them before close.
+- Let a true zero-activity day close, but label it explicitly as no activity to
+  close instead of reusing ordinary completed-work copy.
 - Preserve carry-forward work as operational work items so the later opening
   workflow has a durable handoff.
 - Keep the snapshot query and completion mutation on the same validated

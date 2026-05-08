@@ -18,6 +18,7 @@ const mockedHooks = vi.hoisted(() => ({
 }));
 
 const mockedApi = vi.hoisted(() => ({
+  authenticateStaffCredentialForApproval: "authenticateStaffCredentialForApproval",
   completeDailyClose: "completeDailyClose",
   getDailyCloseSnapshot: "getDailyCloseSnapshot",
 }));
@@ -76,6 +77,10 @@ vi.mock("~/convex/_generated/api", () => ({
   api: {
     operations: {
       dailyClose: mockedApi,
+      staffCredentials: {
+        authenticateStaffCredentialForApproval:
+          mockedApi.authenticateStaffCredentialForApproval,
+      },
     },
   },
 }));
@@ -269,6 +274,11 @@ function renderContent(
 describe("DailyCloseViewContent", () => {
   beforeEach(() => {
     window.scrollTo = vi.fn();
+    global.ResizeObserver = class ResizeObserver {
+      disconnect() {}
+      observe() {}
+      unobserve() {}
+    };
     mockedRouter.search = {};
     vi.clearAllMocks();
   });
@@ -383,6 +393,55 @@ describe("DailyCloseViewContent", () => {
     expect(screen.getByText("Completed At")).toBeInTheDocument();
     expect(screen.getByText("GH₵495")).toBeInTheDocument();
     expect(screen.getByText("GH₵500")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /complete daily close/i }),
+    ).toBeEnabled();
+    const checklist = screen.getByText("Close checklist").closest("div");
+    expect(checklist).not.toBeNull();
+    within(checklist as HTMLElement)
+      .getAllByText("Clear")
+      .forEach((value) => {
+        expect(value).not.toHaveClass("text-success");
+        expect(value).not.toHaveClass("text-warning-foreground");
+      });
+    expect(within(checklist as HTMLElement).getByText("None")).not.toHaveClass(
+      "text-action-workflow",
+    );
+  });
+
+  it("labels a ready zero-activity day explicitly", () => {
+    renderContent({
+      ...readySnapshot,
+      readyItems: [],
+      reviewItems: [],
+      summary: {
+        carriedOverCashTotal: 0,
+        carriedOverRegisterCount: 0,
+        cashDeposited: 0,
+        cashExpected: 0,
+        carryForwardCount: 0,
+        currentDayCashTransactionCount: 0,
+        currentDayCashTotal: 0,
+        expenseStaffCount: 0,
+        expenseTotal: 0,
+        registerCount: 0,
+        registerVarianceCount: 0,
+        staffCount: 0,
+        totalSales: 0,
+        transactionCount: 0,
+        varianceTotal: 0,
+      },
+    });
+
+    expect(screen.getByText("No activity to close")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "No sales, register activity, expenses, or follow-ups were recorded for this operating day.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("No activity was recorded for this operating day."),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /complete daily close/i }),
     ).toBeEnabled();
@@ -543,6 +602,49 @@ describe("DailyCloseViewContent", () => {
         startAt: readySnapshot.startAt,
       });
     });
+  });
+
+  it("opens manager approval when completion requires it", async () => {
+    const user = userEvent.setup();
+
+    renderContent(readySnapshot, {
+      onComplete: vi.fn(async () => ({
+        kind: "approval_required" as const,
+        approval: {
+          action: {
+            key: "operations.daily_close.complete",
+            label: "Complete Daily Close",
+          },
+          copy: {
+            message:
+              "A manager needs to approve this Daily Close before the operating day is saved.",
+            primaryActionLabel: "Approve and complete",
+            secondaryActionLabel: "Cancel",
+            title: "Manager approval required",
+          },
+          reason: "Manager approval is required to complete Daily Close.",
+          requiredRole: "manager" as const,
+          resolutionModes: [{ kind: "inline_manager_proof" as const }],
+          selfApproval: "allowed" as const,
+          subject: {
+            id: "store-1:2026-05-07",
+            label: "Daily Close 2026-05-07",
+            type: "daily_close",
+          },
+        },
+      })),
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: /complete daily close/i }),
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Manager approval required",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Enter manager credentials")).toBeInTheDocument();
   });
 
   it("renders command-result user errors inline with operator-safe copy", async () => {
