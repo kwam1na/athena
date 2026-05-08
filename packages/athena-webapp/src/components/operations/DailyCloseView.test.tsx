@@ -318,8 +318,16 @@ describe("DailyCloseViewContent", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("shows blocked items, links to source workflows, and disables completion", () => {
+  it("shows blocked items, links to source workflows, and disables completion", async () => {
+    const user = userEvent.setup();
+
     renderContent(blockedSnapshot);
+
+    for (const detailsButton of screen.getAllByRole("button", {
+      name: /show details/i,
+    })) {
+      await user.click(detailsButton);
+    }
 
     expect(
       screen.getByText("Register session is still open"),
@@ -331,9 +339,9 @@ describe("DailyCloseViewContent", () => {
     expect(screen.getByText("Register Session")).toBeInTheDocument();
     expect(screen.queryByText("Register 1")).not.toBeInTheDocument();
     expect(
-      screen.getByText("Front counter terminal / Register 1"),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Operating Scope")).toBeInTheDocument();
+      screen.getAllByText("Front counter terminal / Register 1"),
+    ).not.toHaveLength(0);
+    expect(screen.getAllByText("Operating Scope")).not.toHaveLength(0);
     expect(screen.getByText("Carried over from prior day")).toBeInTheDocument();
     expect(screen.getByText("Opened At")).toBeInTheDocument();
     expect(screen.getByText("GH₵400")).toBeInTheDocument();
@@ -382,7 +390,9 @@ describe("DailyCloseViewContent", () => {
     ).toBeDisabled();
   });
 
-  it("shows ready summary totals and enables completion", () => {
+  it("shows ready summary totals and enables completion", async () => {
+    const user = userEvent.setup();
+
     renderContent(readySnapshot);
 
     expect(screen.getByText("Ready to close")).toBeInTheDocument();
@@ -397,6 +407,11 @@ describe("DailyCloseViewContent", () => {
       .getByText("Register closeouts complete")
       .closest("article");
     expect(closedRegisterItem).not.toBeNull();
+    await user.click(
+      within(closedRegisterItem as HTMLElement).getByRole("button", {
+        name: /show details/i,
+      }),
+    );
     expect(
       within(closedRegisterItem as HTMLElement).getAllByText("GH₵955"),
     ).toHaveLength(2);
@@ -413,11 +428,16 @@ describe("DailyCloseViewContent", () => {
     );
     const saleItem = screen.getByText("Completed sale").closest("article");
     expect(saleItem).not.toBeNull();
+    await user.click(
+      within(saleItem as HTMLElement).getByRole("button", {
+        name: /show details/i,
+      }),
+    );
     expect(
-      within(saleItem as HTMLElement).getByText(
+      within(saleItem as HTMLElement).getAllByText(
         "Front counter terminal / Register A1",
       ),
-    ).toBeInTheDocument();
+    ).not.toHaveLength(0);
     expect(
       within(saleItem as HTMLElement).getByText("Kofi Mensah"),
     ).toBeInTheDocument();
@@ -442,6 +462,11 @@ describe("DailyCloseViewContent", () => {
     expect(screen.getByText("Completed expense")).toBeInTheDocument();
     const expenseItem = screen.getByText("Completed expense").closest("article");
     expect(expenseItem).not.toBeNull();
+    await user.click(
+      within(expenseItem as HTMLElement).getByRole("button", {
+        name: /show details/i,
+      }),
+    );
     expect(
       within(expenseItem as HTMLElement).getByRole("link", {
         name: "#EXP-1",
@@ -492,6 +517,133 @@ describe("DailyCloseViewContent", () => {
     expect(within(checklist as HTMLElement).getByText("None")).not.toHaveClass(
       "text-action-workflow",
     );
+  });
+
+  it("paginates daily close item cards at five items per page", async () => {
+    const user = userEvent.setup();
+    const saleTemplate = readySnapshot.readyItems[1];
+    const readyItems = Array.from({ length: 12 }, (_, index) => ({
+      ...saleTemplate,
+      id: `ready-sale-${index + 1}`,
+      metadata: {
+        ...(saleTemplate.metadata as Record<string, unknown>),
+        transaction: `TXN-${index + 1}`,
+      },
+      subject: {
+        id: `txn-${index + 1}`,
+        label: `TXN-${index + 1}`,
+        type: "pos_transaction",
+      },
+      title: `Completed sale ${index + 1}`,
+    }));
+
+    const { unmount } = renderContent({
+      ...readySnapshot,
+      readyItems,
+    });
+
+    const readySection = screen.getByRole("region", {
+      name: /ready close items/i,
+    });
+
+    expect(
+      within(readySection).getByText("Showing 1-5 of 12"),
+    ).toBeInTheDocument();
+    expect(within(readySection).getByText("Page 1 of 3")).toBeInTheDocument();
+    expect(
+      within(readySection).getByText("Completed sale 5"),
+    ).toBeInTheDocument();
+    expect(
+      within(readySection).queryByText("Completed sale 6"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(readySection).getByRole("button", {
+        name: /go to previous page/i,
+      }),
+    ).toBeDisabled();
+
+    await user.click(
+      within(readySection).getByRole("button", {
+        name: /go to next page/i,
+      }),
+    );
+
+    expect(mockedRouter.navigate).toHaveBeenCalledWith({
+      search: expect.any(Function),
+    });
+    const firstPageUpdater = mockedRouter.navigate.mock.calls[0]?.[0]
+      ?.search as (current: Record<string, unknown>) => Record<string, unknown>;
+    expect(firstPageUpdater({ tab: "ready" })).toEqual({
+      page: 2,
+      tab: "ready",
+    });
+
+    unmount();
+    vi.clearAllMocks();
+    mockedRouter.search = { page: 2, tab: "ready" };
+    const secondPageRender = renderContent({
+      ...readySnapshot,
+      readyItems,
+    });
+    const secondPageReadySection = screen.getByRole("region", {
+      name: /ready close items/i,
+    });
+
+    expect(
+      within(secondPageReadySection).getByText("Showing 6-10 of 12"),
+    ).toBeInTheDocument();
+    expect(
+      within(secondPageReadySection).getByText("Page 2 of 3"),
+    ).toBeInTheDocument();
+    expect(
+      within(secondPageReadySection).queryByText("Completed sale 5"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(secondPageReadySection).getByText("Completed sale 6"),
+    ).toBeInTheDocument();
+    expect(
+      within(secondPageReadySection).getByText("Completed sale 10"),
+    ).toBeInTheDocument();
+    expect(
+      within(secondPageReadySection).getByRole("button", {
+        name: /go to next page/i,
+      }),
+    ).toBeEnabled();
+
+    await user.click(
+      within(secondPageReadySection).getByRole("button", {
+        name: /go to next page/i,
+      }),
+    );
+
+    const secondPageUpdater = mockedRouter.navigate.mock.calls[0]?.[0]
+      ?.search as (current: Record<string, unknown>) => Record<string, unknown>;
+    expect(secondPageUpdater({ page: 2, tab: "ready" })).toEqual({
+      page: 3,
+      tab: "ready",
+    });
+
+    secondPageRender.unmount();
+    mockedRouter.search = { page: 3, tab: "ready" };
+    renderContent({
+      ...readySnapshot,
+      readyItems,
+    });
+    const thirdPageReadySection = screen.getByRole("region", {
+      name: /ready close items/i,
+    });
+
+    expect(
+      within(thirdPageReadySection).getByText("Showing 11-12 of 12"),
+    ).toBeInTheDocument();
+    expect(
+      within(thirdPageReadySection).getByText("Page 3 of 3"),
+    ).toBeInTheDocument();
+    expect(
+      within(thirdPageReadySection).getByRole("button", {
+        name: /go to next page/i,
+      }),
+    ).toBeDisabled();
   });
 
   it("labels a ready zero-activity day explicitly", () => {
@@ -668,10 +820,12 @@ describe("DailyCloseViewContent", () => {
     expect(
       searchUpdater({
         o: "%2Fwigclub%2Fstore%2Fwigclub%2Foperations",
+        page: 3,
         tab: "ready",
       }),
     ).toEqual({
       o: "%2Fwigclub%2Fstore%2Fwigclub%2Foperations",
+      page: 1,
       tab: "blocked",
     });
   });

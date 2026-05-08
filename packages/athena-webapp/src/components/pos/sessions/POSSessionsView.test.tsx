@@ -1,12 +1,8 @@
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { POSSessionsView } from "./POSSessionsView";
 
-const presentCommandToastMock = vi.fn();
-const runCommandMock = vi.fn();
-const useMutationMock = vi.fn();
 const useParamsMock = vi.fn();
 const useProtectedAdminPageStateMock = vi.fn();
 const useQueryMock = vi.fn();
@@ -14,16 +10,13 @@ const useQueryMock = vi.fn();
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
     children,
-    params: _params,
-    search: _search,
     to,
-    ...props
   }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
     params?: unknown;
     search?: unknown;
     to?: string;
   }) => (
-    <a href={to ?? "#"} {...props}>
+    <a href={to ?? "#"}>
       {children}
     </a>
   ),
@@ -32,20 +25,11 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 vi.mock("convex/react", () => ({
-  useMutation: (...args: unknown[]) => useMutationMock(...args),
   useQuery: (...args: unknown[]) => useQueryMock(...args),
 }));
 
 vi.mock("@/hooks/useProtectedAdminPageState", () => ({
   useProtectedAdminPageState: () => useProtectedAdminPageStateMock(),
-}));
-
-vi.mock("@/lib/errors/presentCommandToast", () => ({
-  presentCommandToast: (...args: unknown[]) => presentCommandToastMock(...args),
-}));
-
-vi.mock("@/lib/errors/runCommand", () => ({
-  runCommand: (...args: unknown[]) => runCommandMock(...args),
 }));
 
 vi.mock("@/components/View", () => ({
@@ -77,9 +61,9 @@ vi.mock("@/components/base/table/data-table", () => ({
     data,
   }: {
     columns: Array<{
-      cell?: (args: { row: { original: any } }) => React.ReactNode;
+      cell?: (args: { row: { original: unknown } }) => React.ReactNode;
     }>;
-    data: any[];
+    data: Array<{ _id: string }>;
   }) => (
     <div>
       {data.map((row) => (
@@ -109,15 +93,12 @@ vi.mock("@/components/states/signed-out/ProtectedAdminSignInView", () => ({
 }));
 
 describe("POSSessionsView", () => {
-  const expireSession = vi.fn();
-
   beforeEach(() => {
     vi.clearAllMocks();
     useParamsMock.mockReturnValue({
       orgUrlSlug: "acme",
       storeUrlSlug: "downtown",
     });
-    useMutationMock.mockReturnValue(expireSession);
     useProtectedAdminPageStateMock.mockReturnValue({
       activeStore: {
         _id: "store-1",
@@ -128,9 +109,6 @@ describe("POSSessionsView", () => {
       isAuthenticated: true,
       isLoadingAccess: false,
     });
-    runCommandMock.mockImplementation(async (command: () => Promise<unknown>) =>
-      command(),
-    );
   });
 
   it("shows a layout skeleton and skips protected query args while access loads", () => {
@@ -267,20 +245,7 @@ describe("POSSessionsView", () => {
     expect(screen.getByText("Terminal not recorded")).toBeInTheDocument();
   });
 
-  it("expires only the active row and presents command errors", async () => {
-    let resolveCommand:
-      | ((value: {
-          kind: "user_error";
-          error: { code: "conflict"; message: string };
-        }) => void)
-      | undefined;
-    const commandPromise = new Promise<{
-      kind: "user_error";
-      error: { code: "conflict"; message: string };
-    }>((resolve) => {
-      resolveCommand = resolve;
-    });
-    expireSession.mockReturnValue(commandPromise);
+  it("omits row action controls from the sessions table", () => {
     useQueryMock.mockReturnValue({
       sessions: [
         {
@@ -302,40 +267,12 @@ describe("POSSessionsView", () => {
 
     render(<POSSessionsView />);
 
-    const firstAction = screen.getByRole("button", {
-      name: "Expire POS session SES-001 and release holds",
-    });
-    const secondAction = screen.getByRole("button", {
-      name: "Expire POS session SES-002 and release holds",
-    });
-
-    await userEvent.click(firstAction);
-
-    await waitFor(() => expect(firstAction).toBeDisabled());
-    expect(secondAction).not.toBeDisabled();
-    expect(expireSession).toHaveBeenCalledWith({
-      reason: "Operator expired session from POS sessions operations view",
-      sessionId: "session-1",
-      storeId: "store-1",
-    });
-
-    resolveCommand?.({
-      kind: "user_error",
-      error: {
-        code: "conflict",
-        message: "Session already completed",
-      },
-    });
-
-    await waitFor(() =>
-      expect(presentCommandToastMock).toHaveBeenCalledWith({
-        kind: "user_error",
-        error: {
-          code: "conflict",
-          message: "Session already completed",
-        },
+    expect(screen.getByText("SES-001")).toBeInTheDocument();
+    expect(screen.queryByText("Action")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: /expire pos session/i,
       }),
-    );
-    expect(firstAction).not.toBeDisabled();
+    ).not.toBeInTheDocument();
   });
 });

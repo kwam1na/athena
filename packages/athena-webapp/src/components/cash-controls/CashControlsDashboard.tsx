@@ -3,8 +3,8 @@ import { useQuery } from "convex/react";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
 
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
-import { capitalizeWords, cn, currencyFormatter } from "@/lib/utils";
-import { formatStoredAmount } from "@/lib/pos/displayAmounts";
+import { capitalizeWords, cn } from "@/lib/utils";
+import { formatStoredCurrencyAmount } from "@/lib/pos/displayAmounts";
 import { api } from "~/convex/_generated/api";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
@@ -219,7 +219,9 @@ function formatCurrency(currency: string, amount?: number | null) {
     return "Pending";
   }
 
-  return formatStoredAmount(currencyFormatter(currency), amount);
+  return formatStoredCurrencyAmount(currency, amount, {
+    revealMinorUnits: true,
+  });
 }
 
 function formatStatusLabel(status: string) {

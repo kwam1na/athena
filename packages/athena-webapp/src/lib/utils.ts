@@ -26,8 +26,11 @@ export function capitalizeWords(str: string): string {
     .join(" ");
 }
 
-export function currencyFormatter(currency: string) {
-  return sharedCurrencyFormatter(currency);
+export function currencyFormatter(
+  currency: string,
+  options?: Parameters<typeof sharedCurrencyFormatter>[1],
+) {
+  return sharedCurrencyFormatter(currency, options);
 }
 
 export function toSlug(str: string) {
