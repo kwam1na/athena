@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 4667 nodes · 4502 edges · 1556 communities detected
+- 4668 nodes · 4504 edges · 1556 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1838,16 +1838,16 @@ Cohesion: 0.26
 Nodes (11): collectConvexSourceModules(), collectConvexSourceModulesFromDir(), readCommandStdout(), readGeneratedConvexApiModules(), refreshAthenaConvexGeneratedApi(), resolveSupportedConvexNodeBin(), runPreCommitGeneratedArtifacts(), stageTrackedGeneratedArtifacts() (+3 more)
 
 ### Community 61 - "Community 61"
+Cohesion: 0.31
+Nodes (12): collectFilesUnder(), collectProofSnapshot(), collectValidationFingerprintPaths(), evaluatePrePushValidationProof(), hashValidationWiring(), normalizeRepoPath(), readPrAthenaScript(), recordPrePushValidationProof() (+4 more)
+
+### Community 62 - "Community 62"
 Cohesion: 0.21
 Nodes (4): hasCustomerDetails(), mapCatalogRowToProduct(), trimOptional(), useRegisterViewModel()
 
-### Community 62 - "Community 62"
+### Community 63 - "Community 63"
 Cohesion: 0.18
 Nodes (2): formatBlockerList(), runPrePushReview()
-
-### Community 63 - "Community 63"
-Cohesion: 0.33
-Nodes (11): collectFilesUnder(), collectProofSnapshot(), collectValidationFingerprintPaths(), evaluatePrePushValidationProof(), hashValidationWiring(), normalizeRepoPath(), readPrAthenaScript(), recordPrePushValidationProof() (+3 more)
 
 ### Community 64 - "Community 64"
 Cohesion: 0.29
@@ -2387,7 +2387,7 @@ Nodes (0):
 
 ### Community 198 - "Community 198"
 Cohesion: 0.4
-Nodes (0):
+Nodes (1): Header()
 
 ### Community 199 - "Community 199"
 Cohesion: 0.4
@@ -2402,12 +2402,12 @@ Cohesion: 0.4
 Nodes (0):
 
 ### Community 202 - "Community 202"
-Cohesion: 0.5
-Nodes (2): handleFileSelect(), validateFile()
-
-### Community 203 - "Community 203"
 Cohesion: 0.4
 Nodes (0):
+
+### Community 203 - "Community 203"
+Cohesion: 0.5
+Nodes (2): handleFileSelect(), validateFile()
 
 ### Community 204 - "Community 204"
 Cohesion: 0.4
@@ -2419,7 +2419,7 @@ Nodes (0):
 
 ### Community 206 - "Community 206"
 Cohesion: 0.4
-Nodes (1): Header()
+Nodes (0):
 
 ### Community 207 - "Community 207"
 Cohesion: 0.5

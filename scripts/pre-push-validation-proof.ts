@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-export const PRE_PUSH_VALIDATION_PROOF_SCHEMA_VERSION = 1;
+export const PRE_PUSH_VALIDATION_PROOF_SCHEMA_VERSION = 2;
 export const PR_ATHENA_PROOF_BASE_REF = "origin/main";
 const PROOF_GIT_PATH = "codex/pre-push-pr-athena-proof.json";
 
@@ -21,10 +21,11 @@ type ProofLogger = Pick<Console, "log" | "warn">;
 
 export type PrePushValidationProof = {
   schemaVersion: typeof PRE_PUSH_VALIDATION_PROOF_SCHEMA_VERSION;
-  headSha: string;
+  recordedHeadSha: string;
+  validatedTreeSha: string;
+  recordedStatusMode: "clean" | "staged-index";
   baseRef: typeof PR_ATHENA_PROOF_BASE_REF;
   baseSha: string;
-  cleanStatus: "";
   bunVersion: string;
   prAthenaScript: string;
   validationFingerprint: string;
@@ -51,6 +52,8 @@ type ProofRuntimeOptions = {
   readFile?: typeof readFile;
   readdir?: typeof readdir;
 };
+
+type ProofSnapshotMode = "evaluate" | "record";
 
 function normalizeRepoPath(repoPath: string) {
   return repoPath.replaceAll("\\", "/").replace(/^\.\//, "");
@@ -83,6 +86,25 @@ async function runCommand(
   }
 
   return stdout.trim();
+}
+
+async function runExitCodeCommand(
+  rootDir: string,
+  command: string[],
+  spawn: CommandRunner = Bun.spawn
+) {
+  const proc = spawn(command, {
+    cwd: rootDir,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+
+  return { stdout: stdout.trim(), stderr: stderr.trim(), exitCode };
 }
 
 async function collectFilesUnder(
@@ -181,42 +203,77 @@ async function readPrAthenaScript(rootDir: string, options: ProofRuntimeOptions 
 
 async function collectProofSnapshot(
   rootDir: string,
-  options: ProofRuntimeOptions = {}
+  options: ProofRuntimeOptions = {},
+  mode: ProofSnapshotMode = "evaluate"
 ): Promise<ProofSnapshot> {
   const spawn = options.spawn ?? Bun.spawn;
   const [
     proofPath,
-    headSha,
+    recordedHeadSha,
+    headTreeSha,
+    indexTreeSha,
     baseSha,
     status,
+    untrackedFiles,
     bunVersion,
     prAthenaScript,
     validationFingerprint,
   ] = await Promise.all([
     runCommand(rootDir, ["git", "rev-parse", "--git-path", PROOF_GIT_PATH], spawn),
     runCommand(rootDir, ["git", "rev-parse", "--verify", "HEAD"], spawn),
+    runCommand(rootDir, ["git", "rev-parse", "--verify", "HEAD^{tree}"], spawn),
+    runCommand(rootDir, ["git", "write-tree"], spawn),
     runCommand(rootDir, ["git", "rev-parse", "--verify", PR_ATHENA_PROOF_BASE_REF], spawn),
     runCommand(
       rootDir,
       ["git", "status", "--porcelain", "--untracked-files=all"],
       spawn
     ),
+    runCommand(rootDir, ["git", "ls-files", "--others", "--exclude-standard"], spawn),
     runCommand(rootDir, ["bun", "--version"], spawn),
     readPrAthenaScript(rootDir, options),
     hashValidationWiring(rootDir, options),
   ]);
 
+  let recordedStatusMode: PrePushValidationProof["recordedStatusMode"] = "clean";
+  let validatedTreeSha = headTreeSha;
+
   if (status.trim()) {
-    throw new Error("working tree is not clean");
+    if (mode !== "record") {
+      throw new Error("working tree is not clean");
+    }
+
+    const unstagedDiff = await runExitCodeCommand(
+      rootDir,
+      ["git", "diff", "--quiet"],
+      spawn
+    );
+    if (unstagedDiff.exitCode > 1) {
+      throw new Error(
+        unstagedDiff.stderr || unstagedDiff.stdout || "git diff --quiet failed"
+      );
+    }
+
+    if (unstagedDiff.exitCode !== 0 || untrackedFiles.trim()) {
+      throw new Error("working tree has unstaged or untracked changes");
+    }
+
+    if (indexTreeSha === headTreeSha) {
+      throw new Error("working tree is not clean");
+    }
+
+    recordedStatusMode = "staged-index";
+    validatedTreeSha = indexTreeSha;
   }
 
   return {
     proofPath: path.resolve(rootDir, proofPath),
     schemaVersion: PRE_PUSH_VALIDATION_PROOF_SCHEMA_VERSION,
-    headSha,
+    recordedHeadSha,
+    validatedTreeSha,
+    recordedStatusMode,
     baseRef: PR_ATHENA_PROOF_BASE_REF,
     baseSha,
-    cleanStatus: "",
     bunVersion,
     prAthenaScript,
     validationFingerprint,
@@ -231,10 +288,12 @@ function validateProofShape(value: unknown): value is PrePushValidationProof {
   const proof = value as Record<string, unknown>;
   return (
     proof.schemaVersion === PRE_PUSH_VALIDATION_PROOF_SCHEMA_VERSION &&
-    typeof proof.headSha === "string" &&
+    typeof proof.recordedHeadSha === "string" &&
+    typeof proof.validatedTreeSha === "string" &&
+    (proof.recordedStatusMode === "clean" ||
+      proof.recordedStatusMode === "staged-index") &&
     proof.baseRef === PR_ATHENA_PROOF_BASE_REF &&
     typeof proof.baseSha === "string" &&
-    proof.cleanStatus === "" &&
     typeof proof.bunVersion === "string" &&
     typeof proof.prAthenaScript === "string" &&
     typeof proof.validationFingerprint === "string"
@@ -274,7 +333,7 @@ export async function evaluatePrePushValidationProof(
   }
 
   const comparisons: Array<[keyof PrePushValidationProof, string]> = [
-    ["headSha", "HEAD changed since pr:athena recorded its proof"],
+    ["validatedTreeSha", "HEAD tree changed since pr:athena recorded its proof"],
     ["baseSha", `${PR_ATHENA_PROOF_BASE_REF} changed since pr:athena recorded its proof`],
     ["bunVersion", "Bun version changed since pr:athena recorded its proof"],
     ["prAthenaScript", "pr:athena command changed since proof recording"],
@@ -305,7 +364,7 @@ export async function recordPrePushValidationProof(
   const logger = options.logger ?? console;
 
   try {
-    const snapshot = await collectProofSnapshot(rootDir, options);
+    const snapshot = await collectProofSnapshot(rootDir, options, "record");
     const { proofPath, ...proof } = snapshot;
     await mkdir(path.dirname(proofPath), { recursive: true });
     await writeFile(proofPath, `${JSON.stringify(proof, null, 2)}\n`, "utf8");

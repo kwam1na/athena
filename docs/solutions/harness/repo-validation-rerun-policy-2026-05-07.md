@@ -39,11 +39,13 @@ ran. It passes `--repo-validation-provided-by pr:athena` into
 `harness:review`; standalone `harness:review` still selects and runs the full
 repo validation command set for repo-owned changes.
 
-After a clean `pr:athena`, the repo records a git-private proof under the current
-worktree's git metadata. `pre-push:review` may reuse that proof only when all of
+After a clean or staged-only `pr:athena`, the repo records a git-private proof
+under the current worktree's git metadata. A staged-only run is valid because
+`pre-commit:generated-artifacts` stages the exact index tree that the next
+commit will contain. `pre-push:review` may reuse that proof only when all of
 these still match:
 
-- branch `HEAD`
+- validated tree SHA
 - `origin/main` SHA
 - clean tracked and untracked working tree status
 - Bun version
@@ -52,7 +54,9 @@ these still match:
 
 If any field is missing or stale, pre-push prints the reason and runs normally.
 Generated-doc and graphify auto-repair still block for review and commit instead
-of reusing a stale proof.
+of reusing a stale proof. Proof recording refuses mixed states with unstaged or
+untracked files, because those files were not guaranteed to become the pushed
+commit tree.
 
 ## Prevention
 
@@ -62,8 +66,11 @@ of reusing a stale proof.
   state into tracked files or shared temp paths.
 - Include command wiring, hooks, harness scripts, coverage scripts, graphify
   scripts, package metadata, and lock/runtime inputs in the proof fingerprint.
-- Reject proof reuse on dirty status, rebases, advanced `origin/main`, missing
-  proof, unsupported proof shape, changed Bun version, or changed validation
-  wiring.
+- Reject proof reuse on dirty status at push time, rebases, advanced
+  `origin/main`, missing proof, unsupported proof shape, changed Bun version, or
+  changed validation wiring.
+- When recording proof before commit, allow staged-only changes by proving the
+  staged index tree; refuse proof recording if any unstaged or untracked files
+  are present.
 - When repeated validation feels noisy, add a characterization test before
   removing any command from the ladder.

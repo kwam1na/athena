@@ -238,7 +238,7 @@ export async function runPrePushReview(
   const proofEvaluation = await evaluateValidationProof(rootDir);
   if (proofEvaluation.reusable) {
     logger.log(
-      `[pre-push] Reusing current pr:athena validation proof for ${proofEvaluation.proof.headSha}.`
+      `[pre-push] Reusing current pr:athena validation proof for tree ${proofEvaluation.proof.validatedTreeSha}.`
     );
     logger.log("[pre-push] All checks passed.");
     return;

@@ -116,11 +116,12 @@ describe("pre-push review wiring", () => {
         reusable: true,
         proofPath: "/tmp/proof.json",
         proof: {
-          schemaVersion: 1,
-          headSha: "head-sha",
+          schemaVersion: 2,
+          recordedHeadSha: "head-sha",
+          validatedTreeSha: "tree-sha",
+          recordedStatusMode: "clean",
           baseRef: "origin/main",
           baseSha: "base-sha",
-          cleanStatus: "",
           bunVersion: "1.1.29",
           prAthenaScript: "bun run pr:athena",
           validationFingerprint: "fingerprint",
@@ -152,7 +153,7 @@ describe("pre-push review wiring", () => {
 
     expect(steps).toEqual([]);
     expect(logs).toContain(
-      "[pre-push] Reusing current pr:athena validation proof for head-sha."
+      "[pre-push] Reusing current pr:athena validation proof for tree tree-sha."
     );
   });
 
