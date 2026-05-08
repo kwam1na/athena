@@ -285,11 +285,25 @@ export default function PosReceiptEmail({
           <Spacer height={16} />
 
           <Section>
+            <SectionLabel>Store policy</SectionLabel>
+            <Text style={{ ...styles.baseTextStyle, ...styles.policyLine }}>
+              In-store purchases may be returned or exchanged within 7 days when
+              items are unused and in original condition.
+            </Text>
+            <Text style={{ ...styles.baseTextStyle, ...styles.policyLine }}>
+              Used wigs or worn products are not eligible for return or
+              exchange.
+            </Text>
+          </Section>
+
+          <Spacer height={16} />
+
+          <Section>
             <Text style={{ ...styles.baseTextStyle, ...styles.footerLine }}>
               Thank you for your business!
             </Text>
             <Text style={{ ...styles.baseTextStyle, ...styles.footerLine }}>
-              Please keep this receipt for your records.
+              Keep this receipt for returns, exchanges, and your records.
             </Text>
           </Section>
         </Container>
@@ -514,6 +528,12 @@ const styles: Record<string, CSSProperties> = {
   },
   paymentMethod: {
     fontWeight: 900,
+  },
+  policyLine: {
+    color: "#444444",
+    fontSize: "10px",
+    lineHeight: "15px",
+    marginBottom: "6px",
   },
   footerLine: {
     textAlign: "center" as const,
