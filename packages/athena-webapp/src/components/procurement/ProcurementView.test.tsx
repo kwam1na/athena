@@ -687,10 +687,7 @@ describe("ProcurementViewContent", () => {
     expect(screen.queryByText("Handled SKU 1")).not.toBeInTheDocument();
     expect(screen.getByText("Handled SKU 11")).toBeInTheDocument();
     expect(screen.getByText("Handled SKU 12")).toBeInTheDocument();
-    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({
-      behavior: "smooth",
-      block: "start",
-    });
+    expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole("button", { name: /previous/i }));
 
