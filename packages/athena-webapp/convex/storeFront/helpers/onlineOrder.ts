@@ -1,6 +1,10 @@
 import { Id } from "../../_generated/dataModel";
 import { MutationCtx, QueryCtx } from "../../_generated/server";
-import { calculateOrderAmount } from "./paymentHelpers";
+import {
+  calculateItemsSubtotal,
+  calculateOrderAmount,
+  resolveServerDeliveryFee,
+} from "./paymentHelpers";
 import {
   recordOnlineOrderCreatedEvent,
   recordOnlineOrderRestockMovement,
@@ -143,27 +147,55 @@ export async function createOrderFromCheckoutSession(
     .query("checkoutSessionItem")
     .withIndex("by_sessionId", (q) => q.eq("sesionId", args.checkoutSessionId))
     .take(MAX_CHECKOUT_SESSION_ITEMS);
+  const serverPricedItems = await Promise.all(
+    items.map(async (item) => {
+      const productSku = await ctx.db.get("productSku", item.productSkuId);
+
+      if (!productSku) {
+        throw new Error("Product SKU not found for checkout session item.");
+      }
+
+      return {
+        ...item,
+        price: Math.round(productSku.price),
+        productId: productSku.productId,
+        productSku: productSku.sku ?? item.productSku,
+      };
+    }),
+  );
+  const subtotal = calculateItemsSubtotal(serverPricedItems);
+  const deliveryFee = resolveServerDeliveryFee({
+    deliveryDetails: args.deliveryDetails ?? session.deliveryDetails,
+    deliveryMethod: args.deliveryMethod ?? session.deliveryMethod,
+    deliveryOption: args.deliveryOption ?? session.deliveryOption,
+    storeConfig: store?.config,
+    subtotal,
+  });
+
+  if (deliveryFee === null) {
+    throw new Error("Delivery details are required before creating an order.");
+  }
 
   const paymentDue = calculateOrderAmount({
-    deliveryFee: args.deliveryFee ?? session.deliveryFee ?? 0,
+    deliveryFee,
     discount,
-    items: items.map((item) => ({
+    items: serverPricedItems.map((item) => ({
       price: item.price,
       productSkuId: item.productSkuId,
       quantity: item.quantity,
     })),
-    subtotal: session.amount,
+    subtotal,
   });
 
   const orderId = await ctx.db.insert("onlineOrder", {
-    amount: session.amount,
+    amount: subtotal,
     bagId: session.bagId,
     billingDetails: args.billingDetails ?? (session.billingDetails as any),
     checkoutSessionId: args.checkoutSessionId,
     customerDetails: args.customerDetails ?? (session.customerDetails as any),
     customerProfileId: customerProfile?._id,
     deliveryDetails: args.deliveryDetails ?? (session.deliveryDetails as any),
-    deliveryFee: args.deliveryFee ?? session.deliveryFee,
+    deliveryFee,
     deliveryInstructions:
       args.deliveryInstructions ?? session.deliveryInstructions,
     deliveryMethod: args.deliveryMethod ?? session.deliveryMethod ?? "n/a",
@@ -183,7 +215,7 @@ export async function createOrderFromCheckoutSession(
   });
 
   await Promise.all(
-    items.map((item) =>
+    serverPricedItems.map((item) =>
       ctx.db.insert("onlineOrderItem", {
         orderId,
         productId: item.productId,

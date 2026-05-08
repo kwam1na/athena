@@ -68,6 +68,9 @@ The fix covered these boundaries:
 - `RegisterCloseoutView`: counted cash parses display input to minor units and renders stored minor units back as display units for editing.
 - Promo codes: `promoCodeMoney` parses fixed amount discounts to minor units, keeps percentage discounts raw, renders stored fixed discounts as display units, and formats promo config payloads consistently.
 - `FeesView`: delivery fees preserve decimal values, handle zero intentionally, and convert with `toPesewas`.
+- Legacy assets delivery fees and return/exchange replacement prices now use the same display-input parser instead of ad hoc `parseInt`, `Number`, or manual `* 100` conversions.
+- Storefront order, review, checkout, bag, upsell, and promo displays format stored pesewa values through storefront's shared `formatStoredAmount` helper.
+- Storefront checkout, online-order creation, refunds, return/exchange planning, offer emails, and selected-product promo discounts are server-owned money boundaries: client-supplied totals are advisory, SKU prices are recomputed from catalog data, delivery fees are recomputed from store config, percentage discounts include quantity, and refunds are capped in integer minor units.
 
 Add a regression audit:
 
@@ -75,7 +78,7 @@ Add a regression audit:
 packages/athena-webapp/src/lib/moneyEntryAudit.test.ts
 ```
 
-That test scans Athena frontend source files with the TypeScript AST and forces raw `Number`, `parseFloat`, or `parseInt` money parsing to be reviewed or removed when it appears in a money-entry context. The AST pass catches multiline mutation payloads and pure helper wrappers, so a new surface like `price: toNumber(priceInput)` fails even if the helper hides the raw parse elsewhere in the file.
+That test scans Athena frontend source files with the TypeScript AST and forces raw `Number`, `parseFloat`, or `parseInt` money parsing to be reviewed or removed when it appears in a money-entry context. It also scans Storefront source for direct formatter usage on money-like values unless the value first passes through a stored-money display helper, and it protects the checkout/refund Convex contract by asserting the server-owned money helpers stay wired. The AST pass catches multiline mutation payloads and pure helper wrappers, so a new surface like `price: toNumber(priceInput)` fails even if the helper hides the raw parse elsewhere in the file.
 
 ## Why This Works
 
@@ -86,8 +89,9 @@ The static audit makes the bug class visible during tests instead of depending o
 ## Prevention
 
 - Use `parseDisplayAmountInput` for frontend money fields that persist to pesewas/minor units.
-- Use `toDisplayAmount` or `formatStoredAmount` when stored minor units are shown or loaded back into editable inputs.
+- Use `toDisplayAmount` or `formatStoredAmount` when stored minor units are shown or loaded back into editable inputs. Storefront should import its stored-money helper from `packages/storefront-webapp/src/lib/currency.ts`.
 - Keep percentage fields raw and branch by `discountType` or `depositType`.
+- Recompute checkout/session/order/refund totals on the server. Client-submitted `amount`, `price`, and delivery-fee values should not be canonical.
 - Keep `moneyEntryAudit.test.ts` green when adding frontend money-entry code. New money-entry boundaries are scanned automatically; add reviewed exceptions only for display-only formatting, backend-owned conversion boundaries, or legacy surfaces with an explicit reason.
 - Trace money changes end to end: frontend field -> mutation payload -> Convex schema/table -> display/readback path.
 

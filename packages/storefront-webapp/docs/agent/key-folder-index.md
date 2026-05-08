@@ -7,7 +7,7 @@ This key-folder index highlights the main directories agents are likely to need 
 ## Core app surfaces
 
 - [`src/routes`](../../src/routes) — TanStack Router routes, layouts, and browser journey entrypoints. Currently 36 file(s); key children: -homePageLoader.test.ts, -homePageLoader.ts, __root.tsx, _layout, _layout.tsx.
-- [`src/components`](../../src/components) — Reusable storefront UI and feature-specific checkout/catalog components. Currently 189 file(s); key children: DefaultCatchBoundary.tsx, EntityPage.tsx, HomePage.test.tsx, HomePage.tsx, ProductActionBar.tsx.
+- [`src/components`](../../src/components) — Reusable storefront UI and feature-specific checkout/catalog components. Currently 190 file(s); key children: DefaultCatchBoundary.tsx, EntityPage.tsx, HomePage.test.tsx, HomePage.tsx, ProductActionBar.tsx.
 - [`src/hooks`](../../src/hooks) — Client hooks for bag, routing, observability, and auth interactions. Currently 29 file(s); key children: TRACKING_SCALABILITY.md, use-store-modal.tsx, useAuth.ts, useCheckout.ts, useDiscountCodeAlert.tsx.
 - [`src/contexts`](../../src/contexts) — Shared client providers for store, navigation, and observability state. Currently 4 file(s); key children: FormSubmissionProvider.tsx, NavigationBarProvider.tsx, StoreContext.tsx, StorefrontObservabilityProvider.tsx.
 - [`src/lib`](../../src/lib) — Shared utilities, query helpers, schemas, and domain logic. Currently 47 file(s); key children: STOREFRONT_OBSERVABILITY.md, constants.ts, countries.ts, currency.ts, feeUtils.test.ts.
@@ -15,6 +15,6 @@ This key-folder index highlights the main directories agents are likely to need 
 
 ## Validation and support surfaces
 
-- [`tests/e2e`](../../tests/e2e) — Playwright browser journeys and redirect/payment coverage. Currently 2 file(s); key children: helpers.
+- [`tests/e2e`](../../tests/e2e) — Playwright browser journeys and redirect/payment coverage. Currently 3 file(s); key children: helpers, storefront-boot.e2e.ts.
 - [`src/utils`](../../src/utils) — Lower-level runtime helpers used across route and API code. Currently 2 file(s); key children: index.ts, versionChecker.ts.
 

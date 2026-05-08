@@ -11,6 +11,17 @@ import { Id } from "../_generated/dataModel";
 
 const entity = "promoCode";
 
+export function calculateSelectedProductPromoDiscount(
+  item: { price: number; quantity: number },
+  promoCode: { discountType: "percentage" | "amount"; discountValue: number },
+) {
+  if (promoCode.discountType === "percentage") {
+    return item.price * item.quantity * (promoCode.discountValue / 100);
+  }
+
+  return promoCode.discountValue;
+}
+
 export const redeem = internalMutation({
   args: {
     code: v.string(),
@@ -19,7 +30,7 @@ export const redeem = internalMutation({
   },
   handler: async (ctx, args) => {
     console.log(
-      `[Redeem] Starting redemption process for code: ${args.code}, session: ${args.checkoutSessionId}, user: ${args.storeFrontUserId}`
+      `[Redeem] Starting redemption process for code: ${args.code}, session: ${args.checkoutSessionId}, user: ${args.storeFrontUserId}`,
     );
 
     // Find the invite code
@@ -34,7 +45,7 @@ export const redeem = internalMutation({
     }
 
     console.log(
-      `[Redeem] Found promo code: ${promoCode.code}, active: ${promoCode.active}, isExclusive: ${promoCode.isExclusive}`
+      `[Redeem] Found promo code: ${promoCode.code}, active: ${promoCode.active}, isExclusive: ${promoCode.isExclusive}`,
     );
 
     if (!promoCode.active) {
@@ -45,7 +56,7 @@ export const redeem = internalMutation({
     // Validate date range
     const now = Date.now();
     console.log(
-      `[Redeem] Validating date range - now: ${now}, validFrom: ${promoCode.validFrom}, validTo: ${promoCode.validTo}`
+      `[Redeem] Validating date range - now: ${now}, validFrom: ${promoCode.validFrom}, validTo: ${promoCode.validTo}`,
     );
 
     if (now < promoCode.validFrom) {
@@ -73,8 +84,8 @@ export const redeem = internalMutation({
       .filter((q) =>
         q.and(
           q.eq(q.field("promoCodeId"), promoCode._id),
-          q.eq(q.field("storeFrontUserId"), args.storeFrontUserId)
-        )
+          q.eq(q.field("storeFrontUserId"), args.storeFrontUserId),
+        ),
       )
       .first();
 
@@ -92,14 +103,14 @@ export const redeem = internalMutation({
         .filter((q) =>
           q.and(
             q.eq(q.field("promoCodeId"), promoCode._id),
-            q.eq(q.field("storeFrontUserId"), args.storeFrontUserId)
-          )
+            q.eq(q.field("storeFrontUserId"), args.storeFrontUserId),
+          ),
         )
         .first();
 
       if (!hasOffer) {
         console.log(
-          `[Redeem] User has no offer for exclusive code: ${args.code}`
+          `[Redeem] User has no offer for exclusive code: ${args.code}`,
         );
         return {
           success: false,
@@ -107,15 +118,18 @@ export const redeem = internalMutation({
         };
       }
       console.log(
-        `[Redeem] User has valid offer for exclusive code: ${args.code}`
+        `[Redeem] User has valid offer for exclusive code: ${args.code}`,
       );
     }
 
-    const checkoutSession = await ctx.db.get("checkoutSession", args.checkoutSessionId);
+    const checkoutSession = await ctx.db.get(
+      "checkoutSession",
+      args.checkoutSessionId,
+    );
 
     if (!checkoutSession) {
       console.log(
-        `[Redeem] Checkout session not found: ${args.checkoutSessionId}`
+        `[Redeem] Checkout session not found: ${args.checkoutSessionId}`,
       );
       return { success: false, message: "Checkout session not found" };
     }
@@ -128,12 +142,12 @@ export const redeem = internalMutation({
       .collect();
 
     console.log(
-      `[Redeem] Found ${sessionItems.length} items in checkout session`
+      `[Redeem] Found ${sessionItems.length} items in checkout session`,
     );
 
     if (promoCode.span == "selected-products") {
       console.log(
-        `[Redeem] Processing selected-products discount for: ${args.code}`
+        `[Redeem] Processing selected-products discount for: ${args.code}`,
       );
 
       const expectedProducts = await ctx.db
@@ -142,41 +156,37 @@ export const redeem = internalMutation({
         .collect();
 
       console.log(
-        `[Redeem] Found ${expectedProducts.length} expected products for selected-products discount`
+        `[Redeem] Found ${expectedProducts.length} expected products for selected-products discount`,
       );
 
       const foundItems = sessionItems.filter((sessionItem) =>
         expectedProducts.some(
           (expectedProduct) =>
-            expectedProduct.productSkuId == sessionItem.productSkuId
-        )
+            expectedProduct.productSkuId == sessionItem.productSkuId,
+        ),
       );
 
       console.log(
-        `[Redeem] Found ${foundItems.length} matching items in session`
+        `[Redeem] Found ${foundItems.length} matching items in session`,
       );
 
       const discounts = foundItems.map((item) => {
-        if (promoCode.discountType == "percentage") {
-          return item.price * (promoCode.discountValue / 100);
-        } else {
-          return promoCode.discountValue;
-        }
+        return calculateSelectedProductPromoDiscount(item, promoCode);
       });
 
       const totalDiscount = discounts.reduce((a, b) => a + b, 0);
       console.log(
-        `[Redeem] Calculated total discount for selected-products: ${totalDiscount}`
+        `[Redeem] Calculated total discount for selected-products: ${totalDiscount}`,
       );
 
       if (foundItems.length == 0) {
         console.log(
-          `[Redeem] No eligible products in bag for selected-products discount: ${args.code}`
+          `[Redeem] No eligible products in bag for selected-products discount: ${args.code}`,
         );
         return { success: false, message: "No eligible products in bag" };
       } else {
         console.log(
-          `[Redeem] Successfully applied selected-products discount: ${args.code}, totalDiscount: ${totalDiscount}`
+          `[Redeem] Successfully applied selected-products discount: ${args.code}, totalDiscount: ${totalDiscount}`,
         );
         const appliedPromoCode = {
           ...promoCode,
@@ -185,17 +195,17 @@ export const redeem = internalMutation({
         };
 
         console.log(
-          `[Redeem] Updating checkout session with discount: ${args.checkoutSessionId}`
+          `[Redeem] Updating checkout session with discount: ${args.checkoutSessionId}`,
         );
         await ctx.runMutation(
           internal.storeFront.checkoutSession.updateCheckoutSession,
           {
             id: args.checkoutSessionId,
             discount: appliedPromoCode,
-          }
+          },
         );
         console.log(
-          `[Redeem] Successfully updated checkout session with discount`
+          `[Redeem] Successfully updated checkout session with discount`,
         );
 
         return {
@@ -214,22 +224,22 @@ export const redeem = internalMutation({
       // Calculate percentage discount on subtotal
       const subtotal = sessionItems.reduce(
         (sum, item) => sum + item.price * item.quantity,
-        0
+        0,
       );
       totalDiscount = subtotal * (promoCode.discountValue / 100);
       console.log(
-        `[Redeem] Percentage discount - subtotal: ${subtotal}, percentage: ${promoCode.discountValue}%, totalDiscount: ${totalDiscount}`
+        `[Redeem] Percentage discount - subtotal: ${subtotal}, percentage: ${promoCode.discountValue}%, totalDiscount: ${totalDiscount}`,
       );
     } else {
       // Amount discount applies once to the order
       totalDiscount = promoCode.discountValue;
       console.log(
-        `[Redeem] Fixed amount discount - totalDiscount: ${totalDiscount}`
+        `[Redeem] Fixed amount discount - totalDiscount: ${totalDiscount}`,
       );
     }
 
     console.log(
-      `[Redeem] Successfully applied entire-order discount: ${args.code}, totalDiscount: ${totalDiscount}`
+      `[Redeem] Successfully applied entire-order discount: ${args.code}, totalDiscount: ${totalDiscount}`,
     );
 
     const appliedPromoCode = {
@@ -238,14 +248,14 @@ export const redeem = internalMutation({
     };
 
     console.log(
-      `[Redeem] Updating checkout session with discount: ${args.checkoutSessionId}`
+      `[Redeem] Updating checkout session with discount: ${args.checkoutSessionId}`,
     );
     await ctx.runMutation(
       internal.storeFront.checkoutSession.updateCheckoutSession,
       {
         id: args.checkoutSessionId,
         discount: appliedPromoCode,
-      }
+      },
     );
     console.log(`[Redeem] Successfully updated checkout session with discount`);
 
@@ -303,7 +313,7 @@ export const create = mutation({
             productSkuId,
             storeId: args.storeId,
           });
-        })
+        }),
       );
     }
 
@@ -339,7 +349,7 @@ export const getAllItems = internalQuery({
         return await ctx.runQuery(internal.inventory.productSku.retrieve, {
           id: sku,
         });
-      })
+      }),
     );
 
     return items.map((item, index) => ({
@@ -371,7 +381,7 @@ export const getById = query({
       createdByUserId: v.id("athenaUser"),
       active: v.boolean(),
     }),
-    v.null()
+    v.null(),
   ),
   handler: async (ctx, args) => {
     return await ctx.db.get("promoCode", args.id);
@@ -407,7 +417,7 @@ export const getPromoCodeItems = query({
       storeId: v.id("store"),
       unitCost: v.optional(v.number()),
       weight: v.optional(v.string()),
-    })
+    }),
   ),
   handler: async (ctx, args) => {
     const items = await ctx.db
@@ -421,7 +431,7 @@ export const getPromoCodeItems = query({
 
     // Fetch all productSku documents
     const productSkus = await Promise.all(
-      productSkuIds.map((id) => ctx.db.get("productSku", id))
+      productSkuIds.map((id) => ctx.db.get("productSku", id)),
     );
 
     // Filter out any null values (in case some IDs don't exist)
@@ -438,7 +448,7 @@ export const getPromoCodeItemsLightweight = query({
       price: v.number(),
       images: v.array(v.string()),
       productId: v.id("product"),
-    })
+    }),
   ),
   handler: async (ctx, args) => {
     const items = await ctx.db
@@ -463,7 +473,7 @@ export const getPromoCodeItemsLightweight = query({
           images: sku.images,
           productId: sku.productId,
         };
-      })
+      }),
     );
 
     // Filter out any null values (in case some IDs don't exist)
@@ -481,7 +491,9 @@ export const remove = mutation({
       .collect();
 
     await Promise.all(
-      promoCodeItems.map((promoCodeItem) => ctx.db.delete("promoCodeItem", promoCodeItem._id))
+      promoCodeItems.map((promoCodeItem) =>
+        ctx.db.delete("promoCodeItem", promoCodeItem._id),
+      ),
     );
 
     await ctx.db.delete("promoCode", args.id);
@@ -501,14 +513,14 @@ export const update = mutation({
     displayText: v.optional(v.string()),
     code: v.optional(v.string()),
     discountType: v.optional(
-      v.union(v.literal("percentage"), v.literal("amount"))
+      v.union(v.literal("percentage"), v.literal("amount")),
     ),
     discountValue: v.optional(v.number()),
     limit: v.optional(v.number()),
     validFrom: v.optional(v.number()),
     validTo: v.optional(v.number()),
     span: v.optional(
-      v.union(v.literal("entire-order"), v.literal("selected-products"))
+      v.union(v.literal("entire-order"), v.literal("selected-products")),
     ),
     productSkus: v.optional(v.array(v.id("productSku"))),
   },
@@ -541,7 +553,9 @@ export const update = mutation({
       .filter((q) => q.eq(q.field("promoCodeId"), args.id))
       .collect();
 
-    await Promise.all(existingItems.map((item) => ctx.db.delete("promoCodeItem", item._id)));
+    await Promise.all(
+      existingItems.map((item) => ctx.db.delete("promoCodeItem", item._id)),
+    );
 
     // Add new promo code items if span is "selected-products"
     if (args.span === "selected-products" && args.productSkus) {
@@ -552,7 +566,7 @@ export const update = mutation({
             productSkuId,
             storeId: promoCode.storeId,
           });
-        })
+        }),
       );
     }
 
@@ -596,7 +610,7 @@ export const getRedeemedPromoCodesForUser = internalQuery({
       _creationTime: v.number(),
       promoCodeId: v.id("promoCode"),
       storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
-    })
+    }),
   ),
   handler: async (ctx, args) => {
     const redeemedPromoCodes = await ctx.db

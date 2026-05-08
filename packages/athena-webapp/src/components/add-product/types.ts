@@ -1,4 +1,5 @@
 import { ImageFile } from "../ui/image-uploader";
+import type { Id } from "~/convex/_generated/dataModel";
 
 export type ProductVariant = {
   id: string;
@@ -13,10 +14,11 @@ export type ProductVariant = {
   price?: number;
   netPrice?: number;
   length?: number;
-  color?: string;
+  color?: Id<"color"> | string;
   colorName?: string;
   size?: string;
   weight?: string;
+  attributes?: Record<string, unknown>;
   markedForDeletion?: boolean;
   existsInDB?: boolean;
   images: ImageFile[];

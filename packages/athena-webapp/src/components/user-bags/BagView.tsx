@@ -3,7 +3,7 @@ import View from "../View";
 import { useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
-import { Bag, BagItem, OnlineOrder, OnlineOrderItem } from "~/types";
+import { Bag, OnlineOrder } from "~/types";
 import { getProductName } from "~/src/lib/productUtils";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import {
@@ -17,11 +17,21 @@ import { FadeIn } from "../common/FadeIn";
 import { SimplePageHeader } from "../common/PageHeader";
 import { toDisplayAmount } from "~/convex/lib/currency";
 
+type BagItemViewItem = {
+  _id: string;
+  price?: number;
+  productId: string;
+  productImage?: string;
+  productName?: string;
+  productSku: string;
+  quantity: number;
+};
+
 export const BagItemView = ({
   item,
   formatter,
 }: {
-  item: BagItem | OnlineOrderItem;
+  item: BagItemViewItem;
   formatter: Intl.NumberFormat;
 }) => {
   return (
@@ -83,8 +93,9 @@ export const BagDetails = ({
 
   if (!activeStore) return null;
 
-  const bagTotal = bag?.items?.reduce(
-    (acc: any, item: any) => acc + item.price * item.quantity,
+  const items = (bag.items ?? []) as BagItemViewItem[];
+  const bagTotal = items.reduce(
+    (acc, item) => acc + (item.price ?? 0) * item.quantity,
     0,
   );
 
@@ -99,25 +110,22 @@ export const BagDetails = ({
     >
       <div className="space-y-16">
         <div className="space-y-4">
-          {bag.items && bag.items?.length > 0 && (
-            <p className="text-sm font-medium">Items</p>
-          )}
+          {items.length > 0 && <p className="text-sm font-medium">Items</p>}
 
           <div className="space-y-8">
-            {bag.items &&
-              bag.items.map((item: any) => (
-                <BagItemView key={item._id} item={item} formatter={formatter} />
-              ))}
+            {items.map((item) => (
+              <BagItemView key={item._id} item={item} formatter={formatter} />
+            ))}
           </div>
 
-          {bag.items && bag.items.length === 0 && (
+          {items.length === 0 && (
             <p className="text-sm text-muted-foreground">
               This user's bag is empty.
             </p>
           )}
         </div>
 
-        {bag.items && bag.items.length > 0 && (
+        {items.length > 0 && (
           <div className="space-y-8">
             <p className="text-sm font-medium">Summary</p>
 

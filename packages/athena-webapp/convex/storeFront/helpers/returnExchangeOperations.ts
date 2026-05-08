@@ -1,8 +1,9 @@
 import { Doc, Id } from "../../_generated/dataModel";
+import { getRemainingRefundableBalance } from "./paymentHelpers";
 
 type ReturnExchangeOrder = Pick<
   Doc<"onlineOrder">,
-  "_id" | "amount" | "orderNumber" | "status"
+  "_id" | "amount" | "deliveryFee" | "orderNumber" | "paymentDue" | "refunds" | "status"
 >;
 
 type ReturnExchangeOrderItem = Pick<
@@ -68,7 +69,7 @@ export type OnlineOrderReturnExchangePlan = {
 };
 
 function getLineRefundAmount(item: ReturnExchangeOrderItem) {
-  return item.price * item.quantity * 100;
+  return Math.round(item.price * item.quantity);
 }
 
 function getKind(args: {
@@ -177,7 +178,11 @@ export function buildOnlineOrderReturnExchangePlan(args: {
     };
   }
 
-  const refundAmount = Math.max(returnSubtotal - replacementSubtotal, 0);
+  const refundableBalance = getRemainingRefundableBalance(args.order);
+  const refundAmount = Math.min(
+    Math.max(returnSubtotal - replacementSubtotal, 0),
+    refundableBalance,
+  );
   const balanceDueAmount = Math.max(replacementSubtotal - returnSubtotal, 0);
 
   return {

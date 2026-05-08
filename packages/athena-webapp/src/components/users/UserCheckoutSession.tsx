@@ -24,6 +24,18 @@ import {
 } from "../ui/tooltip";
 import { Info, Store, Truck } from "lucide-react";
 import { Address, CheckoutSession } from "~/types";
+import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
+
+type CheckoutBagItem = {
+  _id: string;
+  price?: number;
+  productId: string;
+  productImage?: string;
+  productName?: string;
+  productSku: string;
+  productSkuId: Id<"productSku">;
+  quantity: number;
+};
 
 export const UserCheckoutSession = ({
   checkoutSession,
@@ -34,7 +46,7 @@ export const UserCheckoutSession = ({
 
   const bag = useQuery(
     api.storeFront.bag.getByUserId,
-    userId ? { storeFrontUserId: userId as Id<"storeFrontUser"> } : "skip"
+    userId ? { storeFrontUserId: userId as Id<"storeFrontUser"> } : "skip",
   );
 
   const { activeStore } = useGetActiveStore();
@@ -53,8 +65,9 @@ export const UserCheckoutSession = ({
       </div>
     );
 
+  const bagItems = (bag?.items ?? []) as CheckoutBagItem[];
   const items =
-    bag?.items?.map((item: any) => ({
+    bagItems.map((item) => ({
       productSkuId: item.productSkuId,
       quantity: item.quantity,
       price: item.price || 0,
@@ -78,7 +91,7 @@ export const UserCheckoutSession = ({
     checkoutSession.expiresAt && checkoutSession.expiresAt < Date.now();
 
   const { addressLine, country } = formatDeliveryAddress(
-    checkoutSession.deliveryDetails as Address
+    checkoutSession.deliveryDetails as Address,
   );
 
   return (
@@ -121,13 +134,13 @@ export const UserCheckoutSession = ({
 
       <div className="space-y-12">
         <div className="space-y-4">
-          {bag?.items && bag?.items?.length > 0 && (
+          {bagItems.length > 0 && (
             <p className="text-sm font-medium">Items</p>
           )}
 
           <div className="space-y-8">
-            {bag?.items &&
-              bag?.items.map((item: any) => (
+            {bagItems.length > 0 &&
+              bagItems.map((item) => (
                 <BagItemView key={item._id} item={item} formatter={formatter} />
               ))}
           </div>
@@ -135,7 +148,9 @@ export const UserCheckoutSession = ({
 
         <div className="flex items-center gap-2">
           <p className="text-sm text-muted-foreground">Order total</p>
-          <p className="text-sm">{formatter.format(orderAmount / 100)}</p>
+          <p className="text-sm">
+            {formatStoredAmount(formatter, orderAmount)}
+          </p>
           <TooltipProvider>
             <Tooltip delayDuration={0}>
               <TooltipTrigger asChild>
@@ -150,7 +165,7 @@ export const UserCheckoutSession = ({
                     <div className="flex items-center justify-between">
                       <p className="text-sm text-muted-foreground">Subtotal</p>
                       <p className="text-sm">
-                        {formatter.format(checkoutSession.amount / 100)}
+                        {formatStoredAmount(formatter, checkoutSession.amount)}
                       </p>
                     </div>
                     {discount > 0 && (
@@ -159,7 +174,7 @@ export const UserCheckoutSession = ({
                           Discount
                         </p>
                         <p className="text-sm text-green-600">
-                          - {formatter.format(discount / 100)}
+                          - {formatStoredAmount(formatter, discount)}
                         </p>
                       </div>
                     )}
@@ -169,14 +184,17 @@ export const UserCheckoutSession = ({
                           Delivery fee
                         </p>
                         <p className="text-sm">
-                          {formatter.format(checkoutSession.deliveryFee)}
+                          {formatStoredAmount(
+                            formatter,
+                            checkoutSession.deliveryFee,
+                          )}
                         </p>
                       </div>
                     )}
                     <div className="pt-2 flex items-center justify-between">
                       <p className="text-sm font-medium">Total</p>
                       <p className="text-sm font-medium">
-                        {formatter.format(orderAmount / 100)}
+                        {formatStoredAmount(formatter, orderAmount)}
                       </p>
                     </div>
                   </div>

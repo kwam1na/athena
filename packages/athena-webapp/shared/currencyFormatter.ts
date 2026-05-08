@@ -34,7 +34,7 @@ export function currencyFormatter(
   const normalizedCurrency = currency.toUpperCase();
   const displaySymbol = DISPLAY_CURRENCY_SYMBOLS[normalizedCurrency];
   const minimumFractionDigits = options.minimumFractionDigits ?? 0;
-  const maximumFractionDigits = options.maximumFractionDigits ?? 0;
+  const maximumFractionDigits = options.maximumFractionDigits ?? 2;
 
   if (displaySymbol) {
     const numberFormatter = new Intl.NumberFormat("en-US", {

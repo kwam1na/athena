@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
+import { formatStoredAmount } from "@/lib/currency";
 
 interface PastOrdersRewardsProps {
   userEmail: string;
@@ -129,7 +130,7 @@ export function PastOrdersRewards({ userEmail }: PastOrdersRewardsProps) {
                     <td className="py-3">{order.orderNumber}</td>
                     <td className="py-3">{formatDate(order._creationTime)}</td>
                     <td className="py-3">
-                      {formatter.format(order.amount / 100)}
+                      {formatStoredAmount(formatter, order.amount)}
                     </td>
                     <td className="py-3">
                       {order.potentialPoints.toLocaleString()}

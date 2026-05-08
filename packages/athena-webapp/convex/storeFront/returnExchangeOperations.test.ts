@@ -17,7 +17,7 @@ function createOrderItem(overrides: Record<string, unknown> = {}) {
     isRefunded: false,
     isRestocked: false,
     orderId: "order-1",
-    price: 45,
+    price: 4_500,
     productId: "product-1",
     productName: "Curly Closure",
     productSku: "SKU-RETURN-1",
@@ -45,6 +45,28 @@ function createReplacement(
 }
 
 describe("online order return and exchange planning", () => {
+  it("characterizes order item prices as stored minor units", () => {
+    const plan = buildOnlineOrderReturnExchangePlan({
+      order: {
+        _id: "order-1",
+        amount: 9_000,
+        orderNumber: "10000",
+        status: "picked-up",
+      } as any,
+      orderItems: [
+        createOrderItem({
+          price: 4_500,
+          quantity: 2,
+        }),
+      ],
+      restockReturnedItems: true,
+      returnItemIds: ["item-1" as any],
+    });
+
+    expect(plan.refundAmount).toBe(9_000);
+    expect(plan.paymentAllocation?.amount).toBe(9_000);
+  });
+
   it("plans a partial return with a refund, safe restock, and operational events", () => {
     const plan = buildOnlineOrderReturnExchangePlan({
       order: {
@@ -58,7 +80,7 @@ describe("online order return and exchange planning", () => {
         createOrderItem(),
         createOrderItem({
           _id: "item-2",
-          price: 60,
+          price: 6_000,
           productId: "product-3",
           productName: "Frontal Unit",
           productSku: "SKU-RETURN-2",
@@ -103,12 +125,12 @@ describe("online order return and exchange planning", () => {
       orderItems: [
         createOrderItem({
           _id: "item-1",
-          price: 45,
+          price: 4_500,
           quantity: 2,
         }),
         createOrderItem({
           _id: "item-2",
-          price: 60,
+          price: 6_000,
           productId: "product-3",
           productName: "Frontal Unit",
           productSku: "SKU-RETURN-2",
@@ -160,6 +182,28 @@ describe("online order return and exchange planning", () => {
     ]);
   });
 
+  it("caps return refunds against the remaining refundable balance", () => {
+    const plan = buildOnlineOrderReturnExchangePlan({
+      order: {
+        _id: "order-1",
+        amount: 9_000,
+        orderNumber: "10003",
+        refunds: [{ amount: 8_000, date: 1, id: "existing-refund" }],
+        status: "picked-up",
+      } as any,
+      orderItems: [createOrderItem()],
+      restockReturnedItems: true,
+      returnItemIds: ["item-1" as any],
+    });
+
+    expect(plan.refundAmount).toBe(1_000);
+    expect(plan.paymentAllocation).toMatchObject({
+      allocationType: "online_order_return_refund",
+      amount: 1_000,
+      direction: "out",
+    });
+  });
+
   it("requires approval when the return path is not safe to self-resolve", () => {
     const plan = buildOnlineOrderReturnExchangePlan({
       order: {
@@ -197,5 +241,13 @@ describe("online order return and exchange mutation wiring", () => {
     expect(onlineOrderSource).toContain("recordInventoryMovementWithCtx");
     expect(onlineOrderSource).toContain("recordOperationalEventWithCtx");
     expect(onlineOrderSource).toContain("buildApprovalRequest");
+  });
+
+  it("prices replacement items from the server SKU instead of the client payload", () => {
+    const onlineOrderSource = getSource("./onlineOrder.ts");
+
+    expect(onlineOrderSource).toContain('ctx.db.get(\n            "productSku"');
+    expect(onlineOrderSource).toContain("unitPrice: Math.round(productSku.price)");
+    expect(onlineOrderSource).not.toContain("unitPrice: replacement.unitPrice");
   });
 });

@@ -1,5 +1,5 @@
-import { OnlineOrder, OnlineOrderItem } from "~/types";
-import { Doc, Id } from "~/convex/_generated/dataModel";
+import { OnlineOrder } from "~/types";
+import { Id } from "~/convex/_generated/dataModel";
 
 // Type for items embedded in orders (includes _id from the onlineOrderItem table)
 type OrderItemWithId = NonNullable<OnlineOrder["items"]>[number] & {
@@ -41,7 +41,7 @@ export function refundReducer(
         includeDeliveryFee: false,
       };
 
-    case "TOGGLE_ITEM":
+    case "TOGGLE_ITEM": {
       const newSelectedIds = new Set(state.selectedItemIds);
       if (newSelectedIds.has(action.itemId)) {
         newSelectedIds.delete(action.itemId);
@@ -52,6 +52,7 @@ export function refundReducer(
         ...state,
         selectedItemIds: newSelectedIds,
       };
+    }
 
     case "TOGGLE_DELIVERY_FEE":
       return {
@@ -100,12 +101,11 @@ export function getAmountRefunded(order: OnlineOrder): number {
 }
 
 /**
- * Calculate the net amount available for refund
- * This includes the subtotal (order.amount) + delivery fee
+ * Calculate the net amount available for refund.
+ * Prefer paymentDue when present because it already includes discounts and fees.
  */
 export function getNetAmount(order: OnlineOrder): number {
-  const deliveryFee = order.deliveryFee || 0; // already pesewas
-  const totalPaid = order.amount + deliveryFee;
+  const totalPaid = order.paymentDue ?? order.amount + (order.deliveryFee || 0);
   return totalPaid - getAmountRefunded(order);
 }
 
@@ -141,13 +141,11 @@ export function calculateRefundAmount(
     case "partial": {
       if (!order.items) return 0;
 
-      // Sum up selected items (prices are in GHS, need to convert to cents)
       const items = order.items as OrderItemWithId[];
       let total = 0;
       for (const item of items) {
         if (selectedItemIds.has(item._id)) {
-          // Convert from GHS to cents: price * quantity * 100
-          total += item.price * item.quantity * 100;
+          total += item.price * item.quantity;
         }
       }
 

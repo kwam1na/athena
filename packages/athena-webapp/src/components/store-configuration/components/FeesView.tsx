@@ -7,7 +7,65 @@ import { Switch } from "../../ui/switch";
 import { Label } from "../../ui/label";
 import { useStoreConfigUpdate } from "../hooks/useStoreConfigUpdate";
 import { getStoreConfigV2 } from "~/src/lib/storeConfig";
-import { toPesewas, toDisplayAmount } from "~/convex/lib/currency";
+import { toDisplayAmount } from "~/convex/lib/currency";
+import { parseDisplayAmountInput } from "~/src/lib/pos/displayAmounts";
+import { toast } from "sonner";
+
+type DeliveryFeeInputs = {
+  international: string;
+  otherRegions: string;
+  withinAccra: string;
+};
+
+type ParsedDeliveryFeeInputs =
+  | {
+      ok: true;
+      value: {
+        international?: number;
+        otherRegions?: number;
+        withinAccra?: number;
+      };
+    }
+  | { ok: false };
+
+export function formatDeliveryFeeInput(value?: number): string {
+  return value === undefined ? "" : String(toDisplayAmount(value));
+}
+
+function parseOptionalDeliveryFeeInput(value: string): number | undefined {
+  const trimmedValue = value.trim();
+
+  if (trimmedValue.length === 0) {
+    return undefined;
+  }
+
+  return parseDisplayAmountInput(trimmedValue);
+}
+
+export function parseDeliveryFeeInputs(
+  inputs: DeliveryFeeInputs,
+): ParsedDeliveryFeeInputs {
+  const withinAccra = parseOptionalDeliveryFeeInput(inputs.withinAccra);
+  const otherRegions = parseOptionalDeliveryFeeInput(inputs.otherRegions);
+  const international = parseOptionalDeliveryFeeInput(inputs.international);
+
+  if (
+    (inputs.withinAccra.trim() && withinAccra === undefined) ||
+    (inputs.otherRegions.trim() && otherRegions === undefined) ||
+    (inputs.international.trim() && international === undefined)
+  ) {
+    return { ok: false };
+  }
+
+  return {
+    ok: true,
+    value: {
+      international,
+      otherRegions,
+      withinAccra,
+    },
+  };
+}
 
 export const FeesView = () => {
   const { activeStore } = useGetActiveStore();
@@ -17,52 +75,50 @@ export const FeesView = () => {
     [activeStore?.config],
   );
 
-  const [enteredOtherRegionsFee, setEnteredOtherRegionsFee] = useState<
-    number | undefined
-  >(0);
-  const [enteredWithinAccraFee, setEnteredWithinAccraFee] = useState<
-    number | undefined
-  >(0);
-  const [enteredIntlFee, setEnteredIntlFee] = useState<number | undefined>(0);
+  const [enteredOtherRegionsFee, setEnteredOtherRegionsFee] = useState("");
+  const [enteredWithinAccraFee, setEnteredWithinAccraFee] = useState("");
+  const [enteredIntlFee, setEnteredIntlFee] = useState("");
 
   // Replace the single waiveDeliveryFees with separate states for each fee type
   const [waiveWithinAccraFee, setWaiveWithinAccraFee] = useState(false);
   const [waiveOtherRegionsFee, setWaiveOtherRegionsFee] = useState(false);
   const [waiveIntlFee, setWaiveIntlFee] = useState(false);
-  const [minimumOrderAmount, setMinimumOrderAmount] = useState<
-    number | undefined
-  >(undefined);
+  const [minimumOrderAmount, setMinimumOrderAmount] = useState("");
 
   const handleUpdateFees = async () => {
-    const updates = {
-      withinAccra:
-        enteredWithinAccraFee === undefined
-          ? undefined
-          : toPesewas(enteredWithinAccraFee),
-      otherRegions:
-        enteredOtherRegionsFee === undefined
-          ? undefined
-          : toPesewas(enteredOtherRegionsFee),
-      international:
-        enteredIntlFee === undefined ? undefined : toPesewas(enteredIntlFee),
-    };
+    if (!activeStore) {
+      return;
+    }
+
+    const parsedFees = parseDeliveryFeeInputs({
+      international: enteredIntlFee,
+      otherRegions: enteredOtherRegionsFee,
+      withinAccra: enteredWithinAccraFee,
+    });
+    const parsedMinimumOrderAmount =
+      parseOptionalDeliveryFeeInput(minimumOrderAmount);
+
+    if (
+      !parsedFees.ok ||
+      (minimumOrderAmount.trim() && parsedMinimumOrderAmount === undefined)
+    ) {
+      toast.error("Enter valid delivery fee amounts");
+      return;
+    }
 
     const waiveDeliveryFeesConfig = {
       withinAccra: waiveWithinAccraFee,
       otherRegions: waiveOtherRegionsFee,
       international: waiveIntlFee,
       all: waiveWithinAccraFee && waiveOtherRegionsFee && waiveIntlFee,
-      minimumOrderAmount:
-        minimumOrderAmount === undefined
-          ? undefined
-          : toPesewas(minimumOrderAmount),
+      minimumOrderAmount: parsedMinimumOrderAmount,
     };
 
     await updateConfig({
-      storeId: activeStore?._id!,
+      storeId: activeStore._id,
       patch: {
         commerce: {
-          deliveryFees: updates,
+          deliveryFees: parsedFees.value,
           waiveDeliveryFees: waiveDeliveryFeesConfig,
         },
       },
@@ -75,21 +131,9 @@ export const FeesView = () => {
     // Sync state with store data when `activeStore` changes
     // Convert from pesewas (stored) to GHS (displayed in form)
     const fees = storeConfig.commerce.deliveryFees;
-    setEnteredWithinAccraFee(
-      fees?.withinAccra === undefined
-        ? undefined
-        : toDisplayAmount(fees.withinAccra)
-    );
-    setEnteredOtherRegionsFee(
-      fees?.otherRegions === undefined
-        ? undefined
-        : toDisplayAmount(fees.otherRegions)
-    );
-    setEnteredIntlFee(
-      fees?.international === undefined
-        ? undefined
-        : toDisplayAmount(fees.international)
-    );
+    setEnteredWithinAccraFee(formatDeliveryFeeInput(fees?.withinAccra));
+    setEnteredOtherRegionsFee(formatDeliveryFeeInput(fees?.otherRegions));
+    setEnteredIntlFee(formatDeliveryFeeInput(fees?.international));
 
     const waiveConfig = storeConfig.commerce.waiveDeliveryFees;
     if (waiveConfig && typeof waiveConfig === "object") {
@@ -97,15 +141,13 @@ export const FeesView = () => {
       setWaiveOtherRegionsFee(waiveConfig.otherRegions || false);
       setWaiveIntlFee(waiveConfig.international || false);
       setMinimumOrderAmount(
-        waiveConfig.minimumOrderAmount === undefined
-          ? undefined
-          : toDisplayAmount(waiveConfig.minimumOrderAmount)
+        formatDeliveryFeeInput(waiveConfig.minimumOrderAmount),
       );
     } else {
       setWaiveWithinAccraFee(false);
       setWaiveOtherRegionsFee(false);
       setWaiveIntlFee(false);
-      setMinimumOrderAmount(undefined);
+      setMinimumOrderAmount("");
     }
   }, [storeConfig]);
 
@@ -156,12 +198,8 @@ export const FeesView = () => {
           </div>
           <Input
             type="number"
-            value={enteredWithinAccraFee ?? ""}
-            onChange={(e) =>
-              setEnteredWithinAccraFee(
-                e.target.value ? Number.parseFloat(e.target.value) : undefined
-              )
-            }
+            value={enteredWithinAccraFee}
+            onChange={(e) => setEnteredWithinAccraFee(e.target.value)}
             disabled={waiveWithinAccraFee}
           />
         </div>
@@ -185,12 +223,8 @@ export const FeesView = () => {
           </div>
           <Input
             type="number"
-            value={enteredOtherRegionsFee ?? ""}
-            onChange={(e) =>
-              setEnteredOtherRegionsFee(
-                e.target.value ? Number.parseFloat(e.target.value) : undefined
-              )
-            }
+            value={enteredOtherRegionsFee}
+            onChange={(e) => setEnteredOtherRegionsFee(e.target.value)}
             disabled={waiveOtherRegionsFee}
           />
         </div>
@@ -214,12 +248,8 @@ export const FeesView = () => {
           </div>
           <Input
             type="number"
-            value={enteredIntlFee ?? ""}
-            onChange={(e) =>
-              setEnteredIntlFee(
-                e.target.value ? Number.parseFloat(e.target.value) : undefined
-              )
-            }
+            value={enteredIntlFee}
+            onChange={(e) => setEnteredIntlFee(e.target.value)}
             disabled={waiveIntlFee}
           />
         </div>
@@ -260,13 +290,8 @@ export const FeesView = () => {
             id="minimum-order-amount"
             type="number"
             placeholder="Leave empty for unconditional free delivery"
-            value={minimumOrderAmount ?? ""}
-            onChange={(e) => {
-              const val = Number.parseFloat(e.target.value);
-              setMinimumOrderAmount(
-                Number.isNaN(val) || val <= 0 ? undefined : val
-              );
-            }}
+            value={minimumOrderAmount}
+            onChange={(e) => setMinimumOrderAmount(e.target.value)}
           />
           <p className="text-xs text-muted-foreground">
             Leave empty for unconditional free delivery

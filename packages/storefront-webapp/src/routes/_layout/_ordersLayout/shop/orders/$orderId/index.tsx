@@ -43,7 +43,7 @@ import { GuestRewardsPrompt } from "@/components/rewards/GuestRewardsPrompt";
 import { useUserQueries } from "@/lib/queries/user";
 import { OrderPointsDisplay } from "@/components/rewards/OrderPointsDisplay";
 import { getStoreFallbackImageUrl } from "@/lib/storeConfig";
-import { toDisplayAmount } from "@/lib/currency";
+import { formatStoredAmount } from "@/lib/currency";
 
 export const Route = createFileRoute(
   "/_layout/_ordersLayout/shop/orders/$orderId/",
@@ -126,7 +126,7 @@ const OrderSummary = ({ order }: { order: any }) => {
   const discountText =
     order.discount?.type === "percentage"
       ? `${order.discount.value}%`
-      : `${formatter.format(discountValue)}`;
+      : `${formatStoredAmount(formatter, discountValue)}`;
 
   const discountSpan =
     order.discount?.span == "entire-order" ? "entire order" : "select items";
@@ -144,7 +144,7 @@ const OrderSummary = ({ order }: { order: any }) => {
           <div className="grid grid-cols-2">
             <p className="text-sm">Delivery</p>
             <p className="text-sm">
-              {formatter.format(toDisplayAmount(order?.deliveryFee))}
+              {formatStoredAmount(formatter, order.deliveryFee)}
             </p>
           </div>
         )}
@@ -152,21 +152,23 @@ const OrderSummary = ({ order }: { order: any }) => {
         <div className="grid grid-cols-2">
           <p className="text-sm">Subtotal</p>
           <p className="text-sm">
-            {formatter.format(toDisplayAmount(subtotal))}
+            {formatStoredAmount(formatter, subtotal)}
           </p>
         </div>
 
         {Boolean(discountValue) && (
           <div className="grid grid-cols-2">
             <p className="text-sm">Discount</p>
-            <p className="text-sm">{formatter.format(discountValue)}</p>
+            <p className="text-sm">
+              {formatStoredAmount(formatter, discountValue)}
+            </p>
           </div>
         )}
 
         <div className="grid grid-cols-2">
           <p className="text-sm">Total</p>
           <p className="text-sm font-medium">
-            {formatter.format(toDisplayAmount(total))}
+            {formatStoredAmount(formatter, total)}
           </p>
         </div>
 
@@ -202,7 +204,7 @@ const OrderItem = ({
   isReviewable: boolean;
 }) => {
   const priceLabel = item.price
-    ? formatter.format(toDisplayAmount(item.price * item.quantity))
+    ? formatStoredAmount(formatter, item.price * item.quantity)
     : "Free";
 
   const { store } = useStoreContext();

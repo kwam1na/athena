@@ -5,13 +5,17 @@ const baseURL = process.env.PLAYWRIGHT_APP_URL || `http://127.0.0.1:${port}`;
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  testMatch: "**/*.e2e.ts",
   timeout: 60_000,
   expect: {
     timeout: 10_000,
   },
   fullyParallel: false,
   retries: process.env.CI ? 2 : 0,
-  reporter: process.env.CI ? [["github"], ["html"]] : [["list"], ["html"]],
+  outputDir:
+    process.env.PLAYWRIGHT_OUTPUT_DIR ||
+    "/tmp/athena-storefront-playwright-results",
+  reporter: process.env.CI ? [["github"], ["html"]] : [["list"]],
   use: {
     baseURL,
     trace: "on-first-retry",

@@ -20,12 +20,50 @@ import {
 import { currencyFormatter, getProductName } from "../utils";
 import { getProductDiscountValue } from "../inventory/utils";
 import { recordStoreFrontCustomerMilestone } from "./helpers/customerEngagementEvents";
+import { toDisplayAmount } from "../lib/currency";
 
 const entity = "offer" as const;
 const MAX_OFFERS = 500;
 
 const heroImageUrl =
   "https://images.wigclub.store/stores/nn7byz68a3j4tfjvgdf9evpt3n78kk38/assets/a0171a4f-036a-4928-3387-8b578e4f297d.webp";
+
+export function formatOfferProductPrice(
+  formatter: Intl.NumberFormat,
+  price: number,
+) {
+  return formatter.format(toDisplayAmount(price));
+}
+
+export function getDiscountedOfferProductPrice(price: number, promoCode: any) {
+  return Math.max(
+    0,
+    Math.round(price - getProductDiscountValue(price, promoCode)),
+  );
+}
+
+export function buildOfferProductEmailItem({
+  formatter,
+  productSku,
+  productUrl,
+  promoCode,
+}: {
+  formatter: Intl.NumberFormat;
+  productSku: any;
+  productUrl: string;
+  promoCode: any;
+}) {
+  return {
+    image: productSku.images[0],
+    name: getProductName(productSku),
+    original_price: formatOfferProductPrice(formatter, productSku.price),
+    discounted_price: formatOfferProductPrice(
+      formatter,
+      getDiscountedOfferProductPrice(productSku.price, promoCode),
+    ),
+    product_url: productUrl,
+  };
+}
 
 // Email validation with Zod
 const emailSchema = z
@@ -38,7 +76,7 @@ const isDuplicate = async (
   ctx: QueryCtx,
   email: string,
   storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">,
-  promoCodeId: Id<"promoCode">
+  promoCodeId: Id<"promoCode">,
 ) => {
   const [existingByEmail, existingByUser] = await Promise.all([
     ctx.db
@@ -49,7 +87,9 @@ const isDuplicate = async (
     ctx.db
       .query(entity)
       .withIndex("by_storeFrontUserId_promoCodeId", (q) =>
-        q.eq("storeFrontUserId", storeFrontUserId).eq("promoCodeId", promoCodeId)
+        q
+          .eq("storeFrontUserId", storeFrontUserId)
+          .eq("promoCodeId", promoCodeId),
       )
       .first(),
   ]);
@@ -60,11 +100,11 @@ const isDuplicate = async (
 const updateStoreFrontActorEmail = async (
   ctx: MutationCtx,
   storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">,
-  email: string
+  email: string,
 ) => {
   const storeFrontUser = await ctx.db.get(
     "storeFrontUser",
-    storeFrontUserId as Id<"storeFrontUser">
+    storeFrontUserId as Id<"storeFrontUser">,
   );
 
   if (storeFrontUser) {
@@ -94,7 +134,7 @@ const createOffer = async (
     storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">;
     storeId: Id<"store">;
     ipAddress?: string;
-  }
+  },
 ) => {
   try {
     emailSchema.parse(args.email);
@@ -109,7 +149,7 @@ const createOffer = async (
     ctx,
     args.email,
     args.storeFrontUserId,
-    args.promoCodeId
+    args.promoCodeId,
   );
 
   if (isDuplicateSubmission) {
@@ -180,7 +220,7 @@ export const sendOfferEmail = internalAction({
   },
   handler: async (ctx, args) => {
     console.log(
-      `[SendOfferEmail] Starting email send process for offer ${args.offerId}`
+      `[SendOfferEmail] Starting email send process for offer ${args.offerId}`,
     );
 
     // Get the offer
@@ -190,7 +230,7 @@ export const sendOfferEmail = internalAction({
 
     if (!offer || offer.status !== "pending") {
       console.log(
-        `[SendOfferEmail] Offer validation failed - Offer found: ${!!offer}, Status: ${offer?.status}`
+        `[SendOfferEmail] Offer validation failed - Offer found: ${!!offer}, Status: ${offer?.status}`,
       );
       return {
         success: false,
@@ -199,7 +239,7 @@ export const sendOfferEmail = internalAction({
     }
 
     console.log(
-      `[SendOfferEmail] Offer validated - Email: ${offer.email}, User: ${offer.storeFrontUserId}, PromoCode: ${offer.promoCodeId}`
+      `[SendOfferEmail] Offer validated - Email: ${offer.email}, User: ${offer.storeFrontUserId}, PromoCode: ${offer.promoCodeId}`,
     );
 
     // Get the promo code
@@ -207,12 +247,12 @@ export const sendOfferEmail = internalAction({
       internal.inventory.promoCode.getByIdInternal,
       {
         id: offer.promoCodeId,
-      }
+      },
     );
 
     if (!promoCode) {
       console.log(
-        `[SendOfferEmail] Promo code not found for offer ${args.offerId}`
+        `[SendOfferEmail] Promo code not found for offer ${args.offerId}`,
       );
       await ctx.runMutation(internal.storeFront.offers.updateStatus, {
         id: args.offerId,
@@ -226,12 +266,12 @@ export const sendOfferEmail = internalAction({
     }
 
     console.log(
-      `[SendOfferEmail] Promo code retrieved - Code: ${promoCode.code}, Value: ${promoCode.discountValue}, Type: ${promoCode.discountType}`
+      `[SendOfferEmail] Promo code retrieved - Code: ${promoCode.code}, Value: ${promoCode.discountValue}, Type: ${promoCode.discountType}`,
     );
 
     try {
       console.log(
-        `[SendOfferEmail] Fetching upsell products for offer ${args.offerId}`
+        `[SendOfferEmail] Fetching upsell products for offer ${args.offerId}`,
       );
       const { bestSellers, recentlyViewed } = await getUpsellProducts({
         ctx,
@@ -241,11 +281,11 @@ export const sendOfferEmail = internalAction({
       });
 
       console.log(
-        `[SendOfferEmail] Upsell products fetched - Best sellers: ${bestSellers.length}, Recently viewed: ${recentlyViewed.length}`
+        `[SendOfferEmail] Upsell products fetched - Best sellers: ${bestSellers.length}, Recently viewed: ${recentlyViewed.length}`,
       );
 
       console.log(
-        `[SendOfferEmail] Sending email to ${offer.email} with promo code ${promoCode.code}`
+        `[SendOfferEmail] Sending email to ${offer.email} with promo code ${promoCode.code}`,
       );
 
       // Send the email
@@ -270,7 +310,7 @@ export const sendOfferEmail = internalAction({
       });
 
       console.log(
-        `[SendOfferEmail] Offer ${args.offerId} marked as sent successfully`
+        `[SendOfferEmail] Offer ${args.offerId} marked as sent successfully`,
       );
 
       return {
@@ -280,7 +320,7 @@ export const sendOfferEmail = internalAction({
     } catch (error) {
       console.error(
         `[SendOfferEmail] Error sending email for offer ${args.offerId}:`,
-        error
+        error,
       );
 
       // Handle errors
@@ -291,7 +331,7 @@ export const sendOfferEmail = internalAction({
       });
 
       console.log(
-        `[SendOfferEmail] Offer ${args.offerId} marked as error with message: ${error instanceof Error ? error.message : "Unknown error"}`
+        `[SendOfferEmail] Offer ${args.offerId} marked as error with message: ${error instanceof Error ? error.message : "Unknown error"}`,
       );
 
       return {
@@ -324,7 +364,7 @@ export const sendOfferReminderEmail = internalAction({
       internal.inventory.promoCode.getByIdInternal,
       {
         id: offer.promoCodeId,
-      }
+      },
     );
 
     if (!promoCode) {
@@ -364,7 +404,7 @@ export const sendOfferReminderEmail = internalAction({
       ]);
 
       const hairBestSellers = bestSellers.filter(
-        (seller) => seller.productSku.productCategory === "Hair"
+        (seller) => seller.productSku.productCategory === "Hair",
       );
 
       const formatter = currencyFormatter(store?.currency || "GHS");
@@ -373,40 +413,28 @@ export const sendOfferReminderEmail = internalAction({
         .filter(
           (seller) =>
             !recentlyViewedHairProducts.find(
-              (product) => product.sku === seller.productSku.sku
-            )
+              (product) => product.sku === seller.productSku.sku,
+            ),
         )
         .map((seller) => {
-          return {
-            image: seller.productSku.images[0],
-            name: getProductName(seller.productSku),
-            original_price: formatter.format(seller.productSku.price),
-            discounted_price: formatter.format(
-              Math.round(
-                seller.productSku.price -
-                  getProductDiscountValue(seller.productSku.price, promoCode)
-              )
-            ),
-            product_url: `${process.env.STORE_URL}/shop/product/${seller.productId}?variant=${seller.productSku.sku}&origin=discount_reminder_email`,
-          };
+          return buildOfferProductEmailItem({
+            formatter,
+            productSku: seller.productSku,
+            productUrl: `${process.env.STORE_URL}/shop/product/${seller.productId}?variant=${seller.productSku.sku}&origin=discount_reminder_email`,
+            promoCode,
+          });
         })
         .slice(0, 4);
 
       const recentlyViewedHairProductsData = recentlyViewedHairProducts.map(
         (productSku) => {
-          return {
-            image: productSku.images[0],
-            name: getProductName(productSku),
-            original_price: formatter.format(productSku.price),
-            discounted_price: formatter.format(
-              Math.round(
-                productSku.price -
-                  getProductDiscountValue(productSku.price, promoCode)
-              )
-            ),
-            product_url: `${process.env.STORE_URL}/shop/product/${productSku.productId}?variant=${productSku.sku}&origin=discount_reminder_email`,
-          };
-        }
+          return buildOfferProductEmailItem({
+            formatter,
+            productSku,
+            productUrl: `${process.env.STORE_URL}/shop/product/${productSku.productId}?variant=${productSku.sku}&origin=discount_reminder_email`,
+            promoCode,
+          });
+        },
       );
 
       // Send the email using SendGrid
@@ -469,7 +497,7 @@ export const sendOfferReminderEmails = internalAction({
         internal.storeFront.offers.sendOfferReminderEmail,
         {
           offerId: offer._id,
-        }
+        },
       );
     });
 
@@ -493,7 +521,7 @@ export const updateStatus = internalMutation({
       v.literal("sent"),
       v.literal("error"),
       v.literal("redeemed"),
-      v.literal("reminded")
+      v.literal("reminded"),
     ),
     sentAt: v.optional(v.number()),
     errorMessage: v.optional(v.string()),
@@ -501,7 +529,7 @@ export const updateStatus = internalMutation({
       v.object({
         action: v.string(),
         timestamp: v.number(),
-      })
+      }),
     ),
   },
   handler: async (ctx, args) => {
@@ -661,7 +689,7 @@ export const getByStorefrontUserId = query({
         v.literal("sent"),
         v.literal("error"),
         v.literal("redeemed"),
-        v.literal("reminded")
+        v.literal("reminded"),
       ),
       ipAddress: v.optional(v.string()),
       sentAt: v.optional(v.number()),
@@ -672,8 +700,8 @@ export const getByStorefrontUserId = query({
           v.object({
             action: v.string(),
             timestamp: v.number(),
-          })
-        )
+          }),
+        ),
       ),
       promoCode: v.optional(
         v.object({
@@ -688,7 +716,7 @@ export const getByStorefrontUserId = query({
           validTo: v.number(),
           span: v.union(
             v.literal("entire-order"),
-            v.literal("selected-products")
+            v.literal("selected-products"),
           ),
           active: v.boolean(),
           displayText: v.string(),
@@ -697,15 +725,15 @@ export const getByStorefrontUserId = query({
           autoApply: v.optional(v.boolean()),
           sitewide: v.optional(v.boolean()),
           createdByUserId: v.id("athenaUser"),
-        })
+        }),
       ),
-    })
+    }),
   ),
   handler: async (ctx, args) => {
     const offers = await ctx.db
       .query(entity)
       .withIndex("by_storeFrontUserId", (q) =>
-        q.eq("storeFrontUserId", args.storeFrontUserId)
+        q.eq("storeFrontUserId", args.storeFrontUserId),
       )
       .order("desc")
       .take(MAX_OFFERS);
@@ -716,7 +744,7 @@ export const getByStorefrontUserId = query({
       promoCodeIds.map(async (promoCodeId) => {
         const promoCode = await ctx.db.get("promoCode", promoCodeId);
         return { id: promoCodeId, data: promoCode };
-      })
+      }),
     );
 
     // Create a map for quick lookup
@@ -741,8 +769,8 @@ export const getAll = internalQuery({
         v.literal("sent"),
         v.literal("error"),
         v.literal("redeemed"),
-        v.literal("reminded")
-      )
+        v.literal("reminded"),
+      ),
     ),
   },
   handler: async (ctx, args) => {
@@ -750,7 +778,7 @@ export const getAll = internalQuery({
       return await ctx.db
         .query(entity)
         .withIndex("by_storeId_status", (q) =>
-          q.eq("storeId", args.storeId).eq("status", args.status!)
+          q.eq("storeId", args.storeId).eq("status", args.status!),
         )
         .take(MAX_OFFERS);
     }
@@ -796,7 +824,7 @@ const getUpsellProducts = async ({
   ]);
 
   const hairBestSellers = bestSellers.filter(
-    (seller) => seller.productSku.productCategory === "Hair"
+    (seller) => seller.productSku.productCategory === "Hair",
   );
 
   const formatter = currencyFormatter(store?.currency || "GHS");
@@ -805,40 +833,28 @@ const getUpsellProducts = async ({
     .filter(
       (seller) =>
         !recentlyViewedHairProducts.find(
-          (product) => product.sku === seller.productSku.sku
-        )
+          (product) => product.sku === seller.productSku.sku,
+        ),
     )
     .map((seller) => {
-      return {
-        image: seller.productSku.images[0],
-        name: getProductName(seller.productSku),
-        original_price: formatter.format(seller.productSku.price),
-        discounted_price: formatter.format(
-          Math.round(
-            seller.productSku.price -
-              getProductDiscountValue(seller.productSku.price, promoCode)
-          )
-        ),
-        product_url: `${process.env.STORE_URL}/shop/product/${seller.productId}?variant=${seller.productSku.sku}&origin=discount_reminder_email`,
-      };
+      return buildOfferProductEmailItem({
+        formatter,
+        productSku: seller.productSku,
+        productUrl: `${process.env.STORE_URL}/shop/product/${seller.productId}?variant=${seller.productSku.sku}&origin=discount_reminder_email`,
+        promoCode,
+      });
     })
     .slice(0, 4);
 
   const recentlyViewedHairProductsData = recentlyViewedHairProducts.map(
     (productSku) => {
-      return {
-        image: productSku.images[0],
-        name: getProductName(productSku),
-        original_price: formatter.format(productSku.price),
-        discounted_price: formatter.format(
-          Math.round(
-            productSku.price -
-              getProductDiscountValue(productSku.price, promoCode)
-          )
-        ),
-        product_url: `${process.env.STORE_URL}/shop/product/${productSku.productId}?variant=${productSku.sku}&origin=discount_reminder_email`,
-      };
-    }
+      return buildOfferProductEmailItem({
+        formatter,
+        productSku,
+        productUrl: `${process.env.STORE_URL}/shop/product/${productSku.productId}?variant=${productSku.sku}&origin=discount_reminder_email`,
+        promoCode,
+      });
+    },
   );
 
   return {

@@ -14,6 +14,7 @@ import { FadeIn } from "@/components/common/FadeIn";
 import { Badge } from "@/components/ui/badge";
 import { Banknote, Smartphone, Clock, CircleCheck } from "lucide-react";
 import { getStoreFallbackImageUrl } from "@/lib/storeConfig";
+import { formatStoredAmount } from "@/lib/currency";
 
 export const Route = createFileRoute("/_layout/_ordersLayout/shop/orders/")({
   component: () => <Purchases />,
@@ -103,7 +104,7 @@ const OrderItem = ({
       </div>
 
       <div className="flex items-center gap-4">
-        <p>{formatter.format(amountCharged / 100)}</p>
+        <p>{formatStoredAmount(formatter, amountCharged)}</p>
         <Link to="/shop/orders/$orderId" params={{ orderId: order._id }}>
           <Button variant={"link"}>View</Button>
         </Link>

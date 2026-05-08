@@ -1,7 +1,7 @@
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useCheckout } from "@/hooks/useCheckout";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
-import { toDisplayAmount, toPesewas } from "@/lib/currency";
+import { formatStoredAmount, toPesewas } from "@/lib/currency";
 import { GhostButton } from "@/components/ui/ghost-button";
 import { Truck } from "lucide-react";
 import { StoreIcon } from "lucide-react";
@@ -141,8 +141,9 @@ export const PickupOptions = () => {
                   {Boolean(checkoutState.deliveryFee) &&
                     !isFeeWaivedForCurrentOption && (
                       <p className="text-xs text-[#EC4683] text-start w-full">
-                        {formatter.format(
-                          toDisplayAmount(checkoutState.deliveryFee || 0),
+                        {formatStoredAmount(
+                          formatter,
+                          checkoutState.deliveryFee || 0,
                         )}
                       </p>
                     )}
@@ -161,7 +162,7 @@ export const PickupOptions = () => {
       {remainingForFreeDelivery !== null &&
         checkoutState.deliveryMethod === "delivery" && (
           <p className="text-xs text-accent2 font-medium">
-            Add {formatter.format(toDisplayAmount(remainingForFreeDelivery))}{" "}
+            Add {formatStoredAmount(formatter, remainingForFreeDelivery)}{" "}
             more to get free delivery
           </p>
         )}

@@ -18,6 +18,8 @@ type RawParseFinding = {
 
 const webappRoot = process.cwd();
 const sourceRoot = join(webappRoot, "src");
+const storefrontRoot = join(webappRoot, "../storefront-webapp");
+const storefrontSourceRoot = join(storefrontRoot, "src");
 
 const reviewedRawParses: ReviewedRawParse[] = [
   {
@@ -30,36 +32,6 @@ const reviewedRawParses: ReviewedRawParse[] = [
     file: "src/components/promo-codes/PromoCodePreview.tsx",
     textIncludes: "Number.parseFloat(discount)",
     reason: "Display-only preview formatting. V26-369 covers mutation persistence.",
-  },
-  {
-    file: "src/components/store-configuration/components/FeesView.tsx",
-    textIncludes: "Number.parseFloat(e.target.value)",
-    reason:
-      "Display-unit local state for fees; submit path converts with toPesewas before persistence.",
-  },
-  {
-    file: "src/components/assets/index.tsx",
-    textIncludes: "setEnteredWithinAccraFee(parseInt(e.target.value))",
-    reason:
-      "Legacy assets fee editor stores display-unit local state and persists through updateStoreConfiguration.",
-  },
-  {
-    file: "src/components/assets/index.tsx",
-    textIncludes: "setEnteredOtherRegionsFee(parseInt(e.target.value))",
-    reason:
-      "Legacy assets fee editor stores display-unit local state and persists through updateStoreConfiguration.",
-  },
-  {
-    file: "src/components/assets/index.tsx",
-    textIncludes: "setEnteredIntlFee(parseInt(e.target.value))",
-    reason:
-      "Legacy assets fee editor stores display-unit local state and persists through updateStoreConfiguration.",
-  },
-  {
-    file: "src/components/orders/ReturnExchangeView.tsx",
-    textIncludes: "unitPrice = Number(replacementUnitPrice)",
-    reason:
-      "Replacement unit price is a characterized legacy exchange boundary; not converted in this guardrail change.",
   },
   {
     file: "src/lib/pos/displayAmounts.ts",
@@ -98,16 +70,20 @@ const nonMoneyContextTerms = [
   "width",
 ];
 
-function readWebappFile(file: string): string {
-  return readFileSync(join(webappRoot, file), "utf8");
+function readFileFromRoot(root: string, file: string): string {
+  return readFileSync(join(root, file), "utf8");
 }
 
-function collectSourceFiles(dir: string): string[] {
+function readWebappFile(file: string): string {
+  return readFileFromRoot(webappRoot, file);
+}
+
+function collectSourceFiles(dir: string, root = webappRoot): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const absolutePath = join(dir, entry.name);
 
     if (entry.isDirectory()) {
-      return collectSourceFiles(absolutePath);
+      return collectSourceFiles(absolutePath, root);
     }
 
     if (!/\.(ts|tsx)$/.test(entry.name)) {
@@ -121,7 +97,7 @@ function collectSourceFiles(dir: string): string[] {
       return [];
     }
 
-    return [relative(webappRoot, absolutePath)];
+    return [relative(root, absolutePath)];
   });
 }
 
@@ -397,6 +373,123 @@ function collectRawMoneyParses(): RawParseFinding[] {
   });
 }
 
+function isAllowedMoneyFormatConversion(node: ts.CallExpression): boolean {
+  const [argument] = node.arguments;
+  const argumentText = argument?.getText() ?? "";
+
+  return [
+    "formatOfferProductPrice",
+    "formatStoredAmount",
+    "formatStoredCurrencyAmount",
+    "toDisplayAmount",
+  ].some((helperName) => argumentText.includes(`${helperName}(`));
+}
+
+function isFormatterFormatCall(node: ts.Node): node is ts.CallExpression {
+  if (!ts.isCallExpression(node)) {
+    return false;
+  }
+
+  if (!ts.isPropertyAccessExpression(node.expression)) {
+    return false;
+  }
+
+  return node.expression.name.text === "format";
+}
+
+function collectDirectMoneyFormatsFromSource(
+  file: string,
+  source: string
+): RawParseFinding[] {
+  const sourceFile = ts.createSourceFile(
+    file,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS
+  );
+  const findings: RawParseFinding[] = [];
+
+  function visit(node: ts.Node) {
+    if (!isFormatterFormatCall(node)) {
+      ts.forEachChild(node, visit);
+      return;
+    }
+
+    const contextNode = nearestContextNode(node);
+    const contextText = contextNode.getText();
+    const callText = node.getText();
+
+    if (
+      isAllowedMoneyFormatConversion(node) ||
+      referencesOnlyNonMoneyNumericContext(contextText)
+    ) {
+      ts.forEachChild(node, visit);
+      return;
+    }
+
+    if (referencesMoney(`${contextText} ${callText}`)) {
+      findings.push({
+        file,
+        ...nodeLine(sourceFile, node),
+        reason:
+          "Money-like display formatting must pass through a stored-money display helper first.",
+      });
+    }
+
+    ts.forEachChild(node, visit);
+  }
+
+  visit(sourceFile);
+  return findings;
+}
+
+function collectStorefrontDirectMoneyFormats(): RawParseFinding[] {
+  return collectSourceFiles(storefrontSourceRoot, storefrontRoot).flatMap(
+    (file) => {
+      if (file === "src/lib/utils.ts") {
+        return [];
+      }
+
+      return collectDirectMoneyFormatsFromSource(
+        `packages/storefront-webapp/${file}`,
+        readFileFromRoot(storefrontRoot, file)
+      );
+    }
+  );
+}
+
+function collectConvexMoneyBoundaryFindingsFromSource(
+  file: string,
+  source: string
+): RawParseFinding[] {
+  return source
+    .split("\n")
+    .flatMap((line, index): RawParseFinding[] => {
+      if (
+        !/(amount|price|fee|discountValue|unitPrice|subtotal|total)\s*:\s*v\.number\(\)/.test(
+          line
+        )
+      ) {
+        return [];
+      }
+
+      if (/minor-unit|server-computed|server owns money totals/.test(source)) {
+        return [];
+      }
+
+      return [
+        {
+          file,
+          line: line.trim(),
+          lineNumber: index + 1,
+          reason:
+            "Convex money-like number boundaries need an explicit minor-unit or server-computed contract.",
+        },
+      ];
+    });
+}
+
 describe("money entry audit", () => {
   it("catches raw numeric parses when the money field is declared in the surrounding payload", () => {
     const source = `
@@ -462,8 +555,90 @@ const payload = {
     ]);
   });
 
+  it("catches direct money formatting before stored-money conversion", () => {
+    const source = `
+const priceLabel = item.price
+  ? formatter.format(item.price * item.quantity)
+  : "Free";
+`;
+
+    expect(
+      collectDirectMoneyFormatsFromSource(
+        "packages/storefront-webapp/src/components/example/OrderItem.tsx",
+        source
+      )
+    ).toEqual([
+      expect.objectContaining({
+        file: "packages/storefront-webapp/src/components/example/OrderItem.tsx",
+        lineNumber: 3,
+      }),
+    ]);
+  });
+
+  it("allows direct formatting after stored-money conversion", () => {
+    const source = `
+const priceLabel = item.price
+  ? formatStoredAmount(formatter, item.price * item.quantity)
+  : "Free";
+const amountLabel = formatter.format(toDisplayAmount(amount));
+`;
+
+    expect(
+      collectDirectMoneyFormatsFromSource(
+        "packages/storefront-webapp/src/components/example/OrderItem.tsx",
+        source
+      )
+    ).toEqual([]);
+  });
+
+  it("catches Convex money-like number boundaries without an explicit contract", () => {
+    const source = `
+export const refundPayment = action({
+  args: {
+    amount: v.number(),
+  },
+});
+`;
+
+    expect(
+      collectConvexMoneyBoundaryFindingsFromSource(
+        "convex/storeFront/payment.ts",
+        source
+      )
+    ).toEqual([
+      expect.objectContaining({
+        file: "convex/storeFront/payment.ts",
+        lineNumber: 4,
+      }),
+    ]);
+  });
+
   it("scans every frontend source file for unreviewed raw money parsing", () => {
     expect(collectRawMoneyParses()).toEqual([]);
+  });
+
+  it("scans storefront source files for direct stored-money formatting", () => {
+    expect(collectStorefrontDirectMoneyFormats()).toEqual([]);
+  });
+
+  it("keeps checkout and refund Convex money contracts server-owned", () => {
+    const checkoutSessionSource = readWebappFile(
+      "convex/storeFront/checkoutSession.ts"
+    );
+    const paymentSource = readWebappFile("convex/storeFront/payment.ts");
+    const onlineOrderSource = readWebappFile(
+      "convex/storeFront/helpers/onlineOrder.ts"
+    );
+
+    expect(checkoutSessionSource).toContain("buildServerPricedCheckoutProducts");
+    expect(checkoutSessionSource).toContain("amount: sessionAmount");
+    expect(checkoutSessionSource).not.toMatch(
+      /ctx\.db\.insert\("checkoutSession"[\s\S]*amount:\s*args\.amount/
+    );
+    expect(onlineOrderSource).toContain("resolveServerDeliveryFee");
+    expect(paymentSource).toContain("reserveRefundInternal");
+    expect(paymentSource).toContain("finalizeRefundInternal");
+    expect(paymentSource).toContain("releaseRefundReservationInternal");
   });
 
   it("keeps every reviewed money-boundary exception attached to live code", () => {

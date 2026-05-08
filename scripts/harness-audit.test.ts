@@ -534,16 +534,17 @@ async function createFixtureRepo() {
         surfaces: [
           {
             name: "runtime-routes",
-            pathPrefixes: [
-              "packages/storefront-webapp/index.html",
-              "packages/storefront-webapp/package.json",
-              "packages/storefront-webapp/tsconfig.json",
-              "packages/storefront-webapp/src/main.tsx",
-              "packages/storefront-webapp/src/router.tsx",
-              "packages/storefront-webapp/src/routeTree.gen.ts",
-              "packages/storefront-webapp/src/routes/",
-              "packages/storefront-webapp/vite.config.ts",
-            ],
+	            pathPrefixes: [
+	              "packages/storefront-webapp/index.html",
+	              "packages/storefront-webapp/package.json",
+	              "packages/storefront-webapp/tsconfig.json",
+	              "packages/storefront-webapp/src/main.tsx",
+	              "packages/storefront-webapp/src/router.tsx",
+	              "packages/storefront-webapp/src/routeTree.gen.ts",
+	              "packages/storefront-webapp/src/routes/",
+	              "packages/storefront-webapp/vite.config.ts",
+	              "packages/storefront-webapp/playwright.config.ts",
+	            ],
             commands: [{ kind: "script", script: "test" }],
           },
           {
@@ -558,9 +559,12 @@ async function createFixtureRepo() {
             ],
             commands: [{ kind: "script", script: "test" }],
           },
-          {
-            name: "tests",
-            pathPrefixes: ["packages/storefront-webapp/tests/e2e/"],
+	          {
+	            name: "tests",
+	            pathPrefixes: [
+	              "packages/storefront-webapp/playwright.config.ts",
+	              "packages/storefront-webapp/tests/e2e/",
+	            ],
             commands: [
               { kind: "script", script: "test" },
               { kind: "script", script: "test:e2e" },
@@ -1122,7 +1126,12 @@ async function createFixtureRepo() {
     JSON.stringify({ compilerOptions: {} }, null, 2),
     rootDir
   );
-  await write("packages/storefront-webapp/vite.config.ts", "export default {};\n", rootDir);
+	  await write("packages/storefront-webapp/vite.config.ts", "export default {};\n", rootDir);
+	  await write(
+	    "packages/storefront-webapp/playwright.config.ts",
+	    "export default {};\n",
+	    rootDir
+	  );
   await write("packages/storefront-webapp/src/config.ts", "export {};\n", rootDir);
   await write("packages/storefront-webapp/src/index.css", "body {}\n", rootDir);
   await write("packages/storefront-webapp/src/main.tsx", "export {};\n", rootDir);
@@ -1208,20 +1217,24 @@ describe("runHarnessAudit", () => {
             {
               name: "runtime-routes",
               pathPrefixes: [
-                "packages/storefront-webapp/index.html",
-                "packages/storefront-webapp/package.json",
-                "packages/storefront-webapp/tsconfig.json",
-                "packages/storefront-webapp/src/main.tsx",
-                "packages/storefront-webapp/vite.config.ts",
+	                "packages/storefront-webapp/index.html",
+	                "packages/storefront-webapp/package.json",
+	                "packages/storefront-webapp/tsconfig.json",
+	                "packages/storefront-webapp/src/main.tsx",
+	                "packages/storefront-webapp/playwright.config.ts",
+	                "packages/storefront-webapp/vite.config.ts",
                 "packages/storefront-webapp/src/router.tsx",
                 "packages/storefront-webapp/src/routeTree.gen.ts",
                 "packages/storefront-webapp/src/routes/",
               ],
               commands: [{ kind: "script", script: "test" }],
             },
-            {
-              name: "tests",
-              pathPrefixes: ["packages/storefront-webapp/tests/e2e/"],
+	            {
+	              name: "tests",
+	              pathPrefixes: [
+	                "packages/storefront-webapp/playwright.config.ts",
+	                "packages/storefront-webapp/tests/e2e/",
+	              ],
               commands: [
                 { kind: "script", script: "test" },
                 { kind: "script", script: "test:e2e" },

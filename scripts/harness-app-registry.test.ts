@@ -96,7 +96,11 @@ describe("HARNESS_APP_REGISTRY", () => {
     );
 
     expect(fullBrowserScenario).toMatchObject({
-      touchedPaths: ["tests/e2e", "src/routes/shop/checkout"],
+      touchedPaths: [
+        "playwright.config.ts",
+        "tests/e2e",
+        "src/routes/shop/checkout",
+      ],
       commands: [
         { kind: "script", script: "test" },
         { kind: "script", script: "test:e2e" },

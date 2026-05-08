@@ -2,6 +2,7 @@ import { CheckoutProvider } from "@/components/checkout/CheckoutProvider";
 import { FadeIn } from "@/components/common/FadeIn";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { useCheckoutSessionQueries } from "@/lib/queries/checkout";
+import { formatStoredAmount } from "@/lib/currency";
 import { ArrowRightIcon } from "@radix-ui/react-icons";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -34,7 +35,7 @@ const Pending = () => {
               key={session._id}
               className="flex gap-2 hover:underline"
             >
-              <p className="text-sm font-medium">{`${formatter.format(session.amount / 100)} order placed on ${new Date(session._creationTime).toDateString()}`}</p>
+              <p className="text-sm font-medium">{`${formatStoredAmount(formatter, session.amount)} order placed on ${new Date(session._creationTime).toDateString()}`}</p>
               <ArrowRightIcon className="w-4 h-4" />
             </Link>
           );

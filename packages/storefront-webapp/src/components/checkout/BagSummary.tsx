@@ -17,7 +17,7 @@ import { useEffect, useState } from "react";
 import { getDiscountValue } from "./utils";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 import { isFeeWaived, getRemainingForFreeDelivery } from "@/lib/feeUtils";
-import { toDisplayAmount } from "@/lib/currency";
+import { formatStoredAmount } from "@/lib/currency";
 import { Badge } from "../ui/badge";
 import { useDiscountCodeAlert } from "@/hooks/useDiscountCodeAlert";
 import { getStoreConfigV2, getStoreFallbackImageUrl } from "@/lib/storeConfig";
@@ -120,25 +120,23 @@ function SummaryItem({
           <p className="text-sm font-medium">{getProductName(item)}</p>
           {!isFree && !hasDiscount && (
             <p className="text-xs text-muted-foreground">
-              {formatter.format(toDisplayAmount(item.price * item.quantity))}
+              {formatStoredAmount(formatter, item.price * item.quantity)}
             </p>
           )}
           {hasDiscount && !isFree && (
             <div className="flex items-center gap-2 text-xs">
               <p className="text-muted-foreground line-through">
-                {formatter.format(toDisplayAmount(item.price * item.quantity))}
+                {formatStoredAmount(formatter, item.price * item.quantity)}
               </p>
               <p className="text-xs text-accent2">
-                {formatter.format(
-                  toDisplayAmount(discountedPrice * item.quantity),
-                )}
+                {formatStoredAmount(formatter, discountedPrice * item.quantity)}
               </p>
             </div>
           )}
           {isFree && (
             <div className="flex items-center gap-2 text-xs">
               <p className="text-muted-foreground line-through">
-                {formatter.format(toDisplayAmount(item.price * item.quantity))}
+                {formatStoredAmount(formatter, item.price * item.quantity)}
               </p>
               <p className="text-xs text-accent2">Free</p>
             </div>
@@ -205,7 +203,7 @@ function BagSummary() {
   const discountText =
     checkoutState.discount?.type === "percentage"
       ? `${checkoutState.discount.value}%`
-      : `${formatter.format(toDisplayAmount(discountValue))}`;
+      : `${formatStoredAmount(formatter, discountValue)}`;
 
   const redeemPromoCodeMutation = useMutation({
     mutationFn: redeemPromoCode,
@@ -376,7 +374,7 @@ function BagSummary() {
         <div className="flex justify-between">
           <p className="text-sm">Subtotal</p>
           <p className="text-sm">
-            {formatter.format(toDisplayAmount(bagSubtotal))}
+            {formatStoredAmount(formatter, bagSubtotal)}
           </p>
         </div>
         {checkoutState.deliveryMethod === "delivery" &&
@@ -387,9 +385,7 @@ function BagSummary() {
               <p className="text-sm">
                 {isFeeWaivedForCurrentOption
                   ? "Free"
-                  : formatter.format(
-                      toDisplayAmount(checkoutState.deliveryFee || 0),
-                    )}
+                  : formatStoredAmount(formatter, checkoutState.deliveryFee || 0)}
               </p>
             </div>
           )}
@@ -398,13 +394,13 @@ function BagSummary() {
           <div className="flex justify-between">
             <p className="text-sm">Discounts</p>
             <p className="text-sm">
-              - {formatter.format(toDisplayAmount(discountValue))}
+              - {formatStoredAmount(formatter, discountValue)}
             </p>
           </div>
         )}
         <div className="flex justify-between font-medium">
           <p className="text-lg">Total</p>
-          <p className="text-lg">{formatter.format(toDisplayAmount(total))}</p>
+          <p className="text-lg">{formatStoredAmount(formatter, total)}</p>
         </div>
       </div>
     </motion.div>

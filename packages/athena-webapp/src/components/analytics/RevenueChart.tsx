@@ -8,12 +8,14 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 
 interface RevenueChartProps {
   revenueData: Record<string, number>;
+  formatter: Intl.NumberFormat;
 }
 
-export function RevenueChart({ revenueData }: RevenueChartProps) {
+export function RevenueChart({ revenueData, formatter }: RevenueChartProps) {
   // Convert revenue data to chart format
   const chartData = Object.entries(revenueData)
     .sort(([a], [b]) => new Date(a).getTime() - new Date(b).getTime())
@@ -28,7 +30,7 @@ export function RevenueChart({ revenueData }: RevenueChartProps) {
 
   const totalRevenue = Object.values(revenueData).reduce(
     (sum, val) => sum + val,
-    0
+    0,
   );
   const averageDailyRevenue =
     chartData.length > 0 ? totalRevenue / chartData.length : 0;
@@ -48,13 +50,13 @@ export function RevenueChart({ revenueData }: RevenueChartProps) {
               <div>
                 <p className="text-muted-foreground">Total Revenue</p>
                 <p className="font-medium text-lg">
-                  ${totalRevenue.toFixed(2)}
+                  {formatStoredAmount(formatter, totalRevenue)}
                 </p>
               </div>
               <div>
                 <p className="text-muted-foreground">Daily Average</p>
                 <p className="font-medium text-lg">
-                  ${averageDailyRevenue.toFixed(2)}
+                  {formatStoredAmount(formatter, averageDailyRevenue)}
                 </p>
               </div>
             </div>
@@ -72,11 +74,13 @@ export function RevenueChart({ revenueData }: RevenueChartProps) {
                     tick={{ fontSize: 12 }}
                     tickLine={false}
                     axisLine={false}
-                    tickFormatter={(value) => `$${value}`}
+                    tickFormatter={(value) =>
+                      formatStoredAmount(formatter, value)
+                    }
                   />
                   <Tooltip
                     formatter={(value: number) => [
-                      `$${value.toFixed(2)}`,
+                      formatStoredAmount(formatter, value),
                       "Revenue",
                     ]}
                     labelFormatter={(label) => `Date: ${label}`}

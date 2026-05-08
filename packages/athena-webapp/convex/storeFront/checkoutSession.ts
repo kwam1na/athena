@@ -20,6 +20,11 @@ import {
   createOrderFromCheckoutSession,
   findOrderByExternalReference,
 } from "./helpers/onlineOrder";
+import {
+  buildServerPricedCheckoutProducts,
+  calculateItemsSubtotal,
+  resolveServerDeliveryFee,
+} from "./helpers/paymentHelpers";
 
 const entity = "checkoutSession";
 
@@ -36,6 +41,7 @@ type Product = {
 };
 
 type AvailabilityUpdate = { id: Id<"productSku">; change: number };
+type SessionItemSnapshot = { price: number; quantity: number };
 
 async function listSessionItems(
   ctx: QueryCtx | MutationCtx,
@@ -49,11 +55,14 @@ async function listSessionItems(
 
 const checkIfItemsHaveChanged = (
   products: Product[],
-  sessionItemsMap: Map<string, number>,
+  sessionItemsMap: Map<string, SessionItemSnapshot>,
 ) => {
   return products.some((product) => {
-    const existingQuantity = sessionItemsMap.get(product.productSkuId);
-    return existingQuantity !== product.quantity;
+    const existingItem = sessionItemsMap.get(product.productSkuId);
+    return (
+      existingItem?.quantity !== product.quantity ||
+      existingItem?.price !== product.price
+    );
   });
 };
 
@@ -90,12 +99,37 @@ export const create = mutation({
       };
     }
 
+    // Fetch product SKUs and rebuild checkout totals from server catalog data.
+    const productSkus = await fetchProductSkus(ctx, args.products);
+    const pricedCheckout = buildServerPricedCheckoutProducts({
+      products: args.products,
+      productSkus,
+    });
+
+    if (pricedCheckout.missingProductSkuIds.length > 0) {
+      return {
+        success: false,
+        message: "Some items in your bag are no longer available",
+        unavailableProducts: pricedCheckout.missingProductSkuIds.map((id) => {
+          const product = args.products.find((p) => p.productSkuId === id);
+          return {
+            productSkuId: id,
+            requested: product?.quantity ?? 0,
+            available: 0,
+          };
+        }),
+      };
+    }
+
+    const products = pricedCheckout.products;
+    const sessionAmount = pricedCheckout.subtotal;
+
     // Check for valid products
     const productExistenceChecks = await Promise.all(
-      args.products.map((p) => ctx.db.get("product", p.productId)),
+      products.map((p) => ctx.db.get("product", p.productId)),
     );
 
-    const invalidProducts = args.products.filter(
+    const invalidProducts = products.filter(
       (_, index) => !productExistenceChecks[index],
     );
 
@@ -123,7 +157,7 @@ export const create = mutation({
         success: false,
         message: "Some items in your bag are no longer available",
         unavailableProducts: invisibleProducts.map((product) => {
-          const correspondingProductData = args.products.find(
+          const correspondingProductData = products.find(
             (p) => p.productId === product?._id,
           );
           return {
@@ -134,9 +168,6 @@ export const create = mutation({
         }),
       };
     }
-
-    // Fetch product SKUs
-    const productSkus = await fetchProductSkus(ctx, args.products);
 
     // Check if product SKUs are visible
     const invisibleProductSkus = productSkus.filter(
@@ -150,7 +181,7 @@ export const create = mutation({
         unavailableProducts: invisibleProductSkus.map((sku) => ({
           productSkuId: sku._id,
           requested:
-            args.products.find((p) => p.productSkuId === sku._id)?.quantity ||
+            products.find((p) => p.productSkuId === sku._id)?.quantity ||
             0,
           available: 0,
         })),
@@ -163,7 +194,7 @@ export const create = mutation({
       args.storeFrontUserId,
     );
 
-    let sessionItemsMap = new Map<string, number>();
+    let sessionItemsMap = new Map<string, SessionItemSnapshot>();
 
     if (existingSession && existingSession.placedOrderId === undefined) {
       // Fetch existing session items
@@ -171,15 +202,24 @@ export const create = mutation({
 
       // Map existing session items by productSkuId and quantity
       sessionItemsMap = new Map(
-        sessionItems.map((item) => [item.productSkuId, item.quantity]),
+        sessionItems.map((item) => [
+          item.productSkuId,
+          { price: item.price, quantity: item.quantity },
+        ]),
       );
     }
 
     // Adjust availability checks to account for user's current session items
+    const sessionItemQuantitiesMap = new Map(
+      Array.from(sessionItemsMap.entries()).map(([id, item]) => [
+        id,
+        item.quantity,
+      ]),
+    );
     const unavailableProducts = checkAdjustedAvailability(
-      args.products,
+      products,
       productSkus,
-      sessionItemsMap,
+      sessionItemQuantitiesMap,
     );
 
     if (unavailableProducts.length > 0) {
@@ -196,8 +236,8 @@ export const create = mutation({
         existingSession,
         sessionItemsMap,
         {
-          products: args.products,
-          amount: args.amount,
+          products,
+          amount: sessionAmount,
           expiresAt,
           storeId: args.storeId,
           storeFrontUserId: args.storeFrontUserId,
@@ -207,7 +247,7 @@ export const create = mutation({
 
     // Create new session
     const sessionId = await ctx.db.insert(entity, {
-      amount: args.amount,
+      amount: sessionAmount,
       bagId: args.bagId,
       storeFrontUserId: args.storeFrontUserId,
       storeId: args.storeId,
@@ -231,11 +271,11 @@ export const create = mutation({
       ctx,
       sessionId,
       args.storeFrontUserId,
-      args.products,
+      products,
     );
 
     // Update availability counts
-    await updateProductAvailability(ctx, args.products, productSkus);
+    await updateProductAvailability(ctx, products, productSkus);
 
     // Auto-apply best-value promo code
     console.log(
@@ -289,7 +329,7 @@ export const create = mutation({
       success: true,
       session: {
         ...updatedSession,
-        items: args.products,
+        items: products,
       },
     };
   },
@@ -603,16 +643,22 @@ export const updateCheckoutSession = internalMutation({
   },
   handler: async (ctx, args) => {
     try {
-      const patchObject = createPatchObject(args);
+      const currentSession = await ctx.db.get("checkoutSession", args.id);
+
+      if (!currentSession) {
+        console.log(
+          "Session missing for id in updateCheckoutSession. Returning false.",
+          args.id,
+        );
+        return { success: false, message: "Invalid session." };
+      }
+
+      const patchObject = await createPatchObject(ctx, args, currentSession);
       await ctx.db.patch("checkoutSession", args.id, patchObject);
 
       const session = await ctx.db.get("checkoutSession", args.id);
 
       if (!session) {
-        console.log(
-          "Session missing for id in updateCheckoutSession. Returning false.",
-          args.id,
-        );
         return { success: false, message: "Invalid session." };
       }
 
@@ -650,7 +696,11 @@ export const clearDiscount = internalMutation({
   },
 });
 
-function createPatchObject(args: any) {
+async function createPatchObject(
+  ctx: MutationCtx,
+  args: any,
+  session: CheckoutSession,
+) {
   const patchObject: Record<string, any> = {};
 
   // Status updates
@@ -677,13 +727,26 @@ function createPatchObject(args: any) {
   if (args.paymentMethod) patchObject.paymentMethod = args.paymentMethod;
   if (args.discount) patchObject.discount = args.discount;
   if (args.orderDetails) {
+    const [store, sessionItems] = await Promise.all([
+      ctx.db.get("store", session.storeId),
+      listSessionItems(ctx, args.id),
+    ]);
+    const sessionSubtotal = calculateItemsSubtotal(sessionItems);
+    const deliveryFee = resolveServerDeliveryFee({
+      deliveryDetails: args.orderDetails.deliveryDetails,
+      deliveryMethod: args.orderDetails.deliveryMethod,
+      deliveryOption: args.orderDetails.deliveryOption,
+      storeConfig: store?.config,
+      subtotal: sessionSubtotal,
+    });
+
     Object.assign(patchObject, {
       billingDetails: args.orderDetails.billingDetails,
       customerDetails: args.orderDetails.customerDetails,
       deliveryDetails: args.orderDetails.deliveryDetails,
       deliveryMethod: args.orderDetails.deliveryMethod,
       deliveryOption: args.orderDetails.deliveryOption,
-      deliveryFee: args.orderDetails.deliveryFee,
+      deliveryFee,
       pickupLocation: args.orderDetails.pickupLocation,
     });
 
@@ -1036,8 +1099,11 @@ async function updateExistingSession(
 
   const itemsToInsert: Omit<CheckoutSessionItem, "_id" | "_creationTime">[] =
     [];
-  const itemsToUpdate: { id: Id<"checkoutSessionItem">; quantity: number }[] =
-    [];
+  const itemsToUpdate: {
+    id: Id<"checkoutSessionItem">;
+    price: number;
+    quantity: number;
+  }[] = [];
   const itemsToDelete: Id<"checkoutSessionItem">[] = [];
   const availabilityUpdates: AvailabilityUpdate[] = [];
 
@@ -1045,11 +1111,15 @@ async function updateExistingSession(
     const existingItem = sessionItemsMap.get(product.productSkuId);
     if (existingItem) {
       const diff = product.quantity - existingItem.quantity;
-      if (diff !== 0) {
+      if (diff !== 0 || existingItem.price !== product.price) {
         itemsToUpdate.push({
           id: existingItem._id,
+          price: product.price,
           quantity: product.quantity,
         });
+      }
+
+      if (diff !== 0) {
         availabilityUpdates.push({ id: product.productSkuId, change: -diff });
       }
       sessionItemsMap.delete(product.productSkuId);
@@ -1081,8 +1151,8 @@ async function updateExistingSession(
   // Perform batch operations
   await Promise.all([
     ...itemsToInsert.map((item) => ctx.db.insert("checkoutSessionItem", item)),
-    ...itemsToUpdate.map(({ id, quantity }) =>
-      ctx.db.patch("checkoutSessionItem", id, { quantity }),
+    ...itemsToUpdate.map(({ id, price, quantity }) =>
+      ctx.db.patch("checkoutSessionItem", id, { price, quantity }),
     ),
     ...itemsToDelete.map((id) => ctx.db.delete("checkoutSessionItem", id)),
     ...availabilityUpdates.map(({ id, change }) =>
@@ -1163,7 +1233,7 @@ async function updateAvailability(
 async function handleExistingSession(
   ctx: MutationCtx,
   existingSession: any,
-  sessionItemsMap: Map<string, number>,
+  sessionItemsMap: Map<string, SessionItemSnapshot>,
   args: {
     products: Product[];
     amount: number;

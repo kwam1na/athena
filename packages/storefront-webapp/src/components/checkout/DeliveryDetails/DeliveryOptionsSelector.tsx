@@ -6,7 +6,7 @@ import { useStoreContext } from "@/contexts/StoreContext";
 import { isFeeWaived } from "@/lib/feeUtils";
 import { getStoreConfigV2 } from "@/lib/storeConfig";
 import { useShoppingBag } from "@/hooks/useShoppingBag";
-import { toDisplayAmount } from "@/lib/currency";
+import { formatStoredAmount } from "@/lib/currency";
 
 export function StoreSelector() {
   const { updateState, updateActionsState, checkoutState } = useCheckout();
@@ -170,7 +170,7 @@ export function DeliveryOptionsSelector() {
               {shouldWaiveWithinAccraFee && (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <p className="text-start line-through">
-                    {formatter.format(toDisplayAmount(withinAccraFee))}
+                    {formatStoredAmount(formatter, withinAccraFee)}
                   </p>
                   <p className="text-start">Free</p>
                 </div>
@@ -178,7 +178,7 @@ export function DeliveryOptionsSelector() {
 
               {!shouldWaiveWithinAccraFee && (
                 <p className="text-muted-foreground">
-                  {formatter.format(toDisplayAmount(withinAccraFee))}
+                  {formatStoredAmount(formatter, withinAccraFee)}
                 </p>
               )}
             </div>
@@ -192,7 +192,7 @@ export function DeliveryOptionsSelector() {
               {shouldWaiveOtherRegionsFee && (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <p className="text-start line-through">
-                    {formatter.format(toDisplayAmount(otherRegionsFee))}
+                    {formatStoredAmount(formatter, otherRegionsFee)}
                   </p>
                   <p className="text-start">Free</p>
                 </div>
@@ -200,7 +200,7 @@ export function DeliveryOptionsSelector() {
 
               {!shouldWaiveOtherRegionsFee && (
                 <p className="text-muted-foreground">
-                  {formatter.format(toDisplayAmount(otherRegionsFee))}
+                  {formatStoredAmount(formatter, otherRegionsFee)}
                 </p>
               )}
             </div>
@@ -218,7 +218,7 @@ export function DeliveryOptionsSelector() {
               {shouldWaiveIntlFee && (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <p className="text-start line-through">
-                    {formatter.format(toDisplayAmount(internationalFee))}
+                    {formatStoredAmount(formatter, internationalFee)}
                   </p>
                   <p className="text-start">Free</p>
                 </div>
@@ -226,7 +226,7 @@ export function DeliveryOptionsSelector() {
 
               {!shouldWaiveIntlFee && (
                 <p className="text-muted-foreground">
-                  {formatter.format(toDisplayAmount(internationalFee))}
+                  {formatStoredAmount(formatter, internationalFee)}
                 </p>
               )}
             </div>
