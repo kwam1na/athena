@@ -30719,7 +30719,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_procurement_procurementview_tsx",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L845",
+      "source_location": "L839",
       "target": "procurementview_addrecommendationtodraft",
       "weight": 1
     },
@@ -30755,7 +30755,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_procurement_procurementview_tsx",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L1710",
+      "source_location": "L1704",
       "target": "procurementview_cn",
       "weight": 1
     },
@@ -30779,7 +30779,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_procurement_procurementview_tsx",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L1737",
+      "source_location": "L1731",
       "target": "procurementview_formatlinecount",
       "weight": 1
     },
@@ -30803,7 +30803,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_procurement_procurementview_tsx",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L1300",
+      "source_location": "L1294",
       "target": "procurementview_formatpurchaseordercount",
       "weight": 1
     },
@@ -30827,7 +30827,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_procurement_procurementview_tsx",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L1412",
+      "source_location": "L1406",
       "target": "procurementview_formatunitcount",
       "weight": 1
     },
@@ -30899,7 +30899,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_procurement_procurementview_tsx",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L778",
+      "source_location": "L772",
       "target": "procurementview_getrecommendationforpurchaseorder",
       "weight": 1
     },
@@ -30959,7 +30959,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_procurement_procurementview_tsx",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L1059",
+      "source_location": "L1053",
       "target": "procurementview_handleadvancepurchaseordertoordered",
       "weight": 1
     },
@@ -30971,7 +30971,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_procurement_procurementview_tsx",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L940",
+      "source_location": "L934",
       "target": "procurementview_handlecreatedraftpurchaseorders",
       "weight": 1
     },
@@ -30995,7 +30995,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_procurement_procurementview_tsx",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L788",
+      "source_location": "L782",
       "target": "procurementview_handlepurchaseordersummaryclick",
       "weight": 1
     },
@@ -31007,7 +31007,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_procurement_procurementview_tsx",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L888",
+      "source_location": "L882",
       "target": "procurementview_handlequickaddvendor",
       "weight": 1
     },
@@ -31031,7 +31031,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_procurement_procurementview_tsx",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L1032",
+      "source_location": "L1026",
       "target": "procurementview_handleupdatepurchaseorderstatus",
       "weight": 1
     },
@@ -31079,7 +31079,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_procurement_procurementview_tsx",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L1270",
+      "source_location": "L1264",
       "target": "procurementview_if",
       "weight": 1
     },
@@ -31127,7 +31127,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_procurement_procurementview_tsx",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L882",
+      "source_location": "L876",
       "target": "procurementview_removedraftline",
       "weight": 1
     },
@@ -31175,7 +31175,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_procurement_procurementview_tsx",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L871",
+      "source_location": "L865",
       "target": "procurementview_updatedraftline",
       "weight": 1
     },
@@ -45683,7 +45683,7 @@
       "relation": "calls",
       "source": "procurementview_handlemodechange",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L1079",
+      "source_location": "L1073",
       "target": "procurementview_handleadvancepurchaseordertoordered",
       "weight": 1
     },
@@ -45695,7 +45695,7 @@
       "relation": "calls",
       "source": "procurementview_handlemodechange",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L1025",
+      "source_location": "L1019",
       "target": "procurementview_handlecreatedraftpurchaseorders",
       "weight": 1
     },
@@ -45719,7 +45719,7 @@
       "relation": "calls",
       "source": "procurementview_getpurchaseordermode",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L792",
+      "source_location": "L786",
       "target": "procurementview_handlepurchaseordersummaryclick",
       "weight": 1
     },
@@ -45731,7 +45731,7 @@
       "relation": "calls",
       "source": "procurementview_getrecommendationforpurchaseorder",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L791",
+      "source_location": "L785",
       "target": "procurementview_handlepurchaseordersummaryclick",
       "weight": 1
     },
@@ -45743,7 +45743,7 @@
       "relation": "calls",
       "source": "procurementview_handlemodechange",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L802",
+      "source_location": "L796",
       "target": "procurementview_handlepurchaseordersummaryclick",
       "weight": 1
     },
@@ -45755,7 +45755,7 @@
       "relation": "calls",
       "source": "procurementview_selectproductsku",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L796",
+      "source_location": "L790",
       "target": "procurementview_handlepurchaseordersummaryclick",
       "weight": 1
     },
@@ -45767,7 +45767,7 @@
       "relation": "calls",
       "source": "procurementview_setactiverecommendationpage",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L813",
+      "source_location": "L807",
       "target": "procurementview_handlepurchaseordersummaryclick",
       "weight": 1
     },
@@ -45791,7 +45791,7 @@
       "relation": "calls",
       "source": "procurementview_formatstatus",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L1052",
+      "source_location": "L1046",
       "target": "procurementview_handleupdatepurchaseorderstatus",
       "weight": 1
     },
@@ -82558,7 +82558,7 @@
       "label": "addRecommendationToDraft()",
       "norm_label": "addrecommendationtodraft()",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L845"
+      "source_location": "L839"
     },
     {
       "community": 4,
@@ -82585,7 +82585,7 @@
       "label": "cn()",
       "norm_label": "cn()",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L1243"
+      "source_location": "L1237"
     },
     {
       "community": 4,
@@ -82693,7 +82693,7 @@
       "label": "getRecommendationForPurchaseOrder()",
       "norm_label": "getrecommendationforpurchaseorder()",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L778"
+      "source_location": "L772"
     },
     {
       "community": 4,
@@ -82738,7 +82738,7 @@
       "label": "handleAdvancePurchaseOrderToOrdered()",
       "norm_label": "handleadvancepurchaseordertoordered()",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L1059"
+      "source_location": "L1053"
     },
     {
       "community": 4,
@@ -82747,7 +82747,7 @@
       "label": "handleCreateDraftPurchaseOrders()",
       "norm_label": "handlecreatedraftpurchaseorders()",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L940"
+      "source_location": "L934"
     },
     {
       "community": 4,
@@ -82765,7 +82765,7 @@
       "label": "handlePurchaseOrderSummaryClick()",
       "norm_label": "handlepurchaseordersummaryclick()",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L788"
+      "source_location": "L782"
     },
     {
       "community": 4,
@@ -82774,7 +82774,7 @@
       "label": "handleQuickAddVendor()",
       "norm_label": "handlequickaddvendor()",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L888"
+      "source_location": "L882"
     },
     {
       "community": 4,
@@ -82792,7 +82792,7 @@
       "label": "handleUpdatePurchaseOrderStatus()",
       "norm_label": "handleupdatepurchaseorderstatus()",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L1032"
+      "source_location": "L1026"
     },
     {
       "community": 4,
@@ -82828,7 +82828,7 @@
       "label": "if()",
       "norm_label": "if()",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L1270"
+      "source_location": "L1264"
     },
     {
       "community": 4,
@@ -82864,7 +82864,7 @@
       "label": "removeDraftLine()",
       "norm_label": "removedraftline()",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L882"
+      "source_location": "L876"
     },
     {
       "community": 4,
@@ -82900,7 +82900,7 @@
       "label": "updateDraftLine()",
       "norm_label": "updatedraftline()",
       "source_file": "packages/athena-webapp/src/components/procurement/ProcurementView.tsx",
-      "source_location": "L871"
+      "source_location": "L865"
     },
     {
       "community": 40,

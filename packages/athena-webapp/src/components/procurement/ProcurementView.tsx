@@ -650,12 +650,6 @@ export function ProcurementViewContent({
     );
 
     setActiveRecommendationPage(boundedPage);
-    window.requestAnimationFrame(() => {
-      stockPressureSectionRef.current?.scrollIntoView({
-        block: "start",
-        behavior: "smooth",
-      });
-    });
   };
 
   const visibleRecommendations = useMemo(
