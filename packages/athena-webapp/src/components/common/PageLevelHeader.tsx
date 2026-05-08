@@ -1,12 +1,15 @@
 import type { ElementType, ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
+import { NavigateBackButton } from "./PageHeader";
 
 type PageLevelHeaderProps = {
   eyebrow: string;
   title: string;
   description: ReactNode;
   className?: string;
+  showBackButton?: boolean;
+  showBottomBorder?: boolean;
 };
 
 export function PageLevelHeader({
@@ -14,14 +17,18 @@ export function PageLevelHeader({
   title,
   description,
   className,
+  showBackButton = false,
+  showBottomBorder = false,
 }: PageLevelHeaderProps) {
   return (
     <header
       className={cn(
-        "max-w-4xl space-y-layout-sm border-b border-border pb-layout-lg",
+        "max-w-4xl space-y-layout-sm",
+        showBottomBorder ? "border-b border-border pb-layout-lg" : null,
         className,
       )}
     >
+      {showBackButton ? <NavigateBackButton /> : null}
       <p className="text-xs font-semibold uppercase tracking-[0.28em] text-muted-foreground">
         {eyebrow}
       </p>

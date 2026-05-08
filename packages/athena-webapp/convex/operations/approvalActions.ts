@@ -18,7 +18,7 @@ export const APPROVAL_ACTIONS = {
   },
   dailyCloseCompletion: {
     key: "operations.daily_close.complete",
-    label: "Complete Daily Close",
+    label: "Complete End-of-Day Review",
   },
   transactionPaymentMethodCorrection: {
     key: "pos.transaction.correct_payment_method",

@@ -1090,7 +1090,6 @@ export function ProcurementViewContent({
           <PageWorkspaceMain className="min-h-0 overflow-y-auto overscroll-contain pr-1 scrollbar-hide">
             <PageWorkspace>
               <PageLevelHeader
-                className="border-b-0 pb-0"
                 eyebrow="Stock Ops"
                 title="Procurement"
                 description="Review stock pressure, create vendor-backed orders, and track receiving in one workspace."

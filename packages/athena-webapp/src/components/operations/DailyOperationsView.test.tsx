@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { AnchorHTMLAttributes, ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -70,6 +70,18 @@ vi.mock("~/convex/_generated/api", () => ({
 
 const operatingSnapshot: DailyOperationsSnapshot = {
   attentionItems: [],
+  closeSummary: {
+    carriedOverCashTotal: 0,
+    carriedOverRegisterCount: 0,
+    currentDayCashTotal: 349100,
+    currentDayCashTransactionCount: 2,
+    expenseTotal: 19800,
+    expenseTransactionCount: 1,
+    netCashVariance: 0,
+    registerVarianceCount: 0,
+    salesTotal: 1533100,
+    transactionCount: 3,
+  },
   currency: "GHS",
   lanes: [
     {
@@ -84,7 +96,7 @@ const operatingSnapshot: DailyOperationsSnapshot = {
       count: 0,
       description: "No close blockers are active.",
       key: "close",
-      label: "Daily Close",
+      label: "End-of-Day Review",
       status: "ready",
       to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
     },
@@ -98,13 +110,14 @@ const operatingSnapshot: DailyOperationsSnapshot = {
     },
   ],
   lifecycle: {
-    description: "Opening is complete and Daily Close has no blockers.",
+    description:
+      "Opening Handoff is complete and End-of-Day Review has no blockers.",
     label: "Ready to close",
     status: "ready_to_close",
   },
   operatingDate: "2026-05-08",
   primaryAction: {
-    label: "Start Daily Close",
+    label: "Start End-of-Day Review",
     to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
   },
   storeId: "store-1" as Id<"store">,
@@ -117,7 +130,7 @@ const blockedSnapshot: DailyOperationsSnapshot = {
     {
       id: "register_session:register-1:open",
       label: "Register session is still open",
-      message: "Close the register session before completing Daily Close.",
+      message: "Close the register session before completing End-of-Day Review.",
       owner: "daily_close",
       severity: "critical",
       source: {
@@ -159,14 +172,14 @@ const closedSnapshot: DailyOperationsSnapshot = {
     status: "closed",
   },
   primaryAction: {
-    label: "Review Daily Close",
+    label: "Review End-of-Day Review",
     to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
   },
   timeline: [
     {
       createdAt: Date.UTC(2026, 4, 8, 22),
       id: "event-close",
-      message: "Daily Close completed.",
+      message: "End-of-Day Review completed.",
       subject: {
         id: "close-1",
         type: "daily_close",
@@ -176,7 +189,7 @@ const closedSnapshot: DailyOperationsSnapshot = {
     {
       createdAt: Date.UTC(2026, 4, 8, 8),
       id: "event-open",
-      message: "Store day started.",
+      message: "Store day acknowledged for 2026-05-08.",
       subject: {
         id: "opening-1",
         type: "daily_opening",
@@ -184,6 +197,20 @@ const closedSnapshot: DailyOperationsSnapshot = {
       type: "daily_opening.started",
     },
   ],
+};
+
+const timelineOverflowSnapshot: DailyOperationsSnapshot = {
+  ...operatingSnapshot,
+  timeline: Array.from({ length: 12 }, (_, index) => ({
+    createdAt: Date.UTC(2026, 4, 8, 12, index),
+    id: `event-${index + 1}`,
+    message: `Timeline event ${index + 1}`,
+    subject: {
+      id: `subject-${index + 1}`,
+      type: "operations",
+    },
+    type: "operations.event",
+  })),
 };
 
 function renderContent(
@@ -210,6 +237,7 @@ function renderContent(
 describe("DailyOperationsViewContent", () => {
   beforeEach(() => {
     window.scrollTo = vi.fn();
+    window.history.pushState({}, "", "/wigclub/store/osu/operations");
   });
 
   it("renders store-day posture, primary action, and lanes", () => {
@@ -218,19 +246,41 @@ describe("DailyOperationsViewContent", () => {
     expect(
       screen.getByRole("heading", { name: "Daily Operations" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Ready to close")).toBeInTheDocument();
+    expect(screen.getByText("Today's net sales")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open transactions" })).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/pos/transactions?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
+    );
+    expect(screen.getByText("GH₵15,331")).toBeInTheDocument();
+    expect(screen.getByText("3 transactions")).toBeInTheDocument();
+    expect(screen.getByText("Today's cash")).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Start Daily Close" }),
+      screen.getByRole("link", { name: "Open cash transactions" }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/pos/transactions?o=%252Fwigclub%252Fstore%252Fosu%252Foperations&paymentMethod=cash",
+    );
+    expect(screen.getByText("GH₵3,491")).toBeInTheDocument();
+    expect(screen.getByText("2 cash transactions")).toBeInTheDocument();
+    expect(screen.getByText("Carried-over cash")).toBeInTheDocument();
+    expect(screen.getAllByText("GH₵0")).not.toHaveLength(0);
+    expect(screen.getByText("No registers from prior days")).toBeInTheDocument();
+    expect(screen.getByText("Expenses")).toBeInTheDocument();
+    expect(screen.getByText("GH₵198")).toBeInTheDocument();
+    expect(screen.getByText("1 expense transaction")).toBeInTheDocument();
+    expect(screen.getByText("Variance")).toBeInTheDocument();
+    expect(screen.getByText("No register variances")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Start End-of-Day Review" }),
     ).toHaveAttribute("href", "/wigclub/store/osu/operations/daily-close");
     expect(screen.getByText("Opening")).toBeInTheDocument();
-    expect(screen.getByText("Daily Close")).toBeInTheDocument();
+    expect(screen.getByText("End-of-Day Review")).toBeInTheDocument();
     expect(screen.getByText("Open work")).toBeInTheDocument();
   });
 
   it("keeps attention items source-owned and action-linked", () => {
     renderContent(blockedSnapshot);
 
-    expect(screen.getByText("Close blocked")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Review close blockers" }),
     ).toHaveAttribute("href", "/wigclub/store/osu/operations/daily-close");
@@ -239,7 +289,7 @@ describe("DailyOperationsViewContent", () => {
     expect(
       within(attention).getByText("Register session is still open"),
     ).toBeInTheDocument();
-    expect(within(attention).getByText("Daily close")).toBeInTheDocument();
+    expect(within(attention).getByText("End-of-Day Review")).toBeInTheDocument();
     expect(
       within(attention).getByRole("link", {
         name: "Open source for Register session is still open",
@@ -253,13 +303,36 @@ describe("DailyOperationsViewContent", () => {
   it("renders closed-day review timeline without mutation copy", () => {
     renderContent(closedSnapshot);
 
-    expect(screen.getByText("Closed")).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Review Daily Close" }),
+      screen.getByRole("link", { name: "Review End-of-Day Review" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Daily Close completed.")).toBeInTheDocument();
-    expect(screen.getByText("Store day started.")).toBeInTheDocument();
-    expect(screen.queryByText("Complete Daily Close")).not.toBeInTheDocument();
+    expect(screen.getByText("End-of-Day Review completed.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Store day acknowledged for May 8, 2026."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("2026-05-08")).not.toBeInTheDocument();
+    expect(screen.queryByText("Complete End-of-Day Review")).not.toBeInTheDocument();
+  });
+
+  it("previews the five most recent timeline events and opens the full list in a sheet", () => {
+    renderContent(timelineOverflowSnapshot);
+
+    const timeline = screen.getByRole("region", {
+      name: "Store-day timeline",
+    });
+
+    expect(within(timeline).getByText("Timeline event 1")).toBeInTheDocument();
+    expect(within(timeline).getByText("Timeline event 5")).toBeInTheDocument();
+    expect(
+      within(timeline).queryByText("Timeline event 6"),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(within(timeline).getByRole("button", { name: "Show more" }));
+
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getAllByText("Store-day timeline")).not.toHaveLength(0);
+    expect(screen.getByText("Timeline event 6")).toBeInTheDocument();
+    expect(screen.getByText("Timeline event 12")).toBeInTheDocument();
   });
 
   it("uses content-shaped loading state while the store-day snapshot loads", () => {
@@ -313,7 +386,9 @@ describe("DailyOperationsView", () => {
         storeId: "store-1",
       }),
     );
-    expect(screen.getByText("Ready to close")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Start End-of-Day Review" }),
+    ).toBeInTheDocument();
   });
 
   it("skips the protected query when access is not ready", () => {

@@ -1,12 +1,6 @@
 import { NotFoundView } from "@/components/states/not-found/NotFoundView";
-import StoreView from "@/components/StoreView";
-import useGetActiveStore from "@/hooks/useGetActiveStore";
-import { useGetActiveOrganization } from "@/hooks/useGetOrganizations";
 import { useEffect } from "react";
 import { useNavigate, useParams } from "@tanstack/react-router";
-// import { getOrganization } from '@/server-actions/organizations'
-// import { getProducts } from '@/server-actions/products'
-// import { getStore } from '@/server-actions/stores'
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { usePermissions } from "@/hooks/usePermissions";
 
@@ -24,42 +18,36 @@ function StoreRootRedirect() {
           params: { orgUrlSlug, storeUrlSlug },
         });
       } else {
-        // full_admin or default to analytics
+        // full_admin or default to operations workspace
         navigate({
-          to: "/$orgUrlSlug/store/$storeUrlSlug/analytics",
+          to: "/$orgUrlSlug/store/$storeUrlSlug/operations",
           params: { orgUrlSlug, storeUrlSlug },
         });
       }
     }
-  }, [orgUrlSlug, storeUrlSlug, role, isLoading]);
+  }, [orgUrlSlug, storeUrlSlug, role, isLoading, navigate]);
   return null;
+}
+
+function StoreRootNotFound({ data }: { data?: unknown }) {
+  const { orgUrlSlug, storeUrlSlug } = Route.useParams();
+  const notFoundData =
+    typeof data === "object" && data !== null && "data" in data
+      ? (data.data as { org?: boolean } | undefined)
+      : undefined;
+  const isMissingOrg = Boolean(notFoundData?.org);
+  const entity = isMissingOrg ? "organization" : "store";
+  const name = isMissingOrg ? orgUrlSlug : storeUrlSlug;
+
+  return <NotFoundView entity={entity} entityIdentifier={name} />;
 }
 
 export const Route = createFileRoute(
   "/_authed/$orgUrlSlug/store/$storeUrlSlug/"
 )({
-  // beforeLoad: () => {
-  //   const { activeOrganization } = useGetActiveOrganization();
-  //   const { activeStore } = useGetActiveStore();
-
-  //   if (!activeOrganization || !activeStore)
-  //     throw notFound({
-  //       data: {
-  //         store: Boolean(activeStore) == false,
-  //         org: Boolean(activeOrganization) == false,
-  //       },
-  //     });
-  // },
-
-  loader: async ({ params: { orgUrlSlug, storeUrlSlug } }) => {
-    // const [org, store] = await Promise.all([
-    //   getOrganization(orgUrlSlug),
-    //   getStore(storeUrlSlug),
-    // ])
-
+  loader: async () => {
     const org = {};
     const store = {};
-    const products = {};
 
     if (!org || !store)
       throw notFound({
@@ -69,24 +57,11 @@ export const Route = createFileRoute(
         },
       });
 
-    // const products = await getProducts(store.id)
-
     return {
       store,
-      products,
     };
   },
 
   component: StoreRootRedirect,
-
-  notFoundComponent: ({ data }) => {
-    const { orgUrlSlug, storeUrlSlug } = Route.useParams();
-    const { data: d } = data as Record<string, any>;
-    const { org } = d as Record<string, boolean>;
-
-    const entity = org ? "organization" : "store";
-    const name = org ? orgUrlSlug : storeUrlSlug;
-
-    return <NotFoundView entity={entity} entityIdentifier={name} />;
-  },
+  notFoundComponent: StoreRootNotFound,
 });

@@ -60,6 +60,13 @@ describe("POS public transaction query validators", () => {
       type: "object",
       value: {
         sessionTraceId: expect.any(Object),
+        paymentMethods: {
+          fieldType: {
+            type: "array",
+            value: { type: "string" },
+          },
+          optional: false,
+        },
         hasMultiplePaymentMethods: {
           fieldType: { type: "boolean" },
           optional: false,

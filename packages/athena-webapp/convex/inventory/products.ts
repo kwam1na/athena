@@ -6,6 +6,7 @@ import {
   mutation,
   query,
 } from "../_generated/server";
+import type { QueryCtx } from "../_generated/server";
 import { v } from "convex/values";
 import { productSchema, productSkuSchema } from "../schemas/inventory";
 import { ProductSku } from "../../types";
@@ -13,6 +14,7 @@ import { Id } from "../_generated/dataModel";
 import { api, internal } from "../_generated/api";
 import { deleteDirectoryInR2 } from "../cloudflare/r2";
 import { requireStoreFullAdminAccess } from "../stockOps/access";
+import { readActiveHeldQuantitiesForSkus } from "./helpers/inventoryHolds";
 
 const entity = "product";
 
@@ -72,6 +74,38 @@ const calculateTotalAvailableCount = (skus: ProductSku[]): number => {
   if (!skus) return 0;
   return skus.reduce((total, sku) => total + (sku.quantityAvailable || 0), 0);
 };
+
+async function adjustSkuAvailabilityForActiveHolds(
+  ctx: QueryCtx,
+  args: {
+    skus: ProductSku[];
+    storeId: Id<"store">;
+  }
+) {
+  if (args.skus.length === 0) {
+    return args.skus;
+  }
+
+  const heldQuantities = await readActiveHeldQuantitiesForSkus(ctx.db, {
+    storeId: args.storeId,
+    skuIds: args.skus.map((sku) => sku._id),
+  });
+
+  return args.skus.map((sku) => {
+    const reservedQuantity = heldQuantities.get(sku._id) ?? 0;
+    const durableQuantityAvailable = sku.quantityAvailable;
+
+    return {
+      ...sku,
+      durableQuantityAvailable,
+      reservedQuantity,
+      quantityAvailable: Math.max(
+        0,
+        durableQuantityAvailable - reservedQuantity
+      ),
+    };
+  });
+}
 
 export const getAll = query({
   args: {
@@ -313,7 +347,15 @@ export const getById = query({
       category = productCategory?.name;
     }
 
-    const skusWithCategory = skus
+    const availabilityAdjustedSkus = await adjustSkuAvailabilityForActiveHolds(
+      ctx,
+      {
+        skus,
+        storeId: args.storeId,
+      }
+    );
+
+    const skusWithCategory = availabilityAdjustedSkus
       .map((sku) => ({
         ...sku,
         productCategory: category,
@@ -368,7 +410,15 @@ export const getByIdInternal = internalQuery({
       category = productCategory?.name;
     }
 
-    const skusWithCategory = skus
+    const availabilityAdjustedSkus = await adjustSkuAvailabilityForActiveHolds(
+      ctx,
+      {
+        skus,
+        storeId: args.storeId,
+      }
+    );
+
+    const skusWithCategory = availabilityAdjustedSkus
       .map((sku) => ({
         ...sku,
         productCategory: category,
@@ -435,7 +485,15 @@ export const getBySlug = query({
       category = productCategory?.name;
     }
 
-    const skusWithCategory = skus
+    const availabilityAdjustedSkus = await adjustSkuAvailabilityForActiveHolds(
+      ctx,
+      {
+        skus,
+        storeId: args.storeId,
+      }
+    );
+
+    const skusWithCategory = availabilityAdjustedSkus
       .map((sku) => ({
         ...sku,
         productCategory: category,
@@ -536,7 +594,15 @@ export const getByIdOrSlug = query({
       return null;
     }
 
-    const skusWithCategory = skus
+    const availabilityAdjustedSkus = await adjustSkuAvailabilityForActiveHolds(
+      ctx,
+      {
+        skus,
+        storeId: args.storeId,
+      }
+    );
+
+    const skusWithCategory = availabilityAdjustedSkus
       .map((sku) => ({
         ...sku,
         productCategory: category,

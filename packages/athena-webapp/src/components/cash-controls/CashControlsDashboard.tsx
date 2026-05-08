@@ -1174,7 +1174,6 @@ export function CashControlsDashboardContent({
       <FadeIn className="container mx-auto py-layout-xl">
         <PageWorkspace>
           <PageLevelHeader
-            className="border-b-0 pb-0"
             eyebrow="Cash Ops"
             title="Cash controls"
             description="Track live drawers, review deposited totals, and move into session detail before shifting work into closeouts."

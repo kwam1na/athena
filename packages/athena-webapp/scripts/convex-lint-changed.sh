@@ -32,15 +32,25 @@ MERGE_BASE="$(git -C "$REPO_ROOT" merge-base HEAD "$BASE_REF")"
 
 changed_files=()
 
+collect_changed_convex_files() {
+  {
+    git -C "$REPO_ROOT" diff --name-only --diff-filter=ACMR "$MERGE_BASE"...HEAD -- \
+      packages/athena-webapp/convex
+    git -C "$REPO_ROOT" diff --name-only --diff-filter=ACMR -- \
+      packages/athena-webapp/convex
+    git -C "$REPO_ROOT" diff --cached --name-only --diff-filter=ACMR -- \
+      packages/athena-webapp/convex
+    git -C "$REPO_ROOT" ls-files --others --exclude-standard -- \
+      packages/athena-webapp/convex
+  } | sort -u
+}
+
 while IFS= read -r file; do
   if [[ "$file" == packages/athena-webapp/convex/_generated/* ]]; then
     continue
   fi
   changed_files+=("${file#packages/athena-webapp/}")
-done < <(
-  git -C "$REPO_ROOT" diff --name-only --diff-filter=ACMR "$MERGE_BASE"...HEAD -- packages/athena-webapp/convex \
-    | grep -E '\.ts$' || true
-)
+done < <(collect_changed_convex_files | grep -E '\.ts$' || true)
 
 if [ "${#changed_files[@]}" -eq 0 ]; then
   echo "No changed Convex files to lint against $BASE_REF."

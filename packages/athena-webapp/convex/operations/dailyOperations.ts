@@ -83,6 +83,19 @@ type DailyOperationsTimelineEvent = {
   type: string;
 };
 
+type DailyOperationsCloseSummary = {
+  carriedOverCashTotal: number;
+  carriedOverRegisterCount: number;
+  currentDayCashTotal: number;
+  currentDayCashTransactionCount: number;
+  expenseTotal: number;
+  expenseTransactionCount: number;
+  netCashVariance: number;
+  registerVarianceCount: number;
+  salesTotal: number;
+  transactionCount: number;
+};
+
 function operatingDateRange(operatingDate: string) {
   const startAt = Date.parse(`${operatingDate}T00:00:00.000Z`);
 
@@ -145,13 +158,13 @@ function openingNotStartedAttention(args: {
 }): DailyOperationsAttentionItem {
   return {
     id: `daily_opening:${args.storeId}:${args.operatingDate}:not_started`,
-    label: "Daily Opening not started",
-    message: "Start Daily Opening before running the store day.",
+    label: "Opening Handoff not started",
+    message: "Start Opening Handoff before running the store day.",
     owner: "daily_opening",
     severity: "warning",
     source: {
       id: `${args.storeId}:${args.operatingDate}`,
-      label: `Daily Opening ${args.operatingDate}`,
+      label: `Opening Handoff ${args.operatingDate}`,
       type: "daily_opening",
     },
     to: "/$orgUrlSlug/store/$storeUrlSlug/operations/opening",
@@ -296,7 +309,7 @@ function queueAttentionItems(args: {
 function lifecycleCopy(status: LifecycleStatus) {
   if (status === "not_opened") {
     return {
-      description: "Start Daily Opening before running the store day.",
+      description: "Start Opening Handoff before running the store day.",
       label: "Not opened",
     };
   }
@@ -310,7 +323,7 @@ function lifecycleCopy(status: LifecycleStatus) {
 
   if (status === "ready_to_close") {
     return {
-      description: "Opening is complete and Daily Close has no blockers.",
+      description: "Opening Handoff is complete and End-of-Day Review has no blockers.",
       label: "Ready to close",
     };
   }
@@ -323,7 +336,8 @@ function lifecycleCopy(status: LifecycleStatus) {
   }
 
   return {
-    description: "Opening is complete. Keep open work visible through close.",
+    description:
+      "Opening Handoff is complete. Keep open work visible through End-of-Day Review.",
     label: "Operating",
   };
 }
@@ -334,7 +348,7 @@ function primaryAction(status: LifecycleStatus): {
 } {
   if (status === "not_opened") {
     return {
-      label: "Start Daily Opening",
+      label: "Start Opening Handoff",
       to: "/$orgUrlSlug/store/$storeUrlSlug/operations/opening",
     };
   }
@@ -348,13 +362,13 @@ function primaryAction(status: LifecycleStatus): {
 
   if (status === "closed") {
     return {
-      label: "Review Daily Close",
+      label: "Review End-of-Day Review",
       to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
     };
   }
 
   return {
-    label: "Start Daily Close",
+    label: "Start End-of-Day Review",
     to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
   };
 }
@@ -387,10 +401,10 @@ function buildLanes(args: {
     {
       count: args.openingAttentionCount,
       description: args.isOpeningStarted
-        ? "Opening handoff is complete."
-        : "Daily Opening still needs operator acknowledgement.",
+        ? "Opening Handoff is complete."
+        : "Opening Handoff still needs operator acknowledgement.",
       key: "opening",
-      label: "Opening",
+      label: "Opening Handoff",
       status: openingStatus,
       to: "/$orgUrlSlug/store/$storeUrlSlug/operations/opening",
     },
@@ -403,12 +417,12 @@ function buildLanes(args: {
             args.closeBlockerCounts.approvalCount,
       description:
         args.closeStatus === "completed"
-          ? "Daily Close is saved for this store day."
+          ? "End-of-Day Review is saved for this store day."
           : args.closeStatus === "blocked"
-            ? "Daily Close has blockers to resolve."
-            : "Daily Close is available for review.",
+            ? "End-of-Day Review has blockers to resolve."
+            : "End-of-Day Review is available for review.",
       key: "close",
-      label: "Daily Close",
+      label: "End-of-Day Review",
       status: closeStatus,
       to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
     },
@@ -543,6 +557,19 @@ export async function buildDailyOperationsSnapshotWithCtx(
 
   return {
     attentionItems,
+    closeSummary: {
+      carriedOverCashTotal: closeSnapshot.summary.carriedOverCashTotal,
+      carriedOverRegisterCount: closeSnapshot.summary.carriedOverRegisterCount,
+      currentDayCashTotal: closeSnapshot.summary.currentDayCashTotal,
+      currentDayCashTransactionCount:
+        closeSnapshot.summary.currentDayCashTransactionCount,
+      expenseTotal: closeSnapshot.summary.expenseTotal,
+      expenseTransactionCount: closeSnapshot.summary.expenseTransactionCount,
+      netCashVariance: closeSnapshot.summary.netCashVariance,
+      registerVarianceCount: closeSnapshot.summary.registerVarianceCount,
+      salesTotal: closeSnapshot.summary.salesTotal,
+      transactionCount: closeSnapshot.summary.transactionCount,
+    } satisfies DailyOperationsCloseSummary,
     currency: store?.currency ?? "GHS",
     endAt: range.endAt,
     lanes: buildLanes({

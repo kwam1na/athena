@@ -7,12 +7,11 @@ import {
 } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import {
-  AlertTriangle,
   ArrowUpRight,
+  Ban,
   CheckCircle2,
   ClipboardCheck,
   ListChecks,
-  Lock,
   RotateCcw,
 } from "lucide-react";
 
@@ -397,19 +396,13 @@ function normalizeCommandMessage(
   return result.error.message;
 }
 
-function getStatusIcon(status: DailyOpeningStatus) {
-  if (status === "blocked") return AlertTriangle;
-  if (status === "needs_attention") return ClipboardCheck;
-  if (status === "started") return ListChecks;
-  return CheckCircle2;
-}
-
 function getStatusLabelClassName(status: DailyOpeningStatus) {
   return cn(
-    "inline-flex items-center gap-2 font-medium",
-    status === "blocked" && "text-danger",
-    status === "needs_attention" && "text-warning-foreground",
-    (status === "ready" || status === "started") && "text-success",
+    "inline-flex w-fit rounded-md px-layout-sm py-1 text-base font-medium",
+    status === "blocked" && "bg-danger/10 text-danger",
+    status === "needs_attention" && "bg-warning/15 text-warning-foreground",
+    (status === "ready" || status === "started") &&
+      "bg-success/10 text-success",
   );
 }
 
@@ -683,7 +676,7 @@ function BucketSection({
   );
   const Icon =
     status === "blocked"
-      ? AlertTriangle
+      ? Ban
       : status === "review"
         ? ClipboardCheck
         : status === "carry-forward"
@@ -782,7 +775,7 @@ function BucketTabs({
       value={value}
     >
       <TabsList
-        aria-label="Daily opening buckets"
+        aria-label="Opening Handoff buckets"
         className="h-auto w-full flex-wrap justify-start gap-1 border border-border bg-surface-raised p-1 text-muted-foreground shadow-surface"
       >
         {buckets.map((bucket) => (
@@ -832,7 +825,7 @@ function SummaryMetric({ label, value }: { label: string; value: string }) {
       <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
         {label}
       </p>
-      <p className="mt-layout-xs text-lg font-semibold text-foreground">
+      <p className="mt-layout-xs text-lg text-foreground">
         {value}
       </p>
     </div>
@@ -909,7 +902,7 @@ function OpeningRail({
               )}
             >
               {isBlocked ? (
-                <Lock className="h-4 w-4" />
+                <Ban className="h-4 w-4" />
               ) : (
                 <ListChecks className="h-4 w-4" />
               )}
@@ -1180,7 +1173,7 @@ export function DailyOpeningViewContent({
 
   if (!isAuthenticated) {
     return (
-      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before Daily Opening can load protected store-day data" />
+      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before Opening Handoff can load protected store-day data" />
     );
   }
 
@@ -1192,7 +1185,7 @@ export function DailyOpeningViewContent({
     return (
       <div className="container mx-auto py-8">
         <EmptyState
-          description="Select a store before opening Daily Opening."
+          description="Select a store before opening Opening Handoff."
           title="No active store"
         />
       </div>
@@ -1203,7 +1196,6 @@ export function DailyOpeningViewContent({
   const isBlocked = status === "blocked";
   const isStarted = status === "started";
   const displayCopy = statusCopy[status];
-  const StatusIcon = getStatusIcon(status);
   const buckets = snapshot ? getBucketConfigs(snapshot) : [];
   const defaultBucketValue = snapshot
     ? getDefaultBucketValue(snapshot, status)
@@ -1270,9 +1262,8 @@ export function DailyOpeningViewContent({
       <FadeIn className="container mx-auto py-layout-xl">
         <PageWorkspace>
           <PageLevelHeader
-            className="border-b-0 pb-0"
             eyebrow="Operations"
-            title="Daily Opening"
+            title="Opening Handoff"
             description="Review prior close handoff, acknowledge carry-forward work, and confirm whether the store day can start."
           />
 
@@ -1280,19 +1271,13 @@ export function DailyOpeningViewContent({
             <LoadingWorkspace />
           ) : (
             <PageWorkspace>
-              <section className="space-y-layout-md">
-                <div className="flex flex-col gap-layout-sm lg:flex-row lg:items-end lg:justify-between">
-                  <div>
-                    <h2
-                      className={cn(
-                        "text-2xl",
-                        getStatusLabelClassName(status),
-                      )}
-                    >
-                      <StatusIcon aria-hidden="true" className="h-5 w-5" />
+              <section className="space-y-layout-lg">
+                <div className="flex flex-col gap-layout-md lg:flex-row lg:items-end lg:justify-between">
+                  <div className="space-y-layout-xs">
+                    <h2 className={getStatusLabelClassName(status)}>
                       {displayCopy.title}
                     </h2>
-                    <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+                    <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
                       {displayCopy.description}
                     </p>
                   </div>
@@ -1403,14 +1388,13 @@ function DailyOpeningApiPendingView() {
       <FadeIn className="container mx-auto py-layout-xl">
         <PageWorkspace>
           <PageLevelHeader
-            className="border-b-0 pb-0"
             eyebrow="Operations"
-            title="Daily Opening"
-            description="Daily Opening is waiting for the server readiness snapshot and start-day command."
+            title="Opening Handoff"
+            description="Opening Handoff is waiting for the server readiness snapshot and start-day command."
           />
           <EmptyState
             description="The frontend is wired to api.operations.dailyOpening.getDailyOpeningSnapshot and startStoreDay."
-            title="Daily Opening server API pending"
+            title="Opening Handoff server API pending"
           />
         </PageWorkspace>
       </FadeIn>

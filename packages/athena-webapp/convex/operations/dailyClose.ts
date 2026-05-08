@@ -152,7 +152,7 @@ function buildDailyCloseApprovalSubject(args: {
 }) {
   return {
     id: `${args.storeId}:${args.operatingDate}`,
-    label: `Daily Close ${args.operatingDate}`,
+    label: `End-of-Day Review ${args.operatingDate}`,
     type: DAILY_CLOSE_SUBJECT_TYPE,
   };
 }
@@ -163,14 +163,14 @@ function buildDailyCloseCompletionApprovalRequirement(args: {
 }): ApprovalRequirement {
   return {
     action: DAILY_CLOSE_COMPLETION_ACTION,
-    reason: "Manager approval is required to complete Daily Close.",
+    reason: "Manager approval is required to complete End-of-Day Review.",
     requiredRole: "manager",
     selfApproval: "allowed",
     subject: buildDailyCloseApprovalSubject(args),
     copy: {
       title: "Manager approval required",
       message:
-        "A manager needs to approve this Daily Close before the operating day is saved.",
+        "A manager needs to approve this End-of-Day Review before the operating day is saved.",
       primaryActionLabel: "Approve and complete",
       secondaryActionLabel: "Cancel",
     },
@@ -396,7 +396,7 @@ function asCarryForwardItem(
     severity: "carry_forward",
     category: "open_work",
     title: workItem.title,
-    message: "Open operational work will carry forward after Daily Close.",
+    message: "Open operational work will carry forward after End-of-Day Review.",
     subject: {
       type: "operational_work_item",
       id: workItem._id,
@@ -728,7 +728,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       severity: "blocker",
       category: "operating_date",
       title: "Invalid operating date",
-      message: "Daily Close requires an operating date in YYYY-MM-DD format.",
+      message: "End-of-Day Review requires an operating date in YYYY-MM-DD format.",
       subject: {
         type: DAILY_CLOSE_SUBJECT_TYPE,
         id: args.operatingDate,
@@ -878,10 +878,10 @@ export async function buildDailyCloseSnapshotWithCtx(
           : "Register session is still open",
       message:
         session.status === "closing"
-          ? "Finish the register closeout before completing Daily Close."
+          ? "Finish the register closeout before completing End-of-Day Review."
           : isCarriedOver
-            ? "Close the register session carried over from a prior operating day before completing Daily Close."
-            : "Close the register session before completing Daily Close.",
+            ? "Close the register session carried over from a prior operating day before completing End-of-Day Review."
+            : "Close the register session before completing End-of-Day Review.",
       subject: {
         type: "register_session",
         id: session._id,
@@ -955,7 +955,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       category: "approval",
       title: `${approvalRequestTypeLabel(approval.requestType)} pending`,
       message:
-        "Resolve pending closeout approval before completing Daily Close.",
+        "Resolve pending closeout approval before completing End-of-Day Review.",
       subject: {
         type: "approval_request",
         id: approval._id,
@@ -1022,7 +1022,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       category: "pos_session",
       title: "POS session is still unresolved",
       message:
-        "Complete, void, or release held POS sessions before Daily Close.",
+        "Complete, void, or release held POS sessions before End-of-Day Review.",
       subject: {
         type: "pos_session",
         id: session._id,
@@ -1072,7 +1072,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       severity: "ready",
       category: "register_session",
       title: "Register session closed",
-      message: "Closed register session is included in Daily Close.",
+      message: "Closed register session is included in End-of-Day Review.",
       subject: {
         type: "register_session",
         id: session._id,
@@ -1110,7 +1110,7 @@ export async function buildDailyCloseSnapshotWithCtx(
         severity: "review",
         category: "cash_variance",
         title: "Closed register has a cash variance",
-        message: "Review the cash variance before completing Daily Close.",
+        message: "Review the cash variance before completing End-of-Day Review.",
         subject: {
           type: "register_session",
           id: session._id,
@@ -1161,7 +1161,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       severity: "ready",
       category: "sale",
       title: "Completed sale",
-      message: "Completed sale is included in Daily Close.",
+      message: "Completed sale is included in End-of-Day Review.",
       subject: {
         type: "pos_transaction",
         id: transaction._id,
@@ -1214,7 +1214,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       severity: "ready",
       category: "expense",
       title: "Completed expense",
-      message: "Completed expense is included in Daily Close.",
+      message: "Completed expense is included in End-of-Day Review.",
       subject: {
         type: "expense_transaction",
         id: transaction._id,
@@ -1264,7 +1264,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       severity: "review",
       category: "voided_sale",
       title: "Voided sale needs review",
-      message: "Review voided sales before completing Daily Close.",
+      message: "Review voided sales before completing End-of-Day Review.",
       subject: {
         type: "pos_transaction",
         id: transaction._id,
@@ -1519,7 +1519,7 @@ export async function completeDailyCloseWithCtx(
   if (args.organizationId && args.organizationId !== store.organizationId) {
     return userError({
       code: "authorization_failed",
-      message: "Daily Close store does not belong to this organization.",
+      message: "End-of-Day Review store does not belong to this organization.",
     });
   }
 
@@ -1558,7 +1558,8 @@ export async function completeDailyCloseWithCtx(
   if (snapshot.blockers.length > 0) {
     return userError({
       code: "precondition_failed",
-      message: "Daily Close cannot be completed while blocker items remain.",
+      message:
+        "End-of-Day Review cannot be completed while blocker items remain.",
       metadata: {
         blockerCount: snapshot.blockers.length,
       },
@@ -1574,7 +1575,7 @@ export async function completeDailyCloseWithCtx(
     return userError({
       code: "precondition_failed",
       message:
-        "Daily Close review items must be acknowledged before completion.",
+        "End-of-Day Review items must be acknowledged before completion.",
       metadata: {
         reviewItemCount: snapshot.reviewItems.length,
         unreviewedItemKeys,
@@ -1688,7 +1689,7 @@ export async function completeDailyCloseWithCtx(
   if (!dailyClose) {
     return userError({
       code: "unavailable",
-      message: "Daily Close could not be loaded after completion.",
+      message: "End-of-Day Review could not be loaded after completion.",
       retryable: true,
     });
   }
@@ -1699,8 +1700,8 @@ export async function completeDailyCloseWithCtx(
     eventType: "daily_close_completed",
     subjectType: DAILY_CLOSE_SUBJECT_TYPE,
     subjectId: dailyClose._id,
-    subjectLabel: `Daily Close ${args.operatingDate}`,
-    message: `Daily Close completed for ${args.operatingDate}.`,
+    subjectLabel: `End-of-Day Review ${args.operatingDate}`,
+    message: `End-of-Day Review completed for ${args.operatingDate}.`,
     actorUserId: args.actorUserId,
     actorStaffProfileId: args.actorStaffProfileId,
     metadata: {
@@ -1719,8 +1720,8 @@ export async function completeDailyCloseWithCtx(
       eventType: "daily_close_carry_forward_created",
       subjectType: DAILY_CLOSE_SUBJECT_TYPE,
       subjectId: dailyClose._id,
-      subjectLabel: `Daily Close ${args.operatingDate}`,
-      message: "Daily Close created a carry-forward work item.",
+      subjectLabel: `End-of-Day Review ${args.operatingDate}`,
+      message: "End-of-Day Review created a carry-forward work item.",
       actorUserId: args.actorUserId,
       actorStaffProfileId: args.actorStaffProfileId,
       workItemId: workItem._id,

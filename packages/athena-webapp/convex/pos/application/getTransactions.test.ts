@@ -143,6 +143,38 @@ describe("getCompletedTransactions", () => {
       }),
     ]);
   });
+
+  it("surfaces every payment method used by completed transactions", async () => {
+    vi.mocked(listCompletedTransactions).mockResolvedValue([
+      {
+        _id: "txn-4" as Id<"posTransaction">,
+        storeId: "store-1" as Id<"store">,
+        transactionNumber: "POS-444444",
+        total: 1000,
+        paymentMethod: "card",
+        payments: [
+          { amount: 500, method: "card", timestamp: 1 },
+          { amount: 500, method: "cash", timestamp: 2 },
+        ],
+        completedAt: 100,
+      },
+    ] as never);
+    vi.mocked(getCashierById).mockResolvedValue(null as never);
+    vi.mocked(getPosSessionById).mockResolvedValue(null as never);
+    vi.mocked(listTransactionItems).mockResolvedValue([] as never);
+
+    const result = await getCompletedTransactions({} as never, {
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        paymentMethod: "card",
+        paymentMethods: ["card", "cash"],
+        hasMultiplePaymentMethods: true,
+      }),
+    ]);
+  });
 });
 
 describe("getTransactionById", () => {

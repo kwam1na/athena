@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { toExpenseReportRows } from "./ExpenseReportsView";
+import { toExpenseReportRows } from "./expenseReportRows";
 import type { ExpenseReportRow } from "./expenseReportColumns";
 
 describe("toExpenseReportRows", () => {

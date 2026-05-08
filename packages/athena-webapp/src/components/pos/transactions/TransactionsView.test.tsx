@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TransactionsView } from "./TransactionsView";
 
 const useQueryMock = vi.fn();
-const useGetActiveStoreMock = vi.fn();
+const getActiveStoreMock = vi.fn();
 const useSearchMock = vi.fn();
 
 vi.mock("@tanstack/react-router", () => ({
@@ -16,7 +16,11 @@ vi.mock("convex/react", () => ({
 }));
 
 vi.mock("@/hooks/useGetActiveStore", () => ({
-  default: () => useGetActiveStoreMock(),
+  default: () => getActiveStoreMock(),
+}));
+
+vi.mock("~/src/hooks/use-navigate-back", () => ({
+  useNavigateBack: () => vi.fn(),
 }));
 
 vi.mock("../../View", () => ({
@@ -39,6 +43,7 @@ vi.mock("../../common/FadeIn", () => ({
 }));
 
 vi.mock("../../common/PageHeader", () => ({
+  NavigateBackButton: () => <button aria-label="Go back" type="button" />,
   SimplePageHeader: ({ title }: { title: string }) => <h1>{title}</h1>,
 }));
 
@@ -83,7 +88,7 @@ describe("TransactionsView", () => {
   });
 
   it("does not render session traces on the completed transactions surface", () => {
-    useGetActiveStoreMock.mockReturnValue({
+    getActiveStoreMock.mockReturnValue({
       activeStore: {
         _id: "store-1",
         currency: "GHS",
@@ -95,6 +100,7 @@ describe("TransactionsView", () => {
         transactionNumber: "POS-123456",
         total: 1000,
         paymentMethod: "cash",
+        paymentMethods: ["cash"],
         cashierName: "Ada L.",
         customerName: null,
         itemCount: 1,
@@ -107,6 +113,7 @@ describe("TransactionsView", () => {
         transactionNumber: "POS-654321",
         total: 1000,
         paymentMethod: "cash",
+        paymentMethods: ["cash"],
         cashierName: "Ada L.",
         customerName: null,
         itemCount: 1,
@@ -119,6 +126,9 @@ describe("TransactionsView", () => {
     render(<TransactionsView />);
 
     expect(
+      screen.getByRole("heading", { name: "Completed Transactions" }),
+    ).toBeInTheDocument();
+    expect(
       screen.queryByTestId("session-trace-POS-123456"),
     ).not.toBeInTheDocument();
     expect(
@@ -128,7 +138,7 @@ describe("TransactionsView", () => {
 
   it("passes the register session filter to the completed transactions query", () => {
     useSearchMock.mockReturnValue({ registerSessionId: "session-1" });
-    useGetActiveStoreMock.mockReturnValue({
+    getActiveStoreMock.mockReturnValue({
       activeStore: {
         _id: "store-1",
         currency: "GHS",
@@ -152,5 +162,68 @@ describe("TransactionsView", () => {
     expect(
       screen.getByText("No transactions for Register 3"),
     ).toBeInTheDocument();
+  });
+
+  it("filters cash-paid transactions across split payment methods", () => {
+    useSearchMock.mockReturnValue({ paymentMethod: "cash" });
+    getActiveStoreMock.mockReturnValue({
+      activeStore: {
+        _id: "store-1",
+        currency: "GHS",
+      },
+    });
+    useQueryMock.mockReturnValue([
+      {
+        _id: "txn-1",
+        transactionNumber: "POS-CASH-SPLIT",
+        total: 1000,
+        paymentMethod: "card",
+        paymentMethods: ["card", "cash"],
+        hasMultiplePaymentMethods: true,
+        cashierName: "Ada L.",
+        customerName: null,
+        itemCount: 1,
+        completedAt: Date.now(),
+        hasTrace: false,
+        sessionTraceId: null,
+      },
+      {
+        _id: "txn-2",
+        transactionNumber: "POS-CARD-ONLY",
+        total: 1000,
+        paymentMethod: "card",
+        paymentMethods: ["card"],
+        hasMultiplePaymentMethods: false,
+        cashierName: "Ada L.",
+        customerName: null,
+        itemCount: 1,
+        completedAt: Date.now(),
+        hasTrace: false,
+        sessionTraceId: null,
+      },
+    ]);
+
+    render(<TransactionsView />);
+
+    expect(
+      screen.getByText("Showing Cash transactions"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("POS-CASH-SPLIT")).toBeInTheDocument();
+    expect(screen.queryByText("POS-CARD-ONLY")).not.toBeInTheDocument();
+  });
+
+  it("shows the origin-aware back button when transactions open from another workspace", () => {
+    useSearchMock.mockReturnValue({ o: "%2Fwigclub%2Fstore%2Fosu%2Foperations" });
+    getActiveStoreMock.mockReturnValue({
+      activeStore: {
+        _id: "store-1",
+        currency: "GHS",
+      },
+    });
+    useQueryMock.mockReturnValue([]);
+
+    render(<TransactionsView />);
+
+    expect(screen.getByRole("button", { name: "Go back" })).toBeInTheDocument();
   });
 });

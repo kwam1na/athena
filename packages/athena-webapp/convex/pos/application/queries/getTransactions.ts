@@ -54,6 +54,19 @@ async function loadCustomerProfile(
     : null;
 }
 
+function getPaymentMethods(transaction: {
+  paymentMethod?: string;
+  payments?: Array<{ method: string }>;
+}) {
+  const paymentMethods = transaction.payments?.length
+    ? transaction.payments.map((payment) => payment.method)
+    : transaction.paymentMethod
+      ? [transaction.paymentMethod]
+      : [];
+
+  return Array.from(new Set(paymentMethods));
+}
+
 async function loadCorrectionEvents(
   ctx: QueryCtx,
   args: {
@@ -127,6 +140,7 @@ export async function getCompletedTransactions(
 
   return Promise.all(
     transactions.map(async (transaction) => {
+      const paymentMethods = getPaymentMethods(transaction);
       const cashier = transaction.staffProfileId
         ? await getCashierById(ctx, transaction.staffProfileId)
         : null;
@@ -144,10 +158,8 @@ export async function getCompletedTransactions(
         transactionNumber: transaction.transactionNumber,
         total: transaction.total,
         paymentMethod: transaction.paymentMethod || null,
-        hasMultiplePaymentMethods: transaction.payments
-          ? Array.from(new Set(transaction.payments.map((payment) => payment.method)))
-              .length > 1
-          : false,
+        paymentMethods,
+        hasMultiplePaymentMethods: paymentMethods.length > 1,
         completedAt: transaction.completedAt,
         hasTrace: Boolean(sessionTraceId),
         sessionTraceId,

@@ -6,23 +6,16 @@ import View from "../../View";
 import { FadeIn } from "../../common/FadeIn";
 import { EmptyState } from "../../states/empty/empty-state";
 import { GenericDataTable } from "../../base/table/data-table";
+import {
+  PageLevelHeader,
+  PageWorkspace,
+} from "../../common/PageLevelHeader";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
 import { currencyFormatter } from "~/convex/utils";
 import { expenseReportColumns, ExpenseReportRow } from "./expenseReportColumns";
-import { SimplePageHeader } from "../../common/PageHeader";
+import { toExpenseReportRows } from "./expenseReportRows";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
-
-type ExpenseTransactionSummary = {
-  _id: ExpenseReportRow["_id"];
-  transactionNumber: string;
-  totalValue: number;
-  staffProfileName: string | null;
-  itemCount: number;
-  completedAt: number;
-  notes?: string | null;
-};
 
 // Helper to check if timestamp is today
 const isToday = (timestamp: number) => {
@@ -30,21 +23,6 @@ const isToday = (timestamp: number) => {
   const today = new Date();
   return date.toDateString() === today.toDateString();
 };
-
-export function toExpenseReportRows(
-  transactions: ExpenseTransactionSummary[],
-  formatter: Intl.NumberFormat,
-): ExpenseReportRow[] {
-  return transactions.map((transaction) => ({
-    _id: transaction._id,
-    transactionNumber: transaction.transactionNumber,
-    formattedTotal: formatStoredAmount(formatter, transaction.totalValue),
-    cashierName: transaction.staffProfileName,
-    itemCount: transaction.itemCount,
-    completedAt: transaction.completedAt,
-    notes: transaction.notes,
-  }));
-}
 
 export function ExpenseReportsView() {
   const { activeStore } = useGetActiveStore();
@@ -76,9 +54,17 @@ export function ExpenseReportsView() {
   const hasReports = filteredData.length > 0;
 
   return (
-    <View header={<SimplePageHeader title="Expense Reports" />}>
-      <FadeIn>
-        <div className="container mx-auto p-6 space-y-4">
+    <View hideBorder hideHeaderBottomBorder scrollMode="page">
+      <FadeIn className="container mx-auto py-layout-xl">
+        <PageWorkspace>
+          <PageLevelHeader
+            eyebrow="Point of sale"
+            showBackButton
+            title="Expense Reports"
+            description="Review completed POS expense reports by operating day and staff member."
+          />
+
+          <section className="space-y-layout-md">
           <Tabs
             value={filter}
             onValueChange={(v) => setFilter(v as "today" | "all")}
@@ -109,7 +95,8 @@ export function ExpenseReportsView() {
               />
             </div>
           )}
-        </div>
+          </section>
+        </PageWorkspace>
       </FadeIn>
     </View>
   );

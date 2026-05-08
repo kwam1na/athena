@@ -135,7 +135,7 @@ const readySnapshot: DailyCloseSnapshot = {
     },
     {
       category: "sale",
-      description: "Completed sale is included in Daily Close.",
+      description: "Completed sale is included in End-of-Day Review.",
       id: "ready-2",
       metadata: {
         completedAt: Date.UTC(2026, 4, 7, 14),
@@ -155,7 +155,7 @@ const readySnapshot: DailyCloseSnapshot = {
     },
     {
       category: "expense",
-      description: "Completed expense is included in Daily Close.",
+      description: "Completed expense is included in End-of-Day Review.",
       id: "ready-3",
       link: {
         label: "View expense",
@@ -196,7 +196,7 @@ const blockedSnapshot: DailyCloseSnapshot = {
   blockers: [
     {
       category: "register_session",
-      description: "Close the register session before completing Daily Close.",
+      description: "Close the register session before completing End-of-Day Review.",
       id: "blocker-1",
       link: {
         label: "View session",
@@ -222,7 +222,7 @@ const blockedSnapshot: DailyCloseSnapshot = {
     {
       category: "approval",
       description:
-        "Resolve pending closeout approval before completing Daily Close.",
+        "Resolve pending closeout approval before completing End-of-Day Review.",
       id: "approval-1",
       link: {
         label: "View approvals",
@@ -251,7 +251,7 @@ const blockedSnapshot: DailyCloseSnapshot = {
     {
       category: "pos_session",
       description:
-        "Complete, void, or release held POS sessions before Daily Close.",
+        "Complete, void, or release held POS sessions before End-of-Day Review.",
       id: "blocker-2",
       metadata: {
         customer: "Ama Mensah",
@@ -305,15 +305,16 @@ describe("DailyCloseViewContent", () => {
       unobserve() {}
     };
     mockedRouter.search = {};
+    window.history.pushState({}, "", "/");
     vi.clearAllMocks();
   });
 
   it("renders the workspace frame while loading", () => {
     renderContent(undefined);
 
-    expect(screen.getByText("Daily Close")).toBeInTheDocument();
+    expect(screen.getByText("End-of-Day Review")).toBeInTheDocument();
     expect(
-      screen.queryByLabelText("Loading daily close workspace"),
+      screen.queryByLabelText("Loading end-of-day review workspace"),
     ).not.toBeInTheDocument();
   });
 
@@ -377,7 +378,7 @@ describe("DailyCloseViewContent", () => {
     expect(screen.getByText("Held")).toBeInTheDocument();
     expect(screen.getByText("Expired At")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /complete daily close/i }),
+      screen.getByRole("button", { name: /complete end-of-day review/i }),
     ).toBeDisabled();
   });
 
@@ -478,7 +479,7 @@ describe("DailyCloseViewContent", () => {
       "/wigclub/store/osu/pos/expense-reports/expense-1?o=%252F",
     );
     expect(
-      screen.getByRole("button", { name: /complete daily close/i }),
+      screen.getByRole("button", { name: /complete end-of-day review/i }),
     ).toBeEnabled();
     const checklist = screen.getByText("Close checklist").closest("div");
     expect(checklist).not.toBeNull();
@@ -527,7 +528,7 @@ describe("DailyCloseViewContent", () => {
       screen.getByText("No activity was recorded for this operating day."),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /complete daily close/i }),
+      screen.getByRole("button", { name: /complete end-of-day review/i }),
     ).toBeEnabled();
   });
 
@@ -577,6 +578,29 @@ describe("DailyCloseViewContent", () => {
     expect(screen.getByText("1 register from a prior day")).toBeInTheDocument();
     expect(screen.getByText("1 register variance")).toBeInTheDocument();
     expect(screen.getByText("1 expense transaction")).toBeInTheDocument();
+  });
+
+  it("links summary sales metrics to the matching transactions views", () => {
+    window.history.pushState(
+      {},
+      "",
+      "/wigclub/store/osu/operations/daily-close",
+    );
+
+    renderContent(readySnapshot);
+
+    expect(
+      screen.getByRole("link", { name: "Open transactions" }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/pos/transactions?o=%252Fwigclub%252Fstore%252Fosu%252Foperations%252Fdaily-close",
+    );
+    expect(
+      screen.getByRole("link", { name: "Open cash transactions" }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/pos/transactions?o=%252Fwigclub%252Fstore%252Fosu%252Foperations%252Fdaily-close&paymentMethod=cash",
+    );
   });
 
   it("reports expense transaction counts without falling back to staff or approvals", () => {
@@ -675,7 +699,7 @@ describe("DailyCloseViewContent", () => {
     renderContent(snapshot, { onComplete });
 
     await user.click(
-      screen.getByRole("button", { name: /complete daily close/i }),
+      screen.getByRole("button", { name: /complete end-of-day review/i }),
     );
 
     await waitFor(() => {
@@ -699,22 +723,22 @@ describe("DailyCloseViewContent", () => {
         approval: {
           action: {
             key: "operations.daily_close.complete",
-            label: "Complete Daily Close",
+            label: "Complete End-of-Day Review",
           },
           copy: {
             message:
-              "A manager needs to approve this Daily Close before the operating day is saved.",
+              "A manager needs to approve this End-of-Day Review before the operating day is saved.",
             primaryActionLabel: "Approve and complete",
             secondaryActionLabel: "Cancel",
             title: "Manager approval required",
           },
-          reason: "Manager approval is required to complete Daily Close.",
+          reason: "Manager approval is required to complete End-of-Day Review.",
           requiredRole: "manager" as const,
           resolutionModes: [{ kind: "inline_manager_proof" as const }],
           selfApproval: "allowed" as const,
           subject: {
             id: "store-1:2026-05-07",
-            label: "Daily Close 2026-05-07",
+            label: "End-of-Day Review 2026-05-07",
             type: "daily_close",
           },
         },
@@ -722,7 +746,7 @@ describe("DailyCloseViewContent", () => {
     });
 
     await user.click(
-      screen.getByRole("button", { name: /complete daily close/i }),
+      screen.getByRole("button", { name: /complete end-of-day review/i }),
     );
 
     expect(
@@ -746,7 +770,7 @@ describe("DailyCloseViewContent", () => {
     });
 
     await user.click(
-      screen.getByRole("button", { name: /complete daily close/i }),
+      screen.getByRole("button", { name: /complete end-of-day review/i }),
     );
 
     expect(
@@ -756,7 +780,7 @@ describe("DailyCloseViewContent", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders completed Daily Close summary after reload", () => {
+  it("renders completed End-of-Day Review summary after reload", () => {
     renderContent({
       ...readySnapshot,
       completedClose: {
@@ -767,7 +791,7 @@ describe("DailyCloseViewContent", () => {
       status: "completed",
     });
 
-    expect(screen.getByText("Daily close completed")).toBeInTheDocument();
+    expect(screen.getByText("End-of-day review completed")).toBeInTheDocument();
     expect(screen.getByText(/Ama Mensah/)).toBeInTheDocument();
     expect(screen.getByText("Clean close.")).toBeInTheDocument();
   });
@@ -797,7 +821,7 @@ describe("DailyCloseView", () => {
     mockedHooks.useMutation.mockReturnValue(vi.fn(async () => ok({})));
   });
 
-  it("queries Daily Close with the active store and route params", () => {
+  it("queries End-of-Day Review with the active store and route params", () => {
     render(<DailyCloseView />);
 
     expect(mockedHooks.useQuery).toHaveBeenCalledWith(
@@ -809,6 +833,6 @@ describe("DailyCloseView", () => {
         storeId: "store-1",
       },
     );
-    expect(screen.getByText("Daily Close")).toBeInTheDocument();
+    expect(screen.getByText("End-of-Day Review")).toBeInTheDocument();
   });
 });

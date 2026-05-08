@@ -268,16 +268,16 @@ function missingPriorCloseReviewItem(args: {
     key: "daily_close:prior:missing",
     severity: "review",
     category: "prior_close",
-    title: "Prior Daily Close not found",
+    title: "Prior End-of-Day Review not found",
     message:
-      "No completed Daily Close was found for the prior store day. Acknowledge this before starting the store day.",
+      "No completed End-of-Day Review was found for the prior store day. Acknowledge this before starting the store day.",
     subject: {
       type: DAILY_CLOSE_SUBJECT_TYPE,
       id: `${args.storeId}:${args.operatingDate}:prior`,
-      label: "Prior Daily Close",
+      label: "Prior End-of-Day Review",
     },
     link: {
-      label: "Review Daily Close",
+      label: "Review End-of-Day Review",
       to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
     },
     metadata: {
@@ -310,7 +310,7 @@ function missingCarryForwardItem(args: {
     category: "carry_forward",
     title: "Carry-forward work is missing",
     message:
-      "A carry-forward item referenced by prior Daily Close could not be loaded. Resolve the missing handoff before Opening can be acknowledged.",
+      "A carry-forward item referenced by the prior End-of-Day Review could not be loaded. Resolve the missing handoff before Opening Handoff can be acknowledged.",
     subject: {
       type: "operational_work_item",
       id: args.workItemId,
@@ -328,15 +328,15 @@ function priorCloseReadyItem(priorClose: Doc<"dailyClose">): DailyOpeningItem {
     key: `daily_close:${priorClose._id}:completed`,
     severity: "ready",
     category: "prior_close",
-    title: "Prior Daily Close completed",
-    message: "The prior store day has a completed Daily Close.",
+    title: "Prior End-of-Day Review completed",
+    message: "The prior store day has a completed End-of-Day Review.",
     subject: {
       type: DAILY_CLOSE_SUBJECT_TYPE,
       id: priorClose._id,
-      label: `Daily Close ${priorClose.operatingDate}`,
+      label: `End-of-Day Review ${priorClose.operatingDate}`,
     },
     link: {
-      label: "View Daily Close",
+      label: "View End-of-Day Review",
       to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
     },
     metadata: {
@@ -357,12 +357,12 @@ function priorCloseNotesItem(priorClose: Doc<"dailyClose">): DailyOpeningItem | 
     key: `daily_close:${priorClose._id}:notes`,
     severity: "review",
     category: "prior_close",
-    title: "Prior Daily Close notes",
-    message: "Review the prior Daily Close notes before acknowledging Opening.",
+    title: "Prior End-of-Day Review notes",
+    message: "Review the prior End-of-Day Review notes before acknowledging Opening Handoff.",
     subject: {
       type: DAILY_CLOSE_SUBJECT_TYPE,
       id: priorClose._id,
-      label: `Daily Close ${priorClose.operatingDate}`,
+      label: `End-of-Day Review ${priorClose.operatingDate}`,
     },
     metadata: {
       notes,

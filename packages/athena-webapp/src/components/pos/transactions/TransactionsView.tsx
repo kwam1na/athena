@@ -7,6 +7,10 @@ import View from "../../View";
 import { FadeIn } from "../../common/FadeIn";
 import { EmptyState } from "../../states/empty/empty-state";
 import { GenericDataTable } from "../../base/table/data-table";
+import {
+  PageLevelHeader,
+  PageWorkspace,
+} from "../../common/PageLevelHeader";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
 import { currencyFormatter, capitalizeWords } from "~/convex/utils";
@@ -14,7 +18,6 @@ import {
   transactionColumns,
   CompletedTransactionRow,
 } from "./transactionColumns";
-import { SimplePageHeader } from "../../common/PageHeader";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 import type { Id } from "~/convex/_generated/dataModel";
@@ -43,14 +46,31 @@ const isToday = (timestamp: number) => {
   return date.toDateString() === today.toDateString();
 };
 
+type CompletedTransaction = {
+  _id: Id<"posTransaction">;
+  transactionNumber: string;
+  total: number;
+  paymentMethod: string | null;
+  paymentMethods?: string[];
+  hasMultiplePaymentMethods: boolean;
+  cashierName: string | null;
+  customerName: string | null;
+  itemCount: number;
+  completedAt: number;
+  hasTrace: boolean;
+  sessionTraceId: string | null;
+};
+
 export function TransactionsView() {
   const { activeStore } = useGetActiveStore();
-  const { registerSessionId } = useSearch({ strict: false }) as {
+  const { paymentMethod, registerSessionId } = useSearch({ strict: false }) as {
+    paymentMethod?: string;
     registerSessionId?: string;
   };
   const [filter, setFilter] = useState<"today" | "all">(
     registerSessionId ? "all" : "today",
   );
+  const paymentMethodFilter = paymentMethod?.trim();
 
   const transactions = useQuery(
     api.inventory.pos.getCompletedTransactions,
@@ -86,7 +106,7 @@ export function TransactionsView() {
   const tableData: CompletedTransactionRow[] = useMemo(() => {
     if (!transactions || !formatter) return [];
 
-    return transactions.map((transaction: any) => ({
+    return transactions.map((transaction: CompletedTransaction) => ({
       _id: transaction._id,
       transactionNumber: transaction.transactionNumber,
       formattedTotal: formatStoredAmount(formatter, transaction.total),
@@ -94,6 +114,10 @@ export function TransactionsView() {
         ? "Multiple payment methods"
         : formatPaymentMethod(transaction.paymentMethod),
       paymentMethod: transaction.paymentMethod || "cash",
+      paymentMethods:
+        (transaction.paymentMethods?.length ?? 0) > 0
+          ? transaction.paymentMethods
+          : [transaction.paymentMethod || "cash"],
       hasMultiplePaymentMethods: Boolean(transaction.hasMultiplePaymentMethods),
       cashierName: transaction.cashierName,
       customerName: transaction.customerName,
@@ -105,9 +129,19 @@ export function TransactionsView() {
   }, [transactions, formatter]);
 
   const filteredData = useMemo(() => {
-    if (filter === "all") return tableData;
-    return tableData.filter((t) => isToday(t.completedAt));
-  }, [tableData, filter]);
+    const dateFilteredData =
+      filter === "all"
+        ? tableData
+        : tableData.filter((t) => isToday(t.completedAt));
+
+    if (!paymentMethodFilter) return dateFilteredData;
+
+    return dateFilteredData.filter((transaction) =>
+      (transaction.paymentMethods ?? [transaction.paymentMethod]).includes(
+        paymentMethodFilter,
+      ),
+    );
+  }, [tableData, filter, paymentMethodFilter]);
 
   useEffect(() => {
     if (registerSessionId) {
@@ -120,12 +154,26 @@ export function TransactionsView() {
   const hasTransactions = filteredData.length > 0;
 
   return (
-    <View header={<SimplePageHeader title="Completed Transactions" />}>
-      <FadeIn>
-        <div className="container mx-auto p-6 space-y-4">
+    <View hideBorder hideHeaderBottomBorder scrollMode="page">
+      <FadeIn className="container mx-auto py-layout-xl">
+        <PageWorkspace>
+          <PageLevelHeader
+            eyebrow="Point of sale"
+            showBackButton
+            title="Completed Transactions"
+            description="Review completed POS transactions by operating day, register session, or payment method."
+          />
+
+          <section className="space-y-layout-md">
           {registerSessionId ? (
             <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
               Showing transactions linked to {registerFilterLabel}
+            </div>
+          ) : null}
+
+          {paymentMethodFilter ? (
+            <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+              Showing {formatPaymentMethod(paymentMethodFilter)} transactions
             </div>
           ) : null}
 
@@ -161,7 +209,8 @@ export function TransactionsView() {
               />
             </div>
           )}
-        </div>
+          </section>
+        </PageWorkspace>
       </FadeIn>
     </View>
   );

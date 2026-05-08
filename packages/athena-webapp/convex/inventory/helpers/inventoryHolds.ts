@@ -543,6 +543,37 @@ export async function readActiveInventoryHoldDetailsForSession(
   return details;
 }
 
+export async function readActiveHeldQuantitiesForSkus(
+  db: DatabaseReader,
+  args: {
+    storeId: Id<"store">;
+    skuIds: Id<"productSku">[];
+    now?: number;
+  },
+) {
+  const now = args.now ?? Date.now();
+  const heldQuantities = new Map<Id<"productSku">, number>();
+  const uniqueSkuIds = Array.from(new Set(args.skuIds));
+
+  for (const skuId of uniqueSkuIds) {
+    const heldQuantity = await sumActiveHeldQuantity(db, {
+      storeId: args.storeId,
+      skuId,
+      now,
+    });
+
+    if (heldQuantity === Number.POSITIVE_INFINITY) {
+      throw new Error(
+        "Too many active POS inventory holds to summarize product availability. Expire stale POS sessions and retry.",
+      );
+    }
+
+    heldQuantities.set(skuId, heldQuantity);
+  }
+
+  return heldQuantities;
+}
+
 async function sumActiveHeldQuantity(
   db: DatabaseReader,
   args: {
