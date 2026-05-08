@@ -1,5 +1,5 @@
 import type { FormEvent } from "react";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useQuery } from "convex/react";
 import { useMutation } from "convex/react";
 
@@ -9,21 +9,21 @@ import { useSessionManagementExpense } from "@/hooks/useSessionManagementExpense
 import { useExpenseStore } from "@/stores/expenseStore";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useGetTerminal } from "@/hooks/useGetTerminal";
-import { useDebounce } from "@/hooks/useDebounce";
 import { useNavigateBack } from "@/hooks/use-navigate-back";
 import {
-  extractBarcodeFromInput,
-  isUrlOrBarcode,
-  type ExtractResult,
-} from "@/lib/pos/barcodeUtils";
+  useConvexRegisterCatalog,
+  useConvexRegisterCatalogAvailability,
+} from "@/lib/pos/infrastructure/convex/catalogGateway";
 import {
-  POS_AUTO_ADD_DELAY_MS,
-  POS_SEARCH_DEBOUNCE_MS,
-} from "@/lib/pos/constants";
+  searchRegisterCatalog,
+  type RegisterCatalogSearchResult,
+} from "@/lib/pos/presentation/register/catalogSearch";
 import {
-  usePOSBarcodeSearch,
-  usePOSProductSearch,
-} from "@/hooks/usePOSProducts";
+  mapCatalogRowToProduct,
+  normalizeExactInput,
+  type RegisterCatalogAvailability,
+} from "@/lib/pos/presentation/register/catalogSearchPresentation";
+import { useRegisterCatalogIndex } from "@/lib/pos/presentation/register/useRegisterCatalogIndex";
 import { logger } from "@/lib/logger";
 import { toast } from "sonner";
 import { api } from "~/convex/_generated/api";
@@ -50,7 +50,10 @@ function getExpenseSessionLoadKey(
   session: NonNullable<ReturnType<typeof useExpenseActiveSession>>,
 ) {
   const itemKey = (session.cartItems ?? [])
-    .map((item: any) => `${item._id}:${item.quantity}:${item.updatedAt ?? ""}`)
+    .map(
+      (item: { _id: string; quantity: number; updatedAt?: number }) =>
+        `${item._id}:${item.quantity}:${item.updatedAt ?? ""}`,
+    )
     .join("|");
 
   return [
@@ -74,6 +77,7 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
   const autoSessionInitialized = useRef(false);
   const loadedSessionKeyRef = useRef<string | null>(null);
   const sessionContextKeyRef = useRef<string | null>(null);
+  const exactAddKeyRef = useRef<string | null>(null);
   const completeExpenseSession = useMutation(
     api.inventory.expenseSessions.completeExpenseSession,
   );
@@ -270,119 +274,115 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
     store.storeId,
   ]);
 
-  const extractionCacheRef = useRef<ExtractResult | null>(null);
-  const rawExtraction = extractBarcodeFromInput(store.ui.productSearchQuery);
-  const shouldReuseCachedProductId =
-    rawExtraction.type === "barcode" &&
-    extractionCacheRef.current?.type === "productId" &&
-    extractionCacheRef.current.value === rawExtraction.value;
-  const extractResult = shouldReuseCachedProductId
-    ? extractionCacheRef.current!
-    : rawExtraction;
-  const extractedValue = extractResult.value;
+  const registerCatalogRows = useConvexRegisterCatalog({
+    storeId: activeStore?._id,
+  });
+  const registerCatalogIndex = useRegisterCatalogIndex(registerCatalogRows);
+  const registerMetadataSearchState = useMemo(
+    () =>
+      searchRegisterCatalog(registerCatalogIndex, store.ui.productSearchQuery),
+    [registerCatalogIndex, store.ui.productSearchQuery],
+  );
+  const registerAvailabilityProductSkuIds = useMemo(
+    () =>
+      registerMetadataSearchState.results.map(
+        (row) => row.productSkuId as Id<"productSku">,
+      ),
+    [registerMetadataSearchState.results],
+  );
+  const registerCatalogAvailabilityRows = useConvexRegisterCatalogAvailability({
+    storeId: activeStore?._id,
+    productSkuIds: registerAvailabilityProductSkuIds,
+  });
+  const registerCatalogAvailabilityBySkuId = useMemo(() => {
+    const rows = registerCatalogAvailabilityRows ?? [];
 
-  useEffect(() => {
-    if (
-      !extractionCacheRef.current ||
-      extractionCacheRef.current.type !== extractResult.type ||
-      extractionCacheRef.current.value !== extractResult.value
-    ) {
-      extractionCacheRef.current = extractResult;
+    return new Map<string, RegisterCatalogAvailability>(
+      rows.map((row) => [row.productSkuId, row]),
+    );
+  }, [registerCatalogAvailabilityRows]);
+  const registerSearchState = useMemo<RegisterCatalogSearchResult>(() => {
+    if (registerMetadataSearchState.intent !== "exact") {
+      return registerMetadataSearchState;
     }
-  }, [extractResult.type, extractResult.value]);
 
-  const debouncedValue = useDebounce(extractedValue, POS_SEARCH_DEBOUNCE_MS);
-  const inputIsUrlOrBarcode = isUrlOrBarcode(store.ui.productSearchQuery);
-  const productSearchResults = usePOSProductSearch(
-    activeStore?._id,
-    extractResult.type === "productId" || !inputIsUrlOrBarcode
-      ? debouncedValue
-      : "",
+    const exactAvailability = registerMetadataSearchState.exactMatch
+      ? registerCatalogAvailabilityBySkuId.get(
+          registerMetadataSearchState.exactMatch.productSkuId,
+        )
+      : undefined;
+
+    return {
+      ...registerMetadataSearchState,
+      canAutoAdd: Boolean(
+        registerMetadataSearchState.exactMatch &&
+          exactAvailability &&
+          exactAvailability.quantityAvailable > 0,
+      ),
+    };
+  }, [registerCatalogAvailabilityBySkuId, registerMetadataSearchState]);
+  const entrySearchResults = useMemo(
+    () =>
+      registerSearchState.results.map((row) =>
+        mapCatalogRowToProduct(
+          row,
+          registerCatalogAvailabilityBySkuId.get(row.productSkuId),
+        ),
+      ),
+    [registerCatalogAvailabilityBySkuId, registerSearchState.results],
   );
-  const productIdSearchResults =
-    extractResult.type === "productId" ? productSearchResults : [];
-  const textSearchResults =
-    extractResult.type === "productId" ? [] : productSearchResults;
-  const barcodeSearchResult = usePOSBarcodeSearch(
-    activeStore?._id,
-    extractResult.type === "barcode" && inputIsUrlOrBarcode
-      ? debouncedValue
-      : "",
-  );
-  const barcodeSearchResults = Array.isArray(barcodeSearchResult)
-    ? barcodeSearchResult
-    : barcodeSearchResult
-      ? [barcodeSearchResult]
-      : [];
-  const entrySearchResults =
-    productIdSearchResults && productIdSearchResults.length > 0
-      ? productIdSearchResults
-      : barcodeSearchResults.length > 0
-        ? barcodeSearchResults
-        : textSearchResults ?? [];
+  const exactSearchProduct = registerSearchState.exactMatch
+    ? mapCatalogRowToProduct(
+        registerSearchState.exactMatch,
+        registerCatalogAvailabilityBySkuId.get(
+          registerSearchState.exactMatch.productSkuId,
+        ),
+      )
+    : null;
+  const isRegisterCatalogReady = registerCatalogRows !== undefined;
   const isProductEntrySearchLoading =
-    store.ui.productSearchQuery.trim().length > 0 &&
-    (extractResult.type === "barcode"
-      ? barcodeSearchResult === undefined
-      : productSearchResults === undefined);
+    store.ui.productSearchQuery.trim().length > 0 && !isRegisterCatalogReady;
+
+  const addExactSearchProductOnce = useCallback(async () => {
+    if (!exactSearchProduct || !registerSearchState.canAutoAdd) {
+      return false;
+    }
+
+    const exactAddKey = [
+      normalizeExactInput(registerSearchState.query),
+      exactSearchProduct.skuId,
+    ].join(":");
+    if (exactAddKeyRef.current === exactAddKey) {
+      return true;
+    }
+
+    exactAddKeyRef.current = exactAddKey;
+    const wasAdded = await cart.addProduct(exactSearchProduct);
+    if (!wasAdded) {
+      exactAddKeyRef.current = null;
+      return false;
+    }
+
+    store.setProductSearchQuery("");
+    return true;
+  }, [cart, exactSearchProduct, registerSearchState, store]);
 
   useEffect(() => {
-    if (!extractedValue.trim()) {
+    if (!store.ui.productSearchQuery.trim()) {
+      exactAddKeyRef.current = null;
       return;
     }
 
     if (
-      extractResult.type === "productId" &&
-      productIdSearchResults &&
-      productIdSearchResults.length === 1 &&
-      productIdSearchResults[0].quantityAvailable > 0
+      registerSearchState.intent === "exact" &&
+      registerSearchState.canAutoAdd
     ) {
-      logger.info("[Expense] Auto-adding product from product ID", {
-        productId: extractedValue,
-        skuId: productIdSearchResults[0].skuId,
-        productName: productIdSearchResults[0].name,
-        delay: POS_AUTO_ADD_DELAY_MS,
-      });
-      const timeoutId = setTimeout(async () => {
-        await cart.addProduct(productIdSearchResults[0]);
-        store.setProductSearchQuery("");
-      }, POS_AUTO_ADD_DELAY_MS);
-
-      return () => clearTimeout(timeoutId);
-    }
-
-    if (extractResult.type === "barcode" && barcodeSearchResult) {
-      const shouldAutoAdd = Array.isArray(barcodeSearchResult)
-        ? barcodeSearchResult.length === 1 &&
-          barcodeSearchResult[0]?.quantityAvailable &&
-          barcodeSearchResult[0].quantityAvailable > 0
-        : true;
-
-      if (shouldAutoAdd) {
-        const productToAdd = Array.isArray(barcodeSearchResult)
-          ? barcodeSearchResult[0]
-          : barcodeSearchResult;
-
-        logger.info("[Expense] Auto-adding product from barcode", {
-          barcode: extractedValue,
-          productName: productToAdd?.name,
-          delay: POS_AUTO_ADD_DELAY_MS,
-        });
-        const timeoutId = setTimeout(async () => {
-          await cart.addFromBarcode(extractedValue, barcodeSearchResult);
-          store.setProductSearchQuery("");
-        }, POS_AUTO_ADD_DELAY_MS);
-
-        return () => clearTimeout(timeoutId);
-      }
+      void addExactSearchProductOnce();
     }
   }, [
-    extractedValue,
-    extractResult.type,
-    productIdSearchResults,
-    barcodeSearchResult,
-    cart,
-    store,
+    addExactSearchProductOnce,
+    registerSearchState,
+    store.ui.productSearchQuery,
   ]);
 
   const handleBarcodeSubmit = useCallback(
@@ -392,37 +392,12 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
         return;
       }
 
-      if (extractResult.type === "productId" && productIdSearchResults) {
-        if (productIdSearchResults.length === 1) {
-          await cart.addProduct(productIdSearchResults[0]);
-          store.setProductSearchQuery("");
-        }
+      if (registerSearchState.intent === "exact") {
+        await addExactSearchProductOnce();
         return;
       }
-
-      if (extractResult.type === "barcode" && barcodeSearchResult) {
-        const shouldAutoAdd = Array.isArray(barcodeSearchResult)
-          ? barcodeSearchResult.length === 1
-          : true;
-
-        if (shouldAutoAdd) {
-          const productToAdd = Array.isArray(barcodeSearchResult)
-            ? barcodeSearchResult[0]
-            : barcodeSearchResult;
-          await cart.addFromBarcode(extractedValue, barcodeSearchResult);
-          store.setProductSearchQuery("");
-          void productToAdd;
-        }
-      }
     },
-    [
-      barcodeSearchResult,
-      cart,
-      extractResult.type,
-      extractedValue,
-      productIdSearchResults,
-      store,
-    ],
+    [addExactSearchProductOnce, registerSearchState.intent, store],
   );
 
   const handleClearCart = useCallback(async () => {
@@ -578,12 +553,15 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
       setProductSearchQuery: store.setProductSearchQuery,
       onBarcodeSubmit: handleBarcodeSubmit,
       onAddProduct: async (product) => {
-        cart.addProduct(product);
-        return true;
+        const wasAdded = await cart.addProduct(product);
+        if (wasAdded) {
+          store.setProductSearchQuery("");
+        }
+        return wasAdded;
       },
       searchResults: entrySearchResults,
       isSearchLoading: isProductEntrySearchLoading,
-      isSearchReady: true,
+      isSearchReady: isRegisterCatalogReady,
       canQuickAddProduct: false,
     },
     cart: {

@@ -1,5 +1,8 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { useMutation, useQuery } from "convex/react";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -9,11 +12,36 @@ import { useExpenseRegisterViewModel } from "./useExpenseRegisterViewModel";
 
 const mockCreateExpenseSession = vi.fn();
 const mockNavigateBack = vi.fn();
-const posProductMocks = vi.hoisted(() => ({
-  usePOSBarcodeSearch: vi.fn(),
-  usePOSProductSearch: vi.fn(),
+const catalogGatewayMocks = vi.hoisted(() => ({
+  useConvexRegisterCatalog: vi.fn(),
+  useConvexRegisterCatalogAvailability: vi.fn(),
 }));
 const loadedSessionIds: string[] = [];
+type MockRegisterCatalogRow = {
+  id: Id<"productSku">;
+  productSkuId: Id<"productSku">;
+  skuId: Id<"productSku">;
+  productId: Id<"product">;
+  name: string;
+  sku: string;
+  barcode: string;
+  price: number;
+  category: string;
+  description: string;
+  image: string | null;
+  size: string;
+  length: number | null;
+  color: string;
+  areProcessingFeesAbsorbed: boolean;
+};
+type MockRegisterCatalogAvailabilityRow = {
+  productSkuId: Id<"productSku">;
+  skuId: Id<"productSku">;
+  inStock: boolean;
+  quantityAvailable: number;
+};
+let mockRegisterCatalogRows: MockRegisterCatalogRow[];
+let mockRegisterCatalogAvailabilityRows: MockRegisterCatalogAvailabilityRow[] | undefined;
 let mockActiveSessionQuery: {
   _id: Id<"expenseSession">;
   status: "active";
@@ -71,13 +99,19 @@ vi.mock("@/hooks/use-navigate-back", () => ({
   useNavigateBack: () => mockNavigateBack,
 }));
 
-vi.mock("@/hooks/useDebounce", () => ({
-  useDebounce: (value: string) => value,
+vi.mock("@/lib/pos/infrastructure/convex/catalogGateway", () => ({
+  useConvexRegisterCatalog: catalogGatewayMocks.useConvexRegisterCatalog,
+  useConvexRegisterCatalogAvailability:
+    catalogGatewayMocks.useConvexRegisterCatalogAvailability,
 }));
 
 vi.mock("@/hooks/usePOSProducts", () => ({
-  usePOSBarcodeSearch: posProductMocks.usePOSBarcodeSearch,
-  usePOSProductSearch: posProductMocks.usePOSProductSearch,
+  usePOSBarcodeSearch: () => {
+    throw new Error("Expense register search must use the local catalog index");
+  },
+  usePOSProductSearch: () => {
+    throw new Error("Expense register search must use the local catalog index");
+  },
 }));
 
 vi.mock("@/lib/logger", () => ({
@@ -89,6 +123,41 @@ vi.mock("@/lib/logger", () => ({
   },
 }));
 
+function buildRegisterCatalogRow(
+  overrides: Partial<MockRegisterCatalogRow> = {},
+): MockRegisterCatalogRow {
+  return {
+    id: "product-sku-1" as Id<"productSku">,
+    productSkuId: "product-sku-1" as Id<"productSku">,
+    skuId: "product-sku-1" as Id<"productSku">,
+    productId: "product-1" as Id<"product">,
+    name: "Repair kit",
+    sku: "KIT-1",
+    barcode: "1234567890123",
+    price: 3600,
+    category: "Supplies",
+    description: "",
+    image: null,
+    size: "",
+    length: null,
+    color: "",
+    areProcessingFeesAbsorbed: false,
+    ...overrides,
+  };
+}
+
+function buildRegisterCatalogAvailabilityRow(
+  overrides: Partial<MockRegisterCatalogAvailabilityRow> = {},
+): MockRegisterCatalogAvailabilityRow {
+  return {
+    productSkuId: "product-sku-1" as Id<"productSku">,
+    skuId: "product-sku-1" as Id<"productSku">,
+    inStock: true,
+    quantityAvailable: 3,
+    ...overrides,
+  };
+}
+
 describe("useExpenseRegisterViewModel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -96,8 +165,14 @@ describe("useExpenseRegisterViewModel", () => {
     useExpenseStore.getState().resetAll();
     useExpenseStore.getState().setCashier("staff-1" as Id<"staffProfile">);
     mockActiveSessionQuery = null;
-    posProductMocks.usePOSBarcodeSearch.mockReturnValue(null);
-    posProductMocks.usePOSProductSearch.mockReturnValue([]);
+    mockRegisterCatalogRows = [];
+    mockRegisterCatalogAvailabilityRows = [];
+    catalogGatewayMocks.useConvexRegisterCatalog.mockImplementation(
+      () => mockRegisterCatalogRows,
+    );
+    catalogGatewayMocks.useConvexRegisterCatalogAvailability.mockImplementation(
+      () => mockRegisterCatalogAvailabilityRows,
+    );
 
     mockCreateExpenseSession.mockImplementation(async () => {
       const callCount = mockCreateExpenseSession.mock.calls.length;
@@ -183,7 +258,7 @@ describe("useExpenseRegisterViewModel", () => {
     expect(result.current.authDialog?.workflowMode).toBe("expense");
   });
 
-  it("keeps expense product search hooks stable across text and barcode input", () => {
+  it("uses the local register catalog index for text and exact expense search", () => {
     mockActiveSessionQuery = {
       _id: "expense-session-1" as Id<"expenseSession">,
       status: "active",
@@ -192,23 +267,10 @@ describe("useExpenseRegisterViewModel", () => {
       updatedAt: 100,
       cartItems: [],
     };
-    const product = {
-      id: "product-sku-1" as Id<"productSku">,
-      name: "Repair kit",
-      barcode: "1234567890123",
-      sku: "KIT-1",
-      price: 3600,
-      category: "Supplies",
-      description: "",
-      image: null,
-      inStock: true,
-      quantityAvailable: 3,
-      productId: "product-1" as Id<"product">,
-      skuId: "product-sku-1" as Id<"productSku">,
-      areProcessingFeesAbsorbed: false,
-    };
-    posProductMocks.usePOSProductSearch.mockReturnValue([product]);
-    posProductMocks.usePOSBarcodeSearch.mockReturnValue(product);
+    mockRegisterCatalogRows = [buildRegisterCatalogRow()];
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow(),
+    ];
 
     const { result } = renderHook(() => useExpenseRegisterViewModel());
 
@@ -216,29 +278,182 @@ describe("useExpenseRegisterViewModel", () => {
       result.current.productEntry.setProductSearchQuery("repair");
     });
 
-    expect(result.current.productEntry.searchResults).toEqual([product]);
-    expect(posProductMocks.usePOSProductSearch).toHaveBeenCalledWith(
-      "store-1",
-      "repair",
+    expect(result.current.productEntry.searchResults).toEqual([
+      expect.objectContaining({
+        name: "Repair kit",
+        skuId: "product-sku-1",
+        quantityAvailable: 3,
+      }),
+    ]);
+    expect(catalogGatewayMocks.useConvexRegisterCatalog).toHaveBeenCalledWith({
+      storeId: "store-1",
+    });
+    expect(
+      catalogGatewayMocks.useConvexRegisterCatalogAvailability,
+    ).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        storeId: "store-1",
+        productSkuIds: ["product-sku-1"],
+      }),
     );
-    expect(posProductMocks.usePOSBarcodeSearch).toHaveBeenLastCalledWith(
-      "store-1",
-      "",
+
+    expect(result.current.productEntry.isSearchReady).toBe(true);
+    expect(result.current.drawerGate).toBeNull();
+  });
+
+  it("keeps exact matches visible without auto-adding until availability loads", async () => {
+    mockActiveSessionQuery = {
+      _id: "expense-session-1" as Id<"expenseSession">,
+      status: "active",
+      expiresAt: Date.now() + 60_000,
+      sessionNumber: "EXP-0001",
+      updatedAt: 100,
+      cartItems: [],
+    };
+    mockRegisterCatalogRows = [buildRegisterCatalogRow()];
+    mockRegisterCatalogAvailabilityRows = undefined;
+
+    const { result, rerender } = renderHook(() =>
+      useExpenseRegisterViewModel(),
     );
 
     act(() => {
       result.current.productEntry.setProductSearchQuery("1234567890123");
     });
 
-    expect(result.current.productEntry.searchResults).toEqual([product]);
-    expect(posProductMocks.usePOSProductSearch).toHaveBeenLastCalledWith(
-      "store-1",
-      "",
+    expect(result.current.productEntry.searchResults).toEqual([
+      expect.objectContaining({
+        skuId: "product-sku-1",
+        inStock: false,
+        quantityAvailable: 0,
+      }),
+    ]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mockCreateExpenseSession).not.toHaveBeenCalled();
+
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow(),
+    ];
+    rerender();
+
+    await waitFor(() => {
+      expect(mockCreateExpenseSession).toHaveBeenCalledTimes(1);
+    });
+    expect(useExpenseStore.getState().ui.productSearchQuery).toBe("");
+  });
+
+  it("keeps out-of-stock exact matches visible without auto-adding", async () => {
+    mockActiveSessionQuery = {
+      _id: "expense-session-1" as Id<"expenseSession">,
+      status: "active",
+      expiresAt: Date.now() + 60_000,
+      sessionNumber: "EXP-0001",
+      updatedAt: 100,
+      cartItems: [],
+    };
+    mockRegisterCatalogRows = [buildRegisterCatalogRow()];
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow({
+        inStock: false,
+        quantityAvailable: 0,
+      }),
+    ];
+
+    const { result } = renderHook(() => useExpenseRegisterViewModel());
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("KIT-1");
+    });
+
+    expect(result.current.productEntry.searchResults).toEqual([
+      expect.objectContaining({
+        skuId: "product-sku-1",
+        inStock: false,
+        quantityAvailable: 0,
+      }),
+    ]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mockCreateExpenseSession).not.toHaveBeenCalled();
+  });
+
+  it("shows ambiguous exact product matches without auto-adding", async () => {
+    mockActiveSessionQuery = {
+      _id: "expense-session-1" as Id<"expenseSession">,
+      status: "active",
+      expiresAt: Date.now() + 60_000,
+      sessionNumber: "EXP-0001",
+      updatedAt: 100,
+      cartItems: [],
+    };
+    mockRegisterCatalogRows = [
+      buildRegisterCatalogRow(),
+      buildRegisterCatalogRow({
+        id: "product-sku-2" as Id<"productSku">,
+        productSkuId: "product-sku-2" as Id<"productSku">,
+        skuId: "product-sku-2" as Id<"productSku">,
+        sku: "KIT-2",
+        barcode: "9876543210123",
+      }),
+    ];
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow(),
+      buildRegisterCatalogAvailabilityRow({
+        productSkuId: "product-sku-2" as Id<"productSku">,
+        skuId: "product-sku-2" as Id<"productSku">,
+      }),
+    ];
+
+    const { result } = renderHook(() => useExpenseRegisterViewModel());
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("product-1");
+    });
+
+    expect(result.current.productEntry.searchResults).toHaveLength(2);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mockCreateExpenseSession).not.toHaveBeenCalled();
+  });
+
+  it("auto-adds a single available exact expense match once", async () => {
+    mockActiveSessionQuery = {
+      _id: "expense-session-1" as Id<"expenseSession">,
+      status: "active",
+      expiresAt: Date.now() + 60_000,
+      sessionNumber: "EXP-0001",
+      updatedAt: 100,
+      cartItems: [],
+    };
+    mockRegisterCatalogRows = [buildRegisterCatalogRow()];
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow(),
+    ];
+
+    const { result, rerender } = renderHook(() =>
+      useExpenseRegisterViewModel(),
     );
-    expect(posProductMocks.usePOSBarcodeSearch).toHaveBeenLastCalledWith(
-      "store-1",
-      "1234567890123",
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("1234567890123");
+    });
+
+    await waitFor(() => {
+      expect(mockCreateExpenseSession).toHaveBeenCalledTimes(1);
+    });
+    expect(useExpenseStore.getState().ui.productSearchQuery).toBe("");
+
+    rerender();
+    expect(mockCreateExpenseSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not depend on legacy POS product search hooks", () => {
+    const currentDir = dirname(fileURLToPath(import.meta.url));
+    const source = readFileSync(
+      join(currentDir, "useExpenseRegisterViewModel.ts"),
+      "utf8",
     );
+
+    expect(source).not.toContain("usePOSProductSearch");
+    expect(source).not.toContain("usePOSBarcodeSearch");
   });
 
   it("clears expense totals and transaction state after completing a session", async () => {
