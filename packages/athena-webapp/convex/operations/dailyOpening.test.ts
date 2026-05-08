@@ -233,6 +233,50 @@ describe("daily opening backend foundation", () => {
     ]);
   });
 
+  it("hydrates the started opening staff profile name", async () => {
+    const { db } = createDb({
+      dailyClose: [completedDailyClose()],
+      dailyOpening: [
+        {
+          _id: "daily-opening-1",
+          acknowledgedItemKeys: [],
+          actorStaffProfileId: "staff-1",
+          carryForwardWorkItemIds: [],
+          createdAt: Date.UTC(2026, 4, 8, 8),
+          operatingDate: "2026-05-08",
+          organizationId: "org-1",
+          priorDailyCloseId: "daily-close-1",
+          readiness: {
+            blockerCount: 0,
+            carryForwardCount: 0,
+            readyCount: 1,
+            reviewCount: 0,
+            status: "ready",
+          },
+          sourceSubjects: [],
+          startedAt: Date.UTC(2026, 4, 8, 8),
+          status: "started",
+          storeId: "store-1",
+          updatedAt: Date.UTC(2026, 4, 8, 8),
+        },
+      ],
+      staffProfile: [activeStaffProfile],
+      store: [store],
+    });
+
+    const snapshot = await buildDailyOpeningSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.status).toBe("started");
+    expect(snapshot.startedOpening).toMatchObject({
+      _id: "daily-opening-1",
+      actorStaffProfileId: "staff-1",
+      startedByStaffName: "Store Manager",
+    });
+  });
+
   it("blocks calendar-invalid operating dates instead of normalizing them", async () => {
     const { db, inserts } = createDb({
       dailyClose: [completedDailyClose()],
@@ -422,8 +466,11 @@ describe("daily opening backend foundation", () => {
     expect(inserts).toEqual([]);
   });
 
-  it("blocks opening when there is no prior completed Daily Close", async () => {
+  it("requires acknowledgement when there is no prior completed Daily Close", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 8, 8));
+
     const { db, inserts } = createDb({
+      staffProfile: [activeStaffProfile],
       store: [store],
     });
 
@@ -436,18 +483,48 @@ describe("daily opening backend foundation", () => {
       { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
     );
 
-    expect(snapshot.status).toBe("blocked");
-    expect(snapshot.blockers.map((item) => item.key)).toEqual([
+    expect(snapshot.status).toBe("needs_attention");
+    expect(snapshot.blockers).toEqual([]);
+    expect(snapshot.reviewItems.map((item) => item.key)).toEqual([
       "daily_close:prior:missing",
     ]);
     expect(result).toMatchObject({
       kind: "user_error",
       error: {
         code: "precondition_failed",
-        metadata: { blockerCount: 1 },
+        metadata: { unacknowledgedItemKeys: ["daily_close:prior:missing"] },
       },
     });
     expect(inserts).toEqual([]);
+
+    const acknowledgedResult = await startStoreDayWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        acknowledgedItemKeys: ["daily_close:prior:missing"],
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(acknowledgedResult).toMatchObject({
+      kind: "ok",
+      data: {
+        action: "started",
+        dailyOpening: {
+          acknowledgedItemKeys: ["daily_close:prior:missing"],
+          readiness: {
+            blockerCount: 0,
+            reviewCount: 1,
+            status: "needs_attention",
+          },
+        },
+      },
+    });
+    expect(inserts.map((insert) => insert.table)).toEqual([
+      "dailyOpening",
+      "operationalEvent",
+    ]);
   });
 
   it("rechecks command-time readiness so stale ready snapshots cannot start a blocked day", async () => {

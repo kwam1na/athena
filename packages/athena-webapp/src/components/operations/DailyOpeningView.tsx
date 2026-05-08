@@ -26,6 +26,7 @@ import {
 import { getOrigin } from "@/lib/navigationUtils";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
+import type { ApprovalRequirement } from "~/shared/approvalPolicy";
 import type { CommandResult } from "~/shared/commandResult";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
@@ -37,10 +38,16 @@ import {
   PageWorkspaceRail,
 } from "../common/PageLevelHeader";
 import { EmptyState } from "../states/empty/empty-state";
+import {
+  CommandApprovalDialog,
+  type CommandApprovalDialogProps,
+} from "./CommandApprovalDialog";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
+import { Checkbox } from "../ui/checkbox";
+import { Label } from "../ui/label";
 import { LoadingButton } from "../ui/loading-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 
@@ -57,11 +64,7 @@ const useExpectedDailyOpeningMutation = useMutation as unknown as (
   mutation: unknown,
 ) => (args: Record<string, unknown>) => Promise<unknown>;
 
-type DailyOpeningStatus =
-  | "blocked"
-  | "needs_attention"
-  | "ready"
-  | "started";
+type DailyOpeningStatus = "blocked" | "needs_attention" | "ready" | "started";
 
 export type DailyOpeningItemLink = {
   href?: string;
@@ -131,6 +134,7 @@ export type DailyOpeningSnapshot = {
 
 type StartDayArgs = {
   acknowledgedItemKeys: string[];
+  actorStaffProfileId?: Id<"staffProfile">;
   endAt: number;
   notes: string;
   operatingDate: string;
@@ -146,9 +150,8 @@ type DailyOpeningViewContentProps = {
   isLoadingAccess: boolean;
   isLoadingSnapshot: boolean;
   isStarting: boolean;
-  onStartDay: (
-    args: StartDayArgs,
-  ) => Promise<NormalizedCommandResult<unknown>>;
+  onStartDay: (args: StartDayArgs) => Promise<NormalizedCommandResult<unknown>>;
+  onAuthenticateForApproval?: CommandApprovalDialogProps["onAuthenticateForApproval"];
   orgUrlSlug: string;
   snapshot?: DailyOpeningSnapshot;
   storeId?: Id<"store">;
@@ -199,7 +202,7 @@ const statusCopy: Record<
   },
   started: {
     badge: "Started",
-    description: "The store day has a saved opening record.",
+    description: "Opening handoff is complete. The store day is ready to run.",
     title: "Store day started",
   },
 };
@@ -281,7 +284,10 @@ function getOpeningStatus(snapshot: DailyOpeningSnapshot): DailyOpeningStatus {
   if (snapshot.status) return snapshot.status;
   if (snapshot.readiness?.status) return snapshot.readiness.status;
   if (snapshot.blockers.length > 0) return "blocked";
-  if (snapshot.reviewItems.length > 0 || snapshot.carryForwardItems.length > 0) {
+  if (
+    snapshot.reviewItems.length > 0 ||
+    snapshot.carryForwardItems.length > 0
+  ) {
     return "needs_attention";
   }
   return "ready";
@@ -331,6 +337,26 @@ function formatMetadataValue(value: ReactNode, currency: string) {
   return value;
 }
 
+function getMetadataLabel(item: DailyOpeningItem, label: string) {
+  if (label === "operatingDate") {
+    if (item.key === "daily_close:prior:missing") {
+      return "Store day being opened";
+    }
+
+    return "Store day";
+  }
+
+  return humanizeMetadataLabel(label);
+}
+
+function getMetadataValue(label: string, value: ReactNode, currency: string) {
+  if (label === "operatingDate" && typeof value === "string") {
+    return formatOperatingDate(value);
+  }
+
+  return formatMetadataValue(value, currency);
+}
+
 function getMetadataEntries(item: DailyOpeningItem, currency: string) {
   if (!item.metadata) return [];
 
@@ -342,10 +368,12 @@ function getMetadataEntries(item: DailyOpeningItem, currency: string) {
   }
 
   return Object.entries(item.metadata)
-    .filter(([, value]) => value !== null && value !== undefined && value !== "")
+    .filter(
+      ([, value]) => value !== null && value !== undefined && value !== "",
+    )
     .map(([label, value]) => ({
-      label: humanizeMetadataLabel(label),
-      value: formatMetadataValue(value as ReactNode, currency),
+      label: getMetadataLabel(item, label),
+      value: getMetadataValue(label, value as ReactNode, currency),
     }));
 }
 
@@ -466,7 +494,8 @@ function getBucketConfigs(snapshot: DailyOpeningSnapshot): BucketConfig[] {
     },
     {
       ariaLabel: "Carry-forward items",
-      description: "These open work items remain unresolved after acknowledgement.",
+      description:
+        "These open work items remain unresolved after acknowledgement.",
       emptyText: "No carry-forward items are currently reported.",
       items: snapshot.carryForwardItems,
       status: "carry-forward",
@@ -475,7 +504,8 @@ function getBucketConfigs(snapshot: DailyOpeningSnapshot): BucketConfig[] {
     },
     {
       ariaLabel: "Ready opening items",
-      description: "Completed handoff checks that support starting the store day.",
+      description:
+        "Completed handoff checks that support starting the store day.",
       emptyText: "Ready items will appear after the handoff is checked.",
       items: snapshot.readyItems,
       status: "ready",
@@ -796,13 +826,7 @@ function BucketTabs({
   );
 }
 
-function SummaryMetric({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function SummaryMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
       <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
@@ -868,13 +892,8 @@ function OpeningRail({
     {
       label: "Carry forward",
       tone: "workflow",
-      value: formatCount(
-        snapshot.carryForwardItems.length,
-        "item",
-        "None",
-      ),
-      valueTone:
-        snapshot.carryForwardItems.length > 0 ? "workflow" : "plain",
+      value: formatCount(snapshot.carryForwardItems.length, "item", "None"),
+      valueTone: snapshot.carryForwardItems.length > 0 ? "workflow" : "plain",
     },
   ];
 
@@ -948,8 +967,7 @@ function OpeningRail({
                   className={cn(
                     "shrink-0 text-right font-medium text-foreground",
                     item.valueTone === "danger" && "text-danger",
-                    item.valueTone === "warning" &&
-                      "text-warning-foreground",
+                    item.valueTone === "warning" && "text-warning-foreground",
                     item.valueTone === "workflow" && "text-action-workflow",
                   )}
                 >
@@ -970,29 +988,35 @@ function OpeningRail({
             <div className="mt-layout-sm space-y-layout-xs">
               {acknowledgementItems.map((item) => {
                 const acknowledgementKey = getAcknowledgementKey(item);
+                const checkboxId = `daily-opening-acknowledgement-${acknowledgementKey.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
 
                 return (
-                  <label
-                    className="flex items-start gap-layout-xs text-sm text-foreground"
+                  <div
+                    className="flex items-start gap-layout-xs rounded-md border border-warning/30 bg-surface-raised/70 p-layout-xs"
                     key={acknowledgementKey}
                   >
-                    <input
+                    <Checkbox
                       aria-label={`Acknowledge ${item.title}`}
                       checked={acknowledgedKeys.includes(acknowledgementKey)}
-                      className="mt-1 h-4 w-4 rounded border-border text-signal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                      onChange={(event) => {
+                      className="mt-0.5"
+                      id={checkboxId}
+                      onCheckedChange={(checked) => {
                         onAcknowledgedKeysChange(
-                          event.target.checked
+                          checked === true
                             ? [...acknowledgedKeys, acknowledgementKey]
                             : acknowledgedKeys.filter(
                                 (key) => key !== acknowledgementKey,
                               ),
                         );
                       }}
-                      type="checkbox"
                     />
-                    <span>{item.title}</span>
-                  </label>
+                    <Label
+                      className="cursor-pointer text-sm font-medium leading-5"
+                      htmlFor={checkboxId}
+                    >
+                      {item.title}
+                    </Label>
+                  </div>
                 );
               })}
             </div>
@@ -1000,16 +1024,25 @@ function OpeningRail({
         ) : null}
 
         {isStarted && snapshot.startedOpening ? (
-          <div className="mt-layout-md rounded-lg border border-success/30 bg-success/10 p-layout-sm">
+          <div className="mt-layout-lg rounded-lg border border-success/30 bg-success/10 p-layout-sm">
             <p className="text-sm font-medium text-success">
-              Opening record saved
+              Opening handoff complete
             </p>
-            <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              {snapshot.startedOpening.startedByStaffName
-                ? `Started by ${snapshot.startedOpening.startedByStaffName}.`
-                : "Started staff unavailable."}{" "}
-              {formatTimestamp(snapshot.startedOpening.startedAt)}
-            </p>
+            <dl className="mt-layout-sm space-y-layout-xs text-sm">
+              <div className="flex items-start justify-between gap-layout-md">
+                <dt className="text-muted-foreground">Started by</dt>
+                <dd className="text-right font-medium text-foreground">
+                  {snapshot.startedOpening.startedByStaffName ??
+                    "Staff unavailable"}
+                </dd>
+              </div>
+              <div className="flex items-start justify-between gap-layout-md">
+                <dt className="text-muted-foreground">Started at</dt>
+                <dd className="text-right font-medium text-foreground">
+                  {formatTimestamp(snapshot.startedOpening.startedAt)}
+                </dd>
+              </div>
+            </dl>
             {snapshot.startedOpening.notes ? (
               <p className="mt-layout-sm text-sm leading-6 text-foreground">
                 {snapshot.startedOpening.notes}
@@ -1084,6 +1117,7 @@ export function DailyOpeningViewContent({
   isLoadingAccess,
   isLoadingSnapshot,
   isStarting,
+  onAuthenticateForApproval,
   onStartDay,
   orgUrlSlug,
   snapshot,
@@ -1092,6 +1126,7 @@ export function DailyOpeningViewContent({
 }: DailyOpeningViewContentProps) {
   const [acknowledgedKeys, setAcknowledgedKeys] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
+  const [isManagerApprovalOpen, setIsManagerApprovalOpen] = useState(false);
   const [commandMessage, setCommandMessage] = useState<{
     kind: "error" | "success";
     message: string;
@@ -1109,6 +1144,29 @@ export function DailyOpeningViewContent({
     ],
     [snapshot],
   );
+  const openingApproval = useMemo<ApprovalRequirement | null>(() => {
+    if (!snapshot || !storeId) return null;
+
+    return {
+      action: {
+        key: "operations.daily_opening.start_day",
+        label: "Start store day",
+      },
+      copy: {
+        title: "Manager approval required",
+        message: "Manager approval is required to start the store day.",
+        primaryActionLabel: "Start Day",
+      },
+      reason: "Manager approval is required to start the store day.",
+      requiredRole: "manager",
+      resolutionModes: [{ kind: "inline_manager_proof" }],
+      subject: {
+        id: `${storeId}:${snapshot.operatingDate}`,
+        label: `Opening ${formatOperatingDate(snapshot.operatingDate)}`,
+        type: "daily_opening",
+      },
+    };
+  }, [snapshot, storeId]);
 
   if (isLoadingAccess) {
     return (
@@ -1155,8 +1213,7 @@ export function DailyOpeningViewContent({
   const acknowledgedRequiredCount = requiredAcknowledgementKeys.filter((key) =>
     acknowledgedKeys.includes(key),
   ).length;
-
-  const handleStartDay = async () => {
+  const submitStartDay = async (actorStaffProfileId?: Id<"staffProfile">) => {
     if (!snapshot || isBlocked || isStarted) return;
 
     const acknowledgementComplete =
@@ -1168,6 +1225,7 @@ export function DailyOpeningViewContent({
 
     const result = await onStartDay({
       acknowledgedItemKeys: requiredAcknowledgementKeys,
+      ...(actorStaffProfileId ? { actorStaffProfileId } : {}),
       endAt: snapshot.endAt,
       notes,
       operatingDate: snapshot.operatingDate,
@@ -1186,6 +1244,16 @@ export function DailyOpeningViewContent({
       kind: "error",
       message: normalizeCommandMessage(result),
     });
+  };
+
+  const handleStartDay = () => {
+    if (onAuthenticateForApproval && openingApproval) {
+      setCommandMessage(null);
+      setIsManagerApprovalOpen(true);
+      return;
+    }
+
+    void submitStartDay();
   };
 
   const handleBucketValueChange = (value: BucketStatus) => {
@@ -1248,7 +1316,8 @@ export function DailyOpeningViewContent({
                   <SummaryMetric
                     label="Blockers"
                     value={formatCount(
-                      snapshot.summary?.blockerCount ?? snapshot.blockers.length,
+                      snapshot.summary?.blockerCount ??
+                        snapshot.blockers.length,
                       "blocker",
                       "No hard blockers",
                     )}
@@ -1299,7 +1368,7 @@ export function DailyOpeningViewContent({
                   notes={notes}
                   onAcknowledgedKeysChange={setAcknowledgedKeys}
                   onNotesChange={setNotes}
-                  onStartDay={() => void handleStartDay()}
+                  onStartDay={handleStartDay}
                   requiredAcknowledgementCount={
                     requiredAcknowledgementKeys.length
                   }
@@ -1307,6 +1376,19 @@ export function DailyOpeningViewContent({
                   status={status}
                 />
               </PageWorkspaceGrid>
+              {onAuthenticateForApproval && openingApproval ? (
+                <CommandApprovalDialog
+                  approval={openingApproval}
+                  onApproved={(result) => {
+                    setIsManagerApprovalOpen(false);
+                    void submitStartDay(result.approvedByStaffProfileId);
+                  }}
+                  onAuthenticateForApproval={onAuthenticateForApproval}
+                  onDismiss={() => setIsManagerApprovalOpen(false)}
+                  open={isManagerApprovalOpen}
+                  storeId={storeId}
+                />
+              ) : null}
             </PageWorkspace>
           )}
         </PageWorkspace>
@@ -1367,6 +1449,48 @@ function DailyOpeningConnectedView({
       : "skip",
   ) as DailyOpeningSnapshot | undefined;
   const startStoreDayMutation = useExpectedDailyOpeningMutation(startStoreDay);
+  const authenticateStaffCredentialForApproval = useMutation(
+    api.operations.staffCredentials.authenticateStaffCredentialForApproval,
+  );
+
+  async function handleAuthenticateForApproval(args: {
+    actionKey: string;
+    pinHash: string;
+    reason?: string;
+    requiredRole: ApprovalRequirement["requiredRole"];
+    requestedByStaffProfileId?: Id<"staffProfile">;
+    storeId: Id<"store">;
+    subject: ApprovalRequirement["subject"];
+    username: string;
+  }) {
+    if (!activeStore?._id) {
+      return {
+        kind: "user_error",
+        error: {
+          code: "authentication_failed",
+          message: "Select a store before confirming manager credentials.",
+        },
+      } as NormalizedCommandResult<{
+        approvalProofId: Id<"approvalProof">;
+        approvedByStaffProfileId: Id<"staffProfile">;
+        expiresAt: number;
+        requestedByStaffProfileId?: Id<"staffProfile">;
+      }>;
+    }
+
+    return runCommand(() =>
+      authenticateStaffCredentialForApproval({
+        actionKey: args.actionKey,
+        pinHash: args.pinHash,
+        reason: args.reason,
+        requiredRole: args.requiredRole,
+        requestedByStaffProfileId: args.requestedByStaffProfileId,
+        storeId: args.storeId,
+        subject: args.subject,
+        username: args.username,
+      }),
+    );
+  }
 
   const handleStartDay = async (args: StartDayArgs) => {
     if (!activeStore?._id) {
@@ -1386,6 +1510,7 @@ function DailyOpeningConnectedView({
         () =>
           startStoreDayMutation({
             acknowledgedItemKeys: args.acknowledgedItemKeys,
+            actorStaffProfileId: args.actorStaffProfileId,
             endAt: args.endAt,
             notes: args.notes || undefined,
             operatingDate: args.operatingDate,
@@ -1406,6 +1531,7 @@ function DailyOpeningConnectedView({
       isLoadingAccess={isLoadingAccess}
       isLoadingSnapshot={snapshot === undefined}
       isStarting={isStarting}
+      onAuthenticateForApproval={handleAuthenticateForApproval}
       onStartDay={handleStartDay}
       orgUrlSlug={params?.orgUrlSlug ?? ""}
       snapshot={snapshot}

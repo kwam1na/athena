@@ -9,6 +9,7 @@ symptoms:
   - "Opening can drift into a second drawer-open or register-session flow instead of a store-day acknowledgement"
   - "Operators need the prior close handoff, carry-forward work, and pending approval state in one place before starting the day"
   - "Frontend acknowledgement can become stale if the command trusts the client snapshot"
+  - "Started Opening states can show technical record language or miss the staff profile name if the snapshot returns only raw ids"
 root_cause: missing_workflow_record
 resolution_type: design_pattern
 severity: medium
@@ -42,6 +43,14 @@ evidence:
 - The persisted `dailyOpening` record stores the operating date, local range,
   prior close reference, readiness counts, source subjects, carry-forward work
   item ids, acknowledged keys, actor ids, and notes.
+- Start-day confirmation should use the shared manager approval dialog rather
+  than bespoke staff-auth UI. The approval proof's approved manager staff
+  profile becomes the opening actor, preserving the command boundary while
+  giving the store-day record a real staff identity.
+- Started snapshots should hydrate display fields from stored ids. In
+  particular, `startedOpening.startedByStaffName` should be derived from
+  `actorStaffProfileId` server-side so the UI does not guess from raw ids or
+  show "staff unavailable" for valid openings.
 - Opening records an operational event but does not mutate register sessions,
   drawers, or the carry-forward work item status.
 - The operator view should treat Opening as a review-and-confirm workspace with
@@ -60,6 +69,9 @@ review, and store-day analytics without changing the POS drawer lifecycle.
 - Include operating-date range fields in the backend contract when the frontend
   sends local store-day bounds, even if the first slice only keys records by
   `operatingDate`.
+- Use operational copy and labeled details for completed states. Avoid phrases
+  like "saved record" in the UI; present who completed the handoff and when as
+  separate facts.
 - Add a lifecycle harness scenario when Daily Opening, Daily Close, or their
   route wiring changes so readiness gates, generated Convex API refs, and
   operator views are validated together.

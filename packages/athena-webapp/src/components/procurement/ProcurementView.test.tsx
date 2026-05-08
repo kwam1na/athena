@@ -632,7 +632,7 @@ describe("ProcurementViewContent", () => {
     expect(screen.getByText("Camera")).toBeInTheDocument();
   });
 
-  it("communicates handled rows with inbound cover as handled pressure", async () => {
+  it("communicates handled rows with inbound cover inside the inbound queue", async () => {
     const { default: userEvent } = await import("@testing-library/user-event");
     const user = userEvent.setup();
 
@@ -646,8 +646,9 @@ describe("ProcurementViewContent", () => {
     await user.click(screen.getByRole("tab", { name: /inbound/i }));
 
     expect(screen.getByText("Logitech Mouse")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("tab", { name: /handled/i }));
+    expect(
+      screen.queryByRole("tab", { name: /handled/i }),
+    ).not.toBeInTheDocument();
 
     const resolvedRow = screen.getByText("Logitech Mouse").closest("article")!;
     expect(within(resolvedRow).getByText("Handled")).toBeInTheDocument();
@@ -670,7 +671,7 @@ describe("ProcurementViewContent", () => {
     render(
       <ProcurementViewContent
         {...baseProps}
-        mode="resolved"
+        mode="all"
         recommendations={resolvedRecommendations}
       />,
     );

@@ -1,7 +1,6 @@
 import {
   Outlet,
   ScrollRestoration,
-  createRootRoute,
   createRootRouteWithContext,
 } from "@tanstack/react-router";
 
@@ -12,6 +11,11 @@ import { NotFoundView } from "@/components/states/not-found/NotFoundView";
 import { z } from "zod";
 import { useNavigationKeyboardShortcuts } from "@/hooks/use-navigation-keyboard-shortcuts";
 
+const procurementModeSchema = z.preprocess(
+  (value) => (value === "resolved" ? undefined : value),
+  z.enum(["needs_action", "planned", "inbound", "exceptions", "all"]).optional(),
+);
+
 const rootPageSchema = z.object({
   o: z.string().optional(),
   variant: z.string().optional(),
@@ -20,9 +24,7 @@ const rootPageSchema = z.object({
   registerSessionId: z.string().optional(),
   mode: z.enum(["cycle_count", "manual"]).optional(),
   page: z.coerce.number().int().positive().optional(),
-  procurementMode: z
-    .enum(["needs_action", "planned", "inbound", "exceptions", "resolved", "all"])
-    .optional(),
+  procurementMode: procurementModeSchema,
   scope: z.string().optional(),
   sku: z.string().optional(),
 });
