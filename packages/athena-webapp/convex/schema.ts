@@ -407,6 +407,7 @@ const schema = defineSchema({
     .index("by_traceId", ["traceId"]),
   operationalEvent: defineTable(operationalEventSchema)
     .index("by_storeId", ["storeId"])
+    .index("by_storeId_createdAt", ["storeId", "createdAt"])
     .index("by_storeId_subject", ["storeId", "subjectType", "subjectId"])
     .index("by_customerProfileId", ["customerProfileId"])
     .index("by_workItemId", ["workItemId"])

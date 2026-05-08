@@ -227,11 +227,14 @@ describe("HARNESS_APP_REGISTRY", () => {
       touchedPaths: [
         "convex/operations/dailyClose.ts",
         "convex/operations/dailyOpening.ts",
+        "convex/operations/dailyOperations.ts",
         "convex/schemas/operations/dailyClose.ts",
         "convex/schemas/operations/dailyOpening.ts",
         "src/components/operations/DailyCloseView.tsx",
         "src/components/operations/DailyOpeningView.tsx",
+        "src/components/operations/DailyOperationsView.tsx",
         "src/components/app-sidebar.tsx",
+        "src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/index.tsx",
         "src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close.tsx",
         "src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/opening.tsx",
       ],
@@ -239,7 +242,7 @@ describe("HARNESS_APP_REGISTRY", () => {
         {
           kind: "raw",
           command:
-            "bun run --filter '@athena/webapp' test -- convex/operations/dailyOpening.test.ts convex/operations/dailyClose.test.ts convex/operations/operationsQueryIndexes.test.ts src/components/operations/DailyOpeningView.test.tsx src/components/operations/DailyCloseView.test.tsx",
+            "bun run --filter '@athena/webapp' test -- convex/operations/dailyOperations.test.ts convex/operations/dailyOpening.test.ts convex/operations/dailyClose.test.ts convex/operations/operationsQueryIndexes.test.ts src/components/operations/DailyOperationsView.test.tsx src/components/operations/DailyOpeningView.test.tsx src/components/operations/DailyCloseView.test.tsx",
         },
         { kind: "script", script: "audit:convex" },
         { kind: "script", script: "lint:convex:changed" },

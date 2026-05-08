@@ -70,7 +70,10 @@ export type HarnessValidationScenario = {
   note: string;
 };
 
-export type HarnessAppName = "athena-webapp" | "storefront-webapp" | "valkey-proxy-server";
+export type HarnessAppName =
+  | "athena-webapp"
+  | "storefront-webapp"
+  | "valkey-proxy-server";
 
 export type HarnessAppArchetype = "webapp" | "service-package";
 export type HarnessOnboardingStatus = "active" | "planned";
@@ -129,18 +132,21 @@ function buildHarnessDocPaths(packageDir: string): HarnessDocPaths {
 
 function buildHarnessDocPathsForArchetype(
   packageDir: string,
-  archetype: HarnessAppArchetype
+  archetype: HarnessAppArchetype,
 ): HarnessDocPaths {
   const requiredEntryDocs = REQUIRED_HARNESS_ENTRY_DOCS.map((relativePath) =>
-    path.posix.join(packageDir, relativePath)
+    path.posix.join(packageDir, relativePath),
   );
   const discoveryIndexPath =
     archetype === "webapp"
       ? path.posix.join(packageDir, "docs/agent/route-index.md")
       : path.posix.join(packageDir, "docs/agent/entry-index.md");
-  const generatedDocs = [discoveryIndexPath, ...GENERATED_HARNESS_DOCS.map((relativePath) =>
-    path.posix.join(packageDir, relativePath)
-  )];
+  const generatedDocs = [
+    discoveryIndexPath,
+    ...GENERATED_HARNESS_DOCS.map((relativePath) =>
+      path.posix.join(packageDir, relativePath),
+    ),
+  ];
 
   return {
     agentsPath: path.posix.join(packageDir, "AGENTS.md"),
@@ -149,15 +155,26 @@ function buildHarnessDocPathsForArchetype(
     testingPath: path.posix.join(packageDir, "docs/agent/testing.md"),
     codeMapPath: path.posix.join(packageDir, "docs/agent/code-map.md"),
     routeIndexPath:
-      archetype === "webapp" ? path.posix.join(packageDir, "docs/agent/route-index.md") : undefined,
+      archetype === "webapp"
+        ? path.posix.join(packageDir, "docs/agent/route-index.md")
+        : undefined,
     entryIndexPath:
       archetype === "service-package"
         ? path.posix.join(packageDir, "docs/agent/entry-index.md")
         : undefined,
     testIndexPath: path.posix.join(packageDir, "docs/agent/test-index.md"),
-    keyFolderIndexPath: path.posix.join(packageDir, "docs/agent/key-folder-index.md"),
-    validationGuidePath: path.posix.join(packageDir, "docs/agent/validation-guide.md"),
-    validationMapPath: path.posix.join(packageDir, "docs/agent/validation-map.json"),
+    keyFolderIndexPath: path.posix.join(
+      packageDir,
+      "docs/agent/key-folder-index.md",
+    ),
+    validationGuidePath: path.posix.join(
+      packageDir,
+      "docs/agent/validation-guide.md",
+    ),
+    validationMapPath: path.posix.join(
+      packageDir,
+      "docs/agent/validation-map.json",
+    ),
     requiredIndexLinks:
       archetype === "webapp"
         ? REQUIRED_INDEX_LINKS
@@ -180,7 +197,10 @@ export const HARNESS_APP_REGISTRY = [
     packageDir: "packages/athena-webapp",
     routeRoot: "src/routes",
     auditedRoots: ["src", "shared", "convex"],
-    harnessDocs: buildHarnessDocPathsForArchetype("packages/athena-webapp", "webapp"),
+    harnessDocs: buildHarnessDocPathsForArchetype(
+      "packages/athena-webapp",
+      "webapp",
+    ),
     keyFolderGroups: [
       {
         title: "Core app surfaces",
@@ -191,7 +211,8 @@ export const HARNESS_APP_REGISTRY = [
           },
           {
             path: "src/components",
-            description: "UI components, views, and package-local feature widgets.",
+            description:
+              "UI components, views, and package-local feature widgets.",
           },
           {
             path: "src/components/traces",
@@ -210,7 +231,8 @@ export const HARNESS_APP_REGISTRY = [
           },
           {
             path: "src/hooks",
-            description: "React hooks that fan out auth, shell, and feature state.",
+            description:
+              "React hooks that fan out auth, shell, and feature state.",
           },
           {
             path: "src/contexts",
@@ -218,15 +240,18 @@ export const HARNESS_APP_REGISTRY = [
           },
           {
             path: "src/lib",
-            description: "Shared frontend helpers, schemas, and package utilities.",
+            description:
+              "Shared frontend helpers, schemas, and package utilities.",
           },
           {
             path: "shared",
-            description: "Browser-safe helpers shared with Convex-backed workflows.",
+            description:
+              "Browser-safe helpers shared with Convex-backed workflows.",
           },
           {
             path: "src/utils",
-            description: "Cross-cutting browser helpers and lower-level utilities.",
+            description:
+              "Cross-cutting browser helpers and lower-level utilities.",
           },
         ],
       },
@@ -250,7 +275,8 @@ export const HARNESS_APP_REGISTRY = [
           },
           {
             path: "convex",
-            description: "Convex functions, HTTP composition, schemas, and backend tests.",
+            description:
+              "Convex functions, HTTP composition, schemas, and backend tests.",
           },
           {
             path: "src/tests",
@@ -280,26 +306,27 @@ export const HARNESS_APP_REGISTRY = [
           { kind: "script", script: "test" },
           { kind: "script", script: "lint:architecture" },
         ],
-        note:
-          "Use this for authenticated dashboard flows, service-management screens, route trees, and UI behavior changes that stay inside the frontend shell.",
+        note: "Use this for authenticated dashboard flows, service-management screens, route trees, and UI behavior changes that stay inside the frontend shell.",
       },
       {
         title: "Changed frontend source lint",
         touchedPaths: ["src", "shared", "types.ts"],
         commands: [{ kind: "script", script: "lint:frontend:changed" }],
-        note:
-          "Run this for changed browser-facing TypeScript or TSX files so introduced ESLint failures are caught before PR handoff.",
+        note: "Run this for changed browser-facing TypeScript or TSX files so introduced ESLint failures are caught before PR handoff.",
       },
       {
         title: "Daily store operations lifecycle edits",
         touchedPaths: [
           "convex/operations/dailyClose.ts",
           "convex/operations/dailyOpening.ts",
+          "convex/operations/dailyOperations.ts",
           "convex/schemas/operations/dailyClose.ts",
           "convex/schemas/operations/dailyOpening.ts",
           "src/components/operations/DailyCloseView.tsx",
           "src/components/operations/DailyOpeningView.tsx",
+          "src/components/operations/DailyOperationsView.tsx",
           "src/components/app-sidebar.tsx",
+          "src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/index.tsx",
           "src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close.tsx",
           "src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/opening.tsx",
         ],
@@ -307,20 +334,20 @@ export const HARNESS_APP_REGISTRY = [
           {
             kind: "raw",
             command:
-              "bun run --filter '@athena/webapp' test -- convex/operations/dailyOpening.test.ts convex/operations/dailyClose.test.ts convex/operations/operationsQueryIndexes.test.ts src/components/operations/DailyOpeningView.test.tsx src/components/operations/DailyCloseView.test.tsx",
+              "bun run --filter '@athena/webapp' test -- convex/operations/dailyOperations.test.ts convex/operations/dailyOpening.test.ts convex/operations/dailyClose.test.ts convex/operations/operationsQueryIndexes.test.ts src/components/operations/DailyOperationsView.test.tsx src/components/operations/DailyOpeningView.test.tsx src/components/operations/DailyCloseView.test.tsx",
           },
           { kind: "script", script: "audit:convex" },
           { kind: "script", script: "lint:convex:changed" },
           { kind: "script", script: "lint:frontend:changed" },
           {
             kind: "raw",
-            command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+            command:
+              "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
           },
           { kind: "script", script: "build" },
         ],
         behaviorScenarios: ["athena-admin-shell-boot"],
-        note:
-          "Use this when Daily Opening, Daily Close, or the store-day operations route wiring changes. It validates the backend readiness gates, operator-facing acknowledgement views, generated Convex API surface, and route tree before broader package validation.",
+        note: "Use this when Daily Opening, Daily Close, or the store-day operations route wiring changes. It validates the backend readiness gates, operator-facing acknowledgement views, generated Convex API surface, and route tree before broader package validation.",
       },
       {
         title: "Stock-ops procurement and receiving edits",
@@ -344,13 +371,13 @@ export const HARNESS_APP_REGISTRY = [
           { kind: "script", script: "lint:convex:changed" },
           {
             kind: "raw",
-            command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+            command:
+              "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
           },
           { kind: "script", script: "build" },
         ],
         behaviorScenarios: ["athena-admin-shell-boot"],
-        note:
-          "Use this when stock adjustments, procurement recommendations, purchase-order lifecycle changes, or receiving route wiring move. Run `bunx convex dev --once` from `packages/athena-webapp` before validation when generated client refs or new stockOps function exports changed.",
+        note: "Use this when stock adjustments, procurement recommendations, purchase-order lifecycle changes, or receiving route wiring move. Run `bunx convex dev --once` from `packages/athena-webapp` before validation when generated client refs or new stockOps function exports changed.",
       },
       {
         title: "Cash-controls workflow edits",
@@ -370,13 +397,13 @@ export const HARNESS_APP_REGISTRY = [
           },
           {
             kind: "raw",
-            command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+            command:
+              "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
           },
           { kind: "script", script: "build" },
         ],
         behaviorScenarios: ["athena-admin-shell-boot"],
-        note:
-          "Use this when register-session, deposit, closeout, dashboard, operations-queue approval, or cash-controls route wiring changes. This is the confirmation slice for drawers opened from POS showing up in the dashboard and register-session detail views. Run `bunx convex dev --once` from `packages/athena-webapp` before validation when generated client refs or new Convex function exports changed.",
+        note: "Use this when register-session, deposit, closeout, dashboard, operations-queue approval, or cash-controls route wiring changes. This is the confirmation slice for drawers opened from POS showing up in the dashboard and register-session detail views. Run `bunx convex dev --once` from `packages/athena-webapp` before validation when generated client refs or new Convex function exports changed.",
       },
       {
         title: "Service operations intake, catalog, appointments, and cases",
@@ -397,12 +424,12 @@ export const HARNESS_APP_REGISTRY = [
           { kind: "script", script: "lint:convex:changed" },
           {
             kind: "raw",
-            command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+            command:
+              "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
           },
           { kind: "script", script: "build" },
         ],
-        note:
-          "Use this when service intake, catalog management, appointment scheduling, service-case execution, or manager-queue service handoffs change. It validates the command-result service flows plus the operator-facing intake, appointments, active-cases, catalog, and queue surfaces together before broader package validation.",
+        note: "Use this when service intake, catalog management, appointment scheduling, service-case execution, or manager-queue service handoffs change. It validates the command-result service flows plus the operator-facing intake, appointments, active-cases, catalog, and queue surfaces together before broader package validation.",
       },
       {
         title: "Auth, staff, and store-configuration edits",
@@ -430,12 +457,12 @@ export const HARNESS_APP_REGISTRY = [
           },
           {
             kind: "raw",
-            command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+            command:
+              "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
           },
           { kind: "script", script: "build" },
         ],
-        note:
-          "Use this when login auth sync, store staff identity, admin store-configuration mutations, or cashier-auth command handling changes. It validates the retryable auth-sync path, the staff credential rules, the staff-management surface, the shared store-configuration hook plus fulfillment/maintenance/MTN MoMo regressions, and the register and cashier-auth flows that now share `staffProfileId` instead of the deleted cashier model.",
+        note: "Use this when login auth sync, store staff identity, admin store-configuration mutations, or cashier-auth command handling changes. It validates the retryable auth-sync path, the staff credential rules, the staff-management surface, the shared store-configuration hook plus fulfillment/maintenance/MTN MoMo regressions, and the register and cashier-auth flows that now share `staffProfileId` instead of the deleted cashier model.",
       },
       {
         title: "Expense-session and cart flow edits",
@@ -459,12 +486,12 @@ export const HARNESS_APP_REGISTRY = [
           },
           {
             kind: "raw",
-            command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+            command:
+              "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
           },
           { kind: "script", script: "build" },
         ],
-        note:
-          "Use this when expense-session lifecycle, expense cart items, expense transaction finalization, or expense session hooks change. It validates the command-result expense session mutations plus the browser-facing session and cart hooks that now collapse expected failures to safe user-facing copy.",
+        note: "Use this when expense-session lifecycle, expense cart items, expense transaction finalization, or expense session hooks change. It validates the command-result expense session mutations plus the browser-facing session and cart hooks that now collapse expected failures to safe user-facing copy.",
       },
       {
         title: "Omnichannel order, refund, review, and customer-history edits",
@@ -494,7 +521,8 @@ export const HARNESS_APP_REGISTRY = [
           { kind: "script", script: "lint:convex:changed" },
           {
             kind: "raw",
-            command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+            command:
+              "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
           },
           { kind: "script", script: "build" },
         ],
@@ -502,11 +530,11 @@ export const HARNESS_APP_REGISTRY = [
           "athena-convex-storefront-composition",
           "athena-convex-storefront-failure-visibility",
         ],
-        note:
-          "Use this when order updates, refunds, return-exchange execution, review moderation, feedback-request messaging, or customer-history presentation changes. It validates the migrated storefront command-result surfaces plus the operator-facing order, review, and customer-history views before broader package validation. Run `bunx convex dev --once` from `packages/athena-webapp` before validation when generated client refs or new storefront function exports changed.",
+        note: "Use this when order updates, refunds, return-exchange execution, review moderation, feedback-request messaging, or customer-history presentation changes. It validates the migrated storefront command-result surfaces plus the operator-facing order, review, and customer-history views before broader package validation. Run `bunx convex dev --once` from `packages/athena-webapp` before validation when generated client refs or new storefront function exports changed.",
       },
       {
-        title: "Workflow trace foundation, POS drawer gate, and trace-link edits",
+        title:
+          "Workflow trace foundation, POS drawer gate, and trace-link edits",
         touchedPaths: [
           "convex/workflowTraces",
           "convex/schemas/observability",
@@ -541,7 +569,8 @@ export const HARNESS_APP_REGISTRY = [
           { kind: "script", script: "lint:convex:changed" },
           {
             kind: "raw",
-            command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+            command:
+              "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
           },
           { kind: "script", script: "build" },
         ],
@@ -550,17 +579,24 @@ export const HARNESS_APP_REGISTRY = [
           "athena-convex-storefront-composition",
           "athena-convex-storefront-failure-visibility",
         ],
-        note:
-          "Use this when the shared workflow-trace contract, the POS register bootstrap or drawer gate, the `pos_session` / `register_session` trace writers, the trace route/view, or POS register, transaction, and cash-controls trace entry points change. It exercises the trace schema and presentation contract, the session/register trace writers, the drawer-open bootstrap handoff, the shared trace route, and the operator-facing POS and cash-controls surfaces before broader package validation.",
+        note: "Use this when the shared workflow-trace contract, the POS register bootstrap or drawer gate, the `pos_session` / `register_session` trace writers, the trace route/view, or POS register, transaction, and cash-controls trace entry points change. It exercises the trace schema and presentation contract, the session/register trace writers, the drawer-open bootstrap handoff, the shared trace route, and the operator-facing POS and cash-controls surfaces before broader package validation.",
       },
       {
         title: "Shared-lib or utility edits",
-        touchedPaths: ["src/lib", "shared", "src/settings", "src/utils", "src/stores", "types.ts"],
+        touchedPaths: [
+          "src/lib",
+          "shared",
+          "src/settings",
+          "src/utils",
+          "src/stores",
+          "types.ts",
+        ],
         commands: [
           { kind: "script", script: "test" },
           {
             kind: "raw",
-            command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+            command:
+              "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
           },
         ],
         note: "Reach for the package suite first, then typecheck when helpers or shared state can affect many call sites.",
@@ -584,12 +620,12 @@ export const HARNESS_APP_REGISTRY = [
           },
           {
             kind: "raw",
-            command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+            command:
+              "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
           },
           { kind: "script", script: "build" },
         ],
-        note:
-          "Use this when the shared command-result contract, client command normalizers, generic catch boundary, or browser import boundary changes. Expected failures must stay in browser-safe `user_error` results, thrown faults must collapse to generic fallback copy, and shared modules must not import raw Convex server files into the browser tree.",
+        note: "Use this when the shared command-result contract, client command normalizers, generic catch boundary, or browser import boundary changes. Expected failures must stay in browser-safe `user_error` results, thrown faults must collapse to generic fallback copy, and shared modules must not import raw Convex server files into the browser tree.",
       },
       {
         title: "Admin quick-action unexpected-toast fallback edits",
@@ -612,12 +648,12 @@ export const HARNESS_APP_REGISTRY = [
           },
           {
             kind: "raw",
-            command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+            command:
+              "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
           },
           { kind: "script", script: "build" },
         ],
-        note:
-          "Use this when admin quick actions still resolve through toast-only UX. Preserve any explicit business-validation copy returned by the surface, but route unexpected failures through the shared generic unexpected-error fallback so raw backend text never reaches the browser.",
+        note: "Use this when admin quick actions still resolve through toast-only UX. Preserve any explicit business-validation copy returned by the surface, but route unexpected failures through the shared generic unexpected-error fallback so raw backend text never reaches the browser.",
       },
       {
         title: "Frontend test harness edits",
@@ -644,8 +680,7 @@ export const HARNESS_APP_REGISTRY = [
           "athena-convex-storefront-composition",
           "athena-convex-storefront-failure-visibility",
         ],
-        note:
-          "Any change that can affect Convex HTTP wiring, serviceOps schemas and workflows, shared operational rails, or route-to-backend composition should include the Convex audit pair.",
+        note: "Any change that can affect Convex HTTP wiring, serviceOps schemas and workflows, shared operational rails, or route-to-backend composition should include the Convex audit pair.",
       },
       {
         title: "Route runtime or build-pipeline edits",
@@ -664,13 +699,13 @@ export const HARNESS_APP_REGISTRY = [
           },
           {
             kind: "raw",
-            command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+            command:
+              "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
           },
           { kind: "script", script: "build" },
         ],
         behaviorScenarios: ["athena-admin-shell-boot"],
-        note:
-          "Run these when bootstrap, generated router state, or package build configuration changes so browser-entry regressions fail before the route tree reaches Arc.",
+        note: "Run these when bootstrap, generated router state, or package build configuration changes so browser-entry regressions fail before the route tree reaches Arc.",
       },
       {
         title: "Storybook and frontend tooling edits",
@@ -693,8 +728,7 @@ export const HARNESS_APP_REGISTRY = [
           { kind: "script", script: "build" },
           { kind: "script", script: "storybook:build" },
         ],
-        note:
-          "Use this when the document shell, Storybook config, story files, or package-level frontend tooling changes need isolated validation.",
+        note: "Use this when the document shell, Storybook config, story files, or package-level frontend tooling changes need isolated validation.",
       },
     ],
   },
@@ -706,34 +740,43 @@ export const HARNESS_APP_REGISTRY = [
     packageDir: "packages/storefront-webapp",
     routeRoot: "src/routes",
     auditedRoots: ["src", "tests"],
-    harnessDocs: buildHarnessDocPathsForArchetype("packages/storefront-webapp", "webapp"),
+    harnessDocs: buildHarnessDocPathsForArchetype(
+      "packages/storefront-webapp",
+      "webapp",
+    ),
     keyFolderGroups: [
       {
         title: "Core app surfaces",
         folders: [
           {
             path: "src/routes",
-            description: "TanStack Router routes, layouts, and browser journey entrypoints.",
+            description:
+              "TanStack Router routes, layouts, and browser journey entrypoints.",
           },
           {
             path: "src/components",
-            description: "Reusable storefront UI and feature-specific checkout/catalog components.",
+            description:
+              "Reusable storefront UI and feature-specific checkout/catalog components.",
           },
           {
             path: "src/hooks",
-            description: "Client hooks for bag, routing, observability, and auth interactions.",
+            description:
+              "Client hooks for bag, routing, observability, and auth interactions.",
           },
           {
             path: "src/contexts",
-            description: "Shared client providers for store, navigation, and observability state.",
+            description:
+              "Shared client providers for store, navigation, and observability state.",
           },
           {
             path: "src/lib",
-            description: "Shared utilities, query helpers, schemas, and domain logic.",
+            description:
+              "Shared utilities, query helpers, schemas, and domain logic.",
           },
           {
             path: "src/api",
-            description: "Backend-facing request wrappers and typed API helpers.",
+            description:
+              "Backend-facing request wrappers and typed API helpers.",
           },
         ],
       },
@@ -742,11 +785,13 @@ export const HARNESS_APP_REGISTRY = [
         folders: [
           {
             path: "tests/e2e",
-            description: "Playwright browser journeys and redirect/payment coverage.",
+            description:
+              "Playwright browser journeys and redirect/payment coverage.",
           },
           {
             path: "src/utils",
-            description: "Lower-level runtime helpers used across route and API code.",
+            description:
+              "Lower-level runtime helpers used across route and API code.",
           },
         ],
       },
@@ -842,7 +887,7 @@ export const HARNESS_APP_REGISTRY = [
     auditedRoots: ["."],
     harnessDocs: buildHarnessDocPathsForArchetype(
       "packages/valkey-proxy-server",
-      "service-package"
+      "service-package",
     ),
     keyFolderGroups: [
       {
@@ -850,7 +895,8 @@ export const HARNESS_APP_REGISTRY = [
         folders: [
           {
             path: ".",
-            description: "Root service entry files, connection probes, and package metadata.",
+            description:
+              "Root service entry files, connection probes, and package metadata.",
           },
         ],
       },
@@ -859,7 +905,8 @@ export const HARNESS_APP_REGISTRY = [
         folders: [
           {
             path: "docs/agent",
-            description: "Harness docs, generated indexes, and validation map content.",
+            description:
+              "Harness docs, generated indexes, and validation map content.",
           },
         ],
       },
@@ -895,7 +942,8 @@ export const HARNESS_APP_REGISTRY = [
           { kind: "script", script: "test" },
           {
             kind: "raw",
-            command: "node --check packages/valkey-proxy-server/test-connection.js",
+            command:
+              "node --check packages/valkey-proxy-server/test-connection.js",
           },
         ],
         note: "Keep the live Redis probe syntax-checked locally; run the environment-dependent connection probe manually when cluster access is available.",
@@ -904,7 +952,8 @@ export const HARNESS_APP_REGISTRY = [
   },
 ] satisfies HarnessAppRegistryEntry[];
 
-const NON_HARNESS_PACKAGE_REGISTRY = [] as const satisfies readonly NonHarnessPackageRegistration[];
+const NON_HARNESS_PACKAGE_REGISTRY =
+  [] as const satisfies readonly NonHarnessPackageRegistration[];
 
 export const HARNESS_PACKAGE_REGISTRY = [
   ...HARNESS_APP_REGISTRY.map((entry) => ({
@@ -917,5 +966,7 @@ export const HARNESS_PACKAGE_REGISTRY = [
 ] satisfies readonly HarnessPackageRegistration[];
 
 export function getHarnessPackageRegistration(packageDir: string) {
-  return HARNESS_PACKAGE_REGISTRY.find((entry) => entry.packageDir === packageDir);
+  return HARNESS_PACKAGE_REGISTRY.find(
+    (entry) => entry.packageDir === packageDir,
+  );
 }

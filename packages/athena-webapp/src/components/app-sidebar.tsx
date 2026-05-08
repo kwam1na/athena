@@ -200,7 +200,7 @@ export function AppSidebar() {
                 label="Operations"
                 onClick={() => {
                   void navigate({
-                    to: "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work",
+                    to: "/$orgUrlSlug/store/$storeUrlSlug/operations",
                     params: {
                       orgUrlSlug: activeOrganization.slug,
                       storeUrlSlug: activeStore.slug,
@@ -208,6 +208,27 @@ export function AppSidebar() {
                   });
                 }}
               >
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuButton
+                      disabled={!canAccessOperations()}
+                      asChild
+                    >
+                      <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/operations"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: activeOrganization?.slug,
+                          storeUrlSlug: activeStore?.slug,
+                        })}
+                        className="flex items-center"
+                      >
+                        <p className="font-medium">Daily operations</p>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
+
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
                     <SidebarMenuButton

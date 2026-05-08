@@ -46,18 +46,21 @@
       "pathPrefixes": [
         "packages/athena-webapp/convex/operations/dailyClose.ts",
         "packages/athena-webapp/convex/operations/dailyOpening.ts",
+        "packages/athena-webapp/convex/operations/dailyOperations.ts",
         "packages/athena-webapp/convex/schemas/operations/dailyClose.ts",
         "packages/athena-webapp/convex/schemas/operations/dailyOpening.ts",
         "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
         "packages/athena-webapp/src/components/operations/DailyOpeningView.tsx",
+        "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
         "packages/athena-webapp/src/components/app-sidebar.tsx",
+        "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/index.tsx",
         "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close.tsx",
         "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/opening.tsx"
       ],
       "commands": [
         {
           "kind": "raw",
-          "command": "bun run --filter '@athena/webapp' test -- convex/operations/dailyOpening.test.ts convex/operations/dailyClose.test.ts convex/operations/operationsQueryIndexes.test.ts src/components/operations/DailyOpeningView.test.tsx src/components/operations/DailyCloseView.test.tsx"
+          "command": "bun run --filter '@athena/webapp' test -- convex/operations/dailyOperations.test.ts convex/operations/dailyOpening.test.ts convex/operations/dailyClose.test.ts convex/operations/operationsQueryIndexes.test.ts src/components/operations/DailyOperationsView.test.tsx src/components/operations/DailyOpeningView.test.tsx src/components/operations/DailyCloseView.test.tsx"
         },
         {
           "kind": "script",
