@@ -16,6 +16,10 @@ export const APPROVAL_ACTIONS = {
     key: "cash_controls.register_session.correct_opening_float",
     label: "Correct opening float",
   },
+  dailyCloseCompletion: {
+    key: "operations.daily_close.complete",
+    label: "Complete Daily Close",
+  },
   transactionPaymentMethodCorrection: {
     key: "pos.transaction.correct_payment_method",
     label: "Correct payment method",

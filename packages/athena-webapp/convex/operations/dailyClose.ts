@@ -9,7 +9,17 @@ import { v } from "convex/values";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { createOperationalWorkItemWithCtx } from "./operationalWorkItems";
 import { recordOperationalEventWithCtx } from "./operationalEvents";
-import { ok, userError, type CommandResult } from "../../shared/commandResult";
+import {
+  approvalRequired,
+  ok,
+  userError,
+  type ApprovalCommandResult,
+} from "../../shared/commandResult";
+import type { ApprovalRequirement } from "../../shared/approvalPolicy";
+import {
+  APPROVAL_ACTIONS,
+  consumeCommandApprovalProofWithCtx,
+} from "./approvalActions";
 
 const DAILY_CLOSE_QUERY_LIMIT = 200;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -19,6 +29,7 @@ const DAILY_CLOSE_CARRY_FORWARD_TYPE = "daily_close_carry_forward";
 const TERMINAL_WORK_ITEM_STATUSES = new Set(["completed", "cancelled"]);
 const ACTIVE_REGISTER_STATUSES = ["open", "active", "closing"] as const;
 const OPEN_POS_SESSION_STATUSES = ["active", "held"] as const;
+const DAILY_CLOSE_COMPLETION_ACTION = APPROVAL_ACTIONS.dailyCloseCompletion;
 
 type DailyCloseSeverity = "blocker" | "review" | "carry_forward" | "ready";
 
@@ -109,6 +120,7 @@ type DailyCloseSnapshot = {
 type CompleteDailyCloseArgs = {
   actorUserId?: Id<"athenaUser">;
   actorStaffProfileId?: Id<"staffProfile">;
+  approvalProofId?: Id<"approvalProof">;
   carryForwardWorkItemIds?: Id<"operationalWorkItem">[];
   createCarryForwardWorkItems?: Array<{
     title: string;
@@ -127,11 +139,50 @@ type CompleteDailyCloseArgs = {
   storeId: Id<"store">;
 };
 
-type CompleteDailyCloseResult = CommandResult<{
+type CompleteDailyCloseResult = ApprovalCommandResult<{
   action: "completed" | "already_completed";
   dailyClose: Doc<"dailyClose">;
   carryForwardWorkItems: Array<Doc<"operationalWorkItem">>;
 }>;
+
+function buildDailyCloseApprovalSubject(args: {
+  operatingDate: string;
+  storeId: Id<"store">;
+}) {
+  return {
+    id: `${args.storeId}:${args.operatingDate}`,
+    label: `Daily Close ${args.operatingDate}`,
+    type: DAILY_CLOSE_SUBJECT_TYPE,
+  };
+}
+
+function buildDailyCloseCompletionApprovalRequirement(args: {
+  operatingDate: string;
+  storeId: Id<"store">;
+}): ApprovalRequirement {
+  return {
+    action: DAILY_CLOSE_COMPLETION_ACTION,
+    reason: "Manager approval is required to complete Daily Close.",
+    requiredRole: "manager",
+    selfApproval: "allowed",
+    subject: buildDailyCloseApprovalSubject(args),
+    copy: {
+      title: "Manager approval required",
+      message:
+        "A manager needs to approve this Daily Close before the operating day is saved.",
+      primaryActionLabel: "Approve and complete",
+      secondaryActionLabel: "Cancel",
+    },
+    resolutionModes: [
+      {
+        kind: "inline_manager_proof",
+      },
+    ],
+    metadata: {
+      operatingDate: args.operatingDate,
+    },
+  };
+}
 
 function trimOptional(value?: string | null) {
   const nextValue = value?.trim();
@@ -1462,6 +1513,31 @@ export async function completeDailyCloseWithCtx(
     });
   }
 
+  if (!args.approvalProofId) {
+    return approvalRequired(
+      buildDailyCloseCompletionApprovalRequirement({
+        operatingDate: args.operatingDate,
+        storeId: args.storeId,
+      }),
+    );
+  }
+
+  const approvalProof = await consumeCommandApprovalProofWithCtx(ctx, {
+    action: DAILY_CLOSE_COMPLETION_ACTION,
+    approvalProofId: args.approvalProofId,
+    requiredRole: "manager",
+    requestedByStaffProfileId: args.actorStaffProfileId,
+    storeId: args.storeId,
+    subject: buildDailyCloseApprovalSubject({
+      operatingDate: args.operatingDate,
+      storeId: args.storeId,
+    }),
+  });
+
+  if (approvalProof.kind !== "ok") {
+    return approvalProof;
+  }
+
   const createdWorkItemResult = await createCarryForwardWorkItems(ctx, {
     actorStaffProfileId: args.actorStaffProfileId,
     actorUserId: args.actorUserId,
@@ -1547,6 +1623,8 @@ export async function completeDailyCloseWithCtx(
     actorUserId: args.actorUserId,
     actorStaffProfileId: args.actorStaffProfileId,
     metadata: {
+      approvalProofId: approvalProof.data.approvalProofId,
+      approvedByStaffProfileId: approvalProof.data.approvedByStaffProfileId,
       operatingDate: args.operatingDate,
       readiness: dailyClose.readiness,
       summary: dailyClose.summary,
@@ -1629,6 +1707,7 @@ export const completeDailyClose = mutation({
   args: {
     actorUserId: v.optional(v.id("athenaUser")),
     actorStaffProfileId: v.optional(v.id("staffProfile")),
+    approvalProofId: v.optional(v.id("approvalProof")),
     carryForwardWorkItemIds: v.optional(v.array(v.id("operationalWorkItem"))),
     createCarryForwardWorkItems: v.optional(
       v.array(

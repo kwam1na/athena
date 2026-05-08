@@ -13,7 +13,7 @@ import {
   type CommandApprovalProofResult,
 } from "./CommandApprovalDialog";
 
-type ApprovalRetryArgs = {
+export type ApprovalRetryArgs = {
   approvalRequestId?: Id<"approvalRequest">;
   approvalProofId?: Id<"approvalProof">;
 };
