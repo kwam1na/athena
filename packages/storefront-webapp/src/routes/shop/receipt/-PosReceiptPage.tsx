@@ -261,6 +261,20 @@ export const PosReceiptPage = ({ queryOptions }: PosReceiptPageProps) => {
           <div className="line" />
 
           <section className="space-y-2">
+            <h2 className="section-title">Store policy</h2>
+            <p className="small-muted">
+              In-store purchases may be returned or exchanged within 7 days when
+              items are unused and in original condition.
+            </p>
+            <p className="small-muted">
+              Used wigs or worn products are not eligible for return or
+              exchange.
+            </p>
+          </section>
+
+          <div className="line" />
+
+          <section className="space-y-2">
             <h2 className="section-title">Payment</h2>
             {data.payments.length > 0
               ? data.payments.map((payment, idx) => (
@@ -289,7 +303,9 @@ export const PosReceiptPage = ({ queryOptions }: PosReceiptPageProps) => {
 
           <div className="mt-4 pt-3 text-center">
             <p className="text-xs font-bold">Thank you for your business!</p>
-            <p className="small-muted">Please keep this receipt for your records.</p>
+            <p className="small-muted">
+              Keep this receipt for returns, exchanges, and your records.
+            </p>
           </div>
         </div>
       </article>
