@@ -11,6 +11,7 @@ symptoms:
   - "Register, POS session, and store-day close data can drift without a server-owned snapshot"
   - "Late-night local transactions can be omitted when the server interprets an operating date as a UTC day"
   - "An empty operating day can look accidentally ready instead of intentionally closable"
+  - "Expense totals can appear in Daily Close metrics without the underlying expense transactions appearing in the ready list"
 root_cause: store_day_lifecycle_missing_authoritative_close_record
 resolution_type: domain_model_plus_command_boundary
 severity: medium
@@ -46,6 +47,8 @@ Keep the scopes explicit:
 - Daily Close is store-day scoped.
 - Cash Controls is drawer/session scoped.
 - A POS session is the sale/cart lifecycle.
+- An expense transaction is a completed store-day outflow that must be visible
+  alongside completed sales.
 - `registerSession` is the drawer/shift ledger behind cash-control closeout.
 
 The close command should accept reviewed item keys and carry-forward work item
@@ -73,6 +76,14 @@ operating day. The client should pass the local `startAt`/`endAt` bounds it is
 using for the operating date, and the server should validate those bounds before
 using them for transaction, register-session, expense, and variance reads.
 
+Every source table that contributes to close totals should also contribute
+operator-visible close evidence unless the source is intentionally hidden by
+policy. Completed expense transactions are not enough as an aggregate expense
+total; they should create `readyItems` with the expense report number, staff
+owner, register when available, amount, completion time, notes, and a link back
+to the expense report. Query them through a store/status/completed-at index so
+the snapshot cannot miss valid expenses after a broad store-level limit.
+
 For POS completion, recompute totals from normalized line items and compare the
 submitted payment against that canonical total. The persisted transaction
 summary, payment allocation, and cash metrics should derive from the final
@@ -96,4 +107,6 @@ server-side item totals, not from stale client cart state.
   than the UI displayed.
 - Test local-day boundary cases with a completed transaction after UTC midnight
   but before the local operating day ends.
+- Test expense transactions with the same local-day boundary, store filtering,
+  and completed-status filtering used for POS transactions.
 - Add query-index coverage whenever a new close-readiness source table is added.
