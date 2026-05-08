@@ -14,10 +14,32 @@ interface CartState {
   total: number;
 }
 
+type ExpenseSessionCartItem = {
+  _id: Id<"expenseSessionItem">;
+  productName?: string;
+  barcode?: string | null;
+  productSku?: string | null;
+  price?: number;
+  quantity: number;
+  image?: string | null;
+  size?: string | null;
+  length?: number | null;
+  color?: string | null;
+  productId?: Id<"product">;
+  productSkuId?: Id<"productSku">;
+};
+
+type ExpenseSession = {
+  _id: Id<"expenseSession">;
+  expiresAt?: number | null;
+  notes?: string | null;
+  cartItems?: ExpenseSessionCartItem[];
+};
+
 interface SessionState {
   currentSessionId: string | null;
-  activeSession: any | null; // ExpenseSession type
-  heldSessions: any[];
+  activeSession: ExpenseSession | null;
+  heldSessions: ExpenseSession[];
   isCreating: boolean;
   isUpdating: boolean;
   expiresAt: number | null;
@@ -63,17 +85,18 @@ interface ExpenseState {
   addToCart: (item: CartItem) => void;
   updateCartQuantity: (id: Id<"expenseSessionItem">, quantity: number) => void;
   removeFromCart: (id: Id<"expenseSessionItem">) => void;
+  replaceCartItems: (items: CartItem[]) => void;
   clearCart: () => void;
   calculateTotals: () => void;
 
   // Session Actions
   setCurrentSessionId: (sessionId: string | null) => void;
-  setActiveSession: (session: any | null) => void;
-  setHeldSessions: (sessions: any[]) => void;
+  setActiveSession: (session: ExpenseSession | null) => void;
+  setHeldSessions: (sessions: ExpenseSession[]) => void;
   setSessionCreating: (isCreating: boolean) => void;
   setSessionUpdating: (isUpdating: boolean) => void;
   setSessionExpiresAt: (expiresAt: number | null) => void;
-  loadSessionData: (session: any) => void;
+  loadSessionData: (session: ExpenseSession) => void;
 
   // Transaction Actions
   setTransactionCompleting: (isCompleting: boolean) => void;
@@ -148,7 +171,7 @@ const initialState = {
 export const useExpenseStore = create<ExpenseState>()(
   devtools(
     subscribeWithSelector(
-      immer((set, get) => ({
+      immer((set) => ({
         ...initialState,
 
         // Cart Actions
@@ -196,6 +219,16 @@ export const useExpenseStore = create<ExpenseState>()(
             state.cart.items = state.cart.items.filter(
               (item: CartItem) => item.id !== id
             );
+
+            const totals = calculateCartTotals(state.cart.items);
+            state.cart.subtotal = totals.subtotal;
+            state.cart.tax = totals.tax;
+            state.cart.total = totals.total;
+          }),
+
+        replaceCartItems: (items) =>
+          set((state) => {
+            state.cart.items = items;
 
             const totals = calculateCartTotals(state.cart.items);
             state.cart.subtotal = totals.subtotal;
@@ -280,18 +313,18 @@ export const useExpenseStore = create<ExpenseState>()(
               return;
             }
 
-            const sessionCartItems = (session as any).cartItems || [];
-            state.cart.items = sessionCartItems.map((item: any) => ({
+            const sessionCartItems = session.cartItems || [];
+            state.cart.items = sessionCartItems.map((item) => ({
               id: item._id,
-              name: item.productName,
+              name: item.productName ?? "",
               barcode: item.barcode ?? "",
               sku: item.productSku ?? "",
-              price: item.price,
+              price: item.price ?? 0,
               quantity: item.quantity,
               image: item.image,
-              size: item.size,
+              size: item.size ?? undefined,
               length: item.length,
-              color: item.color,
+              color: item.color ?? undefined,
               productId: item.productId,
               skuId: item.productSkuId,
             }));

@@ -115,7 +115,7 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
   }, [handleSetTerminalId]);
 
   const handleSessionLoaded = useCallback(
-    (sessionData: ReturnType<typeof useExpenseActiveSession>) => {
+    (sessionData: NonNullable<ReturnType<typeof useExpenseActiveSession>>) => {
       store.loadSessionData(sessionData);
     },
     [store],
@@ -189,6 +189,10 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
           storeSessionId: store.session.currentSessionId,
           querySessionId: activeSessionQuery._id,
         });
+        return;
+      }
+
+      if (store.session.isUpdating) {
         return;
       }
 
@@ -269,9 +273,11 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
     activeSessionQuery,
     store.session.currentSessionId,
     store.session.isCreating,
+    store.session.isUpdating,
     createSession,
     handleSessionLoaded,
     store.storeId,
+    store,
   ]);
 
   const registerCatalogRows = useConvexRegisterCatalog({
@@ -406,19 +412,39 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
       return;
     }
 
-    const result = await releaseSessionInventoryHoldsAndDeleteItems(
-      sessionId as Id<"expenseSession">,
-    );
+    if (store.session.isUpdating) {
+      return;
+    }
 
-    if (result.success) {
-      toast.success("Cart cleared");
-      cart.clearCart();
+    const previousCartItems = [...store.cart.items];
+    cart.clearCart();
+    store.setSessionUpdating(true);
+
+    try {
+      const result = await releaseSessionInventoryHoldsAndDeleteItems(
+        sessionId as Id<"expenseSession">,
+      );
+
+      if (result.success) {
+        toast.success("Cart cleared");
+        return;
+      }
+
+      store.replaceCartItems(previousCartItems);
+    } catch (error) {
+      logger.error("[Expense] Failed to clear cart", error as Error);
+      store.replaceCartItems(previousCartItems);
+      toast.error("Could not clear this expense cart.");
+    } finally {
+      store.setSessionUpdating(false);
     }
   }, [
     activeSessionQuery?._id,
     cart,
     releaseSessionInventoryHoldsAndDeleteItems,
     store.session.currentSessionId,
+    store.session.isUpdating,
+    store,
   ]);
 
   const handleCompleteExpense = useCallback(async () => {
@@ -467,6 +493,7 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
     store.cart.total,
     store.ui.notes,
     store,
+    resetAutoSessionInitialized,
   ]);
 
   const handleNavigateBack = useCallback(async () => {
