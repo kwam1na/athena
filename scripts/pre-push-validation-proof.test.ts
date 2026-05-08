@@ -49,14 +49,22 @@ async function createFixtureRoot() {
 
 function createSpawn(outputs: {
   headSha?: string;
+  headTreeSha?: string;
+  indexTreeSha?: string;
   baseSha?: string;
   status?: string;
+  untrackedFiles?: string;
+  unstagedDiffExitCode?: number;
   bunVersion?: string;
 }) {
   const next = {
     headSha: "head-a",
+    headTreeSha: "tree-a",
+    indexTreeSha: "tree-a",
     baseSha: "base-a",
     status: "",
+    untrackedFiles: "",
+    unstagedDiffExitCode: 0,
     bunVersion: "1.1.29",
     ...outputs,
   };
@@ -67,12 +75,24 @@ function createSpawn(outputs: {
       output = "proof.json";
     } else if (command.join(" ") === "git rev-parse --verify HEAD") {
       output = next.headSha;
+    } else if (command.join(" ") === "git rev-parse --verify HEAD^{tree}") {
+      output = next.headTreeSha;
+    } else if (command.join(" ") === "git write-tree") {
+      output = next.indexTreeSha;
     } else if (command.join(" ") === "git rev-parse --verify origin/main") {
       output = next.baseSha;
     } else if (
       command.join(" ") === "git status --porcelain --untracked-files=all"
     ) {
       output = next.status;
+    } else if (command.join(" ") === "git ls-files --others --exclude-standard") {
+      output = next.untrackedFiles;
+    } else if (command.join(" ") === "git diff --quiet") {
+      return {
+        exited: Promise.resolve(next.unstagedDiffExitCode),
+        stdout: new Response("").body,
+        stderr: new Response("").body,
+      };
     } else if (command.join(" ") === "bun --version") {
       output = next.bunVersion;
     } else {
@@ -107,10 +127,87 @@ describe("pre-push validation proof", () => {
     ).resolves.toMatchObject({
       reusable: true,
       proof: {
-        headSha: "head-a",
+        recordedHeadSha: "head-a",
         baseSha: "base-a",
-        cleanStatus: "",
+        validatedTreeSha: "tree-a",
+        recordedStatusMode: "clean",
       },
+    });
+  });
+
+  it("records staged-only pr:athena proof and reuses it after commit creates the same tree", async () => {
+    const rootDir = await createFixtureRoot();
+    const recorded = await recordPrePushValidationProof(rootDir, {
+      spawn: createSpawn({
+        headSha: "head-before",
+        headTreeSha: "tree-before",
+        indexTreeSha: "tree-after",
+        status: "M  scripts/pre-push-review.ts",
+      }),
+      logger: { log() {}, warn() {} },
+    });
+    expect(recorded).toMatchObject({
+      recorded: true,
+      proof: {
+        recordedHeadSha: "head-before",
+        validatedTreeSha: "tree-after",
+        recordedStatusMode: "staged-index",
+      },
+    });
+
+    await expect(
+      evaluatePrePushValidationProof(rootDir, {
+        spawn: createSpawn({
+          headSha: "head-after",
+          headTreeSha: "tree-after",
+          indexTreeSha: "tree-after",
+        }),
+      })
+    ).resolves.toMatchObject({
+      reusable: true,
+      proof: {
+        recordedHeadSha: "head-before",
+        validatedTreeSha: "tree-after",
+        recordedStatusMode: "staged-index",
+      },
+    });
+  });
+
+  it("does not record staged proof when unstaged files are also present", async () => {
+    const rootDir = await createFixtureRoot();
+
+    await expect(
+      recordPrePushValidationProof(rootDir, {
+        spawn: createSpawn({
+          headTreeSha: "tree-before",
+          indexTreeSha: "tree-after",
+          status: "MM scripts/pre-push-review.ts",
+          unstagedDiffExitCode: 1,
+        }),
+        logger: { log() {}, warn() {} },
+      })
+    ).resolves.toMatchObject({
+      recorded: false,
+      reason: "working tree has unstaged or untracked changes",
+    });
+  });
+
+  it("does not record staged proof when untracked files are present", async () => {
+    const rootDir = await createFixtureRoot();
+
+    await expect(
+      recordPrePushValidationProof(rootDir, {
+        spawn: createSpawn({
+          headTreeSha: "tree-before",
+          indexTreeSha: "tree-after",
+          status: "M  scripts/pre-push-review.ts\n?? tmp.txt",
+          untrackedFiles: "tmp.txt",
+        }),
+        logger: { log() {}, warn() {} },
+      })
+    ).resolves.toMatchObject({
+      recorded: false,
+      reason: "working tree has unstaged or untracked changes",
     });
   });
 
@@ -128,6 +225,32 @@ describe("pre-push validation proof", () => {
     ).resolves.toMatchObject({
       reusable: false,
       reason: "working tree is not clean",
+    });
+  });
+
+  it("reruns pre-push when HEAD tree differs from the recorded staged proof", async () => {
+    const rootDir = await createFixtureRoot();
+    await recordPrePushValidationProof(rootDir, {
+      spawn: createSpawn({
+        headSha: "head-before",
+        headTreeSha: "tree-before",
+        indexTreeSha: "tree-after",
+        status: "M  scripts/pre-push-review.ts",
+      }),
+      logger: { log() {}, warn() {} },
+    });
+
+    await expect(
+      evaluatePrePushValidationProof(rootDir, {
+        spawn: createSpawn({
+          headSha: "head-after",
+          headTreeSha: "tree-other",
+          indexTreeSha: "tree-other",
+        }),
+      })
+    ).resolves.toMatchObject({
+      reusable: false,
+      reason: "HEAD tree changed since pr:athena recorded its proof",
     });
   });
 
