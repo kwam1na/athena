@@ -18,6 +18,9 @@ DEV_CONVEX_CLOUD="${DEV_CONVEX_CLOUD:-https://jovial-wildebeest-179.convex.cloud
 DEV_CONVEX_SITE="${DEV_CONVEX_SITE:-https://jovial-wildebeest-179.convex.site}"
 DEV_API_URL="${DEV_API_URL:-https://dev.wigclub.store}"
 STOREFRONT_URL="${STOREFRONT_URL:-https://wigclub.store}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+source "$SCRIPT_DIR/convex-node-env.sh"
 
 usage() {
   cat <<USAGE
@@ -53,6 +56,9 @@ Environment:
   DEPLOY_REF        Git ref checked out on the VPS. Default: origin/main
   CONVEX_DEPLOYMENT Production Convex deployment. Defaults to the prod deployment
                     inferred from PROD_CONVEX_CLOUD.
+  ATHENA_CONVEX_NODE_BIN
+                    Absolute path to Node.js 18, 20, 22, or 24 for Convex deploy.
+                    Defaults to a supported local candidate when available.
 USAGE
 }
 
@@ -578,6 +584,7 @@ MESSAGE
 
 deploy_convex_prod() {
   local deployment
+  local node_bin
   deployment="${CONVEX_DEPLOYMENT:-$(prod_convex_deployment)}"
 
   if [[ "$deployment" != prod:* ]]; then
@@ -589,9 +596,11 @@ MESSAGE
     return 1
   fi
 
+  node_bin="$(resolve_convex_node_bin)"
+
   (
     cd packages/athena-webapp
-    CONVEX_DEPLOYMENT="$deployment" npx convex deploy
+    PATH="$(dirname "$node_bin"):$PATH" CONVEX_DEPLOYMENT="$deployment" npx convex deploy
   )
 }
 
