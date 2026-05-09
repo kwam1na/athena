@@ -118,6 +118,42 @@ type DailyCloseSnapshot = {
   }>;
 };
 
+type DailyCloseReportSnapshot = {
+  closeMetadata: {
+    operatingDate: string;
+    storeId: Id<"store">;
+    organizationId: Id<"organization">;
+    startAt: number;
+    endAt: number;
+    completedAt: number;
+    completedByUserId?: Id<"athenaUser">;
+    completedByStaffProfileId?: Id<"staffProfile">;
+    notes?: string;
+    reviewedItemKeys?: string[];
+    carryForwardWorkItemIds: Id<"operationalWorkItem">[];
+  };
+  readiness: DailyCloseReadiness;
+  summary: Record<string, unknown>;
+  reviewedItems: DailyCloseItem[];
+  carryForwardItems: DailyCloseItem[];
+  readyItems: DailyCloseItem[];
+  sourceSubjects: DailyCloseSnapshot["sourceSubjects"];
+};
+
+type DailyCloseHistoryListItem = {
+  dailyCloseId: Id<"dailyClose">;
+  operatingDate: string;
+  completedAt?: number;
+  completedByUserId?: Id<"athenaUser">;
+  completedByStaffProfileId?: Id<"staffProfile">;
+  readinessStatus: DailyCloseReadinessStatus;
+  blockerCount: number;
+  reviewCount: number;
+  carryForwardCount: number;
+  readyCount: number;
+  summary: Record<string, unknown>;
+};
+
 type CompleteDailyCloseArgs = {
   actorUserId?: Id<"athenaUser">;
   actorStaffProfileId?: Id<"staffProfile">;
@@ -684,6 +720,82 @@ function uniqueSourceSubjects(items: DailyCloseItem[]) {
   }
 
   return Array.from(subjects.values());
+}
+
+function uniqueDailyCloseItems(items: DailyCloseItem[]) {
+  const itemByKey = new Map<string, DailyCloseItem>();
+
+  items.forEach((item) => itemByKey.set(item.key, item));
+
+  return Array.from(itemByKey.values());
+}
+
+function buildDailyCloseReportSnapshot(args: {
+  carryForwardWorkItemIds: Id<"operationalWorkItem">[];
+  carryForwardWorkItems: Array<Doc<"operationalWorkItem">>;
+  completedAt: number;
+  completedByStaffProfileId?: Id<"staffProfile">;
+  completedByUserId?: Id<"athenaUser">;
+  notes?: string;
+  readiness: DailyCloseReadiness;
+  reviewedItemKeys?: string[];
+  snapshot: DailyCloseSnapshot;
+  summary: Record<string, unknown>;
+}): DailyCloseReportSnapshot {
+  return {
+    closeMetadata: {
+      operatingDate: args.snapshot.operatingDate,
+      storeId: args.snapshot.storeId,
+      organizationId: args.snapshot.organizationId!,
+      startAt: args.snapshot.startAt,
+      endAt: args.snapshot.endAt,
+      completedAt: args.completedAt,
+      completedByUserId: args.completedByUserId,
+      completedByStaffProfileId: args.completedByStaffProfileId,
+      notes: args.notes,
+      reviewedItemKeys: args.reviewedItemKeys,
+      carryForwardWorkItemIds: args.carryForwardWorkItemIds,
+    },
+    readiness: args.readiness,
+    summary: args.summary,
+    reviewedItems: snapshotReviewedItems(args.snapshot, args.reviewedItemKeys),
+    carryForwardItems: uniqueDailyCloseItems([
+      ...args.snapshot.carryForwardItems,
+      ...args.carryForwardWorkItems.map(asCarryForwardItem),
+    ]),
+    readyItems: args.snapshot.readyItems,
+    sourceSubjects: args.snapshot.sourceSubjects,
+  };
+}
+
+function snapshotReviewedItems(
+  snapshot: DailyCloseSnapshot,
+  reviewedItemKeys?: string[],
+) {
+  if (!reviewedItemKeys) {
+    return snapshot.reviewItems;
+  }
+
+  const reviewedItemKeySet = new Set(reviewedItemKeys);
+  return snapshot.reviewItems.filter((item) => reviewedItemKeySet.has(item.key));
+}
+
+function toDailyCloseHistoryListItem(
+  dailyClose: Doc<"dailyClose">,
+): DailyCloseHistoryListItem {
+  return {
+    dailyCloseId: dailyClose._id,
+    operatingDate: dailyClose.operatingDate,
+    completedAt: dailyClose.completedAt,
+    completedByUserId: dailyClose.completedByUserId,
+    completedByStaffProfileId: dailyClose.completedByStaffProfileId,
+    readinessStatus: dailyClose.readiness.status,
+    blockerCount: dailyClose.readiness.blockerCount,
+    reviewCount: dailyClose.readiness.reviewCount,
+    carryForwardCount: dailyClose.readiness.carryForwardCount,
+    readyCount: dailyClose.readiness.readyCount,
+    summary: dailyClose.summary,
+  };
 }
 
 function emptySummary(): DailyCloseSummary {
@@ -1644,24 +1756,39 @@ export async function completeDailyCloseWithCtx(
   const carryForwardWorkItemIds = carryForwardWorkItems.map(
     (workItem) => workItem._id,
   );
+  const notes = trimOptional(args.notes);
+  const readiness = {
+    ...snapshot.readiness,
+    carryForwardCount: carryForwardWorkItemIds.length,
+  };
+  const summary = {
+    ...snapshot.summary,
+    carryForwardWorkItemCount: carryForwardWorkItemIds.length,
+  };
   const closeFields = {
     storeId: args.storeId,
     organizationId: store.organizationId,
     operatingDate: args.operatingDate,
     status: "completed" as const,
     isCurrent: true,
-    readiness: {
-      ...snapshot.readiness,
-      carryForwardCount: carryForwardWorkItemIds.length,
-    },
-    summary: {
-      ...snapshot.summary,
-      carryForwardWorkItemCount: carryForwardWorkItemIds.length,
-    },
+    readiness,
+    summary,
     sourceSubjects: snapshot.sourceSubjects,
+    reportSnapshot: buildDailyCloseReportSnapshot({
+      carryForwardWorkItemIds,
+      carryForwardWorkItems,
+      completedAt: now,
+      completedByStaffProfileId: args.actorStaffProfileId,
+      completedByUserId: args.actorUserId,
+      notes,
+      readiness,
+      reviewedItemKeys: args.reviewedItemKeys,
+      snapshot,
+      summary,
+    }),
     carryForwardWorkItemIds,
     reviewedItemKeys: args.reviewedItemKeys,
-    notes: trimOptional(args.notes),
+    notes,
     updatedAt: now,
     completedAt: now,
     completedByUserId: args.actorUserId,
@@ -1775,6 +1902,58 @@ export async function getDailyCloseOpeningContextWithCtx(
   };
 }
 
+export async function listCompletedDailyCloseHistoryWithCtx(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    limit?: number;
+    storeId: Id<"store">;
+  },
+) {
+  const limit = Math.min(
+    Math.max(Math.floor(args.limit ?? 50), 1),
+    DAILY_CLOSE_QUERY_LIMIT,
+  );
+  const completedCloses = await ctx.db
+    .query("dailyClose")
+    .withIndex("by_storeId_status_operatingDate", (q) =>
+      q.eq("storeId", args.storeId).eq("status", "completed"),
+    )
+    .order("desc")
+    .take(limit);
+
+  return completedCloses
+    .filter((dailyClose) => dailyClose.reportSnapshot)
+    .map(toDailyCloseHistoryListItem);
+}
+
+export async function getCompletedDailyCloseHistoryDetailWithCtx(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    dailyCloseId: Id<"dailyClose">;
+    storeId: Id<"store">;
+  },
+) {
+  const dailyClose = await ctx.db.get("dailyClose", args.dailyCloseId);
+
+  if (
+    !dailyClose ||
+    dailyClose.storeId !== args.storeId ||
+    dailyClose.status !== "completed" ||
+    !dailyClose.reportSnapshot
+  ) {
+    return null;
+  }
+
+  return {
+    dailyCloseId: dailyClose._id,
+    operatingDate: dailyClose.operatingDate,
+    completedAt: dailyClose.completedAt,
+    completedByUserId: dailyClose.completedByUserId,
+    completedByStaffProfileId: dailyClose.completedByStaffProfileId,
+    reportSnapshot: dailyClose.reportSnapshot,
+  };
+}
+
 export const getDailyCloseSnapshot = query({
   args: {
     endAt: v.optional(v.number()),
@@ -1821,4 +2000,21 @@ export const getDailyCloseOpeningContext = query({
     storeId: v.id("store"),
   },
   handler: (ctx, args) => getDailyCloseOpeningContextWithCtx(ctx, args),
+});
+
+export const listCompletedDailyCloseHistory = query({
+  args: {
+    limit: v.optional(v.number()),
+    storeId: v.id("store"),
+  },
+  handler: (ctx, args) => listCompletedDailyCloseHistoryWithCtx(ctx, args),
+});
+
+export const getCompletedDailyCloseHistoryDetail = query({
+  args: {
+    dailyCloseId: v.id("dailyClose"),
+    storeId: v.id("store"),
+  },
+  handler: (ctx, args) =>
+    getCompletedDailyCloseHistoryDetailWithCtx(ctx, args),
 });

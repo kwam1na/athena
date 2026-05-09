@@ -611,6 +611,11 @@ async function createFixtureRepo() {
     rootDir
   );
   await write(
+    "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
     "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/opening.tsx",
     "export {};\n",
     rootDir
@@ -744,6 +749,11 @@ async function createFixtureRepo() {
   );
   await write(
     "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/components/operations/DailyCloseHistoryView.tsx",
     "export {};\n",
     rootDir
   );
