@@ -605,6 +605,11 @@ describe("end-of-day review backend foundation", () => {
       },
       title: "Payment method correction pending",
     });
+    expect(snapshot.blockers[2].metadata).not.toHaveProperty("openedAt");
+    expect(snapshot.blockers[2].metadata).not.toHaveProperty("expectedCash");
+    expect(snapshot.blockers[2].metadata).not.toHaveProperty("countedCash");
+    expect(snapshot.blockers[2].metadata).not.toHaveProperty("variance");
+    expect(snapshot.blockers[2].metadata).not.toHaveProperty("closedAt");
     expect(snapshot.blockers[3].metadata).toMatchObject({
       customer: "Ama Mensah",
       expiresAt: Date.UTC(2026, 4, 7, 20),

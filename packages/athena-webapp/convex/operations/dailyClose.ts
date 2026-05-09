@@ -1275,20 +1275,6 @@ export async function buildDailyCloseSnapshotWithCtx(
         ...(approval.notes ? { notes: approval.notes } : {}),
         ...(terminalLabel ? { terminal: terminalLabel } : {}),
         ...(approvalRegisterLabel ? { register: approvalRegisterLabel } : {}),
-        ...(approvalRegisterSession
-          ? {
-              openedAt: approvalRegisterSession.openedAt,
-              expectedCash: approvalRegisterSession.expectedCash,
-              ...(typeof approvalRegisterSession.countedCash === "number"
-                ? { countedCash: approvalRegisterSession.countedCash }
-                : {}),
-              status: approvalRegisterSession.status,
-              ...nonZeroVarianceMetadata(approvalRegisterSession.variance),
-              ...(typeof approvalRegisterSession.closedAt === "number"
-                ? { closedAt: approvalRegisterSession.closedAt }
-                : {}),
-            }
-          : {}),
         ...(transactionNumber ? { transaction: transactionNumber } : {}),
         ...(transactionId ? { transactionId } : {}),
         ...(previousPaymentMethod

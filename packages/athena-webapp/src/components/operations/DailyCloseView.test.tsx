@@ -240,11 +240,13 @@ const blockedSnapshot: DailyCloseSnapshot = {
         approval: "Payment method correction",
         currentMethod: "Mobile Money",
         notes: "Customer paid cash after mobile money failed.",
+        openedAt: Date.UTC(2026, 4, 7, 15),
         reason: "Variance of -20000 exceeded the closeout approval threshold.",
         register: "Register 3",
         requestedAt: Date.UTC(2026, 4, 7, 16),
         requestedBy: "Ato Kwamina",
         requestedMethod: "Cash",
+        expectedCash: 10098,
         terminal: "Codex",
         transaction: "354477",
         transactionId: "txn-approval-1",
@@ -393,6 +395,19 @@ describe("DailyCloseViewContent", () => {
       "href",
       "/wigclub/store/osu/pos/transactions/txn-approval-1?o=%252F",
     );
+    const approvalItem = screen
+      .getByText("Payment method correction pending")
+      .closest("article");
+    expect(approvalItem).not.toBeNull();
+    expect(
+      within(approvalItem as HTMLElement).queryByText("Expected Cash"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(approvalItem as HTMLElement).queryByText("GH₵100.98"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(approvalItem as HTMLElement).queryByText("Opened At"),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("Mobile Money")).toBeInTheDocument();
     expect(screen.getAllByText("Cash").length).toBeGreaterThan(0);
     expect(
