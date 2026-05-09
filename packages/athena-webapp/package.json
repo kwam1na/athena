@@ -98,7 +98,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^1.2.1",
     "cmdk": "^1.0.0",
-    "convex": "^1.16.4",
+    "convex": "^1.38.0",
     "convex-helpers": "^0.1.59",
     "date-fns": "^4.1.0",
     "framer-motion": "^10.16.4",
