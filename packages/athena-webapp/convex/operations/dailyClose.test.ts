@@ -4,7 +4,9 @@ import type { MutationCtx, QueryCtx } from "../_generated/server";
 import {
   buildDailyCloseSnapshotWithCtx,
   completeDailyCloseWithCtx,
+  getCompletedDailyCloseHistoryDetailWithCtx,
   getDailyCloseOpeningContextWithCtx,
+  listCompletedDailyCloseHistoryWithCtx,
 } from "./dailyClose";
 
 type TableName =
@@ -88,11 +90,15 @@ function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
       );
 
       return rows.sort((left, right) => {
-        const leftValue = Number(left.createdAt ?? left.completedAt ?? 0);
-        const rightValue = Number(right.createdAt ?? right.completedAt ?? 0);
+        const leftValue = String(
+          left.operatingDate ?? left.createdAt ?? left.completedAt ?? "",
+        );
+        const rightValue = String(
+          right.operatingDate ?? right.createdAt ?? right.completedAt ?? "",
+        );
         return sortDirection === "desc"
-          ? rightValue - leftValue
-          : leftValue - rightValue;
+          ? rightValue.localeCompare(leftValue)
+          : leftValue.localeCompare(rightValue);
       });
     };
 
@@ -997,7 +1003,7 @@ describe("end-of-day review backend foundation", () => {
     expect(inserts).toEqual([]);
   });
 
-  it("completes a ready day, persists carry-forward links, and records audit events", async () => {
+  it("completes a ready day, persists carry-forward links, stores a report snapshot, and records audit events", async () => {
     vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 7, 22));
     const { db, inserts } = createDb({
       approvalProof: [dailyCloseApprovalProof()],
@@ -1067,6 +1073,76 @@ describe("end-of-day review backend foundation", () => {
         ? result.data.dailyClose.carryForwardWorkItemIds
         : [],
     ).toEqual(["work-existing", "operationalWorkItem-2"]);
+    const reportSnapshot =
+      result.kind === "ok" ? result.data.dailyClose.reportSnapshot : null;
+    expect(reportSnapshot).toMatchObject({
+      closeMetadata: {
+        completedAt: Date.UTC(2026, 4, 7, 22),
+        completedByStaffProfileId: "staff-1",
+        completedByUserId: "user-1",
+        notes: "Close reviewed.",
+        operatingDate: "2026-05-07",
+        organizationId: "org-1",
+        storeId: "store-1",
+      },
+      readiness: {
+        carryForwardCount: 2,
+        status: "ready",
+      },
+      summary: {
+        carryForwardWorkItemCount: 2,
+        salesTotal: 12000,
+        transactionCount: 1,
+      },
+    });
+    expect(reportSnapshot?.readyItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "pos_transaction:txn-1:completed",
+          metadata: expect.objectContaining({
+            total: 12000,
+            transaction: "TXN-1",
+          }),
+        }),
+      ]),
+    );
+    expect(reportSnapshot?.carryForwardItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "operational_work_item:work-existing:carry_forward",
+          title: "Existing follow-up",
+        }),
+        expect.objectContaining({
+          key: "operational_work_item:operationalWorkItem-2:carry_forward",
+          title: "Count front display",
+        }),
+      ]),
+    );
+    await db.patch("posTransaction", "txn-1", {
+      total: 99000,
+      transactionNumber: "MUTATED",
+    });
+    const detail = await getCompletedDailyCloseHistoryDetailWithCtx(
+      { db } as unknown as QueryCtx,
+      {
+        dailyCloseId:
+          result.kind === "ok"
+            ? (result.data.dailyClose._id as Id<"dailyClose">)
+            : ("missing" as Id<"dailyClose">),
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+    expect(detail?.reportSnapshot.readyItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "pos_transaction:txn-1:completed",
+          metadata: expect.objectContaining({
+            total: 12000,
+            transaction: "TXN-1",
+          }),
+        }),
+      ]),
+    );
     expect(inserts.map((insert) => insert.table)).toEqual([
       "operationalEvent",
       "operationalWorkItem",
@@ -1088,6 +1164,222 @@ describe("end-of-day review backend foundation", () => {
         approvedByStaffProfileId: "staff-manager-1",
       },
     });
+  });
+
+  it("lists completed daily close history for a store newest first and returns snapshot-backed detail", async () => {
+    const completedSnapshot = {
+      closeMetadata: {
+        completedAt: Date.UTC(2026, 4, 8, 22),
+        completedByStaffProfileId: "staff-1",
+        completedByUserId: "user-1",
+        notes: "May 8 reviewed.",
+        operatingDate: "2026-05-08",
+        organizationId: "org-1",
+        storeId: "store-1",
+      },
+      readiness: {
+        blockerCount: 0,
+        carryForwardCount: 1,
+        readyCount: 2,
+        reviewCount: 0,
+        status: "ready",
+      },
+      summary: {
+        expenseTotal: 5000,
+        netCashVariance: 0,
+        salesTotal: 24000,
+        transactionCount: 3,
+      },
+      reviewedItems: [],
+      carryForwardItems: [
+        {
+          key: "operational_work_item:work-1:carry_forward",
+          severity: "carry_forward",
+          category: "open_work",
+          title: "Carry forward",
+          message: "Open operational work will carry forward after End-of-Day Review.",
+          subject: {
+            id: "work-1",
+            label: "Carry forward",
+            type: "operational_work_item",
+          },
+        },
+      ],
+      readyItems: [
+        {
+          key: "pos_transaction:txn-2:completed",
+          severity: "ready",
+          category: "sales",
+          title: "Completed transaction",
+          message: "Transaction included in End-of-Day Review.",
+          subject: {
+            id: "txn-2",
+            label: "TXN-2",
+            type: "pos_transaction",
+          },
+          metadata: {
+            total: 24000,
+            transaction: "TXN-2",
+          },
+        },
+      ],
+      sourceSubjects: [
+        {
+          id: "txn-2",
+          label: "TXN-2",
+          type: "pos_transaction",
+        },
+      ],
+    };
+    const { db } = createDb({
+      dailyClose: [
+        {
+          _id: "daily-close-new",
+          carryForwardWorkItemIds: ["work-1"],
+          completedAt: Date.UTC(2026, 4, 8, 22),
+          completedByStaffProfileId: "staff-1",
+          completedByUserId: "user-1",
+          createdAt: Date.UTC(2026, 4, 8, 22),
+          isCurrent: true,
+          operatingDate: "2026-05-08",
+          organizationId: "org-1",
+          readiness: completedSnapshot.readiness,
+          reportSnapshot: completedSnapshot,
+          sourceSubjects: completedSnapshot.sourceSubjects,
+          status: "completed",
+          storeId: "store-1",
+          summary: completedSnapshot.summary,
+          updatedAt: Date.UTC(2026, 4, 8, 22),
+        },
+        {
+          _id: "daily-close-old",
+          carryForwardWorkItemIds: [],
+          completedAt: Date.UTC(2026, 4, 7, 22),
+          createdAt: Date.UTC(2026, 4, 7, 22),
+          isCurrent: false,
+          operatingDate: "2026-05-07",
+          organizationId: "org-1",
+          readiness: {
+            blockerCount: 0,
+            carryForwardCount: 0,
+            readyCount: 1,
+            reviewCount: 0,
+            status: "ready",
+          },
+          reportSnapshot: {
+            ...completedSnapshot,
+            closeMetadata: {
+              ...completedSnapshot.closeMetadata,
+              completedAt: Date.UTC(2026, 4, 7, 22),
+              operatingDate: "2026-05-07",
+            },
+            summary: { salesTotal: 10000, transactionCount: 1 },
+          },
+          sourceSubjects: [],
+          status: "completed",
+          storeId: "store-1",
+          summary: { salesTotal: 10000, transactionCount: 1 },
+          updatedAt: Date.UTC(2026, 4, 7, 22),
+        },
+        {
+          _id: "daily-close-open",
+          carryForwardWorkItemIds: [],
+          createdAt: Date.UTC(2026, 4, 9, 22),
+          isCurrent: true,
+          operatingDate: "2026-05-09",
+          organizationId: "org-1",
+          readiness: {
+            blockerCount: 0,
+            carryForwardCount: 0,
+            readyCount: 0,
+            reviewCount: 0,
+            status: "ready",
+          },
+          sourceSubjects: [],
+          status: "open",
+          storeId: "store-1",
+          summary: {},
+          updatedAt: Date.UTC(2026, 4, 9, 22),
+        },
+        {
+          _id: "daily-close-other-store",
+          carryForwardWorkItemIds: [],
+          completedAt: Date.UTC(2026, 4, 9, 22),
+          createdAt: Date.UTC(2026, 4, 9, 22),
+          isCurrent: true,
+          operatingDate: "2026-05-09",
+          organizationId: "org-1",
+          readiness: completedSnapshot.readiness,
+          reportSnapshot: {
+            ...completedSnapshot,
+            closeMetadata: {
+              ...completedSnapshot.closeMetadata,
+              operatingDate: "2026-05-09",
+              storeId: "store-2",
+            },
+          },
+          sourceSubjects: [],
+          status: "completed",
+          storeId: "store-2",
+          summary: { salesTotal: 99999 },
+          updatedAt: Date.UTC(2026, 4, 9, 22),
+        },
+      ],
+    });
+
+    const history = await listCompletedDailyCloseHistoryWithCtx(
+      { db } as unknown as QueryCtx,
+      { limit: 10, storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(history.map((record) => record.dailyCloseId)).toEqual([
+      "daily-close-new",
+      "daily-close-old",
+    ]);
+    expect(history[0]).toMatchObject({
+      carryForwardCount: 1,
+      completedAt: Date.UTC(2026, 4, 8, 22),
+      completedByStaffProfileId: "staff-1",
+      operatingDate: "2026-05-08",
+      readinessStatus: "ready",
+      summary: {
+        expenseTotal: 5000,
+        netCashVariance: 0,
+        salesTotal: 24000,
+        transactionCount: 3,
+      },
+    });
+
+    const detail = await getCompletedDailyCloseHistoryDetailWithCtx(
+      { db } as unknown as QueryCtx,
+      {
+        dailyCloseId: "daily-close-new" as Id<"dailyClose">,
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+    expect(detail).toMatchObject({
+      dailyCloseId: "daily-close-new",
+      operatingDate: "2026-05-08",
+      reportSnapshot: completedSnapshot,
+    });
+    await expect(
+      getCompletedDailyCloseHistoryDetailWithCtx(
+        { db } as unknown as QueryCtx,
+        {
+          dailyCloseId: "daily-close-open" as Id<"dailyClose">,
+          storeId: "store-1" as Id<"store">,
+        },
+      ),
+    ).resolves.toBeNull();
+    await expect(
+      getCompletedDailyCloseHistoryDetailWithCtx(
+        { db } as unknown as QueryCtx,
+        {
+          dailyCloseId: "daily-close-other-store" as Id<"dailyClose">,
+          storeId: "store-1" as Id<"store">,
+        },
+      ),
+    ).resolves.toBeNull();
   });
 
   it("exposes prior completed close and carry-forward work for future opening", async () => {

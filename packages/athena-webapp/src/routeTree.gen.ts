@@ -48,6 +48,7 @@ import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugProductsArchivedRouteImport }
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsStockAdjustmentsRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpeningRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/opening'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpenWorkRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/open-work'
+import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseHistoryRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugOperationsApprovalsRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/approvals'
 import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRouteImport } from './routes/_authed/$orgUrlSlug/store/$storeUrlSlug/logs.$logId'
@@ -310,6 +311,14 @@ const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpenWorkRoute =
     path: '/$orgUrlSlug/store/$storeUrlSlug/operations/open-work',
     getParentRoute: () => AuthedRoute,
   } as any)
+const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseHistoryRoute =
+  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseHistoryRouteImport.update(
+    {
+      id: '/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history',
+      path: '/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history',
+      getParentRoute: () => AuthedRoute,
+    } as any,
+  )
 const AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseRoute =
   AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseRouteImport.update({
     id: '/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close',
@@ -530,6 +539,7 @@ export interface FileRoutesByFullPath {
   '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRoute
   '/$orgUrlSlug/store/$storeUrlSlug/operations/approvals': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsApprovalsRoute
   '/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseHistoryRoute
   '/$orgUrlSlug/store/$storeUrlSlug/operations/open-work': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpenWorkRoute
   '/$orgUrlSlug/store/$storeUrlSlug/operations/opening': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpeningRoute
   '/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsStockAdjustmentsRoute
@@ -601,6 +611,7 @@ export interface FileRoutesByTo {
   '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRoute
   '/$orgUrlSlug/store/$storeUrlSlug/operations/approvals': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsApprovalsRoute
   '/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseRoute
+  '/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseHistoryRoute
   '/$orgUrlSlug/store/$storeUrlSlug/operations/open-work': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpenWorkRoute
   '/$orgUrlSlug/store/$storeUrlSlug/operations/opening': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpeningRoute
   '/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsStockAdjustmentsRoute
@@ -675,6 +686,7 @@ export interface FileRoutesById {
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/$logId': typeof AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/approvals': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsApprovalsRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseRoute
+  '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseHistoryRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/open-work': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpenWorkRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/opening': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpeningRoute
   '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments': typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsStockAdjustmentsRoute
@@ -749,6 +761,7 @@ export interface FileRouteTypes {
     | '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId'
     | '/$orgUrlSlug/store/$storeUrlSlug/operations/approvals'
     | '/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close'
+    | '/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history'
     | '/$orgUrlSlug/store/$storeUrlSlug/operations/open-work'
     | '/$orgUrlSlug/store/$storeUrlSlug/operations/opening'
     | '/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments'
@@ -820,6 +833,7 @@ export interface FileRouteTypes {
     | '/$orgUrlSlug/store/$storeUrlSlug/logs/$logId'
     | '/$orgUrlSlug/store/$storeUrlSlug/operations/approvals'
     | '/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close'
+    | '/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history'
     | '/$orgUrlSlug/store/$storeUrlSlug/operations/open-work'
     | '/$orgUrlSlug/store/$storeUrlSlug/operations/opening'
     | '/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments'
@@ -893,6 +907,7 @@ export interface FileRouteTypes {
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/logs/$logId'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/approvals'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close'
+    | '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/open-work'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/opening'
     | '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments'
@@ -1231,6 +1246,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpenWorkRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history': {
+      id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history'
+      path: '/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history'
+      fullPath: '/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history'
+      preLoaderRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseHistoryRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close': {
       id: '/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close'
       path: '/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close'
@@ -1471,6 +1493,7 @@ interface AuthedRouteChildren {
   AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugLogsLogIdRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugOperationsApprovalsRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsApprovalsRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseRoute
+  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseHistoryRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseHistoryRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpenWorkRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpenWorkRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpeningRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpeningRoute
   AuthedOrgUrlSlugStoreStoreUrlSlugOperationsStockAdjustmentsRoute: typeof AuthedOrgUrlSlugStoreStoreUrlSlugOperationsStockAdjustmentsRoute
@@ -1549,6 +1572,8 @@ const AuthedRouteChildren: AuthedRouteChildren = {
     AuthedOrgUrlSlugStoreStoreUrlSlugOperationsApprovalsRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseRoute,
+  AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseHistoryRoute:
+    AuthedOrgUrlSlugStoreStoreUrlSlugOperationsDailyCloseHistoryRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpenWorkRoute:
     AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpenWorkRoute,
   AuthedOrgUrlSlugStoreStoreUrlSlugOperationsOpeningRoute:

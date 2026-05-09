@@ -144,6 +144,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/common/PageLevelHeader.test.tsx`](../../src/components/common/PageLevelHeader.test.tsx)
 - [`src/components/join-team/index.test.tsx`](../../src/components/join-team/index.test.tsx)
 - [`src/components/operations/CommandApprovalDialog.test.tsx`](../../src/components/operations/CommandApprovalDialog.test.tsx)
+- [`src/components/operations/DailyCloseHistoryView.test.tsx`](../../src/components/operations/DailyCloseHistoryView.test.tsx)
 - [`src/components/operations/DailyCloseView.test.tsx`](../../src/components/operations/DailyCloseView.test.tsx)
 - [`src/components/operations/DailyOpeningView.test.tsx`](../../src/components/operations/DailyOpeningView.test.tsx)
 - [`src/components/operations/DailyOperationsView.test.tsx`](../../src/components/operations/DailyOperationsView.test.tsx)

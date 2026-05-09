@@ -83,7 +83,7 @@ const useExpectedDailyCloseMutation = useMutation as unknown as (
   mutation: unknown,
 ) => (args: Record<string, unknown>) => Promise<unknown>;
 
-type DailyCloseStatus =
+export type DailyCloseStatus =
   | "blocked"
   | "needs_review"
   | "carry_forward"
@@ -184,7 +184,7 @@ type CompletionArgs = {
   startAt: number;
 };
 
-type BucketStatus = "blocked" | "carry-forward" | "ready" | "review";
+export type BucketStatus = "blocked" | "carry-forward" | "ready" | "review";
 
 const bucketTabValues: BucketStatus[] = [
   "blocked",
@@ -385,7 +385,7 @@ function formatVoidedSaleCount(value: number) {
   return `${value} voided sales`;
 }
 
-function formatMoney(currency: string, amount?: number | null) {
+export function formatDailyCloseMoney(currency: string, amount?: number | null) {
   if (typeof amount !== "number") return "Pending";
 
   return formatStoredCurrencyAmount(currency, amount, {
@@ -393,7 +393,7 @@ function formatMoney(currency: string, amount?: number | null) {
   });
 }
 
-function formatOperatingDate(operatingDate: string) {
+export function formatDailyCloseOperatingDate(operatingDate: string) {
   const parsed = new Date(`${operatingDate}T00:00:00`);
 
   if (Number.isNaN(parsed.getTime())) {
@@ -407,7 +407,7 @@ function formatOperatingDate(operatingDate: string) {
   });
 }
 
-function formatCompletedAt(completedAt?: number | null) {
+export function formatDailyCloseCompletedAt(completedAt?: number | null) {
   if (!completedAt) return "Completion time unavailable";
 
   return new Date(completedAt).toLocaleString([], {
@@ -772,7 +772,7 @@ function formatMetadataValue(label: string, value: unknown, currency: string) {
     }
 
     return isMoneyMetadataLabel(label)
-      ? formatMoney(currency, value)
+      ? formatDailyCloseMoney(currency, value)
       : String(value);
   }
 
@@ -796,7 +796,7 @@ function formatMetadataValue(label: string, value: unknown, currency: string) {
       value.trim() !== "" &&
       Number.isFinite(numericValue)
     ) {
-      return formatMoney(currency, numericValue);
+      return formatDailyCloseMoney(currency, numericValue);
     }
 
     if (normalizedLabel === "status") {
@@ -1351,7 +1351,7 @@ function getTransactionReportAmount(item: DailyCloseItem, currency: string) {
     getMetadataStringOrNumber(item.metadata, "total"),
   );
 
-  return amount === null ? "Not set" : formatMoney(currency, amount);
+  return amount === null ? "Not set" : formatDailyCloseMoney(currency, amount);
 }
 
 function getTransactionReportStaff(item: DailyCloseItem) {
@@ -1988,6 +1988,201 @@ function TransactionReportAction({
   );
 }
 
+export function DailyCloseReadOnlyReport({
+  currency,
+  orgUrlSlug,
+  snapshot,
+  storeUrlSlug,
+}: {
+  currency: string;
+  orgUrlSlug: string;
+  snapshot: DailyCloseSnapshot;
+  storeUrlSlug: string;
+}) {
+  const status = getDailyCloseStatus(snapshot);
+  const displayCopy = getStatusDisplayCopy(snapshot, status);
+  const buckets = getBucketConfigs(snapshot);
+  const defaultBucketValue = getDefaultBucketValue(snapshot, status);
+  const [selectedBucketValue, setSelectedBucketValue] =
+    useState<BucketStatus>(defaultBucketValue);
+  const [selectedBucketPage, setSelectedBucketPage] = useState(1);
+  const selectedBucket =
+    buckets.find((bucket) => bucket.value === selectedBucketValue) ??
+    buckets.find((bucket) => bucket.value === defaultBucketValue) ??
+    buckets[0];
+
+  return (
+    <PageWorkspace>
+      <section className="space-y-layout-lg">
+        <div className="flex flex-col gap-layout-md lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-layout-xs">
+            <h2 className={getStatusLabelClassName(status)}>
+              {displayCopy.title}
+            </h2>
+            <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+              {displayCopy.description}
+            </p>
+          </div>
+          <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-center">
+            <TransactionReportAction
+              currency={currency}
+              orgUrlSlug={orgUrlSlug}
+              snapshot={snapshot}
+              storeUrlSlug={storeUrlSlug}
+            />
+            <div className="rounded-lg border border-border bg-surface-raised px-layout-md py-layout-sm text-sm text-muted-foreground shadow-surface">
+              Operating date{" "}
+              <span className="font-medium text-foreground">
+                {formatDailyCloseOperatingDate(snapshot.operatingDate)}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-layout-sm md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+          <OperationsSummaryMetric
+            helper={formatEntityCount(
+              getSummaryCount(
+                snapshot.summary,
+                "transactionCount",
+                "transactionCount",
+              ),
+              "transaction",
+            )}
+            label="Today's net sales"
+            link={{
+              ariaLabel: "Open transactions",
+              orgUrlSlug,
+              search: { o: getOrigin() },
+              storeUrlSlug,
+              to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
+            }}
+            value={formatDailyCloseMoney(
+              currency,
+              getSummaryAmount(snapshot.summary, "totalSales", "salesTotal"),
+            )}
+          />
+          <OperationsSummaryMetric
+            helper={formatTodayCashTransactionCount(
+              getSummaryCount(
+                snapshot.summary,
+                "currentDayCashTransactionCount",
+                "transactionCount",
+              ),
+            )}
+            label="Today's cash"
+            link={{
+              ariaLabel: "Open cash transactions",
+              orgUrlSlug,
+              search: { o: getOrigin(), paymentMethod: "cash" },
+              storeUrlSlug,
+              to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
+            }}
+            value={formatDailyCloseMoney(
+              currency,
+              getSummaryAmount(
+                snapshot.summary,
+                "currentDayCashTotal",
+                "cashExpected",
+              ),
+            )}
+          />
+          <OperationsSummaryMetric
+            helper={formatCarriedOverRegisterCount(
+              getSummaryCount(
+                snapshot.summary,
+                "carriedOverRegisterCount",
+                "carriedOverRegisterCount",
+              ),
+            )}
+            label="Carried-over cash"
+            value={formatDailyCloseMoney(
+              currency,
+              getSummaryAmount(
+                snapshot.summary,
+                "carriedOverCashTotal",
+                "carriedOverCashTotal",
+              ),
+            )}
+          />
+          <OperationsSummaryMetric
+            helper={formatExpenseTransactionCount(
+              getExpenseTransactionCount(snapshot.summary),
+            )}
+            label="Expenses"
+            value={formatDailyCloseMoney(currency, snapshot.summary.expenseTotal)}
+          />
+          <OperationsSummaryMetric
+            helper={formatRegisterVarianceCount(
+              getSummaryRegisterVarianceCount(snapshot.summary),
+            )}
+            label="Variance"
+            value={formatDailyCloseMoney(
+              currency,
+              getSummaryAmount(snapshot.summary, "varianceTotal", "netCashVariance"),
+            )}
+          />
+        </div>
+      </section>
+
+      {selectedBucket ? (
+        <section className="space-y-layout-md">
+          <Tabs
+            className="space-y-layout-md"
+            onValueChange={(nextValue) => {
+              const nextBucket = normalizeBucketTab(nextValue);
+              if (!nextBucket) return;
+              setSelectedBucketValue(nextBucket);
+              setSelectedBucketPage(1);
+            }}
+            value={selectedBucket.value}
+          >
+            <TabsList
+              aria-label="Historical end-of-day review buckets"
+              className="h-auto w-full flex-wrap justify-start gap-1 border border-border bg-surface-raised p-1 text-muted-foreground shadow-surface"
+            >
+              {buckets.map((bucket) => (
+                <TabsTrigger
+                  className="min-h-9 gap-2 px-3 data-[state=active]:bg-background"
+                  key={bucket.value}
+                  value={bucket.value}
+                >
+                  <span>{bucket.title}</span>
+                  <span
+                    className={cn(
+                      "inline-flex min-w-5 items-center justify-center rounded-full border px-1.5 py-0.5 font-numeric text-[11px] font-semibold leading-none tabular-nums",
+                      getBucketCountClassName(bucket.status),
+                    )}
+                  >
+                    {bucket.items.length}
+                  </span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+
+            <TabsContent className="mt-0" value={selectedBucket.value}>
+              <BucketSection
+                ariaLabel={selectedBucket.ariaLabel}
+                currency={currency}
+                description={selectedBucket.description}
+                emptyText={selectedBucket.emptyText}
+                items={selectedBucket.items}
+                onPageChange={setSelectedBucketPage}
+                orgUrlSlug={orgUrlSlug}
+                page={selectedBucketPage}
+                showCountBadge={false}
+                status={selectedBucket.status}
+                storeUrlSlug={storeUrlSlug}
+                title={selectedBucket.title}
+              />
+            </TabsContent>
+          </Tabs>
+        </section>
+      ) : null}
+    </PageWorkspace>
+  );
+}
+
 function CompletionRail({
   commandMessage,
   isBlocked,
@@ -2078,7 +2273,7 @@ function CompletionRail({
             Operating date
           </p>
           <p className="mt-1 text-sm font-medium text-foreground">
-            {formatOperatingDate(snapshot.operatingDate)}
+            {formatDailyCloseOperatingDate(snapshot.operatingDate)}
           </p>
         </div>
 
@@ -2131,7 +2326,7 @@ function CompletionRail({
               {snapshot.completedClose.completedByStaffName
                 ? `Completed by ${snapshot.completedClose.completedByStaffName}.`
                 : "Completed staff unavailable."}{" "}
-              {formatCompletedAt(snapshot.completedClose.completedAt)}
+              {formatDailyCloseCompletedAt(snapshot.completedClose.completedAt)}
             </p>
             {snapshot.completedClose.notes ? (
               <p className="mt-layout-sm text-sm leading-6 text-foreground">
@@ -2375,7 +2570,7 @@ export function DailyCloseViewContent({
                     <div className="rounded-lg border border-border bg-surface-raised px-layout-md py-layout-sm text-sm text-muted-foreground shadow-surface">
                       Operating date{" "}
                       <span className="font-medium text-foreground">
-                        {formatOperatingDate(snapshot.operatingDate)}
+                        {formatDailyCloseOperatingDate(snapshot.operatingDate)}
                       </span>
                     </div>
                   </div>
@@ -2399,7 +2594,7 @@ export function DailyCloseViewContent({
                       storeUrlSlug,
                       to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
                     }}
-                    value={formatMoney(
+                    value={formatDailyCloseMoney(
                       currency,
                       getSummaryAmount(
                         snapshot.summary,
@@ -2424,7 +2619,7 @@ export function DailyCloseViewContent({
                       storeUrlSlug,
                       to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
                     }}
-                    value={formatMoney(
+                    value={formatDailyCloseMoney(
                       currency,
                       getSummaryAmount(
                         snapshot.summary,
@@ -2442,7 +2637,7 @@ export function DailyCloseViewContent({
                       ),
                     )}
                     label="Carried-over cash"
-                    value={formatMoney(
+                    value={formatDailyCloseMoney(
                       currency,
                       getSummaryAmount(
                         snapshot.summary,
@@ -2456,14 +2651,14 @@ export function DailyCloseViewContent({
                       getExpenseTransactionCount(snapshot.summary),
                     )}
                     label="Expenses"
-                    value={formatMoney(currency, snapshot.summary.expenseTotal)}
+                    value={formatDailyCloseMoney(currency, snapshot.summary.expenseTotal)}
                   />
                   <OperationsSummaryMetric
                     helper={formatRegisterVarianceCount(
                       getSummaryRegisterVarianceCount(snapshot.summary),
                     )}
                     label="Variance"
-                    value={formatMoney(
+                    value={formatDailyCloseMoney(
                       currency,
                       getSummaryAmount(
                         snapshot.summary,
