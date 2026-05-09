@@ -1,20 +1,30 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { POSRegisterOpeningGuard } from "~/src/components/pos/register/POSRegisterOpeningGuard";
 import { POSRegisterView } from "~/src/components/pos/register/POSRegisterView";
 import { NotFoundView } from "~/src/components/states/not-found/NotFoundView";
 
 export const Route = createFileRoute(
   "/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/register/"
 )({
-  component: POSRegisterView,
+  component: POSRegisterRoute,
 
-  notFoundComponent: ({ data }) => {
-    const { orgUrlSlug, storeUrlSlug } = Route.useParams();
-    const { data: d } = data as Record<string, any>;
-    const { org } = d as Record<string, boolean>;
-
-    const entity = org ? "organization" : "store";
-    const name = org ? orgUrlSlug : storeUrlSlug;
-
-    return <NotFoundView entity={entity} entityIdentifier={name} />;
-  },
+  notFoundComponent: POSRegisterNotFoundRoute,
 });
+
+function POSRegisterRoute() {
+  return (
+    <POSRegisterOpeningGuard>
+      <POSRegisterView />
+    </POSRegisterOpeningGuard>
+  );
+}
+
+function POSRegisterNotFoundRoute({ data }: { data?: unknown }) {
+  const { orgUrlSlug, storeUrlSlug } = Route.useParams();
+  const routeData = data as { data?: { org?: boolean } };
+  const isOrgMissing = Boolean(routeData.data?.org);
+  const entity = isOrgMissing ? "organization" : "store";
+  const name = isOrgMissing ? orgUrlSlug : storeUrlSlug;
+
+  return <NotFoundView entity={entity} entityIdentifier={name} />;
+}

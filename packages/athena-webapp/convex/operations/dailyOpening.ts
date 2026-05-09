@@ -39,7 +39,12 @@ type DailyOpeningItem = {
     search?: Record<string, string>;
     to?: string;
   };
-  metadata?: Record<string, unknown>;
+  metadata?:
+    | Array<{
+        label: string;
+        value: unknown;
+      }>
+    | Record<string, unknown>;
 };
 
 type DailyOpeningReadinessStatus = "blocked" | "needs_attention" | "ready";
@@ -235,29 +240,133 @@ async function listPendingOpeningBlockerApprovals(
 function pendingApprovalItem(
   approval: Doc<"approvalRequest">,
 ): DailyOpeningItem {
+  const requestLabel = approvalRequestTypeLabel(approval.requestType);
+  const note = approval.notes?.trim();
+  const context = approvalMetadataEntries(approval);
+
   return {
     key: `approval_request:${approval._id}:pending`,
     severity: "blocker",
     category: "approval",
-    title: "Closeout approval pending",
+    title: `${requestLabel} approval pending`,
     message:
       "A pending register or closeout approval must be resolved before Opening can be acknowledged.",
     subject: {
       type: "approval_request",
       id: approval._id,
-      label: approval.reason,
+      label: note ?? approval.reason,
     },
     link: {
       label: "View approvals",
       to: "/$orgUrlSlug/store/$storeUrlSlug/operations/approvals",
     },
-    metadata: {
-      reason: approval.reason,
-      requestType: approval.requestType,
-      subjectId: approval.subjectId,
-      subjectType: approval.subjectType,
-    },
+    metadata: [
+      {
+        label: "Request",
+        value: requestLabel,
+      },
+      ...context,
+      ...(note
+        ? [
+            {
+              label: "Requester note",
+              value: note,
+            },
+          ]
+        : []),
+    ],
   };
+}
+
+function approvalMetadataEntries(approval: Doc<"approvalRequest">) {
+  if (approval.requestType === "payment_method_correction") {
+    return compactMetadataEntries([
+      {
+        label: "Transaction",
+        value: getStringMetadata(approval.metadata, "transactionNumber"),
+      },
+      {
+        label: "transactionId",
+        value: getStringMetadata(approval.metadata, "transactionId"),
+      },
+      {
+        label: "Current method",
+        value: getPaymentMethodMetadata(
+          approval.metadata,
+          "previousPaymentMethod",
+        ),
+      },
+      {
+        label: "Requested method",
+        value: getPaymentMethodMetadata(approval.metadata, "paymentMethod"),
+      },
+      {
+        label: "Amount",
+        value: getNumberMetadata(approval.metadata, "amount"),
+      },
+    ]);
+  }
+
+  return [];
+}
+
+function approvalRequestTypeLabel(requestType: string) {
+  if (requestType === "payment_method_correction") {
+    return "Payment correction";
+  }
+
+  if (requestType === "variance_review") {
+    return "Closeout variance";
+  }
+
+  if (requestType === "inventory_adjustment_review") {
+    return "Stock adjustment";
+  }
+
+  return requestType
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function compactMetadataEntries(
+  entries: Array<{ label: string; value: unknown }>,
+) {
+  return entries.filter(
+    (entry) =>
+      entry.value !== null && entry.value !== undefined && entry.value !== "",
+  );
+}
+
+function getNumberMetadata(
+  metadata: Record<string, unknown> | undefined,
+  key: string,
+) {
+  const value = metadata?.[key];
+  return typeof value === "number" ? value : undefined;
+}
+
+function getPaymentMethodMetadata(
+  metadata: Record<string, unknown> | undefined,
+  key: string,
+) {
+  const value = getStringMetadata(metadata, key);
+  return value ? formatPaymentMethodLabel(value) : undefined;
+}
+
+function getStringMetadata(
+  metadata: Record<string, unknown> | undefined,
+  key: string,
+) {
+  const value = metadata?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function formatPaymentMethodLabel(method: string) {
+  return method
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 function missingPriorCloseReviewItem(args: {
@@ -278,6 +387,9 @@ function missingPriorCloseReviewItem(args: {
     },
     link: {
       label: "Review End-of-Day Review",
+      search: {
+        operatingDate: args.operatingDate,
+      },
       to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
     },
     metadata: {
@@ -337,6 +449,9 @@ function priorCloseReadyItem(priorClose: Doc<"dailyClose">): DailyOpeningItem {
     },
     link: {
       label: "View End-of-Day Review",
+      search: {
+        operatingDate: priorClose.operatingDate,
+      },
       to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
     },
     metadata: {

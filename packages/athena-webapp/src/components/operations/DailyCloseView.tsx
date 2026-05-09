@@ -1,4 +1,4 @@
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import {
   Link,
   useNavigate,
@@ -10,8 +10,8 @@ import {
   ArrowUpRight,
   Banknote,
   Ban,
+  Calendar as CalendarIcon,
   CheckCircle2,
-  ChevronDown,
   ClipboardCheck,
   CreditCardIcon,
   FileText,
@@ -46,8 +46,6 @@ import { ListPagination } from "../common/ListPagination";
 import {
   PageLevelHeader,
   PageWorkspace,
-  PageWorkspaceGrid,
-  PageWorkspaceMain,
   PageWorkspaceRail,
 } from "../common/PageLevelHeader";
 import { EmptyState } from "../states/empty/empty-state";
@@ -55,7 +53,9 @@ import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
+import { Calendar } from "../ui/calendar";
 import { LoadingButton } from "../ui/loading-button";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import {
   Sheet,
@@ -68,6 +68,8 @@ import {
   useApprovedCommand,
   type ApprovalRetryArgs,
 } from "./useApprovedCommand";
+import { OperationReviewWorkspace } from "./OperationReviewWorkspace";
+import { OperationReviewItemCard } from "./OperationReviewItemCard";
 import { OperationsSummaryMetric } from "./OperationsSummaryMetric";
 
 type DailyCloseApi = {
@@ -211,9 +213,11 @@ type DailyCloseViewContentProps = {
   isCompleting: boolean;
   isLoadingAccess: boolean;
   isLoadingSnapshot: boolean;
+  latestSelectableOperatingDate?: Date;
   onComplete: (
     args: CompletionArgs,
   ) => Promise<NormalizedApprovalCommandResult<unknown>>;
+  onOperatingDateChange?: (date: Date) => void;
   onAuthenticateForApproval?: (args: {
     actionKey: string;
     pinHash: string;
@@ -385,7 +389,14 @@ function formatVoidedSaleCount(value: number) {
   return `${value} voided sales`;
 }
 
-export function formatDailyCloseMoney(currency: string, amount?: number | null) {
+function sentenceFragment(value: string) {
+  return value ? value.charAt(0).toLocaleLowerCase() + value.slice(1) : value;
+}
+
+export function formatDailyCloseMoney(
+  currency: string,
+  amount?: number | null,
+) {
   if (typeof amount !== "number") return "Pending";
 
   return formatStoredCurrencyAmount(currency, amount, {
@@ -403,8 +414,28 @@ export function formatDailyCloseOperatingDate(operatingDate: string) {
   return parsed.toLocaleDateString([], {
     day: "numeric",
     month: "short",
+    weekday: "long",
     year: "numeric",
   });
+}
+
+function getLocalDateFromOperatingDate(operatingDate: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(operatingDate);
+
+  if (!match) return undefined;
+
+  const [, year, month, day] = match;
+  const parsed = new Date(Number(year), Number(month) - 1, Number(day));
+
+  if (
+    parsed.getFullYear() !== Number(year) ||
+    parsed.getMonth() !== Number(month) - 1 ||
+    parsed.getDate() !== Number(day)
+  ) {
+    return undefined;
+  }
+
+  return parsed;
 }
 
 export function formatDailyCloseCompletedAt(completedAt?: number | null) {
@@ -427,6 +458,29 @@ function getLocalOperatingDate(date = new Date()) {
   return localDate.toISOString().slice(0, 10);
 }
 
+function buildDailyCloseTransactionSearch({
+  operatingDate,
+  paymentMethod,
+}: {
+  operatingDate: string;
+  paymentMethod?: string;
+}) {
+  return {
+    o: getOrigin(),
+    ...(operatingDate !== getLocalOperatingDate() ? { operatingDate } : {}),
+    ...(paymentMethod ? { paymentMethod } : {}),
+  };
+}
+
+function getDailyCloseSalesMetricLabels(operatingDate: string) {
+  const isCurrentOperatingDate = operatingDate === getLocalOperatingDate();
+
+  return {
+    cash: isCurrentOperatingDate ? "Today's cash" : "Cash",
+    netSales: isCurrentOperatingDate ? "Today's net sales" : "Net sales",
+  };
+}
+
 function getLocalOperatingDateRange(date = new Date()) {
   const localStart = new Date(
     date.getFullYear(),
@@ -444,6 +498,18 @@ function getLocalOperatingDateRange(date = new Date()) {
     startAt: localStart.getTime(),
     endAt: localEnd.getTime(),
   };
+}
+
+function getLocalOperatingDateRangeFromSearch(operatingDate?: unknown) {
+  if (typeof operatingDate === "string") {
+    const localDate = getLocalDateFromOperatingDate(operatingDate);
+
+    if (localDate) {
+      return getLocalOperatingDateRange(localDate);
+    }
+  }
+
+  return getLocalOperatingDateRange();
 }
 
 function normalizeCommandMessage(
@@ -834,7 +900,9 @@ function formatMetadataDisplayValue({
     (item.subject?.type === "pos_transaction" ? item.subject.id : undefined);
   const reportId =
     getMetadataStringValue(item.metadata, "reportId") ??
-    (item.subject?.type === "expense_transaction" ? item.subject.id : undefined);
+    (item.subject?.type === "expense_transaction"
+      ? item.subject.id
+      : undefined);
 
   if (normalizeMetadataLabel(label) === "transaction" && transactionId) {
     return (
@@ -1057,9 +1125,7 @@ function getMetadataEntries(
           }),
         }));
 
-  return sortEntries(
-    combineTerminalAndRegister(metadataEntries),
-  );
+  return sortEntries(combineTerminalAndRegister(metadataEntries));
 }
 
 const collapsedMetadataPriority = [
@@ -1189,8 +1255,11 @@ function isZeroActivityDailyClose(snapshot: DailyCloseSnapshot) {
     snapshot.reviewItems.length === 0 &&
     snapshot.carryForwardItems.length === 0 &&
     snapshot.readyItems.length === 0 &&
-    getSummaryCount(snapshot.summary, "transactionCount", "transactionCount") ===
-      0 &&
+    getSummaryCount(
+      snapshot.summary,
+      "transactionCount",
+      "transactionCount",
+    ) === 0 &&
     getSummaryCount(
       snapshot.summary,
       "currentDayCashTransactionCount",
@@ -1215,8 +1284,7 @@ function isZeroActivityDailyClose(snapshot: DailyCloseSnapshot) {
       "carriedOverCashTotal",
     ) === 0 &&
     snapshot.summary.expenseTotal === 0 &&
-    getSummaryAmount(snapshot.summary, "varianceTotal", "netCashVariance") ===
-      0
+    getSummaryAmount(snapshot.summary, "varianceTotal", "netCashVariance") === 0
   );
 }
 
@@ -1343,7 +1411,7 @@ function getTransactionReportIdentifier(item: DailyCloseItem) {
 
   return typeof metadataLabel === "string" || typeof metadataLabel === "number"
     ? String(metadataLabel)
-    : item.subject?.label ?? item.title;
+    : (item.subject?.label ?? item.title);
 }
 
 function getTransactionReportAmount(item: DailyCloseItem, currency: string) {
@@ -1373,14 +1441,13 @@ function getTransactionReportPayment(item: DailyCloseItem) {
 }
 
 function normalizeTransactionReportPaymentMethod(value: string) {
-  return value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
 }
 
-function TransactionReportPaymentIcon({
-  payment,
-}: {
-  payment: string;
-}) {
+function TransactionReportPaymentIcon({ payment }: { payment: string }) {
   const paymentParts = payment
     .split(",")
     .map(normalizeTransactionReportPaymentMethod)
@@ -1417,7 +1484,9 @@ function getTransactionReportTime(item: DailyCloseItem) {
   return timestamp === null ? "Not set" : formatTimestampMetadata(timestamp);
 }
 
-function getTransactionReportLink(item: DailyCloseItem): DailyCloseItemLink | null {
+function getTransactionReportLink(
+  item: DailyCloseItem,
+): DailyCloseItemLink | null {
   if (item.link) return item.link;
 
   if (item.subject?.type === "pos_transaction") {
@@ -1552,7 +1621,6 @@ function DailyCloseItemCard({
   const contextLabel = getItemContextLabel(item);
   const description = getItemDescription(item);
   const showCollapsedDescription = shouldShowCollapsedDescription(description);
-  const [isExpanded, setIsExpanded] = useState(false);
   const metadataEntries = getMetadataEntries(
     item,
     currency,
@@ -1561,111 +1629,37 @@ function DailyCloseItemCard({
   );
   const collapsedMetadataEntries = getCollapsedMetadataEntries(metadataEntries);
   const hasSourceLink = Boolean(item.link);
-  const detailsId = `daily-close-item-details-${itemId.replace(
-    /[^a-zA-Z0-9_-]/g,
-    "-",
-  )}`;
 
   return (
-    <article className="rounded-lg border border-border/80 bg-surface-raised p-layout-md shadow-surface transition-[border-color,box-shadow] hover:border-border">
-      <div className="flex flex-col gap-layout-md md:flex-row md:items-start md:justify-between">
-        <div className="flex min-w-0 gap-layout-sm">
-          {selectable ? (
-            <input
-              aria-label={`Carry forward ${item.title}`}
-              checked={Boolean(selected)}
-              className="mt-1 h-4 w-4 rounded border-border text-signal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              onChange={(event) => onSelectedChange?.(event.target.checked)}
-              type="checkbox"
-            />
-          ) : null}
-          <div className="min-w-0 space-y-layout-xs">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                {contextLabel}
-              </p>
-            </div>
-            <div className="flex flex-wrap items-baseline gap-x-layout-md gap-y-layout-xs">
-              <p className="font-medium text-foreground">{item.title}</p>
-              {showCollapsedDescription ? (
-                <p className="text-sm leading-6 text-muted-foreground">
-                  {description}
-                </p>
-              ) : null}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex shrink-0 flex-wrap items-center gap-2 md:justify-end">
-          {hasSourceLink ? (
-            <ItemLink
-              link={item.link}
-              orgUrlSlug={orgUrlSlug}
-              storeUrlSlug={storeUrlSlug}
-            />
-          ) : null}
-          {metadataEntries.length > 0 ? (
-            <Button
-              aria-controls={detailsId}
-              aria-expanded={isExpanded}
-              onClick={() => setIsExpanded((current) => !current)}
-              size="sm"
-              type="button"
-              variant="utility"
-            >
-              <ChevronDown
-                aria-hidden="true"
-                className={cn(
-                  "transition-transform",
-                  isExpanded && "rotate-180",
-                )}
-              />
-              {isExpanded ? "Hide details" : "Show details"}
-            </Button>
-          ) : null}
-        </div>
-      </div>
-
-      {collapsedMetadataEntries.length > 0 && !isExpanded ? (
-        <dl className="mt-layout-sm grid gap-x-layout-lg gap-y-layout-sm border-t border-border/70 pt-layout-sm text-sm sm:grid-cols-2 lg:grid-cols-4">
-          {collapsedMetadataEntries.map((entry) => (
-            <div key={`${itemId}-summary-${entry.label}`} className="min-w-0">
-              <dt className="text-xs text-muted-foreground">{entry.label}</dt>
-              <dd className="mt-1 truncate font-medium text-foreground">
-                {entry.value}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      ) : null}
-
-      {description && !showCollapsedDescription && isExpanded ? (
-        <p className="mt-layout-sm border-t border-border/70 pt-layout-sm text-sm leading-6 text-muted-foreground">
-          {description}
-        </p>
-      ) : null}
-
-      {metadataEntries.length > 0 && isExpanded ? (
-        <dl
-          className={cn(
-            "grid gap-layout-md border-t border-border/70 pt-layout-md text-sm md:grid-cols-3",
-            description && !showCollapsedDescription
-              ? "mt-layout-sm"
-              : "mt-layout-md",
-          )}
-          id={detailsId}
-        >
-          {metadataEntries.map((entry) => (
-            <div key={`${itemId}-${entry.label}`}>
-              <dt className="text-xs text-muted-foreground">{entry.label}</dt>
-              <dd className="mt-1 font-medium text-foreground">
-                {entry.value}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      ) : null}
-    </article>
+    <OperationReviewItemCard
+      actionSlot={
+        hasSourceLink ? (
+          <ItemLink
+            link={item.link}
+            orgUrlSlug={orgUrlSlug}
+            storeUrlSlug={storeUrlSlug}
+          />
+        ) : null
+      }
+      collapsedMetadataEntries={collapsedMetadataEntries}
+      contextLabel={contextLabel}
+      description={description}
+      itemId={itemId}
+      metadataEntries={metadataEntries}
+      selectionSlot={
+        selectable ? (
+          <input
+            aria-label={`Carry forward ${item.title}`}
+            checked={Boolean(selected)}
+            className="mt-1 h-4 w-4 rounded border-border text-signal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            onChange={(event) => onSelectedChange?.(event.target.checked)}
+            type="checkbox"
+          />
+        ) : null
+      }
+      showCollapsedDescription={showCollapsedDescription}
+      title={item.title}
+    />
   );
 }
 
@@ -1903,7 +1897,11 @@ function TransactionReportAction({
     formatPosSaleCount(
       getSummaryCount(snapshot.summary, "transactionCount", "transactionCount"),
     ),
-    formatExpenseTransactionCount(getExpenseTransactionCount(snapshot.summary)),
+    sentenceFragment(
+      formatExpenseTransactionCount(
+        getExpenseTransactionCount(snapshot.summary),
+      ),
+    ),
     formatVoidedSaleCount(snapshot.summary.voidedTransactionCount ?? 0),
   ].join(", ");
 
@@ -1935,8 +1933,8 @@ function TransactionReportAction({
             <div className="divide-y divide-border bg-surface">
               {items.length === 0 ? (
                 <p className="p-layout-lg text-sm text-muted-foreground">
-                  No POS or expense transactions were recorded for this operating
-                  day.
+                  No POS or expense transactions were recorded for this
+                  operating day.
                 </p>
               ) : (
                 <div className="divide-y divide-border">
@@ -2010,6 +2008,9 @@ export function DailyCloseReadOnlyReport({
     buckets.find((bucket) => bucket.value === selectedBucketValue) ??
     buckets.find((bucket) => bucket.value === defaultBucketValue) ??
     buckets[0];
+  const salesMetricLabels = getDailyCloseSalesMetricLabels(
+    snapshot.operatingDate,
+  );
 
   return (
     <PageWorkspace>
@@ -2049,11 +2050,13 @@ export function DailyCloseReadOnlyReport({
               ),
               "transaction",
             )}
-            label="Today's net sales"
+            label={salesMetricLabels.netSales}
             link={{
               ariaLabel: "Open transactions",
               orgUrlSlug,
-              search: { o: getOrigin() },
+              search: buildDailyCloseTransactionSearch({
+                operatingDate: snapshot.operatingDate,
+              }),
               storeUrlSlug,
               to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
             }}
@@ -2070,11 +2073,14 @@ export function DailyCloseReadOnlyReport({
                 "transactionCount",
               ),
             )}
-            label="Today's cash"
+            label={salesMetricLabels.cash}
             link={{
               ariaLabel: "Open cash transactions",
               orgUrlSlug,
-              search: { o: getOrigin(), paymentMethod: "cash" },
+              search: buildDailyCloseTransactionSearch({
+                operatingDate: snapshot.operatingDate,
+                paymentMethod: "cash",
+              }),
               storeUrlSlug,
               to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
             }}
@@ -2110,7 +2116,10 @@ export function DailyCloseReadOnlyReport({
               getExpenseTransactionCount(snapshot.summary),
             )}
             label="Expenses"
-            value={formatDailyCloseMoney(currency, snapshot.summary.expenseTotal)}
+            value={formatDailyCloseMoney(
+              currency,
+              snapshot.summary.expenseTotal,
+            )}
           />
           <OperationsSummaryMetric
             helper={formatRegisterVarianceCount(
@@ -2119,7 +2128,11 @@ export function DailyCloseReadOnlyReport({
             label="Variance"
             value={formatDailyCloseMoney(
               currency,
-              getSummaryAmount(snapshot.summary, "varianceTotal", "netCashVariance"),
+              getSummaryAmount(
+                snapshot.summary,
+                "varianceTotal",
+                "netCashVariance",
+              ),
             )}
           />
         </div>
@@ -2183,6 +2196,62 @@ export function DailyCloseReadOnlyReport({
   );
 }
 
+function OperatingDatePicker({
+  disabled = false,
+  latestSelectableDate: latestSelectableDateProp,
+  operatingDate,
+  onChange,
+}: {
+  disabled?: boolean;
+  latestSelectableDate?: Date;
+  operatingDate: string;
+  onChange?: (date: Date) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedDate = getLocalDateFromOperatingDate(operatingDate);
+  const latestSelectableDate = useMemo(() => {
+    if (latestSelectableDateProp) return latestSelectableDateProp;
+
+    const today = new Date();
+
+    return new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  }, [latestSelectableDateProp]);
+
+  return (
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          aria-label={`Change operating date, currently ${formatDailyCloseOperatingDate(
+            operatingDate,
+          )}`}
+          className="h-auto justify-start rounded-lg px-layout-md py-layout-sm text-sm font-normal text-muted-foreground shadow-surface"
+          disabled={disabled || !onChange}
+          variant="outline"
+        >
+          <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+          Operating date{" "}
+          <span className="font-medium text-foreground">
+            {formatDailyCloseOperatingDate(operatingDate)}
+          </span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-auto p-0">
+        <Calendar
+          disabled={{ after: latestSelectableDate }}
+          mode="single"
+          onSelect={(date) => {
+            if (!date) return;
+
+            onChange?.(date);
+            setIsOpen(false);
+          }}
+          selected={selectedDate}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function CompletionRail({
   commandMessage,
   isBlocked,
@@ -2229,8 +2298,7 @@ function CompletionRail({
         "item",
         "None",
       ),
-      valueTone:
-        snapshot.carryForwardItems.length > 0 ? "workflow" : "plain",
+      valueTone: snapshot.carryForwardItems.length > 0 ? "workflow" : "plain",
     },
   ];
 
@@ -2305,8 +2373,7 @@ function CompletionRail({
                   className={cn(
                     "shrink-0 text-right font-medium text-foreground",
                     item.valueTone === "danger" && "text-danger",
-                    item.valueTone === "warning" &&
-                      "text-warning-foreground",
+                    item.valueTone === "warning" && "text-warning-foreground",
                     item.valueTone === "workflow" && "text-action-workflow",
                   )}
                 >
@@ -2387,7 +2454,9 @@ export function DailyCloseViewContent({
   isCompleting,
   isLoadingAccess,
   isLoadingSnapshot,
+  latestSelectableOperatingDate,
   onComplete,
+  onOperatingDateChange,
   onAuthenticateForApproval,
   orgUrlSlug,
   snapshot,
@@ -2404,6 +2473,7 @@ export function DailyCloseViewContent({
   >(null);
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as {
+    o?: unknown;
     page?: unknown;
     tab?: unknown;
   };
@@ -2428,6 +2498,10 @@ export function DailyCloseViewContent({
           },
         })),
   });
+
+  useEffect(() => {
+    setCommandMessage(null);
+  }, [snapshot?.operatingDate]);
 
   if (isLoadingAccess) {
     return (
@@ -2466,6 +2540,9 @@ export function DailyCloseViewContent({
   const displayCopy = snapshot
     ? getStatusDisplayCopy(snapshot, status)
     : statusCopy[status];
+  const salesMetricLabels = snapshot
+    ? getDailyCloseSalesMetricLabels(snapshot.operatingDate)
+    : null;
   const buckets = snapshot ? getBucketConfigs(snapshot) : [];
   const defaultBucketValue = snapshot
     ? getDefaultBucketValue(snapshot, status)
@@ -2539,171 +2616,166 @@ export function DailyCloseViewContent({
   };
 
   return (
-    <View hideBorder hideHeaderBottomBorder scrollMode="page">
-      <FadeIn className="container mx-auto py-layout-xl">
-        <PageWorkspace>
-          <PageLevelHeader
-            eyebrow="Store Ops"
-            title="End-of-Day Review"
-            description="Review the operating day, resolve blockers, and preserve follow-ups before saving the close summary."
+    <OperationReviewWorkspace
+      actions={
+        snapshot ? (
+          <>
+            <TransactionReportAction
+              currency={currency}
+              orgUrlSlug={orgUrlSlug}
+              snapshot={snapshot}
+              storeUrlSlug={storeUrlSlug}
+            />
+            <OperatingDatePicker
+              latestSelectableDate={latestSelectableOperatingDate}
+              operatingDate={snapshot.operatingDate}
+              onChange={onOperatingDateChange}
+            />
+          </>
+        ) : null
+      }
+      afterGrid={completionApprovalRunner.dialog}
+      description="Review the operating day, resolve blockers, and preserve follow-ups before saving the close summary."
+      eyebrow="Store Ops"
+      isLoading={isLoadingSnapshot || !snapshot}
+      main={
+        snapshot ? (
+          <BucketTabs
+            buckets={buckets}
+            currency={currency}
+            onPageChange={handleBucketPageChange}
+            onSelectedIdsChange={setSelectedCarryForwardIds}
+            onValueChange={handleBucketValueChange}
+            orgUrlSlug={orgUrlSlug}
+            page={selectedBucketPage}
+            selectedIds={selectedIds}
+            storeUrlSlug={storeUrlSlug}
+            value={selectedBucketValue}
           />
-
-          {isLoadingSnapshot || !snapshot ? null : (
-            <PageWorkspace>
-              <section className="space-y-layout-lg">
-                <div className="flex flex-col gap-layout-md lg:flex-row lg:items-end lg:justify-between">
-                  <div className="space-y-layout-xs">
-                    <h2 className={getStatusLabelClassName(status)}>
-                      {displayCopy.title}
-                    </h2>
-                    <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-                      {displayCopy.description}
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-center">
-                    <TransactionReportAction
-                      currency={currency}
-                      orgUrlSlug={orgUrlSlug}
-                      snapshot={snapshot}
-                      storeUrlSlug={storeUrlSlug}
-                    />
-                    <div className="rounded-lg border border-border bg-surface-raised px-layout-md py-layout-sm text-sm text-muted-foreground shadow-surface">
-                      Operating date{" "}
-                      <span className="font-medium text-foreground">
-                        {formatDailyCloseOperatingDate(snapshot.operatingDate)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid gap-layout-sm md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
-                  <OperationsSummaryMetric
-                    helper={formatEntityCount(
-                      getSummaryCount(
-                        snapshot.summary,
-                        "transactionCount",
-                        "transactionCount",
-                      ),
-                      "transaction",
-                    )}
-                    label="Today's net sales"
-                    link={{
-                      ariaLabel: "Open transactions",
-                      orgUrlSlug,
-                      search: { o: getOrigin() },
-                      storeUrlSlug,
-                      to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
-                    }}
-                    value={formatDailyCloseMoney(
-                      currency,
-                      getSummaryAmount(
-                        snapshot.summary,
-                        "totalSales",
-                        "salesTotal",
-                      ),
-                    )}
-                  />
-                  <OperationsSummaryMetric
-                    helper={formatTodayCashTransactionCount(
-                      getSummaryCount(
-                        snapshot.summary,
-                        "currentDayCashTransactionCount",
-                        "transactionCount",
-                      ),
-                    )}
-                    label="Today's cash"
-                    link={{
-                      ariaLabel: "Open cash transactions",
-                      orgUrlSlug,
-                      search: { o: getOrigin(), paymentMethod: "cash" },
-                      storeUrlSlug,
-                      to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
-                    }}
-                    value={formatDailyCloseMoney(
-                      currency,
-                      getSummaryAmount(
-                        snapshot.summary,
-                        "currentDayCashTotal",
-                        "cashExpected",
-                      ),
-                    )}
-                  />
-                  <OperationsSummaryMetric
-                    helper={formatCarriedOverRegisterCount(
-                      getSummaryCount(
-                        snapshot.summary,
-                        "carriedOverRegisterCount",
-                        "carriedOverRegisterCount",
-                      ),
-                    )}
-                    label="Carried-over cash"
-                    value={formatDailyCloseMoney(
-                      currency,
-                      getSummaryAmount(
-                        snapshot.summary,
-                        "carriedOverCashTotal",
-                        "carriedOverCashTotal",
-                      ),
-                    )}
-                  />
-                  <OperationsSummaryMetric
-                    helper={formatExpenseTransactionCount(
-                      getExpenseTransactionCount(snapshot.summary),
-                    )}
-                    label="Expenses"
-                    value={formatDailyCloseMoney(currency, snapshot.summary.expenseTotal)}
-                  />
-                  <OperationsSummaryMetric
-                    helper={formatRegisterVarianceCount(
-                      getSummaryRegisterVarianceCount(snapshot.summary),
-                    )}
-                    label="Variance"
-                    value={formatDailyCloseMoney(
-                      currency,
-                      getSummaryAmount(
-                        snapshot.summary,
-                        "varianceTotal",
-                        "netCashVariance",
-                      ),
-                    )}
-                  />
-                </div>
-              </section>
-
-              <PageWorkspaceGrid>
-                <PageWorkspaceMain>
-                  <BucketTabs
-                    buckets={buckets}
-                    currency={currency}
-                    onPageChange={handleBucketPageChange}
-                    onSelectedIdsChange={setSelectedCarryForwardIds}
-                    onValueChange={handleBucketValueChange}
-                    orgUrlSlug={orgUrlSlug}
-                    page={selectedBucketPage}
-                    selectedIds={selectedIds}
-                    storeUrlSlug={storeUrlSlug}
-                    value={selectedBucketValue}
-                  />
-                </PageWorkspaceMain>
-
-                <CompletionRail
-                  commandMessage={commandMessage}
-                  isBlocked={isBlocked}
-                  isCompleted={isCompleted}
-                  isCompleting={isCompleting}
-                  notes={notes}
-                  onComplete={() => void handleComplete()}
-                  onNotesChange={setNotes}
-                  snapshot={snapshot}
-                  status={status}
-                />
-              </PageWorkspaceGrid>
-            </PageWorkspace>
-          )}
-        </PageWorkspace>
-      </FadeIn>
-      {completionApprovalRunner.dialog}
-    </View>
+        ) : null
+      }
+      metrics={
+        snapshot ? (
+          <>
+            <OperationsSummaryMetric
+              helper={formatEntityCount(
+                getSummaryCount(
+                  snapshot.summary,
+                  "transactionCount",
+                  "transactionCount",
+                ),
+                "transaction",
+              )}
+              label={salesMetricLabels?.netSales ?? "Net sales"}
+              link={{
+                ariaLabel: "Open transactions",
+                orgUrlSlug,
+                search: buildDailyCloseTransactionSearch({
+                  operatingDate: snapshot.operatingDate,
+                }),
+                storeUrlSlug,
+                to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
+              }}
+              value={formatDailyCloseMoney(
+                currency,
+                getSummaryAmount(snapshot.summary, "totalSales", "salesTotal"),
+              )}
+            />
+            <OperationsSummaryMetric
+              helper={formatTodayCashTransactionCount(
+                getSummaryCount(
+                  snapshot.summary,
+                  "currentDayCashTransactionCount",
+                  "transactionCount",
+                ),
+              )}
+              label={salesMetricLabels?.cash ?? "Cash"}
+              link={{
+                ariaLabel: "Open cash transactions",
+                orgUrlSlug,
+                search: buildDailyCloseTransactionSearch({
+                  operatingDate: snapshot.operatingDate,
+                  paymentMethod: "cash",
+                }),
+                storeUrlSlug,
+                to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
+              }}
+              value={formatDailyCloseMoney(
+                currency,
+                getSummaryAmount(
+                  snapshot.summary,
+                  "currentDayCashTotal",
+                  "cashExpected",
+                ),
+              )}
+            />
+            <OperationsSummaryMetric
+              helper={formatCarriedOverRegisterCount(
+                getSummaryCount(
+                  snapshot.summary,
+                  "carriedOverRegisterCount",
+                  "carriedOverRegisterCount",
+                ),
+              )}
+              label="Carried-over cash"
+              value={formatDailyCloseMoney(
+                currency,
+                getSummaryAmount(
+                  snapshot.summary,
+                  "carriedOverCashTotal",
+                  "carriedOverCashTotal",
+                ),
+              )}
+            />
+            <OperationsSummaryMetric
+              helper={formatExpenseTransactionCount(
+                getExpenseTransactionCount(snapshot.summary),
+              )}
+              label="Expenses"
+              value={formatDailyCloseMoney(
+                currency,
+                snapshot.summary.expenseTotal,
+              )}
+            />
+            <OperationsSummaryMetric
+              helper={formatRegisterVarianceCount(
+                getSummaryRegisterVarianceCount(snapshot.summary),
+              )}
+              label="Variance"
+              value={formatDailyCloseMoney(
+                currency,
+                getSummaryAmount(
+                  snapshot.summary,
+                  "varianceTotal",
+                  "netCashVariance",
+                ),
+              )}
+            />
+          </>
+        ) : null
+      }
+      rail={
+        snapshot ? (
+          <CompletionRail
+            commandMessage={commandMessage}
+            isBlocked={isBlocked}
+            isCompleted={isCompleted}
+            isCompleting={isCompleting}
+            notes={notes}
+            onComplete={() => void handleComplete()}
+            onNotesChange={setNotes}
+            snapshot={snapshot}
+            status={status}
+          />
+        ) : null
+      }
+      showBackButton={typeof search.o === "string" && search.o.length > 0}
+      statusDescription={displayCopy.description}
+      statusTitle={
+        <h2 className={getStatusLabelClassName(status)}>{displayCopy.title}</h2>
+      }
+      title="End-of-Day Review"
+    />
   );
 }
 
@@ -2750,7 +2822,14 @@ function DailyCloseConnectedView({
       }
     | undefined;
   const [isCompleting, setIsCompleting] = useState(false);
-  const operatingDateRange = useMemo(() => getLocalOperatingDateRange(), []);
+  const navigate = useNavigate();
+  const search = useSearch({ strict: false }) as {
+    operatingDate?: unknown;
+  };
+  const operatingDateRange = useMemo(
+    () => getLocalOperatingDateRangeFromSearch(search.operatingDate),
+    [search.operatingDate],
+  );
   const snapshot = useExpectedDailyCloseQuery(
     getDailyCloseSnapshot,
     canQueryProtectedData
@@ -2795,6 +2874,18 @@ function DailyCloseConnectedView({
     }
   };
 
+  const handleOperatingDateChange = (date: Date) => {
+    const nextRange = getLocalOperatingDateRange(date);
+
+    void navigate({
+      search: ((current: Record<string, unknown>) => ({
+        ...current,
+        operatingDate: nextRange.operatingDate,
+        page: 1,
+      })) as never,
+    });
+  };
+
   return (
     <DailyCloseViewContent
       currency={activeStore?.currency || "USD"}
@@ -2804,6 +2895,7 @@ function DailyCloseConnectedView({
       isLoadingAccess={isLoadingAccess}
       isLoadingSnapshot={snapshot === undefined}
       onComplete={handleComplete}
+      onOperatingDateChange={handleOperatingDateChange}
       onAuthenticateForApproval={(args) =>
         runCommand(
           () =>

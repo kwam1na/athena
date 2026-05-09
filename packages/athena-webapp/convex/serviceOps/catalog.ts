@@ -6,6 +6,10 @@ import { v } from "convex/values";
 import { toSlug } from "../utils";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 
+export function normalizeServiceCatalogNameKey(name: string) {
+  return toSlug(name);
+}
+
 export function buildServiceCatalogItem(args: {
   basePrice?: number;
   depositType: "none" | "flat" | "percentage";
@@ -83,7 +87,7 @@ export function buildServiceCatalogItem(args: {
   return ok({
     ...args,
     createdAt: now,
-    slug: toSlug(args.name),
+    slug: normalizeServiceCatalogNameKey(args.name),
     status: "active" as const,
     updatedAt: now,
   });

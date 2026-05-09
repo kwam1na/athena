@@ -101,6 +101,7 @@ export async function listTransactionsByStore(
 export async function listCompletedTransactions(
   ctx: QueryCtx,
   args: {
+    completedFrom?: number;
     registerSessionId?: Id<"registerSession">;
     storeId: Id<"store">;
     limit?: number;
@@ -113,7 +114,8 @@ export async function listCompletedTransactions(
         q
           .eq("storeId", args.storeId)
           .eq("status", "completed")
-          .eq("registerSessionId", args.registerSessionId),
+          .eq("registerSessionId", args.registerSessionId)
+          .gte("completedAt", args.completedFrom ?? 0),
       )
       .order("desc")
       .take(args.limit ?? 50);
@@ -122,7 +124,10 @@ export async function listCompletedTransactions(
   return ctx.db
     .query("posTransaction")
     .withIndex("by_storeId_status_completedAt", (q) =>
-      q.eq("storeId", args.storeId).eq("status", "completed"),
+      q
+        .eq("storeId", args.storeId)
+        .eq("status", "completed")
+        .gte("completedAt", args.completedFrom ?? 0),
     )
     .order("desc")
     .take(args.limit ?? 50);

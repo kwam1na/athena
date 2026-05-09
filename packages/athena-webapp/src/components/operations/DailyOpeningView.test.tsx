@@ -18,7 +18,8 @@ const mockedHooks = vi.hoisted(() => ({
 }));
 
 const mockedApi = vi.hoisted(() => ({
-  authenticateStaffCredentialForApproval: "authenticateStaffCredentialForApproval",
+  authenticateStaffCredentialForApproval:
+    "authenticateStaffCredentialForApproval",
   getDailyOpeningSnapshot: "getDailyOpeningSnapshot",
   startStoreDay: "startStoreDay",
 }));
@@ -167,6 +168,17 @@ const readySnapshot: DailyOpeningSnapshot = {
     {
       description: "End-of-Day Review for 7 May is complete.",
       id: "ready-1",
+      link: {
+        label: "View End-of-Day Review",
+        search: {
+          operatingDate: "2026-05-07",
+        },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+      },
+      metadata: {
+        completedAt: Date.UTC(2026, 4, 8, 23, 15),
+        operatingDate: "2026-05-07",
+      },
       statusLabel: "Ready",
       title: "Prior close complete",
     },
@@ -181,6 +193,16 @@ const readySnapshot: DailyOpeningSnapshot = {
     reviewCount: 0,
   },
 };
+
+function formatExpectedTimestamp(timestamp: number) {
+  return new Date(timestamp).toLocaleString([], {
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
 
 const blockedSnapshot: DailyOpeningSnapshot = {
   ...readySnapshot,
@@ -270,6 +292,7 @@ function renderContent(
 
 describe("DailyOpeningViewContent", () => {
   beforeEach(() => {
+    window.history.pushState({}, "", "/");
     window.scrollTo = vi.fn();
     global.ResizeObserver = class ResizeObserver {
       disconnect() {}
@@ -294,9 +317,22 @@ describe("DailyOpeningViewContent", () => {
 
     expect(screen.getByText("Ready to start")).toBeInTheDocument();
     expect(screen.getByText("Prior close complete")).toBeInTheDocument();
+    expect(screen.getByText("Completed At")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        formatExpectedTimestamp(readySnapshot.priorClose!.completedAt!),
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("GHS 17,783,033,180.02")).not.toBeInTheDocument();
     expect(screen.getByText("No hard blockers")).toBeInTheDocument();
     expect(screen.getByText("No carry-forward items")).toBeInTheDocument();
     expect(screen.queryByText(/opening float/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /view end-of-day review/i }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/operations/daily-close?o=%252F&operatingDate=2026-05-07",
+    );
     expect(screen.queryByRole("button", { name: /open drawer/i })).toBeNull();
     expect(screen.getByRole("button", { name: /start day/i })).toBeEnabled();
   });
@@ -317,6 +353,121 @@ describe("DailyOpeningViewContent", () => {
     expect(screen.getByText("Front counter terminal")).toBeInTheDocument();
     expect(screen.getByText("Register 1")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /start day/i })).toBeDisabled();
+  });
+
+  it("hides stale blocker detail once the store day has started", () => {
+    renderContent({
+      ...blockedSnapshot,
+      startedOpening: {
+        notes: "Opening completed after manager review.",
+        startedAt: Date.UTC(2026, 4, 9, 10, 51),
+        startedByStaffName: "Kwamina Mensah",
+      },
+      status: "started",
+      summary: {
+        ...blockedSnapshot.summary,
+        blockerCount: 1,
+      },
+    });
+
+    expect(screen.getByText("Store day started")).toBeInTheDocument();
+    expect(screen.getByText("No hard blockers")).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /blocked/i })).toBeNull();
+    expect(
+      screen.queryByText("Register session still needs closeout"),
+    ).toBeNull();
+    expect(screen.queryByText("1 blocker")).toBeNull();
+  });
+
+  it("renders pending approval metadata as operator-facing detail", async () => {
+    const user = userEvent.setup();
+
+    window.history.pushState(
+      {},
+      "",
+      "/wigclub/store/osu/operations/opening?tab=blocked",
+    );
+    mockedRouter.search = { tab: "blocked" };
+
+    renderContent({
+      ...blockedSnapshot,
+      blockers: [
+        {
+          category: "approval",
+          description:
+            "A pending register or closeout approval must be resolved before Opening can be acknowledged.",
+          id: "approval-1",
+          key: "approval_request:approval-1:pending",
+          link: {
+            label: "View approvals",
+            to: "/$orgUrlSlug/store/$storeUrlSlug/operations/approvals",
+          },
+          metadata: [
+            {
+              label: "Request",
+              value: "Payment correction",
+            },
+            {
+              label: "Transaction",
+              value: "298944",
+            },
+            {
+              label: "transactionId",
+              value: "txn-1",
+            },
+            {
+              label: "Current method",
+              value: "Mobile Money",
+            },
+            {
+              label: "Requested method",
+              value: "Cash",
+            },
+            {
+              label: "Amount",
+              value: 171500,
+            },
+            {
+              label: "Requester note",
+              value: "Customer paid cash, not mobile money.",
+            },
+          ],
+          title: "Payment correction approval pending",
+        },
+      ],
+    });
+
+    expect(
+      screen.getByText("Payment correction approval pending"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Request")).toBeInTheDocument();
+    expect(screen.getByText("Payment correction")).toBeInTheDocument();
+    expect(screen.getByText("Transaction")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /#298944/i })).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/pos/transactions/txn-1?o=%252Fwigclub%252Fstore%252Fosu%252Foperations%252Fopening%253Ftab%253Dblocked",
+    );
+    expect(screen.queryByText("transactionId")).toBeNull();
+    expect(screen.queryByText("txn-1")).toBeNull();
+    expect(screen.getByText("Current method")).toBeInTheDocument();
+    expect(screen.getByText("Mobile Money")).toBeInTheDocument();
+    expect(screen.getByText("Requested method")).toBeInTheDocument();
+    expect(screen.getByText("Cash")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /show details/i }));
+    expect(screen.getByText("Amount")).toBeInTheDocument();
+    expect(screen.getByText("GHS 1,715.00")).toBeInTheDocument();
+    expect(screen.getByText("Requester note")).toBeInTheDocument();
+    expect(
+      screen.getByText("Customer paid cash, not mobile money."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("payment_method_correction")).toBeNull();
+    expect(screen.queryByText("pos_transaction")).toBeNull();
+    expect(
+      screen.getByRole("link", { name: /view approvals/i }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/operations/approvals?o=%252Fwigclub%252Fstore%252Fosu%252Foperations%252Fopening%253Ftab%253Dblocked",
+    );
   });
 
   it("explains the store day when prior End-of-Day Review is missing", () => {
@@ -348,8 +499,9 @@ describe("DailyOpeningViewContent", () => {
 
     const storeDayLabel = screen.getByText("Store day being opened");
     expect(storeDayLabel).toBeInTheDocument();
-    expect(within(storeDayLabel.closest("div")!).getByText("May 8, 2026"))
-      .toBeInTheDocument();
+    expect(
+      within(storeDayLabel.closest("div")!).getByText("May 8, 2026"),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Operating Date")).not.toBeInTheDocument();
   });
 

@@ -77,9 +77,9 @@ describe("ServiceIntakeView auth readiness", () => {
       isLoadingAccess: true,
     });
 
-    render(<ServiceIntakeView />);
+    const { container } = render(<ServiceIntakeView />);
 
-    expect(screen.getByText("Loading service intake...")).toBeInTheDocument();
+    expect(container).toBeEmptyDOMElement();
     expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
       "skip",
       "skip",

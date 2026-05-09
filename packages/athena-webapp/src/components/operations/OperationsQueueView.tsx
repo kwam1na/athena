@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "@tanstack/react-router";
+import { Link, useParams, useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import {
   ArrowUpRight,
@@ -91,6 +91,7 @@ type QueueApprovalRequest = {
     expectedCash?: number;
     variance?: number;
   } | null;
+  notes?: string | null;
   requestedByStaffName?: string | null;
   createdAt?: number;
   requestType: string;
@@ -314,6 +315,7 @@ type OperationsQueueViewContentProps = {
   }) => Promise<NormalizedCommandResult<unknown>>;
   onStockAdjustmentSearchChange?: (patch: StockAdjustmentSearchPatch) => void;
   orgUrlSlug?: string;
+  showBackButton?: boolean;
   storeId?: Id<"store">;
   storeUrlSlug?: string;
   stockAdjustmentSearch?: StockAdjustmentSearchState;
@@ -345,6 +347,7 @@ export function OperationsQueueViewContent({
   onSubmitCycleCountDraft,
   onStockAdjustmentSearchChange,
   orgUrlSlug,
+  showBackButton = false,
   storeId,
   storeUrlSlug,
   stockAdjustmentSearch,
@@ -499,6 +502,7 @@ export function OperationsQueueViewContent({
               eyebrow="Store Ops"
               title="Pending approvals"
               description="Review manager approval requests before queued stock and payment changes are applied."
+              showBackButton={showBackButton}
             />
 
             {approvalRequests.length === 0 ? (
@@ -633,6 +637,16 @@ export function OperationsQueueViewContent({
                                     {request.requestedByStaffName ??
                                       "admin flow"}
                                   </p>
+                                  {request.notes ? (
+                                    <div className="mt-layout-sm rounded-md border border-border/70 bg-surface px-layout-sm py-layout-xs">
+                                      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                                        Requester note
+                                      </p>
+                                      <p className="mt-1 text-sm leading-6 text-foreground">
+                                        {request.notes}
+                                      </p>
+                                    </div>
+                                  ) : null}
                                 </div>
                               </div>
                             </div>
@@ -1040,6 +1054,7 @@ export function OperationsQueueView({
         storeUrlSlug?: string;
       }
     | undefined;
+  const search = useSearch({ strict: false }) as { o?: unknown };
   const {
     activeStore,
     canQueryProtectedData,
@@ -1454,6 +1469,7 @@ export function OperationsQueueView({
         onSubmitCycleCountDraft={handleSubmitCycleCountDraft}
         onStockAdjustmentSearchChange={onStockAdjustmentSearchChange}
         orgUrlSlug={routeParams?.orgUrlSlug}
+        showBackButton={typeof search.o === "string" && search.o.length > 0}
         storeId={activeStore._id}
         storeUrlSlug={routeParams?.storeUrlSlug}
         stockAdjustmentSearch={stockAdjustmentSearch}

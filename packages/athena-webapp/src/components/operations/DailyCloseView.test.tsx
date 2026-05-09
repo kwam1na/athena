@@ -18,12 +18,14 @@ const mockedHooks = vi.hoisted(() => ({
 }));
 
 const mockedApi = vi.hoisted(() => ({
-  authenticateStaffCredentialForApproval: "authenticateStaffCredentialForApproval",
+  authenticateStaffCredentialForApproval:
+    "authenticateStaffCredentialForApproval",
   completeDailyClose: "completeDailyClose",
   getDailyCloseSnapshot: "getDailyCloseSnapshot",
 }));
 
 const mockedRouter = vi.hoisted(() => ({
+  navigateBack: vi.fn(),
   navigate: vi.fn(),
   search: {} as Record<string, unknown>,
 }));
@@ -62,6 +64,10 @@ vi.mock("@tanstack/react-router", () => ({
   }),
   useNavigate: () => mockedRouter.navigate,
   useSearch: () => mockedRouter.search,
+}));
+
+vi.mock("~/src/hooks/use-navigate-back", () => ({
+  useNavigateBack: () => mockedRouter.navigateBack,
 }));
 
 vi.mock("convex/react", () => ({
@@ -196,7 +202,8 @@ const blockedSnapshot: DailyCloseSnapshot = {
   blockers: [
     {
       category: "register_session",
-      description: "Close the register session before completing End-of-Day Review.",
+      description:
+        "Close the register session before completing End-of-Day Review.",
       id: "blocker-1",
       link: {
         label: "View session",
@@ -318,6 +325,19 @@ describe("DailyCloseViewContent", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("shows the header back button when opened from another workflow", async () => {
+    const user = userEvent.setup();
+    mockedRouter.search = {
+      o: "%2Fwigclub%2Fstore%2Fwigclub%2Foperations%2Fopening",
+    };
+
+    renderContent(readySnapshot);
+
+    await user.click(screen.getByRole("button", { name: /go back/i }));
+
+    expect(mockedRouter.navigateBack).toHaveBeenCalledTimes(1);
+  });
+
   it("shows blocked items, links to source workflows, and disables completion", async () => {
     const user = userEvent.setup();
 
@@ -374,7 +394,7 @@ describe("DailyCloseViewContent", () => {
       "/wigclub/store/osu/pos/transactions/txn-approval-1?o=%252F",
     );
     expect(screen.getByText("Mobile Money")).toBeInTheDocument();
-    expect(screen.getByText("Cash")).toBeInTheDocument();
+    expect(screen.getAllByText("Cash").length).toBeGreaterThan(0);
     expect(
       screen.getByText("POS session is still unresolved"),
     ).toBeInTheDocument();
@@ -424,8 +444,12 @@ describe("DailyCloseViewContent", () => {
     const readySection = screen.getByRole("region", {
       name: "Ready close items",
     });
-    expect(within(readySection).getByText("Completed sale")).toBeInTheDocument();
-    expect(within(readySection).getByRole("link", { name: "#TXN-1" })).toHaveAttribute(
+    expect(
+      within(readySection).getByText("Completed sale"),
+    ).toBeInTheDocument();
+    expect(
+      within(readySection).getByRole("link", { name: "#TXN-1" }),
+    ).toHaveAttribute(
       "href",
       "/wigclub/store/osu/pos/transactions/txn-1?o=%252F",
     );
@@ -655,6 +679,46 @@ describe("DailyCloseViewContent", () => {
     ).toBeDisabled();
   });
 
+  it("opens the operating-date calendar and reports the selected date", async () => {
+    const user = userEvent.setup();
+    const handleOperatingDateChange = vi.fn();
+
+    renderContent(readySnapshot, {
+      onOperatingDateChange: handleOperatingDateChange,
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: /change operating date/i }),
+    );
+    await user.click(
+      within(screen.getByRole("gridcell", { name: "8" })).getByRole("button"),
+    );
+
+    expect(handleOperatingDateChange).toHaveBeenCalledTimes(1);
+    const selectedDate = handleOperatingDateChange.mock.calls[0]?.[0] as Date;
+    expect(selectedDate.getFullYear()).toBe(2026);
+    expect(selectedDate.getMonth()).toBe(4);
+    expect(selectedDate.getDate()).toBe(8);
+  });
+
+  it("disables future operating dates in the calendar", async () => {
+    const user = userEvent.setup();
+    const handleOperatingDateChange = vi.fn();
+
+    renderContent(readySnapshot, {
+      latestSelectableOperatingDate: new Date(2026, 4, 9),
+      onOperatingDateChange: handleOperatingDateChange,
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: /change operating date/i }),
+    );
+
+    expect(
+      within(screen.getByRole("gridcell", { name: "10" })).getByRole("button"),
+    ).toBeDisabled();
+  });
+
   it("opens a POS and expense transaction report as line items", async () => {
     const user = userEvent.setup();
 
@@ -666,13 +730,16 @@ describe("DailyCloseViewContent", () => {
       }),
     ).not.toBeInTheDocument();
 
-    const operatingDate = screen.getAllByText("May 7, 2026")[0];
+    const operatingDate = screen.getAllByText("Thursday, May 7, 2026")[0];
     const actionGroup = operatingDate.closest("div")?.parentElement;
     expect(actionGroup).not.toBeNull();
 
-    const reportButton = within(actionGroup as HTMLElement).getByRole("button", {
-      name: /view report/i,
-    });
+    const reportButton = within(actionGroup as HTMLElement).getByRole(
+      "button",
+      {
+        name: /view report/i,
+      },
+    );
 
     expect(
       screen.queryByText("POS and expense transactions"),
@@ -720,6 +787,29 @@ describe("DailyCloseViewContent", () => {
       "href",
       "/wigclub/store/osu/pos/expense-reports/expense-1?o=%252F",
     );
+  });
+
+  it("uses sentence-case fragments in the empty transaction report summary", async () => {
+    const user = userEvent.setup();
+
+    renderContent({
+      ...readySnapshot,
+      readyItems: [],
+      summary: {
+        ...baseSummary,
+        expenseTransactionCount: 0,
+        transactionCount: 0,
+        voidedTransactionCount: 0,
+      },
+    });
+
+    await user.click(screen.getByRole("button", { name: /view report/i }));
+
+    expect(
+      await screen.findByText(
+        "no POS sales, no expense transactions, no voided sales available from the End-of-Day Review workspace.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("labels a ready zero-activity day explicitly", () => {
@@ -817,18 +907,53 @@ describe("DailyCloseViewContent", () => {
 
     renderContent(readySnapshot);
 
+    expect(screen.getByText("Net sales")).toBeInTheDocument();
+    expect(screen.getByText("Cash")).toBeInTheDocument();
+    expect(screen.queryByText("Today's net sales")).toBeNull();
+    expect(screen.queryByText("Today's cash")).toBeNull();
     expect(
       screen.getByRole("link", { name: "Open transactions" }),
     ).toHaveAttribute(
       "href",
-      "/wigclub/store/osu/pos/transactions?o=%252Fwigclub%252Fstore%252Fosu%252Foperations%252Fdaily-close",
+      "/wigclub/store/osu/pos/transactions?o=%252Fwigclub%252Fstore%252Fosu%252Foperations%252Fdaily-close&operatingDate=2026-05-07",
     );
     expect(
       screen.getByRole("link", { name: "Open cash transactions" }),
     ).toHaveAttribute(
       "href",
-      "/wigclub/store/osu/pos/transactions?o=%252Fwigclub%252Fstore%252Fosu%252Foperations%252Fdaily-close&paymentMethod=cash",
+      "/wigclub/store/osu/pos/transactions?o=%252Fwigclub%252Fstore%252Fosu%252Foperations%252Fdaily-close&operatingDate=2026-05-07&paymentMethod=cash",
     );
+  });
+
+  it("omits operating date from transaction links for the current operating day", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-07T12:00:00"));
+    window.history.pushState(
+      {},
+      "",
+      "/wigclub/store/osu/operations/daily-close",
+    );
+
+    try {
+      renderContent(readySnapshot);
+
+      expect(screen.getByText("Today's net sales")).toBeInTheDocument();
+      expect(screen.getByText("Today's cash")).toBeInTheDocument();
+      expect(
+        screen.getByRole("link", { name: "Open transactions" }),
+      ).toHaveAttribute(
+        "href",
+        "/wigclub/store/osu/pos/transactions?o=%252Fwigclub%252Fstore%252Fosu%252Foperations%252Fdaily-close",
+      );
+      expect(
+        screen.getByRole("link", { name: "Open cash transactions" }),
+      ).toHaveAttribute(
+        "href",
+        "/wigclub/store/osu/pos/transactions?o=%252Fwigclub%252Fstore%252Fosu%252Foperations%252Fdaily-close&paymentMethod=cash",
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("reports expense transaction counts without falling back to staff or approvals", () => {
@@ -845,9 +970,7 @@ describe("DailyCloseViewContent", () => {
     });
 
     expect(screen.getByText("No expense transactions")).toBeInTheDocument();
-    expect(
-      screen.queryByText("1 expense transaction"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("1 expense transaction")).not.toBeInTheDocument();
   });
 
   it("keeps review context available from the ready state", () => {
@@ -890,8 +1013,9 @@ describe("DailyCloseViewContent", () => {
       search: expect.any(Function),
     });
 
-    const searchUpdater = mockedRouter.navigate.mock.calls[0]?.[0]
-      ?.search as (current: Record<string, unknown>) => Record<string, unknown>;
+    const searchUpdater = mockedRouter.navigate.mock.calls[0]?.[0]?.search as (
+      current: Record<string, unknown>,
+    ) => Record<string, unknown>;
 
     expect(
       searchUpdater({
@@ -1010,6 +1134,48 @@ describe("DailyCloseViewContent", () => {
     ).toBeInTheDocument();
   });
 
+  it("clears completion feedback when the operating date changes", async () => {
+    const user = userEvent.setup();
+    const renderResult = renderContent(readySnapshot);
+
+    await user.click(
+      screen.getByRole("button", { name: /complete end-of-day review/i }),
+    );
+
+    expect(
+      await screen.findByRole("status", {
+        name: "",
+      }),
+    ).toHaveTextContent("End-of-day review completed.");
+
+    renderResult.rerender(
+      <DailyCloseViewContent
+        currency="GHS"
+        hasFullAdminAccess
+        isAuthenticated
+        isCompleting={false}
+        isLoadingAccess={false}
+        isLoadingSnapshot={false}
+        onComplete={vi.fn(async () => ok({ closeId: "close-1" }))}
+        orgUrlSlug="wigclub"
+        snapshot={{
+          ...readySnapshot,
+          endAt: Date.UTC(2026, 4, 10),
+          operatingDate: "2026-05-09",
+          startAt: Date.UTC(2026, 4, 9),
+        }}
+        storeId={"store-1" as Id<"store">}
+        storeUrlSlug="osu"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.queryByText("End-of-day review completed."),
+      ).not.toBeInTheDocument();
+    });
+  });
+
   it("renders completed End-of-Day Review summary after reload", () => {
     renderContent({
       ...readySnapshot,
@@ -1064,5 +1230,21 @@ describe("DailyCloseView", () => {
       },
     );
     expect(screen.getByText("End-of-Day Review")).toBeInTheDocument();
+  });
+
+  it("queries End-of-Day Review for the operating date in route search", () => {
+    mockedRouter.search = { operatingDate: "2026-05-08" };
+
+    render(<DailyCloseView />);
+
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+      mockedApi.getDailyCloseSnapshot,
+      {
+        endAt: new Date(2026, 4, 9).getTime(),
+        operatingDate: "2026-05-08",
+        startAt: new Date(2026, 4, 8).getTime(),
+        storeId: "store-1",
+      },
+    );
   });
 });

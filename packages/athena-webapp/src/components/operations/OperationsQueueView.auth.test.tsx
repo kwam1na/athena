@@ -41,6 +41,7 @@ vi.mock("@tanstack/react-router", () => ({
     orgUrlSlug: "wigclub",
     storeUrlSlug: "wigclub",
   }),
+  useSearch: () => ({}),
 }));
 
 vi.mock("@/hooks/useProtectedAdminPageState", () => ({

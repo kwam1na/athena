@@ -32,8 +32,6 @@ import { FadeIn } from "../common/FadeIn";
 import {
   PageLevelHeader,
   PageWorkspace,
-  PageWorkspaceGrid,
-  PageWorkspaceMain,
   PageWorkspaceRail,
 } from "../common/PageLevelHeader";
 import { EmptyState } from "../states/empty/empty-state";
@@ -49,6 +47,9 @@ import { Checkbox } from "../ui/checkbox";
 import { Label } from "../ui/label";
 import { LoadingButton } from "../ui/loading-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
+import { OperationReviewWorkspace } from "./OperationReviewWorkspace";
+import { OperationReviewItemCard } from "./OperationReviewItemCard";
+import { OperationsSummaryMetric } from "./OperationsSummaryMetric";
 
 type DailyOpeningApi = {
   getDailyOpeningSnapshot?: unknown;
@@ -353,17 +354,95 @@ function getMetadataValue(label: string, value: ReactNode, currency: string) {
     return formatOperatingDate(value);
   }
 
+  if (label.endsWith("At") && typeof value === "number") {
+    return formatTimestamp(value);
+  }
+
   return formatMetadataValue(value, currency);
 }
 
-function getMetadataEntries(item: DailyOpeningItem, currency: string) {
+function getArrayMetadataStringValue(
+  metadata: DailyOpeningItem["metadata"],
+  label: string,
+) {
+  if (!Array.isArray(metadata)) return undefined;
+
+  const entry = metadata.find((candidate) => candidate.label === label);
+  const value = entry?.value;
+
+  return typeof value === "string" && value.trim() !== ""
+    ? value.trim()
+    : undefined;
+}
+
+function formatMetadataDisplayValue({
+  currency,
+  item,
+  label,
+  orgUrlSlug,
+  storeUrlSlug,
+  value,
+}: {
+  currency: string;
+  item: DailyOpeningItem;
+  label: string;
+  orgUrlSlug: string;
+  storeUrlSlug: string;
+  value: ReactNode;
+}) {
+  const formattedValue = getMetadataValue(label, value, currency);
+  const transactionId = getArrayMetadataStringValue(
+    item.metadata,
+    "transactionId",
+  );
+
+  if (label === "Transaction" && transactionId) {
+    return (
+      <Link
+        className="inline-flex items-center gap-1 text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline"
+        params={
+          {
+            orgUrlSlug,
+            storeUrlSlug,
+            transactionId,
+          } as never
+        }
+        search={{ o: getOrigin() } as never}
+        to="/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId"
+      >
+        {typeof formattedValue === "string" && !formattedValue.startsWith("#")
+          ? `#${formattedValue}`
+          : formattedValue}
+        <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
+      </Link>
+    );
+  }
+
+  return formattedValue;
+}
+
+function getMetadataEntries(
+  item: DailyOpeningItem,
+  currency: string,
+  orgUrlSlug: string,
+  storeUrlSlug: string,
+) {
   if (!item.metadata) return [];
 
   if (Array.isArray(item.metadata)) {
-    return item.metadata.map((entry) => ({
-      label: entry.label,
-      value: formatMetadataValue(entry.value, currency),
-    }));
+    return item.metadata
+      .filter((entry) => entry.label !== "transactionId")
+      .map((entry) => ({
+        label: entry.label,
+        value: formatMetadataDisplayValue({
+          currency,
+          item,
+          label: entry.label,
+          orgUrlSlug,
+          storeUrlSlug,
+          value: entry.value,
+        }),
+      }));
   }
 
   return Object.entries(item.metadata)
@@ -450,12 +529,36 @@ function getDefaultBucketValue(
   snapshot: DailyOpeningSnapshot,
   status: DailyOpeningStatus,
 ): BucketStatus {
+  if (status === "started") return "ready";
   if (snapshot.blockers.length > 0) return "blocked";
   if (status === "needs_attention" && snapshot.reviewItems.length > 0) {
     return "review";
   }
   if (status === "needs_attention") return "carry-forward";
   return "ready";
+}
+
+function getDisplaySnapshot(
+  snapshot: DailyOpeningSnapshot,
+  status: DailyOpeningStatus,
+): DailyOpeningSnapshot {
+  if (status !== "started") return snapshot;
+
+  return {
+    ...snapshot,
+    blockers: [],
+    readiness: snapshot.readiness
+      ? {
+          ...snapshot.readiness,
+          blockerCount: 0,
+          status: "ready",
+        }
+      : undefined,
+    summary: {
+      ...snapshot.summary,
+      blockerCount: 0,
+    },
+  };
 }
 
 function normalizeBucketTab(value: unknown): BucketStatus | null {
@@ -506,6 +609,32 @@ function getBucketConfigs(snapshot: DailyOpeningSnapshot): BucketConfig[] {
       value: "ready",
     },
   ];
+}
+
+function getVisibleBucketConfigs(
+  snapshot: DailyOpeningSnapshot,
+  status: DailyOpeningStatus,
+) {
+  const buckets = getBucketConfigs(snapshot);
+
+  if (status !== "started") return buckets;
+
+  return buckets.filter((bucket) => bucket.value !== "blocked");
+}
+
+function getSelectedBucketValue(
+  requestedValue: BucketStatus | null,
+  defaultValue: BucketStatus,
+  buckets: BucketConfig[],
+) {
+  if (
+    requestedValue &&
+    buckets.some((bucket) => bucket.value === requestedValue)
+  ) {
+    return requestedValue;
+  }
+
+  return defaultValue;
 }
 
 function ItemLink({
@@ -581,61 +710,46 @@ function OpeningItemCard({
   const itemId = getItemId(item);
   const contextLabel = getItemContextLabel(item);
   const description = getItemDescription(item);
-  const metadataEntries = getMetadataEntries(item, currency);
+  const metadataEntries = getMetadataEntries(
+    item,
+    currency,
+    orgUrlSlug,
+    storeUrlSlug,
+  );
 
   return (
-    <article className="rounded-lg border border-border/80 bg-surface-raised p-layout-md shadow-surface transition-[border-color,box-shadow] hover:border-border">
-      <div className="flex flex-col gap-layout-md md:flex-row md:items-start md:justify-between">
-        <div className="flex min-w-0 gap-layout-sm">
-          {requiresAcknowledgement ? (
-            <input
-              aria-label={`Acknowledge ${item.title}`}
-              checked={Boolean(selected)}
-              className="mt-1 h-4 w-4 rounded border-border text-signal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              onChange={(event) => onSelectedChange?.(event.target.checked)}
-              type="checkbox"
-            />
-          ) : null}
-          <div className="min-w-0 space-y-layout-xs">
-            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              {contextLabel}
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="font-medium text-foreground">{item.title}</p>
-              {item.statusLabel ? (
-                <Badge className="shadow-sm" variant="outline">
-                  {item.statusLabel}
-                </Badge>
-              ) : null}
-            </div>
-            {description ? (
-              <p className="text-sm leading-6 text-muted-foreground">
-                {description}
-              </p>
-            ) : null}
-          </div>
-        </div>
-
+    <OperationReviewItemCard
+      actionSlot={
         <ItemLink
           link={item.link}
           orgUrlSlug={orgUrlSlug}
           storeUrlSlug={storeUrlSlug}
         />
-      </div>
-
-      {metadataEntries.length > 0 ? (
-        <dl className="mt-layout-md grid gap-layout-md rounded-lg border border-border/70 bg-surface px-layout-md py-layout-sm text-sm md:grid-cols-3">
-          {metadataEntries.map((entry) => (
-            <div key={`${itemId}-${entry.label}`}>
-              <dt className="text-xs text-muted-foreground">{entry.label}</dt>
-              <dd className="mt-1 font-medium text-foreground">
-                {entry.value}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      ) : null}
-    </article>
+      }
+      badgeSlot={
+        item.statusLabel ? (
+          <Badge className="shadow-sm" variant="outline">
+            {item.statusLabel}
+          </Badge>
+        ) : null
+      }
+      contextLabel={contextLabel}
+      description={description}
+      itemId={itemId}
+      metadataEntries={metadataEntries}
+      selectionSlot={
+        requiresAcknowledgement ? (
+          <input
+            aria-label={`Acknowledge ${item.title}`}
+            checked={Boolean(selected)}
+            className="mt-1 h-4 w-4 rounded border-border text-signal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            onChange={(event) => onSelectedChange?.(event.target.checked)}
+            type="checkbox"
+          />
+        ) : null
+      }
+      title={item.title}
+    />
   );
 }
 
@@ -816,19 +930,6 @@ function BucketTabs({
         </TabsContent>
       ))}
     </Tabs>
-  );
-}
-
-function SummaryMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
-      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-        {label}
-      </p>
-      <p className="mt-layout-xs text-lg text-foreground">
-        {value}
-      </p>
-    </div>
   );
 }
 
@@ -1196,12 +1297,20 @@ export function DailyOpeningViewContent({
   const isBlocked = status === "blocked";
   const isStarted = status === "started";
   const displayCopy = statusCopy[status];
-  const buckets = snapshot ? getBucketConfigs(snapshot) : [];
-  const defaultBucketValue = snapshot
-    ? getDefaultBucketValue(snapshot, status)
+  const displaySnapshot = snapshot
+    ? getDisplaySnapshot(snapshot, status)
+    : null;
+  const buckets = displaySnapshot
+    ? getVisibleBucketConfigs(displaySnapshot, status)
+    : [];
+  const defaultBucketValue = displaySnapshot
+    ? getDefaultBucketValue(displaySnapshot, status)
     : "ready";
-  const selectedBucketValue =
-    normalizeBucketTab(search.tab) ?? defaultBucketValue;
+  const selectedBucketValue = getSelectedBucketValue(
+    normalizeBucketTab(search.tab),
+    defaultBucketValue,
+    buckets,
+  );
   const acknowledgedRequiredCount = requiredAcknowledgementKeys.filter((key) =>
     acknowledgedKeys.includes(key),
   ).length;
@@ -1258,127 +1367,121 @@ export function DailyOpeningViewContent({
   };
 
   return (
-    <View hideBorder hideHeaderBottomBorder scrollMode="page">
-      <FadeIn className="container mx-auto py-layout-xl">
-        <PageWorkspace>
-          <PageLevelHeader
-            eyebrow="Store Ops"
-            title="Opening Handoff"
-            description="Review prior close handoff, acknowledge carry-forward work, and confirm whether the store day can start."
+    <OperationReviewWorkspace
+      actions={
+        snapshot ? (
+          <div className="rounded-lg border border-border bg-surface-raised px-layout-md py-layout-sm text-sm text-muted-foreground shadow-surface">
+            Operating date{" "}
+            <span className="font-medium text-foreground">
+              {formatOperatingDate(snapshot.operatingDate)}
+            </span>
+          </div>
+        ) : null
+      }
+      afterGrid={
+        onAuthenticateForApproval && openingApproval ? (
+          <CommandApprovalDialog
+            approval={openingApproval}
+            onApproved={(result) => {
+              setIsManagerApprovalOpen(false);
+              void submitStartDay(result.approvedByStaffProfileId);
+            }}
+            onAuthenticateForApproval={onAuthenticateForApproval}
+            onDismiss={() => setIsManagerApprovalOpen(false)}
+            open={isManagerApprovalOpen}
+            storeId={storeId}
           />
-
-          {isLoadingSnapshot || !snapshot ? (
-            <LoadingWorkspace />
-          ) : (
-            <PageWorkspace>
-              <section className="space-y-layout-lg">
-                <div className="flex flex-col gap-layout-md lg:flex-row lg:items-end lg:justify-between">
-                  <div className="space-y-layout-xs">
-                    <h2 className={getStatusLabelClassName(status)}>
-                      {displayCopy.title}
-                    </h2>
-                    <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-                      {displayCopy.description}
-                    </p>
-                  </div>
-                  <div className="rounded-lg border border-border bg-surface-raised px-layout-md py-layout-sm text-sm text-muted-foreground shadow-surface">
-                    Operating date{" "}
-                    <span className="font-medium text-foreground">
-                      {formatOperatingDate(snapshot.operatingDate)}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="grid gap-layout-sm md:grid-cols-2 xl:grid-cols-4">
-                  <SummaryMetric
-                    label="Prior close"
-                    value={
-                      snapshot.priorClose
-                        ? formatOperatingDate(snapshot.priorClose.operatingDate)
-                        : "Not found"
-                    }
-                  />
-                  <SummaryMetric
-                    label="Blockers"
-                    value={formatCount(
-                      snapshot.summary?.blockerCount ??
-                        snapshot.blockers.length,
-                      "blocker",
-                      "No hard blockers",
-                    )}
-                  />
-                  <SummaryMetric
-                    label="Needs review"
-                    value={formatCount(
-                      snapshot.summary?.reviewCount ??
-                        snapshot.reviewItems.length,
-                      "item",
-                      "No review items",
-                    )}
-                  />
-                  <SummaryMetric
-                    label="Carry forward"
-                    value={formatCount(
-                      snapshot.summary?.carryForwardCount ??
-                        snapshot.carryForwardItems.length,
-                      "item",
-                      "No carry-forward items",
-                    )}
-                  />
-                </div>
-              </section>
-
-              <PageWorkspaceGrid>
-                <PageWorkspaceMain>
-                  <BucketTabs
-                    acknowledgedKeys={acknowledgedKeys}
-                    buckets={buckets}
-                    currency={currency}
-                    onAcknowledgedKeysChange={setAcknowledgedKeys}
-                    onValueChange={handleBucketValueChange}
-                    orgUrlSlug={orgUrlSlug}
-                    storeUrlSlug={storeUrlSlug}
-                    value={selectedBucketValue}
-                  />
-                </PageWorkspaceMain>
-
-                <OpeningRail
-                  acknowledgedKeys={acknowledgedKeys}
-                  acknowledgedCount={acknowledgedRequiredCount}
-                  acknowledgementItems={acknowledgementItems}
-                  commandMessage={commandMessage}
-                  isBlocked={isBlocked}
-                  isStarted={isStarted}
-                  isStarting={isStarting}
-                  notes={notes}
-                  onAcknowledgedKeysChange={setAcknowledgedKeys}
-                  onNotesChange={setNotes}
-                  onStartDay={handleStartDay}
-                  requiredAcknowledgementCount={
-                    requiredAcknowledgementKeys.length
-                  }
-                  snapshot={snapshot}
-                  status={status}
-                />
-              </PageWorkspaceGrid>
-              {onAuthenticateForApproval && openingApproval ? (
-                <CommandApprovalDialog
-                  approval={openingApproval}
-                  onApproved={(result) => {
-                    setIsManagerApprovalOpen(false);
-                    void submitStartDay(result.approvedByStaffProfileId);
-                  }}
-                  onAuthenticateForApproval={onAuthenticateForApproval}
-                  onDismiss={() => setIsManagerApprovalOpen(false)}
-                  open={isManagerApprovalOpen}
-                  storeId={storeId}
-                />
-              ) : null}
-            </PageWorkspace>
-          )}
-        </PageWorkspace>
-      </FadeIn>
-    </View>
+        ) : null
+      }
+      description="Review prior close handoff, acknowledge carry-forward work, and confirm whether the store day can start."
+      eyebrow="Store Ops"
+      isLoading={isLoadingSnapshot || !snapshot}
+      loadingContent={<LoadingWorkspace />}
+      main={
+        snapshot ? (
+          <BucketTabs
+            acknowledgedKeys={acknowledgedKeys}
+            buckets={buckets}
+            currency={currency}
+            onAcknowledgedKeysChange={setAcknowledgedKeys}
+            onValueChange={handleBucketValueChange}
+            orgUrlSlug={orgUrlSlug}
+            storeUrlSlug={storeUrlSlug}
+            value={selectedBucketValue}
+          />
+        ) : null
+      }
+      metrics={
+        snapshot ? (
+          <>
+            <OperationsSummaryMetric
+              label="Prior close"
+              tone="quiet"
+              value={
+                snapshot.priorClose
+                  ? formatOperatingDate(snapshot.priorClose.operatingDate)
+                  : "Not found"
+              }
+            />
+            <OperationsSummaryMetric
+              label="Blockers"
+              tone="quiet"
+              value={formatCount(
+                displaySnapshot?.summary?.blockerCount ??
+                  displaySnapshot?.blockers.length ??
+                  0,
+                "blocker",
+                "No hard blockers",
+              )}
+            />
+            <OperationsSummaryMetric
+              label="Needs review"
+              tone="quiet"
+              value={formatCount(
+                snapshot.summary?.reviewCount ?? snapshot.reviewItems.length,
+                "item",
+                "No review items",
+              )}
+            />
+            <OperationsSummaryMetric
+              label="Carry forward"
+              tone="quiet"
+              value={formatCount(
+                snapshot.summary?.carryForwardCount ??
+                  snapshot.carryForwardItems.length,
+                "item",
+                "No carry-forward items",
+              )}
+            />
+          </>
+        ) : null
+      }
+      rail={
+        snapshot ? (
+          <OpeningRail
+            acknowledgedKeys={acknowledgedKeys}
+            acknowledgedCount={acknowledgedRequiredCount}
+            acknowledgementItems={acknowledgementItems}
+            commandMessage={commandMessage}
+            isBlocked={isBlocked}
+            isStarted={isStarted}
+            isStarting={isStarting}
+            notes={notes}
+            onAcknowledgedKeysChange={setAcknowledgedKeys}
+            onNotesChange={setNotes}
+            onStartDay={handleStartDay}
+            requiredAcknowledgementCount={requiredAcknowledgementKeys.length}
+            snapshot={displaySnapshot ?? snapshot}
+            status={status}
+          />
+        ) : null
+      }
+      statusDescription={displayCopy.description}
+      statusTitle={
+        <h2 className={getStatusLabelClassName(status)}>{displayCopy.title}</h2>
+      }
+      title="Opening Handoff"
+    />
   );
 }
 

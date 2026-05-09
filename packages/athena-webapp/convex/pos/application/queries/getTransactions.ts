@@ -131,6 +131,7 @@ export async function getTransactionsByStore(
 export async function getCompletedTransactions(
   ctx: QueryCtx,
   args: {
+    completedFrom?: number;
     registerSessionId?: Id<"registerSession">;
     storeId: Id<"store">;
     limit?: number;

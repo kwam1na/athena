@@ -733,6 +733,131 @@ describe("end-of-day review backend foundation", () => {
     expect(metadata).not.toHaveProperty("register");
   });
 
+  it("includes the staff member name for completed close summaries", async () => {
+    const { db } = createDb({
+      dailyClose: [
+        {
+          _id: "daily-close-1",
+          carryForwardWorkItemIds: [],
+          completedAt: Date.UTC(2026, 4, 9, 1, 8),
+          completedByStaffProfileId: "staff-1",
+          completedByUserId: "user-1",
+          createdAt: Date.UTC(2026, 4, 9, 1, 8),
+          isCurrent: true,
+          operatingDate: "2026-05-08",
+          organizationId: "org-1",
+          readiness: {
+            blockerCount: 0,
+            carryForwardCount: 0,
+            readyCount: 0,
+            reviewCount: 0,
+            status: "ready",
+          },
+          sourceSubjects: [],
+          status: "completed",
+          storeId: "store-1",
+          summary: {},
+          updatedAt: Date.UTC(2026, 4, 9, 1, 8),
+        },
+      ],
+      staffProfile: [
+        {
+          _id: "staff-1",
+          firstName: "Kofi",
+          fullName: "Kofi Mensah",
+          lastName: "Mensah",
+          organizationId: "org-1",
+          status: "active",
+          storeId: "store-1",
+        },
+      ],
+      store: [store],
+    });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(snapshot.completedClose).toMatchObject({
+      completedByStaffName: "Kofi Mensah",
+      completedByStaffProfileId: "staff-1",
+    });
+  });
+
+  it("falls back to the completion event approver for older close summaries", async () => {
+    const { db } = createDb({
+      dailyClose: [
+        {
+          _id: "daily-close-1",
+          carryForwardWorkItemIds: [],
+          completedAt: Date.UTC(2026, 4, 9, 1, 8),
+          completedByUserId: "user-1",
+          createdAt: Date.UTC(2026, 4, 9, 1, 8),
+          isCurrent: true,
+          operatingDate: "2026-05-08",
+          organizationId: "org-1",
+          readiness: {
+            blockerCount: 0,
+            carryForwardCount: 0,
+            readyCount: 0,
+            reviewCount: 0,
+            status: "ready",
+          },
+          sourceSubjects: [],
+          status: "completed",
+          storeId: "store-1",
+          summary: {},
+          updatedAt: Date.UTC(2026, 4, 9, 1, 8),
+        },
+      ],
+      operationalEvent: [
+        {
+          _id: "event-1",
+          createdAt: Date.UTC(2026, 4, 9, 1, 8),
+          eventType: "daily_close_completed",
+          message: "End-of-Day Review completed for 2026-05-08.",
+          metadata: {
+            approvedByStaffProfileId: "staff-manager-1",
+          },
+          organizationId: "org-1",
+          storeId: "store-1",
+          subjectId: "daily-close-1",
+          subjectLabel: "End-of-Day Review 2026-05-08",
+          subjectType: "daily_close",
+        },
+      ],
+      staffProfile: [
+        {
+          _id: "staff-manager-1",
+          firstName: "Kwamina",
+          fullName: "Kwamina Mensah",
+          lastName: "Mensah",
+          organizationId: "org-1",
+          status: "active",
+          storeId: "store-1",
+        },
+      ],
+      store: [store],
+    });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(snapshot.completedClose).toMatchObject({
+      completedByStaffName: "Kwamina Mensah",
+      completedByStaffProfileId: "staff-manager-1",
+    });
+  });
+
   it("uses the supplied operating-day range for same-local-day transactions after UTC midnight", async () => {
     const { db } = createDb({
       posTransaction: [
@@ -1058,7 +1183,7 @@ describe("end-of-day review backend foundation", () => {
       data: {
         action: "completed",
         dailyClose: {
-          completedByStaffProfileId: "staff-1",
+          completedByStaffProfileId: "staff-manager-1",
           completedByUserId: "user-1",
           isCurrent: true,
           notes: "Close reviewed.",
@@ -1078,7 +1203,7 @@ describe("end-of-day review backend foundation", () => {
     expect(reportSnapshot).toMatchObject({
       closeMetadata: {
         completedAt: Date.UTC(2026, 4, 7, 22),
-        completedByStaffProfileId: "staff-1",
+        completedByStaffProfileId: "staff-manager-1",
         completedByUserId: "user-1",
         notes: "Close reviewed.",
         operatingDate: "2026-05-07",
@@ -1157,6 +1282,7 @@ describe("end-of-day review backend foundation", () => {
           insert.value.eventType === "daily_close_completed",
       )?.value,
     ).toMatchObject({
+      actorStaffProfileId: "staff-manager-1",
       eventType: "daily_close_completed",
       subjectType: "daily_close",
       metadata: {
@@ -1325,6 +1451,42 @@ describe("end-of-day review backend foundation", () => {
           updatedAt: Date.UTC(2026, 4, 9, 22),
         },
       ],
+      operationalEvent: [
+        {
+          _id: "event-old-complete",
+          createdAt: Date.UTC(2026, 4, 7, 22),
+          eventType: "daily_close_completed",
+          message: "End-of-Day Review completed for 2026-05-07.",
+          metadata: {
+            approvedByStaffProfileId: "staff-manager-1",
+          },
+          organizationId: "org-1",
+          storeId: "store-1",
+          subjectId: "daily-close-old",
+          subjectLabel: "End-of-Day Review 2026-05-07",
+          subjectType: "daily_close",
+        },
+      ],
+      staffProfile: [
+        {
+          _id: "staff-1",
+          firstName: "Ama",
+          fullName: "Ama Mensah",
+          lastName: "Mensah",
+          organizationId: "org-1",
+          status: "active",
+          storeId: "store-1",
+        },
+        {
+          _id: "staff-manager-1",
+          firstName: "Kwamina",
+          fullName: "Kwamina Mensah",
+          lastName: "Mensah",
+          organizationId: "org-1",
+          status: "active",
+          storeId: "store-1",
+        },
+      ],
     });
 
     const history = await listCompletedDailyCloseHistoryWithCtx(
@@ -1339,6 +1501,7 @@ describe("end-of-day review backend foundation", () => {
     expect(history[0]).toMatchObject({
       carryForwardCount: 1,
       completedAt: Date.UTC(2026, 4, 8, 22),
+      completedByStaffName: "Ama Mensah",
       completedByStaffProfileId: "staff-1",
       operatingDate: "2026-05-08",
       readinessStatus: "ready",
@@ -1349,6 +1512,11 @@ describe("end-of-day review backend foundation", () => {
         transactionCount: 3,
       },
     });
+    expect(history[1]).toMatchObject({
+      completedByStaffName: "Kwamina Mensah",
+      completedByStaffProfileId: "staff-manager-1",
+      operatingDate: "2026-05-07",
+    });
 
     const detail = await getCompletedDailyCloseHistoryDetailWithCtx(
       { db } as unknown as QueryCtx,
@@ -1358,9 +1526,23 @@ describe("end-of-day review backend foundation", () => {
       },
     );
     expect(detail).toMatchObject({
+      completedByStaffName: "Ama Mensah",
+      completedByStaffProfileId: "staff-1",
       dailyCloseId: "daily-close-new",
       operatingDate: "2026-05-08",
       reportSnapshot: completedSnapshot,
+    });
+    await expect(
+      getCompletedDailyCloseHistoryDetailWithCtx(
+        { db } as unknown as QueryCtx,
+        {
+          dailyCloseId: "daily-close-old" as Id<"dailyClose">,
+          storeId: "store-1" as Id<"store">,
+        },
+      ),
+    ).resolves.toMatchObject({
+      completedByStaffName: "Kwamina Mensah",
+      completedByStaffProfileId: "staff-manager-1",
     });
     await expect(
       getCompletedDailyCloseHistoryDetailWithCtx(

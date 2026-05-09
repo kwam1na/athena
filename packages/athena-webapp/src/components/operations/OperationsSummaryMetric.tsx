@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowUpRight } from "lucide-react";
 
+import { cn } from "@/lib/utils";
 import { Button } from "../ui/button";
 
 type OperationsSummaryMetricLink = {
@@ -27,17 +28,33 @@ export function OperationsSummaryMetric({
   helper,
   label,
   link,
+  tone = "default",
   value,
 }: {
   helper?: string;
   label: string;
   link?: OperationsSummaryMetricLink;
+  tone?: "default" | "quiet";
   value: string | number;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-surface px-layout-md py-layout-sm shadow-surface">
+    <div
+      className={cn(
+        "rounded-lg border border-border bg-surface shadow-surface",
+        tone === "quiet"
+          ? "px-layout-md py-layout-md"
+          : "px-layout-md py-layout-sm",
+      )}
+    >
       <div className="flex items-start justify-between gap-layout-sm">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <p
+          className={cn(
+            "font-medium uppercase text-muted-foreground",
+            tone === "quiet"
+              ? "text-[11px] tracking-[0.16em]"
+              : "text-xs tracking-wide",
+          )}
+        >
           {label}
         </p>
         {link ? (
@@ -58,7 +75,14 @@ export function OperationsSummaryMetric({
           </Button>
         ) : null}
       </div>
-      <p className="mt-1 font-numeric text-2xl tabular-nums text-foreground">
+      <p
+        className={cn(
+          "mt-1 tabular-nums text-foreground",
+          tone === "quiet"
+            ? "text-base font-medium leading-7"
+            : "font-numeric text-2xl",
+        )}
+      >
         {value}
       </p>
       {helper ? (
