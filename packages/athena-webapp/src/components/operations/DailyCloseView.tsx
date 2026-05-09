@@ -133,6 +133,7 @@ export type DailyCloseSnapshot = {
   } | null;
   operatingDate: string;
   readyItems: DailyCloseItem[];
+  reportSnapshot?: DailyCloseStoredReportSnapshot | null;
   startAt: number;
   endAt: number;
   readiness?: {
@@ -174,6 +175,24 @@ export type DailyCloseSnapshot = {
     varianceTotal?: number | null;
     voidedTransactionCount?: number | null;
   };
+};
+
+type DailyCloseStoredReportSnapshot = {
+  closeMetadata?: {
+    completedAt?: number | null;
+    completedByStaffName?: string | null;
+    endAt: number;
+    notes?: string | null;
+    operatingDate: string;
+    startAt: number;
+  };
+  carryForwardItems?: DailyCloseSnapshot["carryForwardItems"];
+  readyItems?: DailyCloseSnapshot["readyItems"];
+  readiness?: DailyCloseSnapshot["readiness"];
+  reviewedItems?: DailyCloseSnapshot["reviewItems"];
+  reviewItems?: DailyCloseSnapshot["reviewItems"];
+  status?: DailyCloseSnapshot["status"];
+  summary?: DailyCloseSnapshot["summary"];
 };
 
 type CompletionArgs = {
@@ -1304,6 +1323,44 @@ function getStatusDisplayCopy(
   return statusCopy[status];
 }
 
+function normalizeCompletedReportSnapshot(
+  snapshot: DailyCloseSnapshot,
+): DailyCloseSnapshot {
+  if (snapshot.status !== "completed" || !snapshot.reportSnapshot) {
+    return snapshot;
+  }
+
+  const storedSnapshot = snapshot.reportSnapshot;
+
+  if (!storedSnapshot.closeMetadata) {
+    return snapshot;
+  }
+
+  return {
+    ...snapshot,
+    blockers: [],
+    carryForwardItems: storedSnapshot.carryForwardItems ?? [],
+    completedClose: {
+      completedAt:
+        storedSnapshot.closeMetadata.completedAt ??
+        snapshot.completedClose?.completedAt,
+      completedByStaffName:
+        storedSnapshot.closeMetadata.completedByStaffName ??
+        snapshot.completedClose?.completedByStaffName,
+      notes:
+        storedSnapshot.closeMetadata.notes ?? snapshot.completedClose?.notes,
+    },
+    endAt: storedSnapshot.closeMetadata.endAt,
+    operatingDate: storedSnapshot.closeMetadata.operatingDate,
+    readyItems: storedSnapshot.readyItems ?? [],
+    readiness: storedSnapshot.readiness ?? snapshot.readiness,
+    reviewItems:
+      storedSnapshot.reviewedItems ?? storedSnapshot.reviewItems ?? [],
+    startAt: storedSnapshot.closeMetadata.startAt,
+    summary: storedSnapshot.summary ?? snapshot.summary,
+  };
+}
+
 function getDefaultBucketValue(
   snapshot: DailyCloseSnapshot,
   status: DailyCloseStatus,
@@ -1997,10 +2054,11 @@ export function DailyCloseReadOnlyReport({
   snapshot: DailyCloseSnapshot;
   storeUrlSlug: string;
 }) {
-  const status = getDailyCloseStatus(snapshot);
-  const displayCopy = getStatusDisplayCopy(snapshot, status);
-  const buckets = getBucketConfigs(snapshot);
-  const defaultBucketValue = getDefaultBucketValue(snapshot, status);
+  const displaySnapshot = normalizeCompletedReportSnapshot(snapshot);
+  const status = getDailyCloseStatus(displaySnapshot);
+  const displayCopy = getStatusDisplayCopy(displaySnapshot, status);
+  const buckets = getBucketConfigs(displaySnapshot);
+  const defaultBucketValue = getDefaultBucketValue(displaySnapshot, status);
   const [selectedBucketValue, setSelectedBucketValue] =
     useState<BucketStatus>(defaultBucketValue);
   const [selectedBucketPage, setSelectedBucketPage] = useState(1);
@@ -2009,7 +2067,7 @@ export function DailyCloseReadOnlyReport({
     buckets.find((bucket) => bucket.value === defaultBucketValue) ??
     buckets[0];
   const salesMetricLabels = getDailyCloseSalesMetricLabels(
-    snapshot.operatingDate,
+    displaySnapshot.operatingDate,
   );
 
   return (
@@ -2028,13 +2086,13 @@ export function DailyCloseReadOnlyReport({
             <TransactionReportAction
               currency={currency}
               orgUrlSlug={orgUrlSlug}
-              snapshot={snapshot}
+              snapshot={displaySnapshot}
               storeUrlSlug={storeUrlSlug}
             />
             <div className="rounded-lg border border-border bg-surface-raised px-layout-md py-layout-sm text-sm text-muted-foreground shadow-surface">
               Operating date{" "}
               <span className="font-medium text-foreground">
-                {formatDailyCloseOperatingDate(snapshot.operatingDate)}
+                {formatDailyCloseOperatingDate(displaySnapshot.operatingDate)}
               </span>
             </div>
           </div>
@@ -2044,7 +2102,7 @@ export function DailyCloseReadOnlyReport({
           <OperationsSummaryMetric
             helper={formatEntityCount(
               getSummaryCount(
-                snapshot.summary,
+                displaySnapshot.summary,
                 "transactionCount",
                 "transactionCount",
               ),
@@ -2055,20 +2113,24 @@ export function DailyCloseReadOnlyReport({
               ariaLabel: "Open transactions",
               orgUrlSlug,
               search: buildDailyCloseTransactionSearch({
-                operatingDate: snapshot.operatingDate,
+                operatingDate: displaySnapshot.operatingDate,
               }),
               storeUrlSlug,
               to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
             }}
             value={formatDailyCloseMoney(
               currency,
-              getSummaryAmount(snapshot.summary, "totalSales", "salesTotal"),
+              getSummaryAmount(
+                displaySnapshot.summary,
+                "totalSales",
+                "salesTotal",
+              ),
             )}
           />
           <OperationsSummaryMetric
             helper={formatTodayCashTransactionCount(
               getSummaryCount(
-                snapshot.summary,
+                displaySnapshot.summary,
                 "currentDayCashTransactionCount",
                 "transactionCount",
               ),
@@ -2078,7 +2140,7 @@ export function DailyCloseReadOnlyReport({
               ariaLabel: "Open cash transactions",
               orgUrlSlug,
               search: buildDailyCloseTransactionSearch({
-                operatingDate: snapshot.operatingDate,
+                operatingDate: displaySnapshot.operatingDate,
                 paymentMethod: "cash",
               }),
               storeUrlSlug,
@@ -2087,7 +2149,7 @@ export function DailyCloseReadOnlyReport({
             value={formatDailyCloseMoney(
               currency,
               getSummaryAmount(
-                snapshot.summary,
+                displaySnapshot.summary,
                 "currentDayCashTotal",
                 "cashExpected",
               ),
@@ -2096,7 +2158,7 @@ export function DailyCloseReadOnlyReport({
           <OperationsSummaryMetric
             helper={formatCarriedOverRegisterCount(
               getSummaryCount(
-                snapshot.summary,
+                displaySnapshot.summary,
                 "carriedOverRegisterCount",
                 "carriedOverRegisterCount",
               ),
@@ -2105,7 +2167,7 @@ export function DailyCloseReadOnlyReport({
             value={formatDailyCloseMoney(
               currency,
               getSummaryAmount(
-                snapshot.summary,
+                displaySnapshot.summary,
                 "carriedOverCashTotal",
                 "carriedOverCashTotal",
               ),
@@ -2113,23 +2175,23 @@ export function DailyCloseReadOnlyReport({
           />
           <OperationsSummaryMetric
             helper={formatExpenseTransactionCount(
-              getExpenseTransactionCount(snapshot.summary),
+              getExpenseTransactionCount(displaySnapshot.summary),
             )}
             label="Expenses"
             value={formatDailyCloseMoney(
               currency,
-              snapshot.summary.expenseTotal,
+              displaySnapshot.summary.expenseTotal,
             )}
           />
           <OperationsSummaryMetric
             helper={formatRegisterVarianceCount(
-              getSummaryRegisterVarianceCount(snapshot.summary),
+              getSummaryRegisterVarianceCount(displaySnapshot.summary),
             )}
             label="Variance"
             value={formatDailyCloseMoney(
               currency,
               getSummaryAmount(
-                snapshot.summary,
+                displaySnapshot.summary,
                 "varianceTotal",
                 "netCashVariance",
               ),
@@ -2534,18 +2596,21 @@ export function DailyCloseViewContent({
     );
   }
 
-  const status = snapshot ? getDailyCloseStatus(snapshot) : "ready";
+  const displaySnapshot = snapshot
+    ? normalizeCompletedReportSnapshot(snapshot)
+    : undefined;
+  const status = displaySnapshot ? getDailyCloseStatus(displaySnapshot) : "ready";
   const isBlocked = status === "blocked";
   const isCompleted = status === "completed";
-  const displayCopy = snapshot
-    ? getStatusDisplayCopy(snapshot, status)
+  const displayCopy = displaySnapshot
+    ? getStatusDisplayCopy(displaySnapshot, status)
     : statusCopy[status];
-  const salesMetricLabels = snapshot
-    ? getDailyCloseSalesMetricLabels(snapshot.operatingDate)
+  const salesMetricLabels = displaySnapshot
+    ? getDailyCloseSalesMetricLabels(displaySnapshot.operatingDate)
     : null;
-  const buckets = snapshot ? getBucketConfigs(snapshot) : [];
-  const defaultBucketValue = snapshot
-    ? getDefaultBucketValue(snapshot, status)
+  const buckets = displaySnapshot ? getBucketConfigs(displaySnapshot) : [];
+  const defaultBucketValue = displaySnapshot
+    ? getDefaultBucketValue(displaySnapshot, status)
     : "ready";
   const selectedBucketValue =
     normalizeBucketTab(search.tab) ?? defaultBucketValue;
@@ -2618,17 +2683,17 @@ export function DailyCloseViewContent({
   return (
     <OperationReviewWorkspace
       actions={
-        snapshot ? (
+        displaySnapshot ? (
           <>
             <TransactionReportAction
               currency={currency}
               orgUrlSlug={orgUrlSlug}
-              snapshot={snapshot}
+              snapshot={displaySnapshot}
               storeUrlSlug={storeUrlSlug}
             />
             <OperatingDatePicker
               latestSelectableDate={latestSelectableOperatingDate}
-              operatingDate={snapshot.operatingDate}
+              operatingDate={displaySnapshot.operatingDate}
               onChange={onOperatingDateChange}
             />
           </>
@@ -2637,9 +2702,9 @@ export function DailyCloseViewContent({
       afterGrid={completionApprovalRunner.dialog}
       description="Review the operating day, resolve blockers, and preserve follow-ups before saving the close summary."
       eyebrow="Store Ops"
-      isLoading={isLoadingSnapshot || !snapshot}
+      isLoading={isLoadingSnapshot || !displaySnapshot}
       main={
-        snapshot ? (
+        displaySnapshot ? (
           <BucketTabs
             buckets={buckets}
             currency={currency}
@@ -2655,12 +2720,12 @@ export function DailyCloseViewContent({
         ) : null
       }
       metrics={
-        snapshot ? (
+        displaySnapshot ? (
           <>
             <OperationsSummaryMetric
               helper={formatEntityCount(
                 getSummaryCount(
-                  snapshot.summary,
+                  displaySnapshot.summary,
                   "transactionCount",
                   "transactionCount",
                 ),
@@ -2671,20 +2736,24 @@ export function DailyCloseViewContent({
                 ariaLabel: "Open transactions",
                 orgUrlSlug,
                 search: buildDailyCloseTransactionSearch({
-                  operatingDate: snapshot.operatingDate,
+                  operatingDate: displaySnapshot.operatingDate,
                 }),
                 storeUrlSlug,
                 to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
               }}
               value={formatDailyCloseMoney(
                 currency,
-                getSummaryAmount(snapshot.summary, "totalSales", "salesTotal"),
+                getSummaryAmount(
+                  displaySnapshot.summary,
+                  "totalSales",
+                  "salesTotal",
+                ),
               )}
             />
             <OperationsSummaryMetric
               helper={formatTodayCashTransactionCount(
                 getSummaryCount(
-                  snapshot.summary,
+                  displaySnapshot.summary,
                   "currentDayCashTransactionCount",
                   "transactionCount",
                 ),
@@ -2694,7 +2763,7 @@ export function DailyCloseViewContent({
                 ariaLabel: "Open cash transactions",
                 orgUrlSlug,
                 search: buildDailyCloseTransactionSearch({
-                  operatingDate: snapshot.operatingDate,
+                  operatingDate: displaySnapshot.operatingDate,
                   paymentMethod: "cash",
                 }),
                 storeUrlSlug,
@@ -2703,7 +2772,7 @@ export function DailyCloseViewContent({
               value={formatDailyCloseMoney(
                 currency,
                 getSummaryAmount(
-                  snapshot.summary,
+                  displaySnapshot.summary,
                   "currentDayCashTotal",
                   "cashExpected",
                 ),
@@ -2712,7 +2781,7 @@ export function DailyCloseViewContent({
             <OperationsSummaryMetric
               helper={formatCarriedOverRegisterCount(
                 getSummaryCount(
-                  snapshot.summary,
+                  displaySnapshot.summary,
                   "carriedOverRegisterCount",
                   "carriedOverRegisterCount",
                 ),
@@ -2721,7 +2790,7 @@ export function DailyCloseViewContent({
               value={formatDailyCloseMoney(
                 currency,
                 getSummaryAmount(
-                  snapshot.summary,
+                  displaySnapshot.summary,
                   "carriedOverCashTotal",
                   "carriedOverCashTotal",
                 ),
@@ -2729,23 +2798,23 @@ export function DailyCloseViewContent({
             />
             <OperationsSummaryMetric
               helper={formatExpenseTransactionCount(
-                getExpenseTransactionCount(snapshot.summary),
+                getExpenseTransactionCount(displaySnapshot.summary),
               )}
               label="Expenses"
               value={formatDailyCloseMoney(
                 currency,
-                snapshot.summary.expenseTotal,
+                displaySnapshot.summary.expenseTotal,
               )}
             />
             <OperationsSummaryMetric
               helper={formatRegisterVarianceCount(
-                getSummaryRegisterVarianceCount(snapshot.summary),
+                getSummaryRegisterVarianceCount(displaySnapshot.summary),
               )}
               label="Variance"
               value={formatDailyCloseMoney(
                 currency,
                 getSummaryAmount(
-                  snapshot.summary,
+                  displaySnapshot.summary,
                   "varianceTotal",
                   "netCashVariance",
                 ),
@@ -2755,7 +2824,7 @@ export function DailyCloseViewContent({
         ) : null
       }
       rail={
-        snapshot ? (
+        displaySnapshot ? (
           <CompletionRail
             commandMessage={commandMessage}
             isBlocked={isBlocked}
@@ -2764,7 +2833,7 @@ export function DailyCloseViewContent({
             notes={notes}
             onComplete={() => void handleComplete()}
             onNotesChange={setNotes}
-            snapshot={snapshot}
+            snapshot={displaySnapshot}
             status={status}
           />
         ) : null
