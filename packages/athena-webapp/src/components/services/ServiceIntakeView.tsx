@@ -3,12 +3,16 @@ import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
+import { PageLevelHeader, PageWorkspace } from "../common/PageLevelHeader";
 import { EmptyState } from "../states/empty/empty-state";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
 import { useAuth } from "@/hooks/useAuth";
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
-import { type NormalizedCommandResult, runCommand } from "@/lib/errors/runCommand";
+import {
+  type NormalizedCommandResult,
+  runCommand,
+} from "@/lib/errors/runCommand";
 import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
 import { parseDisplayAmountInput } from "~/src/lib/pos/displayAmounts";
@@ -43,7 +47,7 @@ type ServiceIntakeViewContentProps = {
   isLoadingPermissions: boolean;
   isSubmitting: boolean;
   onCreateIntake: (
-    args: CreateServiceIntakeArgs
+    args: CreateServiceIntakeArgs,
   ) => Promise<NormalizedCommandResult<CreateServiceIntakeResult>>;
   searchQuery: string;
   setSearchQuery: (value: string) => void;
@@ -93,13 +97,7 @@ export function ServiceIntakeViewContent({
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   if (isLoadingPermissions) {
-    return (
-      <View>
-        <div className="container mx-auto py-10 text-sm text-muted-foreground">
-          Loading service intake...
-        </div>
-      </View>
-    );
+    return null;
   }
 
   if (!hasFullAdminAccess) {
@@ -107,18 +105,12 @@ export function ServiceIntakeViewContent({
   }
 
   if (!staffOptions) {
-    return (
-      <View>
-        <div className="container mx-auto py-10 text-sm text-muted-foreground">
-          Loading service intake...
-        </div>
-      </View>
-    );
+    return null;
   }
 
   const handleChange = <K extends keyof ServiceIntakeFormState>(
     field: K,
-    value: ServiceIntakeFormState[K]
+    value: ServiceIntakeFormState[K],
   ) => {
     setForm((current) => ({
       ...current,
@@ -195,28 +187,27 @@ export function ServiceIntakeViewContent({
   };
 
   return (
-    <View
-      hideBorder
-      hideHeaderBottomBorder
-      header={
-        <div className="container mx-auto flex h-[40px] items-center">
-          <p className="text-xl font-medium">Service intake</p>
-        </div>
-      }
-    >
-      <FadeIn className="container mx-auto py-8">
-        <ServiceIntakeForm
-          customerResults={customerResults}
-          form={form}
-          isSubmitting={isSubmitting}
-          onChange={handleChange}
-          onSelectCustomer={handleSelectCustomer}
-          onSubmit={handleSubmit}
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          staffOptions={staffOptions}
-          validationErrors={validationErrors}
-        />
+    <View hideBorder hideHeaderBottomBorder scrollMode="page">
+      <FadeIn className="container mx-auto py-layout-xl">
+        <PageWorkspace>
+          <PageLevelHeader
+            eyebrow="Service Ops"
+            title="Service Intake"
+            description="Capture walk-in or booked service work with the customer, staff owner, priority, and deposit details ready for operations."
+          />
+          <ServiceIntakeForm
+            customerResults={customerResults}
+            form={form}
+            isSubmitting={isSubmitting}
+            onChange={handleChange}
+            onSelectCustomer={handleSelectCustomer}
+            onSubmit={handleSubmit}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            staffOptions={staffOptions}
+            validationErrors={validationErrors}
+          />
+        </PageWorkspace>
       </FadeIn>
     </View>
   );
@@ -239,16 +230,16 @@ export function ServiceIntakeView() {
     operationsApi.serviceIntake.searchCustomers,
     canQueryProtectedData && deferredSearchQuery.trim()
       ? { searchQuery: deferredSearchQuery, storeId: activeStore!._id }
-      : "skip"
+      : "skip",
   ) as ServiceIntakeCustomerResult[] | undefined;
 
   const staffOptions = useQuery(
     operationsApi.serviceIntake.listAssignableStaff,
-    canQueryProtectedData ? { storeId: activeStore!._id } : "skip"
+    canQueryProtectedData ? { storeId: activeStore!._id } : "skip",
   ) as ServiceIntakeStaffOption[] | undefined;
 
   const createServiceIntake = useMutation(
-    operationsApi.serviceIntake.createServiceIntake
+    operationsApi.serviceIntake.createServiceIntake,
   );
 
   const handleCreateIntake = async (args: CreateServiceIntakeArgs) => {
@@ -261,13 +252,7 @@ export function ServiceIntakeView() {
   };
 
   if (isLoadingAccess) {
-    return (
-      <View>
-        <div className="container mx-auto py-10 text-sm text-muted-foreground">
-          Loading service intake...
-        </div>
-      </View>
-    );
+    return null;
   }
 
   if (!isAuthenticated) {

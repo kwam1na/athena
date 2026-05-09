@@ -29,6 +29,7 @@ vi.mock("@tanstack/react-router", () => ({
     </a>
   ),
   useParams: () => ({}),
+  useSearch: () => ({}),
 }));
 
 vi.mock("convex/react", () => ({
@@ -36,7 +37,9 @@ vi.mock("convex/react", () => ({
 }));
 
 vi.mock("@/hooks/useGetActiveStore", () => ({
-  default: () => useGetActiveStoreMock(),
+  default: function UseGetActiveStoreMockAdapter() {
+    return useGetActiveStoreMock();
+  },
 }));
 
 vi.mock("@/hooks/useGetOrganizations", () => ({
@@ -93,13 +96,19 @@ describe("PointOfSaleView", () => {
     usePermissionsMock.mockReturnValue({
       hasFullAdminAccess: true,
     });
-    useQueryMock
-      .mockReturnValueOnce({})
-      .mockReturnValueOnce({
-        totalItemsSold: 3,
-        totalSales: 12_500,
-        totalTransactions: 2,
-      });
+    useQueryMock.mockReturnValueOnce({}).mockReturnValueOnce({
+      totalItemsSold: 3,
+      totalSales: 12_500,
+      totalTransactions: 2,
+    });
+  });
+
+  it("renders the POS landing header as the page title", () => {
+    render(<PointOfSaleView />);
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Point of Sale" }),
+    ).toBeInTheDocument();
   });
 
   it("links managers to active POS session operations from the POS landing page", () => {

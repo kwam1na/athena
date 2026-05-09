@@ -46,6 +46,23 @@ const isToday = (timestamp: number) => {
   return date.toDateString() === today.toDateString();
 };
 
+function getStartOfOperatingDate(operatingDate?: string) {
+  const match = operatingDate?.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (!match) return null;
+
+  const [, year, month, day] = match;
+  return new Date(Number(year), Number(month) - 1, Number(day)).getTime();
+}
+
+function formatOperatingDateFilterLabel(operatingDate: string) {
+  return new Date(`${operatingDate}T00:00:00`).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 type CompletedTransaction = {
   _id: Id<"posTransaction">;
   transactionNumber: string;
@@ -63,14 +80,20 @@ type CompletedTransaction = {
 
 export function TransactionsView() {
   const { activeStore } = useGetActiveStore();
-  const { paymentMethod, registerSessionId } = useSearch({ strict: false }) as {
+  const { operatingDate, paymentMethod, registerSessionId } = useSearch({
+    strict: false,
+  }) as {
+    operatingDate?: string;
     paymentMethod?: string;
     registerSessionId?: string;
   };
-  const [filter, setFilter] = useState<"today" | "all">(
-    registerSessionId ? "all" : "today",
+  const operatingDateStartAt = getStartOfOperatingDate(operatingDate);
+  const [filter, setFilter] = useState<"today" | "fromDate" | "all">(
+    operatingDateStartAt ? "fromDate" : registerSessionId ? "all" : "today",
   );
   const paymentMethodFilter = paymentMethod?.trim();
+  const isOperatingDateFilterActive =
+    filter === "fromDate" && operatingDateStartAt !== null;
 
   const transactions = useQuery(
     api.inventory.pos.getCompletedTransactions,
@@ -81,6 +104,9 @@ export function TransactionsView() {
             ? {
                 registerSessionId: registerSessionId as Id<"registerSession">,
               }
+            : {}),
+          ...(isOperatingDateFilterActive
+            ? { completedFrom: operatingDateStartAt }
             : {}),
         }
       : "skip",
@@ -102,6 +128,22 @@ export function TransactionsView() {
   const registerFilterLabel = formatRegisterFilterLabel(
     registerSessionSnapshot?.registerSession?.registerNumber,
   );
+  const hasActiveFilter = Boolean(
+    registerSessionId || paymentMethodFilter || operatingDate,
+  );
+  const activeFilterSummary = hasActiveFilter
+    ? [
+        paymentMethodFilter
+          ? `${formatPaymentMethod(paymentMethodFilter)} transactions`
+          : "transactions",
+        registerSessionId ? `linked to ${registerFilterLabel}` : null,
+        operatingDate && operatingDateStartAt !== null
+          ? `from ${formatOperatingDateFilterLabel(operatingDate)}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" ")
+    : "";
 
   const tableData: CompletedTransactionRow[] = useMemo(() => {
     if (!transactions || !formatter) return [];
@@ -132,7 +174,9 @@ export function TransactionsView() {
     const dateFilteredData =
       filter === "all"
         ? tableData
-        : tableData.filter((t) => isToday(t.completedAt));
+        : filter === "fromDate" && operatingDateStartAt !== null
+          ? tableData.filter((t) => t.completedAt >= operatingDateStartAt)
+          : tableData.filter((t) => isToday(t.completedAt));
 
     if (!paymentMethodFilter) return dateFilteredData;
 
@@ -141,13 +185,15 @@ export function TransactionsView() {
         paymentMethodFilter,
       ),
     );
-  }, [tableData, filter, paymentMethodFilter]);
+  }, [tableData, filter, operatingDateStartAt, paymentMethodFilter]);
 
   useEffect(() => {
-    if (registerSessionId) {
+    if (operatingDateStartAt) {
+      setFilter("fromDate");
+    } else if (registerSessionId) {
       setFilter("all");
     }
-  }, [registerSessionId]);
+  }, [operatingDateStartAt, registerSessionId]);
 
   if (!activeStore || !transactions || !formatter) return null;
 
@@ -165,24 +211,23 @@ export function TransactionsView() {
           />
 
           <section className="space-y-layout-md">
-          {registerSessionId ? (
+          {activeFilterSummary ? (
             <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-              Showing transactions linked to {registerFilterLabel}
-            </div>
-          ) : null}
-
-          {paymentMethodFilter ? (
-            <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-              Showing {formatPaymentMethod(paymentMethodFilter)} transactions
+              Showing {activeFilterSummary}
             </div>
           ) : null}
 
           <Tabs
             value={filter}
-            onValueChange={(v) => setFilter(v as "today" | "all")}
+            onValueChange={(v) => setFilter(v as "today" | "fromDate" | "all")}
           >
             <TabsList>
               <TabsTrigger value="today">Today</TabsTrigger>
+              {operatingDate && operatingDateStartAt !== null ? (
+                <TabsTrigger value="fromDate">
+                  From {formatOperatingDateFilterLabel(operatingDate)}
+                </TabsTrigger>
+              ) : null}
               <TabsTrigger value="all">All Time</TabsTrigger>
             </TabsList>
           </Tabs>
@@ -201,6 +246,8 @@ export function TransactionsView() {
                   <p className="text-muted-foreground">
                     {filter === "today"
                       ? "No completed transactions today"
+                      : filter === "fromDate" && operatingDate
+                        ? `No completed transactions from ${formatOperatingDateFilterLabel(operatingDate)}`
                       : registerSessionId
                         ? `No transactions for ${registerFilterLabel}`
                         : "No completed transactions"}

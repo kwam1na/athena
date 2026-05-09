@@ -50,6 +50,7 @@ vi.mock("@tanstack/react-router", () => ({
     orgUrlSlug: "wigclub",
     storeUrlSlug: "wigclub",
   }),
+  useSearch: () => ({}),
 }));
 
 vi.mock("convex/react", () => ({
@@ -446,6 +447,7 @@ describe("OperationsQueueViewContent", () => {
               previousPaymentMethod: "cash",
               transactionId: "txn-1" as Id<"posTransaction">,
             },
+            notes: "Customer paid by card after mobile money failed.",
             requestedByStaffName: "Ato Kwamina",
             requestType: "payment_method_correction",
             status: "pending",
@@ -467,6 +469,10 @@ describe("OperationsQueueViewContent", () => {
 
     expect(screen.getByText("Linked transaction")).toBeInTheDocument();
     expect(screen.getByText("Requested by Ato Kwamina")).toBeInTheDocument();
+    expect(screen.getByText("Requester note")).toBeInTheDocument();
+    expect(
+      screen.getByText("Customer paid by card after mobile money failed."),
+    ).toBeInTheDocument();
     expect(screen.getByText("#434898")).toBeInTheDocument();
     expect(screen.getByText("GH₵195")).toBeInTheDocument();
     expect(screen.getByText("Current method")).toBeInTheDocument();

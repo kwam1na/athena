@@ -3,6 +3,11 @@ import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
+import {
+  PageLevelHeader,
+  PageWorkspace,
+  PageWorkspaceMain,
+} from "../common/PageLevelHeader";
 import { EmptyState } from "../states/empty/empty-state";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
@@ -22,6 +27,7 @@ import {
   runCommand,
 } from "@/lib/errors/runCommand";
 import { api } from "~/convex/_generated/api";
+import type { Id } from "~/convex/_generated/dataModel";
 import { parseDisplayAmountInput } from "~/src/lib/pos/displayAmounts";
 
 type CustomerResult = {
@@ -62,6 +68,13 @@ type ServiceCaseDetails = {
   status: string;
 };
 
+type ServiceCaseStatus =
+  | "in_progress"
+  | "awaiting_approval"
+  | "awaiting_pickup"
+  | "completed"
+  | "cancelled";
+
 type CreateServiceCaseArgs = {
   assignedStaffProfileId: string;
   customerProfileId: string;
@@ -87,7 +100,7 @@ type ServiceCasesViewContentProps = {
     unitPrice: number;
   }) => Promise<ServiceCaseCommandResult>;
   onCreateCase: (
-    args: CreateServiceCaseArgs
+    args: CreateServiceCaseArgs,
   ) => Promise<ServiceCaseCommandResult>;
   onRecordInventoryUsage: (args: {
     productSkuId: string;
@@ -102,7 +115,7 @@ type ServiceCasesViewContentProps = {
   }) => Promise<ServiceCaseCommandResult>;
   onUpdateStatus: (args: {
     serviceCaseId: string;
-    status: string;
+    status: ServiceCaseStatus;
   }) => Promise<ServiceCaseCommandResult>;
   searchQuery: string;
   selectedCaseDetails: ServiceCaseDetails | null;
@@ -162,13 +175,16 @@ export function ServiceCasesViewContent({
   const [lineItemForm, setLineItemForm] = useState(initialLineItemForm);
   const [inventoryForm, setInventoryForm] = useState(initialInventoryForm);
   const [paymentForm, setPaymentForm] = useState(initialPaymentForm);
-  const [statusValue, setStatusValue] = useState("in_progress");
+  const [statusValue, setStatusValue] =
+    useState<ServiceCaseStatus>("in_progress");
   const [createErrors, setCreateErrors] = useState<string[]>([]);
   const [detailErrors, setDetailErrors] = useState<string[]>([]);
 
   const selectedCaseSummary = useMemo(
-    () => serviceCases.find((serviceCase) => serviceCase._id === selectedCaseId) ?? null,
-    [selectedCaseId, serviceCases]
+    () =>
+      serviceCases.find((serviceCase) => serviceCase._id === selectedCaseId) ??
+      null,
+    [selectedCaseId, serviceCases],
   );
 
   useEffect(() => {
@@ -177,7 +193,7 @@ export function ServiceCasesViewContent({
 
   const applyCommandResult = (
     result: ServiceCaseCommandResult,
-    setErrors: (errors: string[]) => void
+    setErrors: (errors: string[]) => void,
   ) => {
     if (result.kind === "ok") {
       setErrors([]);
@@ -189,13 +205,7 @@ export function ServiceCasesViewContent({
   };
 
   if (isLoadingPermissions) {
-    return (
-      <View>
-        <div className="container mx-auto py-10 text-sm text-muted-foreground">
-          Loading service cases...
-        </div>
-      </View>
-    );
+    return null;
   }
 
   if (!hasFullAdminAccess) {
@@ -251,493 +261,587 @@ export function ServiceCasesViewContent({
   const activeServiceCaseId = selectedCaseDetails?._id ?? selectedCaseId;
 
   return (
-    <View
-      hideBorder
-      hideHeaderBottomBorder
-      header={
-        <div className="container mx-auto flex h-[40px] items-center">
-          <p className="text-xl font-medium">Active service cases</p>
-        </div>
-      }
-    >
-      <FadeIn className="container mx-auto grid gap-6 py-8 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
-        <section className="space-y-4 rounded-lg border p-4">
-          <div>
-            <h3 className="text-base font-medium">Create walk-in case</h3>
-            <p className="text-sm text-muted-foreground">
-              Start same-day, consultation, repair, or revamp work from one place.
-            </p>
-          </div>
+    <View hideBorder hideHeaderBottomBorder scrollMode="page">
+      <FadeIn className="container mx-auto py-layout-xl">
+        <PageWorkspace>
+          <PageLevelHeader
+            eyebrow="Service Ops"
+            title="Active Cases"
+            description="Open service cases, review payment and approval pressure, and run the actions needed to move work forward."
+          />
 
-          {createErrors.length > 0 ? (
-            <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              <ul className="list-disc pl-5">
-                {createErrors.map((error) => (
-                  <li key={error}>{error}</li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-
-          <div className="space-y-2">
-            <Label htmlFor="case-search">Search existing customers</Label>
-            <Input
-              id="case-search"
-              onChange={(event) => setSearchQuery(event.target.value)}
-              value={searchQuery}
-            />
-          </div>
-
-          {customerResults.length > 0 ? (
-            <div className="space-y-2 rounded-md border bg-muted/20 p-3">
-              {customerResults.map((customer) => (
-                <button
-                  className="flex w-full items-center justify-between rounded-md border bg-background px-3 py-2 text-left"
-                  key={customer._id}
-                  onClick={() =>
-                    setCreateForm((current) => ({
-                      ...current,
-                      selectedCustomerId: customer._id,
-                    }))
-                  }
-                  type="button"
-                >
-                  <span>{customer.fullName}</span>
-                  <span className="text-xs text-muted-foreground">Use customer</span>
-                </button>
-              ))}
-            </div>
-          ) : null}
-
-          <div className="space-y-2">
-            <Label htmlFor="case-title">Service title</Label>
-            <Input
-              id="case-title"
-              onChange={(event) =>
-                setCreateForm((current) => ({
-                  ...current,
-                  title: event.target.value,
-                }))
-              }
-              value={createForm.title}
-            />
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="case-service-mode">Service mode</Label>
-              <Select
-                onValueChange={(value) =>
-                  setCreateForm((current) => ({
-                    ...current,
-                    serviceMode: value as CreateServiceCaseArgs["serviceMode"],
-                  }))
-                }
-                value={createForm.serviceMode}
-              >
-                <SelectTrigger aria-label="Service mode" id="case-service-mode">
-                  <SelectValue placeholder="Select service mode" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="same_day">Same-day</SelectItem>
-                  <SelectItem value="consultation">Consultation</SelectItem>
-                  <SelectItem value="repair">Repair</SelectItem>
-                  <SelectItem value="revamp">Revamp</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="case-service-catalog">Service catalog</Label>
-              <Select
-                onValueChange={(value) =>
-                  setCreateForm((current) => ({
-                    ...current,
-                    serviceCatalogId: value,
-                  }))
-                }
-                value={createForm.serviceCatalogId}
-              >
-                <SelectTrigger aria-label="Service catalog" id="case-service-catalog">
-                  <SelectValue placeholder="Optional catalog item" />
-                </SelectTrigger>
-                <SelectContent>
-                  {catalogItems.map((item) => (
-                    <SelectItem key={item._id} value={item._id}>
-                      {item.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="case-assigned-staff">Assigned staff</Label>
-              <Select
-                onValueChange={(value) =>
-                  setCreateForm((current) => ({
-                    ...current,
-                    assignedStaffProfileId: value,
-                  }))
-                }
-                value={createForm.assignedStaffProfileId}
-              >
-                <SelectTrigger aria-label="Assigned staff" id="case-assigned-staff">
-                  <SelectValue placeholder="Select staff member" />
-                </SelectTrigger>
-                <SelectContent>
-                  {staffOptions.map((staff) => (
-                    <SelectItem key={staff._id} value={staff._id}>
-                      {staff.fullName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="case-quoted-amount">Quoted amount</Label>
-              <Input
-                id="case-quoted-amount"
-                inputMode="decimal"
-                onChange={(event) =>
-                  setCreateForm((current) => ({
-                    ...current,
-                    quotedAmount: event.target.value,
-                  }))
-                }
-                value={createForm.quotedAmount}
-              />
-            </div>
-          </div>
-
-          <Button disabled={isSaving} onClick={handleCreateCase} type="button">
-            Create service case
-          </Button>
-        </section>
-
-        <section className="grid gap-6 lg:grid-cols-[minmax(0,280px)_minmax(0,1fr)]">
-          <div className="space-y-3 rounded-lg border p-4">
-            <div>
-              <h3 className="text-base font-medium">Live cases</h3>
-              <p className="text-sm text-muted-foreground">
-                Review assignment, payment state, and approval pressure at a glance.
-              </p>
-            </div>
-
-            {serviceCases.length === 0 ? (
-              <EmptyState
-                description="Service cases will appear here once work is created"
-                title="No active cases"
-              />
-            ) : (
-              serviceCases.map((serviceCase) => (
-                <button
-                  className={`w-full rounded-md border p-3 text-left ${
-                    serviceCase._id === selectedCaseId ? "border-primary" : ""
-                  }`}
-                  key={serviceCase._id}
-                  onClick={() => setSelectedCaseId(serviceCase._id)}
-                  type="button"
-                >
-                  <p className="font-medium">
-                    {serviceCase.serviceCatalogName ?? "Service case"}
+          <PageWorkspaceMain>
+            <div className="space-y-layout-xl">
+              <section className="space-y-layout-lg rounded-lg border border-border bg-surface p-layout-lg shadow-surface">
+                <div className="space-y-1.5 border-b border-border/70 pb-layout-sm">
+                  <h3 className="text-xl font-semibold tracking-tight text-foreground">
+                    Create walk-in case
+                  </h3>
+                  <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+                    Start same-day, consultation, repair, or revamp work from
+                    one place.
                   </p>
-                  <p className="text-sm text-muted-foreground">
-                    {[serviceCase.customerName, serviceCase.staffName]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {serviceCase.paymentStatus} · balance {serviceCase.balanceDueAmount}
-                  </p>
-                </button>
-              ))
-            )}
-          </div>
+                </div>
 
-          <div className="space-y-4 rounded-lg border p-4">
-            {!selectedCaseSummary || !activeServiceCaseId ? (
-              <EmptyState
-                description="Choose a case to review details and run service actions"
-                title="No case selected"
-              />
-            ) : (
-              <>
-                {detailErrors.length > 0 ? (
-                  <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {createErrors.length > 0 ? (
+                  <div className="rounded-lg border border-danger/30 bg-danger/10 px-layout-md py-layout-sm text-sm text-danger">
                     <ul className="list-disc pl-5">
-                      {detailErrors.map((error) => (
+                      {createErrors.map((error) => (
                         <li key={error}>{error}</li>
                       ))}
                     </ul>
                   </div>
                 ) : null}
 
-                <div>
-                  <h3 className="text-base font-medium">
-                    {selectedCaseSummary.serviceCatalogName ?? "Service case"}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    {[selectedCaseSummary.customerName, selectedCaseSummary.staffName]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
-                    <span>{selectedCaseSummary.paymentStatus}</span>
-                    <span>balance {selectedCaseSummary.balanceDueAmount}</span>
-                    <span>{selectedCaseSummary.pendingApprovalCount} pending approval</span>
+                <div className="space-y-2">
+                  <Label htmlFor="case-search">Search existing customers</Label>
+                  <Input
+                    id="case-search"
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    value={searchQuery}
+                  />
+                </div>
+
+                {customerResults.length > 0 ? (
+                  <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
+                    {customerResults.map((customer) => (
+                      <button
+                        className="flex w-full items-center justify-between rounded-md border border-border bg-background px-3 py-2 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        key={customer._id}
+                        onClick={() =>
+                          setCreateForm((current) => ({
+                            ...current,
+                            selectedCustomerId: customer._id,
+                          }))
+                        }
+                        type="button"
+                      >
+                        <span>{customer.fullName}</span>
+                        <span className="text-xs text-muted-foreground">
+                          Use customer
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div className="space-y-2">
+                  <Label htmlFor="case-title">Service title</Label>
+                  <Input
+                    id="case-title"
+                    onChange={(event) =>
+                      setCreateForm((current) => ({
+                        ...current,
+                        title: event.target.value,
+                      }))
+                    }
+                    value={createForm.title}
+                  />
+                </div>
+
+                <div className="grid gap-layout-md sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="case-service-mode">Service mode</Label>
+                    <Select
+                      onValueChange={(value) =>
+                        setCreateForm((current) => ({
+                          ...current,
+                          serviceMode:
+                            value as CreateServiceCaseArgs["serviceMode"],
+                        }))
+                      }
+                      value={createForm.serviceMode}
+                    >
+                      <SelectTrigger
+                        aria-label="Service mode"
+                        id="case-service-mode"
+                      >
+                        <SelectValue placeholder="Select service mode" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="same_day">Same-day</SelectItem>
+                        <SelectItem value="consultation">
+                          Consultation
+                        </SelectItem>
+                        <SelectItem value="repair">Repair</SelectItem>
+                        <SelectItem value="revamp">Revamp</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="case-service-catalog">Service catalog</Label>
+                    <Select
+                      onValueChange={(value) =>
+                        setCreateForm((current) => ({
+                          ...current,
+                          serviceCatalogId: value,
+                        }))
+                      }
+                      value={createForm.serviceCatalogId}
+                    >
+                      <SelectTrigger
+                        aria-label="Service catalog"
+                        id="case-service-catalog"
+                      >
+                        <SelectValue placeholder="Optional catalog item" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {catalogItems.map((item) => (
+                          <SelectItem key={item._id} value={item._id}>
+                            {item.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="case-assigned-staff">Assigned staff</Label>
+                    <Select
+                      onValueChange={(value) =>
+                        setCreateForm((current) => ({
+                          ...current,
+                          assignedStaffProfileId: value,
+                        }))
+                      }
+                      value={createForm.assignedStaffProfileId}
+                    >
+                      <SelectTrigger
+                        aria-label="Assigned staff"
+                        id="case-assigned-staff"
+                      >
+                        <SelectValue placeholder="Select staff member" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {staffOptions.map((staff) => (
+                          <SelectItem key={staff._id} value={staff._id}>
+                            {staff.fullName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="case-quoted-amount">Quoted amount</Label>
+                    <Input
+                      id="case-quoted-amount"
+                      inputMode="decimal"
+                      onChange={(event) =>
+                        setCreateForm((current) => ({
+                          ...current,
+                          quotedAmount: event.target.value,
+                        }))
+                      }
+                      value={createForm.quotedAmount}
+                    />
                   </div>
                 </div>
+              </section>
 
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <section className="space-y-3 rounded-md border p-3">
-                    <h4 className="font-medium">Payments</h4>
-                    <div className="space-y-2">
-                      <Label htmlFor="payment-amount">Payment amount</Label>
-                      <Input
-                        id="payment-amount"
-                        inputMode="numeric"
-                        onChange={(event) =>
-                          setPaymentForm((current) => ({
-                            ...current,
-                            amount: event.target.value,
-                          }))
-                        }
-                        value={paymentForm.amount}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="payment-method">Payment method</Label>
-                      <Select
-                        onValueChange={(value) =>
-                          setPaymentForm((current) => ({
-                            ...current,
-                            method: value,
-                          }))
-                        }
-                        value={paymentForm.method}
-                      >
-                        <SelectTrigger aria-label="Payment method" id="payment-method">
-                          <SelectValue placeholder="Select payment method" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="cash">Cash</SelectItem>
-                          <SelectItem value="card">Card</SelectItem>
-                          <SelectItem value="mobile_money">Mobile money</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <Button
-                      onClick={async () => {
-                        setDetailErrors([]);
-                        const amount = parseDisplayAmountInput(paymentForm.amount);
+              <div className="flex justify-start">
+                <Button
+                  disabled={isSaving}
+                  onClick={handleCreateCase}
+                  type="button"
+                  variant="workflow"
+                >
+                  Create service case
+                </Button>
+              </div>
+            </div>
 
-                        if (amount === undefined) {
-                          setDetailErrors(["Payment amount must be a valid amount"]);
-                          return;
-                        }
-
-                        const result = await onRecordPayment({
-                          amount,
-                          method: paymentForm.method,
-                          serviceCaseId: activeServiceCaseId,
-                        });
-
-                        if (!applyCommandResult(result, setDetailErrors)) {
-                          return;
-                        }
-
-                        setPaymentForm(initialPaymentForm);
-                        toast.success("Payment recorded");
-                      }}
-                      type="button"
-                      variant="outline"
-                    >
-                      Record payment
-                    </Button>
-                  </section>
-
-                  <section className="space-y-3 rounded-md border p-3">
-                    <h4 className="font-medium">Case status</h4>
-                    <div className="space-y-2">
-                      <Label htmlFor="case-status">Case status</Label>
-                      <Select onValueChange={setStatusValue} value={statusValue}>
-                        <SelectTrigger aria-label="Case status" id="case-status">
-                          <SelectValue placeholder="Select case status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="in_progress">In progress</SelectItem>
-                          <SelectItem value="awaiting_approval">
-                            Awaiting approval
-                          </SelectItem>
-                          <SelectItem value="awaiting_pickup">
-                            Awaiting pickup
-                          </SelectItem>
-                          <SelectItem value="completed">Completed</SelectItem>
-                          <SelectItem value="cancelled">Cancelled</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <Button
-                      onClick={async () => {
-                        setDetailErrors([]);
-                        const result = await onUpdateStatus({
-                          serviceCaseId: activeServiceCaseId,
-                          status: statusValue,
-                        });
-
-                        if (!applyCommandResult(result, setDetailErrors)) {
-                          return;
-                        }
-
-                        toast.success("Service case updated");
-                      }}
-                      type="button"
-                      variant="outline"
-                    >
-                      Update status
-                    </Button>
-                  </section>
-
-                  <section className="space-y-3 rounded-md border p-3">
-                    <h4 className="font-medium">Line items</h4>
-                    <div className="space-y-2">
-                      <Label htmlFor="line-item-description">Line item description</Label>
-                      <Input
-                        id="line-item-description"
-                        onChange={(event) =>
-                          setLineItemForm((current) => ({
-                            ...current,
-                            description: event.target.value,
-                          }))
-                        }
-                        value={lineItemForm.description}
-                      />
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      <div className="space-y-2">
-                        <Label htmlFor="line-item-quantity">Line item quantity</Label>
-                        <Input
-                          id="line-item-quantity"
-                          inputMode="numeric"
-                          onChange={(event) =>
-                            setLineItemForm((current) => ({
-                              ...current,
-                              quantity: event.target.value,
-                            }))
-                          }
-                          value={lineItemForm.quantity}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="line-item-unit-price">Line item unit price</Label>
-                        <Input
-                          id="line-item-unit-price"
-                          inputMode="decimal"
-                          onChange={(event) =>
-                            setLineItemForm((current) => ({
-                              ...current,
-                              unitPrice: event.target.value,
-                            }))
-                          }
-                          value={lineItemForm.unitPrice}
-                        />
-                      </div>
-                    </div>
-                    <Button
-                      onClick={async () => {
-                        setDetailErrors([]);
-                        const unitPrice = parseDisplayAmountInput(
-                          lineItemForm.unitPrice
-                        );
-
-                        if (unitPrice === undefined) {
-                          setDetailErrors([
-                            "Line item unit price must be a valid amount",
-                          ]);
-                          return;
-                        }
-
-                        const result = await onAddLineItem({
-                          description: lineItemForm.description,
-                          lineType: lineItemForm.lineType,
-                          quantity: Number(lineItemForm.quantity),
-                          serviceCaseId: activeServiceCaseId,
-                          unitPrice,
-                        });
-
-                        if (!applyCommandResult(result, setDetailErrors)) {
-                          return;
-                        }
-
-                        setLineItemForm(initialLineItemForm);
-                        toast.success("Line item added");
-                      }}
-                      type="button"
-                      variant="outline"
-                    >
-                      Add line item
-                    </Button>
-                  </section>
-
-                  <section className="space-y-3 rounded-md border p-3">
-                    <h4 className="font-medium">Materials</h4>
-                    <div className="space-y-2">
-                      <Label htmlFor="material-sku">Material SKU</Label>
-                      <Input
-                        id="material-sku"
-                        onChange={(event) =>
-                          setInventoryForm((current) => ({
-                            ...current,
-                            productSkuId: event.target.value,
-                          }))
-                        }
-                        value={inventoryForm.productSkuId}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="material-quantity">Material quantity</Label>
-                      <Input
-                        id="material-quantity"
-                        inputMode="numeric"
-                        onChange={(event) =>
-                          setInventoryForm((current) => ({
-                            ...current,
-                            quantity: event.target.value,
-                          }))
-                        }
-                        value={inventoryForm.quantity}
-                      />
-                    </div>
-                    <Button
-                      onClick={async () => {
-                        setDetailErrors([]);
-                        const result = await onRecordInventoryUsage({
-                          productSkuId: inventoryForm.productSkuId,
-                          quantity: Number(inventoryForm.quantity),
-                          serviceCaseId: activeServiceCaseId,
-                          usageType: "consumed",
-                        });
-
-                        if (!applyCommandResult(result, setDetailErrors)) {
-                          return;
-                        }
-
-                        setInventoryForm(initialInventoryForm);
-                        toast.success("Material usage recorded");
-                      }}
-                      type="button"
-                      variant="outline"
-                    >
-                      Record material usage
-                    </Button>
-                  </section>
+            <section
+              className={
+                serviceCases.length === 0
+                  ? "grid gap-layout-lg"
+                  : "grid gap-layout-lg xl:grid-cols-[minmax(320px,380px)_minmax(0,1fr)]"
+              }
+            >
+              <div className="space-y-layout-md rounded-lg border border-border bg-surface p-layout-md shadow-surface">
+                <div>
+                  <h3 className="text-base font-medium">Live cases</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Review assignment, payment state, and approval pressure at a
+                    glance.
+                  </p>
                 </div>
-              </>
-            )}
-          </div>
-        </section>
+
+                {serviceCases.length === 0 ? (
+                  <EmptyState
+                    description="Service cases will appear here once work is created"
+                    title="No active cases"
+                  />
+                ) : (
+                  serviceCases.map((serviceCase) => (
+                    <button
+                      className={`w-full rounded-md border bg-background p-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                        serviceCase._id === selectedCaseId
+                          ? "border-signal"
+                          : "border-border"
+                      }`}
+                      key={serviceCase._id}
+                      onClick={() => setSelectedCaseId(serviceCase._id)}
+                      type="button"
+                    >
+                      <p className="font-medium">
+                        {serviceCase.serviceCatalogName ?? "Service case"}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {[serviceCase.customerName, serviceCase.staffName]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {serviceCase.paymentStatus} · balance{" "}
+                        {serviceCase.balanceDueAmount}
+                      </p>
+                    </button>
+                  ))
+                )}
+              </div>
+
+              {serviceCases.length > 0 ? (
+                <div className="space-y-layout-md rounded-lg border border-border bg-surface p-layout-md shadow-surface">
+                  {!selectedCaseSummary || !activeServiceCaseId ? (
+                    <EmptyState
+                      description="Choose a case to review details and run service actions"
+                      title="No case selected"
+                    />
+                  ) : (
+                    <>
+                      {detailErrors.length > 0 ? (
+                        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                          <ul className="list-disc pl-5">
+                            {detailErrors.map((error) => (
+                              <li key={error}>{error}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+
+                      <div>
+                        <h3 className="text-base font-medium">
+                          {selectedCaseSummary.serviceCatalogName ??
+                            "Service case"}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          {[
+                            selectedCaseSummary.customerName,
+                            selectedCaseSummary.staffName,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                          <span className="rounded-full border border-border bg-muted/30 px-2 py-1">
+                            {selectedCaseSummary.paymentStatus}
+                          </span>
+                          <span className="rounded-full border border-border bg-muted/30 px-2 py-1">
+                            balance {selectedCaseSummary.balanceDueAmount}
+                          </span>
+                          <span className="rounded-full border border-border bg-muted/30 px-2 py-1">
+                            {selectedCaseSummary.pendingApprovalCount} pending
+                            approval
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 lg:grid-cols-2">
+                        <section className="space-y-3 rounded-md border border-border bg-background p-3">
+                          <h4 className="font-medium">Payments</h4>
+                          <div className="space-y-2">
+                            <Label htmlFor="payment-amount">
+                              Payment amount
+                            </Label>
+                            <Input
+                              id="payment-amount"
+                              inputMode="numeric"
+                              onChange={(event) =>
+                                setPaymentForm((current) => ({
+                                  ...current,
+                                  amount: event.target.value,
+                                }))
+                              }
+                              value={paymentForm.amount}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="payment-method">
+                              Payment method
+                            </Label>
+                            <Select
+                              onValueChange={(value) =>
+                                setPaymentForm((current) => ({
+                                  ...current,
+                                  method: value,
+                                }))
+                              }
+                              value={paymentForm.method}
+                            >
+                              <SelectTrigger
+                                aria-label="Payment method"
+                                id="payment-method"
+                              >
+                                <SelectValue placeholder="Select payment method" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="cash">Cash</SelectItem>
+                                <SelectItem value="card">Card</SelectItem>
+                                <SelectItem value="mobile_money">
+                                  Mobile money
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <Button
+                            onClick={async () => {
+                              setDetailErrors([]);
+                              const amount = parseDisplayAmountInput(
+                                paymentForm.amount,
+                              );
+
+                              if (amount === undefined) {
+                                setDetailErrors([
+                                  "Payment amount must be a valid amount",
+                                ]);
+                                return;
+                              }
+
+                              const result = await onRecordPayment({
+                                amount,
+                                method: paymentForm.method,
+                                serviceCaseId: activeServiceCaseId,
+                              });
+
+                              if (
+                                !applyCommandResult(result, setDetailErrors)
+                              ) {
+                                return;
+                              }
+
+                              setPaymentForm(initialPaymentForm);
+                              toast.success("Payment recorded");
+                            }}
+                            type="button"
+                            variant="workflow"
+                          >
+                            Record payment
+                          </Button>
+                        </section>
+
+                        <section className="space-y-3 rounded-md border border-border bg-background p-3">
+                          <h4 className="font-medium">Case status</h4>
+                          <div className="space-y-2">
+                            <Label htmlFor="case-status">Case status</Label>
+                            <Select
+                              onValueChange={(value) =>
+                                setStatusValue(value as ServiceCaseStatus)
+                              }
+                              value={statusValue}
+                            >
+                              <SelectTrigger
+                                aria-label="Case status"
+                                id="case-status"
+                              >
+                                <SelectValue placeholder="Select case status" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="in_progress">
+                                  In progress
+                                </SelectItem>
+                                <SelectItem value="awaiting_approval">
+                                  Awaiting approval
+                                </SelectItem>
+                                <SelectItem value="awaiting_pickup">
+                                  Awaiting pickup
+                                </SelectItem>
+                                <SelectItem value="completed">
+                                  Completed
+                                </SelectItem>
+                                <SelectItem value="cancelled">
+                                  Cancelled
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <Button
+                            onClick={async () => {
+                              setDetailErrors([]);
+                              const result = await onUpdateStatus({
+                                serviceCaseId: activeServiceCaseId,
+                                status: statusValue,
+                              });
+
+                              if (
+                                !applyCommandResult(result, setDetailErrors)
+                              ) {
+                                return;
+                              }
+
+                              toast.success("Service case updated");
+                            }}
+                            type="button"
+                            variant="workflow"
+                          >
+                            Update status
+                          </Button>
+                        </section>
+
+                        <section className="space-y-3 rounded-md border border-border bg-background p-3">
+                          <h4 className="font-medium">Line items</h4>
+                          <div className="space-y-2">
+                            <Label htmlFor="line-item-description">
+                              Line item description
+                            </Label>
+                            <Input
+                              id="line-item-description"
+                              onChange={(event) =>
+                                setLineItemForm((current) => ({
+                                  ...current,
+                                  description: event.target.value,
+                                }))
+                              }
+                              value={lineItemForm.description}
+                            />
+                          </div>
+                          <div className="grid gap-3 sm:grid-cols-3">
+                            <div className="space-y-2">
+                              <Label htmlFor="line-item-quantity">
+                                Line item quantity
+                              </Label>
+                              <Input
+                                id="line-item-quantity"
+                                inputMode="numeric"
+                                onChange={(event) =>
+                                  setLineItemForm((current) => ({
+                                    ...current,
+                                    quantity: event.target.value,
+                                  }))
+                                }
+                                value={lineItemForm.quantity}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="line-item-unit-price">
+                                Line item unit price
+                              </Label>
+                              <Input
+                                id="line-item-unit-price"
+                                inputMode="decimal"
+                                onChange={(event) =>
+                                  setLineItemForm((current) => ({
+                                    ...current,
+                                    unitPrice: event.target.value,
+                                  }))
+                                }
+                                value={lineItemForm.unitPrice}
+                              />
+                            </div>
+                          </div>
+                          <Button
+                            onClick={async () => {
+                              setDetailErrors([]);
+                              const unitPrice = parseDisplayAmountInput(
+                                lineItemForm.unitPrice,
+                              );
+
+                              if (unitPrice === undefined) {
+                                setDetailErrors([
+                                  "Line item unit price must be a valid amount",
+                                ]);
+                                return;
+                              }
+
+                              const result = await onAddLineItem({
+                                description: lineItemForm.description,
+                                lineType: lineItemForm.lineType,
+                                quantity: Number(lineItemForm.quantity),
+                                serviceCaseId: activeServiceCaseId,
+                                unitPrice,
+                              });
+
+                              if (
+                                !applyCommandResult(result, setDetailErrors)
+                              ) {
+                                return;
+                              }
+
+                              setLineItemForm(initialLineItemForm);
+                              toast.success("Line item added");
+                            }}
+                            type="button"
+                            variant="workflow"
+                          >
+                            Add line item
+                          </Button>
+                        </section>
+
+                        <section className="space-y-3 rounded-md border border-border bg-background p-3">
+                          <h4 className="font-medium">Materials</h4>
+                          <div className="space-y-2">
+                            <Label htmlFor="material-sku">Material SKU</Label>
+                            <Input
+                              id="material-sku"
+                              onChange={(event) =>
+                                setInventoryForm((current) => ({
+                                  ...current,
+                                  productSkuId: event.target.value,
+                                }))
+                              }
+                              value={inventoryForm.productSkuId}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="material-quantity">
+                              Material quantity
+                            </Label>
+                            <Input
+                              id="material-quantity"
+                              inputMode="numeric"
+                              onChange={(event) =>
+                                setInventoryForm((current) => ({
+                                  ...current,
+                                  quantity: event.target.value,
+                                }))
+                              }
+                              value={inventoryForm.quantity}
+                            />
+                          </div>
+                          <Button
+                            onClick={async () => {
+                              setDetailErrors([]);
+                              const result = await onRecordInventoryUsage({
+                                productSkuId: inventoryForm.productSkuId,
+                                quantity: Number(inventoryForm.quantity),
+                                serviceCaseId: activeServiceCaseId,
+                                usageType: "consumed",
+                              });
+
+                              if (
+                                !applyCommandResult(result, setDetailErrors)
+                              ) {
+                                return;
+                              }
+
+                              setInventoryForm(initialInventoryForm);
+                              toast.success("Material usage recorded");
+                            }}
+                            type="button"
+                            variant="workflow"
+                          >
+                            Record material usage
+                          </Button>
+                        </section>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : null}
+            </section>
+          </PageWorkspaceMain>
+        </PageWorkspace>
       </FadeIn>
     </View>
   );
@@ -758,49 +862,49 @@ export function ServiceCasesView() {
 
   const serviceCases = useQuery(
     api.serviceOps.serviceCases.listActiveServiceCases,
-    canQueryProtectedData ? { storeId: activeStore!._id } : "skip"
+    canQueryProtectedData ? { storeId: activeStore!._id } : "skip",
   ) as ServiceCaseListItem[] | undefined;
 
   const selectedCaseDetails = useQuery(
     api.serviceOps.serviceCases.getServiceCaseDetails,
     canQueryProtectedData && selectedCaseId
-      ? { serviceCaseId: selectedCaseId as any }
-      : "skip"
+      ? { serviceCaseId: selectedCaseId as Id<"serviceCase"> }
+      : "skip",
   ) as ServiceCaseDetails | null | undefined;
 
   const customerResults = useQuery(
     api.operations.serviceIntake.searchCustomers,
     canQueryProtectedData && deferredSearchQuery.trim()
       ? { searchQuery: deferredSearchQuery, storeId: activeStore!._id }
-      : "skip"
+      : "skip",
   ) as CustomerResult[] | undefined;
 
   const staffOptions = useQuery(
     api.operations.serviceIntake.listAssignableStaff,
-    canQueryProtectedData ? { storeId: activeStore!._id } : "skip"
+    canQueryProtectedData ? { storeId: activeStore!._id } : "skip",
   ) as StaffOption[] | undefined;
 
   const catalogItems = useQuery(
     api.serviceOps.catalog.listServiceCatalogItems,
     canQueryProtectedData
       ? { status: "active", storeId: activeStore!._id }
-      : "skip"
+      : "skip",
   ) as CatalogItem[] | undefined;
 
   const createWalkInServiceCase = useMutation(
-    api.serviceOps.serviceCases.createWalkInServiceCase
+    api.serviceOps.serviceCases.createWalkInServiceCase,
   );
   const addServiceCaseLineItem = useMutation(
-    api.serviceOps.serviceCases.addServiceCaseLineItem
+    api.serviceOps.serviceCases.addServiceCaseLineItem,
   );
   const recordServiceInventoryUsage = useMutation(
-    api.serviceOps.serviceCases.recordServiceInventoryUsage
+    api.serviceOps.serviceCases.recordServiceInventoryUsage,
   );
   const recordServicePayment = useMutation(
-    api.serviceOps.serviceCases.recordServicePayment
+    api.serviceOps.serviceCases.recordServicePayment,
   );
   const updateServiceCaseStatus = useMutation(
-    api.serviceOps.serviceCases.updateServiceCaseStatus
+    api.serviceOps.serviceCases.updateServiceCaseStatus,
   );
 
   const withSaveState = async <T,>(action: () => Promise<T>) => {
@@ -813,13 +917,7 @@ export function ServiceCasesView() {
   };
 
   if (isLoadingAccess) {
-    return (
-      <View>
-        <div className="container mx-auto py-10 text-sm text-muted-foreground">
-          Loading service cases...
-        </div>
-      </View>
-    );
+    return null;
   }
 
   if (!isAuthenticated) {
@@ -860,9 +958,9 @@ export function ServiceCasesView() {
           runCommand(() =>
             addServiceCaseLineItem({
               ...args,
-              serviceCaseId: args.serviceCaseId as any,
-            })
-          )
+              serviceCaseId: args.serviceCaseId as Id<"serviceCase">,
+            }),
+          ),
         )
       }
       onCreateCase={(args) =>
@@ -870,17 +968,21 @@ export function ServiceCasesView() {
           const result = await runCommand(() =>
             createWalkInServiceCase({
               ...args,
-              assignedStaffProfileId: args.assignedStaffProfileId as any,
-              customerProfileId: args.customerProfileId as any,
+              assignedStaffProfileId:
+                args.assignedStaffProfileId as Id<"staffProfile">,
+              customerProfileId:
+                args.customerProfileId as Id<"customerProfile">,
               serviceCatalogId: args.serviceCatalogId
-                ? (args.serviceCatalogId as any)
+                ? (args.serviceCatalogId as Id<"serviceCatalog">)
                 : undefined,
               storeId: activeStore._id,
-            })
+            }),
           );
 
           if (result.kind === "ok") {
-            setSelectedCaseId((result.data as any)?._id ?? null);
+            setSelectedCaseId(
+              (result.data as { _id?: Id<"serviceCase"> } | null)?._id ?? null,
+            );
           }
 
           return result;
@@ -891,10 +993,10 @@ export function ServiceCasesView() {
           runCommand(() =>
             recordServiceInventoryUsage({
               ...args,
-              productSkuId: args.productSkuId as any,
-              serviceCaseId: args.serviceCaseId as any,
-            })
-          )
+              productSkuId: args.productSkuId as Id<"productSku">,
+              serviceCaseId: args.serviceCaseId as Id<"serviceCase">,
+            }),
+          ),
         )
       }
       onRecordPayment={(args) =>
@@ -902,9 +1004,9 @@ export function ServiceCasesView() {
           runCommand(() =>
             recordServicePayment({
               ...args,
-              serviceCaseId: args.serviceCaseId as any,
-            })
-          )
+              serviceCaseId: args.serviceCaseId as Id<"serviceCase">,
+            }),
+          ),
         )
       }
       onUpdateStatus={(args) =>
@@ -912,10 +1014,9 @@ export function ServiceCasesView() {
           runCommand(() =>
             updateServiceCaseStatus({
               ...args,
-              serviceCaseId: args.serviceCaseId as any,
-              status: args.status as any,
-            })
-          )
+              serviceCaseId: args.serviceCaseId as Id<"serviceCase">,
+            }),
+          ),
         )
       }
       searchQuery={searchQuery}

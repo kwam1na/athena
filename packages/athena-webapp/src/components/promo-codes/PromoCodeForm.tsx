@@ -5,7 +5,7 @@ import { Label } from "../ui/label";
 import { Switch } from "../ui/switch";
 import Products from "./Products";
 import { Id } from "~/convex/_generated/dataModel";
-import { Dispatch, SetStateAction } from "react";
+import { ComponentProps, Dispatch, SetStateAction } from "react";
 import { DiscountType, PromoCodeSpan } from "./types";
 import { Button } from "../ui/button";
 import { Calendar } from "../ui/calendar";
@@ -42,7 +42,7 @@ interface PromoCodeFormProps {
   isUpdatingPromoCode: boolean;
   isUpdatingStoreConfig: boolean;
   promoCodeSlug?: Id<"promoCode">;
-  products: any[];
+  products: ComponentProps<typeof Products>["products"];
   validFrom: Date | undefined;
   setValidFrom: Dispatch<SetStateAction<Date | undefined>>;
   validTo: Date | undefined;
@@ -73,8 +73,6 @@ const PromoCodeForm = ({
   isLeaveAReviewDiscountCode,
   updateLeaveAReviewDiscountCode,
   isUpdatingPromoCode,
-  isUpdatingStoreConfig,
-  promoCodeSlug,
   products,
   validFrom,
   setValidFrom,
@@ -151,7 +149,7 @@ const PromoCodeForm = ({
                   mode="single"
                   selected={validFrom}
                   onSelect={setValidFrom}
-                  initialFocus
+                  autoFocus
                 />
               </PopoverContent>
             </Popover>

@@ -1,24 +1,20 @@
 import { useQuery } from "convex/react";
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import View from "../View";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
 import { FadeIn } from "../common/FadeIn";
-import { Button } from "@/components/ui/button";
 import {
-  Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Link, useParams } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import {
   ScanBarcode,
   BarChart3,
-  Clock,
   Users,
-  ShoppingCart,
   Settings,
   Receipt,
   Search,
@@ -28,23 +24,26 @@ import {
 import { useGetActiveOrganization } from "@/hooks/useGetOrganizations";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import { useGetCurrencyFormatter } from "~/src/hooks/useGetCurrencyFormatter";
-import { useGetTerminal } from "~/src/hooks/useGetTerminal";
 import { Badge } from "../ui/badge";
 import { cn } from "~/src/lib/utils";
 import { usePermissions } from "~/src/hooks/usePermissions";
 import { toDisplayAmount } from "~/convex/lib/currency";
+import { PageLevelHeader, PageWorkspace } from "../common/PageLevelHeader";
 
-const FeatureLink = Link as ComponentType<any>;
-
-const Navigation = () => {
-  return (
-    <div className="container mx-auto flex gap-2 h-[40px]">
-      <div className="flex items-center">
-        <p className="text-xl font-medium">Point of Sale</p>
-      </div>
-    </div>
-  );
+type FeatureLinkProps = {
+  children: ReactNode;
+  className?: string;
+  params: {
+    orgUrlSlug: string;
+    storeUrlSlug: string;
+  };
+  search: {
+    o: string;
+  };
+  to: string;
 };
+
+const FeatureLink = Link as unknown as ComponentType<FeatureLinkProps>;
 
 export default function PointOfSaleView() {
   const { activeStore } = useGetActiveStore();
@@ -116,7 +115,7 @@ export default function PointOfSaleView() {
       title: "Active Sessions",
       description: "Review active and held sales reserving inventory",
       icon: ClipboardList,
-      href: "/$orgUrlSlug/store/$storeUrlSlug/pos/sessions" as any,
+      href: "/$orgUrlSlug/store/$storeUrlSlug/pos/sessions" as const,
       color: "bg-cyan-600",
       available: hasFullAdminAccess,
     },
@@ -147,159 +146,157 @@ export default function PointOfSaleView() {
   ];
 
   return (
-    <View
-      hideBorder
-      hideHeaderBottomBorder
-      className="bg-background"
-      header={<Navigation />}
-    >
-      <FadeIn className="space-y-8 py-8">
-        {/* POS Features Grid */}
-        <div>
-          {/* <h2 className="text-2xl font-semibold mb-6">POS Features</h2> */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {posFeatures
-              .filter((f) => f.available)
-              .map((feature) => {
-                const Icon = feature.icon;
+    <View hideBorder hideHeaderBottomBorder className="bg-background">
+      <FadeIn className="container mx-auto py-layout-xl">
+        <PageWorkspace>
+          <PageLevelHeader title="Point of Sale" />
 
-                if (!feature.available || !feature.href) {
+          {/* POS Features Grid */}
+          <div>
+            {/* <h2 className="text-2xl font-semibold mb-6">POS Features</h2> */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {posFeatures
+                .filter((f) => f.available)
+                .map((feature) => {
+                  const Icon = feature.icon;
+
+                  if (!feature.available || !feature.href) {
+                    return (
+                      <div
+                        key={feature.title}
+                        className="border rounded-lg opacity-50 cursor-not-allowed"
+                      >
+                        <CardHeader className="pb-3">
+                          <div className="flex items-center space-x-3">
+                            <div className={`p-2 rounded-lg ${feature.color}`}>
+                              <Icon className="h-5 w-5 text-white" />
+                            </div>
+                            <CardTitle className="text-lg flex items-center gap-2">
+                              {feature.title}
+                              <span className="text-xs bg-muted px-2 py-1 rounded">
+                                Coming Soon
+                              </span>
+                            </CardTitle>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          <CardDescription className="text-sm">
+                            {feature.description}
+                          </CardDescription>
+                        </CardContent>
+                      </div>
+                    );
+                  }
+
                   return (
                     <div
                       key={feature.title}
-                      className="border rounded-lg opacity-50 cursor-not-allowed"
+                      className={cn(
+                        "border rounded-lg cursor-pointer",
+                        feature.enabled === false && "cursor-not-allowed",
+                      )}
                     >
-                      <CardHeader className="pb-3">
-                        <div className="flex items-center space-x-3">
-                          <div className={`p-2 rounded-lg ${feature.color}`}>
-                            <Icon className="h-5 w-5 text-white" />
+                      <FeatureLink
+                        to={feature.href}
+                        params={{
+                          orgUrlSlug: activeOrganization.slug,
+                          storeUrlSlug: activeStore.slug,
+                        }}
+                        search={{
+                          o: getOrigin(),
+                        }}
+                        className="block h-full"
+                      >
+                        <CardHeader className="pb-3">
+                          <div className="flex items-center space-x-3">
+                            <div className={`p-2 rounded-lg ${feature.color}`}>
+                              <Icon className="h-5 w-5 text-white" />
+                            </div>
+                            <CardTitle className="text-lg">
+                              {feature.title}
+                            </CardTitle>
+                            {feature.enabled === false && (
+                              <Badge variant="outline">Disabled</Badge>
+                            )}
                           </div>
-                          <CardTitle className="text-lg flex items-center gap-2">
-                            {feature.title}
-                            <span className="text-xs bg-muted px-2 py-1 rounded">
-                              Coming Soon
-                            </span>
-                          </CardTitle>
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        <CardDescription className="text-sm">
-                          {feature.description}
-                        </CardDescription>
-                      </CardContent>
+                        </CardHeader>
+                        <CardContent>
+                          <CardDescription className="text-sm">
+                            {feature.description}
+                          </CardDescription>
+                        </CardContent>
+                      </FeatureLink>
                     </div>
                   );
-                }
-
-                return (
-                  <div
-                    key={feature.title}
-                    className={cn(
-                      "border rounded-lg cursor-pointer",
-                      feature.enabled === false && "cursor-not-allowed",
-                    )}
-                  >
-                    <FeatureLink
-                      to={feature.href}
-                      params={{
-                        orgUrlSlug: activeOrganization.slug,
-                        storeUrlSlug: activeStore.slug,
-                      }}
-                      search={{
-                        o: getOrigin(),
-                      }}
-                      className="block h-full"
-                    >
-                      <CardHeader className="pb-3">
-                        <div className="flex items-center space-x-3">
-                          <div className={`p-2 rounded-lg ${feature.color}`}>
-                            <Icon className="h-5 w-5 text-white" />
-                          </div>
-                          <CardTitle className="text-lg">
-                            {feature.title}
-                          </CardTitle>
-                          {feature.enabled === false && (
-                            <Badge variant="outline">Disabled</Badge>
-                          )}
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        <CardDescription className="text-sm">
-                          {feature.description}
-                        </CardDescription>
-                      </CardContent>
-                    </FeatureLink>
-                  </div>
-                );
-              })}
+                })}
+            </div>
           </div>
-        </div>
 
-        {/* Today's Summary */}
-        <div>
-          <h2 className="text-xl font-medium mb-6">Summary</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {hasFullAdminAccess && (
-              <>
-                <div className="border rounded-lg">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm text-muted-foreground">
-                      Total Sales
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="text-2xl font-bold">
-                      {todaySummary ? (
-                        currencyFormatter.format(
-                          toDisplayAmount(todaySummary.totalSales),
-                        )
-                      ) : (
-                        <span className="text-muted-foreground">--</span>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground">Today</p>
-                  </CardContent>
-                </div>
-              </>
-            )}
+          {/* Today's Summary */}
+          <div>
+            <h2 className="text-xl font-medium mb-6">Summary</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {hasFullAdminAccess && (
+                <>
+                  <div className="border rounded-lg">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm text-muted-foreground">
+                        Total Sales
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div className="text-2xl font-bold">
+                        {todaySummary ? (
+                          currencyFormatter.format(
+                            toDisplayAmount(todaySummary.totalSales),
+                          )
+                        ) : (
+                          <span className="text-muted-foreground">--</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">Today</p>
+                    </CardContent>
+                  </div>
+                </>
+              )}
 
-            <div className="border rounded-lg">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-muted-foreground">
-                  Transactions
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="text-2xl font-bold">
-                  {todaySummary ? (
-                    todaySummary.totalTransactions
-                  ) : (
-                    <span className="text-muted-foreground">--</span>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">Today</p>
-              </CardContent>
-            </div>
+              <div className="border rounded-lg">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm text-muted-foreground">
+                    Transactions
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="text-2xl font-bold">
+                    {todaySummary ? (
+                      todaySummary.totalTransactions
+                    ) : (
+                      <span className="text-muted-foreground">--</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Today</p>
+                </CardContent>
+              </div>
 
-            <div className="border rounded-lg">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-muted-foreground">
-                  Items Sold
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="text-2xl font-bold">
-                  {todaySummary ? (
-                    todaySummary.totalItemsSold
-                  ) : (
-                    <span className="text-muted-foreground">--</span>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">Today</p>
-              </CardContent>
-            </div>
+              <div className="border rounded-lg">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm text-muted-foreground">
+                    Items Sold
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="text-2xl font-bold">
+                    {todaySummary ? (
+                      todaySummary.totalItemsSold
+                    ) : (
+                      <span className="text-muted-foreground">--</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Today</p>
+                </CardContent>
+              </div>
 
-            {/* {hasFullAdminAccess && (
+              {/* {hasFullAdminAccess && (
               <div className="border rounded-lg">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm text-muted-foreground">
@@ -320,8 +317,9 @@ export default function PointOfSaleView() {
                 </CardContent>
               </div>
             )} */}
+            </div>
           </div>
-        </div>
+        </PageWorkspace>
       </FadeIn>
     </View>
   );

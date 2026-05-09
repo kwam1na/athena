@@ -79,6 +79,7 @@ This route index enumerates the current files under `src/routes` so agents can o
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services/active-cases.index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services/active-cases.index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services/appointments.index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services/appointments.index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services/catalog-management.index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services/catalog-management.index.tsx)
+- [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services/index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services/index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services/intake.index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services/intake.index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId.test.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId.test.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId.tsx)

@@ -146,6 +146,7 @@ type DailyCloseHistoryListItem = {
   completedAt?: number;
   completedByUserId?: Id<"athenaUser">;
   completedByStaffProfileId?: Id<"staffProfile">;
+  completedByStaffName?: string | null;
   readinessStatus: DailyCloseReadinessStatus;
   blockerCount: number;
   reviewCount: number;
@@ -782,13 +783,16 @@ function snapshotReviewedItems(
 
 function toDailyCloseHistoryListItem(
   dailyClose: Doc<"dailyClose">,
+  completedByStaffName?: string | null,
+  completedByStaffProfileId = dailyClose.completedByStaffProfileId,
 ): DailyCloseHistoryListItem {
   return {
     dailyCloseId: dailyClose._id,
     operatingDate: dailyClose.operatingDate,
     completedAt: dailyClose.completedAt,
     completedByUserId: dailyClose.completedByUserId,
-    completedByStaffProfileId: dailyClose.completedByStaffProfileId,
+    completedByStaffProfileId,
+    completedByStaffName,
     readinessStatus: dailyClose.readiness.status,
     blockerCount: dailyClose.readiness.blockerCount,
     reviewCount: dailyClose.readiness.reviewCount,
@@ -796,6 +800,33 @@ function toDailyCloseHistoryListItem(
     readyCount: dailyClose.readiness.readyCount,
     summary: dailyClose.summary,
   };
+}
+
+async function getDailyCloseCompletionEventStaffProfileId(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    dailyCloseId: Id<"dailyClose">;
+    storeId: Id<"store">;
+  },
+): Promise<Id<"staffProfile"> | undefined> {
+  const events = await ctx.db
+    .query("operationalEvent")
+    .withIndex("by_storeId_subject", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("subjectType", DAILY_CLOSE_SUBJECT_TYPE)
+        .eq("subjectId", args.dailyCloseId),
+    )
+    .take(DAILY_CLOSE_QUERY_LIMIT);
+  const completionEvent = events
+    .filter((event) => event.eventType === "daily_close_completed")
+    .sort((left, right) => (right.createdAt ?? 0) - (left.createdAt ?? 0))[0];
+  const approvedByStaffProfileId =
+    completionEvent?.metadata?.approvedByStaffProfileId;
+
+  return typeof approvedByStaffProfileId === "string"
+    ? (approvedByStaffProfileId as Id<"staffProfile">)
+    : undefined;
 }
 
 function emptySummary(): DailyCloseSummary {
@@ -934,6 +965,14 @@ export async function buildDailyCloseSnapshotWithCtx(
   const expenseSessions = Array.from(expenseSessionsById.values()).filter(
     (session): session is Doc<"expenseSession"> => Boolean(session),
   );
+  const completedByStaffProfileId =
+    existingClose?.status === "completed"
+      ? existingClose.completedByStaffProfileId ??
+        (await getDailyCloseCompletionEventStaffProfileId(ctx, {
+          dailyCloseId: existingClose._id,
+          storeId: args.storeId,
+        }))
+      : undefined;
   const terminalLabelsById = await buildTerminalLabelsById(ctx, [
     ...activeRegisterSessions.map((session) => session.terminalId),
     ...closedRegisterSessions.map((session) => session.terminalId),
@@ -955,6 +994,7 @@ export async function buildDailyCloseSnapshotWithCtx(
     ...voidedTransactions.map((transaction) => transaction.staffProfileId),
     ...expenseTransactions.map((transaction) => transaction.staffProfileId),
     ...pendingApprovals.map((approval) => approval.requestedByStaffProfileId),
+    completedByStaffProfileId,
   ]);
   const blockers: DailyCloseItem[] = [];
   const reviewItems: DailyCloseItem[] = [];
@@ -1479,8 +1519,10 @@ export async function buildDailyCloseSnapshotWithCtx(
     existingClose?.status === "completed"
       ? {
           completedAt: existingClose.completedAt,
-          completedByStaffProfileId: existingClose.completedByStaffProfileId,
-          completedByStaffName: null,
+          completedByStaffProfileId,
+          completedByStaffName: completedByStaffProfileId
+            ? staffNamesById.get(completedByStaffProfileId) ?? null
+            : null,
           completedByUserId: existingClose.completedByUserId,
           notes: existingClose.notes,
         }
@@ -1749,6 +1791,7 @@ export async function completeDailyCloseWithCtx(
   }
 
   const now = Date.now();
+  const completedByStaffProfileId = approvalProof.data.approvedByStaffProfileId;
   const carryForwardWorkItems = [
     ...linkedWorkItemResult.workItems,
     ...createdWorkItemResult.workItems,
@@ -1778,7 +1821,7 @@ export async function completeDailyCloseWithCtx(
       carryForwardWorkItemIds,
       carryForwardWorkItems,
       completedAt: now,
-      completedByStaffProfileId: args.actorStaffProfileId,
+      completedByStaffProfileId,
       completedByUserId: args.actorUserId,
       notes,
       readiness,
@@ -1792,7 +1835,7 @@ export async function completeDailyCloseWithCtx(
     updatedAt: now,
     completedAt: now,
     completedByUserId: args.actorUserId,
-    completedByStaffProfileId: args.actorStaffProfileId,
+    completedByStaffProfileId,
   };
 
   let dailyCloseId = snapshot.existingClose?._id;
@@ -1830,7 +1873,7 @@ export async function completeDailyCloseWithCtx(
     subjectLabel: `End-of-Day Review ${args.operatingDate}`,
     message: `End-of-Day Review completed for ${args.operatingDate}.`,
     actorUserId: args.actorUserId,
-    actorStaffProfileId: args.actorStaffProfileId,
+    actorStaffProfileId: completedByStaffProfileId,
     metadata: {
       approvalProofId: approvalProof.data.approvalProofId,
       approvedByStaffProfileId: approvalProof.data.approvedByStaffProfileId,
@@ -1920,10 +1963,35 @@ export async function listCompletedDailyCloseHistoryWithCtx(
     )
     .order("desc")
     .take(limit);
+  const completedClosesWithSnapshots = completedCloses.filter(
+    (dailyClose) => dailyClose.reportSnapshot,
+  );
+  const completedByStaffProfileIds = await Promise.all(
+    completedClosesWithSnapshots.map((dailyClose) =>
+      dailyClose.completedByStaffProfileId
+        ? Promise.resolve(dailyClose.completedByStaffProfileId)
+        : getDailyCloseCompletionEventStaffProfileId(ctx, {
+            dailyCloseId: dailyClose._id,
+            storeId: args.storeId,
+          }),
+    ),
+  );
+  const staffNamesById = await buildStaffNamesById(
+    ctx,
+    completedByStaffProfileIds,
+  );
 
-  return completedCloses
-    .filter((dailyClose) => dailyClose.reportSnapshot)
-    .map(toDailyCloseHistoryListItem);
+  return completedClosesWithSnapshots.map((dailyClose, index) => {
+    const completedByStaffProfileId = completedByStaffProfileIds[index];
+
+    return toDailyCloseHistoryListItem(
+      dailyClose,
+      completedByStaffProfileId
+        ? staffNamesById.get(completedByStaffProfileId) ?? null
+        : null,
+      completedByStaffProfileId,
+    );
+  });
 }
 
 export async function getCompletedDailyCloseHistoryDetailWithCtx(
@@ -1944,12 +2012,25 @@ export async function getCompletedDailyCloseHistoryDetailWithCtx(
     return null;
   }
 
+  const completedByStaffProfileId =
+    dailyClose.completedByStaffProfileId ??
+    (await getDailyCloseCompletionEventStaffProfileId(ctx, {
+      dailyCloseId: dailyClose._id,
+      storeId: args.storeId,
+    }));
+  const staffNamesById = await buildStaffNamesById(ctx, [
+    completedByStaffProfileId,
+  ]);
+
   return {
     dailyCloseId: dailyClose._id,
     operatingDate: dailyClose.operatingDate,
     completedAt: dailyClose.completedAt,
     completedByUserId: dailyClose.completedByUserId,
-    completedByStaffProfileId: dailyClose.completedByStaffProfileId,
+    completedByStaffProfileId,
+    completedByStaffName: completedByStaffProfileId
+      ? staffNamesById.get(completedByStaffProfileId) ?? null
+      : null,
     reportSnapshot: dailyClose.reportSnapshot,
   };
 }

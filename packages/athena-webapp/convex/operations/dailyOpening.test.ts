@@ -224,6 +224,12 @@ describe("daily opening backend foundation", () => {
     expect(snapshot.readyItems.map((item) => item.key)).toEqual([
       "daily_close:daily-close-1:completed",
     ]);
+    expect(snapshot.readyItems[0]?.link).toMatchObject({
+      search: {
+        operatingDate: "2026-05-07",
+      },
+      to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+    });
     expect(snapshot.sourceSubjects).toEqual([
       {
         id: "daily-close-1",
@@ -231,6 +237,86 @@ describe("daily opening backend foundation", () => {
         type: "daily_close",
       },
     ]);
+  });
+
+  it("summarizes pending approval blockers with operator-facing metadata", async () => {
+    const { db } = createDb({
+      approvalRequest: [
+        {
+          _id: "approval-1",
+          createdAt: Date.UTC(2026, 4, 8, 7),
+          notes: "Customer paid cash, not mobile money.",
+          reason:
+            "Manager approval is required to correct a completed transaction payment method.",
+          registerSessionId: "register-1",
+          requestType: "payment_method_correction",
+          status: "pending",
+          storeId: "store-1",
+          subjectId: "txn-1",
+          subjectType: "pos_transaction",
+          metadata: {
+            amount: 171500,
+            paymentMethod: "cash",
+            previousPaymentMethod: "mobile_money",
+            transactionId: "txn-1",
+            transactionNumber: "298944",
+          },
+        },
+      ],
+      dailyClose: [completedDailyClose()],
+      store: [store],
+    });
+
+    const snapshot = await buildDailyOpeningSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.status).toBe("blocked");
+    expect(snapshot.blockers[0]).toMatchObject({
+      key: "approval_request:approval-1:pending",
+      title: "Payment correction approval pending",
+      link: {
+        label: "View approvals",
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/approvals",
+      },
+      metadata: [
+        {
+          label: "Request",
+          value: "Payment correction",
+        },
+        {
+          label: "Transaction",
+          value: "298944",
+        },
+        {
+          label: "transactionId",
+          value: "txn-1",
+        },
+        {
+          label: "Current method",
+          value: "Mobile Money",
+        },
+        {
+          label: "Requested method",
+          value: "Cash",
+        },
+        {
+          label: "Amount",
+          value: 171500,
+        },
+        {
+          label: "Requester note",
+          value: "Customer paid cash, not mobile money.",
+        },
+      ],
+    });
+    expect(JSON.stringify(snapshot.blockers[0]?.metadata)).not.toContain(
+      "payment_method_correction",
+    );
+    expect(JSON.stringify(snapshot.blockers[0]?.metadata)).not.toContain(
+      "pos_transaction",
+    );
   });
 
   it("hydrates the started opening staff profile name", async () => {

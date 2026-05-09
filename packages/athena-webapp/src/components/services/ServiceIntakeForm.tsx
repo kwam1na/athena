@@ -46,7 +46,7 @@ type ServiceIntakeFormProps = {
   isSubmitting: boolean;
   onChange: <K extends keyof ServiceIntakeFormState>(
     field: K,
-    value: ServiceIntakeFormState[K]
+    value: ServiceIntakeFormState[K],
   ) => void;
   onSelectCustomer: (customer: ServiceIntakeCustomerResult) => void;
   onSubmit: () => void;
@@ -69,9 +69,9 @@ export function ServiceIntakeForm({
   validationErrors,
 }: ServiceIntakeFormProps) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-layout-xl">
       {validationErrors.length > 0 ? (
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-lg border border-danger/30 bg-danger/10 px-layout-md py-layout-sm text-sm text-danger">
           <p className="font-medium">Fix the highlighted intake details</p>
           <ul className="mt-2 list-disc pl-5">
             {validationErrors.map((error) => (
@@ -81,11 +81,13 @@ export function ServiceIntakeForm({
         </div>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="space-y-4 rounded-lg border p-4">
-          <div>
-            <h3 className="text-base font-medium">Customer</h3>
-            <p className="text-sm text-muted-foreground">
+      <div className="grid gap-layout-xl lg:grid-cols-2">
+        <section className="space-y-layout-lg rounded-lg border border-border bg-surface p-layout-lg shadow-surface">
+          <div className="space-y-1.5 border-b border-border/70 pb-layout-sm">
+            <h3 className="text-xl font-semibold tracking-tight text-foreground">
+              Customer
+            </h3>
+            <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
               Link an existing customer or capture the walk-in details directly.
             </p>
           </div>
@@ -101,10 +103,10 @@ export function ServiceIntakeForm({
           </div>
 
           {customerResults.length > 0 ? (
-            <div className="space-y-2 rounded-md border bg-muted/20 p-3">
+            <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
               {customerResults.map((customer) => (
                 <button
-                  className="flex w-full items-start justify-between rounded-md border bg-background px-3 py-2 text-left"
+                  className="flex w-full items-start justify-between rounded-md border border-border bg-background px-3 py-2 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   key={customer._id}
                   onClick={() => onSelectCustomer(customer)}
                   type="button"
@@ -125,7 +127,7 @@ export function ServiceIntakeForm({
             </div>
           ) : null}
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-layout-md sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="customer-full-name">Customer name</Label>
               <Input
@@ -141,7 +143,9 @@ export function ServiceIntakeForm({
               <Label htmlFor="customer-email">Email</Label>
               <Input
                 id="customer-email"
-                onChange={(event) => onChange("customerEmail", event.target.value)}
+                onChange={(event) =>
+                  onChange("customerEmail", event.target.value)
+                }
                 placeholder="ama@example.com"
                 value={form.customerEmail}
               />
@@ -161,7 +165,9 @@ export function ServiceIntakeForm({
               <Label htmlFor="customer-notes">Customer notes</Label>
               <Textarea
                 id="customer-notes"
-                onChange={(event) => onChange("customerNotes", event.target.value)}
+                onChange={(event) =>
+                  onChange("customerNotes", event.target.value)
+                }
                 placeholder="Hairline concerns, preferred stylist, prior repairs..."
                 value={form.customerNotes}
               />
@@ -169,20 +175,25 @@ export function ServiceIntakeForm({
           </div>
         </section>
 
-        <section className="space-y-4 rounded-lg border p-4">
-          <div>
-            <h3 className="text-base font-medium">Intake</h3>
-            <p className="text-sm text-muted-foreground">
-              Capture the work, assignee, and optional deposit without a full calendar.
+        <section className="space-y-layout-lg rounded-lg border border-border bg-surface p-layout-lg shadow-surface">
+          <div className="space-y-1.5 border-b border-border/70 pb-layout-sm">
+            <h3 className="text-xl font-semibold tracking-tight text-foreground">
+              Intake
+            </h3>
+            <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+              Capture the work, assignee, and optional deposit without a full
+              calendar.
             </p>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-layout-md sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="service-title">Service title</Label>
               <Input
                 id="service-title"
-                onChange={(event) => onChange("serviceTitle", event.target.value)}
+                onChange={(event) =>
+                  onChange("serviceTitle", event.target.value)
+                }
                 placeholder="Wash and restyle closure wig"
                 value={form.serviceTitle}
               />
@@ -191,7 +202,9 @@ export function ServiceIntakeForm({
             <div className="space-y-2">
               <Label htmlFor="assigned-staff">Assigned staff</Label>
               <Select
-                onValueChange={(value) => onChange("assignedStaffProfileId", value)}
+                onValueChange={(value) =>
+                  onChange("assignedStaffProfileId", value)
+                }
                 value={form.assignedStaffProfileId}
               >
                 <SelectTrigger aria-label="Assigned staff" id="assigned-staff">
@@ -201,7 +214,9 @@ export function ServiceIntakeForm({
                   {staffOptions.map((staff) => (
                     <SelectItem key={staff._id} value={staff._id}>
                       {staff.fullName}
-                      {staff.roles.length > 0 ? ` · ${staff.roles.join(", ")}` : ""}
+                      {staff.roles.length > 0
+                        ? ` · ${staff.roles.join(", ")}`
+                        : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -214,7 +229,7 @@ export function ServiceIntakeForm({
                 onValueChange={(value) =>
                   onChange(
                     "intakeChannel",
-                    value as ServiceIntakeFormState["intakeChannel"]
+                    value as ServiceIntakeFormState["intakeChannel"],
                   )
                 }
                 value={form.intakeChannel}
@@ -233,7 +248,10 @@ export function ServiceIntakeForm({
               <Label htmlFor="priority">Priority</Label>
               <Select
                 onValueChange={(value) =>
-                  onChange("priority", value as ServiceIntakeFormState["priority"])
+                  onChange(
+                    "priority",
+                    value as ServiceIntakeFormState["priority"],
+                  )
                 }
                 value={form.priority}
               >
@@ -253,7 +271,9 @@ export function ServiceIntakeForm({
               <Input
                 id="deposit-amount"
                 inputMode="numeric"
-                onChange={(event) => onChange("depositAmount", event.target.value)}
+                onChange={(event) =>
+                  onChange("depositAmount", event.target.value)
+                }
                 placeholder="Optional"
                 value={form.depositAmount}
               />
@@ -302,7 +322,12 @@ export function ServiceIntakeForm({
       </div>
 
       <div className="flex justify-end">
-        <Button disabled={isSubmitting} onClick={onSubmit} type="button">
+        <Button
+          disabled={isSubmitting}
+          onClick={onSubmit}
+          type="button"
+          variant="workflow"
+        >
           {isSubmitting ? "Creating intake..." : "Create intake"}
         </Button>
       </div>

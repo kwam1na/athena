@@ -281,8 +281,8 @@ describe("DailyCloseHistoryView", () => {
       name: "Completed Daily Close records",
     });
 
-    expect(within(list).getByText("May 8, 2026")).toBeInTheDocument();
-    expect(within(list).getByText("May 7, 2026")).toBeInTheDocument();
+    expect(within(list).getByText("Friday, May 8, 2026")).toBeInTheDocument();
+    expect(within(list).getByText("Thursday, May 7, 2026")).toBeInTheDocument();
     expect(within(list).getAllByText("Completed")).toHaveLength(2);
     expect(within(list).getAllByText("GH₵1,255")[0]).toBeInTheDocument();
     expect(within(list).queryByText("May 6, 2026")).not.toBeInTheDocument();
@@ -296,10 +296,34 @@ describe("DailyCloseHistoryView", () => {
     });
 
     expect(within(detail).getByText("Historical close")).toBeInTheDocument();
-    expect(within(detail).getAllByText("May 8, 2026")[0]).toBeInTheDocument();
+    expect(within(detail).getAllByText("Friday, May 8, 2026")[0]).toBeInTheDocument();
     expect(within(detail).getByText(/Completed by Ama Mensah/)).toBeInTheDocument();
+    expect(within(detail).queryByText("Read-only")).not.toBeInTheDocument();
     expect(within(detail).getByText("Close reviewed by owner.")).toBeInTheDocument();
     expect(within(detail).getByText("Completed sale")).toBeInTheDocument();
+  });
+
+  it("uses the history record staff name when the stored snapshot has no name", () => {
+    const reportSnapshot = storedReportSnapshot(
+      snapshot({
+        completedClose: {
+          completedAt: Date.UTC(2026, 4, 8, 22, 30),
+          completedByStaffName: undefined,
+          notes: "Close reviewed by owner.",
+        },
+      }),
+    );
+
+    mockQueries([
+      historyRecord({
+        completedByStaffName: "Kwamina Mensah",
+        reportSnapshot,
+      }),
+    ]);
+
+    render(<DailyCloseHistoryView />);
+
+    expect(screen.getByText(/Completed by Kwamina Mensah/)).toBeInTheDocument();
   });
 
   it("opens another completed record from the list", async () => {

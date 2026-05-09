@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
-import { ArrowUpRight, CheckCircle2, History } from "lucide-react";
+import { ArrowUpRight, History } from "lucide-react";
 
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { cn } from "@/lib/utils";
@@ -375,8 +375,8 @@ function DailyCloseHistoryConnectedView({
                         <button
                           aria-pressed={isSelected}
                           className={cn(
-                            "w-full px-layout-md py-layout-md text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
-                            isSelected && "bg-success/10",
+                            "w-full px-layout-md py-layout-lg text-left transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+                            isSelected && "bg-muted/25",
                           )}
                           key={recordId}
                           onClick={() => setSelectedRecordId(recordId)}
@@ -393,15 +393,12 @@ function DailyCloseHistoryConnectedView({
                                 )}
                               </p>
                             </div>
-                            <Badge
-                              className="border-success/20 bg-success/10 text-success"
-                              variant="outline"
-                            >
+                            <Badge className="border-border bg-transparent text-muted-foreground">
                               Completed
                             </Badge>
                           </div>
 
-                          <dl className="mt-layout-md grid grid-cols-2 gap-layout-sm text-sm">
+                          <dl className="mt-layout-lg grid grid-cols-2 gap-layout-md text-sm">
                             <div>
                               <dt className="text-xs text-muted-foreground">
                                 Sales
@@ -476,7 +473,7 @@ function DailyCloseHistoryConnectedView({
                           <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
                             Historical close
                           </p>
-                          <h2 className="text-2xl font-semibold tracking-tight text-foreground">
+                          <h2 className="text-xl font-medium text-foreground">
                             {formatDailyCloseOperatingDate(
                               selectedSnapshot.operatingDate,
                             )}
@@ -491,10 +488,6 @@ function DailyCloseHistoryConnectedView({
                             )}
                           </p>
                         </div>
-                        <Badge className="w-fit border-success/20 bg-success/10 text-success">
-                          <CheckCircle2 aria-hidden="true" className="mr-1 h-3 w-3" />
-                          Read-only
-                        </Badge>
                       </div>
                       {selectedSnapshot.completedClose?.notes ? (
                         <p className="mt-layout-md rounded-md border border-border bg-surface p-layout-sm text-sm leading-6 text-foreground">

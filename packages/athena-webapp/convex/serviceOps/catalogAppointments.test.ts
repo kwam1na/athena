@@ -1,12 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { Id } from "../_generated/dataModel";
-import { buildServiceCatalogItem } from "./catalog";
+import {
+  buildServiceCatalogItem,
+  normalizeServiceCatalogNameKey,
+} from "./catalog";
 import {
   buildServiceAppointment,
   findOverlappingAppointment,
 } from "./appointments";
 
 describe("service catalog and appointment helpers", () => {
+  it("normalizes service catalog names case-insensitively for uniqueness", () => {
+    expect(normalizeServiceCatalogNameKey("Tokin")).toBe("tokin");
+    expect(normalizeServiceCatalogNameKey("tokin")).toBe("tokin");
+    expect(normalizeServiceCatalogNameKey("  TOKIN  ")).toBe("tokin");
+  });
+
   it("normalizes catalog items and returns user_error data for expected validation failures", () => {
     expect(
       buildServiceCatalogItem({

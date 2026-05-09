@@ -212,6 +212,86 @@ describe("TransactionsView", () => {
     expect(screen.queryByText("POS-CARD-ONLY")).not.toBeInTheDocument();
   });
 
+  it("uses the operating date search param as the completed-from filter", () => {
+    useSearchMock.mockReturnValue({ operatingDate: "2026-05-08" });
+    getActiveStoreMock.mockReturnValue({
+      activeStore: {
+        _id: "store-1",
+        currency: "GHS",
+      },
+    });
+    useQueryMock.mockReturnValue([
+      {
+        _id: "txn-1",
+        transactionNumber: "POS-MAY-08",
+        total: 1000,
+        paymentMethod: "cash",
+        paymentMethods: ["cash"],
+        hasMultiplePaymentMethods: false,
+        cashierName: "Ada L.",
+        customerName: null,
+        itemCount: 1,
+        completedAt: new Date(2026, 4, 8, 10).getTime(),
+        hasTrace: false,
+        sessionTraceId: null,
+      },
+    ]);
+
+    render(<TransactionsView />);
+
+    expect(useQueryMock).toHaveBeenNthCalledWith(1, expect.anything(), {
+      storeId: "store-1",
+      completedFrom: new Date(2026, 4, 8).getTime(),
+    });
+    expect(
+      screen.getByText("Showing transactions from May 8, 2026"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "From May 8, 2026" }))
+      .toBeInTheDocument();
+    expect(screen.getByText("POS-MAY-08")).toBeInTheDocument();
+  });
+
+  it("combines active payment and operating date filters into one summary", () => {
+    useSearchMock.mockReturnValue({
+      operatingDate: "2026-05-08",
+      paymentMethod: "cash",
+    });
+    getActiveStoreMock.mockReturnValue({
+      activeStore: {
+        _id: "store-1",
+        currency: "GHS",
+      },
+    });
+    useQueryMock.mockReturnValue([
+      {
+        _id: "txn-1",
+        transactionNumber: "POS-CASH-MAY-08",
+        total: 1000,
+        paymentMethod: "cash",
+        paymentMethods: ["cash"],
+        hasMultiplePaymentMethods: false,
+        cashierName: "Ada L.",
+        customerName: null,
+        itemCount: 1,
+        completedAt: new Date(2026, 4, 8, 10).getTime(),
+        hasTrace: false,
+        sessionTraceId: null,
+      },
+    ]);
+
+    render(<TransactionsView />);
+
+    expect(
+      screen.getByText("Showing Cash transactions from May 8, 2026"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Showing Cash transactions"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Showing from May 8, 2026"),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows the origin-aware back button when transactions open from another workspace", () => {
     useSearchMock.mockReturnValue({ o: "%2Fwigclub%2Fstore%2Fosu%2Foperations" });
     getActiveStoreMock.mockReturnValue({

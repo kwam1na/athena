@@ -175,6 +175,20 @@ describe("getCompletedTransactions", () => {
       }),
     ]);
   });
+
+  it("passes the completed-from lower bound into the completed transaction repository", async () => {
+    vi.mocked(listCompletedTransactions).mockResolvedValue([] as never);
+
+    await getCompletedTransactions({} as never, {
+      completedFrom: Date.UTC(2026, 4, 8),
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(listCompletedTransactions).toHaveBeenCalledWith(expect.anything(), {
+      completedFrom: Date.UTC(2026, 4, 8),
+      storeId: "store-1",
+    });
+  });
 });
 
 describe("getTransactionById", () => {
