@@ -212,6 +212,31 @@ const store = {
   slug: "accra",
 };
 
+function dailyCloseSummary(overrides: Record<string, unknown> = {}) {
+  return {
+    carriedOverCashTotal: 0,
+    carriedOverRegisterCount: 0,
+    cashDepositTotal: 0,
+    closedRegisterSessionCount: 0,
+    currentDayCashTotal: 0,
+    currentDayCashTransactionCount: 0,
+    expectedCashTotal: 0,
+    expenseStaffCount: 0,
+    expenseTotal: 0,
+    expenseTransactionCount: 0,
+    netCashVariance: 0,
+    openWorkItemCount: 0,
+    paymentTotals: [],
+    pendingApprovalCount: 0,
+    registerCount: 0,
+    registerVarianceCount: 0,
+    salesTotal: 0,
+    transactionCount: 0,
+    voidedTransactionCount: 0,
+    ...overrides,
+  };
+}
+
 function dailyCloseApprovalProof(overrides: Partial<Row> = {}): Row {
   return {
     _id: "approval-proof-1",
@@ -259,6 +284,20 @@ describe("end-of-day review backend foundation", () => {
           status: "pending",
           storeId: "store-1",
           subjectId: "txn-1",
+          subjectType: "pos_transaction",
+        },
+        {
+          _id: "approval-next-day",
+          createdAt: Date.UTC(2026, 4, 8, 16),
+          metadata: {
+            transactionId: "txn-next-day",
+            transactionNumber: "TXN-NEXT",
+          },
+          registerSessionId: "register-next-day",
+          requestType: "payment_method_correction",
+          status: "pending",
+          storeId: "store-1",
+          subjectId: "txn-next-day",
           subjectType: "pos_transaction",
         },
       ],
@@ -366,6 +405,16 @@ describe("end-of-day review backend foundation", () => {
           terminalId: "terminal-1",
           updatedAt: 2,
         },
+        {
+          _id: "pos-next-day",
+          createdAt: Date.UTC(2026, 4, 8, 10),
+          expiresAt: Date.UTC(2026, 4, 8, 20),
+          sessionNumber: "SES-next",
+          status: "held",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          updatedAt: Date.UTC(2026, 4, 8, 10),
+        },
       ],
       posTerminal: [
         {
@@ -434,6 +483,19 @@ describe("end-of-day review backend foundation", () => {
           totalPaid: 5000,
           transactionNumber: "TXN-2",
         },
+        {
+          _id: "txn-next-day",
+          completedAt: Date.UTC(2026, 4, 8, 14),
+          payments: [{ amount: 7000, method: "cash", timestamp: 1 }],
+          registerSessionId: "register-next-day",
+          status: "completed",
+          storeId: "store-1",
+          subtotal: 7000,
+          tax: 0,
+          total: 7000,
+          totalPaid: 7000,
+          transactionNumber: "TXN-NEXT",
+        },
       ],
       registerSession: [
         {
@@ -473,6 +535,16 @@ describe("end-of-day review backend foundation", () => {
           storeId: "store-1",
           terminalId: "terminal-1",
           variance: -500,
+        },
+        {
+          _id: "register-next-day",
+          expectedCash: 17000,
+          openedAt: Date.UTC(2026, 4, 8, 9),
+          openingFloat: 10000,
+          registerNumber: "A4",
+          status: "closing",
+          storeId: "store-1",
+          terminalId: "terminal-1",
         },
       ],
       store: [store],
@@ -686,6 +758,171 @@ describe("end-of-day review backend foundation", () => {
         },
       ]),
     );
+  });
+
+  it("serves the persisted report snapshot for completed End-of-Day Reviews", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 9, 12));
+
+    const { db } = createDb({
+      approvalRequest: [
+        {
+          _id: "approval-current",
+          createdAt: Date.UTC(2026, 4, 9, 9),
+          registerSessionId: "register-current",
+          requestType: "payment_method_correction",
+          status: "pending",
+          storeId: "store-1",
+          subjectId: "txn-current",
+          subjectType: "pos_transaction",
+        },
+      ],
+      dailyClose: [
+        {
+          _id: "daily-close-1",
+          carryForwardWorkItemIds: [],
+          completedAt: Date.UTC(2026, 4, 8, 22),
+          completedByStaffProfileId: "staff-1",
+          createdAt: Date.UTC(2026, 4, 8, 22),
+          isCurrent: true,
+          notes: "Closed cleanly.",
+          operatingDate: "2026-05-08",
+          organizationId: "org-1",
+          readiness: {
+            blockerCount: 0,
+            carryForwardCount: 0,
+            readyCount: 1,
+            reviewCount: 0,
+            status: "ready",
+          },
+          reportSnapshot: {
+            closeMetadata: {
+              carryForwardWorkItemIds: [],
+              completedAt: Date.UTC(2026, 4, 8, 22),
+              completedByStaffProfileId: "staff-1",
+              endAt: Date.UTC(2026, 4, 9),
+              notes: "Closed cleanly.",
+              operatingDate: "2026-05-08",
+              organizationId: "org-1",
+              startAt: Date.UTC(2026, 4, 8),
+              storeId: "store-1",
+            },
+            carryForwardItems: [],
+            readiness: {
+              blockerCount: 0,
+              carryForwardCount: 0,
+              readyCount: 1,
+              reviewCount: 0,
+              status: "ready",
+            },
+            readyItems: [
+              {
+                category: "sale",
+                key: "pos_transaction:txn-closed-day:completed",
+                message: "Completed sale is included in End-of-Day Review.",
+                severity: "ready",
+                subject: {
+                  id: "txn-closed-day",
+                  label: "TXN-CLOSED",
+                  type: "pos_transaction",
+                },
+                title: "Completed sale",
+              },
+            ],
+            reviewedItems: [],
+            sourceSubjects: [
+              {
+                id: "txn-closed-day",
+                label: "TXN-CLOSED",
+                type: "pos_transaction",
+              },
+            ],
+            summary: {
+              ...dailyCloseSummary({
+                salesTotal: 46000,
+                transactionCount: 1,
+              }),
+            },
+          },
+          reviewedItemKeys: [],
+          sourceSubjects: [],
+          status: "completed",
+          storeId: "store-1",
+          summary: {
+            ...dailyCloseSummary({
+              salesTotal: 46000,
+              transactionCount: 1,
+            }),
+          },
+          updatedAt: Date.UTC(2026, 4, 8, 22),
+        },
+      ],
+      posSession: [
+        {
+          _id: "pos-current",
+          createdAt: Date.UTC(2026, 4, 9, 10),
+          expiresAt: Date.UTC(2026, 4, 9, 14),
+          sessionNumber: "SES-CURRENT",
+          status: "held",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          updatedAt: Date.UTC(2026, 4, 9, 10),
+        },
+      ],
+      posTransaction: [
+        {
+          _id: "txn-current",
+          completedAt: Date.UTC(2026, 4, 9, 10),
+          payments: [{ amount: 10000, method: "cash", timestamp: 1 }],
+          registerSessionId: "register-current",
+          status: "completed",
+          storeId: "store-1",
+          subtotal: 10000,
+          tax: 0,
+          total: 10000,
+          totalPaid: 10000,
+          transactionNumber: "TXN-CURRENT",
+        },
+      ],
+      registerSession: [
+        {
+          _id: "register-current",
+          expectedCash: 20000,
+          openedAt: Date.UTC(2026, 4, 9, 9),
+          openingFloat: 10000,
+          registerNumber: "A1",
+          status: "closing",
+          storeId: "store-1",
+        },
+      ],
+      staffProfile: [
+        {
+          _id: "staff-1",
+          firstName: "Ama",
+          fullName: "Ama Mensah",
+          lastName: "Mensah",
+          organizationId: "org-1",
+          status: "active",
+          storeId: "store-1",
+        },
+      ],
+      store: [store],
+    });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.status).toBe("completed");
+    expect(snapshot.blockers).toEqual([]);
+    expect(snapshot.readyItems.map((item) => item.key)).toEqual([
+      "pos_transaction:txn-closed-day:completed",
+    ]);
+    expect(snapshot.summary.transactionCount).toBe(1);
+    expect(snapshot.completedClose).toMatchObject({
+      completedByStaffName: "Ama Mensah",
+      notes: "Closed cleanly.",
+    });
   });
 
   it("does not repeat the register when the terminal label already includes it", async () => {

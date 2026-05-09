@@ -1179,10 +1179,53 @@ describe("DailyCloseViewContent", () => {
   it("renders completed End-of-Day Review summary after reload", () => {
     renderContent({
       ...readySnapshot,
+      blockers: blockedSnapshot.blockers,
       completedClose: {
         completedAt: Date.UTC(2026, 4, 7, 23, 15),
         completedByStaffName: "Ama Mensah",
         notes: "Clean close.",
+      },
+      reportSnapshot: {
+        closeMetadata: {
+          completedAt: Date.UTC(2026, 4, 7, 23, 15),
+          completedByStaffName: "Ama Mensah",
+          endAt: readySnapshot.endAt,
+          notes: "Clean close.",
+          operatingDate: readySnapshot.operatingDate,
+          startAt: readySnapshot.startAt,
+        },
+        carryForwardItems: [],
+        readyItems: [
+          {
+            category: "sale",
+            description: "Completed sale is included in End-of-Day Review.",
+            id: "persisted-sale",
+            metadata: {
+              completedAt: Date.UTC(2026, 4, 7, 14),
+              total: 10000,
+              transaction: "TXN-SAVED",
+            },
+            subject: {
+              id: "txn-saved",
+              label: "TXN-SAVED",
+              type: "pos_transaction",
+            },
+            title: "Saved close sale",
+          },
+        ],
+        readiness: {
+          blockerCount: 0,
+          carryForwardCount: 0,
+          readyCount: 1,
+          reviewCount: 0,
+          status: "ready",
+        },
+        reviewedItems: [],
+        summary: {
+          ...baseSummary,
+          totalSales: 10000,
+          transactionCount: 1,
+        },
       },
       status: "completed",
     });
@@ -1190,6 +1233,11 @@ describe("DailyCloseViewContent", () => {
     expect(screen.getByText("End-of-day review completed")).toBeInTheDocument();
     expect(screen.getByText(/Ama Mensah/)).toBeInTheDocument();
     expect(screen.getByText("Clean close.")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Payment method correction pending"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Saved close sale")).toBeInTheDocument();
+    expect(screen.getAllByText("GH₵100").length).toBeGreaterThan(0);
   });
 
   it("renders protected access states consistently with operations pages", () => {

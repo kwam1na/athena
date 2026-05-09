@@ -140,6 +140,45 @@ type DailyCloseReportSnapshot = {
   sourceSubjects: DailyCloseSnapshot["sourceSubjects"];
 };
 
+function normalizeCompletedDailyCloseSnapshot(args: {
+  dailyClose: Doc<"dailyClose">;
+  completedByStaffName?: string | null;
+  completedByStaffProfileId?: Id<"staffProfile">;
+}): DailyCloseSnapshot | null {
+  const reportSnapshot = args.dailyClose.reportSnapshot as
+    | DailyCloseReportSnapshot
+    | undefined;
+
+  if (!reportSnapshot) {
+    return null;
+  }
+
+  return {
+    operatingDate: reportSnapshot.closeMetadata.operatingDate,
+    storeId: reportSnapshot.closeMetadata.storeId,
+    organizationId: reportSnapshot.closeMetadata.organizationId,
+    startAt: reportSnapshot.closeMetadata.startAt,
+    endAt: reportSnapshot.closeMetadata.endAt,
+    existingClose: args.dailyClose,
+    completedClose: {
+      completedAt: reportSnapshot.closeMetadata.completedAt,
+      completedByStaffProfileId: args.completedByStaffProfileId,
+      completedByStaffName: args.completedByStaffName ?? null,
+      completedByUserId: reportSnapshot.closeMetadata.completedByUserId,
+      notes: reportSnapshot.closeMetadata.notes,
+    },
+    priorClose: null,
+    status: "completed",
+    blockers: [],
+    reviewItems: reportSnapshot.reviewedItems,
+    carryForwardItems: reportSnapshot.carryForwardItems,
+    readyItems: reportSnapshot.readyItems,
+    readiness: reportSnapshot.readiness,
+    summary: reportSnapshot.summary as DailyCloseSummary,
+    sourceSubjects: reportSnapshot.sourceSubjects,
+  };
+}
+
 type DailyCloseHistoryListItem = {
   dailyCloseId: Id<"dailyClose">;
   operatingDate: string;
@@ -529,28 +568,113 @@ async function listClosedRegisterSessionsForDay(
   );
 }
 
+function registerSessionIntersectsRange(
+  session: Pick<Doc<"registerSession">, "closedAt" | "openedAt">,
+  range: { endAt: number; startAt: number },
+) {
+  return (
+    session.openedAt < range.endAt &&
+    (session.closedAt ?? Infinity) >= range.startAt
+  );
+}
+
+function posSessionIntersectsRange(
+  session: Pick<
+    Doc<"posSession">,
+    "createdAt" | "expiresAt" | "heldAt" | "resumedAt"
+  >,
+  range: { endAt: number; startAt: number },
+) {
+  const startsAt = Math.min(
+    session.createdAt,
+    session.heldAt ?? session.createdAt,
+    session.resumedAt ?? session.createdAt,
+  );
+
+  return startsAt < range.endAt && session.expiresAt >= range.startAt;
+}
+
+async function approvalBelongsToRange(
+  ctx: Pick<QueryCtx, "db">,
+  approval: Doc<"approvalRequest">,
+  range: { endAt: number; startAt: number },
+) {
+  const transactionId =
+    approval.subjectType === "pos_transaction"
+      ? (approval.subjectId as Id<"posTransaction">)
+      : typeof approval.metadata?.transactionId === "string"
+        ? (approval.metadata.transactionId as Id<"posTransaction">)
+        : null;
+
+  if (transactionId) {
+    const transaction = await ctx.db.get("posTransaction", transactionId);
+
+    if (typeof transaction?.completedAt === "number") {
+      return isInRange(transaction.completedAt, range.startAt, range.endAt);
+    }
+  }
+
+  const registerSessionId =
+    approval.registerSessionId ??
+    (approval.subjectType === "register_session"
+      ? (approval.subjectId as Id<"registerSession">)
+      : null);
+
+  if (registerSessionId) {
+    const registerSession = await ctx.db.get(
+      "registerSession",
+      registerSessionId,
+    );
+
+    if (registerSession) {
+      return registerSessionIntersectsRange(registerSession, range);
+    }
+  }
+
+  return isInRange(approval.createdAt, range.startAt, range.endAt);
+}
+
 async function listPendingCloseoutApprovals(
   ctx: Pick<QueryCtx, "db">,
-  storeId: Id<"store">,
+  args: {
+    endAt: number;
+    startAt: number;
+    storeId: Id<"store">;
+  },
 ) {
   const approvals = await ctx.db
     .query("approvalRequest")
     .withIndex("by_storeId_status", (q) =>
-      q.eq("storeId", storeId).eq("status", "pending"),
+      q.eq("storeId", args.storeId).eq("status", "pending"),
     )
     .take(DAILY_CLOSE_QUERY_LIMIT);
 
-  return approvals.filter(
+  const closeoutApprovals = approvals.filter(
     (approval) =>
       approval.registerSessionId ||
       approval.subjectType === "register_session" ||
       approval.requestType === "variance_review",
   );
+
+  const scopedApprovals = await Promise.all(
+    closeoutApprovals.map(async (approval) => ({
+      approval,
+      belongsToRange: await approvalBelongsToRange(ctx, approval, args),
+    })),
+  );
+
+  return scopedApprovals
+    .filter(({ belongsToRange }) => belongsToRange)
+    .map(({ approval }) => approval);
 }
 
 async function listOpenPosSessions(
   ctx: Pick<QueryCtx, "db">,
-  storeId: Id<"store">,
+  args: {
+    endAt: number;
+    startAt: number;
+    storeId: Id<"store">;
+  },
 ) {
   const now = Date.now();
   const sessions = await Promise.all(
@@ -558,7 +682,7 @@ async function listOpenPosSessions(
       ctx.db
         .query("posSession")
         .withIndex("by_storeId_and_status", (q) =>
-          q.eq("storeId", storeId).eq("status", status),
+          q.eq("storeId", args.storeId).eq("status", status),
         )
         .take(DAILY_CLOSE_QUERY_LIMIT),
     ),
@@ -566,7 +690,10 @@ async function listOpenPosSessions(
 
   return sessions
     .flat()
-    .filter((session) => !session.expiresAt || session.expiresAt >= now);
+    .filter(
+      (session) =>
+        session.expiresAt >= now && posSessionIntersectsRange(session, args),
+    );
 }
 
 async function listOpenOperationalWorkItems(
@@ -904,6 +1031,31 @@ export async function buildDailyCloseSnapshotWithCtx(
     };
   }
 
+  const existingClose = await getDailyCloseForDate(ctx, args);
+
+  if (existingClose?.status === "completed" && existingClose.reportSnapshot) {
+    const completedByStaffProfileId =
+      existingClose.completedByStaffProfileId ??
+      (await getDailyCloseCompletionEventStaffProfileId(ctx, {
+        dailyCloseId: existingClose._id,
+        storeId: args.storeId,
+      }));
+    const staffNamesById = await buildStaffNamesById(ctx, [
+      completedByStaffProfileId,
+    ]);
+    const completedSnapshot = normalizeCompletedDailyCloseSnapshot({
+      dailyClose: existingClose,
+      completedByStaffProfileId,
+      completedByStaffName: completedByStaffProfileId
+        ? staffNamesById.get(completedByStaffProfileId) ?? null
+        : null,
+    });
+
+    if (completedSnapshot) {
+      return completedSnapshot;
+    }
+  }
+
   const [
     activeRegisterSessionsForStore,
     closedRegisterSessions,
@@ -914,13 +1066,12 @@ export async function buildDailyCloseSnapshotWithCtx(
     voidedTransactions,
     expenseTransactions,
     cashDeposits,
-    existingClose,
     priorClose,
   ] = await Promise.all([
     listActiveRegisterSessions(ctx, args.storeId),
     listClosedRegisterSessionsForDay(ctx, { ...range, storeId: args.storeId }),
-    listPendingCloseoutApprovals(ctx, args.storeId),
-    listOpenPosSessions(ctx, args.storeId),
+    listPendingCloseoutApprovals(ctx, { ...range, storeId: args.storeId }),
+    listOpenPosSessions(ctx, { ...range, storeId: args.storeId }),
     listOpenOperationalWorkItems(ctx, args.storeId),
     listTransactionsForDay(ctx, {
       ...range,
@@ -934,7 +1085,6 @@ export async function buildDailyCloseSnapshotWithCtx(
     }),
     listExpensesForDay(ctx, { ...range, storeId: args.storeId }),
     listDepositsForDay(ctx, { ...range, storeId: args.storeId }),
-    getDailyCloseForDate(ctx, args),
     getPriorCompletedDailyClose(ctx, args),
   ]);
 
@@ -996,6 +1146,7 @@ export async function buildDailyCloseSnapshotWithCtx(
     ...pendingApprovals.map((approval) => approval.requestedByStaffProfileId),
     completedByStaffProfileId,
   ]);
+
   const blockers: DailyCloseItem[] = [];
   const reviewItems: DailyCloseItem[] = [];
   const readyItems: DailyCloseItem[] = [];
