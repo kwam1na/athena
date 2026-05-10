@@ -519,6 +519,11 @@ describe("DailyOperationsViewContent", () => {
       "/wigclub/store/osu/operations/daily-close?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
     );
     expect(screen.queryByText("Current day only")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Opening ready")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("End-of-Day Review ready"),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Open work ready")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open Opening" })).toHaveAttribute(
       "href",
       "/wigclub/store/osu/operations/opening?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",

@@ -1,9 +1,15 @@
 import { useMemo, useState } from "react";
-import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useSearch,
+} from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import {
   ArrowUpRight,
   Calendar as CalendarIcon,
+  Check,
   ChevronLeft,
   ChevronRight,
   Clock3,
@@ -228,7 +234,10 @@ function getSundayWeekStartOperatingDate(operatingDate: string) {
 }
 
 function getSaturdayWeekEndOperatingDate(operatingDate: string) {
-  return shiftLocalOperatingDate(getSundayWeekStartOperatingDate(operatingDate), 6);
+  return shiftLocalOperatingDate(
+    getSundayWeekStartOperatingDate(operatingDate),
+    6,
+  );
 }
 
 function getLocalOperatingDateRangeFromSearch(operatingDate?: unknown) {
@@ -364,11 +373,7 @@ function formatTimelineMessage(message: string) {
   return message.replace(
     /\b(\d{4})-(\d{2})-(\d{2})\b/g,
     (value, year, month, day) => {
-      const parsed = new Date(
-        Number(year),
-        Number(month) - 1,
-        Number(day),
-      );
+      const parsed = new Date(Number(year), Number(month) - 1, Number(day));
 
       if (Number.isNaN(parsed.getTime())) {
         return value;
@@ -448,6 +453,27 @@ function statusLabel(status: DailyOperationsLaneStatus) {
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
+function SuccessCheckIcon({
+  className,
+  label,
+}: {
+  className?: string;
+  label: string;
+}) {
+  return (
+    <span
+      aria-label={label}
+      className={cn(
+        "inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-success text-surface",
+        className,
+      )}
+      role="img"
+    >
+      <Check aria-hidden="true" className="h-3 w-3 stroke-[3]" />
+    </span>
+  );
+}
+
 function buildParams(
   orgUrlSlug: string,
   storeUrlSlug: string,
@@ -512,12 +538,16 @@ function LaneCard({
             {lane.description}
           </p>
         </div>
-        <Badge
-          className={cn("shrink-0 border", statusClassName(lane.status))}
-          size="sm"
-        >
-          {statusLabel(lane.status)}
-        </Badge>
+        {["ready", "closed"].includes(lane.status) ? (
+          <SuccessCheckIcon className="mt-0.5" label={`${lane.label} ready`} />
+        ) : (
+          <Badge
+            className={cn("shrink-0 border", statusClassName(lane.status))}
+            size="sm"
+          >
+            {statusLabel(lane.status)}
+          </Badge>
+        )}
       </div>
       <div className="mt-layout-sm flex items-center justify-between">
         <span className="font-numeric text-lg tabular-nums text-foreground">
@@ -670,8 +700,9 @@ function WeekMetricsStrip({
     weekEndOperatingDate,
     7,
   );
-  const nextWeekStartOperatingDate =
-    getSundayWeekStartOperatingDate(nextWeekEndOperatingDate);
+  const nextWeekStartOperatingDate = getSundayWeekStartOperatingDate(
+    nextWeekEndOperatingDate,
+  );
   const canMoveNext = nextWeekStartOperatingDate <= getLocalOperatingDate();
   const weekSalesTotal = metrics.reduce(
     (total, metric) => total + metric.salesTotal,
@@ -865,7 +896,9 @@ export function DailyOperationsViewContent({
   const metricLabels = snapshot
     ? getDailyOperationsMetricLabels(snapshot.operatingDate)
     : undefined;
-  const showPrimaryAction = snapshot ? shouldShowPrimaryAction(snapshot) : false;
+  const showPrimaryAction = snapshot
+    ? shouldShowPrimaryAction(snapshot)
+    : false;
   const isHistoricalDate = snapshot
     ? isHistoricalOperatingDate(snapshot.operatingDate)
     : false;
