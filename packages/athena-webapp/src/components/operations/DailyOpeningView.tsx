@@ -260,6 +260,23 @@ function formatOperatingDate(operatingDate?: string | null) {
   });
 }
 
+function formatOperatingDateWithWeekday(operatingDate?: string | null) {
+  if (!operatingDate) return "Not available";
+
+  const parsed = new Date(`${operatingDate}T00:00:00`);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return operatingDate;
+  }
+
+  return parsed.toLocaleDateString([], {
+    day: "numeric",
+    month: "long",
+    weekday: "long",
+    year: "numeric",
+  });
+}
+
 function formatTimestamp(timestamp?: number | null) {
   if (!timestamp) return "Time unavailable";
 
@@ -1030,7 +1047,7 @@ function OpeningRail({
             Operating date
           </p>
           <p className="mt-1 text-sm font-medium text-foreground">
-            {formatOperatingDate(snapshot.operatingDate)}
+            {formatOperatingDateWithWeekday(snapshot.operatingDate)}
           </p>
         </div>
 
@@ -1373,7 +1390,7 @@ export function DailyOpeningViewContent({
           <div className="rounded-lg border border-border bg-surface-raised px-layout-md py-layout-sm text-sm text-muted-foreground shadow-surface">
             Operating date{" "}
             <span className="font-medium text-foreground">
-              {formatOperatingDate(snapshot.operatingDate)}
+              {formatOperatingDateWithWeekday(snapshot.operatingDate)}
             </span>
           </div>
         ) : null
