@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -45,6 +45,27 @@ function resolveWithEnv(env: Record<string, string>) {
   );
 }
 
+function resolveEsbuildWithEnv(repoRoot: string, env: Record<string, string>) {
+  return Bun.spawnSync(
+    [
+      "bash",
+      "-lc",
+      `source scripts/convex-node-env.sh && resolve_convex_esbuild_bin ${JSON.stringify(repoRoot)}`,
+    ],
+    {
+      cwd: path.join(import.meta.dirname, ".."),
+      env: {
+        ...process.env,
+        ATHENA_CONVEX_ESBUILD_BIN: "",
+        ESBUILD_BINARY_PATH: "",
+        ...env,
+      },
+      stderr: "pipe",
+      stdout: "pipe",
+    }
+  );
+}
+
 describe("resolve_convex_node_bin", () => {
   it("prefers ATHENA_CONVEX_NODE_BIN when it points to a supported Node release", async () => {
     await withTempDir(async (dir) => {
@@ -77,6 +98,54 @@ describe("resolve_convex_node_bin", () => {
         "Convex deploy requires Node.js 18, 20, 22, or 24"
       );
       expect(result.stderr.toString()).toContain("v23.5.0");
+    });
+  });
+});
+
+describe("resolve_convex_esbuild_bin", () => {
+  it("prefers ATHENA_CONVEX_ESBUILD_BIN when it points to an executable", async () => {
+    await withTempDir(async (dir) => {
+      const esbuildBin = path.join(dir, "esbuild");
+      await writeFile(esbuildBin, "#!/bin/sh\nprintf '0.27.0\\n'\n", {
+        mode: 0o755,
+      });
+
+      const result = resolveEsbuildWithEnv(dir, {
+        ATHENA_CONVEX_ESBUILD_BIN: esbuildBin,
+      });
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout.toString().trim()).toBe(esbuildBin);
+      expect(result.stderr.toString()).toBe("");
+    });
+  });
+
+  it("uses the repo-level Apple Silicon esbuild binary when available", async () => {
+    await withTempDir(async (dir) => {
+      const esbuildBin = path.join(
+        dir,
+        "node_modules",
+        "@esbuild",
+        "darwin-arm64",
+        "bin",
+        "esbuild"
+      );
+      await mkdir(path.dirname(esbuildBin), { recursive: true });
+      await writeFile(esbuildBin, "#!/bin/sh\nprintf '0.27.0\\n'\n", {
+        mode: 0o755,
+      });
+
+      const result = resolveEsbuildWithEnv(dir, {
+        ATHENA_CONVEX_ESBUILD_BIN: "",
+        ESBUILD_BINARY_PATH: "",
+      });
+
+      if (process.platform === "darwin" && process.arch === "arm64") {
+        expect(result.exitCode).toBe(0);
+        expect(result.stdout.toString().trim()).toBe(esbuildBin);
+      } else {
+        expect(result.exitCode).toBe(1);
+      }
     });
   });
 });

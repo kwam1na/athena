@@ -1980,8 +1980,8 @@ function TransactionReportAction({
             </SheetDescription>
           </SheetHeader>
 
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <div className="divide-y divide-border bg-surface">
+          <div className="min-h-0 flex-1 overflow-y-auto bg-background/60 p-layout-lg md:p-layout-xl">
+            <div className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface">
               {items.length === 0 ? (
                 <p className="p-layout-lg text-sm text-muted-foreground">
                   No POS or expense transactions were recorded for this

@@ -16,6 +16,14 @@ export const APPROVAL_ACTIONS = {
     key: "cash_controls.register_session.correct_opening_float",
     label: "Correct opening float",
   },
+  registerSessionCloseoutReopen: {
+    key: "cash_controls.register_session.reopen_closeout",
+    label: "Reopen register closeout",
+  },
+  registerSessionCloseoutModificationSubmit: {
+    key: "cash_controls.register_session.submit_reopened_closeout",
+    label: "Submit reopened register closeout",
+  },
   dailyCloseCompletion: {
     key: "operations.daily_close.complete",
     label: "Complete End-of-Day Review",

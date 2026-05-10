@@ -96,6 +96,12 @@ type DailyOperationsCloseSummary = {
   transactionCount: number;
 };
 
+type DailyOperationsWeekMetric = DailyOperationsCloseSummary & {
+  isClosed: boolean;
+  isSelected: boolean;
+  operatingDate: string;
+};
+
 function operatingDateRange(operatingDate: string) {
   const startAt = Date.parse(`${operatingDate}T00:00:00.000Z`);
 
@@ -104,6 +110,28 @@ function operatingDateRange(operatingDate: string) {
   }
 
   return { endAt: startAt + DAY_MS, startAt };
+}
+
+function shiftOperatingDate(operatingDate: string, offsetDays: number) {
+  const range = operatingDateRange(operatingDate);
+
+  return new Date(range.startAt + offsetDays * DAY_MS)
+    .toISOString()
+    .slice(0, 10);
+}
+
+function sundayWeekStartOperatingDate(operatingDate: string) {
+  const range = operatingDateRange(operatingDate);
+  const date = new Date(range.startAt);
+  const dayOfWeek = date.getUTCDay();
+
+  return new Date(range.startAt - dayOfWeek * DAY_MS)
+    .toISOString()
+    .slice(0, 10);
+}
+
+function saturdayWeekEndOperatingDate(operatingDate: string) {
+  return shiftOperatingDate(sundayWeekStartOperatingDate(operatingDate), 6);
 }
 
 function resolveRange(args: {
@@ -124,9 +152,135 @@ function resolveRange(args: {
   return operatingDateRange(args.operatingDate);
 }
 
+function emptyCloseSummary(): DailyOperationsCloseSummary {
+  return {
+    carriedOverCashTotal: 0,
+    carriedOverRegisterCount: 0,
+    currentDayCashTotal: 0,
+    currentDayCashTransactionCount: 0,
+    expenseTotal: 0,
+    expenseTransactionCount: 0,
+    netCashVariance: 0,
+    registerVarianceCount: 0,
+    salesTotal: 0,
+    transactionCount: 0,
+  };
+}
+
 function pluralize(value: number, singular: string, plural = `${singular}s`) {
   if (value === 1) return `1 ${singular}`;
   return `${value} ${plural}`;
+}
+
+function transactionCashDelta(
+  transaction: Pick<Doc<"posTransaction">, "changeGiven" | "payments">,
+) {
+  const cashTendered = transaction.payments.reduce(
+    (sum, payment) => (payment.method === "cash" ? sum + payment.amount : sum),
+    0,
+  );
+
+  return Math.max(0, cashTendered - (transaction.changeGiven ?? 0));
+}
+
+async function buildWeekMetricForDate(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    isSelected: boolean;
+    operatingDate: string;
+    storeId: Id<"store">;
+  },
+): Promise<DailyOperationsWeekMetric> {
+  const range = operatingDateRange(args.operatingDate);
+
+  if (!Number.isFinite(range.startAt) || !Number.isFinite(range.endAt)) {
+    return {
+      ...emptyCloseSummary(),
+      isClosed: false,
+      isSelected: args.isSelected,
+      operatingDate: args.operatingDate,
+    };
+  }
+
+  const [completedTransactions, expenseTransactions, dailyClose] =
+    await Promise.all([
+      ctx.db
+        .query("posTransaction")
+        .withIndex("by_storeId_status_completedAt", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("status", "completed")
+            .gte("completedAt", range.startAt)
+            .lt("completedAt", range.endAt),
+        )
+        .take(MAX_OPERATIONS_QUERY_LIMIT),
+      ctx.db
+        .query("expenseTransaction")
+        .withIndex("by_storeId_status_completedAt", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("status", "completed")
+            .gte("completedAt", range.startAt)
+            .lt("completedAt", range.endAt),
+        )
+        .take(MAX_OPERATIONS_QUERY_LIMIT),
+      ctx.db
+        .query("dailyClose")
+        .withIndex("by_storeId_operatingDate", (q) =>
+          q.eq("storeId", args.storeId).eq("operatingDate", args.operatingDate),
+        )
+        .first(),
+    ]);
+
+  return {
+    ...emptyCloseSummary(),
+    currentDayCashTotal: completedTransactions.reduce(
+      (sum, transaction) => sum + transactionCashDelta(transaction),
+      0,
+    ),
+    currentDayCashTransactionCount: completedTransactions.filter(
+      (transaction) => transactionCashDelta(transaction) > 0,
+    ).length,
+    expenseTotal: expenseTransactions.reduce(
+      (sum, transaction) => sum + transaction.totalValue,
+      0,
+    ),
+    expenseTransactionCount: expenseTransactions.length,
+    isClosed: dailyClose?.status === "completed",
+    isSelected: args.isSelected,
+    operatingDate: args.operatingDate,
+    salesTotal: completedTransactions.reduce(
+      (sum, transaction) => sum + transaction.total,
+      0,
+    ),
+    transactionCount: completedTransactions.length,
+  };
+}
+
+async function buildWeekMetrics(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    operatingDate: string;
+    storeId: Id<"store">;
+    weekEndOperatingDate?: string;
+  },
+) {
+  const weekEndOperatingDate = saturdayWeekEndOperatingDate(
+    args.weekEndOperatingDate ?? args.operatingDate,
+  );
+  const operatingDates = Array.from({ length: 7 }, (_, index) =>
+    shiftOperatingDate(weekEndOperatingDate, index - 6),
+  );
+
+  return Promise.all(
+    operatingDates.map((operatingDate) =>
+      buildWeekMetricForDate(ctx, {
+        isSelected: operatingDate === args.operatingDate,
+        operatingDate,
+        storeId: args.storeId,
+      }),
+    ),
+  );
 }
 
 function attentionSeverity(item: SourceItem): AttentionSeverity {
@@ -497,16 +651,18 @@ export async function buildDailyOperationsSnapshotWithCtx(
     operatingDate: string;
     startAt?: number;
     storeId: Id<"store">;
+    weekEndOperatingDate?: string;
   },
 ) {
   const range = resolveRange(args);
-  const [openingSnapshot, closeSnapshot, queueCounts, timeline, store] =
+  const [openingSnapshot, closeSnapshot, queueCounts, timeline, store, weekMetrics] =
     await Promise.all([
       buildDailyOpeningSnapshotWithCtx(ctx, args),
       buildDailyCloseSnapshotWithCtx(ctx, args),
       listOpenQueueSnapshot(ctx, args.storeId),
       listTimelineEvents(ctx, { ...range, storeId: args.storeId }),
       ctx.db.get("store", args.storeId),
+      buildWeekMetrics(ctx, args),
     ]);
 
   const isOpeningStarted = openingSnapshot.status === "started";
@@ -590,6 +746,7 @@ export async function buildDailyOperationsSnapshotWithCtx(
     startAt: range.startAt,
     storeId: args.storeId,
     timeline,
+    weekMetrics,
   };
 }
 
@@ -599,6 +756,7 @@ export const getDailyOperationsSnapshot = query({
     operatingDate: v.string(),
     startAt: v.optional(v.number()),
     storeId: v.id("store"),
+    weekEndOperatingDate: v.optional(v.string()),
   },
   handler: (ctx, args) => buildDailyOperationsSnapshotWithCtx(ctx, args),
 });

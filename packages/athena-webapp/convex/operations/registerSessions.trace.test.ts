@@ -9,6 +9,8 @@ vi.mock("./registerSessionTracing", () => ({
 }));
 
 import {
+  buildClosedRegisterSessionPatch,
+  buildReopenedClosedRegisterSessionPatch,
   getOpenRegisterSession,
   getRegisterSessionForRegisterState,
   openRegisterSession,
@@ -144,6 +146,66 @@ describe("register session workflow trace handlers", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("appends closeout ledger entries when closing and reopening a closed drawer", () => {
+    const closedPatch = buildClosedRegisterSessionPatch(
+      buildRegisterSession({ status: "closing" }) as never,
+      {
+        closedByStaffProfileId: "staff-1" as never,
+        closedByUserId: "user-1" as never,
+        countedCash: 5_500,
+        notes: "Initial count.",
+      },
+    );
+
+    expect(closedPatch).toMatchObject({
+      closeoutRecords: [
+        {
+          actorStaffProfileId: "staff-1",
+          actorUserId: "user-1",
+          countedCash: 5_500,
+          expectedCash: 5_000,
+          notes: "Initial count.",
+          type: "closed",
+          variance: 500,
+        },
+      ],
+      countedCash: 5_500,
+      status: "closed",
+      variance: 500,
+    });
+
+    const reopenPatch = buildReopenedClosedRegisterSessionPatch(
+      {
+        ...buildRegisterSession({ status: "closed" }),
+        ...closedPatch,
+      } as never,
+      {
+        actorStaffProfileId: "staff-2" as never,
+        actorUserId: "user-2" as never,
+      },
+    );
+
+    expect(reopenPatch).toMatchObject({
+      closedAt: undefined,
+      closedByStaffProfileId: undefined,
+      closedByUserId: undefined,
+      closeoutRecords: [
+        expect.objectContaining({ type: "closed" }),
+        expect.objectContaining({
+          actorStaffProfileId: "staff-2",
+          actorUserId: "user-2",
+          countedCash: 5_500,
+          expectedCash: 5_000,
+          reason: "Closed register closeout reopened for correction.",
+          type: "reopened",
+          variance: 500,
+        }),
+      ],
+      managerApprovalRequestId: undefined,
+      status: "closing",
+    });
   });
 
   it("records an opened trace after opening a register session", async () => {

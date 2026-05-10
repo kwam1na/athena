@@ -319,6 +319,17 @@ function isInRange(value: unknown, startAt: number, endAt: number) {
   return typeof value === "number" && value >= startAt && value < endAt;
 }
 
+function registerSessionCloseoutOperatingAt(
+  session: Pick<Doc<"registerSession">, "closedAt" | "closeoutRecords">,
+) {
+  const firstClosedRecord = session.closeoutRecords?.find(
+    (record) =>
+      record.type === "closed" && typeof record.occurredAt === "number",
+  );
+
+  return firstClosedRecord?.occurredAt ?? session.closedAt;
+}
+
 function registerSessionLabel(
   session: Pick<Doc<"registerSession">, "registerNumber">,
 ) {
@@ -564,7 +575,11 @@ async function listClosedRegisterSessionsForDay(
     .take(DAILY_CLOSE_QUERY_LIMIT);
 
   return sessions.filter((session) =>
-    isInRange(session.closedAt, args.startAt, args.endAt),
+    isInRange(
+      registerSessionCloseoutOperatingAt(session),
+      args.startAt,
+      args.endAt,
+    ),
   );
 }
 
@@ -576,6 +591,22 @@ function registerSessionIntersectsRange(
     session.openedAt < range.endAt &&
     (session.closedAt ?? Infinity) >= range.startAt
   );
+}
+
+function registerSessionBelongsToRange(
+  session: Pick<
+    Doc<"registerSession">,
+    "closedAt" | "closeoutRecords" | "openedAt"
+  >,
+  range: { endAt: number; startAt: number },
+) {
+  const closeoutOperatingAt = registerSessionCloseoutOperatingAt(session);
+
+  if (typeof closeoutOperatingAt === "number") {
+    return isInRange(closeoutOperatingAt, range.startAt, range.endAt);
+  }
+
+  return registerSessionIntersectsRange(session, range);
 }
 
 function posSessionIntersectsRange(
@@ -627,7 +658,7 @@ async function approvalBelongsToRange(
     );
 
     if (registerSession) {
-      return registerSessionIntersectsRange(registerSession, range);
+      return registerSessionBelongsToRange(registerSession, range);
     }
   }
 
@@ -1089,7 +1120,7 @@ export async function buildDailyCloseSnapshotWithCtx(
   ]);
 
   const activeRegisterSessions = activeRegisterSessionsForStore.filter(
-    (session) => session.openedAt < range.endAt,
+    (session) => registerSessionBelongsToRange(session, range),
   );
   const relevantRegisterSessions = [
     ...activeRegisterSessions,

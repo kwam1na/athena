@@ -78,6 +78,7 @@ type CashControlRegisterSession = Pick<
   | "_id"
   | "closedAt"
   | "closedByStaffProfileId"
+  | "closeoutRecords"
   | "countedCash"
   | "expectedCash"
   | "managerApprovalRequestId"

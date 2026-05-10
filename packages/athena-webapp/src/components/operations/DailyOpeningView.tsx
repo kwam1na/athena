@@ -1397,6 +1397,7 @@ export function DailyOpeningViewContent({
       eyebrow="Store Ops"
       isLoading={isLoadingSnapshot || !snapshot}
       loadingContent={<LoadingWorkspace />}
+      showBackButton
       main={
         snapshot ? (
           <BucketTabs
@@ -1494,6 +1495,7 @@ function DailyOpeningApiPendingView() {
             eyebrow="Store Ops"
             title="Opening Handoff"
             description="Opening Handoff is waiting for the server readiness snapshot and start-day command."
+            showBackButton
           />
           <EmptyState
             description="The frontend is wired to api.operations.dailyOpening.getDailyOpeningSnapshot and startStoreDay."

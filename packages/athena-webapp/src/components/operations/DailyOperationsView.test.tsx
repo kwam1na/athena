@@ -10,6 +10,8 @@ import {
 import type { Id } from "~/convex/_generated/dataModel";
 
 const mockedHooks = vi.hoisted(() => ({
+  navigate: vi.fn(),
+  useSearch: vi.fn(),
   useProtectedAdminPageState: vi.fn(),
   useQuery: vi.fn(),
 }));
@@ -50,6 +52,8 @@ vi.mock("@tanstack/react-router", () => ({
     orgUrlSlug: "wigclub",
     storeUrlSlug: "osu",
   }),
+  useNavigate: () => mockedHooks.navigate,
+  useSearch: mockedHooks.useSearch,
 }));
 
 vi.mock("convex/react", () => ({
@@ -67,6 +71,86 @@ vi.mock("~/convex/_generated/api", () => ({
     },
   },
 }));
+
+const weekMetrics = [
+  {
+    currentDayCashTotal: 0,
+    currentDayCashTransactionCount: 0,
+    expenseTotal: 0,
+    expenseTransactionCount: 0,
+    isClosed: true,
+    isSelected: false,
+    operatingDate: "2026-05-03",
+    salesTotal: 70000,
+    transactionCount: 1,
+  },
+  {
+    currentDayCashTotal: 0,
+    currentDayCashTransactionCount: 0,
+    expenseTotal: 0,
+    expenseTransactionCount: 0,
+    isClosed: true,
+    isSelected: false,
+    operatingDate: "2026-05-04",
+    salesTotal: 0,
+    transactionCount: 0,
+  },
+  {
+    currentDayCashTotal: 0,
+    currentDayCashTransactionCount: 0,
+    expenseTotal: 0,
+    expenseTransactionCount: 0,
+    isClosed: true,
+    isSelected: false,
+    operatingDate: "2026-05-05",
+    salesTotal: 98000,
+    transactionCount: 2,
+  },
+  {
+    currentDayCashTotal: 0,
+    currentDayCashTransactionCount: 0,
+    expenseTotal: 0,
+    expenseTransactionCount: 0,
+    isClosed: false,
+    isSelected: false,
+    operatingDate: "2026-05-06",
+    salesTotal: 0,
+    transactionCount: 0,
+  },
+  {
+    currentDayCashTotal: 0,
+    currentDayCashTransactionCount: 0,
+    expenseTotal: 0,
+    expenseTransactionCount: 0,
+    isClosed: false,
+    isSelected: false,
+    operatingDate: "2026-05-07",
+    salesTotal: 45000,
+    transactionCount: 1,
+  },
+  {
+    currentDayCashTotal: 349100,
+    currentDayCashTransactionCount: 2,
+    expenseTotal: 19800,
+    expenseTransactionCount: 1,
+    isClosed: false,
+    isSelected: true,
+    operatingDate: "2026-05-08",
+    salesTotal: 1533100,
+    transactionCount: 3,
+  },
+  {
+    currentDayCashTotal: 0,
+    currentDayCashTransactionCount: 0,
+    expenseTotal: 0,
+    expenseTransactionCount: 0,
+    isClosed: false,
+    isSelected: false,
+    operatingDate: "2026-05-09",
+    salesTotal: 0,
+    transactionCount: 0,
+  },
+] satisfies DailyOperationsSnapshot["weekMetrics"];
 
 const operatingSnapshot: DailyOperationsSnapshot = {
   attentionItems: [],
@@ -122,6 +206,7 @@ const operatingSnapshot: DailyOperationsSnapshot = {
   },
   storeId: "store-1" as Id<"store">,
   timeline: [],
+  weekMetrics,
 };
 
 const blockedSnapshot: DailyOperationsSnapshot = {
@@ -164,8 +249,30 @@ const blockedSnapshot: DailyOperationsSnapshot = {
   },
 };
 
+const notOpenedSnapshot: DailyOperationsSnapshot = {
+  ...operatingSnapshot,
+  lifecycle: {
+    description: "Start Opening Handoff before running the store day.",
+    label: "Not opened",
+    status: "not_opened",
+  },
+  primaryAction: {
+    label: "Start Opening Handoff",
+    to: "/$orgUrlSlug/store/$storeUrlSlug/operations/opening",
+  },
+};
+
 const closedSnapshot: DailyOperationsSnapshot = {
   ...operatingSnapshot,
+  lanes: operatingSnapshot.lanes.map((lane) =>
+    lane.key === "close"
+      ? {
+          ...lane,
+          description: "End-of-Day Review is saved for this store day.",
+          status: "closed",
+        }
+      : lane,
+  ),
   lifecycle: {
     description: "The store day has a saved close summary.",
     label: "Closed",
@@ -213,6 +320,49 @@ const timelineOverflowSnapshot: DailyOperationsSnapshot = {
   })),
 };
 
+function getCurrentLocalOperatingDate() {
+  const date = new Date();
+  const localDate = new Date(
+    date.getTime() - date.getTimezoneOffset() * 60_000,
+  );
+
+  return localDate.toISOString().slice(0, 10);
+}
+
+function getCurrentSaturdayWeekEndOperatingDate() {
+  const date = new Date();
+  const weekEndDate = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate() + (6 - date.getDay()),
+  );
+  const localDate = new Date(
+    weekEndDate.getTime() - weekEndDate.getTimezoneOffset() * 60_000,
+  );
+
+  return localDate.toISOString().slice(0, 10);
+}
+
+function shiftTestOperatingDate(operatingDate: string, offsetDays: number) {
+  const [year, month, day] = operatingDate.split("-").map(Number);
+  const date = new Date(year, month - 1, day + offsetDays);
+  const localDate = new Date(
+    date.getTime() - date.getTimezoneOffset() * 60_000,
+  );
+
+  return localDate.toISOString().slice(0, 10);
+}
+
+function formatTestOperatingDate(operatingDate: string) {
+  const [year, month, day] = operatingDate.split("-").map(Number);
+
+  return new Date(year, month - 1, day).toLocaleDateString([], {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 function renderContent(
   snapshot: DailyOperationsSnapshot | undefined,
   overrides: Partial<
@@ -238,27 +388,31 @@ describe("DailyOperationsViewContent", () => {
   beforeEach(() => {
     window.scrollTo = vi.fn();
     window.history.pushState({}, "", "/wigclub/store/osu/operations");
+    mockedHooks.navigate.mockReset();
+    mockedHooks.useSearch.mockReturnValue({});
   });
 
-  it("renders store-day posture, primary action, and lanes", () => {
+  it("renders historical metrics with view-only workflow messaging", () => {
     renderContent(operatingSnapshot);
 
     expect(
       screen.getByRole("heading", { name: "Daily Operations" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Today's net sales")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Open transactions" })).toHaveAttribute(
+    expect(screen.getByText("Net sales")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Open transactions" }),
+    ).toHaveAttribute(
       "href",
-      "/wigclub/store/osu/pos/transactions?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
+      "/wigclub/store/osu/pos/transactions?o=%252Fwigclub%252Fstore%252Fosu%252Foperations&operatingDate=2026-05-08",
     );
-    expect(screen.getByText("GH₵15,331")).toBeInTheDocument();
-    expect(screen.getByText("3 transactions")).toBeInTheDocument();
-    expect(screen.getByText("Today's cash")).toBeInTheDocument();
+    expect(screen.getAllByText("GH₵15,331")).not.toHaveLength(0);
+    expect(screen.getAllByText("3 transactions")).not.toHaveLength(0);
+    expect(screen.getByText("Cash")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Open cash transactions" }),
     ).toHaveAttribute(
       "href",
-      "/wigclub/store/osu/pos/transactions?o=%252Fwigclub%252Fstore%252Fosu%252Foperations&paymentMethod=cash",
+      "/wigclub/store/osu/pos/transactions?o=%252Fwigclub%252Fstore%252Fosu%252Foperations&operatingDate=2026-05-08&paymentMethod=cash",
     );
     expect(screen.getByText("GH₵3,491")).toBeInTheDocument();
     expect(screen.getByText("2 cash transactions")).toBeInTheDocument();
@@ -271,21 +425,245 @@ describe("DailyOperationsViewContent", () => {
     expect(screen.getByText("Variance")).toBeInTheDocument();
     expect(screen.getByText("No register variances")).toBeInTheDocument();
     expect(
+      screen.getByRole("heading", { name: "Week at a glance" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Week sales")).toBeInTheDocument();
+    expect(screen.getByText("GH₵17,461")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", {
+        name: "Previous week, seven days ending May 2, 2026",
+      }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/operations?operatingDate=2026-04-26&weekEndOperatingDate=2026-05-02",
+    );
+    expect(
+      screen.getByRole("link", {
+        name: "Next week, seven days ending May 16, 2026",
+      }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/operations?weekEndOperatingDate=2026-05-16",
+    );
+    expect(
+      screen.getByRole("link", { name: "View May 7, 2026 operations" }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/operations?operatingDate=2026-05-07&weekEndOperatingDate=2026-05-09",
+    );
+    expect(
+      screen.getByRole("link", { name: "View May 6, 2026 operations" }),
+    ).not.toContainHTML("width:");
+    expect(
+      screen.getByRole("link", { name: "View May 8, 2026 operations" }),
+    ).toHaveAttribute("aria-current", "date");
+    expect(
+      screen.getByRole("button", {
+        name: "Change operating date, currently Friday, May 8, 2026",
+      }),
+    ).toBeDisabled();
+    expect(
+      screen.queryByRole("link", { name: "Start End-of-Day Review" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Historical store-day view" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This historical operating date is view-only. Workflow actions are available only on the current operating date.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Metrics and timeline remain available for this historical day.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Workflow status")).not.toBeInTheDocument();
+    expect(screen.queryByText("Current day only")).not.toBeInTheDocument();
+    expect(screen.queryByText("Needs attention")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Open Opening" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Open End-of-Day Review" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Open Open work" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("uses today labels and current-day transaction links for the current operating date", () => {
+    renderContent({
+      ...operatingSnapshot,
+      operatingDate: getCurrentLocalOperatingDate(),
+    });
+
+    expect(screen.getByText("Today's net sales")).toBeInTheDocument();
+    expect(screen.getByText("Today's cash")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Open transactions" }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/pos/transactions?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
+    );
+    expect(
+      screen.getByRole("link", { name: "Open cash transactions" }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/pos/transactions?o=%252Fwigclub%252Fstore%252Fosu%252Foperations&paymentMethod=cash",
+    );
+    expect(
       screen.getByRole("link", { name: "Start End-of-Day Review" }),
-    ).toHaveAttribute("href", "/wigclub/store/osu/operations/daily-close");
-    expect(screen.getByText("Opening")).toBeInTheDocument();
-    expect(screen.getByText("End-of-Day Review")).toBeInTheDocument();
-    expect(screen.getByText("Open work")).toBeInTheDocument();
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/operations/daily-close?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
+    );
+    expect(screen.queryByText("Current day only")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open Opening" })).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/operations/opening?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
+    );
+    expect(
+      screen.getByRole("link", { name: "Open End-of-Day Review" }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/operations/daily-close?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
+    );
+    expect(screen.getByRole("link", { name: "Open Open work" })).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/operations/open-work?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
+    );
+  });
+
+  it("disables future dates in the week strip", () => {
+    const currentOperatingDate = getCurrentLocalOperatingDate();
+    const futureOperatingDate = shiftTestOperatingDate(currentOperatingDate, 1);
+    const futureDateLabel = formatTestOperatingDate(futureOperatingDate);
+
+    renderContent({
+      ...operatingSnapshot,
+      operatingDate: currentOperatingDate,
+      weekMetrics: [
+        {
+          ...weekMetrics[0],
+          isClosed: false,
+          isSelected: true,
+          operatingDate: currentOperatingDate,
+          salesTotal: 748500,
+          transactionCount: 1,
+        },
+        {
+          ...weekMetrics[1],
+          isClosed: false,
+          isSelected: false,
+          operatingDate: futureOperatingDate,
+          salesTotal: 0,
+          transactionCount: 0,
+        },
+      ],
+    });
+
+    expect(
+      screen.queryByRole("link", {
+        name: `View ${futureDateLabel} operations`,
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByLabelText(`${futureDateLabel} operations unavailable`),
+    ).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("disables historical start actions that would mutate the store day", () => {
+    renderContent(notOpenedSnapshot);
+
+    expect(
+      screen.queryByRole("link", { name: "Start Opening Handoff" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Historical store-day view" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This historical operating date is view-only. Workflow actions are available only on the current operating date.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Needs attention")).not.toBeInTheDocument();
+    expect(screen.queryByText("Workflow status")).not.toBeInTheDocument();
+  });
+
+  it("keeps current-day opening actions available", () => {
+    renderContent({
+      ...notOpenedSnapshot,
+      operatingDate: getCurrentLocalOperatingDate(),
+    });
+
+    expect(
+      screen.getByRole("link", { name: "Start Opening Handoff" }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/operations/opening?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
+    );
+  });
+
+  it("passes origin context to current-day blocker review actions", () => {
+    renderContent({
+      ...blockedSnapshot,
+      operatingDate: getCurrentLocalOperatingDate(),
+    });
+
+    expect(
+      screen.getByRole("link", { name: "Review close blockers" }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/operations/daily-close?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
+    );
+    expect(
+      screen.getByRole("link", { name: "Open Registers" }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/operations/daily-close?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
+    );
   });
 
   it("keeps attention items out of the right rail", () => {
     renderContent(blockedSnapshot);
 
     expect(
-      screen.getByRole("link", { name: "Review close blockers" }),
-    ).toHaveAttribute("href", "/wigclub/store/osu/operations/daily-close");
+      screen.queryByRole("link", { name: "Review close blockers" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Historical store-day view" }),
+    ).toBeInTheDocument();
     expect(screen.queryByLabelText("Operator attention")).not.toBeInTheDocument();
     expect(screen.queryByText("Register session is still open")).not.toBeInTheDocument();
+  });
+
+  it("keeps historical End-of-Day Review links on the selected operating date", () => {
+    renderContent(closedSnapshot);
+
+    expect(
+      screen.getByRole("heading", { name: "Closed store-day record" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This operating date is closed. The saved End-of-Day Review is available for this store-day record.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Review End-of-Day Review" }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/operations/daily-close?o=%252Fwigclub%252Fstore%252Fosu%252Foperations&operatingDate=2026-05-08",
+    );
+    expect(screen.queryByText("Workflow status")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Open End-of-Day Review" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: "Open End-of-Day Review unavailable for May 8, 2026",
+      }),
+    ).not.toBeInTheDocument();
   });
 
   it("renders closed-day review timeline without mutation copy", () => {
@@ -363,6 +741,8 @@ describe("DailyOperationsView", () => {
       isLoadingAccess: false,
     });
     mockedHooks.useQuery.mockReturnValue(operatingSnapshot);
+    mockedHooks.navigate.mockReset();
+    mockedHooks.useSearch.mockReturnValue({});
   });
 
   it("queries the daily operations snapshot for the active store", () => {
@@ -372,11 +752,30 @@ describe("DailyOperationsView", () => {
       mockedApi.getDailyOperationsSnapshot,
       expect.objectContaining({
         storeId: "store-1",
+        weekEndOperatingDate: getCurrentSaturdayWeekEndOperatingDate(),
       }),
     );
     expect(
-      screen.getByRole("link", { name: "Start End-of-Day Review" }),
+      screen.getByRole("heading", { name: "Historical store-day view" }),
     ).toBeInTheDocument();
+  });
+
+  it("queries the daily operations snapshot for the route operating date", () => {
+    mockedHooks.useSearch.mockReturnValue({
+      operatingDate: "2026-05-07",
+      weekEndOperatingDate: "2026-05-08",
+    });
+
+    render(<DailyOperationsView />);
+
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+      mockedApi.getDailyOperationsSnapshot,
+      expect.objectContaining({
+        operatingDate: "2026-05-07",
+        storeId: "store-1",
+        weekEndOperatingDate: "2026-05-09",
+      }),
+    );
   });
 
   it("skips the protected query when access is not ready", () => {

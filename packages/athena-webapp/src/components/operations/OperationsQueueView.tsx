@@ -407,6 +407,7 @@ export function OperationsQueueViewContent({
               eyebrow="Store Ops"
               title="Open work"
               description="Service intake and stock review work that still needs progress or completion."
+              showBackButton
             />
 
             {workItems.length === 0 ? (

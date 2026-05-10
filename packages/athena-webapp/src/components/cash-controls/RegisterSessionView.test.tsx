@@ -121,6 +121,8 @@ vi.mock("@/components/operations/CommandApprovalDialog", () => ({
     open,
   }: {
     approval: {
+      action: { key: string };
+      copy: { primaryActionLabel?: string };
       requiredRole: "manager";
       subject: { id: string; label?: string; type: string };
     } | null;
@@ -144,23 +146,39 @@ vi.mock("@/components/operations/CommandApprovalDialog", () => ({
       <button
         type="button"
         onClick={async () => {
-          await onAuthenticateForApproval({
-            actionKey: "cash_controls.register_session.correct_opening_float",
+          const result = await onAuthenticateForApproval({
+            actionKey: approval.action.key,
             pinHash: "hashed-pin",
             requiredRole: approval.requiredRole,
             storeId: "store-1",
             subject: approval.subject,
             username: "manager",
           });
+          const approvedResult =
+            typeof result === "object" &&
+            result !== null &&
+            "kind" in result &&
+            result.kind === "ok" &&
+            "data" in result
+              ? (result.data as {
+                  approvalProofId: string;
+                  approvedByStaffProfileId: string;
+                  expiresAt: number;
+                })
+              : {
+                  approvalProofId: "approval-proof-1",
+                  approvedByStaffProfileId: "manager-1",
+                  expiresAt: Date.now() + 60_000,
+                };
           onApproved({
             approval,
-            approvalProofId: "approval-proof-1",
-            approvedByStaffProfileId: "manager-1",
-            expiresAt: Date.now() + 60_000,
+            approvalProofId: approvedResult.approvalProofId,
+            approvedByStaffProfileId: approvedResult.approvedByStaffProfileId,
+            expiresAt: approvedResult.expiresAt,
           });
         }}
       >
-        Approve correction
+        {approval.copy.primaryActionLabel ?? "Approve"}
       </button>
     ) : null,
 }));
@@ -307,9 +325,9 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getByText("Closeout workflow")).toBeInTheDocument();
     expect(screen.getByText("Counted cash ($)")).toBeInTheDocument();
     expect(screen.getByLabelText("Closeout counted cash")).toHaveValue(171);
-    expect(
-      screen.getByRole("button", { name: "Submit closeout" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Submit closeout" })).toHaveClass(
+      "bg-action-workflow",
+    );
     expect(screen.getByText("Deposit history")).toBeInTheDocument();
     expect(screen.getByText("Record cash deposit")).toBeInTheDocument();
     expect(screen.getByText("BANK-339")).toBeInTheDocument();
@@ -355,6 +373,85 @@ describe("RegisterSessionViewContent", () => {
         "Opening float corrections are available before closeout starts.",
       ),
     ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Reopen closeout/i })).toBeInTheDocument();
+  });
+
+  it("reopens a closed closeout after manager approval", async () => {
+    const user = userEvent.setup();
+    const onAuthenticateStaff = vi.fn().mockResolvedValue(
+      ok({
+        activeRoles: ["cashier"],
+        staffProfile: { fullName: "Ato Kofi" },
+        staffProfileId: "staff-1",
+      }),
+    );
+    const onAuthenticateForApproval = vi.fn().mockResolvedValue(
+      ok({
+        approvalProofId: "approval-proof-1",
+        approvedByStaffProfileId: "manager-1",
+        expiresAt: Date.now() + 60_000,
+      }),
+    );
+    const onReopenCloseout = vi
+      .fn()
+      .mockResolvedValue(ok({ action: "reopened" }));
+
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="GHS"
+        isLoading={false}
+        {...closeoutHandlers}
+        onAuthenticateForApproval={onAuthenticateForApproval}
+        onAuthenticateStaff={onAuthenticateStaff}
+        onRecordDeposit={vi.fn()}
+        onReopenCloseout={onReopenCloseout}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            closedAt: new Date("2026-04-21T19:45:00.000Z").getTime(),
+            closedByStaffName: "Kojo Mensimah",
+            status: "closed",
+          },
+        }}
+        storeId="store-1"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Reopen closeout/i }));
+    let reopenButtons = screen.getAllByRole("button", {
+      name: "Reopen closeout",
+    });
+    await waitFor(() => {
+      reopenButtons = screen.getAllByRole("button", {
+        name: "Reopen closeout",
+      });
+      expect(reopenButtons.length).toBeGreaterThan(1);
+    });
+    await user.click(reopenButtons[0]);
+
+    expect(onAuthenticateStaff).not.toHaveBeenCalled();
+    expect(onAuthenticateForApproval).toHaveBeenCalledWith({
+      actionKey: "cash_controls.register_session.reopen_closeout",
+      pinHash: "hashed-pin",
+      requiredRole: "manager",
+      storeId: "store-1",
+      subject: {
+        id: "session-1",
+        label: "Register 3",
+        type: "register_session",
+      },
+      username: "manager",
+    });
+    await waitFor(() =>
+      expect(onReopenCloseout).toHaveBeenCalledWith({
+        actorStaffProfileId: "manager-1",
+        approvalProofId: "approval-proof-1",
+        registerSessionId: "session-1",
+        requestedByStaffProfileId: undefined,
+      }),
+    );
   });
 
   it("keeps closed metadata structured when closer staff is missing", () => {
@@ -573,6 +670,138 @@ describe("RegisterSessionViewContent", () => {
         registerSessionId: "session-1",
       }),
     );
+  });
+
+  it("uses manager approval to submit a reopened closeout correction", async () => {
+    const user = userEvent.setup();
+    const onAuthenticateStaff = vi.fn();
+    const onAuthenticateForApproval = vi.fn().mockResolvedValue(
+      ok({
+        approvalProofId: "approval-proof-2",
+        approvedByStaffProfileId: "manager-1",
+        expiresAt: Date.now() + 60_000,
+      }),
+    );
+    const onSubmitCloseout = vi
+      .fn()
+      .mockResolvedValue(ok({ action: "closed" }));
+
+    render(
+      <RegisterSessionViewContent
+        actorStaffProfileId="staff-1"
+        actorUserId="user-1"
+        currency="GHS"
+        isLoading={false}
+        onAuthenticateForApproval={onAuthenticateForApproval}
+        onAuthenticateStaff={onAuthenticateStaff}
+        onRecordDeposit={vi.fn()}
+        onReviewCloseout={vi.fn()}
+        onSubmitCloseout={onSubmitCloseout}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            closeoutRecords: [
+              {
+                actorStaffProfileId: "cashier-1",
+                occurredAt: 1,
+                type: "closed",
+              },
+              {
+                actorStaffProfileId: "manager-1",
+                occurredAt: 2,
+                type: "reopened",
+              },
+            ],
+          },
+        }}
+        storeId="store-1"
+      />,
+    );
+
+    await user.clear(screen.getByLabelText("Closeout counted cash"));
+    await user.type(screen.getByLabelText("Closeout counted cash"), "176");
+    await user.click(screen.getByRole("button", { name: "Submit closeout" }));
+    await user.click(screen.getByRole("button", { name: "Submit correction" }));
+
+    expect(onAuthenticateStaff).not.toHaveBeenCalled();
+    expect(onAuthenticateForApproval).toHaveBeenCalledWith({
+      actionKey: "cash_controls.register_session.submit_reopened_closeout",
+      pinHash: "hashed-pin",
+      requiredRole: "manager",
+      storeId: "store-1",
+      subject: {
+        id: "session-1",
+        label: "Register 3",
+        type: "register_session",
+      },
+      username: "manager",
+    });
+    await waitFor(() =>
+      expect(onSubmitCloseout).toHaveBeenCalledWith({
+        actorStaffProfileId: "manager-1",
+        closeoutModificationApprovalProofId: "approval-proof-2",
+        countedCash: 17600,
+        notes: undefined,
+        registerSessionId: "session-1",
+        requestedByStaffProfileId: "staff-1",
+      }),
+    );
+  });
+
+  it("blocks reopened closeout submission when a different manager approves", async () => {
+    const user = userEvent.setup();
+    const onAuthenticateForApproval = vi.fn().mockResolvedValue(
+      ok({
+        approvalProofId: "approval-proof-2",
+        approvedByStaffProfileId: "manager-2",
+        expiresAt: Date.now() + 60_000,
+      }),
+    );
+    const onSubmitCloseout = vi.fn();
+
+    render(
+      <RegisterSessionViewContent
+        actorStaffProfileId="staff-1"
+        actorUserId="user-1"
+        currency="GHS"
+        isLoading={false}
+        onAuthenticateForApproval={onAuthenticateForApproval}
+        onAuthenticateStaff={vi.fn()}
+        onRecordDeposit={vi.fn()}
+        onReviewCloseout={vi.fn()}
+        onSubmitCloseout={onSubmitCloseout}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            closeoutRecords: [
+              {
+                actorStaffProfileId: "cashier-1",
+                occurredAt: 1,
+                type: "closed",
+              },
+              {
+                actorStaffProfileId: "manager-1",
+                occurredAt: 2,
+                type: "reopened",
+              },
+            ],
+          },
+        }}
+        storeId="store-1"
+      />,
+    );
+
+    await user.clear(screen.getByLabelText("Closeout counted cash"));
+    await user.type(screen.getByLabelText("Closeout counted cash"), "176");
+    await user.click(screen.getByRole("button", { name: "Submit closeout" }));
+    await user.click(screen.getByRole("button", { name: "Submit correction" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The manager who reopened this closeout must submit the correction.",
+    );
+    expect(onSubmitCloseout).not.toHaveBeenCalled();
   });
 
   it("chains inline manager approval when a manager submits a variance closeout", async () => {

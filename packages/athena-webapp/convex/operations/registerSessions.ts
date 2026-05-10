@@ -23,10 +23,30 @@ type RegisterSessionIdentity = {
   terminalId?: Id<"posTerminal"> | null;
 };
 type RegisterSessionCashAdjustmentKind = "sale" | "void";
+type RegisterSessionCloseoutRecord = {
+  actorStaffProfileId?: Id<"staffProfile">;
+  actorUserId?: Id<"athenaUser">;
+  countedCash?: number;
+  expectedCash: number;
+  notes?: string;
+  occurredAt: number;
+  previousClosedAt?: number;
+  previousClosedByStaffProfileId?: Id<"staffProfile">;
+  previousClosedByUserId?: Id<"athenaUser">;
+  reason?: string;
+  type: "closed" | "reopened";
+  variance?: number;
+};
 
 function trimOptional(value?: string | null) {
   const nextValue = value?.trim();
   return nextValue ? nextValue : undefined;
+}
+
+function omitUndefined<T extends Record<string, unknown>>(value: T) {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, entryValue]) => entryValue !== undefined)
+  ) as T;
 }
 
 async function persistRegisterSessionWorkflowTraceIdBestEffort(
@@ -224,6 +244,59 @@ export function buildReopenedRegisterSessionPatch(session: {
   };
 }
 
+export function buildReopenedClosedRegisterSessionPatch(
+  session: {
+    closedAt?: number;
+    closedByStaffProfileId?: Id<"staffProfile">;
+    closedByUserId?: Id<"athenaUser">;
+    closeoutRecords?: RegisterSessionCloseoutRecord[];
+    countedCash?: number;
+    expectedCash: number;
+    notes?: string;
+    status: RegisterSessionStatus;
+    variance?: number;
+  },
+  args: {
+    actorStaffProfileId?: Id<"staffProfile">;
+    actorUserId?: Id<"athenaUser">;
+    reason?: string;
+  }
+) {
+  if (session.status !== "closed") {
+    throw new Error("Only closed register sessions can be reopened for correction.");
+  }
+
+  const occurredAt = Date.now();
+  const reason =
+    trimOptional(args.reason) ??
+    "Closed register closeout reopened for correction.";
+
+  return {
+    closedAt: undefined,
+    closedByStaffProfileId: undefined,
+    closedByUserId: undefined,
+    closeoutRecords: [
+      ...(session.closeoutRecords ?? []),
+      omitUndefined({
+        actorStaffProfileId: args.actorStaffProfileId,
+        actorUserId: args.actorUserId,
+        countedCash: session.countedCash,
+        expectedCash: session.expectedCash,
+        notes: session.notes,
+        occurredAt,
+        previousClosedAt: session.closedAt,
+        previousClosedByStaffProfileId: session.closedByStaffProfileId,
+        previousClosedByUserId: session.closedByUserId,
+        reason,
+        type: "reopened" as const,
+        variance: session.variance,
+      }),
+    ],
+    managerApprovalRequestId: undefined,
+    status: "closing" as const,
+  };
+}
+
 export function buildRegisterSessionDepositPatch(
   session: {
     countedCash?: number;
@@ -296,6 +369,7 @@ export function buildRegisterSessionOpeningFloatCorrectionPatch(
 
 export function buildClosedRegisterSessionPatch(
   session: {
+    closeoutRecords?: RegisterSessionCloseoutRecord[];
     expectedCash: number;
     notes?: string;
     status: RegisterSessionStatus;
@@ -308,15 +382,31 @@ export function buildClosedRegisterSessionPatch(
   }
 ) {
   assertValidRegisterSessionTransition(session.status, "closed");
+  const closedAt = Date.now();
+  const notes = trimOptional(args.notes) ?? session.notes;
+  const variance = args.countedCash - session.expectedCash;
 
   return {
-    closedAt: Date.now(),
+    closedAt,
     closedByStaffProfileId: args.closedByStaffProfileId,
     closedByUserId: args.closedByUserId,
+    closeoutRecords: [
+      ...(session.closeoutRecords ?? []),
+      omitUndefined({
+        actorStaffProfileId: args.closedByStaffProfileId,
+        actorUserId: args.closedByUserId,
+        countedCash: args.countedCash,
+        expectedCash: session.expectedCash,
+        notes,
+        occurredAt: closedAt,
+        type: "closed" as const,
+        variance,
+      }),
+    ],
     countedCash: args.countedCash,
-    notes: trimOptional(args.notes) ?? session.notes,
+    notes,
     status: "closed" as const,
-    variance: args.countedCash - session.expectedCash,
+    variance,
   };
 }
 
@@ -611,6 +701,41 @@ export const reopenRegisterSession = internalMutation({
       "registerSession",
       args.registerSessionId,
       buildReopenedRegisterSessionPatch(session)
+    );
+
+    return ctx.db.get("registerSession", args.registerSessionId);
+  },
+});
+
+export const reopenClosedRegisterSessionCloseout = internalMutation({
+  args: {
+    actorStaffProfileId: v.optional(v.id("staffProfile")),
+    actorUserId: v.optional(v.id("athenaUser")),
+    reason: v.optional(v.string()),
+    registerSessionId: v.id("registerSession"),
+  },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get("registerSession", args.registerSessionId);
+    if (!session) {
+      throw new Error("Register session not found.");
+    }
+
+    if (session.status !== "closed") {
+      throw new Error("Only closed register sessions can be reopened for correction.");
+    }
+
+    if (session.terminalId) {
+      await findConflictingRegisterSession(ctx, {
+        storeId: session.storeId,
+        terminalId: session.terminalId,
+        registerNumber: session.registerNumber,
+      });
+    }
+
+    await ctx.db.patch(
+      "registerSession",
+      args.registerSessionId,
+      buildReopenedClosedRegisterSessionPatch(session, args)
     );
 
     return ctx.db.get("registerSession", args.registerSessionId);

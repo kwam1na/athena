@@ -975,6 +975,74 @@ describe("end-of-day review backend foundation", () => {
     expect(metadata).not.toHaveProperty("register");
   });
 
+  it("keeps reopened register closeouts associated with their original closeout day", async () => {
+    const originallyClosedAt = Date.UTC(2026, 4, 8, 17, 56);
+    const reopenedAt = Date.UTC(2026, 4, 10, 16, 37);
+    const correctedClosedAt = Date.UTC(2026, 4, 10, 17, 12);
+    const registerSession = {
+      _id: "register-reopened",
+      closedAt: correctedClosedAt,
+      closedByStaffProfileId: "staff-1",
+      closeoutRecords: [
+        {
+          actorStaffProfileId: "staff-1",
+          countedCash: 18975,
+          expectedCash: 18975,
+          occurredAt: originallyClosedAt,
+          type: "closed",
+          variance: 0,
+        },
+        {
+          actorStaffProfileId: "manager-1",
+          countedCash: 18975,
+          expectedCash: 18975,
+          occurredAt: reopenedAt,
+          previousClosedAt: originallyClosedAt,
+          type: "reopened",
+          variance: 0,
+        },
+        {
+          actorStaffProfileId: "manager-1",
+          countedCash: 18977,
+          expectedCash: 18975,
+          occurredAt: correctedClosedAt,
+          type: "closed",
+          variance: 2,
+        },
+      ],
+      countedCash: 18977,
+      expectedCash: 18975,
+      openedAt: Date.UTC(2026, 4, 8, 4, 48),
+      openingFloat: 40000,
+      registerNumber: "2",
+      status: "closed",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      variance: 2,
+    };
+    const { db } = createDb({
+      registerSession: [registerSession],
+      store: [store],
+    });
+
+    const originalDaySnapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+    const reopenedDaySnapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-10", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(originalDaySnapshot.readyItems.map((item) => item.key)).toContain(
+      "register_session:register-reopened:closed",
+    );
+    expect(reopenedDaySnapshot.readyItems.map((item) => item.key)).not.toContain(
+      "register_session:register-reopened:closed",
+    );
+    expect(reopenedDaySnapshot.summary.closedRegisterSessionCount).toBe(0);
+  });
+
   it("includes the staff member name for completed close summaries", async () => {
     const { db } = createDb({
       dailyClose: [

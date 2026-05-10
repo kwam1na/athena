@@ -19,6 +19,24 @@ export const registerSessionSchema = v.object({
   expectedCash: v.number(),
   countedCash: v.optional(v.number()),
   variance: v.optional(v.number()),
+  closeoutRecords: v.optional(
+    v.array(
+      v.object({
+        actorStaffProfileId: v.optional(v.id("staffProfile")),
+        actorUserId: v.optional(v.id("athenaUser")),
+        countedCash: v.optional(v.number()),
+        expectedCash: v.number(),
+        notes: v.optional(v.string()),
+        occurredAt: v.number(),
+        previousClosedAt: v.optional(v.number()),
+        previousClosedByStaffProfileId: v.optional(v.id("staffProfile")),
+        previousClosedByUserId: v.optional(v.id("athenaUser")),
+        reason: v.optional(v.string()),
+        type: v.union(v.literal("closed"), v.literal("reopened")),
+        variance: v.optional(v.number()),
+      })
+    )
+  ),
   closedByUserId: v.optional(v.id("athenaUser")),
   closedByStaffProfileId: v.optional(v.id("staffProfile")),
   closedAt: v.optional(v.number()),

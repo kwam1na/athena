@@ -85,3 +85,34 @@ resolve_convex_node_bin() {
   } >&2
   return 1
 }
+
+resolve_convex_esbuild_bin() {
+  local repo_root="$1"
+  local candidates=(
+    "${ATHENA_CONVEX_ESBUILD_BIN:-}"
+    "${ESBUILD_BINARY_PATH:-}"
+  )
+
+  case "$(uname -s)-$(uname -m)" in
+    Darwin-arm64)
+      candidates+=("$repo_root/node_modules/@esbuild/darwin-arm64/bin/esbuild")
+      ;;
+  esac
+
+  local seen=":"
+  local candidate
+
+  for candidate in "${candidates[@]}"; do
+    if [[ -z "$candidate" || "$seen" == *":$candidate:"* ]]; then
+      continue
+    fi
+    seen="$seen$candidate:"
+
+    if [[ -x "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+
+  return 1
+}

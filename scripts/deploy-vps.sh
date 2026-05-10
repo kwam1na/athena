@@ -19,6 +19,7 @@ DEV_CONVEX_SITE="${DEV_CONVEX_SITE:-https://jovial-wildebeest-179.convex.site}"
 DEV_API_URL="${DEV_API_URL:-https://dev.wigclub.store}"
 STOREFRONT_URL="${STOREFRONT_URL:-https://wigclub.store}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 source "$SCRIPT_DIR/convex-node-env.sh"
 
@@ -59,6 +60,9 @@ Environment:
   ATHENA_CONVEX_NODE_BIN
                     Absolute path to Node.js 18, 20, 22, or 24 for Convex deploy.
                     Defaults to a supported local candidate when available.
+  ATHENA_CONVEX_ESBUILD_BIN
+                    Absolute path to a working esbuild binary for Convex deploy.
+                    Defaults to the repo-level esbuild binary on Apple Silicon.
 USAGE
 }
 
@@ -585,6 +589,7 @@ MESSAGE
 deploy_convex_prod() {
   local deployment
   local node_bin
+  local esbuild_bin
   deployment="${CONVEX_DEPLOYMENT:-$(prod_convex_deployment)}"
 
   if [[ "$deployment" != prod:* ]]; then
@@ -597,10 +602,15 @@ MESSAGE
   fi
 
   node_bin="$(resolve_convex_node_bin)"
+  esbuild_bin="$(resolve_convex_esbuild_bin "$REPO_ROOT" || true)"
 
   (
     cd packages/athena-webapp
-    PATH="$(dirname "$node_bin"):$PATH" CONVEX_DEPLOYMENT="$deployment" npx convex deploy
+    if [[ -n "$esbuild_bin" ]]; then
+      PATH="$(dirname "$node_bin"):$PATH" ESBUILD_BINARY_PATH="$esbuild_bin" CONVEX_DEPLOYMENT="$deployment" npx convex deploy
+    else
+      PATH="$(dirname "$node_bin"):$PATH" CONVEX_DEPLOYMENT="$deployment" npx convex deploy
+    fi
   )
 }
 
