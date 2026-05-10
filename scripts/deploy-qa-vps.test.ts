@@ -99,6 +99,17 @@ describe("VPS QA deploy contract", () => {
     expect(workflow).toContain('/src/main.tsx');
   });
 
+  it("resets generated remote checkout drift before switching deploy refs", async () => {
+    const deployScript = await readRepoFile("scripts/deploy-vps.sh");
+
+    expect(deployScript).toContain(
+      "Discarding local changes in %s before checking out %s.",
+    );
+    expect(deployScript).toMatch(
+      /git reset --hard[\s\S]*git fetch --prune origin[\s\S]*git checkout --detach "\$DEPLOY_REF"/,
+    );
+  });
+
   it("schedules browser-level Athena QA smoke checks", async () => {
     const workflow = await readRepoFile(".github/workflows/athena-qa-smoke.yml");
 

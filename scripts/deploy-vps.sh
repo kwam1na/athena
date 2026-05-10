@@ -129,6 +129,10 @@ MESSAGE
 fi
 
 cd "$REMOTE_SOURCE_DIR"
+if ! git diff --quiet || ! git diff --cached --quiet; then
+  printf 'Discarding local changes in %s before checking out %s.\n' "$REMOTE_SOURCE_DIR" "$DEPLOY_REF" >&2
+  git reset --hard
+fi
 git fetch --prune origin
 git checkout --detach "$DEPLOY_REF"
 bun install --ignore-scripts
