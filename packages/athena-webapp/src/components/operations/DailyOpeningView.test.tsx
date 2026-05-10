@@ -630,6 +630,9 @@ describe("DailyOpeningViewContent", () => {
     });
 
     expect(screen.getByText("Store day started")).toBeInTheDocument();
+    expect(screen.getByLabelText("Resolve blockers clear")).toBeInTheDocument();
+    expect(screen.getByLabelText("Review handoff clear")).toBeInTheDocument();
+    expect(screen.getByLabelText("Carry forward clear")).toBeInTheDocument();
     expect(
       screen.getAllByText("Friday, May 8, 2026").length,
     ).toBeGreaterThanOrEqual(2);

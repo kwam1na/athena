@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 5055 nodes · 5061 edges · 1608 communities detected
+- 5054 nodes · 5060 edges · 1608 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1666,28 +1666,28 @@ Cohesion: 0.07
 Nodes (18): formatStatus(), formatUnitCount(), getPurchaseOrderMode(), getRecommendationForPurchaseOrder(), getRecommendationStateNote(), getRecommendationUrlSku(), handleAdvancePurchaseOrderToOrdered(), handleCreateDraftPurchaseOrders() (+10 more)
 
 ### Community 5 - "Community 5"
-Cohesion: 0.08
+Cohesion: 0.07
 Nodes (23): cn(), formatMetadataDisplayValue(), formatMetadataValue(), formatOperatingDate(), formatTimestamp(), getAcknowledgementKey(), getArrayMetadataStringValue(), getBucketConfigs() (+15 more)
 
 ### Community 6 - "Community 6"
-Cohesion: 0.1
-Nodes (18): buildDailyCloseSearch(), buildDailyOperationsSearch(), buildOperationsTransactionSearch(), formatWeekdayDate(), formatWeekdayLabel(), getDailyOperationsMetricLabels(), getLocalDateFromOperatingDate(), getLocalOperatingDate() (+10 more)
-
-### Community 7 - "Community 7"
 Cohesion: 0.15
 Nodes (31): collectHarnessOnboardingErrors(), collectMarkdownLinkErrors(), collectMissingRequiredLinkErrors(), collectPackageGuideLinkErrors(), collectPackagesRouterLinkErrors(), collectReadmeLinkErrors(), collectReferencedPathErrors(), collectRuntimeScenarioDocSyncErrors() (+23 more)
 
-### Community 8 - "Community 8"
+### Community 7 - "Community 7"
 Cohesion: 0.12
 Nodes (29): approvalMetadataEntries(), approvalRequestTypeLabel(), buildDailyOpeningSnapshotWithCtx(), buildReadiness(), compactMetadataEntries(), formatPaymentMethodLabel(), getDailyOpeningForDate(), getMissingCarryForwardItems() (+21 more)
 
-### Community 9 - "Community 9"
+### Community 8 - "Community 8"
 Cohesion: 0.12
 Nodes (28): asRegExp(), collectLatencyDiagnostics(), collectRuntimeSignalDiagnostics(), collectRuntimeSignalMatches(), consumeLines(), escapeRegExp(), formatAssertionDiagnostics(), formatError() (+20 more)
 
-### Community 10 - "Community 10"
+### Community 9 - "Community 9"
 Cohesion: 0.09
 Nodes (19): applyCloseoutCommandResult(), applyCommandResult(), buildDepositSubmissionKey(), formatRegisterHeaderName(), formatRegisterName(), handleAuthenticatedCloseoutStaff(), handleOpeningFloatApprovalApproved(), handleRecordDeposit() (+11 more)
+
+### Community 10 - "Community 10"
+Cohesion: 0.11
+Nodes (18): buildDailyCloseSearch(), buildDailyOperationsSearch(), buildOperationsTransactionSearch(), formatWeekdayDate(), formatWeekdayLabel(), getDailyOperationsMetricLabels(), getLocalDateFromOperatingDate(), getLocalOperatingDate() (+10 more)
 
 ### Community 11 - "Community 11"
 Cohesion: 0.15
@@ -2226,16 +2226,16 @@ Cohesion: 0.29
 Nodes (0):
 
 ### Community 145 - "Community 145"
-Cohesion: 0.33
-Nodes (2): getProductName(), sortProduct()
-
-### Community 146 - "Community 146"
 Cohesion: 0.29
 Nodes (0):
 
-### Community 147 - "Community 147"
+### Community 146 - "Community 146"
 Cohesion: 0.52
 Nodes (6): addItemToSavedBag(), getActiveSavedBag(), getBaseUrl(), removeItemFromSavedBag(), updateSavedBagItem(), updateSavedBagOwner()
+
+### Community 147 - "Community 147"
+Cohesion: 0.33
+Nodes (2): getProductName(), sortProduct()
 
 ### Community 148 - "Community 148"
 Cohesion: 0.43
@@ -10333,4 +10333,4 @@ _Questions this graph is uniquely positioned to answer:_
 - **Should `Community 4` be split into smaller, more focused modules?**
   _Cohesion score 0.07 - nodes in this community are weakly interconnected._
 - **Should `Community 5` be split into smaller, more focused modules?**
-  _Cohesion score 0.08 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.07 - nodes in this community are weakly interconnected._

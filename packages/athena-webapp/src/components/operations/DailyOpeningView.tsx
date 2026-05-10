@@ -9,6 +9,7 @@ import { useMutation, useQuery } from "convex/react";
 import {
   ArrowUpRight,
   Ban,
+  Check,
   CheckCircle2,
   ClipboardCheck,
   ListChecks,
@@ -494,11 +495,50 @@ function normalizeCommandMessage(
 
 function getStatusLabelClassName(status: DailyOpeningStatus) {
   return cn(
-    "inline-flex w-fit rounded-md px-layout-sm py-1 text-base font-medium",
+    "inline-flex w-fit items-center rounded-md px-layout-sm py-1 text-base font-medium",
     status === "blocked" && "bg-danger/10 text-danger",
     status === "needs_attention" && "bg-warning/15 text-warning-foreground",
     (status === "ready" || status === "started") &&
       "bg-success/10 text-success",
+  );
+}
+
+function SuccessCheckIcon({
+  className,
+  label,
+}: {
+  className?: string;
+  label?: string;
+}) {
+  return (
+    <span
+      aria-hidden={label ? undefined : "true"}
+      aria-label={label}
+      className={cn(
+        "inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-success text-surface",
+        className,
+      )}
+      role={label ? "img" : undefined}
+    >
+      <Check aria-hidden="true" className="h-3 w-3 stroke-[3]" />
+    </span>
+  );
+}
+
+function DailyOpeningStatusTitle({
+  status,
+  title,
+}: {
+  status: DailyOpeningStatus;
+  title: string;
+}) {
+  return (
+    <h2 className={getStatusLabelClassName(status)}>
+      {status === "started" ? (
+        <SuccessCheckIcon className="-ml-0.5 mr-1.5" />
+      ) : null}
+      {title}
+    </h2>
   );
 }
 
@@ -989,18 +1029,21 @@ function OpeningRail({
     acknowledgedCount >= requiredAcknowledgementCount;
   const checklistItems = [
     {
+      isClear: snapshot.blockers.length === 0,
       label: "Resolve blockers",
       tone: snapshot.blockers.length > 0 ? "danger" : "success",
       value: formatCount(snapshot.blockers.length, "blocker", "Clear"),
       valueTone: snapshot.blockers.length > 0 ? "danger" : "plain",
     },
     {
+      isClear: snapshot.reviewItems.length === 0,
       label: "Review handoff",
       tone: "warning",
       value: formatCount(snapshot.reviewItems.length, "item", "Clear"),
       valueTone: snapshot.reviewItems.length > 0 ? "warning" : "plain",
     },
     {
+      isClear: snapshot.carryForwardItems.length === 0,
       label: "Carry forward",
       tone: "workflow",
       value: formatCount(snapshot.carryForwardItems.length, "item", "None"),
@@ -1082,7 +1125,14 @@ function OpeningRail({
                     item.valueTone === "workflow" && "text-action-workflow",
                   )}
                 >
-                  {item.value}
+                  {item.isClear ? (
+                    <SuccessCheckIcon
+                      className="ml-auto"
+                      label={`${item.label} clear`}
+                    />
+                  ) : (
+                    item.value
+                  )}
                 </dd>
               </div>
             ))}
@@ -1496,7 +1546,7 @@ export function DailyOpeningViewContent({
       }
       statusDescription={displayCopy.description}
       statusTitle={
-        <h2 className={getStatusLabelClassName(status)}>{displayCopy.title}</h2>
+        <DailyOpeningStatusTitle status={status} title={displayCopy.title} />
       }
       title="Opening Handoff"
     />
