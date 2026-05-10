@@ -212,6 +212,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/hooks/useBulkOperations.test.ts`](../../src/hooks/useBulkOperations.test.ts)
 - [`src/hooks/useExpenseSessions.test.ts`](../../src/hooks/useExpenseSessions.test.ts)
 - [`src/hooks/useProtectedAdminPageState.test.tsx`](../../src/hooks/useProtectedAdminPageState.test.tsx)
+- [`src/lib/access/capabilities.test.ts`](../../src/lib/access/capabilities.test.ts)
 - [`src/lib/errors/operatorMessages.test.ts`](../../src/lib/errors/operatorMessages.test.ts)
 - [`src/lib/errors/presentCommandToast.test.ts`](../../src/lib/errors/presentCommandToast.test.ts)
 - [`src/lib/errors/presentUnexpectedErrorToast.test.ts`](../../src/lib/errors/presentUnexpectedErrorToast.test.ts)
