@@ -11,6 +11,7 @@ import {
   Banknote,
   Ban,
   Calendar as CalendarIcon,
+  Check,
   CheckCircle2,
   ClipboardCheck,
   CreditCardIcon,
@@ -348,7 +349,7 @@ function formatRegisterVarianceCount(value: number) {
 
 function getStatusLabelClassName(status: DailyCloseStatus) {
   return cn(
-    "inline-flex w-fit rounded-md px-layout-sm py-1 text-base font-medium",
+    "inline-flex w-fit items-center rounded-md px-layout-sm py-1 text-base font-medium",
     status === "blocked" && "bg-danger/10 text-danger",
     status === "needs_review" && "bg-warning/15 text-warning-foreground",
     status === "carry_forward" &&
@@ -366,6 +367,45 @@ function getStatusRailIconClassName(status: DailyCloseStatus) {
       "bg-action-workflow-soft text-action-workflow",
     (status === "ready" || status === "completed") &&
       "bg-success/10 text-success",
+  );
+}
+
+function DailyCloseStatusTitle({
+  status,
+  title,
+}: {
+  status: DailyCloseStatus;
+  title: string;
+}) {
+  return (
+    <h2 className={getStatusLabelClassName(status)}>
+      {status === "completed" ? (
+        <SuccessCheckIcon className="-ml-0.5 mr-1.5" />
+      ) : null}
+      {title}
+    </h2>
+  );
+}
+
+function SuccessCheckIcon({
+  className,
+  label,
+}: {
+  className?: string;
+  label?: string;
+}) {
+  return (
+    <span
+      aria-hidden={label ? undefined : "true"}
+      aria-label={label}
+      className={cn(
+        "inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-success text-surface",
+        className,
+      )}
+      role={label ? "img" : undefined}
+    >
+      <Check aria-hidden="true" className="h-2.5 w-2.5" />
+    </span>
   );
 }
 
@@ -826,6 +866,17 @@ function getMetadataStringValue(
 
   const value = metadata[label];
   return typeof value === "string" && value.trim() !== "" ? value : undefined;
+}
+
+function isVarianceApprovalItem(item: DailyCloseItem) {
+  if (normalizeMetadataLabel(item.category ?? "") !== "approval") {
+    return false;
+  }
+
+  const approvalType = getMetadataStringValue(item.metadata, "approval");
+  const approvalText = `${approvalType ?? ""} ${item.title}`.toLowerCase();
+
+  return approvalText.includes("variance");
 }
 
 function getMetadataValue(metadata: Record<string, unknown>, label: string) {
@@ -1680,6 +1731,11 @@ function DailyCloseItemCard({
   );
   const collapsedMetadataEntries = getCollapsedMetadataEntries(metadataEntries);
   const hasSourceLink = Boolean(item.link);
+  const badgeSlot = isVarianceApprovalItem(item) ? (
+    <Badge className="border-warning/30 bg-warning/10 text-warning-foreground">
+      Variance review
+    </Badge>
+  ) : null;
 
   return (
     <OperationReviewItemCard
@@ -1708,6 +1764,7 @@ function DailyCloseItemCard({
           />
         ) : null
       }
+      badgeSlot={badgeSlot}
       showCollapsedDescription={showCollapsedDescription}
       title={item.title}
     />
@@ -2069,9 +2126,7 @@ export function DailyCloseReadOnlyReport({
       <section className="space-y-layout-lg">
         <div className="flex flex-col gap-layout-md lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-layout-xs">
-            <h2 className={getStatusLabelClassName(status)}>
-              {displayCopy.title}
-            </h2>
+            <DailyCloseStatusTitle status={status} title={displayCopy.title} />
             <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
               {displayCopy.description}
             </p>
@@ -2335,18 +2390,21 @@ function CompletionRail({
   const copy = statusCopy[status];
   const checklistItems = [
     {
+      isClear: snapshot.blockers.length === 0,
       label: "Resolve blockers",
       tone: snapshot.blockers.length > 0 ? "danger" : "success",
       value: formatChecklistCount(snapshot.blockers.length, "blocker"),
       valueTone: snapshot.blockers.length > 0 ? "danger" : "plain",
     },
     {
+      isClear: snapshot.reviewItems.length === 0,
       label: "Review exceptions",
       tone: "warning",
       value: formatChecklistCount(snapshot.reviewItems.length, "item"),
       valueTone: snapshot.reviewItems.length > 0 ? "warning" : "plain",
     },
     {
+      isClear: snapshot.carryForwardItems.length === 0,
       label: "Carry forward",
       tone: "workflow",
       value: formatChecklistCount(
@@ -2433,7 +2491,14 @@ function CompletionRail({
                     item.valueTone === "workflow" && "text-action-workflow",
                   )}
                 >
-                  {item.value}
+                  {item.isClear ? (
+                    <SuccessCheckIcon
+                      className="ml-auto"
+                      label={`${item.label} clear`}
+                    />
+                  ) : (
+                    item.value
+                  )}
                 </dd>
               </div>
             ))}
@@ -2593,7 +2658,9 @@ export function DailyCloseViewContent({
   const displaySnapshot = snapshot
     ? normalizeCompletedReportSnapshot(snapshot)
     : undefined;
-  const status = displaySnapshot ? getDailyCloseStatus(displaySnapshot) : "ready";
+  const status = displaySnapshot
+    ? getDailyCloseStatus(displaySnapshot)
+    : "ready";
   const isBlocked = status === "blocked";
   const isCompleted = status === "completed";
   const displayCopy = displaySnapshot
@@ -2835,7 +2902,7 @@ export function DailyCloseViewContent({
       showBackButton={typeof search.o === "string" && search.o.length > 0}
       statusDescription={displayCopy.description}
       statusTitle={
-        <h2 className={getStatusLabelClassName(status)}>{displayCopy.title}</h2>
+        <DailyCloseStatusTitle status={status} title={displayCopy.title} />
       }
       title="End-of-Day Review"
     />

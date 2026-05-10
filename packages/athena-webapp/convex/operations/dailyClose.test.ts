@@ -557,12 +557,12 @@ describe("end-of-day review backend foundation", () => {
 
     expect(snapshot.readiness.status).toBe("blocked");
     expect(snapshot.blockers.map((item) => item.key)).toEqual([
-      "register_session:register-open:open",
-      "register_session:register-closing:closing",
       "approval_request:approval-1:pending",
+      "register_session:register-closing:closing",
+      "register_session:register-open:open",
       "pos_session:pos-held:held",
     ]);
-    expect(snapshot.blockers[0].metadata).toMatchObject({
+    expect(snapshot.blockers[2].metadata).toMatchObject({
       openedAt: Date.UTC(2026, 4, 6, 20),
       operatingScope: "Carried over from prior day",
       register: "Register A1",
@@ -579,12 +579,12 @@ describe("end-of-day review backend foundation", () => {
       terminal: "Front counter terminal",
       variance: -2000,
     });
-    expect(snapshot.blockers[0].link).toEqual({
+    expect(snapshot.blockers[2].link).toEqual({
       label: "View session",
       params: { sessionId: "register-open" },
       to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
     });
-    expect(snapshot.blockers[2]).toMatchObject({
+    expect(snapshot.blockers[0]).toMatchObject({
       link: {
         label: "View approvals",
         to: "/$orgUrlSlug/store/$storeUrlSlug/operations/approvals",
@@ -605,11 +605,11 @@ describe("end-of-day review backend foundation", () => {
       },
       title: "Payment method correction pending",
     });
-    expect(snapshot.blockers[2].metadata).not.toHaveProperty("openedAt");
-    expect(snapshot.blockers[2].metadata).not.toHaveProperty("expectedCash");
-    expect(snapshot.blockers[2].metadata).not.toHaveProperty("countedCash");
-    expect(snapshot.blockers[2].metadata).not.toHaveProperty("variance");
-    expect(snapshot.blockers[2].metadata).not.toHaveProperty("closedAt");
+    expect(snapshot.blockers[0].metadata).not.toHaveProperty("openedAt");
+    expect(snapshot.blockers[0].metadata).not.toHaveProperty("expectedCash");
+    expect(snapshot.blockers[0].metadata).not.toHaveProperty("countedCash");
+    expect(snapshot.blockers[0].metadata).not.toHaveProperty("variance");
+    expect(snapshot.blockers[0].metadata).not.toHaveProperty("closedAt");
     expect(snapshot.blockers[3].metadata).toMatchObject({
       customer: "Ama Mensah",
       expiresAt: Date.UTC(2026, 4, 7, 20),

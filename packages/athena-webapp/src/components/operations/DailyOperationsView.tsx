@@ -556,16 +556,8 @@ function HistoricalWorkflowPanel({
         {isClosed ? "Closed store-day record" : "Historical store-day view"}
       </h3>
       <div className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
-        <p className="text-sm leading-6 text-foreground">
-          {isClosed
-            ? "This operating date is closed. The saved End-of-Day Review is available for this store-day record."
-            : "This historical operating date is view-only. Workflow actions are available only on the current operating date."}
-        </p>
-        <p className="mt-layout-xs text-sm leading-6 text-muted-foreground">
-          Metrics and timeline remain available for this historical day.
-        </p>
         {isClosed ? (
-          <Button asChild className="mt-layout-md" size="sm" variant="outline">
+          <Button asChild size="sm" variant="outline">
             <Link
               params={buildParams(orgUrlSlug, storeUrlSlug)}
               search={
@@ -580,7 +572,17 @@ function HistoricalWorkflowPanel({
               <ArrowUpRight aria-hidden="true" className="h-4 w-4" />
             </Link>
           </Button>
-        ) : null}
+        ) : (
+          <>
+            <p className="text-sm leading-6 text-foreground">
+              This historical operating date is view-only. Workflow actions are
+              available only on the current operating date.
+            </p>
+            <p className="mt-layout-xs text-sm leading-6 text-muted-foreground">
+              Metrics and timeline remain available for this historical day.
+            </p>
+          </>
+        )}
       </div>
     </section>
   );

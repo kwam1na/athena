@@ -7,14 +7,14 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 - [packages/AGENTS.md](../../packages/AGENTS.md) - package router plus the operational guides for each harnessed package
 
 ## Repo Summary
-- Code files discovered: 1677
-- Graph nodes: 5048
-- Graph edges: 5053
-- Communities: 1606
+- Code files discovered: 1679
+- Graph nodes: 5055
+- Graph edges: 5061
+- Communities: 1608
 
 ## Graph Hotspots
-- `DailyCloseView.tsx` (71 edges, Community 0) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)
-- `dailyClose.ts` (54 edges, Community 1) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../packages/athena-webapp/convex/operations/dailyClose.ts)
+- `DailyCloseView.tsx` (74 edges, Community 0) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)
+- `dailyClose.ts` (55 edges, Community 1) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../packages/athena-webapp/convex/operations/dailyClose.ts)
 - `harness-inferential-review.ts` (46 edges, Community 2) - [`scripts/harness-inferential-review.ts`](../../scripts/harness-inferential-review.ts)
 - `storefrontJourneyEvents.ts` (45 edges, Community 3) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)
 - `createJourneyEvent()` (40 edges, Community 3) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)

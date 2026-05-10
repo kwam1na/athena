@@ -333,7 +333,12 @@ describe("DailyCloseViewContent", () => {
       o: "%2Fwigclub%2Fstore%2Fwigclub%2Foperations%2Fopening",
     };
 
-    renderContent(readySnapshot);
+    renderContent({
+      ...readySnapshot,
+      blockers: [],
+      carryForwardItems: [],
+      reviewItems: [],
+    });
 
     await user.click(screen.getByRole("button", { name: /go back/i }));
 
@@ -425,10 +430,43 @@ describe("DailyCloseViewContent", () => {
     ).toBeDisabled();
   });
 
+  it("marks variance approval blockers for first-glance scanning", () => {
+    renderContent({
+      ...blockedSnapshot,
+      blockers: [
+        {
+          ...blockedSnapshot.blockers[1],
+          metadata: {
+            ...(blockedSnapshot.blockers[1].metadata as Record<
+              string,
+              unknown
+            >),
+            approval: "Register closeout variance review",
+          },
+          title: "Register closeout variance review pending",
+        },
+      ],
+    });
+
+    const approvalItem = screen
+      .getByText("Register closeout variance review pending")
+      .closest("article");
+
+    expect(approvalItem).not.toBeNull();
+    expect(
+      within(approvalItem as HTMLElement).getByText("Variance review"),
+    ).toBeInTheDocument();
+  });
+
   it("shows ready summary totals and enables completion", async () => {
     const user = userEvent.setup();
 
-    renderContent(readySnapshot);
+    renderContent({
+      ...readySnapshot,
+      blockers: [],
+      carryForwardItems: [],
+      reviewItems: [],
+    });
 
     expect(screen.getByText("Ready to close")).toBeInTheDocument();
     expect(screen.getByText("14 transactions")).toBeInTheDocument();
@@ -556,15 +594,21 @@ describe("DailyCloseViewContent", () => {
     ).toBeEnabled();
     const checklist = screen.getByText("Close checklist").closest("div");
     expect(checklist).not.toBeNull();
-    within(checklist as HTMLElement)
-      .getAllByText("Clear")
-      .forEach((value) => {
-        expect(value).not.toHaveClass("text-success");
-        expect(value).not.toHaveClass("text-warning-foreground");
-      });
-    expect(within(checklist as HTMLElement).getByText("None")).not.toHaveClass(
-      "text-action-workflow",
-    );
+    expect(
+      within(checklist as HTMLElement).getByLabelText(
+        "Resolve blockers clear",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(checklist as HTMLElement).getByLabelText(
+        "Review exceptions clear",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(checklist as HTMLElement).getByLabelText("Carry forward clear"),
+    ).toBeInTheDocument();
+    expect(within(checklist as HTMLElement).queryByText("Clear")).toBeNull();
+    expect(within(checklist as HTMLElement).queryByText("None")).toBeNull();
   });
 
   it("paginates daily close item cards at five items per page", async () => {
