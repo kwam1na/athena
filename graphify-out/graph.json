@@ -40715,7 +40715,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_routes_authed_tsx",
       "source_file": "packages/athena-webapp/src/routes/_authed.tsx",
-      "source_location": "L34",
+      "source_location": "L35",
       "target": "authed_authedcomponent",
       "weight": 1
     },
@@ -40727,7 +40727,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_routes_authed_tsx",
       "source_file": "packages/athena-webapp/src/routes/_authed.tsx",
-      "source_location": "L54",
+      "source_location": "L56",
       "target": "authed_handlesignout",
       "weight": 1
     },
@@ -89338,7 +89338,7 @@
       "label": "AuthedComponent()",
       "norm_label": "authedcomponent()",
       "source_file": "packages/athena-webapp/src/routes/_authed.tsx",
-      "source_location": "L34"
+      "source_location": "L35"
     },
     {
       "community": 442,
@@ -89347,7 +89347,7 @@
       "label": "handleSignOut()",
       "norm_label": "handlesignout()",
       "source_file": "packages/athena-webapp/src/routes/_authed.tsx",
-      "source_location": "L54"
+      "source_location": "L56"
     },
     {
       "community": 442,

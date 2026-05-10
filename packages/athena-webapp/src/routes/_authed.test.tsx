@@ -13,6 +13,7 @@ const mocked = vi.hoisted(() => ({
   endManagerElevation: vi.fn(),
   useAuth: vi.fn(),
   useManagerElevation: vi.fn(),
+  usePermissions: vi.fn(),
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -23,6 +24,10 @@ vi.mock("@tanstack/react-router", () => ({
 
 vi.mock("../hooks/useAuth", () => ({
   useAuth: mocked.useAuth,
+}));
+
+vi.mock("../hooks/usePermissions", () => ({
+  usePermissions: mocked.usePermissions,
 }));
 
 vi.mock("@convex-dev/auth/react", () => ({
@@ -88,6 +93,9 @@ describe("Authed layout", () => {
       endManagerElevation: mocked.endManagerElevation,
       isManagerElevated: false,
       startManagerElevation: mocked.startManagerElevation,
+    });
+    mocked.usePermissions.mockReturnValue({
+      hasFullAdminAccess: false,
     });
   });
 
@@ -170,7 +178,9 @@ describe("Authed layout", () => {
     render(<Layout />);
 
     expect(screen.getByText("operator@example.com")).toBeInTheDocument();
-    expect(screen.getByText("Manager: Adjoa Mensah")).toBeInTheDocument();
+    expect(
+      screen.getByText("Elevated session: Adjoa Mensah"),
+    ).toBeInTheDocument();
 
     await user.click(
       screen.getByRole("button", { name: /end manager elevation/i }),
@@ -193,5 +203,22 @@ describe("Authed layout", () => {
     );
 
     expect(mocked.startManagerElevation).toHaveBeenCalled();
+  });
+
+  it("hides manager elevation start for full-admin accounts", () => {
+    mocked.useAuth.mockReturnValue({
+      user: { _id: "user-1", email: "admin@example.com" },
+      isLoading: false,
+    });
+    mocked.usePermissions.mockReturnValue({
+      hasFullAdminAccess: true,
+    });
+
+    render(<Layout />);
+
+    expect(
+      screen.queryByRole("button", { name: /start manager elevation/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /sign out/i })).toBeInTheDocument();
   });
 });

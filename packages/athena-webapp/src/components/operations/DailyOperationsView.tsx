@@ -1075,7 +1075,7 @@ export function DailyOperationsViewContent({
                     <SheetTitle>Store-day timeline</SheetTitle>
                     <SheetDescription>
                       All recorded events for{" "}
-                      {formatOperatingDate(snapshot.operatingDate)}.
+                      {formatOperatingDateWithWeekday(snapshot.operatingDate)}.
                     </SheetDescription>
                   </SheetHeader>
                   <div className="min-h-0 flex-1 overflow-y-auto px-layout-lg py-layout-md">
