@@ -697,6 +697,9 @@ describe("DailyOperationsViewContent", () => {
 
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getAllByText("Store-day timeline")).not.toHaveLength(0);
+    expect(
+      screen.getByText("All recorded events for Friday, May 8, 2026."),
+    ).toBeInTheDocument();
     expect(screen.getByText("Timeline event 6")).toBeInTheDocument();
     expect(screen.getByText("Timeline event 12")).toBeInTheDocument();
   });

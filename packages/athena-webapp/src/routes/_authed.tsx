@@ -9,8 +9,9 @@ import {
 } from "../components/ui/sidebar";
 import { AppSidebar } from "../components/app-sidebar";
 import { useAuth } from "../hooks/useAuth";
+import { usePermissions } from "../hooks/usePermissions";
 import { PermissionsProvider } from "../contexts/PermissionsContext";
-import { UserCircle } from "lucide-react";
+import { ShieldCheck, UserCircle } from "lucide-react";
 import { AppHeader } from "@/components/Navbar";
 import { cn } from "@/lib/utils";
 import { useAuthActions } from "@convex-dev/auth/react";
@@ -44,6 +45,7 @@ function AuthedComponent() {
 function UserMenu({ userEmail }: { userEmail: string }) {
   const navigate = useNavigate();
   const { signOut } = useAuthActions();
+  const { hasFullAdminAccess } = usePermissions();
   const {
     activeElevation,
     endManagerElevation,
@@ -72,10 +74,11 @@ function UserMenu({ userEmail }: { userEmail: string }) {
             <Badge
               variant="outline"
               size="sm"
-              className="max-w-[14rem] shrink-0 border-action-workflow-border bg-action-workflow-soft text-action-workflow"
+              className="max-w-fit shrink-0 border-action-workflow-border bg-action-workflow-soft text-action-workflow gap-1"
             >
+              <ShieldCheck aria-hidden="true" className="h-3 w-3 shrink-0" />
               <span className="truncate">
-                Manager: {activeElevation.displayName}
+                Elevated session: {activeElevation.displayName}
               </span>
             </Badge>
           ) : null}
@@ -89,14 +92,14 @@ function UserMenu({ userEmail }: { userEmail: string }) {
           >
             End manager elevation
           </DropdownMenuItem>
-        ) : (
+        ) : !hasFullAdminAccess ? (
           <DropdownMenuItem
             className="gap-layout-xs"
             onSelect={startManagerElevation}
           >
             Start manager elevation
           </DropdownMenuItem>
-        )}
+        ) : null}
         <DropdownMenuItem
           className="gap-layout-xs"
           onSelect={() => void handleSignOut()}
