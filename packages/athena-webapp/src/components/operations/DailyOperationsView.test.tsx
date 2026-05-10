@@ -645,10 +645,15 @@ describe("DailyOperationsViewContent", () => {
       screen.getByRole("heading", { name: "Closed store-day record" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(
+      screen.queryByText(
         "This operating date is closed. The saved End-of-Day Review is available for this store-day record.",
       ),
-    ).toBeInTheDocument();
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Metrics and timeline remain available for this historical day.",
+      ),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Review End-of-Day Review" }),
     ).toHaveAttribute(

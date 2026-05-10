@@ -12,6 +12,7 @@ This route index enumerates the current files under `src/routes` so agents can o
 - [`src/routes/index.test.tsx`](../../src/routes/index.test.tsx)
 - [`src/routes/index.tsx`](../../src/routes/index.tsx)
 - [`src/routes/join-team.index.tsx`](../../src/routes/join-team.index.tsx)
+- [`src/routes/landing.tsx`](../../src/routes/landing.tsx)
 
 ## Section `_authed`
 

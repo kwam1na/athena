@@ -30,6 +30,11 @@ const TERMINAL_WORK_ITEM_STATUSES = new Set(["completed", "cancelled"]);
 const ACTIVE_REGISTER_STATUSES = ["open", "active", "closing"] as const;
 const OPEN_POS_SESSION_STATUSES = ["active", "held"] as const;
 const DAILY_CLOSE_COMPLETION_ACTION = APPROVAL_ACTIONS.dailyCloseCompletion;
+const DAILY_CLOSE_BLOCKER_CATEGORY_PRECEDENCE: Record<string, number> = {
+  approval: 0,
+  register_session: 10,
+  pos_session: 20,
+};
 
 type DailyCloseSeverity = "blocker" | "review" | "carry_forward" | "ready";
 
@@ -117,6 +122,21 @@ type DailyCloseSnapshot = {
     label?: string;
   }>;
 };
+
+function sortDailyCloseBlockers(blockers: DailyCloseItem[]) {
+  return blockers.sort((left, right) => {
+    const leftPriority =
+      DAILY_CLOSE_BLOCKER_CATEGORY_PRECEDENCE[left.category] ?? 100;
+    const rightPriority =
+      DAILY_CLOSE_BLOCKER_CATEGORY_PRECEDENCE[right.category] ?? 100;
+
+    if (leftPriority !== rightPriority) {
+      return leftPriority - rightPriority;
+    }
+
+    return left.key.localeCompare(right.key);
+  });
+}
 
 type DailyCloseReportSnapshot = {
   closeMetadata: {
@@ -1671,6 +1691,7 @@ export async function buildDailyCloseSnapshotWithCtx(
     voidedTransactionCount: voidedTransactions.length,
     paymentTotals: buildPaymentTotals(completedTransactions),
   };
+  sortDailyCloseBlockers(blockers);
   const readiness = buildReadiness({
     blockers,
     carryForwardItems,
