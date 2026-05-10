@@ -1,4 +1,6 @@
 import View from "../View";
+import { FadeIn } from "../common/FadeIn";
+import { PageLevelHeader, PageWorkspace } from "../common/PageLevelHeader";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -40,10 +42,21 @@ const organizationMemberSchema = z.object({
   role: z.enum(["full_admin", "pos_only"]),
 });
 
-const Header = () => {
+const SectionHeader = ({
+  description,
+  title,
+}: {
+  description: string;
+  title: string;
+}) => {
   return (
-    <div className="container mx-auto flex gap-2 h-[40px] items-center justify-between">
-      <p className="text-xl font-medium">Organization Members</p>
+    <div className="space-y-1.5 border-b border-border/70 pb-layout-md">
+      <h2 className="text-xl font-semibold tracking-tight text-foreground">
+        {title}
+      </h2>
+      <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+        {description}
+      </p>
     </div>
   );
 };
@@ -104,13 +117,18 @@ const MemberForm = ({ onCancelClick }: { onCancelClick: () => void }) => {
   const { activeOrganization } = useGetActiveOrganization();
 
   const onSubmit = async (data: z.infer<typeof organizationMemberSchema>) => {
+    if (!activeOrganization?._id || !user?._id) {
+      toast.error("Member invite requires an active organization and user");
+      return;
+    }
+
     setIsAddingMember(true);
     try {
       const res = await createInviteCode({
-        organizationId: activeOrganization?._id!,
+        organizationId: activeOrganization._id,
         recipientEmail: data.email,
         role: data.role,
-        createdByUserId: user?._id!,
+        createdByUserId: user._id,
       });
 
       if (res.success) {
@@ -120,7 +138,7 @@ const MemberForm = ({ onCancelClick }: { onCancelClick: () => void }) => {
       }
 
       onCancelClick();
-    } catch (e) {
+    } catch {
       presentUnexpectedErrorToast("Failed to add member");
     } finally {
       setIsAddingMember(false);
@@ -214,36 +232,61 @@ export const OrganizationMembersView = () => {
   const { activeStore } = useGetActiveStore();
 
   return (
-    <View hideBorder hideHeaderBottomBorder header={<Header />}>
-      <div className="container mx-auto h-full w-full py-8 space-y-12">
-        <div className="grid grid-cols-2 gap-40">
-          <div className="space-y-8">
-            <Members />
-            {showMemberForm && (
-              <div>
-                <MemberForm onCancelClick={() => setShowMemberForm(false)} />
-              </div>
-            )}
-            {!showMemberForm && (
-              <Button variant={"ghost"} onClick={() => setShowMemberForm(true)}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Member
-              </Button>
-            )}
-          </div>
+    <View hideBorder hideHeaderBottomBorder scrollMode="page">
+      <FadeIn className="container mx-auto py-layout-xl">
+        <PageWorkspace>
+          <PageLevelHeader
+            eyebrow="Team access"
+            showBackButton
+            title="Members"
+            description="Review organization members, pending invites, and store staff profiles before assigning operational access."
+          />
 
-          <Invites />
-        </div>
-
-        {activeStore && activeOrganization && (
-          <div className="border-t pt-12">
-            <StaffManagement
-              storeId={activeStore._id}
-              organizationId={activeOrganization._id}
+          <section className="space-y-layout-lg rounded-lg border border-border bg-surface p-layout-lg shadow-surface">
+            <SectionHeader
+              title="Organization members"
+              description="Manage admin access and pending invites for the organization."
             />
-          </div>
-        )}
-      </div>
+
+            <div className="grid gap-layout-2xl xl:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
+              <div className="space-y-layout-xl">
+                <Members />
+                {showMemberForm && (
+                  <div>
+                    <MemberForm
+                      onCancelClick={() => setShowMemberForm(false)}
+                    />
+                  </div>
+                )}
+                {!showMemberForm && (
+                  <Button
+                    variant={"ghost"}
+                    onClick={() => setShowMemberForm(true)}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Member
+                  </Button>
+                )}
+              </div>
+
+              <Invites />
+            </div>
+          </section>
+
+          {activeStore && activeOrganization && (
+            <section className="space-y-layout-lg rounded-lg border border-border bg-surface p-layout-lg shadow-surface">
+              <SectionHeader
+                title="Staff"
+                description="Manage store staff profiles and the credentials used in POS, services, and cash controls."
+              />
+              <StaffManagement
+                storeId={activeStore._id}
+                organizationId={activeOrganization._id}
+              />
+            </section>
+          )}
+        </PageWorkspace>
+      </FadeIn>
     </View>
   );
 };
