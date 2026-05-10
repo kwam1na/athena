@@ -71,6 +71,7 @@ import {
   dailyCloseSchema,
   dailyOpeningSchema,
   inventoryMovementSchema,
+  managerElevationSchema,
   operationalEventSchema,
   operationalWorkItemSchema,
   paymentAllocationSchema,
@@ -412,6 +413,23 @@ const schema = defineSchema({
     .index("by_customerProfileId", ["customerProfileId"])
     .index("by_workItemId", ["workItemId"])
     .index("by_registerSessionId", ["registerSessionId"]),
+  managerElevation: defineTable(managerElevationSchema)
+    .index("by_storeId_terminalId_accountId", [
+      "storeId",
+      "terminalId",
+      "accountId",
+    ])
+    .index("by_storeId_managerStaffProfileId", [
+      "storeId",
+      "managerStaffProfileId",
+    ])
+    .index("by_storeId_terminalId_accountId_expiresAt", [
+      "storeId",
+      "terminalId",
+      "accountId",
+      "expiresAt",
+    ])
+    .index("by_expiresAt", ["expiresAt"]),
   operationalWorkItem: defineTable(operationalWorkItemSchema)
     .index("by_storeId", ["storeId"])
     .index("by_storeId_status", ["storeId", "status"])

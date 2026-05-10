@@ -26,6 +26,7 @@ export type StaffAuthenticationResult = {
   activeRoles?: string[];
   approvalProofId?: Id<"approvalProof">;
   approvedByStaffProfileId?: Id<"staffProfile">;
+  elevationId?: Id<"managerElevation">;
   expiresAt?: number;
   staffProfile: {
     firstName?: string | null;
@@ -122,7 +123,7 @@ export function StaffAuthenticationDialog({
 
     let result: NormalizedCommandResult<StaffAuthenticationResult>;
     let submittedPinHash = "";
-    let submittedUsername = username.trim();
+    const submittedUsername = username.trim();
 
     try {
       submittedPinHash = await hashPin(pin);

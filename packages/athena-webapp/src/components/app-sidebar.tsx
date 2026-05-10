@@ -140,7 +140,7 @@ export function AppSidebar() {
     activeStore?._id ? { storeId: activeStore._id } : "skip",
   );
 
-  const { canAccessOperations, hasFullAdminAccess } = usePermissions();
+  const { canAccessStoreDaySurfaces, hasFullAdminAccess } = usePermissions();
   const isOperationsRoute = location.pathname.includes("/operations");
   const isOrdersRoute = location.pathname.includes("/orders");
   const isProductsRoute = location.pathname.includes("/products");
@@ -178,7 +178,7 @@ export function AppSidebar() {
               </SidebarMenuItem>
 
               <SidebarMenuItem>
-                <SidebarMenuButton disabled={!canAccessOperations()} asChild>
+                <SidebarMenuButton disabled={!canAccessStoreDaySurfaces()} asChild>
                   <Link
                     to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls"
                     params={(p) => ({
@@ -196,7 +196,7 @@ export function AppSidebar() {
 
               <SidebarMenuCollapsible
                 defaultOpen={isOperationsRoute}
-                disabled={!canAccessOperations()}
+                disabled={!canAccessStoreDaySurfaces()}
                 icon={Workflow}
                 label="Operations"
                 onClick={() => {
@@ -212,7 +212,7 @@ export function AppSidebar() {
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
                     <SidebarMenuButton
-                      disabled={!canAccessOperations()}
+                      disabled={!canAccessStoreDaySurfaces()}
                       asChild
                     >
                       <Link
@@ -233,7 +233,7 @@ export function AppSidebar() {
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
                     <SidebarMenuButton
-                      disabled={!canAccessOperations()}
+                      disabled={!canAccessStoreDaySurfaces()}
                       asChild
                     >
                       <Link
@@ -254,7 +254,7 @@ export function AppSidebar() {
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
                     <SidebarMenuButton
-                      disabled={!canAccessOperations()}
+                      disabled={!canAccessStoreDaySurfaces()}
                       asChild
                     >
                       <Link
@@ -275,7 +275,7 @@ export function AppSidebar() {
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
                     <SidebarMenuButton
-                      disabled={!canAccessOperations()}
+                      disabled={!canAccessStoreDaySurfaces()}
                       asChild
                     >
                       <Link
@@ -296,7 +296,7 @@ export function AppSidebar() {
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
                     <SidebarMenuButton
-                      disabled={!canAccessOperations()}
+                      disabled={!canAccessStoreDaySurfaces()}
                       asChild
                     >
                       <Link
@@ -317,7 +317,7 @@ export function AppSidebar() {
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
                     <SidebarMenuButton
-                      disabled={!canAccessOperations()}
+                      disabled={!canAccessStoreDaySurfaces()}
                       asChild
                     >
                       <Link
@@ -337,7 +337,7 @@ export function AppSidebar() {
               </SidebarMenuCollapsible>
 
               <SidebarMenuItem>
-                <SidebarMenuButton disabled={!canAccessOperations()} asChild>
+                <SidebarMenuButton disabled={!hasFullAdminAccess} asChild>
                   <Link
                     to="/$orgUrlSlug/store/$storeUrlSlug/procurement"
                     params={(p) => ({

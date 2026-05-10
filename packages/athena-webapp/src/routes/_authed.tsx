@@ -10,11 +10,16 @@ import {
 import { AppSidebar } from "../components/app-sidebar";
 import { useAuth } from "../hooks/useAuth";
 import { PermissionsProvider } from "../contexts/PermissionsContext";
-import { LogOut, UserCircle } from "lucide-react";
+import { UserCircle } from "lucide-react";
 import { AppHeader } from "@/components/Navbar";
 import { cn } from "@/lib/utils";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { LOGGED_IN_USER_ID_KEY } from "@/lib/constants";
+import { Badge } from "@/components/ui/badge";
+import {
+  ManagerElevationProvider,
+  useManagerElevation,
+} from "../contexts/ManagerElevationContext";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,6 +44,12 @@ function AuthedComponent() {
 function UserMenu({ userEmail }: { userEmail: string }) {
   const navigate = useNavigate();
   const { signOut } = useAuthActions();
+  const {
+    activeElevation,
+    endManagerElevation,
+    isManagerElevated,
+    startManagerElevation,
+  } = useManagerElevation();
 
   const handleSignOut = async () => {
     await signOut();
@@ -57,9 +68,35 @@ function UserMenu({ userEmail }: { userEmail: string }) {
           <span className="max-w-[18rem] truncate font-medium">
             {userEmail}
           </span>
+          {activeElevation ? (
+            <Badge
+              variant="outline"
+              size="sm"
+              className="max-w-[14rem] shrink-0 border-action-workflow-border bg-action-workflow-soft text-action-workflow"
+            >
+              <span className="truncate">
+                Manager: {activeElevation.displayName}
+              </span>
+            </Badge>
+          ) : null}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
+        {isManagerElevated ? (
+          <DropdownMenuItem
+            className="gap-layout-xs"
+            onSelect={() => void endManagerElevation()}
+          >
+            End manager elevation
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem
+            className="gap-layout-xs"
+            onSelect={startManagerElevation}
+          >
+            Start manager elevation
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem
           className="gap-layout-xs"
           onSelect={() => void handleSignOut()}
@@ -97,7 +134,7 @@ function TopBar({ userEmail }: { userEmail: string }) {
 }
 
 export default function Layout() {
-  const [defaultOpen, setDefaultOpen] = useState<boolean | null>(true);
+  const [defaultOpen] = useState<boolean | null>(true);
   const navigate = useNavigate();
   const { isLoading, user } = useAuth();
   const userEmail = user?.email ?? "";
@@ -131,20 +168,22 @@ export default function Layout() {
 
   return (
     <PermissionsProvider>
-      <SidebarProvider
-        className="fixed inset-0 h-svh !min-h-0 flex-col overflow-hidden"
-        defaultOpen={defaultOpen}
-      >
-        <TopBar userEmail={userEmail} />
-        <div className="flex h-[calc(100svh-4rem)] !min-h-0 flex-1">
-          <AppSidebar />
-          <SidebarInset className="h-full !min-h-0 overflow-hidden">
-            <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-transparent p-8">
-              <AuthedComponent />
-            </main>
-          </SidebarInset>
-        </div>
-      </SidebarProvider>
+      <ManagerElevationProvider>
+        <SidebarProvider
+          className="fixed inset-0 h-svh !min-h-0 flex-col overflow-hidden"
+          defaultOpen={defaultOpen}
+        >
+          <TopBar userEmail={userEmail} />
+          <div className="flex h-[calc(100svh-4rem)] !min-h-0 flex-1">
+            <AppSidebar />
+            <SidebarInset className="h-full !min-h-0 overflow-hidden">
+              <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-transparent p-8">
+                <AuthedComponent />
+              </main>
+            </SidebarInset>
+          </div>
+        </SidebarProvider>
+      </ManagerElevationProvider>
     </PermissionsProvider>
   );
 }

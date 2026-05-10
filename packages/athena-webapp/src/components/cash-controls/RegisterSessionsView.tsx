@@ -242,11 +242,13 @@ export function RegisterSessionsViewContent({
 export function RegisterSessionsView() {
   const {
     activeStore,
+    canAccessProtectedSurface,
     canQueryProtectedData,
     hasFullAdminAccess,
     isAuthenticated,
     isLoadingAccess,
-  } = useProtectedAdminPageState();
+  } = useProtectedAdminPageState({ surface: "store_day" });
+  const canAccessSurface = canAccessProtectedSurface ?? hasFullAdminAccess;
   const params = useParams({ strict: false }) as
     | {
         orgUrlSlug?: string;
@@ -275,7 +277,7 @@ export function RegisterSessionsView() {
     );
   }
 
-  if (!hasFullAdminAccess) {
+  if (!canAccessSurface) {
     return <NoPermissionView />;
   }
 

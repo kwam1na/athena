@@ -254,11 +254,13 @@ function DailyCloseHistoryConnectedView({
 }) {
   const {
     activeStore,
+    canAccessProtectedSurface,
     canQueryProtectedData,
     hasFullAdminAccess,
     isAuthenticated,
     isLoadingAccess,
-  } = useProtectedAdminPageState();
+  } = useProtectedAdminPageState({ surface: "store_day" });
+  const canAccessSurface = canAccessProtectedSurface ?? hasFullAdminAccess;
   const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false }) as {
     orgUrlSlug: string;
     storeUrlSlug: string;
@@ -312,7 +314,7 @@ function DailyCloseHistoryConnectedView({
     );
   }
 
-  if (!hasFullAdminAccess) {
+  if (!canAccessSurface) {
     return <NoPermissionView />;
   }
 

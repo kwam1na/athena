@@ -133,6 +133,7 @@ import type * as operations_dailyOperations from "../operations/dailyOperations.
 import type * as operations_helpers_eventBuilders from "../operations/helpers/eventBuilders.js";
 import type * as operations_helpers_linking from "../operations/helpers/linking.js";
 import type * as operations_inventoryMovements from "../operations/inventoryMovements.js";
+import type * as operations_managerElevations from "../operations/managerElevations.js";
 import type * as operations_operationalEvents from "../operations/operationalEvents.js";
 import type * as operations_operationalWorkItems from "../operations/operationalWorkItems.js";
 import type * as operations_paymentAllocations from "../operations/paymentAllocations.js";
@@ -213,6 +214,7 @@ import type * as schemas_operations_dailyClose from "../schemas/operations/daily
 import type * as schemas_operations_dailyOpening from "../schemas/operations/dailyOpening.js";
 import type * as schemas_operations_index from "../schemas/operations/index.js";
 import type * as schemas_operations_inventoryMovement from "../schemas/operations/inventoryMovement.js";
+import type * as schemas_operations_managerElevation from "../schemas/operations/managerElevation.js";
 import type * as schemas_operations_operationalEvent from "../schemas/operations/operationalEvent.js";
 import type * as schemas_operations_operationalWorkItem from "../schemas/operations/operationalWorkItem.js";
 import type * as schemas_operations_paymentAllocation from "../schemas/operations/paymentAllocation.js";
@@ -448,6 +450,7 @@ declare const fullApi: ApiFromModules<{
   "operations/helpers/eventBuilders": typeof operations_helpers_eventBuilders;
   "operations/helpers/linking": typeof operations_helpers_linking;
   "operations/inventoryMovements": typeof operations_inventoryMovements;
+  "operations/managerElevations": typeof operations_managerElevations;
   "operations/operationalEvents": typeof operations_operationalEvents;
   "operations/operationalWorkItems": typeof operations_operationalWorkItems;
   "operations/paymentAllocations": typeof operations_paymentAllocations;
@@ -528,6 +531,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/operations/dailyOpening": typeof schemas_operations_dailyOpening;
   "schemas/operations/index": typeof schemas_operations_index;
   "schemas/operations/inventoryMovement": typeof schemas_operations_inventoryMovement;
+  "schemas/operations/managerElevation": typeof schemas_operations_managerElevation;
   "schemas/operations/operationalEvent": typeof schemas_operations_operationalEvent;
   "schemas/operations/operationalWorkItem": typeof schemas_operations_operationalWorkItem;
   "schemas/operations/paymentAllocation": typeof schemas_operations_paymentAllocation;

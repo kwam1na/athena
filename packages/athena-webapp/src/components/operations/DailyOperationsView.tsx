@@ -1122,11 +1122,13 @@ function DailyOperationsConnectedView({
 }) {
   const {
     activeStore,
+    canAccessProtectedSurface,
     canQueryProtectedData,
     hasFullAdminAccess,
     isAuthenticated,
     isLoadingAccess,
-  } = useProtectedAdminPageState();
+  } = useProtectedAdminPageState({ surface: "store_day" });
+  const canAccessSurface = canAccessProtectedSurface ?? hasFullAdminAccess;
   const params = useParams({ strict: false }) as
     | {
         orgUrlSlug?: string;
@@ -1175,7 +1177,7 @@ function DailyOperationsConnectedView({
   return (
     <DailyOperationsViewContent
       currency={activeStore?.currency ?? "GHS"}
-      hasFullAdminAccess={hasFullAdminAccess}
+      hasFullAdminAccess={canAccessSurface}
       isAuthenticated={isAuthenticated}
       isLoadingAccess={isLoadingAccess}
       isLoadingSnapshot={snapshot === undefined}

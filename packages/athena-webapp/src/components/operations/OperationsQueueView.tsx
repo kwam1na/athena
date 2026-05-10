@@ -1058,11 +1058,13 @@ export function OperationsQueueView({
   const search = useSearch({ strict: false }) as { o?: unknown };
   const {
     activeStore,
+    canAccessProtectedSurface,
     canQueryProtectedData,
     hasFullAdminAccess,
     isAuthenticated,
     isLoadingAccess,
-  } = useProtectedAdminPageState();
+  } = useProtectedAdminPageState({ surface: "store_day" });
+  const canAccessSurface = canAccessProtectedSurface ?? hasFullAdminAccess;
   const [isSubmittingStockBatch, setIsSubmittingStockBatch] = useState(false);
   const [isSavingCycleCountDraft, setIsSavingCycleCountDraft] = useState(false);
   const [decisioningApprovalRequestId, setDecisioningApprovalRequestId] =
@@ -1424,7 +1426,7 @@ export function OperationsQueueView({
     );
   }
 
-  if (!hasFullAdminAccess) {
+  if (!canAccessSurface) {
     return <NoPermissionView />;
   }
 
@@ -1451,7 +1453,7 @@ export function OperationsQueueView({
         approvalRequests={queue?.approvalRequests ?? []}
         cycleCountDraft={cycleCountDraft}
         cycleCountDraftSummary={activeCycleCountDraftSummary ?? null}
-        hasFullAdminAccess={hasFullAdminAccess}
+        hasFullAdminAccess={canAccessSurface}
         inventoryItems={inventoryItems ?? []}
         isCycleCountDraftSaving={isSavingCycleCountDraft}
         isDecidingApprovalRequestId={decisioningApprovalRequestId}
