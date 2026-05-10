@@ -59,6 +59,10 @@ vi.mock("convex/react", () => ({
   useQuery: mockedHooks.useQuery,
 }));
 
+vi.mock("@/hooks/use-navigate-back", () => ({
+  useNavigateBack: () => vi.fn(),
+}));
+
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: mockedHooks.useAuth,
 }));

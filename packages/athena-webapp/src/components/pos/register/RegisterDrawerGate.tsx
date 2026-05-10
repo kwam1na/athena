@@ -351,9 +351,7 @@ export function RegisterDrawerGate({
                   disabled={drawerGate.isCloseoutSubmitting}
                   inputMode="decimal"
                   onChange={(event) =>
-                    drawerGate.onCloseoutCountedCashChange?.(
-                      event.target.value,
-                    )
+                    drawerGate.onCloseoutCountedCashChange?.(event.target.value)
                   }
                   placeholder="0.00"
                   value={drawerGate.closeoutCountedCash ?? ""}
@@ -391,6 +389,7 @@ export function RegisterDrawerGate({
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <LoadingButton
                   className="w-full sm:w-auto"
+                  variant={"workflow"}
                   disabled={Boolean(drawerGate.isCloseoutSubmitting)}
                   isLoading={Boolean(drawerGate.isCloseoutSubmitting)}
                   type="submit"
@@ -402,15 +401,14 @@ export function RegisterDrawerGate({
                   className="w-full sm:w-auto"
                   disabled={Boolean(
                     drawerGate.isCloseoutSubmitting ||
-                      drawerGate.isReopeningCloseout,
+                    drawerGate.isReopeningCloseout,
                   )}
                   isLoading={Boolean(drawerGate.isReopeningCloseout)}
                   onClick={() => void drawerGate.onReopenRegister?.()}
                   type="button"
                   variant="outline"
                 >
-                  {drawerGate.closeoutSecondaryActionLabel ??
-                    "Reopen register"}
+                  {drawerGate.closeoutSecondaryActionLabel ?? "Reopen register"}
                 </LoadingButton>
 
                 {drawerGate.canOpenCashControls ? (

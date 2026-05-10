@@ -30,6 +30,10 @@ const REGISTER_OPENING_FLOAT_CORRECTION_ACTION =
   APPROVAL_ACTIONS.registerSessionOpeningFloatCorrection;
 const REGISTER_OPENING_FLOAT_CORRECTION_ACTION_KEY =
   REGISTER_OPENING_FLOAT_CORRECTION_ACTION.key;
+const REGISTER_CLOSEOUT_REOPEN_ACTION =
+  APPROVAL_ACTIONS.registerSessionCloseoutReopen;
+const REGISTER_CLOSEOUT_MODIFICATION_SUBMIT_ACTION =
+  APPROVAL_ACTIONS.registerSessionCloseoutModificationSubmit;
 
 const userErrorValidator = v.object({
   code: v.union(
@@ -89,9 +93,11 @@ type SubmitRegisterSessionCloseoutArgs = {
   actorStaffProfileId?: Id<"staffProfile">;
   actorUserId?: Id<"athenaUser">;
   approvalProofId?: Id<"approvalProof">;
+  closeoutModificationApprovalProofId?: Id<"approvalProof">;
   countedCash: number;
   notes?: string;
   registerSessionId: Id<"registerSession">;
+  requestedByStaffProfileId?: Id<"staffProfile">;
   storeId: Id<"store">;
 };
 
@@ -127,6 +133,15 @@ type ReopenRegisterSessionResult = {
   action: "reopened";
   approvalRequest: Doc<"approvalRequest"> | null;
   registerSession: Doc<"registerSession"> | null;
+};
+
+type ReopenRegisterSessionCloseoutArgs = {
+  actorStaffProfileId?: Id<"staffProfile">;
+  actorUserId?: Id<"athenaUser">;
+  approvalProofId?: Id<"approvalProof">;
+  registerSessionId: Id<"registerSession">;
+  requestedByStaffProfileId?: Id<"staffProfile">;
+  storeId: Id<"store">;
 };
 
 type CorrectRegisterSessionOpeningFloatArgs = {
@@ -262,6 +277,18 @@ function asNumber(value: unknown) {
 function trimOptional(value?: string | null) {
   const nextValue = value?.trim();
   return nextValue ? nextValue : undefined;
+}
+
+function omitUndefined<T extends Record<string, unknown>>(value: T) {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, entryValue]) => entryValue !== undefined)
+  ) as T;
+}
+
+function getLatestReopenedCloseoutRecord(registerSession: Doc<"registerSession">) {
+  const latestRecord = registerSession.closeoutRecords?.at(-1);
+
+  return latestRecord?.type === "reopened" ? latestRecord : null;
 }
 
 async function persistRegisterSessionWorkflowTraceIdBestEffort(
@@ -626,9 +653,11 @@ export const submitRegisterSessionCloseout = mutation({
     actorStaffProfileId: v.optional(v.id("staffProfile")),
     actorUserId: v.optional(v.id("athenaUser")),
     approvalProofId: v.optional(v.id("approvalProof")),
+    closeoutModificationApprovalProofId: v.optional(v.id("approvalProof")),
     countedCash: v.number(),
     notes: v.optional(v.string()),
     registerSessionId: v.id("registerSession"),
+    requestedByStaffProfileId: v.optional(v.id("staffProfile")),
     storeId: v.id("store"),
   },
   returns: submitRegisterSessionCloseoutResultValidator,
@@ -668,7 +697,54 @@ export const submitRegisterSessionCloseout = mutation({
       config,
       expectedCash: registerSession.expectedCash,
     });
+    const latestReopenedCloseout = getLatestReopenedCloseoutRecord(registerSession);
+    let closeoutSubmitActorStaffProfileId = args.actorStaffProfileId;
     let approvedByStaffProfileId: Id<"staffProfile"> | undefined;
+
+    if (latestReopenedCloseout) {
+      if (
+        !registerSession.organizationId ||
+        !args.closeoutModificationApprovalProofId ||
+        !latestReopenedCloseout.actorStaffProfileId
+      ) {
+        return userError({
+          code: "authentication_failed",
+          message:
+            "The manager who reopened this closeout must submit the correction.",
+        });
+      }
+
+      const proof = await consumeCommandApprovalProofWithCtx(ctx, {
+        action: REGISTER_CLOSEOUT_MODIFICATION_SUBMIT_ACTION,
+        approvalProofId: args.closeoutModificationApprovalProofId,
+        requiredRole: "manager",
+        requestedByStaffProfileId: args.requestedByStaffProfileId,
+        storeId: args.storeId,
+        subject: {
+          type: "register_session",
+          id: registerSession._id,
+          label: registerSession.registerNumber,
+        },
+      });
+
+      if (proof.kind !== "ok") {
+        return proof;
+      }
+
+      if (
+        proof.data.approvedByStaffProfileId !==
+        latestReopenedCloseout.actorStaffProfileId
+      ) {
+        return userError({
+          code: "authorization_failed",
+          message:
+            "The manager who reopened this closeout must submit the correction.",
+        });
+      }
+
+      closeoutSubmitActorStaffProfileId = proof.data.approvedByStaffProfileId;
+      approvedByStaffProfileId = proof.data.approvedByStaffProfileId;
+    }
 
     if (closeoutReview.requiresApproval && args.approvalProofId) {
       if (!registerSession.organizationId) {
@@ -682,7 +758,7 @@ export const submitRegisterSessionCloseout = mutation({
         action: REGISTER_VARIANCE_REVIEW_ACTION,
         approvalProofId: args.approvalProofId,
         requiredRole: "manager",
-        requestedByStaffProfileId: args.actorStaffProfileId,
+        requestedByStaffProfileId: closeoutSubmitActorStaffProfileId,
         storeId: args.storeId,
         subject: {
           type: "register_session",
@@ -714,14 +790,15 @@ export const submitRegisterSessionCloseout = mutation({
     if (
       closeoutReview.requiresApproval &&
       !args.approvalProofId &&
-      args.actorStaffProfileId &&
+      closeoutSubmitActorStaffProfileId &&
+      !approvedByStaffProfileId &&
       registerSession.organizationId
     ) {
       const actorCanReviewVariance = await staffProfileCanReviewCloseoutVariance(
         ctx,
         {
           organizationId: registerSession.organizationId,
-          staffProfileId: args.actorStaffProfileId,
+          staffProfileId: closeoutSubmitActorStaffProfileId,
           storeId: args.storeId,
         },
       );
@@ -760,7 +837,7 @@ export const submitRegisterSessionCloseout = mutation({
             status: "closing",
           } as typeof registerSession),
         occurredAt: closeoutSubmittedAt,
-        actorStaffProfileId: args.actorStaffProfileId,
+        actorStaffProfileId: closeoutSubmitActorStaffProfileId,
         actorUserId: args.actorUserId,
         countedCash: args.countedCash,
         variance: closeoutReview.variance,
@@ -778,7 +855,7 @@ export const submitRegisterSessionCloseout = mutation({
       await cancelPendingApprovalIfNeeded({
         approvalRequestId: registerSession.managerApprovalRequestId,
         ctx,
-        reviewedByStaffProfileId: args.actorStaffProfileId,
+        reviewedByStaffProfileId: closeoutSubmitActorStaffProfileId,
         reviewedByUserId: args.actorUserId,
       });
 
@@ -799,9 +876,13 @@ export const submitRegisterSessionCloseout = mutation({
           eventType: "register_session_closeout_approved",
           message: "Manager approved the register closeout.",
           metadata: {
-            actionKey: REGISTER_VARIANCE_REVIEW_ACTION_KEY,
+            actionKey: latestReopenedCloseout
+              ? REGISTER_CLOSEOUT_MODIFICATION_SUBMIT_ACTION.key
+              : REGISTER_VARIANCE_REVIEW_ACTION_KEY,
             approvalMode: "inline_manager_proof",
-            approvalProofId: args.approvalProofId,
+            approvalProofId:
+              args.approvalProofId ??
+              args.closeoutModificationApprovalProofId,
             countedCash: args.countedCash,
             decision: "approved",
             expectedCash: registerSession.expectedCash,
@@ -871,7 +952,7 @@ export const submitRegisterSessionCloseout = mutation({
           reason: closeoutReview.reason,
           registerSessionId: registerSession._id,
           requestType: "variance_review",
-          requestedByStaffProfileId: args.actorStaffProfileId,
+          requestedByStaffProfileId: closeoutSubmitActorStaffProfileId,
           requestedByUserId: args.actorUserId,
           storeId: args.storeId,
           subjectId: registerSession._id,
@@ -893,7 +974,7 @@ export const submitRegisterSessionCloseout = mutation({
       });
 
       await recordOperationalEventWithCtx(ctx, {
-        actorStaffProfileId: args.actorStaffProfileId,
+        actorStaffProfileId: closeoutSubmitActorStaffProfileId,
         actorUserId: args.actorUserId,
         approvalRequestId,
         eventType: "register_session_variance_review_requested",
@@ -936,7 +1017,7 @@ export const submitRegisterSessionCloseout = mutation({
               status: "closing",
             } as typeof registerSession),
           occurredAt: approvalPendingAt,
-          actorStaffProfileId: args.actorStaffProfileId,
+          actorStaffProfileId: closeoutSubmitActorStaffProfileId,
           actorUserId: args.actorUserId,
           approvalRequestId,
           countedCash: args.countedCash,
@@ -957,14 +1038,14 @@ export const submitRegisterSessionCloseout = mutation({
     await cancelPendingApprovalIfNeeded({
       approvalRequestId: registerSession.managerApprovalRequestId,
       ctx,
-      reviewedByStaffProfileId: args.actorStaffProfileId,
+      reviewedByStaffProfileId: closeoutSubmitActorStaffProfileId,
       reviewedByUserId: args.actorUserId,
     });
 
     const closedSession = await ctx.runMutation(
       internal.operations.registerSessions.closeRegisterSession,
       {
-        closedByStaffProfileId: args.actorStaffProfileId,
+        closedByStaffProfileId: closeoutSubmitActorStaffProfileId,
         closedByUserId: args.actorUserId,
         countedCash: args.countedCash,
         registerSessionId: args.registerSessionId,
@@ -972,7 +1053,7 @@ export const submitRegisterSessionCloseout = mutation({
     );
 
     await recordOperationalEventWithCtx(ctx, {
-      actorStaffProfileId: args.actorStaffProfileId,
+      actorStaffProfileId: closeoutSubmitActorStaffProfileId,
       actorUserId: args.actorUserId,
       eventType: "register_session_closed",
       message: closeoutReview.hasVariance
@@ -996,7 +1077,7 @@ export const submitRegisterSessionCloseout = mutation({
       stage: "closed",
       session: closedSession ?? registerSession,
       occurredAt: closedSession?.closedAt,
-      actorStaffProfileId: args.actorStaffProfileId,
+      actorStaffProfileId: closeoutSubmitActorStaffProfileId,
       actorUserId: args.actorUserId,
       countedCash: args.countedCash,
       variance: closeoutReview.variance,
@@ -1021,13 +1102,15 @@ export const reopenRegisterSessionCloseout = mutation({
   args: {
     actorStaffProfileId: v.optional(v.id("staffProfile")),
     actorUserId: v.optional(v.id("athenaUser")),
+    approvalProofId: v.optional(v.id("approvalProof")),
     registerSessionId: v.id("registerSession"),
+    requestedByStaffProfileId: v.optional(v.id("staffProfile")),
     storeId: v.id("store"),
   },
   returns: reopenRegisterSessionResultValidator,
   handler: async (
     ctx: MutationCtx,
-    args
+    args: ReopenRegisterSessionCloseoutArgs
   ): Promise<CommandResult<ReopenRegisterSessionResult>> => {
     const registerSession = await ctx.db.get("registerSession", args.registerSessionId);
 
@@ -1039,9 +1122,109 @@ export const reopenRegisterSessionCloseout = mutation({
     }
 
     if (registerSession.status !== "closing") {
-      return userError({
-        code: "precondition_failed",
-        message: "Register session is not in closeout.",
+      if (registerSession.status !== "closed") {
+        return userError({
+          code: "precondition_failed",
+          message: "Register session is not in closeout.",
+        });
+      }
+
+      if (!registerSession.organizationId || !args.approvalProofId) {
+        return userError({
+          code: "authentication_failed",
+          message: "Only managers can reopen a closed register closeout.",
+        });
+      }
+
+      const proof = await consumeCommandApprovalProofWithCtx(ctx, {
+        action: REGISTER_CLOSEOUT_REOPEN_ACTION,
+        approvalProofId: args.approvalProofId,
+        requiredRole: "manager",
+        requestedByStaffProfileId: args.requestedByStaffProfileId,
+        storeId: args.storeId,
+        subject: {
+          type: "register_session",
+          id: registerSession._id,
+          label: registerSession.registerNumber,
+        },
+      });
+
+      if (proof.kind !== "ok") {
+        return proof;
+      }
+
+      const canReopenClosedCloseout = await staffProfileCanReviewCloseoutVariance(ctx, {
+        organizationId: registerSession.organizationId,
+        staffProfileId: proof.data.approvedByStaffProfileId,
+        storeId: args.storeId,
+      });
+
+      if (!canReopenClosedCloseout) {
+        return userError({
+          code: "authorization_failed",
+          message: "Only managers can reopen a closed register closeout.",
+        });
+      }
+
+      const previousCloseout = omitUndefined({
+        closedAt: registerSession.closedAt,
+        closedByStaffProfileId: registerSession.closedByStaffProfileId,
+        closedByUserId: registerSession.closedByUserId,
+        countedCash: registerSession.countedCash,
+        expectedCash: registerSession.expectedCash,
+        variance: registerSession.variance,
+      });
+      const reopenedSession = await ctx.runMutation(
+        internal.operations.registerSessions.reopenClosedRegisterSessionCloseout,
+        {
+          actorStaffProfileId: proof.data.approvedByStaffProfileId,
+          actorUserId: args.actorUserId,
+          reason: "Closed register closeout reopened for correction.",
+          registerSessionId: args.registerSessionId,
+        }
+      );
+      const reopenedAt = Date.now();
+
+      await recordOperationalEventWithCtx(ctx, {
+        actorStaffProfileId: proof.data.approvedByStaffProfileId,
+        actorUserId: args.actorUserId,
+        eventType: "register_session_closeout_reopened",
+        message: "Closed register closeout reopened for correction.",
+        metadata: previousCloseout,
+        organizationId: registerSession.organizationId,
+        reason: "Correction needed after closeout was saved.",
+        registerSessionId: registerSession._id,
+        storeId: args.storeId,
+        subjectId: registerSession._id,
+        subjectLabel: registerSession.registerNumber,
+        subjectType: "register_session",
+      });
+
+      const traceResult = await recordRegisterSessionTraceBestEffort(ctx, {
+        stage: "closeout_reopened",
+        session: reopenedSession ?? {
+          ...registerSession,
+          status: "closing",
+        },
+        occurredAt: reopenedAt,
+        actorStaffProfileId: proof.data.approvedByStaffProfileId,
+        actorUserId: args.actorUserId,
+        countedCash: registerSession.countedCash,
+        reason: "Correction needed after closeout was saved.",
+        variance: registerSession.variance,
+      });
+
+      await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
+        registerSessionId: registerSession._id,
+        traceCreated: traceResult.traceCreated,
+        traceId: traceResult.traceId,
+        workflowTraceId: reopenedSession?.workflowTraceId,
+      });
+
+      return ok({
+        action: "reopened",
+        approvalRequest: null,
+        registerSession: reopenedSession,
       });
     }
 

@@ -6,10 +6,11 @@ import {
   ChevronDown,
   CreditCard,
   Receipt,
+  RotateCcw,
   Smartphone,
   WalletCards,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/hooks/useAuth";
@@ -80,6 +81,11 @@ type RegisterSessionDetail = {
   _id: string;
   closedAt?: number;
   closedByStaffName?: string | null;
+  closeoutRecords?: Array<{
+    actorStaffProfileId?: string;
+    occurredAt: number;
+    type: "closed" | "reopened";
+  }>;
   countedCash?: number;
   expectedCash: number;
   netExpectedCash?: number;
@@ -165,9 +171,11 @@ type RegisterSessionDepositResult =
 type RegisterCloseoutSubmitArgs = {
   actorStaffProfileId: string;
   approvalProofId?: string;
+  closeoutModificationApprovalProofId?: string;
   countedCash: number;
   notes?: string;
   registerSessionId: string;
+  requestedByStaffProfileId?: string;
 };
 
 type RegisterCloseoutReviewArgs = {
@@ -178,7 +186,7 @@ type RegisterCloseoutReviewArgs = {
 };
 
 type RegisterCloseoutCommandPayload = {
-  action?: "closed" | "approved" | "rejected";
+  action?: "closed" | "approved" | "rejected" | "reopened";
 };
 
 type RegisterCloseoutCommandResult =
@@ -222,6 +230,12 @@ type RegisterSessionViewContentProps = {
   onReviewCloseout: (
     args: RegisterCloseoutReviewArgs,
   ) => Promise<RegisterCloseoutCommandResult>;
+  onReopenCloseout?: (args: {
+    actorStaffProfileId: string;
+    approvalProofId: string;
+    registerSessionId: string;
+    requestedByStaffProfileId?: string;
+  }) => Promise<RegisterCloseoutCommandResult>;
   onAuthenticateStaff: (args: {
     allowedRoles: StaffAuthenticationRole[];
     pinHash: string;
@@ -257,6 +271,13 @@ type CloseoutStaffAuthIntent =
       kind: "review";
       registerSessionId: string;
     };
+
+type ReopenedCloseoutSubmitIntent = {
+  countedCash: number;
+  notes?: string;
+  registerSessionId: string;
+  reopenedByStaffProfileId?: string;
+};
 
 type OpeningFloatCorrectionIntent = {
   correctedOpeningFloat: number;
@@ -400,6 +421,7 @@ export function RegisterSessionViewContent({
   onAuthenticateCloseoutReviewApproval,
   onCorrectOpeningFloat,
   onRecordDeposit,
+  onReopenCloseout,
   onReviewCloseout,
   onSubmitCloseout,
   orgUrlSlug,
@@ -419,10 +441,16 @@ export function RegisterSessionViewContent({
   const [managerNotes, setManagerNotes] = useState("");
   const [closeoutErrorMessage, setCloseoutErrorMessage] = useState("");
   const [pendingCloseoutAction, setPendingCloseoutAction] = useState<
-    "approved" | "rejected" | "submit" | null
+    "approved" | "rejected" | "reopen" | "submit" | null
   >(null);
   const [closeoutStaffAuthIntent, setCloseoutStaffAuthIntent] =
     useState<CloseoutStaffAuthIntent | null>(null);
+  const [reopenedCloseoutSubmitIntent, setReopenedCloseoutSubmitIntent] =
+    useState<ReopenedCloseoutSubmitIntent | null>(null);
+  const [
+    isReopenedCloseoutSubmitApprovalOpen,
+    setIsReopenedCloseoutSubmitApprovalOpen,
+  ] = useState(false);
   const [isOpeningFloatCorrectionOpen, setIsOpeningFloatCorrectionOpen] =
     useState(false);
   const [correctedOpeningFloat, setCorrectedOpeningFloat] = useState("");
@@ -440,6 +468,7 @@ export function RegisterSessionViewContent({
     useState<ApprovalRequirement | null>(null);
   const [isCorrectingOpeningFloat, setIsCorrectingOpeningFloat] =
     useState(false);
+  const [isReopenApprovalOpen, setIsReopenApprovalOpen] = useState(false);
   const closeoutApprovalRunner = useApprovedCommand({
     storeId: storeId as Id<"store"> | undefined,
     onAuthenticateForApproval:
@@ -473,6 +502,8 @@ export function RegisterSessionViewContent({
       setCloseoutErrorMessage("");
       setPendingCloseoutAction(null);
       setCloseoutStaffAuthIntent(null);
+      setReopenedCloseoutSubmitIntent(null);
+      setIsReopenedCloseoutSubmitApprovalOpen(false);
       setIsOpeningFloatCorrectionOpen(false);
       setCorrectedOpeningFloat("");
       setOpeningFloatCorrectionReason("");
@@ -481,6 +512,7 @@ export function RegisterSessionViewContent({
       setOpeningFloatCorrectionSuccess("");
       setOpeningFloatCorrectionIntent(null);
       setPendingOpeningFloatApproval(null);
+      setIsReopenApprovalOpen(false);
       return;
     }
 
@@ -494,6 +526,8 @@ export function RegisterSessionViewContent({
     setCloseoutErrorMessage("");
     setPendingCloseoutAction(null);
     setCloseoutStaffAuthIntent(null);
+    setReopenedCloseoutSubmitIntent(null);
+    setIsReopenedCloseoutSubmitApprovalOpen(false);
     setIsOpeningFloatCorrectionOpen(false);
     setCorrectedOpeningFloat(
       formatStoredAmountForInput(registerSession.openingFloat),
@@ -504,11 +538,79 @@ export function RegisterSessionViewContent({
     setOpeningFloatCorrectionSuccess("");
     setOpeningFloatCorrectionIntent(null);
     setPendingOpeningFloatApproval(null);
+    setIsReopenApprovalOpen(false);
   }, [
     registerSession?._id,
     registerSession?.countedCash,
     registerSession?.openingFloat,
   ]);
+
+  const reopenCloseoutApproval = useMemo<ApprovalRequirement | null>(() => {
+    if (!registerSession || !storeId) {
+      return null;
+    }
+
+    return {
+      action: {
+        key: "cash_controls.register_session.reopen_closeout",
+        label: "Reopen register closeout",
+      },
+      copy: {
+        title: "Manager approval required",
+        message: "Manager approval is required to reopen this saved closeout.",
+        primaryActionLabel: "Reopen closeout",
+        secondaryActionLabel: "Cancel",
+      },
+      reason: "Manager approval is required to reopen this saved closeout.",
+      requiredRole: "manager",
+      resolutionModes: [{ kind: "inline_manager_proof" }],
+      subject: {
+        id: registerSession._id,
+        label: registerSession.registerNumber ?? undefined,
+        type: "register_session",
+      },
+    };
+  }, [registerSession, storeId]);
+
+  const latestCloseoutRecord = registerSession?.closeoutRecords?.at(-1) ?? null;
+  const reopenedCloseoutRecord =
+    latestCloseoutRecord?.type === "reopened" ? latestCloseoutRecord : null;
+  const requiresReopenedCloseoutSubmitApproval =
+    registerSession?.status === "closing" && Boolean(reopenedCloseoutRecord);
+
+  const reopenedCloseoutSubmitApproval =
+    useMemo<ApprovalRequirement | null>(() => {
+      if (
+        !registerSession ||
+        !storeId ||
+        !requiresReopenedCloseoutSubmitApproval
+      ) {
+        return null;
+      }
+
+      return {
+        action: {
+          key: "cash_controls.register_session.submit_reopened_closeout",
+          label: "Submit reopened register closeout",
+        },
+        copy: {
+          title: "Manager approval required",
+          message:
+            "The manager who reopened this closeout must submit the corrected count.",
+          primaryActionLabel: "Submit correction",
+          secondaryActionLabel: "Cancel",
+        },
+        reason:
+          "The manager who reopened this closeout must submit the corrected count.",
+        requiredRole: "manager",
+        resolutionModes: [{ kind: "inline_manager_proof" }],
+        subject: {
+          id: registerSession._id,
+          label: registerSession.registerNumber ?? undefined,
+          type: "register_session",
+        },
+      };
+    }, [registerSession, requiresReopenedCloseoutSubmitApproval, storeId]);
 
   const applyCommandResult = (result: RegisterSessionDepositResult) => {
     if (result.kind === "ok") {
@@ -609,6 +711,29 @@ export function RegisterSessionViewContent({
     }
 
     setCloseoutErrorMessage("");
+
+    if (requiresReopenedCloseoutSubmitApproval) {
+      if (
+        !onAuthenticateForApproval ||
+        !storeId ||
+        !reopenedCloseoutSubmitApproval
+      ) {
+        setCloseoutErrorMessage(
+          "Manager approval is not available yet. Try again after the register tools refresh.",
+        );
+        return;
+      }
+
+      setReopenedCloseoutSubmitIntent({
+        countedCash: parsedCountedCash,
+        notes: trimmedCloseoutNotes,
+        registerSessionId: registerSession._id,
+        reopenedByStaffProfileId: reopenedCloseoutRecord?.actorStaffProfileId,
+      });
+      setIsReopenedCloseoutSubmitApprovalOpen(true);
+      return;
+    }
+
     setCloseoutStaffAuthIntent({
       kind: "submit",
       countedCash: parsedCountedCash,
@@ -632,6 +757,32 @@ export function RegisterSessionViewContent({
       decisionNotes: trimOptional(managerNotes),
       registerSessionId: registerSession._id,
     });
+  }
+
+  async function handleReopenClosedCloseout() {
+    if (!registerSession?._id) {
+      setCloseoutErrorMessage(
+        "A register session is required before reopening a closeout",
+      );
+      return;
+    }
+
+    if (!onReopenCloseout) {
+      setCloseoutErrorMessage(
+        "Closeout reopening is not available yet. Try again after the register tools refresh.",
+      );
+      return;
+    }
+
+    if (!onAuthenticateForApproval || !storeId || !reopenCloseoutApproval) {
+      setCloseoutErrorMessage(
+        "Manager approval is not available yet. Try again after the register tools refresh.",
+      );
+      return;
+    }
+
+    setCloseoutErrorMessage("");
+    setIsReopenApprovalOpen(true);
   }
 
   async function handleSubmitOpeningFloatCorrection() {
@@ -820,6 +971,85 @@ export function RegisterSessionViewContent({
     void runOpeningFloatCorrection(openingFloatCorrectionIntent, {
       approvalProofId: result.approvalProofId,
     });
+  }
+
+  async function handleReopenCloseoutApproved(
+    result: CommandApprovalApprovedResult,
+  ) {
+    if (!registerSession?._id || !onReopenCloseout) {
+      setCloseoutErrorMessage(
+        "A register session is required before reopening a closeout",
+      );
+      setIsReopenApprovalOpen(false);
+      return;
+    }
+
+    setCloseoutErrorMessage("");
+    setPendingCloseoutAction("reopen");
+    setIsReopenApprovalOpen(false);
+
+    try {
+      const commandResult = await onReopenCloseout({
+        actorStaffProfileId: result.approvedByStaffProfileId,
+        approvalProofId: result.approvalProofId,
+        registerSessionId: registerSession._id,
+        requestedByStaffProfileId: actorStaffProfileId,
+      });
+
+      applyCloseoutCommandResult(commandResult);
+    } finally {
+      setPendingCloseoutAction(null);
+    }
+  }
+
+  async function handleReopenedCloseoutSubmitApproved(
+    result: CommandApprovalApprovedResult,
+  ) {
+    if (!reopenedCloseoutSubmitIntent) {
+      setCloseoutErrorMessage(
+        "Closeout correction details were not available. Review the count and submit again.",
+      );
+      setIsReopenedCloseoutSubmitApprovalOpen(false);
+      return;
+    }
+
+    if (
+      reopenedCloseoutSubmitIntent.reopenedByStaffProfileId &&
+      result.approvedByStaffProfileId !==
+        reopenedCloseoutSubmitIntent.reopenedByStaffProfileId
+    ) {
+      setCloseoutErrorMessage(
+        "The manager who reopened this closeout must submit the correction.",
+      );
+      setIsReopenedCloseoutSubmitApprovalOpen(false);
+      return;
+    }
+
+    const intent = reopenedCloseoutSubmitIntent;
+
+    setCloseoutErrorMessage("");
+    setPendingCloseoutAction("submit");
+    setReopenedCloseoutSubmitIntent(null);
+    setIsReopenedCloseoutSubmitApprovalOpen(false);
+
+    try {
+      const commandResult = await onSubmitCloseout({
+        actorStaffProfileId: result.approvedByStaffProfileId,
+        closeoutModificationApprovalProofId: result.approvalProofId,
+        countedCash: intent.countedCash,
+        notes: intent.notes,
+        registerSessionId: intent.registerSessionId,
+        requestedByStaffProfileId: actorStaffProfileId,
+      });
+
+      if (!applyCloseoutCommandResult(commandResult)) {
+        return;
+      }
+
+      setCloseoutNotes("");
+    } finally {
+      setPendingCloseoutAction(null);
+    }
   }
 
   const closeoutStaffAuthCopy =
@@ -1178,6 +1408,55 @@ export function RegisterSessionViewContent({
           setOpeningFloatCorrectionIntent(null);
         }}
         open={Boolean(pendingOpeningFloatApproval)}
+        requestedByStaffProfileId={
+          actorStaffProfileId as Id<"staffProfile"> | undefined
+        }
+        storeId={(storeId ?? "missing-store") as Id<"store">}
+      />
+      <CommandApprovalDialog
+        approval={reopenCloseoutApproval}
+        onAuthenticateForApproval={
+          onAuthenticateForApproval ??
+          (() =>
+            Promise.resolve(
+              userError({
+                code: "unavailable",
+                message:
+                  "Manager approval is not available yet. Try again after the register tools refresh.",
+              }),
+            ))
+        }
+        onApproved={(result) => {
+          void handleReopenCloseoutApproved(result);
+        }}
+        onDismiss={() => setIsReopenApprovalOpen(false)}
+        open={isReopenApprovalOpen}
+        requestedByStaffProfileId={
+          actorStaffProfileId as Id<"staffProfile"> | undefined
+        }
+        storeId={(storeId ?? "missing-store") as Id<"store">}
+      />
+      <CommandApprovalDialog
+        approval={reopenedCloseoutSubmitApproval}
+        onAuthenticateForApproval={
+          onAuthenticateForApproval ??
+          (() =>
+            Promise.resolve(
+              userError({
+                code: "unavailable",
+                message:
+                  "Manager approval is not available yet. Try again after the register tools refresh.",
+              }),
+            ))
+        }
+        onApproved={(result) => {
+          void handleReopenedCloseoutSubmitApproved(result);
+        }}
+        onDismiss={() => {
+          setIsReopenedCloseoutSubmitApprovalOpen(false);
+          setReopenedCloseoutSubmitIntent(null);
+        }}
+        open={isReopenedCloseoutSubmitApprovalOpen}
         requestedByStaffProfileId={
           actorStaffProfileId as Id<"staffProfile"> | undefined
         }
@@ -1963,6 +2242,23 @@ export function RegisterSessionViewContent({
                           </dd>
                         </div>
                       </dl>
+                      <div className="space-y-3 border-t border-border/70 pt-3">
+                        <p className="text-sm leading-relaxed text-muted-foreground">
+                          Reopen the closeout to submit a corrected count. The
+                          saved closeout stays in the drawer history.
+                        </p>
+                        <LoadingButton
+                          className="w-full justify-center"
+                          disabled={pendingCloseoutAction === "reopen"}
+                          isLoading={pendingCloseoutAction === "reopen"}
+                          onClick={() => void handleReopenClosedCloseout()}
+                          type="button"
+                          variant="outline"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          Reopen closeout
+                        </LoadingButton>
+                      </div>
                     </div>
                   ) : (
                     <div className="space-y-4">
@@ -2065,6 +2361,7 @@ export function RegisterSessionViewContent({
                         isLoading={pendingCloseoutAction === "submit"}
                         onClick={() => void handleSubmitCloseout()}
                         type="button"
+                        variant="workflow"
                       >
                         Submit closeout
                       </LoadingButton>
@@ -2147,11 +2444,11 @@ export function RegisterSessionViewContent({
                   ) : null}
 
                   <LoadingButton
-                    className="bg-signal text-signal-foreground hover:bg-signal/90"
                     disabled={isRecordingDeposit}
                     isLoading={isRecordingDeposit}
                     onClick={() => void handleRecordDeposit()}
                     type="button"
+                    variant={"workflow"}
                   >
                     Record deposit
                   </LoadingButton>
@@ -2201,6 +2498,9 @@ export function RegisterSessionView() {
   );
   const reviewRegisterSessionCloseout = useMutation(
     api.cashControls.closeouts.reviewRegisterSessionCloseout,
+  );
+  const reopenRegisterSessionCloseout = useMutation(
+    api.cashControls.closeouts.reopenRegisterSessionCloseout,
   );
   const authenticateStaffCredential = useMutation(
     api.operations.staffCredentials.authenticateStaffCredential,
@@ -2264,9 +2564,16 @@ export function RegisterSessionView() {
         approvalProofId: args.approvalProofId as
           | Id<"approvalProof">
           | undefined,
+        closeoutModificationApprovalProofId:
+          args.closeoutModificationApprovalProofId as
+            | Id<"approvalProof">
+            | undefined,
         countedCash: args.countedCash,
         notes: args.notes,
         registerSessionId: args.registerSessionId as Id<"registerSession">,
+        requestedByStaffProfileId: args.requestedByStaffProfileId as
+          | Id<"staffProfile">
+          | undefined,
         storeId: activeStore._id,
       }),
     );
@@ -2404,6 +2711,39 @@ export function RegisterSessionView() {
     return result;
   }
 
+  async function onReopenCloseout(args: {
+    actorStaffProfileId: string;
+    approvalProofId: string;
+    registerSessionId: string;
+    requestedByStaffProfileId?: string;
+  }) {
+    if (!activeStore?._id || !user?._id) {
+      return userError({
+        code: "authentication_failed",
+        message: "You must be logged in to reopen a register closeout",
+      });
+    }
+
+    const result = await runCommand(() =>
+      reopenRegisterSessionCloseout({
+        actorStaffProfileId: args.actorStaffProfileId as Id<"staffProfile">,
+        actorUserId: user._id,
+        approvalProofId: args.approvalProofId as Id<"approvalProof">,
+        registerSessionId: args.registerSessionId as Id<"registerSession">,
+        requestedByStaffProfileId: args.requestedByStaffProfileId as
+          | Id<"staffProfile">
+          | undefined,
+        storeId: activeStore._id,
+      }),
+    );
+
+    if (result.kind === "ok") {
+      toast.success("Register closeout reopened");
+    }
+
+    return result;
+  }
+
   async function onCorrectOpeningFloat(args: CorrectOpeningFloatArgs) {
     if (!activeStore?._id || !user?._id) {
       return userError({
@@ -2478,6 +2818,7 @@ export function RegisterSessionView() {
       onAuthenticateStaff={onAuthenticateStaff}
       onCorrectOpeningFloat={onCorrectOpeningFloat}
       onRecordDeposit={onRecordDeposit}
+      onReopenCloseout={onReopenCloseout}
       onReviewCloseout={onReviewCloseout}
       onSubmitCloseout={onSubmitCloseout}
       orgUrlSlug={params?.orgUrlSlug}

@@ -272,6 +272,109 @@ describe("daily operations overview read model", () => {
     });
   });
 
+  it("keeps the week summary anchored separately from the selected operating date", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [
+          priorClose,
+          {
+            ...priorClose,
+            _id: "close-current",
+            completedAt: Date.UTC(2026, 4, 8, 22),
+            isCurrent: true,
+            operatingDate: "2026-05-08",
+          },
+        ],
+        dailyOpening: [startedOpening],
+        expenseTransaction: [
+          {
+            _id: "expense-current",
+            completedAt: Date.UTC(2026, 4, 8, 16),
+            notes: "Supplies",
+            registerNumber: "1",
+            sessionId: "expense-session-1",
+            staffProfileId: "staff-1",
+            status: "completed",
+            storeId: "store-1",
+            totalValue: 12000,
+            transactionNumber: "EXP-1",
+          },
+        ],
+        posTransaction: [
+          {
+            _id: "txn-prior",
+            changeGiven: 0,
+            completedAt: Date.UTC(2026, 4, 7, 16),
+            paymentMethod: "cash",
+            paymentAllocations: [],
+            payments: [{ amount: 50000, method: "cash" }],
+            status: "completed",
+            storeId: "store-1",
+            terminalId: "terminal-1",
+            total: 50000,
+            totalPaid: 50000,
+            transactionNumber: "TXN-PRIOR",
+          },
+          {
+            _id: "txn-current",
+            changeGiven: 5000,
+            completedAt: Date.UTC(2026, 4, 8, 16),
+            paymentMethod: "cash",
+            paymentAllocations: [],
+            payments: [{ amount: 85000, method: "cash" }],
+            status: "completed",
+            storeId: "store-1",
+            terminalId: "terminal-1",
+            total: 80000,
+            totalPaid: 85000,
+            transactionNumber: "TXN-CURRENT",
+          },
+        ],
+        store: [store],
+      }),
+      {
+        operatingDate: "2026-05-05",
+        storeId: "store-1" as Id<"store">,
+        weekEndOperatingDate: "2026-05-08",
+      },
+    );
+
+    expect(snapshot.weekMetrics.map((metric) => metric.operatingDate)).toEqual([
+      "2026-05-03",
+      "2026-05-04",
+      "2026-05-05",
+      "2026-05-06",
+      "2026-05-07",
+      "2026-05-08",
+      "2026-05-09",
+    ]);
+    expect(
+      snapshot.weekMetrics.find((metric) => metric.operatingDate === "2026-05-07"),
+    ).toMatchObject({
+      isClosed: true,
+      isSelected: false,
+      salesTotal: 50000,
+      transactionCount: 1,
+    });
+    expect(
+      snapshot.weekMetrics.find((metric) => metric.operatingDate === "2026-05-08"),
+    ).toMatchObject({
+      currentDayCashTotal: 80000,
+      expenseTotal: 12000,
+      isClosed: true,
+      isSelected: false,
+      salesTotal: 80000,
+      transactionCount: 1,
+    });
+    expect(
+      snapshot.weekMetrics.find((metric) => metric.operatingDate === "2026-05-05"),
+    ).toMatchObject({
+      isSelected: true,
+      salesTotal: 0,
+      transactionCount: 0,
+    });
+  });
+
   it("keeps the store day operating while close review items remain", async () => {
     const snapshot = await buildDailyOperationsSnapshotWithCtx(
       buildCtx({

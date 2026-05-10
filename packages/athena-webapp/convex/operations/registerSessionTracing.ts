@@ -20,6 +20,7 @@ export type RegisterSessionTraceStage =
   | "deposit_recorded"
   | "opening_float_corrected"
   | "closeout_submitted"
+  | "closeout_reopened"
   | "approval_pending"
   | "closeout_approved"
   | "closeout_rejected"
@@ -282,6 +283,16 @@ function buildTraceEvent(args: {
         step: "register_session_closeout_rejected",
         status: "blocked" as const,
         message: "Manager rejected the register closeout for correction.",
+        occurredAt,
+        details,
+        subjectRefs,
+      };
+    case "closeout_reopened":
+      return {
+        kind: "system_action" as const,
+        step: "register_session_closeout_reopened",
+        status: "info" as const,
+        message: `Reopened closeout for ${registerLabel}.`,
         occurredAt,
         details,
         subjectRefs,

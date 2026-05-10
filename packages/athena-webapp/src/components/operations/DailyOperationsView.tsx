@@ -1,10 +1,12 @@
-import { useState } from "react";
-import { Link, useParams } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
+import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import {
   ArrowUpRight,
+  Calendar as CalendarIcon,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
-  ListChecks,
 } from "lucide-react";
 
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
@@ -28,6 +30,8 @@ import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
+import { Calendar } from "../ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import {
   Sheet,
   SheetContent,
@@ -122,6 +126,17 @@ export type DailyOperationsSnapshot = {
     };
     type: string;
   }>;
+  weekMetrics: Array<{
+    currentDayCashTotal: number;
+    currentDayCashTransactionCount: number;
+    expenseTotal: number;
+    expenseTransactionCount: number;
+    isClosed: boolean;
+    isSelected: boolean;
+    operatingDate: string;
+    salesTotal: number;
+    transactionCount: number;
+  }>;
 };
 
 type DailyOperationsViewContentProps = {
@@ -130,6 +145,7 @@ type DailyOperationsViewContentProps = {
   isAuthenticated: boolean;
   isLoadingAccess: boolean;
   isLoadingSnapshot: boolean;
+  onOperatingDateChange?: (date: Date) => void;
   orgUrlSlug: string;
   snapshot?: DailyOperationsSnapshot;
   storeUrlSlug: string;
@@ -174,6 +190,59 @@ function getLocalOperatingDateRange(date = new Date()) {
   };
 }
 
+function getLocalDateFromOperatingDate(operatingDate: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(operatingDate);
+
+  if (!match) return undefined;
+
+  const [, year, month, day] = match;
+  const parsed = new Date(Number(year), Number(month) - 1, Number(day));
+
+  if (
+    parsed.getFullYear() !== Number(year) ||
+    parsed.getMonth() !== Number(month) - 1 ||
+    parsed.getDate() !== Number(day)
+  ) {
+    return undefined;
+  }
+
+  return parsed;
+}
+
+function shiftLocalOperatingDate(operatingDate: string, offsetDays: number) {
+  const parsed = getLocalDateFromOperatingDate(operatingDate);
+
+  if (!parsed) return operatingDate;
+
+  parsed.setDate(parsed.getDate() + offsetDays);
+  return getLocalOperatingDate(parsed);
+}
+
+function getSundayWeekStartOperatingDate(operatingDate: string) {
+  const parsed = getLocalDateFromOperatingDate(operatingDate);
+
+  if (!parsed) return operatingDate;
+
+  parsed.setDate(parsed.getDate() - parsed.getDay());
+  return getLocalOperatingDate(parsed);
+}
+
+function getSaturdayWeekEndOperatingDate(operatingDate: string) {
+  return shiftLocalOperatingDate(getSundayWeekStartOperatingDate(operatingDate), 6);
+}
+
+function getLocalOperatingDateRangeFromSearch(operatingDate?: unknown) {
+  if (typeof operatingDate === "string") {
+    const localDate = getLocalDateFromOperatingDate(operatingDate);
+
+    if (localDate) {
+      return getLocalOperatingDateRange(localDate);
+    }
+  }
+
+  return getLocalOperatingDateRange();
+}
+
 function formatOperatingDate(operatingDate?: string | null) {
   if (!operatingDate) return "Not available";
 
@@ -188,6 +257,100 @@ function formatOperatingDate(operatingDate?: string | null) {
     month: "short",
     year: "numeric",
   });
+}
+
+function formatOperatingDateWithWeekday(operatingDate?: string | null) {
+  if (!operatingDate) return "Not available";
+
+  const parsed = new Date(`${operatingDate}T00:00:00`);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return operatingDate;
+  }
+
+  return parsed.toLocaleDateString([], {
+    day: "numeric",
+    month: "long",
+    weekday: "long",
+    year: "numeric",
+  });
+}
+
+function buildDailyCloseSearch(operatingDate: string) {
+  return {
+    ...(operatingDate !== getLocalOperatingDate() ? { operatingDate } : {}),
+  };
+}
+
+function buildDailyOperationsSearch({
+  operatingDate,
+  weekEndOperatingDate,
+}: {
+  operatingDate: string;
+  weekEndOperatingDate?: string;
+}) {
+  const currentOperatingDate = getLocalOperatingDate();
+  const search = {
+    ...(operatingDate !== currentOperatingDate ? { operatingDate } : {}),
+    ...(weekEndOperatingDate && weekEndOperatingDate !== currentOperatingDate
+      ? { weekEndOperatingDate }
+      : {}),
+  };
+
+  return Object.keys(search).length > 0 ? search : undefined;
+}
+
+function buildOperationsTransactionSearch({
+  operatingDate,
+  paymentMethod,
+}: {
+  operatingDate: string;
+  paymentMethod?: string;
+}) {
+  return {
+    o: getOrigin(),
+    ...(operatingDate !== getLocalOperatingDate() ? { operatingDate } : {}),
+    ...(paymentMethod ? { paymentMethod } : {}),
+  };
+}
+
+function getDailyOperationsMetricLabels(operatingDate: string) {
+  const isCurrentOperatingDate = operatingDate === getLocalOperatingDate();
+
+  return {
+    cash: isCurrentOperatingDate ? "Today's cash" : "Cash",
+    netSales: isCurrentOperatingDate ? "Today's net sales" : "Net sales",
+  };
+}
+
+function isHistoricalOperatingDate(operatingDate: string) {
+  return operatingDate !== getLocalOperatingDate();
+}
+
+function getWeekEndOperatingDateFromSearch(weekEndOperatingDate?: unknown) {
+  if (
+    typeof weekEndOperatingDate === "string" &&
+    getLocalDateFromOperatingDate(weekEndOperatingDate)
+  ) {
+    return getSaturdayWeekEndOperatingDate(weekEndOperatingDate);
+  }
+
+  return getSaturdayWeekEndOperatingDate(getLocalOperatingDate());
+}
+
+function shouldShowPrimaryAction(snapshot: DailyOperationsSnapshot) {
+  return !isHistoricalOperatingDate(snapshot.operatingDate);
+}
+
+function getWorkflowSearch(to: string, operatingDate: string) {
+  const search = {
+    o: getOrigin(),
+    ...(to.includes("/operations/daily-close")
+      ? buildDailyCloseSearch(operatingDate)
+      : {}),
+  };
+
+  return Object.keys(search).length > 0 ? search : undefined;
 }
 
 function formatEventTime(timestamp: number) {
@@ -218,6 +381,22 @@ function formatTimelineMessage(message: string) {
       });
     },
   );
+}
+
+function formatWeekdayLabel(operatingDate: string) {
+  const parsed = getLocalDateFromOperatingDate(operatingDate);
+
+  if (!parsed) return operatingDate;
+
+  return parsed.toLocaleDateString([], { weekday: "short" });
+}
+
+function formatWeekdayDate(operatingDate: string) {
+  const parsed = getLocalDateFromOperatingDate(operatingDate);
+
+  if (!parsed) return operatingDate;
+
+  return parsed.toLocaleDateString([], { day: "numeric", month: "short" });
 }
 
 function formatEntityCount(
@@ -315,42 +494,333 @@ function TimelineEventItem({
 
 function LaneCard({
   lane,
+  operatingDate,
   orgUrlSlug,
   storeUrlSlug,
 }: {
   lane: DailyOperationsSnapshot["lanes"][number];
+  operatingDate: string;
   orgUrlSlug: string;
   storeUrlSlug: string;
 }) {
   return (
-    <article className="rounded-lg border border-border bg-surface p-layout-md shadow-surface">
+    <article className="rounded-md border border-border/70 bg-background/60 px-layout-md py-layout-sm transition-colors hover:bg-background">
       <div className="flex items-start justify-between gap-layout-sm">
-        <div>
-          <h3 className="font-medium text-foreground">{lane.label}</h3>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">
+        <div className="min-w-0">
+          <h3 className="text-sm font-medium text-foreground">{lane.label}</h3>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
             {lane.description}
           </p>
         </div>
-        <Badge className={cn("shrink-0 border", statusClassName(lane.status))}>
+        <Badge
+          className={cn("shrink-0 border", statusClassName(lane.status))}
+          size="sm"
+        >
           {statusLabel(lane.status)}
         </Badge>
       </div>
-      <div className="mt-layout-md flex items-center justify-between border-t border-border pt-layout-sm">
-        <span className="font-numeric text-xl tabular-nums text-foreground">
+      <div className="mt-layout-sm flex items-center justify-between">
+        <span className="font-numeric text-lg tabular-nums text-foreground">
           {lane.countLabel ?? lane.count}
         </span>
-        <Button asChild size="sm" variant="outline">
+        <Button asChild className="h-8 px-2 text-xs" size="sm" variant="ghost">
           <Link
             aria-label={`Open ${lane.label}`}
             params={buildParams(orgUrlSlug, storeUrlSlug)}
+            search={getWorkflowSearch(lane.to, operatingDate) as never}
             to={lane.to}
           >
             Open
-            <ArrowUpRight aria-hidden="true" className="ml-2 h-4 w-4" />
+            <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
           </Link>
         </Button>
       </div>
     </article>
+  );
+}
+
+function HistoricalWorkflowPanel({
+  orgUrlSlug,
+  snapshot,
+  storeUrlSlug,
+}: {
+  orgUrlSlug: string;
+  snapshot: DailyOperationsSnapshot;
+  storeUrlSlug: string;
+}) {
+  const isClosed = snapshot.lifecycle.status === "closed";
+
+  return (
+    <section className="space-y-layout-md">
+      <h3 className="text-base font-medium text-foreground">
+        {isClosed ? "Closed store-day record" : "Historical store-day view"}
+      </h3>
+      <div className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
+        <p className="text-sm leading-6 text-foreground">
+          {isClosed
+            ? "This operating date is closed. The saved End-of-Day Review is available for this store-day record."
+            : "This historical operating date is view-only. Workflow actions are available only on the current operating date."}
+        </p>
+        <p className="mt-layout-xs text-sm leading-6 text-muted-foreground">
+          Metrics and timeline remain available for this historical day.
+        </p>
+        {isClosed ? (
+          <Button asChild className="mt-layout-md" size="sm" variant="outline">
+            <Link
+              params={buildParams(orgUrlSlug, storeUrlSlug)}
+              search={
+                getWorkflowSearch(
+                  "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+                  snapshot.operatingDate,
+                ) as never
+              }
+              to="/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close"
+            >
+              Review End-of-Day Review
+              <ArrowUpRight aria-hidden="true" className="h-4 w-4" />
+            </Link>
+          </Button>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function OperatingDatePicker({
+  disabled = false,
+  latestSelectableDate: latestSelectableDateProp,
+  operatingDate,
+  onChange,
+}: {
+  disabled?: boolean;
+  latestSelectableDate?: Date;
+  operatingDate: string;
+  onChange?: (date: Date) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedDate = getLocalDateFromOperatingDate(operatingDate);
+  const latestSelectableDate = useMemo(() => {
+    if (latestSelectableDateProp) return latestSelectableDateProp;
+
+    const today = new Date();
+
+    return new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  }, [latestSelectableDateProp]);
+
+  return (
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          aria-label={`Change operating date, currently ${formatOperatingDateWithWeekday(
+            operatingDate,
+          )}`}
+          className="h-auto justify-start rounded-lg px-layout-md py-layout-sm text-sm font-normal text-muted-foreground shadow-surface"
+          disabled={disabled || !onChange}
+          variant="outline"
+        >
+          <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+          Operating date{" "}
+          <span className="font-medium text-foreground">
+            {formatOperatingDateWithWeekday(operatingDate)}
+          </span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-auto p-0">
+        <Calendar
+          disabled={{ after: latestSelectableDate }}
+          mode="single"
+          onSelect={(date) => {
+            if (!date) return;
+
+            onChange?.(date);
+            setIsOpen(false);
+          }}
+          selected={selectedDate}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function WeekMetricsStrip({
+  currency,
+  metrics,
+  orgUrlSlug,
+  storeUrlSlug,
+}: {
+  currency: string;
+  metrics: DailyOperationsSnapshot["weekMetrics"];
+  orgUrlSlug: string;
+  storeUrlSlug: string;
+}) {
+  if (metrics.length === 0) return null;
+
+  const currentOperatingDate = getLocalOperatingDate();
+  const weekEndOperatingDate = metrics[metrics.length - 1].operatingDate;
+  const previousWeekEndOperatingDate = shiftLocalOperatingDate(
+    weekEndOperatingDate,
+    -7,
+  );
+  const previousWeekStartOperatingDate = getSundayWeekStartOperatingDate(
+    previousWeekEndOperatingDate,
+  );
+  const nextWeekEndOperatingDate = shiftLocalOperatingDate(
+    weekEndOperatingDate,
+    7,
+  );
+  const nextWeekStartOperatingDate =
+    getSundayWeekStartOperatingDate(nextWeekEndOperatingDate);
+  const canMoveNext = nextWeekStartOperatingDate <= getLocalOperatingDate();
+  const weekSalesTotal = metrics.reduce(
+    (total, metric) => total + metric.salesTotal,
+    0,
+  );
+
+  return (
+    <section className="space-y-layout-sm">
+      <div className="flex flex-col gap-layout-xs sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h3 className="text-base font-medium text-foreground">
+            Week at a glance
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Seven days ending {formatOperatingDate(weekEndOperatingDate)}.
+          </p>
+        </div>
+        <div className="flex items-center gap-layout-sm">
+          <p className="flex items-baseline gap-2 text-sm text-muted-foreground">
+            <span>Week sales</span>
+            <span className="font-numeric text-base font-semibold tabular-nums text-foreground">
+              {formatMoney(currency, weekSalesTotal)}
+            </span>
+          </p>
+          <div className="flex items-center gap-1">
+            <Button
+              asChild
+              aria-label={`Previous week, seven days ending ${formatOperatingDate(
+                previousWeekEndOperatingDate,
+              )}`}
+              className="h-8 w-8"
+              size="icon"
+              variant="outline"
+            >
+              <Link
+                params={buildParams(orgUrlSlug, storeUrlSlug)}
+                search={buildDailyOperationsSearch({
+                  operatingDate: previousWeekStartOperatingDate,
+                  weekEndOperatingDate: previousWeekEndOperatingDate,
+                })}
+                to="/$orgUrlSlug/store/$storeUrlSlug/operations"
+              >
+                <ChevronLeft aria-hidden="true" className="h-4 w-4" />
+              </Link>
+            </Button>
+            {canMoveNext ? (
+              <Button
+                asChild
+                aria-label={`Next week, seven days ending ${formatOperatingDate(
+                  nextWeekEndOperatingDate,
+                )}`}
+                className="h-8 w-8"
+                size="icon"
+                variant="outline"
+              >
+                <Link
+                  params={buildParams(orgUrlSlug, storeUrlSlug)}
+                  search={buildDailyOperationsSearch({
+                    operatingDate: nextWeekStartOperatingDate,
+                    weekEndOperatingDate: nextWeekEndOperatingDate,
+                  })}
+                  to="/$orgUrlSlug/store/$storeUrlSlug/operations"
+                >
+                  <ChevronRight aria-hidden="true" className="h-4 w-4" />
+                </Link>
+              </Button>
+            ) : (
+              <Button
+                aria-label="Next operating date unavailable"
+                className="h-8 w-8"
+                disabled
+                size="icon"
+                type="button"
+                variant="outline"
+              >
+                <ChevronRight aria-hidden="true" className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+      <div className="overflow-x-auto rounded-lg border border-border bg-surface-raised p-layout-sm shadow-surface">
+        <div className="grid min-w-[42rem] grid-cols-7 gap-layout-xs">
+          {metrics.map((metric) => {
+            const isFutureDate = metric.operatingDate > currentOperatingDate;
+            const cardClassName = cn(
+              "rounded-md border px-layout-sm py-layout-sm text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              metric.isSelected
+                ? "border-primary/40 bg-background text-foreground"
+                : "border-transparent text-muted-foreground",
+              isFutureDate
+                ? "cursor-not-allowed opacity-60"
+                : "hover:bg-background",
+            );
+            const content = (
+              <>
+                <div className="flex items-center justify-between gap-layout-xs">
+                  <span className="text-xs font-medium uppercase tracking-wide">
+                    {formatWeekdayLabel(metric.operatingDate)}
+                  </span>
+                  {metric.isClosed ? (
+                    <span className="rounded-full bg-success/10 px-1.5 py-0.5 text-[10px] font-medium text-success">
+                      Closed
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {formatWeekdayDate(metric.operatingDate)}
+                </p>
+                <p className="mt-layout-sm font-numeric text-lg tabular-nums text-foreground">
+                  {formatMoney(currency, metric.salesTotal)}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {formatEntityCount(metric.transactionCount, "transaction")}
+                </p>
+              </>
+            );
+
+            if (isFutureDate) {
+              return (
+                <div
+                  aria-disabled="true"
+                  aria-label={`${formatOperatingDate(metric.operatingDate)} operations unavailable`}
+                  className={cardClassName}
+                  key={metric.operatingDate}
+                >
+                  {content}
+                </div>
+              );
+            }
+
+            return (
+              <Link
+                aria-current={metric.isSelected ? "date" : undefined}
+                aria-label={`View ${formatOperatingDate(metric.operatingDate)} operations`}
+                className={cardClassName}
+                key={metric.operatingDate}
+                params={buildParams(orgUrlSlug, storeUrlSlug)}
+                search={buildDailyOperationsSearch({
+                  operatingDate: metric.operatingDate,
+                  weekEndOperatingDate,
+                })}
+                to="/$orgUrlSlug/store/$storeUrlSlug/operations"
+              >
+                {content}
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -360,6 +830,7 @@ export function DailyOperationsViewContent({
   isAuthenticated,
   isLoadingAccess,
   isLoadingSnapshot,
+  onOperatingDateChange,
   orgUrlSlug,
   snapshot,
   storeUrlSlug,
@@ -389,6 +860,13 @@ export function DailyOperationsViewContent({
   const previewTimeline = snapshot?.timeline.slice(0, TIMELINE_PREVIEW_LIMIT);
   const hasMoreTimelineEvents =
     (snapshot?.timeline.length ?? 0) > TIMELINE_PREVIEW_LIMIT;
+  const metricLabels = snapshot
+    ? getDailyOperationsMetricLabels(snapshot.operatingDate)
+    : undefined;
+  const showPrimaryAction = snapshot ? shouldShowPrimaryAction(snapshot) : false;
+  const isHistoricalDate = snapshot
+    ? isHistoricalOperatingDate(snapshot.operatingDate)
+    : false;
 
   return (
     <View hideBorder hideHeaderBottomBorder scrollMode="page">
@@ -404,31 +882,37 @@ export function DailyOperationsViewContent({
             <LoadingWorkspace />
           ) : (
             <PageWorkspace>
-              <section className="space-y-layout-md">
+              <section className="space-y-layout-2xl">
                 <div className="flex flex-col gap-layout-sm lg:flex-row lg:items-center lg:justify-end">
                   <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-center">
-                    <div className="rounded-lg border border-border bg-surface-raised px-layout-md py-layout-sm text-sm text-muted-foreground shadow-surface">
-                      Operating date{" "}
-                      <span className="font-medium text-foreground">
-                        {formatOperatingDate(snapshot.operatingDate)}
-                      </span>
-                    </div>
-                    <Button
-                      asChild
-                      className="w-full sm:w-auto"
-                      variant="outline"
-                    >
-                      <Link
-                        params={buildParams(orgUrlSlug, storeUrlSlug)}
-                        to={snapshot.primaryAction.to}
+                    <OperatingDatePicker
+                      operatingDate={snapshot.operatingDate}
+                      onChange={onOperatingDateChange}
+                    />
+                    {showPrimaryAction ? (
+                      <Button
+                        asChild
+                        className="w-full sm:w-auto"
+                        variant="outline"
                       >
-                        {snapshot.primaryAction.label}
-                        <ArrowUpRight
-                          aria-hidden="true"
-                          className="ml-2 h-4 w-4"
-                        />
-                      </Link>
-                    </Button>
+                        <Link
+                          params={buildParams(orgUrlSlug, storeUrlSlug)}
+                          search={
+                            getWorkflowSearch(
+                              snapshot.primaryAction.to,
+                              snapshot.operatingDate,
+                            ) as never
+                          }
+                          to={snapshot.primaryAction.to}
+                        >
+                          {snapshot.primaryAction.label}
+                          <ArrowUpRight
+                            aria-hidden="true"
+                            className="ml-2 h-4 w-4"
+                          />
+                        </Link>
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
 
@@ -438,11 +922,13 @@ export function DailyOperationsViewContent({
                       snapshot.closeSummary.transactionCount,
                       "transaction",
                     )}
-                    label="Today's net sales"
+                    label={metricLabels?.netSales ?? "Net sales"}
                     link={{
                       ariaLabel: "Open transactions",
                       orgUrlSlug,
-                      search: { o: getOrigin() },
+                      search: buildOperationsTransactionSearch({
+                        operatingDate: snapshot.operatingDate,
+                      }),
                       storeUrlSlug,
                       to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
                     }}
@@ -455,11 +941,14 @@ export function DailyOperationsViewContent({
                     helper={formatTodayCashTransactionCount(
                       snapshot.closeSummary.currentDayCashTransactionCount,
                     )}
-                    label="Today's cash"
+                    label={metricLabels?.cash ?? "Cash"}
                     link={{
                       ariaLabel: "Open cash transactions",
                       orgUrlSlug,
-                      search: { o: getOrigin(), paymentMethod: "cash" },
+                      search: buildOperationsTransactionSearch({
+                        operatingDate: snapshot.operatingDate,
+                        paymentMethod: "cash",
+                      }),
                       storeUrlSlug,
                       to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
                     }}
@@ -500,31 +989,43 @@ export function DailyOperationsViewContent({
                     )}
                   />
                 </div>
+
+                <WeekMetricsStrip
+                  currency={snapshot.currency ?? currency}
+                  metrics={snapshot.weekMetrics}
+                  orgUrlSlug={orgUrlSlug}
+                  storeUrlSlug={storeUrlSlug}
+                />
               </section>
 
               <PageWorkspaceGrid>
                 <PageWorkspaceMain>
-                  <section className="space-y-layout-md">
-                    <div>
-                      <h3 className="flex items-center gap-layout-xs text-lg font-medium text-foreground">
-                        <ListChecks aria-hidden="true" className="h-5 w-5" />
-                        Operations lanes
-                      </h3>
-                      <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                        Each lane links back to the workflow that owns the work.
-                      </p>
-                    </div>
-                    <div className="grid gap-layout-md md:grid-cols-2 xl:grid-cols-3">
-                      {snapshot.lanes.map((lane) => (
-                        <LaneCard
-                          key={lane.key}
-                          lane={lane}
-                          orgUrlSlug={orgUrlSlug}
-                          storeUrlSlug={storeUrlSlug}
-                        />
-                      ))}
-                    </div>
-                  </section>
+                  {isHistoricalDate ? (
+                    <HistoricalWorkflowPanel
+                      orgUrlSlug={orgUrlSlug}
+                      snapshot={snapshot}
+                      storeUrlSlug={storeUrlSlug}
+                    />
+                  ) : (
+                    <section className="space-y-layout-lg">
+                      <div>
+                        <h3 className="text-base font-medium text-foreground">
+                          Workflow status
+                        </h3>
+                      </div>
+                      <div className="grid gap-layout-xs rounded-lg border border-border bg-surface-raised p-layout-sm shadow-surface md:grid-cols-2 xl:grid-cols-3">
+                        {snapshot.lanes.map((lane) => (
+                          <LaneCard
+                            key={lane.key}
+                            lane={lane}
+                            operatingDate={snapshot.operatingDate}
+                            orgUrlSlug={orgUrlSlug}
+                            storeUrlSlug={storeUrlSlug}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  )}
                 </PageWorkspaceMain>
 
                 <PageWorkspaceRail>
@@ -632,13 +1133,44 @@ function DailyOperationsConnectedView({
         storeUrlSlug?: string;
       }
     | undefined;
-  const operatingDateRange = getLocalOperatingDateRange();
+  const navigate = useNavigate();
+  const search = useSearch({ strict: false }) as {
+    operatingDate?: unknown;
+    weekEndOperatingDate?: unknown;
+  };
+  const operatingDateRange = useMemo(
+    () => getLocalOperatingDateRangeFromSearch(search.operatingDate),
+    [search.operatingDate],
+  );
+  const weekEndOperatingDate = useMemo(
+    () => getWeekEndOperatingDateFromSearch(search.weekEndOperatingDate),
+    [search.weekEndOperatingDate],
+  );
   const snapshot = useExpectedDailyOperationsQuery(
     getDailyOperationsSnapshot,
     canQueryProtectedData
-      ? { ...operatingDateRange, storeId: activeStore!._id }
+      ? {
+          ...operatingDateRange,
+          storeId: activeStore!._id,
+          weekEndOperatingDate,
+        }
       : "skip",
   ) as DailyOperationsSnapshot | undefined;
+
+  const handleOperatingDateChange = (date: Date) => {
+    const nextRange = getLocalOperatingDateRange(date);
+    const nextWeekEndOperatingDate = getSaturdayWeekEndOperatingDate(
+      nextRange.operatingDate,
+    );
+
+    void navigate({
+      search: ((current: Record<string, unknown>) => ({
+        ...current,
+        operatingDate: nextRange.operatingDate,
+        weekEndOperatingDate: nextWeekEndOperatingDate,
+      })) as never,
+    });
+  };
 
   return (
     <DailyOperationsViewContent
@@ -647,6 +1179,7 @@ function DailyOperationsConnectedView({
       isAuthenticated={isAuthenticated}
       isLoadingAccess={isLoadingAccess}
       isLoadingSnapshot={snapshot === undefined}
+      onOperatingDateChange={handleOperatingDateChange}
       orgUrlSlug={params?.orgUrlSlug ?? ""}
       snapshot={snapshot}
       storeUrlSlug={params?.storeUrlSlug ?? ""}

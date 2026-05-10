@@ -5,6 +5,7 @@ import {
   buildRegisterSessionVarianceApprovalRequirement,
   correctRegisterSessionOpeningFloat,
   getCashControlsConfig,
+  reopenRegisterSessionCloseout,
   submitRegisterSessionCloseout,
 } from "./closeouts";
 
@@ -178,6 +179,21 @@ describe("cash control closeouts", () => {
     expect(source).toContain("requestedByStaffProfileId: args.actorStaffProfileId");
   });
 
+  it("exposes closed-closeout reopening as an append-only correction path", () => {
+    const source = getSource("./closeouts.ts");
+
+    expect(source).toContain("reopenClosedRegisterSessionCloseout");
+    expect(source).toContain("register_session_closeout_reopened");
+    expect(source).toContain("stage: \"closeout_reopened\"");
+    expect(source).toContain("metadata: previousCloseout");
+    expect(source).toContain("requestedByStaffProfileId: args.requestedByStaffProfileId");
+    expect(source).toContain("REGISTER_CLOSEOUT_MODIFICATION_SUBMIT_ACTION");
+    expect(source).toContain("closeoutModificationApprovalProofId");
+    expect(source).toContain(
+      "proof.data.approvedByStaffProfileId !==\n        latestReopenedCloseout.actorStaffProfileId",
+    );
+  });
+
   it("returns user_error for invalid opening float corrections without mutating", async () => {
     const runMutation = vi.fn();
     const ctx = {
@@ -228,6 +244,164 @@ describe("cash control closeouts", () => {
       },
     });
     expect(runMutation).not.toHaveBeenCalled();
+  });
+
+  it("returns user_error when reopening a non-closeout register session", async () => {
+    const runMutation = vi.fn();
+    const ctx = {
+      db: {
+        get: vi.fn(async () => ({
+          _id: "session-1",
+          status: "active",
+          storeId: "store-1",
+        })),
+      },
+      runMutation,
+    };
+
+    const result = await getHandler(reopenRegisterSessionCloseout)(ctx, {
+      registerSessionId: "session-1",
+      storeId: "store-1",
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: "Register session is not in closeout.",
+      },
+    });
+    expect(runMutation).not.toHaveBeenCalled();
+  });
+
+  it("requires a manager approval proof to reopen a closed register closeout", async () => {
+    const runMutation = vi.fn();
+    const ctx = {
+      db: {
+        get: vi.fn(async (table: string) => {
+          if (table === "registerSession") {
+            return {
+              _id: "session-1",
+              expectedCash: 10000,
+              organizationId: "org-1",
+              registerNumber: "A1",
+              status: "closed",
+              storeId: "store-1",
+            };
+          }
+
+          if (table === "staffProfile") {
+            return {
+              _id: "staff-1",
+              organizationId: "org-1",
+              status: "active",
+              storeId: "store-1",
+            };
+          }
+
+          return null;
+        }),
+        query: vi.fn(() => ({
+          withIndex: () => ({
+            take: async () => [],
+          }),
+        })),
+      },
+      runMutation,
+    };
+
+    const result = await getHandler(reopenRegisterSessionCloseout)(ctx, {
+      actorStaffProfileId: "staff-1",
+      registerSessionId: "session-1",
+      storeId: "store-1",
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "authentication_failed",
+        message: "Only managers can reopen a closed register closeout.",
+      },
+    });
+    expect(runMutation).not.toHaveBeenCalled();
+  });
+
+  it("requires the same manager to submit a reopened closeout correction", async () => {
+    const runMutation = vi.fn();
+    const patch = vi.fn();
+    const insert = vi.fn();
+    const registerSession = {
+      _id: "session-1",
+      closeoutRecords: [
+        {
+          actorStaffProfileId: "manager-1",
+          expectedCash: 10000,
+          occurredAt: 1,
+          type: "reopened",
+        },
+      ],
+      expectedCash: 10000,
+      openedAt: 1,
+      organizationId: "org-1",
+      registerNumber: "A1",
+      status: "closing",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    };
+    const ctx = {
+      db: {
+        get: vi.fn(async (table: string) => {
+          if (table === "registerSession") {
+            return registerSession;
+          }
+          if (table === "approvalProof") {
+            return {
+              _id: "proof-1",
+              actionKey: "cash_controls.register_session.submit_reopened_closeout",
+              approvedByStaffProfileId: "manager-2",
+              expiresAt: Date.now() + 60_000,
+              requestedByStaffProfileId: "staff-1",
+              requiredRole: "manager",
+              storeId: "store-1",
+              subjectId: "session-1",
+              subjectLabel: "A1",
+              subjectType: "register_session",
+            };
+          }
+          return null;
+        }),
+        insert,
+        patch,
+      },
+      runMutation,
+      runQuery: vi.fn(async () => ({ _id: "store-1" })),
+    };
+
+    const result = await getHandler(submitRegisterSessionCloseout)(ctx, {
+      actorStaffProfileId: "staff-1",
+      closeoutModificationApprovalProofId: "proof-1",
+      countedCash: 10000,
+      registerSessionId: "session-1",
+      requestedByStaffProfileId: "staff-1",
+      storeId: "store-1",
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message:
+          "The manager who reopened this closeout must submit the correction.",
+      },
+    });
+    expect(patch).toHaveBeenCalledWith("approvalProof", "proof-1", {
+      consumedAt: expect.any(Number),
+    });
+    expect(runMutation).not.toHaveBeenCalled();
+    expect(insert).not.toHaveBeenCalledWith(
+      "approvalRequest",
+      expect.anything(),
+    );
   });
 
   it("returns an inline-only approval requirement for manager closeout variance submissions", async () => {

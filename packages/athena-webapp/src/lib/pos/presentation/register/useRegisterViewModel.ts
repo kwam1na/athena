@@ -2100,7 +2100,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         : undefined,
     });
     toast.success(
-      `Sale completed. Transaction ${result.data.transactionNumber} recorded.`,
+      `Sale completed. Transaction #${result.data.transactionNumber} recorded.`,
     );
     return true;
   }, [
