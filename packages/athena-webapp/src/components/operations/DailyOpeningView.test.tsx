@@ -631,6 +631,9 @@ describe("DailyOpeningViewContent", () => {
 
     expect(screen.getByText("Store day started")).toBeInTheDocument();
     expect(
+      screen.getAllByText("Friday, May 8, 2026").length,
+    ).toBeGreaterThanOrEqual(2);
+    expect(
       screen.getAllByText(
         "Opening handoff is complete. The store day is ready to run.",
       ).length,
