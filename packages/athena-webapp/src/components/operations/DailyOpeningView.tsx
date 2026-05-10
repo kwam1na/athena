@@ -1518,11 +1518,13 @@ function DailyOpeningConnectedView({
 }: DailyOpeningConnectedViewProps) {
   const {
     activeStore,
+    canAccessProtectedSurface,
     canQueryProtectedData,
     hasFullAdminAccess,
     isAuthenticated,
     isLoadingAccess,
-  } = useProtectedAdminPageState();
+  } = useProtectedAdminPageState({ surface: "store_day" });
+  const canAccessSurface = canAccessProtectedSurface ?? hasFullAdminAccess;
   const params = useParams({ strict: false }) as
     | {
         orgUrlSlug?: string;
@@ -1615,7 +1617,7 @@ function DailyOpeningConnectedView({
   return (
     <DailyOpeningViewContent
       currency={activeStore?.currency || "USD"}
-      hasFullAdminAccess={hasFullAdminAccess}
+      hasFullAdminAccess={canAccessSurface}
       isAuthenticated={isAuthenticated}
       isLoadingAccess={isLoadingAccess}
       isLoadingSnapshot={snapshot === undefined}

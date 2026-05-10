@@ -4,6 +4,7 @@ export * from "./staffRoleAssignment";
 export * from "./staffCredential";
 export * from "./operationalWorkItem";
 export * from "./operationalEvent";
+export * from "./managerElevation";
 export * from "./dailyClose";
 export * from "./dailyOpening";
 export * from "./inventoryMovement";

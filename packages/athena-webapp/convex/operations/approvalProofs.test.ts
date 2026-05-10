@@ -312,4 +312,65 @@ describe("approval proofs", () => {
       });
     }
   });
+
+  it("does not treat manager elevation state as an action-bound approval proof", async () => {
+    const { ctx } = createApprovalProofMutationCtx();
+
+    await expect(
+      consumeApprovalProofWithCtx(ctx, {
+        actionKey: "cash_controls.closeout.complete",
+        approvalProofId: "managerElevation-1" as Id<"approvalProof">,
+        requiredRole: "manager",
+        storeId: "store-1" as Id<"store">,
+        subject: {
+          type: "register_session",
+          id: "register-session-1",
+        },
+      }),
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+      },
+    });
+  });
+
+  it("keeps approval proofs bound to the command action even when a manager is present", async () => {
+    const now = Date.now();
+    const { ctx, tables } = createApprovalProofMutationCtx({
+      proofs: [
+        {
+          _id: "proof-1",
+          actionKey: "pos.transaction.payment_method.correct",
+          approvedByCredentialId: "credential-1",
+          approvedByStaffProfileId: "manager-1",
+          createdAt: now - 1_000,
+          expiresAt: now + 60_000,
+          requiredRole: "manager",
+          storeId: "store-1",
+          subjectId: "register-session-1",
+          subjectType: "register_session",
+        },
+      ],
+    });
+
+    await expect(
+      consumeApprovalProofWithCtx(ctx, {
+        actionKey: "cash_controls.closeout.complete",
+        approvalProofId: "proof-1" as Id<"approvalProof">,
+        requiredRole: "manager",
+        storeId: "store-1" as Id<"store">,
+        subject: {
+          type: "register_session",
+          id: "register-session-1",
+        },
+      }),
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+      },
+    });
+    expect(tables.approvalProof.get("proof-1")?.consumedAt).toBeUndefined();
+  });
 });

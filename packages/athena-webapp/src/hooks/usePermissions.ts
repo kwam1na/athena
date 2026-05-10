@@ -1,11 +1,19 @@
 import { usePermissionsContext } from "../contexts/PermissionsContext";
+import { useOptionalManagerElevation } from "../contexts/ManagerElevationContext";
+import {
+  canAccessFullAdminSurface,
+  canAccessStoreDaySurface,
+} from "@/lib/access/capabilities";
 import { Role } from "~/types";
 
 interface UsePermissionsReturn {
   canAccessOperations: () => boolean;
   canAccessPOS: () => boolean;
   canAccessAdmin: () => boolean;
+  canAccessStoreDaySurfaces: () => boolean;
+  canAccessFullAdminSurfaces: () => boolean;
   hasFullAdminAccess: boolean;
+  hasStoreDaySurfaceAccess: boolean;
   role: Role | null;
   isLoading: boolean;
 }
@@ -13,12 +21,22 @@ interface UsePermissionsReturn {
 export function usePermissions(): UsePermissionsReturn {
   const { canAccessAdmin, canAccessPOS, role, isLoading } =
     usePermissionsContext();
+  const managerElevation = useOptionalManagerElevation();
+  const activeManagerElevation = managerElevation?.activeElevation ?? null;
+  const hasFullAdminAccess = canAccessFullAdminSurface({ role });
+  const hasStoreDaySurfaceAccess = canAccessStoreDaySurface({
+    activeManagerElevation,
+    role,
+  });
 
   return {
-    canAccessOperations: () => role === "full_admin",
+    canAccessOperations: () => hasStoreDaySurfaceAccess,
     canAccessPOS: () => canAccessPOS,
     canAccessAdmin: () => canAccessAdmin,
-    hasFullAdminAccess: role === "full_admin",
+    canAccessStoreDaySurfaces: () => hasStoreDaySurfaceAccess,
+    canAccessFullAdminSurfaces: () => hasFullAdminAccess,
+    hasFullAdminAccess,
+    hasStoreDaySurfaceAccess,
     role,
     isLoading,
   };

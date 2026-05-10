@@ -1,0 +1,798 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Athena Manager Elevation Access Implementation Plan</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f3eb;
+        --paper: #fffdf8;
+        --ink: #211f1a;
+        --muted: #6b665c;
+        --line: #d8d0c1;
+        --accent: #285e4f;
+        --accent-soft: #dcebe2;
+        --blue: #244d7a;
+        --blue-soft: #dce8f3;
+        --warn: #8a5a18;
+        --warn-soft: #f4e5c6;
+        --danger: #7c2f2a;
+        --danger-soft: #f0d8d5;
+        --shadow: 0 22px 70px rgba(35, 31, 24, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        line-height: 1.55;
+      }
+
+      main {
+        width: min(1160px, calc(100% - 32px));
+        margin: 32px auto 56px;
+        background: var(--paper);
+        border: 1px solid var(--line);
+        box-shadow: var(--shadow);
+      }
+
+      header,
+      section {
+        padding: 34px 56px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      header {
+        padding-top: 50px;
+        padding-bottom: 38px;
+      }
+
+      section:last-child {
+        border-bottom: 0;
+      }
+
+      .eyebrow {
+        margin: 0 0 12px;
+        color: var(--accent);
+        font-size: 0.78rem;
+        font-weight: 780;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin-top: 0;
+      }
+
+      h1,
+      h2,
+      h3 {
+        line-height: 1.15;
+        letter-spacing: 0;
+      }
+
+      h1 {
+        max-width: 900px;
+        margin-bottom: 22px;
+        font-size: clamp(2.2rem, 5vw, 4.6rem);
+        font-weight: 830;
+      }
+
+      h2 {
+        margin-bottom: 16px;
+        font-size: 1.35rem;
+      }
+
+      h3 {
+        margin-bottom: 8px;
+        font-size: 1rem;
+      }
+
+      p {
+        margin-bottom: 14px;
+      }
+
+      p:last-child {
+        margin-bottom: 0;
+      }
+
+      ul,
+      ol {
+        margin: 0;
+        padding-left: 1.25rem;
+      }
+
+      li {
+        margin: 8px 0;
+      }
+
+      code {
+        padding: 0.1rem 0.32rem;
+        border: 1px solid var(--line);
+        background: #f5efe4;
+        border-radius: 4px;
+        font-size: 0.92em;
+      }
+
+      strong {
+        font-weight: 780;
+      }
+
+      .lede {
+        max-width: 860px;
+        color: var(--muted);
+        font-size: 1.14rem;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .grid.two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .card {
+        min-height: 100%;
+        padding: 18px;
+        border: 1px solid var(--line);
+        background: #fffaf0;
+      }
+
+      .card.recommended {
+        border-color: #8fb09f;
+        background: var(--accent-soft);
+      }
+
+      .card.blue {
+        border-color: #9fb6cb;
+        background: var(--blue-soft);
+      }
+
+      .card.warn {
+        border-color: #d6b06c;
+        background: var(--warn-soft);
+      }
+
+      .card.danger {
+        border-color: #d29b96;
+        background: var(--danger-soft);
+      }
+
+      .label {
+        display: inline-flex;
+        min-height: 28px;
+        align-items: center;
+        padding: 3px 10px;
+        margin-bottom: 12px;
+        border: 1px solid currentColor;
+        color: var(--accent);
+        font-size: 0.75rem;
+        font-weight: 780;
+        text-transform: uppercase;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      .small {
+        font-size: 0.92rem;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+        border: 1px solid var(--line);
+      }
+
+      table {
+        width: 100%;
+        min-width: 860px;
+        border-collapse: collapse;
+        background: #fffaf0;
+      }
+
+      th,
+      td {
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        background: #eee7d9;
+        font-size: 0.82rem;
+        text-transform: uppercase;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .unit {
+        display: grid;
+        grid-template-columns: 10rem minmax(0, 1fr);
+        gap: 18px;
+        padding: 18px 0;
+        border-top: 1px solid var(--line);
+      }
+
+      .unit:first-of-type {
+        border-top: 0;
+        padding-top: 0;
+      }
+
+      .unit-id {
+        font-weight: 820;
+        color: var(--accent);
+      }
+
+      .callout {
+        padding: 20px;
+        border-left: 5px solid var(--accent);
+        background: var(--accent-soft);
+      }
+
+      @media (max-width: 860px) {
+        main {
+          width: 100%;
+          margin: 0;
+          border-left: 0;
+          border-right: 0;
+        }
+
+        header,
+        section {
+          padding-left: 22px;
+          padding-right: 22px;
+        }
+
+        .grid,
+        .grid.two,
+        .unit {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media print {
+        body {
+          background: white;
+        }
+
+        main {
+          width: 100%;
+          margin: 0;
+          border: 0;
+          box-shadow: none;
+        }
+
+        header,
+        section,
+        .card,
+        .unit {
+          break-inside: avoid;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="eyebrow">Implementation plan · May 10, 2026 · Status: draft for signoff</p>
+        <h1>Manager elevation access for store-day surfaces</h1>
+        <p class="lede">
+          Build temporary manager elevation as a store-scoped operating context
+          for POS terminals. The signed-in Athena account remains visible in the
+          global header, and the active elevated manager state appears directly
+          next to that account email. Elevated navigation can unlock selected
+          store-day surfaces, while protected mutations continue to enforce
+          server-side command approval.
+        </p>
+      </header>
+
+      <section>
+        <h2>Origin and Scope</h2>
+        <div class="grid two">
+          <article class="card recommended">
+            <span class="label">Approved direction</span>
+            <p>
+              Use temporary manager elevation rather than broadening
+              <code>pos_only</code> or requiring full account switching on the
+              terminal.
+            </p>
+            <p>
+              The elevated state must be visible in the global header next to
+              the signed-in account email.
+            </p>
+          </article>
+          <article class="card">
+            <span class="label">Source artifact</span>
+            <p>
+              This plan follows
+              <code>docs/brainstorms/2026-05-10-access-management-manager-elevation-signoff.html</code>.
+            </p>
+            <p class="muted small">
+              The signoff brief frames access as terminal-level manager
+              presence, not as a change to the underlying Athena account role.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <h2>Technical Thesis</h2>
+        <p>
+          Athena should introduce a first-class manager-elevation session rather
+          than overloading existing approval proofs. Approval proofs are
+          intentionally action-bound and one-use. Manager elevation is different:
+          it is a short-lived operating context that affects which store-day
+          surfaces the terminal can see.
+        </p>
+        <p>
+          The implementation should split "can see store-day operations" from
+          "is a full admin." The current UI has places where
+          <code>canAccessOperations()</code> effectively means full-admin access
+          and is reused for cash controls, operations, and procurement
+          navigation. Manager elevation should unlock only the selected
+          store-day capabilities, not procurement administration or
+          organization configuration by accident.
+        </p>
+      </section>
+
+      <section>
+        <h2>Key Decisions</h2>
+        <div class="grid">
+          <article class="card recommended">
+            <h3>Persist elevation server-side</h3>
+            <p class="small">
+              Store manager elevation in Convex with expiry, store, terminal,
+              Athena account, and manager staff identity. Do not rely on local
+              browser state as the authority.
+            </p>
+          </article>
+          <article class="card recommended">
+            <h3>Show elevation in the global header</h3>
+            <p class="small">
+              Add an elevation chip beside the signed-in account email in
+              <code>src/routes/_authed.tsx</code>. The chip should show who
+              elevated the terminal and include a clear end-elevation action.
+            </p>
+          </article>
+          <article class="card recommended">
+            <h3>Use capability gates</h3>
+            <p class="small">
+              Replace broad role checks in the affected shell surfaces with
+              capability helpers such as store-day operations access,
+              procurement admin access, and full-admin access.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <h2>Rejected Alternatives</h2>
+        <div class="grid">
+          <article class="card danger">
+            <h3>Broaden pos_only</h3>
+            <p class="small">
+              Rejected because it permanently weakens POS account boundaries and
+              makes ordinary terminal use too privileged.
+            </p>
+          </article>
+          <article class="card warn">
+            <h3>Reuse approval proofs as elevation</h3>
+            <p class="small">
+              Rejected because approval proofs are intentionally bound to one
+              action and subject. Elevation needs session semantics and visible
+              lifecycle controls.
+            </p>
+          </article>
+          <article class="card warn">
+            <h3>Client-only elevation</h3>
+            <p class="small">
+              Rejected because route and command behavior would be spoofable or
+              inconsistent after refresh, tab changes, or stale terminal state.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <h2>Capability Boundary</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Capability</th>
+                <th>Base POS</th>
+                <th>Manager elevated</th>
+                <th>Full admin only</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>POS and product lookup</strong></td>
+                <td>Allowed</td>
+                <td>Allowed</td>
+                <td>Allowed</td>
+              </tr>
+              <tr>
+                <td><strong>Cash controls</strong></td>
+                <td>Hidden or disabled</td>
+                <td>Allowed, with command approval still enforced</td>
+                <td>Allowed</td>
+              </tr>
+              <tr>
+                <td><strong>Daily operations and open work</strong></td>
+                <td>Hidden or disabled</td>
+                <td>Allowed for store-day decision work</td>
+                <td>Allowed</td>
+              </tr>
+              <tr>
+                <td><strong>Stock adjustment review</strong></td>
+                <td>Hidden or disabled</td>
+                <td>Allowed where the command contract already supports manager approval</td>
+                <td>Allowed</td>
+              </tr>
+              <tr>
+                <td><strong>Procurement, configuration, members, storefront admin</strong></td>
+                <td>Hidden or disabled</td>
+                <td>Still hidden or disabled for first release</td>
+                <td>Allowed</td>
+              </tr>
+              <tr>
+                <td><strong>Analytics and broad reports</strong></td>
+                <td>Hidden or disabled</td>
+                <td>Deferred unless explicitly approved as read-only manager context</td>
+                <td>Allowed</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2>Implementation Units</h2>
+
+        <div class="unit">
+          <div class="unit-id">IU-1</div>
+          <div>
+            <h3>Server-side elevation model and API</h3>
+            <p>
+              Add a Convex-backed manager elevation record with store,
+              organization, terminal, authenticated Athena user, manager staff
+              profile, credential, creation time, expiry, ended time, and end
+              reason. Add mutations to start and end elevation and a query to
+              read the active elevation for the current store/terminal/account.
+            </p>
+            <p class="small">
+              Primary files:
+              <code>packages/athena-webapp/convex/schema.ts</code>,
+              <code>packages/athena-webapp/convex/operations/managerElevations.ts</code>,
+              <code>packages/athena-webapp/convex/operations/staffCredentials.ts</code>,
+              <code>packages/athena-webapp/convex/operations/operationalEvents.ts</code>.
+            </p>
+            <p class="small">
+              Tests:
+              <code>packages/athena-webapp/convex/operations/managerElevations.test.ts</code>,
+              <code>packages/athena-webapp/convex/operations/staffCredentials.test.ts</code>.
+            </p>
+          </div>
+        </div>
+
+        <div class="unit">
+          <div class="unit-id">IU-2</div>
+          <div>
+            <h3>Client elevation provider and hook</h3>
+            <p>
+              Add a provider under the authenticated shell that knows the active
+              store and terminal, subscribes to the active elevation query, and
+              exposes start, end, loading, expired, and active-manager state.
+              Keep this separate from permissions so existing account-role
+              checks remain understandable.
+            </p>
+            <p class="small">
+              Primary files:
+              <code>packages/athena-webapp/src/contexts/ManagerElevationContext.tsx</code>,
+              <code>packages/athena-webapp/src/hooks/useManagerElevation.ts</code>,
+              <code>packages/athena-webapp/src/routes/_authed.tsx</code>.
+            </p>
+            <p class="small">
+              Tests:
+              <code>packages/athena-webapp/src/contexts/ManagerElevationContext.test.tsx</code>,
+              <code>packages/athena-webapp/src/routes/_authed.test.tsx</code>.
+            </p>
+          </div>
+        </div>
+
+        <div class="unit">
+          <div class="unit-id">IU-3</div>
+          <div>
+            <h3>Global header indicator and elevation control</h3>
+            <p>
+              Update the top bar so the signed-in account email remains visible
+              and the elevated manager state appears immediately beside it. The
+              default state should show only the account email. The elevated
+              state should show a compact "Elevated by [manager]" indicator,
+              expiry hint, and end-elevation control.
+            </p>
+            <p class="small">
+              Primary files:
+              <code>packages/athena-webapp/src/routes/_authed.tsx</code>,
+              <code>packages/athena-webapp/src/components/staff-auth/StaffAuthenticationDialog.tsx</code>,
+              optional
+              <code>packages/athena-webapp/src/components/operations/ManagerElevationDialog.tsx</code>.
+            </p>
+            <p class="small">
+              Tests:
+              <code>packages/athena-webapp/src/routes/_authed.test.tsx</code>,
+              <code>packages/athena-webapp/src/components/operations/ManagerElevationDialog.test.tsx</code>.
+            </p>
+          </div>
+        </div>
+
+        <div class="unit">
+          <div class="unit-id">IU-4</div>
+          <div>
+            <h3>Capability-aware permissions and route gates</h3>
+            <p>
+              Extend the permission layer with capability helpers that combine
+              account membership and active manager elevation. Do not make
+              elevation equivalent to <code>full_admin</code>. Replace affected
+              shell checks with capability-specific checks.
+            </p>
+            <p class="small">
+              Primary files:
+              <code>packages/athena-webapp/src/contexts/PermissionsContext.tsx</code>,
+              <code>packages/athena-webapp/src/hooks/usePermissions.ts</code>,
+              <code>packages/athena-webapp/src/components/PermissionGate.tsx</code>,
+              <code>packages/athena-webapp/src/components/ProtectedRoute.tsx</code>,
+              <code>packages/athena-webapp/src/components/app-sidebar.tsx</code>.
+            </p>
+            <p class="small">
+              Tests:
+              <code>packages/athena-webapp/src/hooks/usePermissions.test.tsx</code>,
+              <code>packages/athena-webapp/src/components/PermissionGate.test.tsx</code>,
+              <code>packages/athena-webapp/src/components/app-sidebar.test.tsx</code>.
+            </p>
+          </div>
+        </div>
+
+        <div class="unit">
+          <div class="unit-id">IU-5</div>
+          <div>
+            <h3>First-release surface wiring</h3>
+            <p>
+              Wire manager elevation into the first set of store-day surfaces:
+              cash controls, daily operations, open work, approvals, and stock
+              adjustments where existing commands already enforce approval or
+              role boundaries. Keep procurement, analytics, configuration,
+              members, storefront admin, and organization settings full-admin
+              only unless separately approved.
+            </p>
+            <p class="small">
+              Primary files:
+              <code>packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls.index.tsx</code>,
+              <code>packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations.index.tsx</code>,
+              <code>packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/approvals.tsx</code>,
+              <code>packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments.tsx</code>.
+            </p>
+            <p class="small">
+              Tests:
+              affected route auth tests plus
+              <code>packages/athena-webapp/src/components/operations/OperationsQueueView.auth.test.tsx</code>
+              and cash-control route/view tests.
+            </p>
+          </div>
+        </div>
+
+        <div class="unit">
+          <div class="unit-id">IU-6</div>
+          <div>
+            <h3>Audit, expiry, and cleanup behavior</h3>
+            <p>
+              Record operational events when elevation starts, ends, expires,
+              or is rejected. Ensure active elevation cannot cross store,
+              terminal, or signed-in account boundaries. Expired elevation
+              should stop granting capabilities immediately, and the header
+              should fall back to the base signed-in account state.
+            </p>
+            <p class="small">
+              Primary files:
+              <code>packages/athena-webapp/convex/operations/managerElevations.ts</code>,
+              <code>packages/athena-webapp/convex/operations/operationalEvents.ts</code>,
+              <code>packages/athena-webapp/convex/operations/helpers/eventBuilders.ts</code>.
+            </p>
+            <p class="small">
+              Tests:
+              <code>packages/athena-webapp/convex/operations/managerElevations.test.ts</code>,
+              with explicit coverage for expired, ended, wrong-store,
+              wrong-terminal, and wrong-account records.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Sequencing</h2>
+        <ol>
+          <li>
+            Add the server-side elevation model, start/end API, active query,
+            and backend tests.
+          </li>
+          <li>
+            Add the client provider and header read path with no surface access
+            changes yet.
+          </li>
+          <li>
+            Add start/end elevation UI in the global header area and verify the
+            account email plus elevated manager indicator layout.
+          </li>
+          <li>
+            Split permission helpers into capability-level checks and update the
+            sidebar without widening admin-only surfaces.
+          </li>
+          <li>
+            Wire the first store-day surfaces and add route/view tests for
+            base POS, elevated manager, and full-admin accounts.
+          </li>
+          <li>
+            Run focused tests, Convex audit, TypeScript, browser verification,
+            and graph rebuild.
+          </li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>Test Scenarios</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Area</th>
+                <th>Required scenarios</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Server elevation</strong></td>
+                <td>
+                  Starts only with active manager credentials; rejects cashier
+                  credentials; records manager, store, terminal, account, and
+                  expiry; returns no active elevation after expiry or end.
+                </td>
+              </tr>
+              <tr>
+                <td><strong>Header</strong></td>
+                <td>
+                  Shows signed-in account email alone in the base state; shows
+                  manager elevation beside the email when active; end control
+                  removes the chip and revokes elevated capabilities.
+                </td>
+              </tr>
+              <tr>
+                <td><strong>Permissions</strong></td>
+                <td>
+                  Base POS can access POS and products only; manager elevation
+                  grants store-day operation capabilities; full admin retains
+                  all existing access; procurement/admin surfaces remain
+                  full-admin only.
+                </td>
+              </tr>
+              <tr>
+                <td><strong>Routes and sidebar</strong></td>
+                <td>
+                  Disabled/hidden state is correct before elevation; selected
+                  surfaces become reachable after elevation; refresh preserves
+                  valid elevation; expired elevation stops access.
+                </td>
+              </tr>
+              <tr>
+                <td><strong>Command safety</strong></td>
+                <td>
+                  Manager elevation does not bypass command-level approval
+                  proof checks for closeout, payment correction, approval
+                  decisions, or stock adjustment actions.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2>Validation Commands</h2>
+        <ul>
+          <li>
+            Focused unit and component tests for the new files and affected
+            shell/routes.
+          </li>
+          <li>
+            <code>bun run --filter '@athena/webapp' audit:convex</code>
+          </li>
+          <li>
+            <code>bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json</code>
+          </li>
+          <li>
+            Browser verification on POS: base state, elevation start, header
+            chip visibility, elevated navigation, end elevation, and expiry
+            behavior.
+          </li>
+          <li>
+            <code>bun run graphify:rebuild</code> after code changes.
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Risks and Mitigations</h2>
+        <div class="grid two">
+          <article class="card warn">
+            <h3>Risk: accidental admin widening</h3>
+            <p class="small">
+              Mitigation: introduce capability helpers instead of treating
+              manager elevation as <code>full_admin</code>. Add tests proving
+              procurement, configuration, and members stay admin-only.
+            </p>
+          </article>
+          <article class="card warn">
+            <h3>Risk: stale elevation on shared terminals</h3>
+            <p class="small">
+              Mitigation: server-side expiry, visible header state, explicit end
+              action, store/terminal/account scoping, and immediate capability
+              revocation when the active query no longer returns a valid record.
+            </p>
+          </article>
+          <article class="card warn">
+            <h3>Risk: command approval boundary drift</h3>
+            <p class="small">
+              Mitigation: keep action-level approval proof validation unchanged.
+              Elevation can expose a surface, but commands still decide whether
+              approval is required.
+            </p>
+          </article>
+          <article class="card warn">
+            <h3>Risk: header clutter</h3>
+            <p class="small">
+              Mitigation: use a compact chip next to the account email, collapse
+              details into the account/elevation menu, and verify at desktop and
+              tablet widths.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <h2>Open Items Before Execution</h2>
+        <div class="callout">
+          <p>
+            The plan is ready to execute with one default assumption: first
+            release unlocks cash controls and operations-related store-day
+            surfaces only. Procurement, analytics, configuration, and member
+            management remain full-admin only.
+          </p>
+          <p>
+            If analytics or order-management read access should be part of the
+            first release, decide that before implementation starts so route
+            gates and tests can cover it deliberately.
+          </p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

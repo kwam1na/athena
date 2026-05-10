@@ -68,7 +68,7 @@ const Invites = () => {
     api.inventory.inviteCode.getAll,
     activeOrganization?._id
       ? { organizationId: activeOrganization._id }
-      : "skip"
+      : "skip",
   );
 
   return (
@@ -89,7 +89,7 @@ const Members = () => {
     api.inventory.organizationMembers.getAll,
     activeOrganization?._id
       ? { organizationId: activeOrganization._id }
-      : "skip"
+      : "skip",
   );
 
   return (
@@ -248,7 +248,7 @@ export const OrganizationMembersView = () => {
               description="Manage admin access and pending invites for the organization."
             />
 
-            <div className="grid gap-layout-2xl xl:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
+            <div className="grid gap-layout-2xl xl:grid-cols-2">
               <div className="space-y-layout-xl">
                 <Members />
                 {showMemberForm && (

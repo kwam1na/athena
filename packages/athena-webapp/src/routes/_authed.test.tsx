@@ -9,7 +9,10 @@ import { LOGGED_IN_USER_ID_KEY } from "@/lib/constants";
 const mocked = vi.hoisted(() => ({
   navigate: vi.fn(),
   signOut: vi.fn().mockResolvedValue(undefined),
+  startManagerElevation: vi.fn(),
+  endManagerElevation: vi.fn(),
   useAuth: vi.fn(),
+  useManagerElevation: vi.fn(),
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -28,6 +31,13 @@ vi.mock("@convex-dev/auth/react", () => ({
 
 vi.mock("../contexts/PermissionsContext", () => ({
   PermissionsProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
+}));
+
+vi.mock("../contexts/ManagerElevationContext", () => ({
+  ManagerElevationProvider: ({ children }: { children: ReactNode }) => (
+    <>{children}</>
+  ),
+  useManagerElevation: mocked.useManagerElevation,
 }));
 
 vi.mock("../components/ui/sidebar", () => ({
@@ -70,7 +80,15 @@ describe("Authed layout", () => {
   beforeEach(() => {
     mocked.navigate.mockReset();
     mocked.signOut.mockClear();
+    mocked.startManagerElevation.mockReset();
+    mocked.endManagerElevation.mockReset();
     mocked.useAuth.mockReset();
+    mocked.useManagerElevation.mockReturnValue({
+      activeElevation: null,
+      endManagerElevation: mocked.endManagerElevation,
+      isManagerElevated: false,
+      startManagerElevation: mocked.startManagerElevation,
+    });
   });
 
   it("stays empty while auth is still loading", () => {
@@ -130,5 +148,50 @@ describe("Authed layout", () => {
       LOGGED_IN_USER_ID_KEY
     );
     expect(mocked.navigate).toHaveBeenCalledWith({ to: "/login" });
+  });
+
+  it("keeps the account email visible while manager elevation is active", async () => {
+    const user = userEvent.setup();
+    mocked.useAuth.mockReturnValue({
+      user: { _id: "user-1", email: "operator@example.com" },
+      isLoading: false,
+    });
+    mocked.useManagerElevation.mockReturnValue({
+      activeElevation: {
+        displayName: "Adjoa Mensah",
+        startedAt: 123,
+        staffProfileId: "staff-manager-1",
+      },
+      endManagerElevation: mocked.endManagerElevation,
+      isManagerElevated: true,
+      startManagerElevation: mocked.startManagerElevation,
+    });
+
+    render(<Layout />);
+
+    expect(screen.getByText("operator@example.com")).toBeInTheDocument();
+    expect(screen.getByText("Manager: Adjoa Mensah")).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: /end manager elevation/i }),
+    );
+
+    expect(mocked.endManagerElevation).toHaveBeenCalled();
+  });
+
+  it("starts manager elevation from the user menu", async () => {
+    const user = userEvent.setup();
+    mocked.useAuth.mockReturnValue({
+      user: { _id: "user-1", email: "operator@example.com" },
+      isLoading: false,
+    });
+
+    render(<Layout />);
+
+    await user.click(
+      screen.getByRole("button", { name: /start manager elevation/i }),
+    );
+
+    expect(mocked.startManagerElevation).toHaveBeenCalled();
   });
 });
