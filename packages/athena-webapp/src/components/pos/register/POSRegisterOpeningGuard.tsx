@@ -14,6 +14,13 @@ type DailyOpeningSnapshot = {
   status?: "blocked" | "needs_attention" | "ready" | "started";
 };
 
+type DailyCloseSnapshot = {
+  existingClose?: {
+    lifecycleStatus?: "active" | "reopened" | "superseded";
+  } | null;
+  status?: "blocked" | "needs_review" | "carry_forward" | "ready" | "completed";
+};
+
 function getLocalOperatingDate(date = new Date()) {
   const localDate = new Date(
     date.getTime() - date.getTimezoneOffset() * 60_000,
@@ -57,13 +64,34 @@ export function POSRegisterOpeningGuard({
         }
       : "skip",
   ) as DailyOpeningSnapshot | undefined;
+  const dailyCloseSnapshot = useQuery(
+    api.operations.dailyClose.getDailyCloseSnapshot,
+    activeStore?._id
+      ? {
+          ...operatingDateRange,
+          storeId: activeStore._id,
+        }
+      : "skip",
+  ) as DailyCloseSnapshot | undefined;
 
-  if (isLoadingStores || !activeStore?._id || snapshot === undefined) {
+  if (
+    isLoadingStores ||
+    !activeStore?._id ||
+    snapshot === undefined ||
+    dailyCloseSnapshot === undefined
+  ) {
     return null;
   }
 
   if (snapshot.status !== "started") {
     return <StoreDayNotStartedState />;
+  }
+
+  if (
+    dailyCloseSnapshot.status === "completed" &&
+    dailyCloseSnapshot.existingClose?.lifecycleStatus !== "reopened"
+  ) {
+    return <StoreDayClosedState />;
   }
 
   return <>{children}</>;
@@ -125,6 +153,72 @@ function StoreDayNotStartedState() {
                 to="/$orgUrlSlug/store/$storeUrlSlug/operations/opening"
               >
                 Opening Handoff
+                <ArrowUpRight className="h-4 w-4" />
+              </Link>
+            </Button>
+          ) : null}
+        </div>
+      </FadeIn>
+    </View>
+  );
+}
+
+function StoreDayClosedState() {
+  const params = useParams({ strict: false }) as
+    | {
+        orgUrlSlug?: string;
+        storeUrlSlug?: string;
+      }
+    | undefined;
+  const canLinkToDailyClose = Boolean(params?.orgUrlSlug && params.storeUrlSlug);
+
+  return (
+    <View
+      fullHeight
+      width="full"
+      contentClassName="flex h-full max-h-full flex-col overflow-hidden rounded-2xl border border-border/80 bg-white"
+      headerClassName="shrink-0"
+      mainClassName="min-h-0 flex-1"
+      header={
+        <ComposedPageHeader
+          width="full"
+          className="h-auto flex-wrap gap-x-4 gap-y-3 py-4"
+          leadingContent={
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <div className="w-2 h-2 bg-background rounded-full" />
+              <p className="text-lg font-semibold text-gray-900">POS</p>
+            </div>
+          }
+        />
+      }
+    >
+      <FadeIn className="flex h-full min-h-0 items-center justify-center p-6">
+        <div className="flex w-full max-w-2xl flex-col items-center rounded-lg border border-border bg-surface px-12 py-16 text-center shadow-sm">
+          <div className="mb-6 flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-full bg-warning/10 text-warning">
+            <Store className="h-7 w-7" />
+          </div>
+          <h2 className="text-xl font-medium text-foreground/80">
+            Store day closed
+          </h2>
+          <p className="mt-3 max-w-lg text-base leading-7 text-muted-foreground">
+            End-of-Day Review has already closed this operating day. Reopen the
+            day from End-of-Day Review before entering POS.
+          </p>
+          {canLinkToDailyClose ? (
+            <Button
+              asChild
+              className="mt-8 bg-background/80 text-muted-foreground hover:text-foreground"
+              size="lg"
+              variant="outline"
+            >
+              <Link
+                params={{
+                  orgUrlSlug: params!.orgUrlSlug!,
+                  storeUrlSlug: params!.storeUrlSlug!,
+                }}
+                to="/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close"
+              >
+                End-of-Day Review
                 <ArrowUpRight className="h-4 w-4" />
               </Link>
             </Button>

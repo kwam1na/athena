@@ -192,6 +192,11 @@ const schema = defineSchema({
     .index("by_posCustomerId", ["posCustomerId"]),
   dailyClose: defineTable(dailyCloseSchema)
     .index("by_storeId_operatingDate", ["storeId", "operatingDate"])
+    .index("by_storeId_operatingDate_lifecycleStatus", [
+      "storeId",
+      "operatingDate",
+      "lifecycleStatus",
+    ])
     .index("by_storeId_status", ["storeId", "status"])
     .index("by_storeId_isCurrent", ["storeId", "isCurrent"])
     .index("by_storeId_status_operatingDate", [

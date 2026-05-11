@@ -54,7 +54,10 @@ export type DailyCloseHistoryRecord = {
   readinessStatus?: DailyCloseSnapshot["readiness"] extends { status: infer Status }
     ? Status
     : string;
+  reopenedAt?: number | null;
+  reopenReason?: string | null;
   reportSnapshot?: DailyCloseStoredSnapshot | DailyCloseSnapshot | null;
+  supersededByDailyCloseId?: Id<"dailyClose"> | string | null;
   reviewCount?: number;
   status?: string;
   summary?: DailyCloseSnapshot["summary"];
@@ -140,6 +143,18 @@ function getHistoryRecordCompletedBy(record: DailyCloseHistoryRecord) {
 
 function getHistoryRecordSummary(record: DailyCloseHistoryRecord) {
   return record.summary ?? record.reportSnapshot?.summary;
+}
+
+function getHistoryLifecycleLabel(record: DailyCloseHistoryRecord) {
+  if (record.status === "superseded" || record.supersededByDailyCloseId) {
+    return "Superseded";
+  }
+
+  if (record.reopenedAt || record.reopenReason) {
+    return "Reopened";
+  }
+
+  return "Completed";
 }
 
 function normalizeHistorySnapshot(
@@ -390,7 +405,7 @@ function DailyCloseHistoryConnectedView({
                               </p>
                             </div>
                             <Badge className="border-border bg-transparent text-muted-foreground">
-                              Completed
+                              {getHistoryLifecycleLabel(record)}
                             </Badge>
                           </div>
 
@@ -489,6 +504,23 @@ function DailyCloseHistoryConnectedView({
                         <p className="mt-layout-md rounded-md border border-border bg-surface p-layout-sm text-sm leading-6 text-foreground">
                           {selectedSnapshot.completedClose.notes}
                         </p>
+                      ) : null}
+                      {selectedRecord.reopenedAt || selectedRecord.reopenReason ? (
+                        <div className="mt-layout-md rounded-md border border-warning/30 bg-warning/10 p-layout-sm text-sm leading-6">
+                          <p className="font-medium text-warning-foreground">
+                            Reopened after completion
+                          </p>
+                          <p className="mt-1 text-muted-foreground">
+                            {selectedRecord.reopenedAt
+                              ? formatDailyCloseCompletedAt(
+                                  selectedRecord.reopenedAt,
+                                )
+                              : "Reopen time unavailable"}
+                            {selectedRecord.reopenReason
+                              ? `. ${selectedRecord.reopenReason}`
+                              : "."}
+                          </p>
+                        </div>
                       ) : null}
                     </div>
 

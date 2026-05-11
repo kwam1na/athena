@@ -156,6 +156,11 @@ describe("operations query indexing", () => {
       },
       {
         table: "dailyClose",
+        descriptor: "by_storeId_operatingDate_lifecycleStatus",
+        fields: ["storeId", "operatingDate", "lifecycleStatus"],
+      },
+      {
+        table: "dailyClose",
         descriptor: "by_storeId_status",
         fields: ["storeId", "status"],
       },
@@ -224,6 +229,9 @@ describe("operations query indexing", () => {
       '.withIndex("by_storeId_createdAt"',
     );
     expect(dailyCloseSource).toContain('.withIndex("by_storeId_operatingDate"');
+    expect(dailyCloseSource).toContain(
+      '.withIndex("by_storeId_operatingDate_lifecycleStatus"',
+    );
     expect(dailyCloseSource).toContain(
       '.withIndex("by_storeId_status_operatingDate"',
     );

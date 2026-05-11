@@ -1170,6 +1170,104 @@ describe("DailyCloseViewContent", () => {
     expect(screen.getByText("Enter manager credentials")).toBeInTheDocument();
   });
 
+  it("shows manager-approved reopen only for current completed close and requires a reason", async () => {
+    const user = userEvent.setup();
+    const onReopen = vi.fn(async () => ok({ action: "reopened" }));
+
+    renderContent(
+      {
+        ...readySnapshot,
+        completedClose: {
+          completedAt: Date.UTC(2026, 4, 7, 23, 15),
+          completedByStaffName: "Ama Mensah",
+        },
+        existingClose: {
+          _id: "daily-close-1",
+          isCurrent: true,
+          lifecycleStatus: "active",
+        },
+        status: "completed",
+      },
+      { onReopen },
+    );
+
+    const reopenButton = screen.getByRole("button", {
+      name: "Reopen End-of-Day Review",
+    });
+
+    expect(reopenButton).toBeDisabled();
+
+    await user.type(
+      screen.getByLabelText("Reopen reason"),
+      "Cash deposit corrected.",
+    );
+    await user.click(reopenButton);
+
+    expect(onReopen).toHaveBeenCalledWith({
+      endAt: readySnapshot.endAt,
+      operatingDate: readySnapshot.operatingDate,
+      reason: "Cash deposit corrected.",
+      startAt: readySnapshot.startAt,
+    });
+  });
+
+  it("does not show reopen for superseded or already reopened close records", () => {
+    const { rerender } = renderContent(
+      {
+        ...readySnapshot,
+        completedClose: {
+          completedAt: Date.UTC(2026, 4, 7, 23, 15),
+          completedByStaffName: "Ama Mensah",
+        },
+        existingClose: {
+          _id: "daily-close-1",
+          isCurrent: true,
+          lifecycleStatus: "superseded",
+        },
+        status: "completed",
+      },
+      { onReopen: vi.fn(async () => ok({ action: "reopened" })) },
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Reopen End-of-Day Review" }),
+    ).not.toBeInTheDocument();
+
+    rerender(
+      <DailyCloseViewContent
+        currency="GHS"
+        hasFullAdminAccess
+        isAuthenticated
+        isCompleting={false}
+        isLoadingAccess={false}
+        isLoadingSnapshot={false}
+        onComplete={vi.fn(async () => ok({ closeId: "close-1" }))}
+        onReopen={vi.fn(async () => ok({ action: "reopened" }))}
+        orgUrlSlug="wigclub"
+        snapshot={{
+          ...readySnapshot,
+          completedClose: {
+            completedAt: Date.UTC(2026, 4, 7, 23, 15),
+            completedByStaffName: "Ama Mensah",
+          },
+          existingClose: {
+            _id: "daily-close-1",
+            isCurrent: true,
+            lifecycleStatus: "reopened",
+          },
+          status: "completed",
+        }}
+        storeId={"store-1" as Id<"store">}
+        storeUrlSlug="osu"
+      />,
+    );
+
+    expect(screen.getByText("Review required")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Reopen End-of-Day Review" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders command-result user errors inline with operator-safe copy", async () => {
     const user = userEvent.setup();
 

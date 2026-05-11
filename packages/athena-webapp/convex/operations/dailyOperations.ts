@@ -44,6 +44,7 @@ type LifecycleStatus =
   | "operating"
   | "close_blocked"
   | "ready_to_close"
+  | "reopened"
   | "closed";
 
 type DailyOperationsAttentionItem = {
@@ -412,6 +413,21 @@ async function listTimelineEvents(
   }));
 }
 
+async function getDailyCloseRecordForDate(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    operatingDate: string;
+    storeId: Id<"store">;
+  },
+) {
+  return ctx.db
+    .query("dailyClose")
+    .withIndex("by_storeId_operatingDate", (q) =>
+      q.eq("storeId", args.storeId).eq("operatingDate", args.operatingDate),
+    )
+    .first();
+}
+
 function getCloseItemCounts(items: SourceItem[]) {
   return {
     approvalCount: items.filter((item) => item.category === "approval").length,
@@ -489,6 +505,14 @@ function lifecycleCopy(status: LifecycleStatus) {
     };
   }
 
+  if (status === "reopened") {
+    return {
+      description:
+        "End-of-Day Review was reopened. Complete the revised review before treating the store day as closed.",
+      label: "Reopened",
+    };
+  }
+
   return {
     description:
       "Opening Handoff is complete. Keep open work visible through End-of-Day Review.",
@@ -521,6 +545,13 @@ function primaryAction(status: LifecycleStatus): {
     };
   }
 
+  if (status === "reopened") {
+    return {
+      label: "Revise End-of-Day Review",
+      to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+    };
+  }
+
   return {
     label: "Start End-of-Day Review",
     to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
@@ -530,6 +561,7 @@ function primaryAction(status: LifecycleStatus): {
 function buildLanes(args: {
   closeBlockerCounts: ReturnType<typeof getCloseItemCounts>;
   closeStatus: string;
+  isCloseReopened: boolean;
   isOpeningStarted: boolean;
   openingAttentionCount: number;
   queueCounts: {
@@ -543,7 +575,9 @@ function buildLanes(args: {
     ? "ready"
     : "needs_attention";
   const closeStatus: LaneStatus =
-    args.closeStatus === "completed"
+    args.isCloseReopened
+      ? "needs_attention"
+      : args.closeStatus === "completed"
       ? "closed"
       : args.closeStatus === "blocked"
         ? "blocked"
@@ -564,13 +598,15 @@ function buildLanes(args: {
     },
     {
       count:
-        args.closeStatus === "completed"
+        args.closeStatus === "completed" && !args.isCloseReopened
           ? 0
           : args.closeBlockerCounts.registerCount +
             args.closeBlockerCounts.posSessionCount +
             args.closeBlockerCounts.approvalCount,
       description:
-        args.closeStatus === "completed"
+        args.isCloseReopened
+          ? "End-of-Day Review was reopened and needs a revised close."
+          : args.closeStatus === "completed"
           ? "End-of-Day Review is saved for this store day."
           : args.closeStatus === "blocked"
             ? "End-of-Day Review has blockers to resolve."
@@ -655,10 +691,19 @@ export async function buildDailyOperationsSnapshotWithCtx(
   },
 ) {
   const range = resolveRange(args);
-  const [openingSnapshot, closeSnapshot, queueCounts, timeline, store, weekMetrics] =
+  const [
+    openingSnapshot,
+    closeSnapshot,
+    dailyCloseRecord,
+    queueCounts,
+    timeline,
+    store,
+    weekMetrics,
+  ] =
     await Promise.all([
       buildDailyOpeningSnapshotWithCtx(ctx, args),
       buildDailyCloseSnapshotWithCtx(ctx, args),
+      getDailyCloseRecordForDate(ctx, args),
       listOpenQueueSnapshot(ctx, args.storeId),
       listTimelineEvents(ctx, { ...range, storeId: args.storeId }),
       ctx.db.get("store", args.storeId),
@@ -666,6 +711,9 @@ export async function buildDailyOperationsSnapshotWithCtx(
     ]);
 
   const isOpeningStarted = openingSnapshot.status === "started";
+  const isCloseReopened =
+    closeSnapshot.existingClose?.lifecycleStatus === "reopened" ||
+    dailyCloseRecord?.lifecycleStatus === "reopened";
   const closeBlockers = closeSnapshot.blockers as SourceItem[];
   const closeReviews = closeSnapshot.reviewItems as SourceItem[];
   const openingAttention = [
@@ -683,6 +731,25 @@ export async function buildDailyOperationsSnapshotWithCtx(
       ),
     );
   } else {
+    if (isCloseReopened) {
+      attentionItems.push({
+        id: `daily_close:${args.storeId}:${args.operatingDate}:reopened`,
+        label: "End-of-Day Review reopened",
+        message:
+          "Complete the revised End-of-Day Review before treating the store day as closed.",
+        owner: "daily_close",
+        severity: "warning",
+        source: {
+          id:
+            closeSnapshot.existingClose?._id ??
+            dailyCloseRecord?._id ??
+            `${args.storeId}:${args.operatingDate}`,
+          label: `End-of-Day Review ${args.operatingDate}`,
+          type: "daily_close",
+        },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+      });
+    }
     attentionItems.push(
       ...closeBlockers.map((item) => sourceAttentionItem("daily_close", item)),
       ...closeReviews.map((item) => sourceAttentionItem("daily_close", item)),
@@ -697,7 +764,9 @@ export async function buildDailyOperationsSnapshotWithCtx(
 
   const lifecycleStatus: LifecycleStatus = !isOpeningStarted
     ? "not_opened"
-    : closeSnapshot.status === "completed"
+    : isCloseReopened
+      ? "reopened"
+      : closeSnapshot.status === "completed"
       ? "closed"
       : closeSnapshot.blockers.length > 0
         ? "close_blocked"
@@ -731,6 +800,7 @@ export async function buildDailyOperationsSnapshotWithCtx(
     lanes: buildLanes({
       closeBlockerCounts,
       closeStatus: closeSnapshot.status,
+      isCloseReopened,
       isOpeningStarted,
       openingAttentionCount: openingAttention.length,
       queueCounts: {

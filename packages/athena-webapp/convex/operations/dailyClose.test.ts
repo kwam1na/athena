@@ -7,6 +7,7 @@ import {
   getCompletedDailyCloseHistoryDetailWithCtx,
   getDailyCloseOpeningContextWithCtx,
   listCompletedDailyCloseHistoryWithCtx,
+  reopenDailyCloseWithCtx,
 } from "./dailyClose";
 
 type TableName =
@@ -251,6 +252,103 @@ function dailyCloseApprovalProof(overrides: Partial<Row> = {}): Row {
     subjectId: "store-1:2026-05-07",
     subjectLabel: "End-of-Day Review 2026-05-07",
     subjectType: "daily_close",
+    ...overrides,
+  };
+}
+
+function dailyCloseReopenApprovalProof(overrides: Partial<Row> = {}): Row {
+  return {
+    _id: "approval-proof-reopen-1",
+    actionKey: "operations.daily_close.reopen",
+    approvedByCredentialId: "credential-manager-1",
+    approvedByStaffProfileId: "staff-manager-1",
+    createdAt: Date.UTC(2026, 4, 8, 10),
+    expiresAt: Date.UTC(2026, 4, 8, 12),
+    requiredRole: "manager",
+    requestedByStaffProfileId: "staff-1",
+    storeId: "store-1",
+    subjectId: "daily-close-1",
+    subjectLabel: "End-of-Day Review 2026-05-07",
+    subjectType: "daily_close",
+    ...overrides,
+  };
+}
+
+function completedDailyCloseSnapshot(overrides: Record<string, unknown> = {}) {
+  return {
+    closeMetadata: {
+      completedAt: Date.UTC(2026, 4, 7, 22),
+      completedByStaffProfileId: "staff-manager-1",
+      completedByUserId: "user-1",
+      operatingDate: "2026-05-07",
+      organizationId: "org-1",
+      startAt: Date.UTC(2026, 4, 7),
+      endAt: Date.UTC(2026, 4, 8),
+      storeId: "store-1",
+    },
+    readiness: {
+      blockerCount: 0,
+      carryForwardCount: 0,
+      readyCount: 1,
+      reviewCount: 0,
+      status: "ready",
+    },
+    summary: {
+      salesTotal: 12000,
+      transactionCount: 1,
+    },
+    reviewedItems: [],
+    carryForwardItems: [],
+    readyItems: [
+      {
+        key: "pos_transaction:txn-1:completed",
+        severity: "ready",
+        category: "sale",
+        title: "Completed sale",
+        message: "Completed sale is included in End-of-Day Review.",
+        subject: {
+          id: "txn-1",
+          label: "TXN-1",
+          type: "pos_transaction",
+        },
+        metadata: {
+          total: 12000,
+          transaction: "TXN-1",
+        },
+      },
+    ],
+    sourceSubjects: [
+      {
+        id: "txn-1",
+        label: "TXN-1",
+        type: "pos_transaction",
+      },
+    ],
+    ...overrides,
+  };
+}
+
+function completedDailyCloseRow(overrides: Partial<Row> = {}): Row {
+  const reportSnapshot = completedDailyCloseSnapshot();
+
+  return {
+    _id: "daily-close-1",
+    carryForwardWorkItemIds: [],
+    completedAt: Date.UTC(2026, 4, 7, 22),
+    completedByStaffProfileId: "staff-manager-1",
+    completedByUserId: "user-1",
+    createdAt: Date.UTC(2026, 4, 7, 22),
+    isCurrent: true,
+    lifecycleStatus: "active",
+    operatingDate: "2026-05-07",
+    organizationId: "org-1",
+    readiness: reportSnapshot.readiness,
+    reportSnapshot,
+    sourceSubjects: reportSnapshot.sourceSubjects,
+    status: "completed",
+    storeId: "store-1",
+    summary: reportSnapshot.summary,
+    updatedAt: Date.UTC(2026, 4, 7, 22),
     ...overrides,
   };
 }
@@ -1037,9 +1135,9 @@ describe("end-of-day review backend foundation", () => {
     expect(originalDaySnapshot.readyItems.map((item) => item.key)).toContain(
       "register_session:register-reopened:closed",
     );
-    expect(reopenedDaySnapshot.readyItems.map((item) => item.key)).not.toContain(
-      "register_session:register-reopened:closed",
-    );
+    expect(
+      reopenedDaySnapshot.readyItems.map((item) => item.key),
+    ).not.toContain("register_session:register-reopened:closed");
     expect(reopenedDaySnapshot.summary.closedRegisterSessionCount).toBe(0);
   });
 
@@ -1332,7 +1430,8 @@ describe("end-of-day review backend foundation", () => {
       kind: "user_error",
       error: {
         code: "precondition_failed",
-        message: "End-of-Day Review cannot be completed while blocker items remain.",
+        message:
+          "End-of-Day Review cannot be completed while blocker items remain.",
         metadata: { blockerCount: 1 },
       },
     });
@@ -1602,6 +1701,328 @@ describe("end-of-day review backend foundation", () => {
     });
   });
 
+  it("requires manager approval and a reason before reopening a completed daily close", async () => {
+    const { db, inserts } = createDb({
+      dailyClose: [completedDailyCloseRow()],
+    });
+
+    await expect(
+      reopenDailyCloseWithCtx({ db } as unknown as MutationCtx, {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        dailyCloseId: "daily-close-1" as Id<"dailyClose">,
+        reason: "  ",
+        storeId: "store-1" as Id<"store">,
+      }),
+    ).resolves.toEqual({
+      kind: "user_error",
+      error: {
+        code: "validation_failed",
+        message: "A reopen reason is required.",
+      },
+    });
+
+    const result = await reopenDailyCloseWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        dailyCloseId: "daily-close-1" as Id<"dailyClose">,
+        reason: "Late cash sale was missed.",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toEqual({
+      kind: "approval_required",
+      approval: {
+        action: {
+          key: "operations.daily_close.reopen",
+          label: "Reopen End-of-Day Review",
+        },
+        copy: {
+          message:
+            "A manager needs to approve reopening this End-of-Day Review before the operating day can be revised.",
+          primaryActionLabel: "Approve and reopen",
+          secondaryActionLabel: "Cancel",
+          title: "Manager approval required",
+        },
+        metadata: {
+          dailyCloseId: "daily-close-1",
+          operatingDate: "2026-05-07",
+        },
+        reason: "Manager approval is required to reopen End-of-Day Review.",
+        requiredRole: "manager",
+        resolutionModes: [{ kind: "inline_manager_proof" }],
+        selfApproval: "allowed",
+        subject: {
+          id: "daily-close-1",
+          label: "End-of-Day Review 2026-05-07",
+          type: "daily_close",
+        },
+      },
+    });
+    expect(inserts).toEqual([]);
+  });
+
+  it("reopens a completed close without mutating its report snapshot and makes live readiness active", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 8, 10));
+    const originalSnapshot = completedDailyCloseSnapshot();
+    const { db, inserts, tables } = createDb({
+      approvalProof: [dailyCloseReopenApprovalProof()],
+      dailyClose: [
+        completedDailyCloseRow({ reportSnapshot: originalSnapshot }),
+      ],
+      posTransaction: [
+        {
+          _id: "txn-1",
+          completedAt: Date.UTC(2026, 4, 7, 14),
+          payments: [{ amount: 12000, method: "cash", timestamp: 1 }],
+          status: "completed",
+          storeId: "store-1",
+          subtotal: 12000,
+          tax: 0,
+          total: 12000,
+          totalPaid: 12000,
+          transactionNumber: "TXN-1",
+        },
+        {
+          _id: "txn-late",
+          completedAt: Date.UTC(2026, 4, 7, 19),
+          payments: [{ amount: 5000, method: "cash", timestamp: 1 }],
+          status: "completed",
+          storeId: "store-1",
+          subtotal: 5000,
+          tax: 0,
+          total: 5000,
+          totalPaid: 5000,
+          transactionNumber: "TXN-LATE",
+        },
+      ],
+      store: [store],
+    });
+
+    const result = await reopenDailyCloseWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        actorUserId: "user-1" as Id<"athenaUser">,
+        approvalProofId: "approval-proof-reopen-1" as Id<"approvalProof">,
+        dailyCloseId: "daily-close-1" as Id<"dailyClose">,
+        reason: "Late cash sale was missed.",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        action: "reopened",
+        originalDailyClose: {
+          _id: "daily-close-1",
+          isCurrent: false,
+          lifecycleStatus: "reopened",
+          reportSnapshot: originalSnapshot,
+          reopenReason: "Late cash sale was missed.",
+          status: "completed",
+        },
+        reopenedDailyClose: {
+          isCurrent: true,
+          lifecycleStatus: "active",
+          reopenedFromDailyCloseId: "daily-close-1",
+          status: "open",
+          supersedesDailyCloseId: "daily-close-1",
+        },
+      },
+    });
+    expect(
+      tables.get("dailyClose")?.get("daily-close-1")?.reportSnapshot,
+    ).toEqual(originalSnapshot);
+
+    await db.patch("posTransaction", "txn-1", {
+      total: 99000,
+      transactionNumber: "MUTATED",
+    });
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      {
+        operatingDate: "2026-05-07",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+    expect(snapshot.status).toBe("ready");
+    expect(snapshot.existingClose?.status).toBe("open");
+    expect(snapshot.completedClose).toBeNull();
+    expect(snapshot.readyItems.map((item) => item.key)).toEqual(
+      expect.arrayContaining([
+        "pos_transaction:txn-1:completed",
+        "pos_transaction:txn-late:completed",
+      ]),
+    );
+
+    const detail = await getCompletedDailyCloseHistoryDetailWithCtx(
+      { db } as unknown as QueryCtx,
+      {
+        dailyCloseId: "daily-close-1" as Id<"dailyClose">,
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+    expect(detail?.reportSnapshot).toEqual(originalSnapshot);
+    expect(inserts.map((insert) => insert.table)).toEqual([
+      "operationalEvent",
+      "dailyClose",
+      "operationalEvent",
+    ]);
+    expect(
+      inserts.find(
+        (insert) =>
+          insert.table === "operationalEvent" &&
+          insert.value.eventType === "daily_close_reopened",
+      )?.value,
+    ).toMatchObject({
+      actorStaffProfileId: "staff-manager-1",
+      metadata: {
+        approvalProofId: "approval-proof-reopen-1",
+        reason: "Late cash sale was missed.",
+        reopenedDailyCloseId: "dailyClose-2",
+      },
+    });
+  });
+
+  it("returns the existing reopened close when reopen is retried", async () => {
+    const { db, inserts } = createDb({
+      dailyClose: [
+        completedDailyCloseRow({
+          isCurrent: false,
+          lifecycleStatus: "reopened",
+          reopenedAt: Date.UTC(2026, 4, 8, 10),
+          supersededByDailyCloseId: "daily-close-reopened",
+        }),
+        {
+          ...completedDailyCloseRow({
+            _id: "daily-close-reopened",
+            completedAt: undefined,
+            completedByStaffProfileId: undefined,
+            completedByUserId: undefined,
+            isCurrent: true,
+            lifecycleStatus: "active",
+            reopenedFromDailyCloseId: "daily-close-1",
+            reportSnapshot: undefined,
+            status: "open",
+            supersedesDailyCloseId: "daily-close-1",
+          }),
+        },
+      ],
+    });
+
+    const result = await reopenDailyCloseWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        approvalProofId: "approval-proof-reopen-1" as Id<"approvalProof">,
+        dailyCloseId: "daily-close-1" as Id<"dailyClose">,
+        reason: "Late cash sale was missed.",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        action: "already_reopened",
+        originalDailyClose: {
+          _id: "daily-close-1",
+          lifecycleStatus: "reopened",
+          status: "completed",
+        },
+        reopenedDailyClose: {
+          _id: "daily-close-reopened",
+          lifecycleStatus: "active",
+          reopenedFromDailyCloseId: "daily-close-1",
+          status: "open",
+        },
+      },
+    });
+    expect(inserts).toEqual([]);
+  });
+
+  it("supersedes the original completed close when a reopened close is completed", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 8, 11));
+    const { db, tables } = createDb({
+      approvalProof: [
+        dailyCloseApprovalProof({
+          _id: "approval-proof-complete-reopened",
+          expiresAt: Date.UTC(2026, 4, 8, 12),
+        }),
+      ],
+      dailyClose: [
+        completedDailyCloseRow({
+          isCurrent: false,
+          lifecycleStatus: "reopened",
+          supersededByDailyCloseId: "daily-close-reopened",
+        }),
+        {
+          ...completedDailyCloseRow({
+            _id: "daily-close-reopened",
+            completedAt: undefined,
+            completedByStaffProfileId: undefined,
+            completedByUserId: undefined,
+            isCurrent: true,
+            lifecycleStatus: "active",
+            reopenedFromDailyCloseId: "daily-close-1",
+            reportSnapshot: undefined,
+            status: "open",
+            supersedesDailyCloseId: "daily-close-1",
+          }),
+        },
+      ],
+      posTransaction: [
+        {
+          _id: "txn-1",
+          completedAt: Date.UTC(2026, 4, 7, 14),
+          payments: [{ amount: 12000, method: "cash", timestamp: 1 }],
+          status: "completed",
+          storeId: "store-1",
+          subtotal: 12000,
+          tax: 0,
+          total: 12000,
+          totalPaid: 12000,
+          transactionNumber: "TXN-1",
+        },
+      ],
+      store: [store],
+    });
+
+    const result = await completeDailyCloseWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        approvalProofId:
+          "approval-proof-complete-reopened" as Id<"approvalProof">,
+        operatingDate: "2026-05-07",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        action: "completed",
+        dailyClose: {
+          _id: "daily-close-reopened",
+          lifecycleStatus: "active",
+          status: "completed",
+          supersedesDailyCloseId: "daily-close-1",
+        },
+      },
+    });
+    expect(tables.get("dailyClose")?.get("daily-close-1")).toMatchObject({
+      lifecycleStatus: "superseded",
+      isCurrent: false,
+      supersededByDailyCloseId: "daily-close-reopened",
+      reportSnapshot: completedDailyCloseSnapshot(),
+      status: "completed",
+    });
+  });
+
   it("lists completed daily close history for a store newest first and returns snapshot-backed detail", async () => {
     const completedSnapshot = {
       closeMetadata: {
@@ -1633,7 +2054,8 @@ describe("end-of-day review backend foundation", () => {
           severity: "carry_forward",
           category: "open_work",
           title: "Carry forward",
-          message: "Open operational work will carry forward after End-of-Day Review.",
+          message:
+            "Open operational work will carry forward after End-of-Day Review.",
           subject: {
             id: "work-1",
             label: "Carry forward",

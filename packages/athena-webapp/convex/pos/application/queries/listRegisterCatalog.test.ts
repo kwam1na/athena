@@ -171,6 +171,13 @@ describe("listRegisterCatalog", () => {
           name: "Archived Wig",
           availability: "archived",
         },
+        {
+          _id: "product-zero-price",
+          storeId: "store-a",
+          categoryId: "category-store-a",
+          description: "Unpriced SKU",
+          name: "Bottle Water",
+        },
       ],
       productSku: [
         {
@@ -214,6 +221,17 @@ describe("listRegisterCatalog", () => {
           images: [],
           price: 1000,
           quantityAvailable: 9,
+        },
+        {
+          _id: "sku-zero-price",
+          storeId: "store-a",
+          productId: "product-zero-price",
+          sku: "BOTTLE-WATER-ZERO",
+          barcode: "777",
+          images: [],
+          netPrice: 0,
+          price: 0,
+          quantityAvailable: 200,
         },
       ],
     });

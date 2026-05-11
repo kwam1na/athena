@@ -363,6 +363,25 @@ describe("DailyCloseHistoryView", () => {
     expect(screen.queryByText(/manager approval/i)).not.toBeInTheDocument();
   });
 
+  it("shows reopened metadata without exposing a reopen action", () => {
+    mockQueries([
+      historyRecord({
+        _id: "daily-close-reopened",
+        reopenedAt: Date.UTC(2026, 4, 9, 8),
+        reopenReason: "Cash deposit corrected.",
+      }),
+    ]);
+
+    render(<DailyCloseHistoryView />);
+
+    expect(screen.getByText("Reopened")).toBeInTheDocument();
+    expect(screen.getByText("Reopened after completion")).toBeInTheDocument();
+    expect(screen.getByText(/Cash deposit corrected/i)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Reopen End-of-Day Review" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("keeps source links as navigation with origin context", () => {
     render(<DailyCloseHistoryView />);
 

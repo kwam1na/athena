@@ -17,11 +17,11 @@ Landing page for packages/athena-webapp. Use this page to orient around graph ho
 - [validation-map.json](../../../packages/athena-webapp/docs/agent/validation-map.json)
 
 ## Graph Hotspots
-- `DailyCloseView.tsx` (74 edges, Community 0) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)
-- `dailyClose.ts` (55 edges, Community 1) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../../packages/athena-webapp/convex/operations/dailyClose.ts)
+- `DailyCloseView.tsx` (76 edges, Community 0) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)
+- `dailyClose.ts` (57 edges, Community 1) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../../packages/athena-webapp/convex/operations/dailyClose.ts)
 - `ProcurementView.tsx` (39 edges, Community 4) - [`packages/athena-webapp/src/components/procurement/ProcurementView.tsx`](../../../packages/athena-webapp/src/components/procurement/ProcurementView.tsx)
 - `DailyOpeningView.tsx` (35 edges, Community 5) - [`packages/athena-webapp/src/components/operations/DailyOpeningView.tsx`](../../../packages/athena-webapp/src/components/operations/DailyOpeningView.tsx)
-- `dailyOpening.ts` (31 edges, Community 7) - [`packages/athena-webapp/convex/operations/dailyOpening.ts`](../../../packages/athena-webapp/convex/operations/dailyOpening.ts)
+- `dailyOpening.ts` (33 edges, Community 6) - [`packages/athena-webapp/convex/operations/dailyOpening.ts`](../../../packages/athena-webapp/convex/operations/dailyOpening.ts)
 
 ## Navigation
 - [wiki index](../index.md) - back to the wiki index
