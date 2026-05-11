@@ -81,7 +81,7 @@ function mapSkuToRegisterCatalogRow(args: {
     name: args.product.name,
     sku: args.sku.sku ?? "",
     barcode: args.sku.barcode ?? "",
-    price: args.sku.netPrice ?? args.sku.price,
+    price: getRegisterCatalogPrice(args.sku),
     category: args.category,
     description: args.product.description ?? "",
     image: args.sku.images[0] ?? null,
@@ -90,6 +90,10 @@ function mapSkuToRegisterCatalogRow(args: {
     color: args.color,
     areProcessingFeesAbsorbed: args.product.areProcessingFeesAbsorbed ?? false,
   };
+}
+
+function getRegisterCatalogPrice(sku: Doc<"productSku">) {
+  return sku.netPrice ?? sku.price;
 }
 
 export async function listRegisterCatalog(
@@ -118,6 +122,10 @@ export async function listRegisterCatalog(
       product.storeId !== args.storeId ||
       product.availability === "archived"
     ) {
+      continue;
+    }
+
+    if (getRegisterCatalogPrice(sku) <= 0) {
       continue;
     }
 

@@ -76,6 +76,7 @@ import { OperationsSummaryMetric } from "./OperationsSummaryMetric";
 type DailyCloseApi = {
   completeDailyClose?: unknown;
   getDailyCloseSnapshot?: unknown;
+  reopenDailyClose?: unknown;
 };
 
 const useExpectedDailyCloseQuery = useQuery as unknown as (
@@ -131,6 +132,15 @@ export type DailyCloseSnapshot = {
     completedAt?: number | null;
     completedByStaffName?: string | null;
     notes?: string | null;
+  } | null;
+  existingClose?: {
+    _id?: Id<"dailyClose"> | string;
+    isCurrent?: boolean;
+    lifecycleStatus?: "active" | "reopened" | "superseded";
+    reopenedAt?: number | null;
+    reopenedByStaffProfileId?: Id<"staffProfile"> | null;
+    reopenReason?: string | null;
+    supersededByDailyCloseId?: Id<"dailyClose"> | string | null;
   } | null;
   operatingDate: string;
   readyItems: DailyCloseItem[];
@@ -206,6 +216,14 @@ type CompletionArgs = {
   startAt: number;
 };
 
+type ReopenArgs = {
+  approvalProofId?: Id<"approvalProof">;
+  endAt: number;
+  operatingDate: string;
+  reason: string;
+  startAt: number;
+};
+
 export type BucketStatus = "blocked" | "carry-forward" | "ready" | "review";
 
 const bucketTabValues: BucketStatus[] = [
@@ -236,6 +254,9 @@ type DailyCloseViewContentProps = {
   latestSelectableOperatingDate?: Date;
   onComplete: (
     args: CompletionArgs,
+  ) => Promise<NormalizedApprovalCommandResult<unknown>>;
+  onReopen?: (
+    args: ReopenArgs,
   ) => Promise<NormalizedApprovalCommandResult<unknown>>;
   onOperatingDateChange?: (date: Date) => void;
   onAuthenticateForApproval?: (args: {
@@ -585,6 +606,13 @@ function normalizeCommandMessage(
 }
 
 function getDailyCloseStatus(snapshot: DailyCloseSnapshot): DailyCloseStatus {
+  if (
+    snapshot.existingClose?.lifecycleStatus === "reopened" ||
+    snapshot.existingClose?.lifecycleStatus === "superseded"
+  ) {
+    return snapshot.readiness?.status === "blocked" ? "blocked" : "needs_review";
+  }
+
   if (snapshot.status) return snapshot.status;
 
   if (snapshot.completedClose) return "completed";
@@ -596,6 +624,15 @@ function getDailyCloseStatus(snapshot: DailyCloseSnapshot): DailyCloseStatus {
   if (snapshot.carryForwardItems.length > 0) return "carry_forward";
 
   return "ready";
+}
+
+function canReopenDailyClose(snapshot: DailyCloseSnapshot) {
+  return (
+    getDailyCloseStatus(snapshot) === "completed" &&
+    snapshot.existingClose?.isCurrent !== false &&
+    snapshot.existingClose?.lifecycleStatus !== "reopened" &&
+    snapshot.existingClose?.lifecycleStatus !== "superseded"
+  );
 }
 
 function getItemId(item: DailyCloseItem) {
@@ -1371,7 +1408,12 @@ function getStatusDisplayCopy(
 function normalizeCompletedReportSnapshot(
   snapshot: DailyCloseSnapshot,
 ): DailyCloseSnapshot {
-  if (snapshot.status !== "completed" || !snapshot.reportSnapshot) {
+  if (
+    snapshot.status !== "completed" ||
+    snapshot.existingClose?.lifecycleStatus === "reopened" ||
+    snapshot.existingClose?.lifecycleStatus === "superseded" ||
+    !snapshot.reportSnapshot
+  ) {
     return snapshot;
   }
 
@@ -2365,12 +2407,16 @@ function OperatingDatePicker({
 
 function CompletionRail({
   commandMessage,
+  canReopen,
   isBlocked,
   isCompleted,
   isCompleting,
   notes,
   onComplete,
   onNotesChange,
+  onReopen,
+  onReopenReasonChange,
+  reopenReason,
   snapshot,
   status,
 }: {
@@ -2378,12 +2424,16 @@ function CompletionRail({
     kind: "error" | "success";
     message: string;
   } | null;
+  canReopen: boolean;
   isBlocked: boolean;
   isCompleted: boolean;
   isCompleting: boolean;
   notes: string;
   onComplete: () => void;
   onNotesChange: (notes: string) => void;
+  onReopen?: () => void;
+  onReopenReasonChange: (reason: string) => void;
+  reopenReason: string;
   snapshot: DailyCloseSnapshot;
   status: DailyCloseStatus;
 }) {
@@ -2521,6 +2571,35 @@ function CompletionRail({
                 {snapshot.completedClose.notes}
               </p>
             ) : null}
+            {canReopen ? (
+              <div className="mt-layout-md space-y-layout-sm border-t border-success/30 pt-layout-md">
+                <label
+                  className="text-sm font-medium text-foreground"
+                  htmlFor="daily-close-reopen-reason"
+                >
+                  Reopen reason
+                </label>
+                <textarea
+                  className="min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  id="daily-close-reopen-reason"
+                  onChange={(event) =>
+                    onReopenReasonChange(event.target.value)
+                  }
+                  placeholder="Enter why this close needs revision."
+                  value={reopenReason}
+                />
+                <LoadingButton
+                  className="w-full"
+                  disabled={!reopenReason.trim()}
+                  isLoading={isCompleting}
+                  onClick={onReopen}
+                  type="button"
+                  variant="outline"
+                >
+                  Reopen End-of-Day Review
+                </LoadingButton>
+              </div>
+            ) : null}
           </div>
         ) : (
           <div className="mt-layout-md space-y-layout-sm">
@@ -2578,6 +2657,7 @@ export function DailyCloseViewContent({
   latestSelectableOperatingDate,
   onComplete,
   onOperatingDateChange,
+  onReopen,
   onAuthenticateForApproval,
   orgUrlSlug,
   snapshot,
@@ -2585,6 +2665,7 @@ export function DailyCloseViewContent({
   storeUrlSlug,
 }: DailyCloseViewContentProps) {
   const [notes, setNotes] = useState("");
+  const [reopenReason, setReopenReason] = useState("");
   const [commandMessage, setCommandMessage] = useState<{
     kind: "error" | "success";
     message: string;
@@ -2622,6 +2703,7 @@ export function DailyCloseViewContent({
 
   useEffect(() => {
     setCommandMessage(null);
+    setReopenReason("");
   }, [snapshot?.operatingDate]);
 
   if (isLoadingAccess) {
@@ -2657,6 +2739,9 @@ export function DailyCloseViewContent({
     : "ready";
   const isBlocked = status === "blocked";
   const isCompleted = status === "completed";
+  const canReopen = displaySnapshot
+    ? canReopenDailyClose(displaySnapshot) && Boolean(onReopen)
+    : false;
   const displayCopy = displaySnapshot
     ? getStatusDisplayCopy(displaySnapshot, status)
     : statusCopy[status];
@@ -2703,6 +2788,60 @@ export function DailyCloseViewContent({
             kind: "success",
             message: "End-of-day review completed.",
           });
+          return;
+        }
+
+        setCommandMessage({
+          kind: "error",
+          message: normalizeCommandMessage(commandResult),
+        });
+      },
+    });
+
+    if (result.kind === "approval_required") return;
+  };
+
+  const handleReopen = async () => {
+    if (!snapshot || !onReopen || !canReopen) return;
+
+    const reason = reopenReason.trim();
+
+    if (!reason) {
+      setCommandMessage({
+        kind: "error",
+        message: "Reopen reason required. Enter a reason before reopening.",
+      });
+      return;
+    }
+
+    setCommandMessage(null);
+
+    const reopenArgs = {
+      endAt: snapshot.endAt,
+      operatingDate: snapshot.operatingDate,
+      reason,
+      startAt: snapshot.startAt,
+    };
+
+    const result = await completionApprovalRunner.run({
+      execute: (approvalArgs: ApprovalRetryArgs) =>
+        onReopen({
+          ...reopenArgs,
+          ...(approvalArgs.approvalProofId
+            ? { approvalProofId: approvalArgs.approvalProofId }
+            : {}),
+        }),
+      onResult: (commandResult) => {
+        if (commandResult.kind === "approval_required") {
+          return;
+        }
+
+        if (commandResult.kind === "ok") {
+          setCommandMessage({
+            kind: "success",
+            message: "End-of-Day Review reopened.",
+          });
+          setReopenReason("");
           return;
         }
 
@@ -2881,6 +3020,7 @@ export function DailyCloseViewContent({
       rail={
         displaySnapshot ? (
           <CompletionRail
+            canReopen={canReopen}
             commandMessage={commandMessage}
             isBlocked={isBlocked}
             isCompleted={isCompleted}
@@ -2888,6 +3028,9 @@ export function DailyCloseViewContent({
             notes={notes}
             onComplete={() => void handleComplete()}
             onNotesChange={setNotes}
+            onReopen={() => void handleReopen()}
+            onReopenReasonChange={setReopenReason}
+            reopenReason={reopenReason}
             snapshot={displaySnapshot}
             status={status}
           />
@@ -2926,11 +3069,13 @@ function DailyCloseApiPendingView() {
 type DailyCloseConnectedViewProps = {
   completeDailyClose: unknown;
   getDailyCloseSnapshot: unknown;
+  reopenDailyClose?: unknown;
 };
 
 function DailyCloseConnectedView({
   completeDailyClose,
   getDailyCloseSnapshot,
+  reopenDailyClose,
 }: DailyCloseConnectedViewProps) {
   const {
     activeStore,
@@ -2964,6 +3109,9 @@ function DailyCloseConnectedView({
   ) as DailyCloseSnapshot | undefined;
   const completeDailyCloseMutation =
     useExpectedDailyCloseMutation(completeDailyClose);
+  const reopenDailyCloseMutation = useExpectedDailyCloseMutation(
+    reopenDailyClose ?? completeDailyClose,
+  );
   const authenticateForApproval = useMutation(
     api.operations.staffCredentials.authenticateStaffCredentialForApproval,
   );
@@ -3000,6 +3148,36 @@ function DailyCloseConnectedView({
     }
   };
 
+  const handleReopen = async (args: ReopenArgs) => {
+    if (!activeStore?._id || !reopenDailyClose) {
+      return {
+        kind: "user_error",
+        error: {
+          code: "validation_failed",
+          message: "Reopen action is not available yet.",
+        },
+      } as NormalizedCommandResult<unknown>;
+    }
+
+    setIsCompleting(true);
+
+    try {
+      return await runCommand(
+        () =>
+          reopenDailyCloseMutation({
+            approvalProofId: args.approvalProofId,
+            endAt: args.endAt,
+            operatingDate: args.operatingDate,
+            reason: args.reason,
+            startAt: args.startAt,
+            storeId: activeStore._id,
+          }) as Promise<ApprovalCommandResult<unknown>>,
+      );
+    } finally {
+      setIsCompleting(false);
+    }
+  };
+
   const handleOperatingDateChange = (date: Date) => {
     const nextRange = getLocalOperatingDateRange(date);
 
@@ -3022,6 +3200,7 @@ function DailyCloseConnectedView({
       isLoadingSnapshot={snapshot === undefined}
       onComplete={handleComplete}
       onOperatingDateChange={handleOperatingDateChange}
+      onReopen={reopenDailyClose ? handleReopen : undefined}
       onAuthenticateForApproval={(args) =>
         runCommand(
           () =>
@@ -3066,6 +3245,7 @@ export function DailyCloseView() {
     <DailyCloseConnectedView
       completeDailyClose={dailyCloseApi.completeDailyClose}
       getDailyCloseSnapshot={dailyCloseApi.getDailyCloseSnapshot}
+      reopenDailyClose={dailyCloseApi.reopenDailyClose}
     />
   );
 }

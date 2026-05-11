@@ -239,6 +239,35 @@ describe("daily opening backend foundation", () => {
     ]);
   });
 
+  it("does not treat a reopened prior close as clean", async () => {
+    const { db } = createDb({
+      dailyClose: [
+        completedDailyClose({
+          lifecycleStatus: "reopened",
+          reopenedAt: Date.UTC(2026, 4, 8, 7),
+          reopenReason: "Cash deposit was corrected.",
+        }),
+      ],
+      store: [store],
+    });
+
+    const snapshot = await buildDailyOpeningSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.status).toBe("needs_attention");
+    expect(snapshot.readyItems).toEqual([]);
+    expect(snapshot.reviewItems).toContainEqual(
+      expect.objectContaining({
+        key: "daily_close:daily-close-1:reopened",
+        title: "Prior End-of-Day Review reopened",
+        message:
+          "The prior store day was reopened. Complete the revised End-of-Day Review before treating the prior close as clean.",
+      }),
+    );
+  });
+
   it("summarizes pending approval blockers with operator-facing metadata", async () => {
     const { db } = createDb({
       approvalRequest: [

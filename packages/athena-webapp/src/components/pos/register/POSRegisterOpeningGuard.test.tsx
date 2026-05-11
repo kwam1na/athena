@@ -72,6 +72,9 @@ vi.mock("@/hooks/useGetActiveStore", () => ({
 vi.mock("~/convex/_generated/api", () => ({
   api: {
     operations: {
+      dailyClose: {
+        getDailyCloseSnapshot: "getDailyCloseSnapshot",
+      },
       dailyOpening: {
         getDailyOpeningSnapshot: "getDailyOpeningSnapshot",
       },
@@ -90,6 +93,17 @@ describe("POSRegisterOpeningGuard", () => {
       },
       isLoadingStores: false,
     });
+    useQueryMock.mockImplementation((queryName: string) => {
+      if (queryName === "getDailyOpeningSnapshot") {
+        return { status: "started" };
+      }
+
+      if (queryName === "getDailyCloseSnapshot") {
+        return { status: "ready" };
+      }
+
+      return undefined;
+    });
   });
 
   afterEach(() => {
@@ -97,10 +111,6 @@ describe("POSRegisterOpeningGuard", () => {
   });
 
   it("renders the register when the store day has started", () => {
-    useQueryMock.mockReturnValue({
-      status: "started",
-    });
-
     render(
       <POSRegisterOpeningGuard>
         <div>Register workspace</div>
@@ -115,11 +125,26 @@ describe("POSRegisterOpeningGuard", () => {
         storeId: "store-1",
       }),
     );
+    expect(useQueryMock).toHaveBeenCalledWith(
+      "getDailyCloseSnapshot",
+      expect.objectContaining({
+        operatingDate: "2026-05-09",
+        storeId: "store-1",
+      }),
+    );
   });
 
   it("shows a blocked state when the store day has not started", () => {
-    useQueryMock.mockReturnValue({
-      status: "ready",
+    useQueryMock.mockImplementation((queryName: string) => {
+      if (queryName === "getDailyOpeningSnapshot") {
+        return { status: "ready" };
+      }
+
+      if (queryName === "getDailyCloseSnapshot") {
+        return { status: "ready" };
+      }
+
+      return undefined;
     });
 
     render(
@@ -143,8 +168,93 @@ describe("POSRegisterOpeningGuard", () => {
     );
   });
 
+  it("directs the operator to End-of-Day Review when the store day is closed", () => {
+    useQueryMock.mockImplementation((queryName: string) => {
+      if (queryName === "getDailyOpeningSnapshot") {
+        return { status: "started" };
+      }
+
+      if (queryName === "getDailyCloseSnapshot") {
+        return { status: "completed" };
+      }
+
+      return undefined;
+    });
+
+    render(
+      <POSRegisterOpeningGuard>
+        <div>Register workspace</div>
+      </POSRegisterOpeningGuard>,
+    );
+
+    expect(screen.queryByText("Register workspace")).not.toBeInTheDocument();
+    expect(screen.getByText("Store day closed")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "End-of-Day Review has already closed this operating day. Reopen the day from End-of-Day Review before entering POS.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /End-of-Day Review/i }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/wigclub/operations/daily-close",
+    );
+  });
+
+  it("allows POS when the active close was reopened and Opening Handoff is started", () => {
+    useQueryMock.mockImplementation((queryName: string) => {
+      if (queryName === "getDailyOpeningSnapshot") {
+        return { status: "started" };
+      }
+
+      if (queryName === "getDailyCloseSnapshot") {
+        return {
+          existingClose: { lifecycleStatus: "reopened" },
+          status: "completed",
+        };
+      }
+
+      return undefined;
+    });
+
+    render(
+      <POSRegisterOpeningGuard>
+        <div>Register workspace</div>
+      </POSRegisterOpeningGuard>,
+    );
+
+    expect(screen.getByText("Register workspace")).toBeInTheDocument();
+    expect(screen.queryByText("Store day closed")).not.toBeInTheDocument();
+  });
+
+
   it("waits for the opening snapshot before rendering or redirecting", () => {
-    useQueryMock.mockReturnValue(undefined);
+    useQueryMock.mockImplementation((queryName: string) => {
+      if (queryName === "getDailyCloseSnapshot") {
+        return { status: "ready" };
+      }
+
+      return undefined;
+    });
+
+    render(
+      <POSRegisterOpeningGuard>
+        <div>Register workspace</div>
+      </POSRegisterOpeningGuard>,
+    );
+
+    expect(screen.queryByText("Register workspace")).not.toBeInTheDocument();
+  });
+
+  it("waits for the close snapshot before rendering or redirecting", () => {
+    useQueryMock.mockImplementation((queryName: string) => {
+      if (queryName === "getDailyOpeningSnapshot") {
+        return { status: "started" };
+      }
+
+      return undefined;
+    });
 
     render(
       <POSRegisterOpeningGuard>

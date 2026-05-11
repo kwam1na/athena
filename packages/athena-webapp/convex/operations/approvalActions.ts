@@ -28,6 +28,10 @@ export const APPROVAL_ACTIONS = {
     key: "operations.daily_close.complete",
     label: "Complete End-of-Day Review",
   },
+  dailyCloseReopen: {
+    key: "operations.daily_close.reopen",
+    label: "Reopen End-of-Day Review",
+  },
   transactionPaymentMethodCorrection: {
     key: "pos.transaction.correct_payment_method",
     label: "Correct payment method",

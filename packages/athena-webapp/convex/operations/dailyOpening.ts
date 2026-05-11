@@ -192,6 +192,28 @@ async function getStartedDailyOpeningForDate(
     .first();
 }
 
+async function getPriorDailyCloseForOpeningReview(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    operatingDate: string;
+    storeId: Id<"store">;
+  },
+) {
+  const completedCloses = await ctx.db
+    .query("dailyClose")
+    .withIndex("by_storeId_status_operatingDate", (q) =>
+      q.eq("storeId", args.storeId).eq("status", "completed"),
+    )
+    .order("desc")
+    .take(DAILY_OPENING_QUERY_LIMIT);
+
+  return (
+    completedCloses.find(
+      (dailyClose) => dailyClose.operatingDate < args.operatingDate,
+    ) ?? null
+  );
+}
+
 function getStaffDisplayName(staffProfile: Doc<"staffProfile"> | null) {
   if (!staffProfile) return null;
 
@@ -461,6 +483,34 @@ function priorCloseReadyItem(priorClose: Doc<"dailyClose">): DailyOpeningItem {
   };
 }
 
+function priorCloseReopenedItem(priorClose: Doc<"dailyClose">): DailyOpeningItem {
+  return {
+    key: `daily_close:${priorClose._id}:reopened`,
+    severity: "review",
+    category: "prior_close",
+    title: "Prior End-of-Day Review reopened",
+    message:
+      "The prior store day was reopened. Complete the revised End-of-Day Review before treating the prior close as clean.",
+    subject: {
+      type: DAILY_CLOSE_SUBJECT_TYPE,
+      id: priorClose._id,
+      label: `End-of-Day Review ${priorClose.operatingDate}`,
+    },
+    link: {
+      label: "Review End-of-Day Review",
+      search: {
+        operatingDate: priorClose.operatingDate,
+      },
+      to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+    },
+    metadata: {
+      operatingDate: priorClose.operatingDate,
+      reopenedAt: priorClose.reopenedAt,
+      reopenReason: priorClose.reopenReason,
+    },
+  };
+}
+
 function priorCloseNotesItem(priorClose: Doc<"dailyClose">): DailyOpeningItem | null {
   const notes = trimOptional(priorClose.notes);
 
@@ -668,6 +718,9 @@ export async function buildDailyOpeningSnapshotWithCtx(
     getDailyCloseOpeningContextWithCtx(ctx, args),
     listPendingOpeningBlockerApprovals(ctx, args.storeId),
   ]);
+  const priorClose =
+    openingContext.priorClose ??
+    (await getPriorDailyCloseForOpeningReview(ctx, args));
 
   const blockers: DailyOpeningItem[] = openingContext.priorClose
     ? await getMissingCarryForwardItems(ctx, openingContext.priorClose)
@@ -678,10 +731,14 @@ export async function buildDailyOpeningSnapshotWithCtx(
     .map(carryForwardItem);
   const readyItems: DailyOpeningItem[] = [];
 
-  if (openingContext.priorClose) {
-    readyItems.push(priorCloseReadyItem(openingContext.priorClose));
+  if (priorClose) {
+    if (priorClose.lifecycleStatus === "reopened") {
+      reviewItems.push(priorCloseReopenedItem(priorClose));
+    } else {
+      readyItems.push(priorCloseReadyItem(priorClose));
+    }
 
-    const notesItem = priorCloseNotesItem(openingContext.priorClose);
+    const notesItem = priorCloseNotesItem(priorClose);
 
     if (notesItem) {
       reviewItems.push(notesItem);
@@ -711,7 +768,7 @@ export async function buildDailyOpeningSnapshotWithCtx(
     storeId: args.storeId,
     organizationId: store?.organizationId ?? null,
     existingOpening,
-    priorClose: openingContext.priorClose,
+    priorClose,
     status: existingOpening ? "started" : readiness.status,
     blockers,
     reviewItems,

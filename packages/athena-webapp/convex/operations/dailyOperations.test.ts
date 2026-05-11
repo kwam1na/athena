@@ -272,6 +272,46 @@ describe("daily operations overview read model", () => {
     });
   });
 
+  it("shows a reopened active close as needing revised End-of-Day Review", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [
+          priorClose,
+          {
+            ...priorClose,
+            _id: "close-reopened",
+            completedAt: Date.UTC(2026, 4, 8, 22),
+            isCurrent: true,
+            lifecycleStatus: "reopened",
+            operatingDate: "2026-05-08",
+            reopenedAt: Date.UTC(2026, 4, 9, 8),
+            reopenReason: "Cash count corrected after close.",
+          },
+        ],
+        dailyOpening: [startedOpening],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.lifecycle.status).toBe("reopened");
+    expect(snapshot.primaryAction).toMatchObject({
+      label: "Revise End-of-Day Review",
+    });
+    expect(snapshot.lanes.find((lane) => lane.key === "close")).toMatchObject({
+      status: "needs_attention",
+      description:
+        "End-of-Day Review was reopened and needs a revised close.",
+    });
+    expect(snapshot.attentionItems).toContainEqual(
+      expect.objectContaining({
+        owner: "daily_close",
+        label: "End-of-Day Review reopened",
+        severity: "warning",
+      }),
+    );
+  });
+
   it("keeps the week summary anchored separately from the selected operating date", async () => {
     const snapshot = await buildDailyOperationsSnapshotWithCtx(
       buildCtx({

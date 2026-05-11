@@ -69,6 +69,13 @@ export const dailyCloseSchema = v.object({
   organizationId: v.id("organization"),
   operatingDate: v.string(),
   status: v.union(v.literal("open"), v.literal("completed")),
+  lifecycleStatus: v.optional(
+    v.union(
+      v.literal("active"),
+      v.literal("reopened"),
+      v.literal("superseded"),
+    ),
+  ),
   isCurrent: v.boolean(),
   readiness: v.object({
     status: dailyCloseReadinessStatusValidator,
@@ -88,4 +95,11 @@ export const dailyCloseSchema = v.object({
   completedAt: v.optional(v.number()),
   completedByUserId: v.optional(v.id("athenaUser")),
   completedByStaffProfileId: v.optional(v.id("staffProfile")),
+  reopenedAt: v.optional(v.number()),
+  reopenedByUserId: v.optional(v.id("athenaUser")),
+  reopenedByStaffProfileId: v.optional(v.id("staffProfile")),
+  reopenReason: v.optional(v.string()),
+  reopenedFromDailyCloseId: v.optional(v.id("dailyClose")),
+  supersededByDailyCloseId: v.optional(v.id("dailyClose")),
+  supersedesDailyCloseId: v.optional(v.id("dailyClose")),
 });

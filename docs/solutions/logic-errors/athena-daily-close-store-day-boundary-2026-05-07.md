@@ -63,6 +63,13 @@ dialog through `useApprovedCommand`, and the mutation consumes the one-use
 approval proof before persisting the close record. Do not rely on a
 screen-local manager prompt as the enforcement boundary.
 
+Reopening a completed Daily Close is also a store-day lifecycle mutation, not a
+history edit. Require the same manager approval boundary plus a human reason,
+record a `daily_close_reopened` operational event, and create or select an
+active open lifecycle record for the operating date. The original completed
+record remains audit evidence; a later revised completion supersedes it instead
+of rewriting its stored report.
+
 An all-zero store day is allowed to close when the server snapshot has no
 blockers, review items, carry-forward work, ready inputs, sales, cash activity,
 expenses, or variances. Treat that as an explicit zero-activity close in the UI
@@ -102,6 +109,11 @@ server-side item totals, not from stale client cart state.
   close instead of reusing ordinary completed-work copy.
 - Preserve carry-forward work as operational work items so the later opening
   workflow has a durable handoff.
+- Do not mutate `dailyClose.reportSnapshot` when reopening. Mark lifecycle state
+  explicitly and let a revised completion create the next completed snapshot.
+- POS and Opening should consume the active lifecycle state: completed blocks
+  POS, reopened permits continued work after Opening Handoff has started, and a
+  reopened prior day is not a clean close until a revised close completes.
 - Keep the snapshot query and completion mutation on the same validated
   operating-day range so the operator does not close against a different window
   than the UI displayed.

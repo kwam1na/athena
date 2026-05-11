@@ -30,6 +30,7 @@ const TERMINAL_WORK_ITEM_STATUSES = new Set(["completed", "cancelled"]);
 const ACTIVE_REGISTER_STATUSES = ["open", "active", "closing"] as const;
 const OPEN_POS_SESSION_STATUSES = ["active", "held"] as const;
 const DAILY_CLOSE_COMPLETION_ACTION = APPROVAL_ACTIONS.dailyCloseCompletion;
+const DAILY_CLOSE_REOPEN_ACTION = APPROVAL_ACTIONS.dailyCloseReopen;
 const DAILY_CLOSE_BLOCKER_CATEGORY_PRECEDENCE: Record<string, number> = {
   approval: 0,
   register_session: 10,
@@ -242,6 +243,22 @@ type CompleteDailyCloseResult = ApprovalCommandResult<{
   carryForwardWorkItems: Array<Doc<"operationalWorkItem">>;
 }>;
 
+type ReopenDailyCloseArgs = {
+  actorUserId?: Id<"athenaUser">;
+  actorStaffProfileId?: Id<"staffProfile">;
+  approvalProofId?: Id<"approvalProof">;
+  dailyCloseId: Id<"dailyClose">;
+  organizationId?: Id<"organization">;
+  reason: string;
+  storeId: Id<"store">;
+};
+
+type ReopenDailyCloseResult = ApprovalCommandResult<{
+  action: "reopened" | "already_reopened";
+  originalDailyClose: Doc<"dailyClose">;
+  reopenedDailyClose: Doc<"dailyClose">;
+}>;
+
 function buildDailyCloseApprovalSubject(args: {
   operatingDate: string;
   storeId: Id<"store">;
@@ -276,6 +293,40 @@ function buildDailyCloseCompletionApprovalRequirement(args: {
       },
     ],
     metadata: {
+      operatingDate: args.operatingDate,
+    },
+  };
+}
+
+function buildDailyCloseReopenApprovalRequirement(args: {
+  dailyCloseId: Id<"dailyClose">;
+  operatingDate: string;
+  storeId: Id<"store">;
+}): ApprovalRequirement {
+  return {
+    action: DAILY_CLOSE_REOPEN_ACTION,
+    reason: "Manager approval is required to reopen End-of-Day Review.",
+    requiredRole: "manager",
+    selfApproval: "allowed",
+    subject: {
+      id: args.dailyCloseId,
+      label: `End-of-Day Review ${args.operatingDate}`,
+      type: DAILY_CLOSE_SUBJECT_TYPE,
+    },
+    copy: {
+      title: "Manager approval required",
+      message:
+        "A manager needs to approve reopening this End-of-Day Review before the operating day can be revised.",
+      primaryActionLabel: "Approve and reopen",
+      secondaryActionLabel: "Cancel",
+    },
+    resolutionModes: [
+      {
+        kind: "inline_manager_proof",
+      },
+    ],
+    metadata: {
+      dailyCloseId: args.dailyCloseId,
       operatingDate: args.operatingDate,
     },
   };
@@ -503,7 +554,8 @@ function asCarryForwardItem(
     severity: "carry_forward",
     category: "open_work",
     title: workItem.title,
-    message: "Open operational work will carry forward after End-of-Day Review.",
+    message:
+      "Open operational work will carry forward after End-of-Day Review.",
     subject: {
       type: "operational_work_item",
       id: workItem._id,
@@ -531,12 +583,36 @@ async function getDailyCloseForDate(
     storeId: Id<"store">;
   },
 ) {
-  return ctx.db
+  const activeClose = await ctx.db
+    .query("dailyClose")
+    .withIndex("by_storeId_operatingDate_lifecycleStatus", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("operatingDate", args.operatingDate)
+        .eq("lifecycleStatus", "active"),
+    )
+    .first();
+
+  if (activeClose) {
+    return activeClose;
+  }
+
+  const legacyClose = await ctx.db
     .query("dailyClose")
     .withIndex("by_storeId_operatingDate", (q) =>
       q.eq("storeId", args.storeId).eq("operatingDate", args.operatingDate),
     )
     .first();
+
+  if (
+    legacyClose &&
+    (legacyClose.lifecycleStatus === undefined ||
+      legacyClose.lifecycleStatus === "active")
+  ) {
+    return legacyClose;
+  }
+
+  return null;
 }
 
 async function getPriorCompletedDailyClose(
@@ -556,7 +632,10 @@ async function getPriorCompletedDailyClose(
 
   return (
     completedCloses.find(
-      (dailyClose) => dailyClose.operatingDate < args.operatingDate,
+      (dailyClose) =>
+        dailyClose.operatingDate < args.operatingDate &&
+        (dailyClose.lifecycleStatus === undefined ||
+          dailyClose.lifecycleStatus === "active"),
     ) ?? null
   );
 }
@@ -956,7 +1035,9 @@ function snapshotReviewedItems(
   }
 
   const reviewedItemKeySet = new Set(reviewedItemKeys);
-  return snapshot.reviewItems.filter((item) => reviewedItemKeySet.has(item.key));
+  return snapshot.reviewItems.filter((item) =>
+    reviewedItemKeySet.has(item.key),
+  );
 }
 
 function toDailyCloseHistoryListItem(
@@ -1049,7 +1130,8 @@ export async function buildDailyCloseSnapshotWithCtx(
       severity: "blocker",
       category: "operating_date",
       title: "Invalid operating date",
-      message: "End-of-Day Review requires an operating date in YYYY-MM-DD format.",
+      message:
+        "End-of-Day Review requires an operating date in YYYY-MM-DD format.",
       subject: {
         type: DAILY_CLOSE_SUBJECT_TYPE,
         id: args.operatingDate,
@@ -1098,7 +1180,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       dailyClose: existingClose,
       completedByStaffProfileId,
       completedByStaffName: completedByStaffProfileId
-        ? staffNamesById.get(completedByStaffProfileId) ?? null
+        ? (staffNamesById.get(completedByStaffProfileId) ?? null)
         : null,
     });
 
@@ -1168,11 +1250,11 @@ export async function buildDailyCloseSnapshotWithCtx(
   );
   const completedByStaffProfileId =
     existingClose?.status === "completed"
-      ? existingClose.completedByStaffProfileId ??
+      ? (existingClose.completedByStaffProfileId ??
         (await getDailyCloseCompletionEventStaffProfileId(ctx, {
           dailyCloseId: existingClose._id,
           storeId: args.storeId,
-        }))
+        })))
       : undefined;
   const terminalLabelsById = await buildTerminalLabelsById(ctx, [
     ...activeRegisterSessions.map((session) => session.terminalId),
@@ -1188,8 +1270,12 @@ export async function buildDailyCloseSnapshotWithCtx(
     ...activeRegisterSessions.map((session) => session.closedByStaffProfileId),
     ...closedRegisterSessions.map((session) => session.openedByStaffProfileId),
     ...closedRegisterSessions.map((session) => session.closedByStaffProfileId),
-    ...approvalRegisterSessions.map((session) => session.openedByStaffProfileId),
-    ...approvalRegisterSessions.map((session) => session.closedByStaffProfileId),
+    ...approvalRegisterSessions.map(
+      (session) => session.openedByStaffProfileId,
+    ),
+    ...approvalRegisterSessions.map(
+      (session) => session.closedByStaffProfileId,
+    ),
     ...openPosSessions.map((session) => session.staffProfileId),
     ...completedTransactions.map((transaction) => transaction.staffProfileId),
     ...voidedTransactions.map((transaction) => transaction.staffProfileId),
@@ -1450,7 +1536,8 @@ export async function buildDailyCloseSnapshotWithCtx(
         severity: "review",
         category: "cash_variance",
         title: "Closed register has a cash variance",
-        message: "Review the cash variance before completing End-of-Day Review.",
+        message:
+          "Review the cash variance before completing End-of-Day Review.",
         subject: {
           type: "register_session",
           id: session._id,
@@ -1547,7 +1634,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       ? `Register ${transaction.registerNumber}`
       : expenseSessionRegisterNumber
         ? `Register ${expenseSessionRegisterNumber}`
-      : undefined;
+        : undefined;
 
     readyItems.push({
       key: `expense_transaction:${transaction._id}:completed`,
@@ -1680,8 +1767,8 @@ export async function buildDailyCloseSnapshotWithCtx(
     openWorkItemCount: openWorkItems.length,
     pendingApprovalCount: pendingApprovals.length,
     registerCount: relevantRegisterSessions.length,
-    registerVarianceCount: relevantRegisterSessions.filter(
-      (session) => Boolean(session.variance),
+    registerVarianceCount: relevantRegisterSessions.filter((session) =>
+      Boolean(session.variance),
     ).length,
     salesTotal: completedTransactions.reduce(
       (sum, transaction) => sum + transaction.total,
@@ -1710,7 +1797,7 @@ export async function buildDailyCloseSnapshotWithCtx(
           completedAt: existingClose.completedAt,
           completedByStaffProfileId,
           completedByStaffName: completedByStaffProfileId
-            ? staffNamesById.get(completedByStaffProfileId) ?? null
+            ? (staffNamesById.get(completedByStaffProfileId) ?? null)
             : null,
           completedByUserId: existingClose.completedByUserId,
           notes: existingClose.notes,
@@ -2002,6 +2089,7 @@ export async function completeDailyCloseWithCtx(
     organizationId: store.organizationId,
     operatingDate: args.operatingDate,
     status: "completed" as const,
+    lifecycleStatus: "active" as const,
     isCurrent: true,
     readiness,
     summary,
@@ -2053,6 +2141,15 @@ export async function completeDailyCloseWithCtx(
     });
   }
 
+  if (dailyClose.supersedesDailyCloseId) {
+    await ctx.db.patch("dailyClose", dailyClose.supersedesDailyCloseId, {
+      lifecycleStatus: "superseded",
+      isCurrent: false,
+      supersededByDailyCloseId: dailyClose._id,
+      updatedAt: now,
+    });
+  }
+
   await recordOperationalEventWithCtx(ctx, {
     storeId: args.storeId,
     organizationId: store.organizationId,
@@ -2095,6 +2192,200 @@ export async function completeDailyCloseWithCtx(
     action: "completed",
     dailyClose,
     carryForwardWorkItems,
+  });
+}
+
+export async function reopenDailyCloseWithCtx(
+  ctx: MutationCtx,
+  args: ReopenDailyCloseArgs,
+): Promise<ReopenDailyCloseResult> {
+  const reason = trimOptional(args.reason);
+
+  if (!reason) {
+    return userError({
+      code: "validation_failed",
+      message: "A reopen reason is required.",
+    });
+  }
+
+  const originalDailyClose = await ctx.db.get("dailyClose", args.dailyCloseId);
+
+  if (!originalDailyClose || originalDailyClose.storeId !== args.storeId) {
+    return userError({
+      code: "not_found",
+      message: "End-of-Day Review was not found for this store.",
+    });
+  }
+
+  if (
+    args.organizationId &&
+    args.organizationId !== originalDailyClose.organizationId
+  ) {
+    return userError({
+      code: "authorization_failed",
+      message: "End-of-Day Review store does not belong to this organization.",
+    });
+  }
+
+  if (
+    originalDailyClose.status !== "completed" ||
+    !originalDailyClose.reportSnapshot
+  ) {
+    return userError({
+      code: "precondition_failed",
+      message: "Only a completed End-of-Day Review can be reopened.",
+    });
+  }
+
+  if (originalDailyClose.lifecycleStatus === "superseded") {
+    return userError({
+      code: "precondition_failed",
+      message: "This End-of-Day Review has already been superseded.",
+    });
+  }
+
+  const existingReopenedClose = await ctx.db
+    .query("dailyClose")
+    .withIndex("by_storeId_operatingDate_lifecycleStatus", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("operatingDate", originalDailyClose.operatingDate)
+        .eq("lifecycleStatus", "active"),
+    )
+    .first();
+  const activeReopenedClose =
+    existingReopenedClose?._id === originalDailyClose._id
+      ? null
+      : existingReopenedClose;
+
+  if (
+    activeReopenedClose?.status === "open" &&
+    activeReopenedClose.reopenedFromDailyCloseId === originalDailyClose._id
+  ) {
+    return ok({
+      action: "already_reopened",
+      originalDailyClose,
+      reopenedDailyClose: activeReopenedClose,
+    });
+  }
+
+  if (
+    originalDailyClose.lifecycleStatus === "reopened" ||
+    activeReopenedClose
+  ) {
+    return userError({
+      code: "precondition_failed",
+      message: "This End-of-Day Review is already reopened.",
+    });
+  }
+
+  if (!args.approvalProofId) {
+    return approvalRequired(
+      buildDailyCloseReopenApprovalRequirement({
+        dailyCloseId: originalDailyClose._id,
+        operatingDate: originalDailyClose.operatingDate,
+        storeId: args.storeId,
+      }),
+    );
+  }
+
+  const approvalProof = await consumeCommandApprovalProofWithCtx(ctx, {
+    action: DAILY_CLOSE_REOPEN_ACTION,
+    approvalProofId: args.approvalProofId,
+    requiredRole: "manager",
+    requestedByStaffProfileId: args.actorStaffProfileId,
+    storeId: args.storeId,
+    subject: {
+      id: originalDailyClose._id,
+      label: `End-of-Day Review ${originalDailyClose.operatingDate}`,
+      type: DAILY_CLOSE_SUBJECT_TYPE,
+    },
+  });
+
+  if (approvalProof.kind !== "ok") {
+    return approvalProof;
+  }
+
+  const now = Date.now();
+  const reopenedDailyCloseId = await ctx.db.insert("dailyClose", {
+    storeId: originalDailyClose.storeId,
+    organizationId: originalDailyClose.organizationId,
+    operatingDate: originalDailyClose.operatingDate,
+    status: "open",
+    lifecycleStatus: "active",
+    isCurrent: true,
+    readiness: originalDailyClose.readiness,
+    summary: originalDailyClose.summary,
+    sourceSubjects: originalDailyClose.sourceSubjects,
+    carryForwardWorkItemIds: originalDailyClose.carryForwardWorkItemIds,
+    reviewedItemKeys: originalDailyClose.reviewedItemKeys,
+    notes: originalDailyClose.notes,
+    createdAt: now,
+    updatedAt: now,
+    reopenedAt: now,
+    reopenedByUserId: args.actorUserId,
+    reopenedByStaffProfileId: approvalProof.data.approvedByStaffProfileId,
+    reopenReason: reason,
+    reopenedFromDailyCloseId: originalDailyClose._id,
+    supersedesDailyCloseId: originalDailyClose._id,
+  });
+
+  await ctx.db.patch("dailyClose", originalDailyClose._id, {
+    lifecycleStatus: "reopened",
+    isCurrent: false,
+    reopenedAt: now,
+    reopenedByUserId: args.actorUserId,
+    reopenedByStaffProfileId: approvalProof.data.approvedByStaffProfileId,
+    reopenReason: reason,
+    supersededByDailyCloseId: reopenedDailyCloseId,
+    updatedAt: now,
+  });
+
+  await markOtherDailyClosesNotCurrent(ctx, {
+    currentCloseId: reopenedDailyCloseId,
+    storeId: args.storeId,
+  });
+
+  const reopenedDailyClose = await ctx.db.get(
+    "dailyClose",
+    reopenedDailyCloseId,
+  );
+  const updatedOriginalDailyClose = await ctx.db.get(
+    "dailyClose",
+    originalDailyClose._id,
+  );
+
+  if (!reopenedDailyClose || !updatedOriginalDailyClose) {
+    return userError({
+      code: "unavailable",
+      message: "Reopened End-of-Day Review could not be loaded.",
+      retryable: true,
+    });
+  }
+
+  await recordOperationalEventWithCtx(ctx, {
+    storeId: args.storeId,
+    organizationId: originalDailyClose.organizationId,
+    eventType: "daily_close_reopened",
+    subjectType: DAILY_CLOSE_SUBJECT_TYPE,
+    subjectId: originalDailyClose._id,
+    subjectLabel: `End-of-Day Review ${originalDailyClose.operatingDate}`,
+    message: `End-of-Day Review reopened for ${originalDailyClose.operatingDate}.`,
+    actorUserId: args.actorUserId,
+    actorStaffProfileId: approvalProof.data.approvedByStaffProfileId,
+    metadata: {
+      approvalProofId: approvalProof.data.approvalProofId,
+      approvedByStaffProfileId: approvalProof.data.approvedByStaffProfileId,
+      operatingDate: originalDailyClose.operatingDate,
+      reason,
+      reopenedDailyCloseId,
+    },
+  });
+
+  return ok({
+    action: "reopened",
+    originalDailyClose: updatedOriginalDailyClose,
+    reopenedDailyClose,
   });
 }
 
@@ -2176,7 +2467,7 @@ export async function listCompletedDailyCloseHistoryWithCtx(
     return toDailyCloseHistoryListItem(
       dailyClose,
       completedByStaffProfileId
-        ? staffNamesById.get(completedByStaffProfileId) ?? null
+        ? (staffNamesById.get(completedByStaffProfileId) ?? null)
         : null,
       completedByStaffProfileId,
     );
@@ -2218,7 +2509,7 @@ export async function getCompletedDailyCloseHistoryDetailWithCtx(
     completedByUserId: dailyClose.completedByUserId,
     completedByStaffProfileId,
     completedByStaffName: completedByStaffProfileId
-      ? staffNamesById.get(completedByStaffProfileId) ?? null
+      ? (staffNamesById.get(completedByStaffProfileId) ?? null)
       : null,
     reportSnapshot: dailyClose.reportSnapshot,
   };
@@ -2264,6 +2555,20 @@ export const completeDailyClose = mutation({
   handler: (ctx, args) => completeDailyCloseWithCtx(ctx, args),
 });
 
+export const reopenDailyClose = mutation({
+  args: {
+    actorUserId: v.optional(v.id("athenaUser")),
+    actorStaffProfileId: v.optional(v.id("staffProfile")),
+    approvalProofId: v.optional(v.id("approvalProof")),
+    dailyCloseId: v.id("dailyClose"),
+    organizationId: v.optional(v.id("organization")),
+    reason: v.string(),
+    storeId: v.id("store"),
+  },
+  returns: commandResultValidator(v.any()),
+  handler: (ctx, args) => reopenDailyCloseWithCtx(ctx, args),
+});
+
 export const getDailyCloseOpeningContext = query({
   args: {
     operatingDate: v.string(),
@@ -2285,6 +2590,5 @@ export const getCompletedDailyCloseHistoryDetail = query({
     dailyCloseId: v.id("dailyClose"),
     storeId: v.id("store"),
   },
-  handler: (ctx, args) =>
-    getCompletedDailyCloseHistoryDetailWithCtx(ctx, args),
+  handler: (ctx, args) => getCompletedDailyCloseHistoryDetailWithCtx(ctx, args),
 });

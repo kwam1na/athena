@@ -57,6 +57,12 @@ Keep the raw snapshot for command submission and audit data. Presentation normal
 
 - Treat terminal states as presentation boundaries. If a workflow is completed or started, stale blocker/review details should not drive the primary UI.
 - Completed End-of-Day Review pages must render the persisted `dailyClose.reportSnapshot` instead of recomputing blockers from live register, approval, POS session, transaction, or work-item tables.
+- Reopened End-of-Day Review pages are active workflow state. Present them as
+  needing revised close work, while preserving the original completed snapshot
+  as read-only history.
+- Store-day gates should distinguish completed, reopened, and superseded close
+  records. A superseded historical close is audit context, not the active POS
+  gate for the operating date.
 - Live End-of-Day Review blocker sources must be scoped to the selected operating date. Approval blockers should follow their linked transaction or register session when available; unresolved POS sessions should intersect the operating-day range instead of using store-wide active/held state.
 - Keep current-day and historical operating-date copy separate. Historical reports should say "Net sales" and "Cash"; current-day operational views can say "Today's net sales" and "Today's cash".
 - Omit default current-day filters from navigation links. Include an operating date only when the target needs a historical date.
