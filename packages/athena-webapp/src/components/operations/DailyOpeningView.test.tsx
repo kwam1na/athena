@@ -170,10 +170,10 @@ const readySnapshot: DailyOpeningSnapshot = {
   },
   readyItems: [
     {
-      description: "End-of-Day Review for 7 May is complete.",
+      description: "end of day review for 7 May is complete.",
       id: "ready-1",
       link: {
-        label: "View End-of-Day Review",
+        label: "View EOD Review",
         search: {
           operatingDate: "2026-05-07",
         },
@@ -332,7 +332,7 @@ describe("DailyOpeningViewContent", () => {
     expect(screen.getByText("No carry-forward items")).toBeInTheDocument();
     expect(screen.queryByText(/opening float/i)).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /view end-of-day review/i }),
+      screen.getByRole("link", { name: /view EOD review/i }),
     ).toHaveAttribute(
       "href",
       "/wigclub/store/osu/operations/daily-close?o=%252F&operatingDate=2026-05-07",
@@ -474,7 +474,7 @@ describe("DailyOpeningViewContent", () => {
     );
   });
 
-  it("explains the store day when prior End-of-Day Review is missing", () => {
+  it("explains the store day when prior EOD Review is missing", () => {
     renderContent({
       ...readySnapshot,
       blockers: [],
@@ -489,7 +489,7 @@ describe("DailyOpeningViewContent", () => {
             operatingDate: "2026-05-08",
           },
           statusLabel: "Needs review",
-          title: "Prior End-of-Day Review not found",
+          title: "Prior EOD Review not found",
         },
       ],
       status: "needs_attention",

@@ -175,6 +175,7 @@ export type DailyCloseSnapshot = {
     paymentTotals?: Array<{
       amount: number;
       method: string;
+      transactionCount?: number | null;
     }>;
     pendingApprovalCount?: number | null;
     registerCount?: number | null;
@@ -303,7 +304,7 @@ const statusCopy: Record<
   completed: {
     badge: "Completed",
     description: "The operating day has a saved close summary.",
-    title: "End-of-day review completed",
+    title: "EOD Review completed",
   },
   needs_review: {
     badge: "Needs review",
@@ -352,6 +353,47 @@ function formatTodayCashTransactionCount(value: number) {
   if (value === 0) return "No cash transactions";
   if (value === 1) return "1 cash transaction";
   return `${value} cash transactions`;
+}
+
+function formatPaymentCount(value?: number | null) {
+  if (value === undefined || value === null) return "Payment total";
+
+  if (value === 0) return "No payments";
+  if (value === 1) return "1 payment";
+  return `${value} payments`;
+}
+
+function formatPaymentMethodLabel(method: string) {
+  return method
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function getOtherPaymentTotals(summary: DailyCloseSnapshot["summary"]) {
+  return (summary.paymentTotals ?? [])
+    .filter((paymentTotal) => paymentTotal.method.toLowerCase() !== "cash")
+    .sort((left, right) => right.amount - left.amount);
+}
+
+function shouldShowExpenseMetric(summary: DailyCloseSnapshot["summary"]) {
+  if ((getSummaryAmount(summary, "totalSales", "salesTotal") ?? 0) <= 0) {
+    return true;
+  }
+
+  return (
+    getExpenseTransactionCount(summary) > 0 || (summary.expenseTotal ?? 0) !== 0
+  );
+}
+
+function shouldShowVarianceMetric(summary: DailyCloseSnapshot["summary"]) {
+  if ((getSummaryAmount(summary, "totalSales", "salesTotal") ?? 0) <= 0) {
+    return true;
+  }
+
+  return (
+    getSummaryRegisterVarianceCount(summary) > 0 ||
+    getSummaryAmount(summary, "varianceTotal", "netCashVariance") !== 0
+  );
 }
 
 function formatCarriedOverRegisterCount(value: number) {
@@ -656,13 +698,19 @@ function getCarryForwardWorkItemIds(items: DailyCloseItem[]) {
 }
 
 function getItemDescription(item: DailyCloseItem) {
-  return item.description ?? item.message;
+  return normalizeDailyCloseItemCopy(item.description ?? item.message);
+}
+
+function normalizeDailyCloseItemCopy(value?: string | null) {
+  return value?.replace(/\bEnd-of-Day Review\b/g, "end of day review");
 }
 
 function shouldShowCollapsedDescription(description?: string | null) {
   if (!description) return false;
 
-  return !/included in End-of-Day Review\.?$/i.test(description.trim());
+  return !/included in (?:the )?end[- ]of[- ]day review\.?$/i.test(
+    description.trim(),
+  );
 }
 
 function getItemContextLabel(item: DailyCloseItem) {
@@ -2073,7 +2121,7 @@ function TransactionReportAction({
           <SheetHeader className="border-b border-border px-layout-xl py-layout-lg">
             <SheetTitle>POS and expense transactions</SheetTitle>
             <SheetDescription>
-              {reportSummary} available from the End-of-Day Review workspace.
+              {reportSummary} available from the end of day review workspace.
             </SheetDescription>
           </SheetHeader>
 
@@ -2160,6 +2208,7 @@ export function DailyCloseReadOnlyReport({
   const salesMetricLabels = getDailyCloseSalesMetricLabels(
     displaySnapshot.operatingDate,
   );
+  const otherPaymentTotals = getOtherPaymentTotals(displaySnapshot.summary);
 
   return (
     <PageWorkspace>
@@ -2244,6 +2293,24 @@ export function DailyCloseReadOnlyReport({
               ),
             )}
           />
+          {otherPaymentTotals.map((paymentTotal) => (
+            <OperationsSummaryMetric
+              helper={formatPaymentCount(paymentTotal.transactionCount)}
+              key={paymentTotal.method}
+              label={formatPaymentMethodLabel(paymentTotal.method)}
+              link={{
+                ariaLabel: `Open ${formatPaymentMethodLabel(paymentTotal.method)} transactions`,
+                orgUrlSlug,
+                search: buildDailyCloseTransactionSearch({
+                  operatingDate: displaySnapshot.operatingDate,
+                  paymentMethod: paymentTotal.method,
+                }),
+                storeUrlSlug,
+                to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
+              }}
+              value={formatDailyCloseMoney(currency, paymentTotal.amount)}
+            />
+          ))}
           <OperationsSummaryMetric
             helper={formatCarriedOverRegisterCount(
               getSummaryCount(
@@ -2262,30 +2329,34 @@ export function DailyCloseReadOnlyReport({
               ),
             )}
           />
-          <OperationsSummaryMetric
-            helper={formatExpenseTransactionCount(
-              getExpenseTransactionCount(displaySnapshot.summary),
-            )}
-            label="Expenses"
-            value={formatDailyCloseMoney(
-              currency,
-              displaySnapshot.summary.expenseTotal,
-            )}
-          />
-          <OperationsSummaryMetric
-            helper={formatRegisterVarianceCount(
-              getSummaryRegisterVarianceCount(displaySnapshot.summary),
-            )}
-            label="Variance"
-            value={formatDailyCloseMoney(
-              currency,
-              getSummaryAmount(
-                displaySnapshot.summary,
-                "varianceTotal",
-                "netCashVariance",
-              ),
-            )}
-          />
+          {shouldShowExpenseMetric(displaySnapshot.summary) ? (
+            <OperationsSummaryMetric
+              helper={formatExpenseTransactionCount(
+                getExpenseTransactionCount(displaySnapshot.summary),
+              )}
+              label="Expenses"
+              value={formatDailyCloseMoney(
+                currency,
+                displaySnapshot.summary.expenseTotal,
+              )}
+            />
+          ) : null}
+          {shouldShowVarianceMetric(displaySnapshot.summary) ? (
+            <OperationsSummaryMetric
+              helper={formatRegisterVarianceCount(
+                getSummaryRegisterVarianceCount(displaySnapshot.summary),
+              )}
+              label="Variance"
+              value={formatDailyCloseMoney(
+                currency,
+                getSummaryAmount(
+                  displaySnapshot.summary,
+                  "varianceTotal",
+                  "netCashVariance",
+                ),
+              )}
+            />
+          ) : null}
         </div>
       </section>
 
@@ -2594,7 +2665,7 @@ function CompletionRail({
                   type="button"
                   variant="outline"
                 >
-                  Reopen End-of-Day Review
+                  Reopen EOD Review
                 </LoadingButton>
               </div>
             ) : null}
@@ -2622,7 +2693,7 @@ function CompletionRail({
               type="button"
               variant="workflow"
             >
-              Complete End-of-Day Review
+              Complete EOD Review
             </LoadingButton>
           </div>
         )}
@@ -2710,7 +2781,7 @@ export function DailyCloseViewContent({
 
   if (!isAuthenticated) {
     return (
-      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before End-of-Day Review can load protected operating-day data" />
+      <ProtectedAdminSignInView description="Your Athena session needs to reconnect before the end of day review can load protected operating-day data" />
     );
   }
 
@@ -2722,7 +2793,7 @@ export function DailyCloseViewContent({
     return (
       <div className="container mx-auto py-8">
         <EmptyState
-          description="Select a store before opening End-of-Day Review."
+          description="Select a store before opening the end of day review."
           title="No active store"
         />
       </div>
@@ -2746,6 +2817,9 @@ export function DailyCloseViewContent({
   const salesMetricLabels = displaySnapshot
     ? getDailyCloseSalesMetricLabels(displaySnapshot.operatingDate)
     : null;
+  const otherPaymentTotals = displaySnapshot
+    ? getOtherPaymentTotals(displaySnapshot.summary)
+    : [];
   const buckets = displaySnapshot ? getBucketConfigs(displaySnapshot) : [];
   const defaultBucketValue = displaySnapshot
     ? getDefaultBucketValue(displaySnapshot, status)
@@ -2784,7 +2858,7 @@ export function DailyCloseViewContent({
         if (commandResult.kind === "ok") {
           setCommandMessage({
             kind: "success",
-            message: "End-of-day review completed.",
+            message: "EOD Review completed.",
           });
           return;
         }
@@ -2820,7 +2894,7 @@ export function DailyCloseViewContent({
       setCommandMessage({
         kind: "error",
         message:
-          "End-of-Day Review record unavailable. Refresh before reopening.",
+          "end of day review record unavailable. Refresh before reopening.",
       });
       return;
     }
@@ -2846,7 +2920,7 @@ export function DailyCloseViewContent({
         if (commandResult.kind === "ok") {
           setCommandMessage({
             kind: "success",
-            message: "End-of-Day Review reopened.",
+            message: "EOD Review reopened.",
           });
           setReopenReason("");
           return;
@@ -2979,6 +3053,24 @@ export function DailyCloseViewContent({
                 ),
               )}
             />
+            {otherPaymentTotals.map((paymentTotal) => (
+              <OperationsSummaryMetric
+                helper={formatPaymentCount(paymentTotal.transactionCount)}
+                key={paymentTotal.method}
+                label={formatPaymentMethodLabel(paymentTotal.method)}
+                link={{
+                  ariaLabel: `Open ${formatPaymentMethodLabel(paymentTotal.method)} transactions`,
+                  orgUrlSlug,
+                  search: buildDailyCloseTransactionSearch({
+                    operatingDate: displaySnapshot.operatingDate,
+                    paymentMethod: paymentTotal.method,
+                  }),
+                  storeUrlSlug,
+                  to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
+                }}
+                value={formatDailyCloseMoney(currency, paymentTotal.amount)}
+              />
+            ))}
             <OperationsSummaryMetric
               helper={formatCarriedOverRegisterCount(
                 getSummaryCount(
@@ -2997,30 +3089,34 @@ export function DailyCloseViewContent({
                 ),
               )}
             />
-            <OperationsSummaryMetric
-              helper={formatExpenseTransactionCount(
-                getExpenseTransactionCount(displaySnapshot.summary),
-              )}
-              label="Expenses"
-              value={formatDailyCloseMoney(
-                currency,
-                displaySnapshot.summary.expenseTotal,
-              )}
-            />
-            <OperationsSummaryMetric
-              helper={formatRegisterVarianceCount(
-                getSummaryRegisterVarianceCount(displaySnapshot.summary),
-              )}
-              label="Variance"
-              value={formatDailyCloseMoney(
-                currency,
-                getSummaryAmount(
-                  displaySnapshot.summary,
-                  "varianceTotal",
-                  "netCashVariance",
-                ),
-              )}
-            />
+            {shouldShowExpenseMetric(displaySnapshot.summary) ? (
+              <OperationsSummaryMetric
+                helper={formatExpenseTransactionCount(
+                  getExpenseTransactionCount(displaySnapshot.summary),
+                )}
+                label="Expenses"
+                value={formatDailyCloseMoney(
+                  currency,
+                  displaySnapshot.summary.expenseTotal,
+                )}
+              />
+            ) : null}
+            {shouldShowVarianceMetric(displaySnapshot.summary) ? (
+              <OperationsSummaryMetric
+                helper={formatRegisterVarianceCount(
+                  getSummaryRegisterVarianceCount(displaySnapshot.summary),
+                )}
+                label="Variance"
+                value={formatDailyCloseMoney(
+                  currency,
+                  getSummaryAmount(
+                    displaySnapshot.summary,
+                    "varianceTotal",
+                    "netCashVariance",
+                  ),
+                )}
+              />
+            ) : null}
           </>
         ) : null
       }
@@ -3048,7 +3144,7 @@ export function DailyCloseViewContent({
       statusTitle={
         <DailyCloseStatusTitle status={status} title={displayCopy.title} />
       }
-      title="End-of-Day Review"
+      title="EOD Review"
     />
   );
 }
@@ -3060,12 +3156,12 @@ function DailyCloseApiPendingView() {
         <PageWorkspace>
           <PageLevelHeader
             eyebrow="Store Ops"
-            title="End-of-Day Review"
-            description="End-of-Day Review is waiting for the server close snapshot and completion command."
+            title="EOD Review"
+            description="The end of day review workspace is waiting for the server close snapshot and completion command."
           />
           <EmptyState
             description="The frontend is wired to api.operations.dailyClose.getDailyCloseSnapshot and completeDailyClose."
-            title="End-of-Day Review server API pending"
+            title="EOD Review server API pending"
           />
         </PageWorkspace>
       </FadeIn>
@@ -3129,7 +3225,7 @@ function DailyCloseConnectedView({
         kind: "user_error",
         error: {
           code: "validation_failed",
-          message: "Select a store before completing End-of-Day Review.",
+          message: "Select a store before completing the end of day review.",
         },
       } as NormalizedCommandResult<unknown>;
     }

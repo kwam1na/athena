@@ -102,6 +102,11 @@ const baseSummary = {
   currentDayCashTotal: 45000,
   expenseTransactionCount: 1,
   expenseTotal: 12500,
+  paymentTotals: [
+    { amount: 45000, method: "cash", transactionCount: 2 },
+    { amount: 710, method: "card", transactionCount: 1 },
+    { amount: 2500, method: "mobile_money", transactionCount: 1 },
+  ],
   registerCount: 2,
   registerVarianceCount: 0,
   staffCount: 3,
@@ -142,7 +147,7 @@ const readySnapshot: DailyCloseSnapshot = {
     },
     {
       category: "sale",
-      description: "Completed sale is included in End-of-Day Review.",
+      description: "Completed sale is included in the end of day review.",
       id: "ready-2",
       metadata: {
         completedAt: Date.UTC(2026, 4, 7, 14),
@@ -162,7 +167,7 @@ const readySnapshot: DailyCloseSnapshot = {
     },
     {
       category: "expense",
-      description: "Completed expense is included in End-of-Day Review.",
+      description: "Completed expense is included in the end of day review.",
       id: "ready-3",
       link: {
         label: "View expense",
@@ -204,7 +209,7 @@ const blockedSnapshot: DailyCloseSnapshot = {
     {
       category: "register_session",
       description:
-        "Close the register session before completing End-of-Day Review.",
+        "Close the register session before completing the end of day review.",
       id: "blocker-1",
       link: {
         label: "View session",
@@ -230,7 +235,7 @@ const blockedSnapshot: DailyCloseSnapshot = {
     {
       category: "approval",
       description:
-        "Resolve pending closeout approval before completing End-of-Day Review.",
+        "Resolve pending closeout approval before completing the end of day review.",
       id: "approval-1",
       link: {
         label: "View approvals",
@@ -261,7 +266,7 @@ const blockedSnapshot: DailyCloseSnapshot = {
     {
       category: "pos_session",
       description:
-        "Complete, void, or release held POS sessions before End-of-Day Review.",
+        "Complete, void, or release held POS sessions before the end of day review.",
       id: "blocker-2",
       metadata: {
         customer: "Ama Mensah",
@@ -322,9 +327,9 @@ describe("DailyCloseViewContent", () => {
   it("renders the workspace frame while loading", () => {
     renderContent(undefined);
 
-    expect(screen.getByText("End-of-Day Review")).toBeInTheDocument();
+    expect(screen.getByText("EOD Review")).toBeInTheDocument();
     expect(
-      screen.queryByLabelText("Loading end-of-day review workspace"),
+      screen.queryByLabelText("Loading EOD Review workspace"),
     ).not.toBeInTheDocument();
   });
 
@@ -414,7 +419,7 @@ describe("DailyCloseViewContent", () => {
     expect(
       within(approvalItem as HTMLElement).queryByText("Opened At"),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("Mobile Money")).toBeInTheDocument();
+    expect(screen.getAllByText("Mobile Money").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Cash").length).toBeGreaterThan(0);
     expect(
       screen.getByText("POS session is still unresolved"),
@@ -427,7 +432,7 @@ describe("DailyCloseViewContent", () => {
     expect(screen.getByText("Held")).toBeInTheDocument();
     expect(screen.getByText("Expired At")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /complete end-of-day review/i }),
+      screen.getByRole("button", { name: /complete EOD review/i }),
     ).toBeDisabled();
   });
 
@@ -472,10 +477,12 @@ describe("DailyCloseViewContent", () => {
     expect(screen.getByText("Ready to close")).toBeInTheDocument();
     expect(screen.getByText("14 transactions")).toBeInTheDocument();
     expect(screen.getByText("2 cash transactions")).toBeInTheDocument();
+    expect(screen.getByText("Mobile Money")).toBeInTheDocument();
+    expect(screen.getByText("Card")).toBeInTheDocument();
+    expect(screen.getAllByText("1 payment")).toHaveLength(2);
     expect(
       screen.getByText("No registers from prior days"),
     ).toBeInTheDocument();
-    expect(screen.getByText("No register variances")).toBeInTheDocument();
     expect(screen.getByText("Register closeouts complete")).toBeInTheDocument();
     const closedRegisterItem = screen
       .getByText("Register closeouts complete")
@@ -591,7 +598,7 @@ describe("DailyCloseViewContent", () => {
       "/wigclub/store/osu/pos/expense-reports/expense-1?o=%252F",
     );
     expect(
-      screen.getByRole("button", { name: /complete end-of-day review/i }),
+      screen.getByRole("button", { name: /complete EOD review/i }),
     ).toBeEnabled();
     const checklist = screen.getByText("Close checklist").closest("div");
     expect(checklist).not.toBeNull();
@@ -610,6 +617,82 @@ describe("DailyCloseViewContent", () => {
     ).toBeInTheDocument();
     expect(within(checklist as HTMLElement).queryByText("Clear")).toBeNull();
     expect(within(checklist as HTMLElement).queryByText("None")).toBeNull();
+  });
+
+  it("does not claim zero payments for historical payment totals without counts", () => {
+    renderContent({
+      ...readySnapshot,
+      summary: {
+        ...baseSummary,
+        paymentTotals: [{ amount: 710, method: "card" }],
+      },
+    });
+
+    expect(screen.getByText("Card")).toBeInTheDocument();
+    expect(screen.getByText("Payment total")).toBeInTheDocument();
+    expect(screen.queryByText("No payments")).not.toBeInTheDocument();
+  });
+
+  it("hides zero-value expense and variance summary cards when net sales are positive", () => {
+    renderContent({
+      ...readySnapshot,
+      summary: {
+        ...baseSummary,
+        expenseTotal: 0,
+        expenseTransactionCount: 0,
+        registerVarianceCount: 0,
+        varianceTotal: 0,
+      },
+    });
+
+    expect(screen.queryByText("Expenses")).not.toBeInTheDocument();
+    expect(screen.queryByText("Variance")).not.toBeInTheDocument();
+    expect(screen.queryByText("No expense transactions")).not.toBeInTheDocument();
+    expect(screen.queryByText("No register variances")).not.toBeInTheDocument();
+  });
+
+  it("normalizes legacy end of day review item copy", async () => {
+    const user = userEvent.setup();
+
+    renderContent({
+      ...readySnapshot,
+      readyItems: [
+        {
+          ...readySnapshot.readyItems[0],
+          description:
+            "Closed register session is included in End-of-Day Review.",
+        },
+      ],
+    });
+
+    expect(screen.queryByText(/End-of-Day Review/)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /show details/i }));
+
+    expect(
+      screen.getByText(
+        "Closed register session is included in end of day review.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps zero-value expense and variance summary cards when net sales are zero", () => {
+    renderContent({
+      ...readySnapshot,
+      summary: {
+        ...baseSummary,
+        expenseTotal: 0,
+        expenseTransactionCount: 0,
+        registerVarianceCount: 0,
+        totalSales: 0,
+        varianceTotal: 0,
+      },
+    });
+
+    expect(screen.getByText("Expenses")).toBeInTheDocument();
+    expect(screen.getByText("Variance")).toBeInTheDocument();
+    expect(screen.getByText("No expense transactions")).toBeInTheDocument();
+    expect(screen.getByText("No register variances")).toBeInTheDocument();
   });
 
   it("paginates daily close item cards at five items per page", async () => {
@@ -816,7 +899,7 @@ describe("DailyCloseViewContent", () => {
 
     expect(
       within(report).getByText(
-        "14 POS sales, 1 expense transaction, no voided sales available from the End-of-Day Review workspace.",
+        "14 POS sales, 1 expense transaction, no voided sales available from the end of day review workspace.",
       ),
     ).toBeInTheDocument();
     expect(within(report).getByText("Item")).toBeInTheDocument();
@@ -867,7 +950,7 @@ describe("DailyCloseViewContent", () => {
 
     expect(
       await screen.findByText(
-        "no POS sales, no expense transactions, no voided sales available from the End-of-Day Review workspace.",
+        "no POS sales, no expense transactions, no voided sales available from the end of day review workspace.",
       ),
     ).toBeInTheDocument();
   });
@@ -906,7 +989,7 @@ describe("DailyCloseViewContent", () => {
       screen.getByText("No activity was recorded for this operating day."),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /complete end-of-day review/i }),
+      screen.getByRole("button", { name: /complete EOD review/i }),
     ).toBeEnabled();
   });
 
@@ -954,6 +1037,8 @@ describe("DailyCloseViewContent", () => {
     expect(screen.getByText("1 transaction")).toBeInTheDocument();
     expect(screen.getByText("No cash transactions")).toBeInTheDocument();
     expect(screen.getByText("1 register from a prior day")).toBeInTheDocument();
+    expect(screen.getByText("Expenses")).toBeInTheDocument();
+    expect(screen.getByText("Variance")).toBeInTheDocument();
     expect(screen.getByText("1 register variance")).toBeInTheDocument();
     expect(screen.getByText("1 expense transaction")).toBeInTheDocument();
   });
@@ -982,6 +1067,12 @@ describe("DailyCloseViewContent", () => {
     ).toHaveAttribute(
       "href",
       "/wigclub/store/osu/pos/transactions?o=%252Fwigclub%252Fstore%252Fosu%252Foperations%252Fdaily-close&operatingDate=2026-05-07&paymentMethod=cash",
+    );
+    expect(
+      screen.getByRole("link", { name: "Open Card transactions" }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/pos/transactions?o=%252Fwigclub%252Fstore%252Fosu%252Foperations%252Fdaily-close&operatingDate=2026-05-07&paymentMethod=card",
     );
   });
 
@@ -1026,6 +1117,7 @@ describe("DailyCloseViewContent", () => {
         expenseTotal: 0,
         pendingApprovalCount: 1,
         staffCount: undefined,
+        totalSales: 0,
       },
     });
 
@@ -1113,7 +1205,7 @@ describe("DailyCloseViewContent", () => {
     renderContent(snapshot, { onComplete });
 
     await user.click(
-      screen.getByRole("button", { name: /complete end-of-day review/i }),
+      screen.getByRole("button", { name: /complete EOD review/i }),
     );
 
     await waitFor(() => {
@@ -1137,22 +1229,22 @@ describe("DailyCloseViewContent", () => {
         approval: {
           action: {
             key: "operations.daily_close.complete",
-            label: "Complete End-of-Day Review",
+            label: "Complete EOD Review",
           },
           copy: {
             message:
-              "A manager needs to approve this End-of-Day Review before the operating day is saved.",
+              "A manager needs to approve this end of day review before the operating day is saved.",
             primaryActionLabel: "Approve and complete",
             secondaryActionLabel: "Cancel",
             title: "Manager approval required",
           },
-          reason: "Manager approval is required to complete End-of-Day Review.",
+          reason: "Manager approval is required to complete EOD Review.",
           requiredRole: "manager" as const,
           resolutionModes: [{ kind: "inline_manager_proof" as const }],
           selfApproval: "allowed" as const,
           subject: {
             id: "store-1:2026-05-07",
-            label: "End-of-Day Review 2026-05-07",
+            label: "EOD Review 2026-05-07",
             type: "daily_close",
           },
         },
@@ -1160,7 +1252,7 @@ describe("DailyCloseViewContent", () => {
     });
 
     await user.click(
-      screen.getByRole("button", { name: /complete end-of-day review/i }),
+      screen.getByRole("button", { name: /complete EOD review/i }),
     );
 
     expect(
@@ -1193,7 +1285,7 @@ describe("DailyCloseViewContent", () => {
     );
 
     const reopenButton = screen.getByRole("button", {
-      name: "Reopen End-of-Day Review",
+      name: "Reopen EOD Review",
     });
 
     expect(reopenButton).toBeDisabled();
@@ -1229,7 +1321,7 @@ describe("DailyCloseViewContent", () => {
     );
 
     expect(
-      screen.queryByRole("button", { name: "Reopen End-of-Day Review" }),
+      screen.queryByRole("button", { name: "Reopen EOD Review" }),
     ).not.toBeInTheDocument();
 
     rerender(
@@ -1263,7 +1355,7 @@ describe("DailyCloseViewContent", () => {
 
     expect(screen.getByText("Review required")).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Reopen End-of-Day Review" }),
+      screen.queryByRole("button", { name: "Reopen EOD Review" }),
     ).not.toBeInTheDocument();
   });
 
@@ -1280,7 +1372,7 @@ describe("DailyCloseViewContent", () => {
     });
 
     await user.click(
-      screen.getByRole("button", { name: /complete end-of-day review/i }),
+      screen.getByRole("button", { name: /complete EOD review/i }),
     );
 
     expect(
@@ -1295,14 +1387,14 @@ describe("DailyCloseViewContent", () => {
     const renderResult = renderContent(readySnapshot);
 
     await user.click(
-      screen.getByRole("button", { name: /complete end-of-day review/i }),
+      screen.getByRole("button", { name: /complete EOD review/i }),
     );
 
     expect(
       await screen.findByRole("status", {
         name: "",
       }),
-    ).toHaveTextContent("End-of-day review completed.");
+    ).toHaveTextContent("EOD Review completed.");
 
     renderResult.rerender(
       <DailyCloseViewContent
@@ -1327,12 +1419,12 @@ describe("DailyCloseViewContent", () => {
 
     await waitFor(() => {
       expect(
-        screen.queryByText("End-of-day review completed."),
+        screen.queryByText("EOD Review completed."),
       ).not.toBeInTheDocument();
     });
   });
 
-  it("renders completed End-of-Day Review summary after reload", () => {
+  it("renders completed EOD Review summary after reload", () => {
     renderContent({
       ...readySnapshot,
       blockers: blockedSnapshot.blockers,
@@ -1354,7 +1446,7 @@ describe("DailyCloseViewContent", () => {
         readyItems: [
           {
             category: "sale",
-            description: "Completed sale is included in End-of-Day Review.",
+            description: "Completed sale is included in the end of day review.",
             id: "persisted-sale",
             metadata: {
               completedAt: Date.UTC(2026, 4, 7, 14),
@@ -1386,7 +1478,7 @@ describe("DailyCloseViewContent", () => {
       status: "completed",
     });
 
-    expect(screen.getByText("End-of-day review completed")).toBeInTheDocument();
+    expect(screen.getByText("EOD Review completed")).toBeInTheDocument();
     expect(screen.getByText(/Ama Mensah/)).toBeInTheDocument();
     expect(screen.getByText("Clean close.")).toBeInTheDocument();
     expect(
@@ -1421,7 +1513,7 @@ describe("DailyCloseView", () => {
     mockedHooks.useMutation.mockReturnValue(vi.fn(async () => ok({})));
   });
 
-  it("queries End-of-Day Review with the active store and route params", () => {
+  it("queries EOD Review with the active store and route params", () => {
     render(<DailyCloseView />);
 
     expect(mockedHooks.useQuery).toHaveBeenCalledWith(
@@ -1433,10 +1525,10 @@ describe("DailyCloseView", () => {
         storeId: "store-1",
       },
     );
-    expect(screen.getByText("End-of-Day Review")).toBeInTheDocument();
+    expect(screen.getByText("EOD Review")).toBeInTheDocument();
   });
 
-  it("queries End-of-Day Review for the operating date in route search", () => {
+  it("queries EOD Review for the operating date in route search", () => {
     mockedRouter.search = { operatingDate: "2026-05-08" };
 
     render(<DailyCloseView />);
@@ -1482,7 +1574,7 @@ describe("DailyCloseView", () => {
       "Cash deposit corrected.",
     );
     await user.click(
-      screen.getByRole("button", { name: "Reopen End-of-Day Review" }),
+      screen.getByRole("button", { name: "Reopen EOD Review" }),
     );
 
     expect(reopenMutation).toHaveBeenCalledWith({

@@ -218,7 +218,7 @@ describe("daily operations overview read model", () => {
     vi.restoreAllMocks();
   });
 
-  it("treats a store day with no opening as not opened and points to Opening Handoff", async () => {
+  it("treats a store day with no opening as ready to start when opening has no review work", async () => {
     const snapshot = await buildDailyOperationsSnapshotWithCtx(
       buildCtx({
         dailyClose: [priorClose],
@@ -232,14 +232,40 @@ describe("daily operations overview read model", () => {
       label: "Start Opening Handoff",
       to: "/$orgUrlSlug/store/$storeUrlSlug/operations/opening",
     });
-    expect(snapshot.attentionItems[0]).toMatchObject({
-      owner: "daily_opening",
-      severity: "warning",
+    expect(snapshot.attentionItems).toHaveLength(0);
+    expect(snapshot.lanes.find((lane) => lane.key === "opening")).toMatchObject(
+      {
+        description: "Opening Handoff is ready to start.",
+        status: "ready",
+      },
+    );
+  });
+
+  it("keeps Opening Handoff in review when prior EOD Review is missing", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.lifecycle.status).toBe("not_opened");
+    expect(snapshot.primaryAction).toMatchObject({
+      label: "Start Opening Handoff",
+      to: "/$orgUrlSlug/store/$storeUrlSlug/operations/opening",
     });
     expect(snapshot.lanes.find((lane) => lane.key === "opening")).toMatchObject(
       {
+        description: "1 opening item will be reviewed when Opening Handoff starts.",
         status: "needs_attention",
       },
+    );
+    expect(snapshot.attentionItems).toContainEqual(
+      expect.objectContaining({
+        label: "Prior EOD Review not found",
+        owner: "daily_opening",
+        severity: "warning",
+      }),
     );
   });
 
@@ -255,7 +281,7 @@ describe("daily operations overview read model", () => {
 
     expect(snapshot.lifecycle.status).toBe("ready_to_close");
     expect(snapshot.primaryAction).toMatchObject({
-      label: "Start End-of-Day Review",
+      label: "Start EOD Review",
       to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
     });
     expect(snapshot.lanes.find((lane) => lane.key === "close")).toMatchObject({
@@ -296,17 +322,17 @@ describe("daily operations overview read model", () => {
 
     expect(snapshot.lifecycle.status).toBe("ready_to_close");
     expect(snapshot.primaryAction).toMatchObject({
-      label: "Start End-of-Day Review",
+      label: "Start EOD Review",
     });
     expect(snapshot.lanes.find((lane) => lane.key === "close")).toMatchObject({
-      description: "End-of-Day Review is available for review.",
+      description: "The end of day review is available for review.",
       status: "ready",
     });
     expect(
       snapshot.attentionItems.some(
         (item) =>
           item.owner === "daily_close" &&
-          item.label === "End-of-Day Review reopened",
+          item.label === "EOD Review reopened",
       ),
     ).toBe(false);
   });
@@ -350,13 +376,13 @@ describe("daily operations overview read model", () => {
     expect(snapshot.lanes.find((lane) => lane.key === "close")).toMatchObject({
       count: 1,
       description:
-        "1 close blocker must be resolved after reopening End-of-Day Review.",
+        "1 close blocker must be resolved after reopening the end of day review.",
       status: "blocked",
     });
     expect(snapshot.attentionItems).toContainEqual(
       expect.objectContaining({
         owner: "daily_close",
-        label: "End-of-Day Review reopened",
+        label: "EOD Review reopened",
         severity: "warning",
       }),
     );
@@ -724,7 +750,7 @@ describe("daily operations overview read model", () => {
             _id: "event-2",
             createdAt: Date.UTC(2026, 4, 8, 22),
             eventType: "daily_close.completed",
-            message: "End-of-Day Review completed.",
+            message: "EOD Review completed.",
             storeId: "store-1",
             subjectId: "close-current",
             subjectType: "daily_close",
@@ -746,7 +772,7 @@ describe("daily operations overview read model", () => {
 
     expect(snapshot.lifecycle.status).toBe("closed");
     expect(snapshot.primaryAction).toMatchObject({
-      label: "Review End-of-Day Review",
+      label: "Review EOD Review",
       to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
     });
     expect(snapshot.timeline.map((event) => event.id)).toEqual([

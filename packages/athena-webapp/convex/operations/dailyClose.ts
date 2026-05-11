@@ -92,6 +92,7 @@ type DailyCloseSummary = {
   paymentTotals: Array<{
     method: string;
     amount: number;
+    transactionCount: number;
   }>;
 };
 
@@ -265,7 +266,7 @@ function buildDailyCloseApprovalSubject(args: {
 }) {
   return {
     id: `${args.storeId}:${args.operatingDate}`,
-    label: `End-of-Day Review ${args.operatingDate}`,
+    label: `EOD Review ${args.operatingDate}`,
     type: DAILY_CLOSE_SUBJECT_TYPE,
   };
 }
@@ -276,14 +277,14 @@ function buildDailyCloseCompletionApprovalRequirement(args: {
 }): ApprovalRequirement {
   return {
     action: DAILY_CLOSE_COMPLETION_ACTION,
-    reason: "Manager approval is required to complete End-of-Day Review.",
+    reason: "Manager approval is required to complete EOD Review.",
     requiredRole: "manager",
     selfApproval: "allowed",
     subject: buildDailyCloseApprovalSubject(args),
     copy: {
       title: "Manager approval required",
       message:
-        "A manager needs to approve this End-of-Day Review before the operating day is saved.",
+        "A manager needs to approve this end of day review before the operating day is saved.",
       primaryActionLabel: "Approve and complete",
       secondaryActionLabel: "Cancel",
     },
@@ -305,18 +306,18 @@ function buildDailyCloseReopenApprovalRequirement(args: {
 }): ApprovalRequirement {
   return {
     action: DAILY_CLOSE_REOPEN_ACTION,
-    reason: "Manager approval is required to reopen End-of-Day Review.",
+    reason: "Manager approval is required to reopen EOD Review.",
     requiredRole: "manager",
     selfApproval: "allowed",
     subject: {
       id: args.dailyCloseId,
-      label: `End-of-Day Review ${args.operatingDate}`,
+      label: `EOD Review ${args.operatingDate}`,
       type: DAILY_CLOSE_SUBJECT_TYPE,
     },
     copy: {
       title: "Manager approval required",
       message:
-        "A manager needs to approve reopening this End-of-Day Review before the operating day can be revised.",
+        "A manager needs to approve reopening this EOD Review before the operating day can be revised.",
       primaryActionLabel: "Approve and reopen",
       secondaryActionLabel: "Cancel",
     },
@@ -555,7 +556,7 @@ function asCarryForwardItem(
     category: "open_work",
     title: workItem.title,
     message:
-      "Open operational work will carry forward after End-of-Day Review.",
+      "Open operational work will carry forward after the end of day review.",
     subject: {
       type: "operational_work_item",
       id: workItem._id,
@@ -904,20 +905,31 @@ async function listDepositsForDay(
 }
 
 function buildPaymentTotals(transactions: Array<Doc<"posTransaction">>) {
-  const paymentTotals = new Map<string, number>();
+  const paymentTotals = new Map<
+    string,
+    {
+      amount: number;
+      transactionCount: number;
+    }
+  >();
 
   transactions.forEach((transaction) => {
     transaction.payments.forEach((payment) => {
-      paymentTotals.set(
-        payment.method,
-        (paymentTotals.get(payment.method) ?? 0) + payment.amount,
-      );
+      const existing = paymentTotals.get(payment.method) ?? {
+        amount: 0,
+        transactionCount: 0,
+      };
+
+      paymentTotals.set(payment.method, {
+        amount: existing.amount + payment.amount,
+        transactionCount: existing.transactionCount + 1,
+      });
     });
   });
 
-  return Array.from(paymentTotals.entries()).map(([method, amount]) => ({
+  return Array.from(paymentTotals.entries()).map(([method, total]) => ({
     method,
-    amount,
+    ...total,
   }));
 }
 
@@ -1131,7 +1143,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       category: "operating_date",
       title: "Invalid operating date",
       message:
-        "End-of-Day Review requires an operating date in YYYY-MM-DD format.",
+        "EOD Review requires an operating date in YYYY-MM-DD format.",
       subject: {
         type: DAILY_CLOSE_SUBJECT_TYPE,
         id: args.operatingDate,
@@ -1318,10 +1330,10 @@ export async function buildDailyCloseSnapshotWithCtx(
           : "Register session is still open",
       message:
         session.status === "closing"
-          ? "Finish the register closeout before completing End-of-Day Review."
+          ? "Finish the register closeout before completing the end of day review."
           : isCarriedOver
-            ? "Close the register session carried over from a prior operating day before completing End-of-Day Review."
-            : "Close the register session before completing End-of-Day Review.",
+            ? "Close the register session carried over from a prior operating day before completing the end of day review."
+            : "Close the register session before completing the end of day review.",
       subject: {
         type: "register_session",
         id: session._id,
@@ -1395,7 +1407,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       category: "approval",
       title: `${approvalRequestTypeLabel(approval.requestType)} pending`,
       message:
-        "Resolve pending closeout approval before completing End-of-Day Review.",
+        "Resolve pending closeout approval before completing the end of day review.",
       subject: {
         type: "approval_request",
         id: approval._id,
@@ -1448,7 +1460,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       category: "pos_session",
       title: "POS session is still unresolved",
       message:
-        "Complete, void, or release held POS sessions before End-of-Day Review.",
+        "Complete, void, or release held POS sessions before the end of day review.",
       subject: {
         type: "pos_session",
         id: session._id,
@@ -1498,7 +1510,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       severity: "ready",
       category: "register_session",
       title: "Register session closed",
-      message: "Closed register session is included in End-of-Day Review.",
+      message: "Closed register session is included in the end of day review.",
       subject: {
         type: "register_session",
         id: session._id,
@@ -1537,7 +1549,7 @@ export async function buildDailyCloseSnapshotWithCtx(
         category: "cash_variance",
         title: "Closed register has a cash variance",
         message:
-          "Review the cash variance before completing End-of-Day Review.",
+          "Review the cash variance before completing the end of day review.",
         subject: {
           type: "register_session",
           id: session._id,
@@ -1588,7 +1600,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       severity: "ready",
       category: "sale",
       title: "Completed sale",
-      message: "Completed sale is included in End-of-Day Review.",
+      message: "Completed sale is included in the end of day review.",
       subject: {
         type: "pos_transaction",
         id: transaction._id,
@@ -1641,7 +1653,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       severity: "ready",
       category: "expense",
       title: "Completed expense",
-      message: "Completed expense is included in End-of-Day Review.",
+      message: "Completed expense is included in the end of day review.",
       subject: {
         type: "expense_transaction",
         id: transaction._id,
@@ -1691,7 +1703,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       severity: "review",
       category: "voided_sale",
       title: "Voided sale needs review",
-      message: "Review voided sales before completing End-of-Day Review.",
+      message: "Review voided sales before completing the end of day review.",
       subject: {
         type: "pos_transaction",
         id: transaction._id,
@@ -1949,7 +1961,7 @@ export async function completeDailyCloseWithCtx(
   if (args.organizationId && args.organizationId !== store.organizationId) {
     return userError({
       code: "authorization_failed",
-      message: "End-of-Day Review store does not belong to this organization.",
+      message: "EOD Review store does not belong to this organization.",
     });
   }
 
@@ -1989,7 +2001,7 @@ export async function completeDailyCloseWithCtx(
     return userError({
       code: "precondition_failed",
       message:
-        "End-of-Day Review cannot be completed while blocker items remain.",
+        "EOD Review cannot be completed while blocker items remain.",
       metadata: {
         blockerCount: snapshot.blockers.length,
       },
@@ -2005,7 +2017,7 @@ export async function completeDailyCloseWithCtx(
     return userError({
       code: "precondition_failed",
       message:
-        "End-of-Day Review items must be acknowledged before completion.",
+        "EOD Review items must be acknowledged before completion.",
       metadata: {
         reviewItemCount: snapshot.reviewItems.length,
         unreviewedItemKeys,
@@ -2136,7 +2148,7 @@ export async function completeDailyCloseWithCtx(
   if (!dailyClose) {
     return userError({
       code: "unavailable",
-      message: "End-of-Day Review could not be loaded after completion.",
+      message: "EOD Review could not be loaded after completion.",
       retryable: true,
     });
   }
@@ -2156,8 +2168,8 @@ export async function completeDailyCloseWithCtx(
     eventType: "daily_close_completed",
     subjectType: DAILY_CLOSE_SUBJECT_TYPE,
     subjectId: dailyClose._id,
-    subjectLabel: `End-of-Day Review ${args.operatingDate}`,
-    message: `End-of-Day Review completed for ${args.operatingDate}.`,
+    subjectLabel: `EOD Review ${args.operatingDate}`,
+    message: `EOD Review completed for ${args.operatingDate}.`,
     actorUserId: args.actorUserId,
     actorStaffProfileId: completedByStaffProfileId,
     metadata: {
@@ -2176,8 +2188,8 @@ export async function completeDailyCloseWithCtx(
       eventType: "daily_close_carry_forward_created",
       subjectType: DAILY_CLOSE_SUBJECT_TYPE,
       subjectId: dailyClose._id,
-      subjectLabel: `End-of-Day Review ${args.operatingDate}`,
-      message: "End-of-Day Review created a carry-forward work item.",
+      subjectLabel: `EOD Review ${args.operatingDate}`,
+      message: "EOD Review created a carry-forward work item.",
       actorUserId: args.actorUserId,
       actorStaffProfileId: args.actorStaffProfileId,
       workItemId: workItem._id,
@@ -2213,7 +2225,7 @@ export async function reopenDailyCloseWithCtx(
   if (!originalDailyClose || originalDailyClose.storeId !== args.storeId) {
     return userError({
       code: "not_found",
-      message: "End-of-Day Review was not found for this store.",
+      message: "EOD Review was not found for this store.",
     });
   }
 
@@ -2223,7 +2235,7 @@ export async function reopenDailyCloseWithCtx(
   ) {
     return userError({
       code: "authorization_failed",
-      message: "End-of-Day Review store does not belong to this organization.",
+      message: "EOD Review store does not belong to this organization.",
     });
   }
 
@@ -2233,14 +2245,14 @@ export async function reopenDailyCloseWithCtx(
   ) {
     return userError({
       code: "precondition_failed",
-      message: "Only a completed End-of-Day Review can be reopened.",
+      message: "Only a completed EOD Review can be reopened.",
     });
   }
 
   if (originalDailyClose.lifecycleStatus === "superseded") {
     return userError({
       code: "precondition_failed",
-      message: "This End-of-Day Review has already been superseded.",
+      message: "This EOD Review has already been superseded.",
     });
   }
 
@@ -2275,7 +2287,7 @@ export async function reopenDailyCloseWithCtx(
   ) {
     return userError({
       code: "precondition_failed",
-      message: "This End-of-Day Review is already reopened.",
+      message: "This EOD Review is already reopened.",
     });
   }
 
@@ -2297,7 +2309,7 @@ export async function reopenDailyCloseWithCtx(
     storeId: args.storeId,
     subject: {
       id: originalDailyClose._id,
-      label: `End-of-Day Review ${originalDailyClose.operatingDate}`,
+      label: `EOD Review ${originalDailyClose.operatingDate}`,
       type: DAILY_CLOSE_SUBJECT_TYPE,
     },
   });
@@ -2358,7 +2370,7 @@ export async function reopenDailyCloseWithCtx(
   if (!reopenedDailyClose || !updatedOriginalDailyClose) {
     return userError({
       code: "unavailable",
-      message: "Reopened End-of-Day Review could not be loaded.",
+      message: "Reopened EOD Review could not be loaded.",
       retryable: true,
     });
   }
@@ -2369,8 +2381,8 @@ export async function reopenDailyCloseWithCtx(
     eventType: "daily_close_reopened",
     subjectType: DAILY_CLOSE_SUBJECT_TYPE,
     subjectId: originalDailyClose._id,
-    subjectLabel: `End-of-Day Review ${originalDailyClose.operatingDate}`,
-    message: `End-of-Day Review reopened for ${originalDailyClose.operatingDate}.`,
+    subjectLabel: `EOD Review ${originalDailyClose.operatingDate}`,
+    message: `EOD Review reopened for ${originalDailyClose.operatingDate}.`,
     actorUserId: args.actorUserId,
     actorStaffProfileId: approvalProof.data.approvedByStaffProfileId,
     metadata: {

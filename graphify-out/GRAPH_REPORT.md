@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 5085 nodes · 5107 edges · 1610 communities detected
+- 5091 nodes · 5114 edges · 1610 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1649,7 +1649,7 @@
 
 ### Community 0 - "Community 0"
 Cohesion: 0.04
-Nodes (48): buildDailyCloseTransactionSearch(), canReopenDailyClose(), cn(), formatCarriedOverRegisterCount(), formatDailyCloseMoney(), formatExpenseTransactionCount(), formatMetadataDisplayValue(), formatMetadataValue() (+40 more)
+Nodes (50): buildDailyCloseTransactionSearch(), canReopenDailyClose(), cn(), formatDailyCloseMoney(), formatMetadataDisplayValue(), formatMetadataValue(), formatTimestampMetadata(), getBucketConfigs() (+42 more)
 
 ### Community 1 - "Community 1"
 Cohesion: 0.07
@@ -2240,16 +2240,16 @@ Cohesion: 0.29
 Nodes (0):
 
 ### Community 148 - "Community 148"
+Cohesion: 0.33
+Nodes (2): getProductName(), sortProduct()
+
+### Community 149 - "Community 149"
 Cohesion: 0.29
 Nodes (0):
 
-### Community 149 - "Community 149"
+### Community 150 - "Community 150"
 Cohesion: 0.52
 Nodes (6): addItemToSavedBag(), getActiveSavedBag(), getBaseUrl(), removeItemFromSavedBag(), updateSavedBagItem(), updateSavedBagOwner()
-
-### Community 150 - "Community 150"
-Cohesion: 0.33
-Nodes (2): getProductName(), sortProduct()
 
 ### Community 151 - "Community 151"
 Cohesion: 0.43
