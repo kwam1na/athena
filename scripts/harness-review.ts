@@ -39,6 +39,7 @@ type HarnessReviewLogger = Pick<Console, "log" | "error">;
 type ParsedHarnessReviewArgs = {
   baseRef?: string;
   repoValidationProvidedBy?: "pr:athena";
+  validationProvidedBy?: "athena-pr-tests";
 };
 
 type HarnessReviewOptions = {
@@ -50,6 +51,7 @@ type HarnessReviewOptions = {
   runRawCommand?: (command: string) => Promise<void>;
   runHarnessBehaviorScenario?: (scenario: string) => Promise<void>;
   repoValidationProvidedBy?: "pr:athena";
+  validationProvidedBy?: "athena-pr-tests";
 };
 
 function normalizeRepoPath(repoPath: string) {
@@ -80,6 +82,52 @@ function normalizeValidationCommand(
 
 function normalizeBehaviorScenarioName(scenario: string) {
   return scenario.trim();
+}
+
+function isAthenaPrTestsProvidedCommand(
+  command:
+    | { kind: "script"; workspace: string; script: string }
+    | { kind: "raw"; command: string }
+) {
+  if (command.kind === "script") {
+    if (command.workspace === "@athena/webapp") {
+      return new Set([
+        "audit:convex",
+        "build",
+        "lint:architecture",
+        "lint:convex:changed",
+        "lint:frontend:changed",
+        "test",
+      ]).has(command.script);
+    }
+
+    if (command.workspace === "@athena/storefront-webapp") {
+      return new Set(["build", "lint:architecture", "test"]).has(
+        command.script
+      );
+    }
+
+    return false;
+  }
+
+  const rawCommand = command.command.trim();
+
+  if (
+    rawCommand.startsWith("bun run --filter '@athena/webapp' test ") ||
+    rawCommand === "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json"
+  ) {
+    return true;
+  }
+
+  if (
+    rawCommand.startsWith("bun run --filter '@athena/storefront-webapp' test ") ||
+    rawCommand ===
+      "bunx tsc --noEmit -p packages/storefront-webapp/tsconfig.json"
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 function formatMissingPathPrefixError(
@@ -626,21 +674,36 @@ export async function runHarnessReview(
   }
 
   const combinedCommands = [
-    ...(options.repoValidationProvidedBy === "pr:athena"
+    ...(options.repoValidationProvidedBy === "pr:athena" ||
+    options.validationProvidedBy === "athena-pr-tests"
       ? []
       : repoValidation.selectedCommands.map((command) => ({
           kind: "raw" as const,
           command,
         }))),
     ...selectedCommands,
-  ];
+  ].filter(
+    (command) =>
+      options.validationProvidedBy !== "athena-pr-tests" ||
+      !isAthenaPrTestsProvidedCommand(command)
+  );
 
   if (
-    options.repoValidationProvidedBy === "pr:athena" &&
+    (options.repoValidationProvidedBy === "pr:athena" ||
+      options.validationProvidedBy === "athena-pr-tests") &&
     repoValidation.selectedCommands.length > 0
   ) {
     logger.log(
-      `Repo validation commands provided by pr:athena for ${repoValidation.matchedFiles.length} repo-owned changed file(s).`
+      `Repo validation commands provided by ${options.validationProvidedBy ?? options.repoValidationProvidedBy} for ${repoValidation.matchedFiles.length} repo-owned changed file(s).`
+    );
+  }
+
+  if (
+    options.validationProvidedBy === "athena-pr-tests" &&
+    selectedCommands.length > combinedCommands.length
+  ) {
+    logger.log(
+      `Package validation commands provided by athena-pr-tests for ${selectedCommands.length - combinedCommands.length} selected command(s).`
     );
   }
 
@@ -681,6 +744,7 @@ export function parseHarnessReviewArgs(
 ): ParsedHarnessReviewArgs {
   let baseRef: string | undefined;
   let repoValidationProvidedBy: "pr:athena" | undefined;
+  let validationProvidedBy: "athena-pr-tests" | undefined;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -731,14 +795,38 @@ export function parseHarnessReviewArgs(
       continue;
     }
 
+    if (arg === "--validation-provided-by") {
+      const value = argv[index + 1]?.trim();
+      if (value !== "athena-pr-tests") {
+        throw new Error(
+          "Missing or invalid value for --validation-provided-by. Supported value: athena-pr-tests"
+        );
+      }
+      validationProvidedBy = value;
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith("--validation-provided-by=")) {
+      const value = arg.slice("--validation-provided-by=".length).trim();
+      if (value !== "athena-pr-tests") {
+        throw new Error(
+          "Missing or invalid value for --validation-provided-by. Supported value: athena-pr-tests"
+        );
+      }
+      validationProvidedBy = value;
+      continue;
+    }
+
     throw new Error(
-      `Unknown argument: ${arg}. Usage: bun run harness:review [--base <ref>] [--repo-validation-provided-by pr:athena]`
+      `Unknown argument: ${arg}. Usage: bun run harness:review [--base <ref>] [--repo-validation-provided-by pr:athena] [--validation-provided-by athena-pr-tests]`
     );
   }
 
   return {
     baseRef,
     repoValidationProvidedBy,
+    validationProvidedBy,
   };
 }
 
@@ -748,6 +836,7 @@ if (import.meta.main) {
     await runHarnessReview(process.cwd(), {
       baseRef: parsed.baseRef,
       repoValidationProvidedBy: parsed.repoValidationProvidedBy,
+      validationProvidedBy: parsed.validationProvidedBy,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
