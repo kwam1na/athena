@@ -792,9 +792,30 @@ describe("repo harness ergonomics", () => {
     expect(workflow).toContain("workflow_dispatch:");
     expect(workflow).toContain("harness-implementation-tests:");
     expect(workflow).toContain("fetch-depth: 0");
+    expect(workflow).toContain("run: bun run workflow:check");
+    expect(workflow).toContain("run: bun run compound:check");
     expect(workflow).toContain("run: bun run harness:self-review --base origin/main");
-    expect(workflow).toContain("run: bun run harness:review --base origin/main");
+    expect(workflow).toContain(
+      "run: bun run harness:review --base origin/main --validation-provided-by athena-pr-tests"
+    );
     expect(workflow).toContain("run: bun run harness:test");
+    expect(workflow).toContain("name: Athena and Storefront Webapp Validation");
+    expect(workflow).toContain("name: Storefront Webapp Validation Context");
+    expect(workflow).toContain("athena-webapp-validation:");
+    expect(workflow).toContain("storefront-webapp-validation-context:");
+    expect(workflow).toContain("needs: athena-webapp-validation");
+    expect(workflow).toContain("Confirm consolidated storefront validation coverage");
+    expect(workflow).toContain("run: bun run test:coverage");
+    expect(workflow).toContain("run: bun run --filter '@athena/webapp' build");
+    expect(workflow).toContain(
+      "run: bun run --filter '@athena/storefront-webapp' build"
+    );
+    expect(workflow).toContain(
+      "run: bun run --filter '@athena/webapp' lint:frontend:changed"
+    );
+    expect(workflow).not.toContain("run: bun run --filter '@athena/webapp' test");
+    expect(workflow).not.toContain("test-storefront-webapp:");
+    expect(workflow).not.toContain("cargo install ripgrep");
     expect(workflow).toContain(
       "run: python3 -m pip install -r .graphify-requirements.txt"
     );
@@ -820,6 +841,7 @@ describe("repo harness ergonomics", () => {
       "bun run pre-commit:generated-artifacts"
     );
     expect(packageJson.scripts?.["pr:athena"]).toContain("bun run compound:check");
+    expect(packageJson.scripts?.["pr:athena"]).toContain("bun run workflow:check");
     expect(packageJson.scripts?.["pr:athena"]).toContain("bun run harness:test");
     expect(packageJson.scripts?.["pr:athena"]).toContain(
       "bun run harness:review --base origin/main --repo-validation-provided-by pr:athena"

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { AnchorHTMLAttributes, ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   DailyOperationsView,
@@ -386,10 +386,16 @@ function renderContent(
 
 describe("DailyOperationsViewContent", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 4, 10, 12));
     window.scrollTo = vi.fn();
     window.history.pushState({}, "", "/wigclub/store/osu/operations");
     mockedHooks.navigate.mockReset();
     mockedHooks.useSearch.mockReturnValue({});
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("renders historical metrics with view-only workflow messaging", () => {

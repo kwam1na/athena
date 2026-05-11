@@ -472,6 +472,41 @@ describe("runHarnessInferentialReview", () => {
     expect(result.machine.findings).toEqual([]);
   });
 
+  it("accepts the athena-pr-tests validation provider flag in the PR workflow", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      ".github/workflows/athena-pr-tests.yml",
+      [
+        "name: Athena PR Tests",
+        "jobs:",
+        "  harness-validation:",
+        "    steps:",
+        "      - name: Harness check",
+        "        run: bun run harness:check",
+        "      - name: Targeted harness review",
+        "        run: bun run harness:review --base origin/main --validation-provided-by athena-pr-tests",
+        "      - name: Inferential harness review",
+        "        env:",
+        "          HARNESS_INFERENTIAL_SEMANTIC_MODE: shadow",
+        "        run: bun run harness:inferential-review",
+        "      - name: Harness audit",
+        "        run: bun run harness:audit",
+        "      - name: Graphify check",
+        "        run: bun run graphify:check",
+      ].join("\n"),
+      rootDir
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => [".github/workflows/athena-pr-tests.yml"],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.machine.status).toBe("pass");
+    expect(result.machine.findings).toEqual([]);
+  });
+
   it("does not treat commented harness review text as a real workflow gate", async () => {
     const rootDir = await createFixtureRepo();
     await write(

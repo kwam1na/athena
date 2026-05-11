@@ -50,6 +50,7 @@ describe("collectHarnessRepoValidationSelection", () => {
       },
     ]);
     expect(selection.selectedCommands).toEqual([
+      "bun run workflow:check",
       "bun run harness:test",
       "bun run compound:check",
       "bun run test:coverage",

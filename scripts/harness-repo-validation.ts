@@ -12,6 +12,7 @@ const HARNESS_REPO_VALIDATION_PATTERNS = [
 ] as const;
 
 const HARNESS_REPO_VALIDATION_COMMANDS = [
+  "bun run workflow:check",
   "bun run harness:test",
   "bun run compound:check",
   "bun run test:coverage",

@@ -20,9 +20,10 @@
     "harness:review": "bun scripts/harness-review.ts",
     "harness:test": "bun scripts/harness-test.ts",
     "github:pr-merge": "bun scripts/github-pr-merge.ts",
+    "workflow:check": "bun scripts/github-workflows-check.ts",
     "pre-commit:generated-artifacts": "bun scripts/pre-commit-generated-artifacts.ts",
     "pre-push:review": "bun scripts/pre-push-review.ts",
-    "pr:athena": "bun run pre-commit:generated-artifacts && bun run compound:check && bun run --filter '@athena/webapp' audit:convex && bun run --filter '@athena/webapp' lint:convex:changed && bun run --filter '@athena/webapp' lint:frontend:changed && bun run architecture:check && bun run test:coverage && bun run harness:test && bun run harness:check && bun run harness:review --base origin/main --repo-validation-provided-by pr:athena && bun run harness:inferential-review && bun run harness:audit && bun run harness:scorecard && bun run graphify:check && bun scripts/pre-push-validation-proof.ts record-pr-athena",
+    "pr:athena": "bun run pre-commit:generated-artifacts && bun run compound:check && bun run workflow:check && bun run --filter '@athena/webapp' audit:convex && bun run --filter '@athena/webapp' lint:convex:changed && bun run --filter '@athena/webapp' lint:frontend:changed && bun run architecture:check && bun run test:coverage && bun run harness:test && bun run harness:check && bun run harness:review --base origin/main --repo-validation-provided-by pr:athena && bun run harness:inferential-review && bun run harness:audit && bun run harness:scorecard && bun run graphify:check && bun scripts/pre-push-validation-proof.ts record-pr-athena",
     "test": "bun run --filter '@athena/webapp' test && bun run --filter '@athena/storefront-webapp' test",
     "test:coverage:scripts": "bun scripts/root-scripts-coverage.ts",
     "test:coverage": "bun scripts/coverage-toolchain-parity.ts --repair && bun run --filter '@athena/webapp' test:coverage && bun run --filter '@athena/storefront-webapp' test:coverage && bun run test:coverage:scripts && bun scripts/coverage-summary.ts"

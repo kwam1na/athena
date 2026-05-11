@@ -36,6 +36,12 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Check GitHub workflow YAML
+        run: bun run workflow:check
+
+      - name: Check compound solution docs
+        run: bun run compound:check
+
       - name: Install Graphify runtime
         run: python3 -m pip install -r .graphify-requirements.txt
 
@@ -46,7 +52,7 @@ jobs:
         run: bun run harness:self-review --base origin/main
 
       - name: Run harness review
-        run: bun run harness:review --base origin/main
+        run: bun run harness:review --base origin/main --validation-provided-by athena-pr-tests
 
       - name: Check harness docs
         run: bun run harness:check
@@ -172,8 +178,8 @@ jobs:
       - name: Run harness implementation tests
         run: bun run harness:test
 
-  test-athena-webapp:
-    name: Athena Webapp Validation
+  athena-webapp-validation:
+    name: Athena and Storefront Webapp Validation
     runs-on: ubuntu-latest
 
     steps:
@@ -190,38 +196,38 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Install ripgrep
-        run: |
-          cargo install ripgrep --locked
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-
       - name: Audit Athena Convex baseline
         run: bun run --filter '@athena/webapp' audit:convex
 
       - name: Lint changed Athena Convex files
         run: bun run --filter '@athena/webapp' lint:convex:changed
 
-      - name: Run Athena webapp tests
-        run: bun run --filter '@athena/webapp' test
+      - name: Lint changed Athena frontend files
+        run: bun run --filter '@athena/webapp' lint:frontend:changed
+
+      - name: Build Athena webapp
+        run: bun run --filter '@athena/webapp' build
+
+      - name: Build storefront webapp
+        run: bun run --filter '@athena/storefront-webapp' build
 
       - name: Run repo coverage policy
         run: bun run test:coverage
 
-  test-storefront-webapp:
-    name: Storefront Webapp Test Suite
+  storefront-webapp-validation-context:
+    name: Storefront Webapp Validation Context
+    needs: athena-webapp-validation
+    if: always()
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - name: Confirm consolidated storefront validation coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ needs.athena-webapp-validation.result }}" != "success" ]; then
+            echo "Consolidated webapp validation did not pass; storefront context cannot pass."
+            exit 1
+          fi
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: package.json
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Run storefront webapp tests
-        run: bun run --filter '@athena/storefront-webapp' test
+          echo "Storefront tests and build are covered by Athena and Storefront Webapp Validation."

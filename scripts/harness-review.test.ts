@@ -440,6 +440,7 @@ describe("runHarnessReview", () => {
 
     expect(steps).toEqual([
       "harness:check",
+      "bun run workflow:check",
       "bun run harness:test",
       "bun run compound:check",
       "bun run test:coverage",
@@ -667,6 +668,7 @@ describe("runHarnessReview", () => {
 
     expect(steps).toEqual([
       "harness:check",
+      "raw:bun run workflow:check",
       "raw:bun run harness:test",
       "raw:bun run compound:check",
       "raw:bun run test:coverage",
@@ -677,6 +679,7 @@ describe("runHarnessReview", () => {
   it("does not rerun repo-level validations when pr:athena already provides them", async () => {
     const rootDir = await createFixtureRepo();
     const steps: string[] = [
+      "raw:bun run workflow:check",
       "raw:bun run compound:check",
       "raw:bun run test:coverage",
       "raw:bun run harness:test",
@@ -700,11 +703,182 @@ describe("runHarnessReview", () => {
     steps.push("raw:bun run harness:inferential-review");
 
     expect(steps).toEqual([
+      "raw:bun run workflow:check",
       "raw:bun run compound:check",
       "raw:bun run test:coverage",
       "raw:bun run harness:test",
       "harness:check",
       "raw:bun run harness:inferential-review",
+    ]);
+  });
+
+  it("lets athena-pr-tests provide broad package commands while still running selected behavior", async () => {
+    const rootDir = await createFixtureRepo();
+    const steps: string[] = [];
+
+    await write(
+      "packages/athena-webapp/package.json",
+      JSON.stringify(
+        {
+          name: "@athena/webapp",
+          scripts: {
+            "audit:convex": "echo audit",
+            build: "echo build",
+            "lint:architecture": "echo architecture",
+            "lint:convex:changed": "echo lint convex",
+            "lint:frontend:changed": "echo lint frontend",
+            test: "echo test",
+          },
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+    await write(
+      "packages/athena-webapp/docs/agent/validation-map.json",
+      JSON.stringify(
+        {
+          workspace: "@athena/webapp",
+          packageDir: "packages/athena-webapp",
+          surfaces: [
+            {
+              name: "daily-store-operations-lifecycle-edits",
+              pathPrefixes: [
+                "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
+              ],
+              commands: [
+                {
+                  kind: "raw",
+                  command:
+                    "bun run --filter '@athena/webapp' test -- src/components/operations/DailyCloseView.test.tsx",
+                },
+                { kind: "script", script: "audit:convex" },
+                { kind: "script", script: "lint:convex:changed" },
+                { kind: "script", script: "lint:frontend:changed" },
+                {
+                  kind: "raw",
+                  command:
+                    "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+                },
+                { kind: "script", script: "build" },
+              ],
+              behaviorScenarios: ["athena-admin-shell-boot"],
+            },
+          ],
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+    await write(
+      "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
+      "export const dailyClose = true;\n",
+      rootDir
+    );
+
+    await runHarnessReview(rootDir, {
+      getChangedFiles: async () => [
+        "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
+      ],
+      validationProvidedBy: "athena-pr-tests",
+      runHarnessCheck: async () => {
+        steps.push("harness:check");
+      },
+      runPackageScript: async (workspace, script) => {
+        steps.push(`${workspace}:${script}`);
+      },
+      runRawCommand: async (command) => {
+        steps.push(`raw:${command}`);
+      },
+      runHarnessBehaviorScenario: async (scenario) => {
+        steps.push(`behavior:${scenario}`);
+      },
+      logger: {
+        log() {},
+        error() {},
+      },
+    });
+
+    expect(steps).toEqual([
+      "harness:check",
+      "behavior:athena-admin-shell-boot",
+    ]);
+  });
+
+  it("does not skip package commands that athena-pr-tests does not provide", async () => {
+    const rootDir = await createFixtureRepo();
+    const steps: string[] = [];
+
+    await write(
+      "packages/storefront-webapp/package.json",
+      JSON.stringify(
+        {
+          name: "@athena/storefront-webapp",
+          scripts: {
+            test: "echo test",
+            "test:e2e": "echo e2e",
+          },
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+    await write(
+      "packages/storefront-webapp/docs/agent/validation-map.json",
+      JSON.stringify(
+        {
+          workspace: "@athena/storefront-webapp",
+          packageDir: "packages/storefront-webapp",
+          surfaces: [
+            {
+              name: "full-browser-journeys-and-payment-redirects",
+              pathPrefixes: ["packages/storefront-webapp/tests/e2e"],
+              commands: [
+                { kind: "script", script: "test" },
+                { kind: "script", script: "test:e2e" },
+              ],
+              behaviorScenarios: ["storefront-checkout-bootstrap"],
+            },
+          ],
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+    await write(
+      "packages/storefront-webapp/tests/e2e/checkout.spec.ts",
+      "export const checkout = true;\n",
+      rootDir
+    );
+
+    await runHarnessReview(rootDir, {
+      getChangedFiles: async () => [
+        "packages/storefront-webapp/tests/e2e/checkout.spec.ts",
+      ],
+      validationProvidedBy: "athena-pr-tests",
+      runHarnessCheck: async () => {
+        steps.push("harness:check");
+      },
+      runPackageScript: async (workspace, script) => {
+        steps.push(`${workspace}:${script}`);
+      },
+      runHarnessBehaviorScenario: async (scenario) => {
+        steps.push(`behavior:${scenario}`);
+      },
+      logger: {
+        log() {},
+        error() {},
+      },
+    });
+
+    expect(steps).toEqual([
+      "harness:check",
+      "@athena/storefront-webapp:test:e2e",
+      "behavior:storefront-checkout-bootstrap",
     ]);
   });
 
@@ -1011,6 +1185,7 @@ describe("runHarnessReview", () => {
 
     expect(steps).toEqual([
       "harness:check",
+      "raw:bun run workflow:check",
       "raw:bun run harness:test",
       "raw:bun run compound:check",
       "raw:bun run test:coverage",
@@ -1078,6 +1253,19 @@ describe("parseHarnessReviewArgs", () => {
     });
   });
 
+  it("accepts athena-pr-tests as the workflow validation provider", () => {
+    expect(
+      parseHarnessReviewArgs([
+        "--base=origin/main",
+        "--validation-provided-by",
+        "athena-pr-tests",
+      ])
+    ).toEqual({
+      baseRef: "origin/main",
+      validationProvidedBy: "athena-pr-tests",
+    });
+  });
+
   it("rejects missing --base values", () => {
     expect(() => parseHarnessReviewArgs(["--base"])).toThrow(
       "Missing value for --base. Usage: bun run harness:review --base origin/main"
@@ -1089,6 +1277,14 @@ describe("parseHarnessReviewArgs", () => {
       parseHarnessReviewArgs(["--repo-validation-provided-by", "custom"])
     ).toThrow(
       "Missing or invalid value for --repo-validation-provided-by. Supported value: pr:athena"
+    );
+  });
+
+  it("rejects unknown workflow validation providers", () => {
+    expect(() =>
+      parseHarnessReviewArgs(["--validation-provided-by", "custom"])
+    ).toThrow(
+      "Missing or invalid value for --validation-provided-by. Supported value: athena-pr-tests"
     );
   });
 });

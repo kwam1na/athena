@@ -273,6 +273,13 @@ bun run harness:inferential-review
 bun run graphify:check
 ```
 
+The Athena PR workflow may run `harness:review` with
+`--validation-provided-by athena-pr-tests`. That CI-only mode still checks the
+validation maps and selected runtime behavior scenarios, but it skips package
+test/build/lint commands already enforced elsewhere in the same workflow. Keep
+standalone local `harness:review --base origin/main` fail-closed so agents can
+still get the full touched-surface command list outside CI.
+
 For runtime scenario work, use:
 
 ```sh
