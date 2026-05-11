@@ -803,11 +803,13 @@ function WeekMetricsStrip({
             const cardClassName = cn(
               "rounded-md border px-layout-sm py-layout-sm text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               metric.isSelected
-                ? "border-primary/40 bg-background text-foreground"
+                ? "border-action-workflow-border bg-action-workflow-soft text-foreground ring-1 ring-inset ring-action-workflow-border"
                 : "border-transparent text-muted-foreground",
               isFutureDate
                 ? "cursor-not-allowed opacity-60"
-                : "hover:bg-background",
+                : metric.isSelected
+                  ? "hover:bg-action-workflow-soft"
+                  : "hover:bg-background",
             );
             const content = (
               <>
@@ -829,10 +831,12 @@ function WeekMetricsStrip({
                   {formatWeekdayDate(metric.operatingDate)}
                 </p>
                 <p className="mt-layout-sm font-numeric text-lg tabular-nums text-foreground">
-                  {formatMoney(currency, metric.salesTotal)}
+                  {isFutureDate ? "-" : formatMoney(currency, metric.salesTotal)}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {formatEntityCount(metric.transactionCount, "transaction")}
+                  {isFutureDate
+                    ? "Upcoming"
+                    : formatEntityCount(metric.transactionCount, "transaction")}
                 </p>
               </>
             );

@@ -667,6 +667,8 @@ describe("DailyOperationsViewContent", () => {
     expect(
       screen.getByLabelText(`${futureDateLabel} operations unavailable`),
     ).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByText("-")).toBeInTheDocument();
+    expect(screen.getByText("Upcoming")).toBeInTheDocument();
   });
 
   it("disables historical start actions that would mutate the store day", () => {
