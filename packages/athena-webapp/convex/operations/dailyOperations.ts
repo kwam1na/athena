@@ -99,12 +99,35 @@ type DailyOperationsCloseSummary = {
 
 type DailyOperationsWeekMetric = DailyOperationsCloseSummary & {
   isClosed: boolean;
+  isReopened: boolean;
   isSelected: boolean;
   operatingDate: string;
 };
 
 function operatingDateRange(operatingDate: string) {
   const startAt = Date.parse(`${operatingDate}T00:00:00.000Z`);
+
+  if (!Number.isFinite(startAt)) {
+    return { endAt: 0, startAt: 0 };
+  }
+
+  return { endAt: startAt + DAY_MS, startAt };
+}
+
+function operatingDateRangeForOffset(
+  operatingDate: string,
+  timezoneOffsetMinutes?: number,
+) {
+  if (
+    typeof timezoneOffsetMinutes !== "number" ||
+    !Number.isFinite(timezoneOffsetMinutes)
+  ) {
+    return operatingDateRange(operatingDate);
+  }
+
+  const startAt =
+    Date.parse(`${operatingDate}T00:00:00.000Z`) +
+    timezoneOffsetMinutes * 60_000;
 
   if (!Number.isFinite(startAt)) {
     return { endAt: 0, startAt: 0 };
@@ -189,15 +212,20 @@ async function buildWeekMetricForDate(
   args: {
     isSelected: boolean;
     operatingDate: string;
+    operatingTimezoneOffsetMinutes?: number;
     storeId: Id<"store">;
   },
 ): Promise<DailyOperationsWeekMetric> {
-  const range = operatingDateRange(args.operatingDate);
+  const range = operatingDateRangeForOffset(
+    args.operatingDate,
+    args.operatingTimezoneOffsetMinutes,
+  );
 
   if (!Number.isFinite(range.startAt) || !Number.isFinite(range.endAt)) {
     return {
       ...emptyCloseSummary(),
       isClosed: false,
+      isReopened: false,
       isSelected: args.isSelected,
       operatingDate: args.operatingDate,
     };
@@ -230,8 +258,10 @@ async function buildWeekMetricForDate(
         .withIndex("by_storeId_operatingDate", (q) =>
           q.eq("storeId", args.storeId).eq("operatingDate", args.operatingDate),
         )
-        .first(),
+        .take(MAX_OPERATIONS_QUERY_LIMIT),
     ]);
+  const currentDailyClose =
+    dailyClose.find((close) => close.isCurrent) ?? dailyClose[0];
 
   return {
     ...emptyCloseSummary(),
@@ -247,7 +277,10 @@ async function buildWeekMetricForDate(
       0,
     ),
     expenseTransactionCount: expenseTransactions.length,
-    isClosed: dailyClose?.status === "completed",
+    isClosed:
+      currentDailyClose?.status === "completed" &&
+      currentDailyClose.lifecycleStatus !== "reopened",
+    isReopened: currentDailyClose?.lifecycleStatus === "reopened",
     isSelected: args.isSelected,
     operatingDate: args.operatingDate,
     salesTotal: completedTransactions.reduce(
@@ -262,6 +295,7 @@ async function buildWeekMetrics(
   ctx: Pick<QueryCtx, "db">,
   args: {
     operatingDate: string;
+    operatingTimezoneOffsetMinutes?: number;
     storeId: Id<"store">;
     weekEndOperatingDate?: string;
   },
@@ -278,6 +312,7 @@ async function buildWeekMetrics(
       buildWeekMetricForDate(ctx, {
         isSelected: operatingDate === args.operatingDate,
         operatingDate,
+        operatingTimezoneOffsetMinutes: args.operatingTimezoneOffsetMinutes,
         storeId: args.storeId,
       }),
     ),
@@ -420,12 +455,14 @@ async function getDailyCloseRecordForDate(
     storeId: Id<"store">;
   },
 ) {
-  return ctx.db
+  const dailyClose = await ctx.db
     .query("dailyClose")
     .withIndex("by_storeId_operatingDate", (q) =>
       q.eq("storeId", args.storeId).eq("operatingDate", args.operatingDate),
     )
-    .first();
+    .take(MAX_OPERATIONS_QUERY_LIMIT);
+
+  return dailyClose.find((close) => close.isCurrent) ?? dailyClose[0] ?? null;
 }
 
 function getCloseItemCounts(items: SourceItem[]) {
@@ -575,22 +612,26 @@ function buildLanes(args: {
     ? "ready"
     : "needs_attention";
   const closeStatus: LaneStatus =
-    args.isCloseReopened
-      ? "needs_attention"
+    args.closeStatus === "blocked"
+      ? "blocked"
       : args.closeStatus === "completed"
-      ? "closed"
-      : args.closeStatus === "blocked"
-        ? "blocked"
+        ? "closed"
         : args.closeStatus === "needs_review"
           ? "needs_attention"
           : "ready";
+  const closeBlockerCount =
+    args.closeBlockerCounts.registerCount +
+    args.closeBlockerCounts.posSessionCount +
+    args.closeBlockerCounts.approvalCount;
 
   return [
     {
       count: args.openingAttentionCount,
       description: args.isOpeningStarted
         ? "Opening Handoff is complete."
-        : "Opening Handoff still needs operator acknowledgement.",
+        : args.openingAttentionCount > 0
+          ? `${pluralize(args.openingAttentionCount, "opening item")} still needs operator acknowledgement.`
+          : "Opening Handoff still needs operator acknowledgement.",
       key: "opening",
       label: "Opening Handoff",
       status: openingStatus,
@@ -600,17 +641,15 @@ function buildLanes(args: {
       count:
         args.closeStatus === "completed" && !args.isCloseReopened
           ? 0
-          : args.closeBlockerCounts.registerCount +
-            args.closeBlockerCounts.posSessionCount +
-            args.closeBlockerCounts.approvalCount,
+          : closeBlockerCount,
       description:
-        args.isCloseReopened
-          ? "End-of-Day Review was reopened and needs a revised close."
+        args.closeStatus === "blocked" && args.isCloseReopened
+          ? `${pluralize(closeBlockerCount, "close blocker")} must be resolved after reopening End-of-Day Review.`
           : args.closeStatus === "completed"
-          ? "End-of-Day Review is saved for this store day."
-          : args.closeStatus === "blocked"
-            ? "End-of-Day Review has blockers to resolve."
-            : "End-of-Day Review is available for review.",
+            ? "End-of-Day Review is saved for this store day."
+            : args.closeStatus === "blocked"
+              ? `${pluralize(closeBlockerCount, "close blocker")} must be resolved before close.`
+              : "End-of-Day Review is available for review.",
       key: "close",
       label: "End-of-Day Review",
       status: closeStatus,
@@ -648,7 +687,7 @@ function buildLanes(args: {
       count: args.closeBlockerCounts.registerCount,
       description:
         args.closeBlockerCounts.registerCount > 0
-          ? `${pluralize(args.closeBlockerCounts.registerCount, "register")} needs attention before close.`
+          ? `${pluralize(args.closeBlockerCounts.registerCount, "register")} need attention before close.`
           : "No register blockers.",
       key: "registers",
       label: "Registers",
@@ -685,6 +724,7 @@ export async function buildDailyOperationsSnapshotWithCtx(
   args: {
     endAt?: number;
     operatingDate: string;
+    operatingTimezoneOffsetMinutes?: number;
     startAt?: number;
     storeId: Id<"store">;
     weekEndOperatingDate?: string;
@@ -731,7 +771,11 @@ export async function buildDailyOperationsSnapshotWithCtx(
       ),
     );
   } else {
-    if (isCloseReopened) {
+    if (
+      isCloseReopened &&
+      closeSnapshot.status !== "ready" &&
+      closeSnapshot.status !== "carry_forward"
+    ) {
       attentionItems.push({
         id: `daily_close:${args.storeId}:${args.operatingDate}:reopened`,
         label: "End-of-Day Review reopened",
@@ -764,15 +808,15 @@ export async function buildDailyOperationsSnapshotWithCtx(
 
   const lifecycleStatus: LifecycleStatus = !isOpeningStarted
     ? "not_opened"
-    : isCloseReopened
-      ? "reopened"
-      : closeSnapshot.status === "completed"
+    : closeSnapshot.status === "completed"
       ? "closed"
       : closeSnapshot.blockers.length > 0
         ? "close_blocked"
         : closeSnapshot.status === "ready" ||
             closeSnapshot.status === "carry_forward"
           ? "ready_to_close"
+          : isCloseReopened
+            ? "reopened"
           : "operating";
   const lifecycle = {
     status: lifecycleStatus,
@@ -824,6 +868,7 @@ export const getDailyOperationsSnapshot = query({
   args: {
     endAt: v.optional(v.number()),
     operatingDate: v.string(),
+    operatingTimezoneOffsetMinutes: v.optional(v.number()),
     startAt: v.optional(v.number()),
     storeId: v.id("store"),
     weekEndOperatingDate: v.optional(v.string()),

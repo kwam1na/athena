@@ -8,10 +8,12 @@ import {
 import { useQuery } from "convex/react";
 import {
   ArrowUpRight,
+  Ban,
   Calendar as CalendarIcon,
   Check,
   ChevronLeft,
   ChevronRight,
+  CircleAlert,
   Clock3,
 } from "lucide-react";
 
@@ -34,7 +36,6 @@ import {
 import { EmptyState } from "../states/empty/empty-state";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
-import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Calendar } from "../ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
@@ -138,6 +139,7 @@ export type DailyOperationsSnapshot = {
     expenseTotal: number;
     expenseTransactionCount: number;
     isClosed: boolean;
+    isReopened?: boolean;
     isSelected: boolean;
     operatingDate: string;
     salesTotal: number;
@@ -250,6 +252,12 @@ function getLocalOperatingDateRangeFromSearch(operatingDate?: unknown) {
   }
 
   return getLocalOperatingDateRange();
+}
+
+function getOperatingTimezoneOffsetMinutes(operatingDate: string) {
+  const localDate = getLocalDateFromOperatingDate(operatingDate);
+
+  return localDate ? localDate.getTimezoneOffset() : new Date().getTimezoneOffset();
 }
 
 function formatOperatingDate(operatingDate?: string | null) {
@@ -437,20 +445,15 @@ function formatMoney(currency: string, amount: number) {
 }
 
 function statusClassName(status: DailyOperationsLaneStatus) {
-  if (status === "blocked") return "border-danger/30 bg-danger/10 text-danger";
+  if (status === "blocked") return "text-danger";
   if (status === "needs_attention") {
-    return "border-warning/40 bg-warning/10 text-warning-foreground";
+    return "text-warning";
   }
   if (status === "closed" || status === "ready") {
     return "border-success/30 bg-success/10 text-success";
   }
 
   return "border-border bg-background text-muted-foreground";
-}
-
-function statusLabel(status: DailyOperationsLaneStatus) {
-  if (status === "needs_attention") return "Needs attention";
-  return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
 function SuccessCheckIcon({
@@ -470,6 +473,32 @@ function SuccessCheckIcon({
       role="img"
     >
       <Check aria-hidden="true" className="h-3 w-3 stroke-[3]" />
+    </span>
+  );
+}
+
+function LaneStatusIcon({
+  className,
+  label,
+  status,
+}: {
+  className?: string;
+  label: string;
+  status: DailyOperationsLaneStatus;
+}) {
+  const Icon = status === "blocked" ? Ban : CircleAlert;
+
+  return (
+    <span
+      aria-label={label}
+      className={cn(
+        "inline-flex h-4 w-4 shrink-0 items-center justify-center",
+        statusClassName(status),
+        className,
+      )}
+      role="img"
+    >
+      <Icon aria-hidden="true" className="h-4 w-4 stroke-[2.5]" />
     </span>
   );
 }
@@ -526,18 +555,14 @@ function LaneCard({
         {["ready", "closed"].includes(lane.status) ? (
           <SuccessCheckIcon className="mt-0.5" label={`${lane.label} ready`} />
         ) : (
-          <Badge
-            className={cn("shrink-0 border", statusClassName(lane.status))}
-            size="sm"
-          >
-            {statusLabel(lane.status)}
-          </Badge>
+          <LaneStatusIcon
+            className="mt-0.5"
+            label={`${lane.label} ${lane.status === "blocked" ? "blocked" : "needs attention"}`}
+            status={lane.status}
+          />
         )}
       </div>
-      <div className="mt-layout-sm flex items-center justify-between">
-        <span className="font-numeric text-lg tabular-nums text-foreground">
-          {lane.countLabel ?? lane.count}
-        </span>
+      <div className="mt-layout-sm flex items-center justify-end">
         <Button asChild className="h-8 px-2 text-xs" size="sm" variant="ghost">
           <Link
             aria-label={`Open ${lane.label}`}
@@ -791,6 +816,10 @@ function WeekMetricsStrip({
                   {metric.isClosed ? (
                     <span className="rounded-full bg-success/10 px-1.5 py-0.5 text-[10px] font-medium text-success">
                       Closed
+                    </span>
+                  ) : metric.isReopened ? (
+                    <span className="rounded-full bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">
+                      Reopened
                     </span>
                   ) : null}
                 </div>
@@ -1165,6 +1194,9 @@ function DailyOperationsConnectedView({
     canQueryProtectedData
       ? {
           ...operatingDateRange,
+          operatingTimezoneOffsetMinutes: getOperatingTimezoneOffsetMinutes(
+            operatingDateRange.operatingDate,
+          ),
           storeId: activeStore!._id,
           weekEndOperatingDate,
         }

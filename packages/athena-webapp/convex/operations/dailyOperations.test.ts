@@ -272,7 +272,7 @@ describe("daily operations overview read model", () => {
     });
   });
 
-  it("shows a reopened active close as needing revised End-of-Day Review", async () => {
+  it("treats a reopened active close as ready when no close work remains", async () => {
     const snapshot = await buildDailyOperationsSnapshotWithCtx(
       buildCtx({
         dailyClose: [
@@ -294,20 +294,77 @@ describe("daily operations overview read model", () => {
       { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
     );
 
-    expect(snapshot.lifecycle.status).toBe("reopened");
+    expect(snapshot.lifecycle.status).toBe("ready_to_close");
     expect(snapshot.primaryAction).toMatchObject({
-      label: "Revise End-of-Day Review",
+      label: "Start End-of-Day Review",
     });
     expect(snapshot.lanes.find((lane) => lane.key === "close")).toMatchObject({
-      status: "needs_attention",
+      description: "End-of-Day Review is available for review.",
+      status: "ready",
+    });
+    expect(
+      snapshot.attentionItems.some(
+        (item) =>
+          item.owner === "daily_close" &&
+          item.label === "End-of-Day Review reopened",
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps reopened store days blocked while close blockers remain", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [
+          priorClose,
+          {
+            ...priorClose,
+            _id: "close-reopened",
+            completedAt: Date.UTC(2026, 4, 8, 22),
+            isCurrent: true,
+            lifecycleStatus: "reopened",
+            operatingDate: "2026-05-08",
+            reopenedAt: Date.UTC(2026, 4, 9, 8),
+            reopenReason: "Cash count corrected after close.",
+          },
+        ],
+        dailyOpening: [startedOpening],
+        registerSession: [
+          {
+            _id: "register-1",
+            expectedCash: 25000,
+            openedAt: Date.UTC(2026, 4, 8, 9),
+            registerNumber: "1",
+            status: "open",
+            storeId: "store-1",
+          },
+        ],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.lifecycle.status).toBe("close_blocked");
+    expect(snapshot.primaryAction).toMatchObject({
+      label: "Review close blockers",
+    });
+    expect(snapshot.lanes.find((lane) => lane.key === "close")).toMatchObject({
+      count: 1,
       description:
-        "End-of-Day Review was reopened and needs a revised close.",
+        "1 close blocker must be resolved after reopening End-of-Day Review.",
+      status: "blocked",
     });
     expect(snapshot.attentionItems).toContainEqual(
       expect.objectContaining({
         owner: "daily_close",
         label: "End-of-Day Review reopened",
         severity: "warning",
+      }),
+    );
+    expect(snapshot.attentionItems).toContainEqual(
+      expect.objectContaining({
+        owner: "daily_close",
+        source: expect.objectContaining({ id: "register-1" }),
+        severity: "critical",
       }),
     );
   });
@@ -322,7 +379,9 @@ describe("daily operations overview read model", () => {
             _id: "close-current",
             completedAt: Date.UTC(2026, 4, 8, 22),
             isCurrent: true,
+            lifecycleStatus: "reopened",
             operatingDate: "2026-05-08",
+            status: "needs_review",
           },
         ],
         dailyOpening: [startedOpening],
@@ -401,7 +460,8 @@ describe("daily operations overview read model", () => {
     ).toMatchObject({
       currentDayCashTotal: 80000,
       expenseTotal: 12000,
-      isClosed: true,
+      isClosed: false,
+      isReopened: true,
       isSelected: false,
       salesTotal: 80000,
       transactionCount: 1,
@@ -410,6 +470,50 @@ describe("daily operations overview read model", () => {
       snapshot.weekMetrics.find((metric) => metric.operatingDate === "2026-05-05"),
     ).toMatchObject({
       isSelected: true,
+      salesTotal: 0,
+      transactionCount: 0,
+    });
+  });
+
+  it("buckets week sales by the local operating-day offset instead of UTC midnight", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyOpening: [startedOpening],
+        posTransaction: [
+          {
+            _id: "txn-local-evening",
+            changeGiven: 0,
+            completedAt: Date.UTC(2026, 4, 11, 2),
+            paymentMethod: "cash",
+            paymentAllocations: [],
+            payments: [{ amount: 187899, method: "cash" }],
+            status: "completed",
+            storeId: "store-1",
+            terminalId: "terminal-1",
+            total: 187899,
+            totalPaid: 187899,
+            transactionNumber: "TXN-LOCAL-EVENING",
+          },
+        ],
+        store: [store],
+      }),
+      {
+        operatingDate: "2026-05-10",
+        operatingTimezoneOffsetMinutes: 240,
+        storeId: "store-1" as Id<"store">,
+        weekEndOperatingDate: "2026-05-16",
+      },
+    );
+
+    expect(
+      snapshot.weekMetrics.find((metric) => metric.operatingDate === "2026-05-10"),
+    ).toMatchObject({
+      salesTotal: 187899,
+      transactionCount: 1,
+    });
+    expect(
+      snapshot.weekMetrics.find((metric) => metric.operatingDate === "2026-05-11"),
+    ).toMatchObject({
       salesTotal: 0,
       transactionCount: 0,
     });
