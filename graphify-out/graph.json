@@ -6119,7 +6119,7 @@
       "relation": "calls",
       "source": "dailyoperationsview_getlocaloperatingdaterange",
       "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
-      "source_location": "L1209",
+      "source_location": "L1213",
       "target": "dailyoperationsview_handleoperatingdatechange",
       "weight": 1
     },
@@ -6131,7 +6131,7 @@
       "relation": "calls",
       "source": "dailyoperationsview_getsaturdayweekendoperatingdate",
       "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
-      "source_location": "L1210",
+      "source_location": "L1214",
       "target": "dailyoperationsview_handleoperatingdatechange",
       "weight": 1
     },
@@ -31043,7 +31043,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailyoperationsview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
-      "source_location": "L944",
+      "source_location": "L948",
       "target": "dailyoperationsview_getworkflowsearch",
       "weight": 1
     },
@@ -31055,7 +31055,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailyoperationsview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
-      "source_location": "L1208",
+      "source_location": "L1212",
       "target": "dailyoperationsview_handleoperatingdatechange",
       "weight": 1
     },
@@ -62875,7 +62875,7 @@
       "label": "handleOperatingDateChange()",
       "norm_label": "handleoperatingdatechange()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyOperationsView.tsx",
-      "source_location": "L1208"
+      "source_location": "L1212"
     },
     {
       "community": 10,
