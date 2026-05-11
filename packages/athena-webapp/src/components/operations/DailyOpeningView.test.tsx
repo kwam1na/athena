@@ -307,13 +307,13 @@ describe("DailyOpeningViewContent", () => {
     vi.clearAllMocks();
   });
 
-  it("renders a loading workspace while the snapshot loads", () => {
+  it("renders no loading workspace while the snapshot loads", () => {
     renderContent(undefined);
 
     expect(screen.getByText("Opening Handoff")).toBeInTheDocument();
     expect(
-      screen.getByLabelText("Loading daily opening workspace"),
-    ).toBeInTheDocument();
+      screen.queryByLabelText("Loading daily opening workspace"),
+    ).not.toBeInTheDocument();
   });
 
   it("shows ready state and enables Start Day without drawer controls", () => {

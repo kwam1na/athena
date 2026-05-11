@@ -1,11 +1,9 @@
-import useGetActiveProduct from "~/src/hooks/useGetActiveProduct";
 import { GenericComboBox } from "../GenericComboBox";
 import { useProduct } from "~/src/contexts/ProductContext";
 import { useEffect } from "react";
 import { ProductVariant } from "../add-product/ProductStock";
 import { useSearch } from "@tanstack/react-router";
 import { FadeIn } from "../common/FadeIn";
-import { Skeleton } from "../ui/skeleton";
 
 export const SKUSelector = () => {
   const {
@@ -42,7 +40,7 @@ export const SKUSelector = () => {
     }
   };
 
-  const comboBoxValues = productVariants.map((v, i) => ({
+  const comboBoxValues = productVariants.map((v) => ({
     value: v,
     label: v.sku || "",
   }));
@@ -50,8 +48,7 @@ export const SKUSelector = () => {
   const variantEqualityFn = (a: ProductVariant, b: ProductVariant) =>
     a.id === b.id;
 
-  if (activeProduct === undefined)
-    return <Skeleton className="w-[240px] h-10" />;
+  if (activeProduct === undefined) return null;
 
   if (activeProduct === null) return null;
 

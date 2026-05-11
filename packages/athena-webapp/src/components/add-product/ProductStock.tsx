@@ -16,7 +16,6 @@ import {
   TrashIcon,
 } from "@radix-ui/react-icons";
 import { getErrorForField } from "@/lib/utils";
-import { Skeleton } from "../ui/skeleton";
 import { CardFooter } from "../ui/card";
 import { useProduct } from "@/contexts/ProductContext";
 import { ImageFile } from "../ui/image-uploader";
@@ -591,9 +590,7 @@ function Stock({
                 <TableCell>
                   <div className="flex items-center gap-2">
                     <div className="flex-1">
-                      {showLoaderForProduct ? (
-                        <Skeleton className="h-[40px] w-full" />
-                      ) : !activeProduct ? (
+                      {showLoaderForProduct ? null : !activeProduct ? (
                         <Input
                           id={`sku-${index}`}
                           type="text"
@@ -644,9 +641,7 @@ function Stock({
                     Barcode
                   </Label>
                   <div className="flex items-center gap-2">
-                    {showLoaderForProduct ? (
-                      <Skeleton className="h-[40px] w-full" />
-                    ) : (
+                    {showLoaderForProduct ? null : (
                       <>
                         <Input
                           id={`barcode-${index}`}
@@ -768,9 +763,7 @@ function Stock({
                   <Label htmlFor={`stock-${index}`} className="sr-only">
                     Stock
                   </Label>
-                  {showLoaderForProduct ? (
-                    <Skeleton className="h-[40px] w-full" />
-                  ) : (
+                  {showLoaderForProduct ? null : (
                     <Input
                       id={`stock-${index}`}
                       type="number"
@@ -791,9 +784,7 @@ function Stock({
                   <Label htmlFor={`stock-${index}`} className="sr-only">
                     Quantity available
                   </Label>
-                  {showLoaderForProduct ? (
-                    <Skeleton className="h-[40px] w-full" />
-                  ) : (
+                  {showLoaderForProduct ? null : (
                     <Input
                       id={`quantity-available-${index}`}
                       type="number"
@@ -820,9 +811,7 @@ function Stock({
                     Price{" "}
                     {currencyDisplaySymbol(activeStore?.currency ?? "GHS")}
                   </Label>
-                  {showLoaderForProduct ? (
-                    <Skeleton className="h-[40px] w-full" />
-                  ) : (
+                  {showLoaderForProduct ? null : (
                     <Input
                       id={`price-${index}`}
                       type="number"
@@ -844,9 +833,7 @@ function Stock({
                   <Label htmlFor={`cost-${index}`} className="sr-only">
                     Cost
                   </Label>
-                  {showLoaderForProduct ? (
-                    <Skeleton className="h-[40px] w-full" />
-                  ) : (
+                  {showLoaderForProduct ? null : (
                     <Input
                       id={`cost-${index}`}
                       type="number"

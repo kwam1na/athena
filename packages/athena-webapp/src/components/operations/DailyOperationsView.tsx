@@ -486,21 +486,6 @@ function buildParams(
   };
 }
 
-function LoadingWorkspace() {
-  return (
-    <div className="grid gap-layout-lg lg:grid-cols-[minmax(0,1fr)_22rem]">
-      <div className="space-y-layout-md">
-        <div className="h-28 animate-pulse rounded-lg bg-surface" />
-        <div className="grid gap-layout-sm md:grid-cols-2">
-          <div className="h-32 animate-pulse rounded-lg bg-surface" />
-          <div className="h-32 animate-pulse rounded-lg bg-surface" />
-        </div>
-      </div>
-      <div className="h-64 animate-pulse rounded-lg bg-surface" />
-    </div>
-  );
-}
-
 function TimelineEventItem({
   event,
 }: {
@@ -871,13 +856,7 @@ export function DailyOperationsViewContent({
   const [isTimelineSheetOpen, setIsTimelineSheetOpen] = useState(false);
 
   if (isLoadingAccess) {
-    return (
-      <View hideBorder hideHeaderBottomBorder scrollMode="page">
-        <FadeIn className="container mx-auto py-layout-xl">
-          <LoadingWorkspace />
-        </FadeIn>
-      </View>
-    );
+    return null;
   }
 
   if (!isAuthenticated) {
@@ -913,9 +892,7 @@ export function DailyOperationsViewContent({
             description="Review the store day, see what needs attention, and move into the workflow that owns the next action."
           />
 
-          {isLoadingSnapshot || !snapshot ? (
-            <LoadingWorkspace />
-          ) : (
+          {isLoadingSnapshot || !snapshot ? null : (
             <PageWorkspace>
               <section className="space-y-layout-2xl">
                 <div className="flex flex-col gap-layout-sm lg:flex-row lg:items-center lg:justify-end">

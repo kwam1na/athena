@@ -4,8 +4,6 @@ import type { Id } from "~/convex/_generated/dataModel";
 
 import { WorkflowTraceView } from "~/src/components/traces/WorkflowTraceView";
 import { NotFoundView } from "~/src/components/states/not-found/NotFoundView";
-import View from "~/src/components/View";
-import { FadeIn } from "~/src/components/common/FadeIn";
 import { api } from "~/convex/_generated/api";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -15,20 +13,6 @@ function hasOrgNotFoundPayload(data: unknown) {
       typeof data === "object" &&
       "data" in data &&
       (data as { data?: { org?: boolean } }).data?.org === true,
-  );
-}
-
-function WorkflowTraceLoadingState() {
-  return (
-    <View>
-      <FadeIn>
-        <div className="container mx-auto p-6">
-          <p className="text-sm text-muted-foreground">
-            Loading workflow trace...
-          </p>
-        </div>
-      </FadeIn>
-    </View>
   );
 }
 
@@ -47,7 +31,7 @@ export function WorkflowTraceRouteContent({
   );
 
   if (!organizationId || !traceId || stores === undefined) {
-    return <WorkflowTraceLoadingState />;
+    return null;
   }
 
   const matchedStore = stores.find((store) => store.slug === storeUrlSlug);
@@ -80,7 +64,7 @@ export function WorkflowTraceRouteShell({
   );
 
   if (isLoadingAuth || organizations === undefined || !traceId) {
-    return <WorkflowTraceLoadingState />;
+    return null;
   }
 
   const organization = organizations.find((org) => org.slug === orgUrlSlug);
@@ -110,17 +94,19 @@ function WorkflowTraceRoute() {
   );
 }
 
+function WorkflowTraceNotFoundComponent({ data }: { data?: unknown }) {
+  const { orgUrlSlug, storeUrlSlug } = Route.useParams();
+  const org = hasOrgNotFoundPayload(data);
+
+  const entity = org ? "organization" : "store";
+  const name = org ? orgUrlSlug : storeUrlSlug;
+
+  return <NotFoundView entity={entity} entityIdentifier={name} />;
+}
+
 export const Route = createFileRoute(
   "/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId",
 )({
   component: WorkflowTraceRoute,
-  notFoundComponent: ({ data }) => {
-    const { orgUrlSlug, storeUrlSlug } = Route.useParams();
-    const org = hasOrgNotFoundPayload(data);
-
-    const entity = org ? "organization" : "store";
-    const name = org ? orgUrlSlug : storeUrlSlug;
-
-    return <NotFoundView entity={entity} entityIdentifier={name} />;
-  },
+  notFoundComponent: WorkflowTraceNotFoundComponent,
 });

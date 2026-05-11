@@ -5,9 +5,6 @@ import {
   Smartphone,
   Monitor,
   WandSparkles,
-  CircleDot,
-  Circle,
-  Star,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "~/convex/_generated/api";
@@ -18,7 +15,7 @@ import { capitalizeFirstLetter } from "~/src/lib/utils";
 const EngagementBar = ({ level }: { level: string }) => {
   const count = level === "high" ? 3 : level === "medium" ? 2 : 1;
   let color = "bg-green-600";
-  let barHeight = ["h-2.5", "h-5", "h-7"]; // low, medium, high
+  const barHeight = ["h-2.5", "h-5", "h-7"]; // low, medium, high
   if (level === "medium") color = "bg-yellow-400";
   if (level === "low") color = "bg-red-500";
   return (
@@ -35,10 +32,18 @@ const EngagementBar = ({ level }: { level: string }) => {
   );
 };
 
+type UserInsightsResult = {
+  device_preference?: string;
+  engagement_level?: string;
+  likely_intent?: string;
+  recommendations?: string[];
+  summary?: string;
+};
+
 // UserInsightsSection component
 export const UserInsightsSection = () => {
   const userInsights = useAction(api.llm.userInsights.getUserInsightsFromLlm);
-  const [insights, setInsights] = useState<any>(null);
+  const [insights, setInsights] = useState<UserInsightsResult | null>(null);
   const [insightsLoading, setInsightsLoading] = useState(false);
 
   const { userId } = useParams({ strict: false });
@@ -63,14 +68,7 @@ export const UserInsightsSection = () => {
         <p className="text-sm font-medium">User Insights</p>
         <WandSparkles className="w-4 h-4 text-muted-foreground" />
       </div>
-      {insightsLoading ? (
-        <div className="space-y-4 animate-pulse">
-          <div className="h-4 bg-muted rounded w-1/2" />
-          <div className="h-4 bg-muted rounded w-1/3" />
-          <div className="h-4 bg-muted rounded w-1/4" />
-          <div className="h-4 bg-muted rounded w-2/3" />
-        </div>
-      ) : insights ? (
+      {insightsLoading ? null : insights ? (
         <div className="space-y-8">
           {/* Summary */}
           {insights.summary && (

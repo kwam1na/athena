@@ -37,13 +37,13 @@ describe("Index route", () => {
     mocked.useQuery.mockReset();
   });
 
-  it("renders a nonblank recovery state while the authenticated user is loading", () => {
+  it("stays empty while the authenticated user is loading", () => {
     mocked.useAuth.mockReturnValue({ user: undefined, isLoading: true });
     mocked.useQuery.mockReturnValue(undefined);
 
     render(<Index />);
 
-    expect(screen.getByText("Loading workspace...")).toBeInTheDocument();
+    expect(screen.queryByText("Loading workspace...")).not.toBeInTheDocument();
     expect(screen.queryByTestId("organizations-view")).not.toBeInTheDocument();
     expect(mocked.navigate).not.toHaveBeenCalled();
   });

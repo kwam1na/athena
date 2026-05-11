@@ -126,18 +126,7 @@ export function BagsTable<TData, TValue>({
             ))}
           </TableHeader>
           <TableBody>
-            {isLoading ? (
-              // Skeleton rows
-              Array.from({ length: 10 }).map((_, rowIdx) => (
-                <TableRow key={rowIdx}>
-                  {columns.map((_, colIdx) => (
-                    <TableCell key={colIdx}>
-                      <div className="h-4 w-full rounded bg-muted animate-pulse" />
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : table.getRowModel().rows?.length ? (
+            {isLoading ? null : table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
                 <TableRow
                   key={row.id}

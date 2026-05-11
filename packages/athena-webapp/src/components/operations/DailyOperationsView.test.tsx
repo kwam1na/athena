@@ -720,13 +720,13 @@ describe("DailyOperationsViewContent", () => {
     expect(screen.getByText("Timeline event 12")).toBeInTheDocument();
   });
 
-  it("uses content-shaped loading state while the store-day snapshot loads", () => {
+  it("leaves content empty while the store-day snapshot loads", () => {
     const { container } = renderContent(undefined);
 
     expect(
       screen.getByRole("heading", { name: "Daily Operations" }),
     ).toBeInTheDocument();
-    expect(container.querySelectorAll(".animate-pulse")).toHaveLength(4);
+    expect(container.querySelectorAll(".animate-pulse")).toHaveLength(0);
   });
 
   it("renders access states before showing protected operations data", () => {

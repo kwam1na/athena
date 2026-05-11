@@ -88,8 +88,8 @@ describe("CashControlsDashboard auth readiness", () => {
     render(<CashControlsDashboard />);
 
     expect(
-      screen.getByLabelText("Loading cash controls workspace"),
-    ).toBeInTheDocument();
+      screen.queryByLabelText("Loading cash controls workspace"),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByText("Loading cash controls..."),
     ).not.toBeInTheDocument();

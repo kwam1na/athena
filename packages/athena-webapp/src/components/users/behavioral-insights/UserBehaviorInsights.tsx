@@ -2,7 +2,6 @@ import { useMemo } from "react";
 import { useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
-import { Skeleton } from "../../ui/skeleton";
 import { CustomerJourneyStageCard } from "./CustomerJourneyStage";
 import { RiskIndicators } from "./RiskIndicators";
 import { EngagementMetricsGrid } from "./EngagementMetrics";
@@ -45,17 +44,7 @@ export function UserBehaviorInsights({
 
   // Loading state
   if (!activities || !behaviorData) {
-    return (
-      <div className={`space-y-4 ${className}`}>
-        <Skeleton className="h-20 w-full" />
-        <Skeleton className="h-16 w-full" />
-        <div className="grid grid-cols-2 gap-3">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-16 w-full" />
-          ))}
-        </div>
-      </div>
-    );
+    return null;
   }
 
   // No activity state

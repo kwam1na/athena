@@ -10,7 +10,6 @@ import { Button } from "../ui/button";
 import useGetActiveProduct from "~/src/hooks/useGetActiveProduct";
 import config from "~/src/config";
 import { EyeIcon } from "lucide-react";
-import { Skeleton } from "../ui/skeleton";
 
 const Header = () => {
   const { activeProductVariant, productVariants, setActiveProductVariant } =
@@ -89,9 +88,7 @@ export default function ProductImagesView() {
         />
       )}
 
-      {showLoaderForProduct && (
-        <Skeleton className="mt-4 h-[320px] w-[320px]" />
-      )}
+      {showLoaderForProduct ? null : null}
 
       {activeProduct && (
         <div className="w-full flex">

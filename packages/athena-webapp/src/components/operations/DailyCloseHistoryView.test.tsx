@@ -383,8 +383,8 @@ describe("DailyCloseHistoryView", () => {
     const { rerender } = render(<DailyCloseHistoryView />);
 
     expect(
-      screen.getByLabelText("Loading Daily Close history access"),
-    ).toBeInTheDocument();
+      screen.queryByLabelText("Loading Daily Close history access"),
+    ).not.toBeInTheDocument();
 
     mockProtectedState({ isAuthenticated: false });
     rerender(<DailyCloseHistoryView />);

@@ -28,48 +28,6 @@ function formatMetric(value: number | undefined) {
   return value === undefined ? "..." : formatNumber(value);
 }
 
-function AnalyticsWorkspaceSkeleton() {
-  return (
-    <View
-      hideBorder
-      hideHeaderBottomBorder
-      className="bg-background"
-      scrollMode="page"
-    >
-      <FadeIn className="container mx-auto py-layout-xl">
-        <PageWorkspace>
-          <PageLevelHeader
-            eyebrow="Storefront Ops"
-            title="Storefront activity"
-            description="Loading the latest storefront signal."
-          />
-          <PageWorkspaceGrid>
-            <PageWorkspaceMain>
-              <div className="grid gap-3 md:grid-cols-3">
-                {[0, 1, 2].map((index) => (
-                  <div
-                    key={index}
-                    className="h-36 animate-pulse rounded-lg border border-border bg-surface"
-                  />
-                ))}
-              </div>
-              <div className="h-80 animate-pulse rounded-lg border border-border bg-surface" />
-            </PageWorkspaceMain>
-            <PageWorkspaceRail>
-              {[0, 1].map((index) => (
-                <div
-                  key={index}
-                  className="h-36 animate-pulse rounded-lg border border-border bg-surface"
-                />
-              ))}
-            </PageWorkspaceRail>
-          </PageWorkspaceGrid>
-        </PageWorkspace>
-      </FadeIn>
-    </View>
-  );
-}
-
 function StorefrontSignalCard({
   description,
   icon,
@@ -114,7 +72,7 @@ export default function AnalyticsView() {
       : "skip",
   );
 
-  if (!activeStore || !summary) return <AnalyticsWorkspaceSkeleton />;
+  if (!activeStore || !summary) return null;
 
   return (
     <View

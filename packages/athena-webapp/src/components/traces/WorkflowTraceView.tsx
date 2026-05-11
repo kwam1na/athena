@@ -160,17 +160,7 @@ export function WorkflowTraceView({
   );
 
   if (workflowTrace === undefined) {
-    return (
-      <View>
-        <FadeIn>
-          <div className="container mx-auto p-6">
-            <p className="text-sm text-muted-foreground">
-              Loading workflow trace...
-            </p>
-          </div>
-        </FadeIn>
-      </View>
-    );
+    return null;
   }
 
   if (!workflowTrace) {

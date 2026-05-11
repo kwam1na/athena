@@ -18,7 +18,6 @@ import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { Skeleton } from "../ui/skeleton";
 import {
   Table,
   TableBody,
@@ -83,136 +82,6 @@ type CashControlsDashboardContentProps = {
   orgUrlSlug: string;
   storeUrlSlug: string;
 };
-
-function MetricCardSkeleton() {
-  return (
-    <div className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
-      <Skeleton className="h-3 w-32" />
-      <Skeleton className="mt-layout-xs h-8 w-24" />
-      <Skeleton className="mt-2 h-3 w-36" />
-    </div>
-  );
-}
-
-function DrawerCardSkeleton() {
-  return (
-    <div className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
-      <div className="flex items-start justify-between gap-layout-md">
-        <div className="space-y-2">
-          <Skeleton className="h-4 w-36" />
-          <Skeleton className="h-3 w-52" />
-        </div>
-        <Skeleton className="h-6 w-20" />
-      </div>
-      <div className="mt-layout-md grid grid-cols-3 gap-layout-sm">
-        {Array.from({ length: 3 }).map((_, index) => (
-          <div className="space-y-2" key={index}>
-            <Skeleton className="h-3 w-20" />
-            <Skeleton className="h-4 w-16" />
-          </div>
-        ))}
-      </div>
-      <Skeleton className="mt-layout-md h-4 w-32" />
-    </div>
-  );
-}
-
-function DepositsTableSkeleton() {
-  return (
-    <div className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface">
-      <div className="grid grid-cols-[1fr_120px_160px_120px_120px_1fr_140px] gap-layout-sm border-b px-4 py-4">
-        {Array.from({ length: 7 }).map((_, index) => (
-          <Skeleton className="h-3 w-20" key={index} />
-        ))}
-      </div>
-      {Array.from({ length: 3 }).map((_, index) => (
-        <div
-          className="grid grid-cols-[1fr_120px_160px_120px_120px_1fr_140px] items-center gap-layout-sm border-b px-4 py-4 last:border-b-0"
-          key={index}
-        >
-          <Skeleton className="h-4 w-28" />
-          <Skeleton className="h-4 w-16" />
-          <Skeleton className="h-4 w-28" />
-          <Skeleton className="h-4 w-20" />
-          <Skeleton className="h-4 w-20" />
-          <Skeleton className="h-4 w-32" />
-          <Skeleton className="ml-auto h-8 w-32" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function CashControlsDashboardSkeleton() {
-  return (
-    <div
-      aria-label="Loading cash controls workspace"
-      className="space-y-layout-3xl"
-    >
-      <section className="space-y-layout-md">
-        <div className="flex flex-col gap-layout-sm lg:flex-row lg:items-end lg:justify-between">
-          <div className="space-y-layout-2xs">
-            <Skeleton className="h-3 w-44" />
-            <Skeleton className="h-8 w-56" />
-          </div>
-          <Skeleton className="h-10 w-72" />
-        </div>
-        <div className="grid gap-layout-sm md:grid-cols-2 2xl:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <MetricCardSkeleton key={index} />
-          ))}
-        </div>
-      </section>
-
-      <section className="grid gap-layout-lg xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-        <section className="space-y-layout-sm">
-          <div className="flex items-center justify-between gap-layout-md">
-            <Skeleton className="h-4 w-28" />
-            <Skeleton className="h-6 w-10" />
-          </div>
-          <div className="space-y-layout-xl">
-            <DrawerCardSkeleton />
-            <DrawerCardSkeleton />
-          </div>
-        </section>
-        <section className="space-y-layout-sm">
-          <div className="flex items-center justify-between gap-layout-md">
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-32" />
-              <Skeleton className="h-3 w-56" />
-            </div>
-            <Skeleton className="h-6 w-10" />
-          </div>
-          <div className="rounded-lg border border-border bg-background p-layout-md">
-            <div className="grid grid-cols-4 gap-layout-sm border-b pb-layout-sm">
-              {Array.from({ length: 4 }).map((_, index) => (
-                <Skeleton className="h-3 w-20" key={index} />
-              ))}
-            </div>
-            {Array.from({ length: 3 }).map((_, index) => (
-              <div
-                className="grid grid-cols-4 gap-layout-sm border-b py-layout-sm last:border-b-0"
-                key={index}
-              >
-                {Array.from({ length: 4 }).map((__, cellIndex) => (
-                  <Skeleton className="h-4 w-24" key={cellIndex} />
-                ))}
-              </div>
-            ))}
-          </div>
-        </section>
-      </section>
-
-      <section className="space-y-layout-md">
-        <div className="space-y-layout-2xs">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-4 w-[42rem] max-w-full" />
-        </div>
-        <DepositsTableSkeleton />
-      </section>
-    </div>
-  );
-}
 
 function formatCurrency(currency: string, amount?: number | null) {
   if (amount === undefined || amount === null) {
@@ -1181,9 +1050,7 @@ export function CashControlsDashboardContent({
             description="Track live drawers, review deposited totals, and move into session detail before shifting work into closeouts."
           />
 
-          {isLoading ? (
-            <CashControlsDashboardSkeleton />
-          ) : (
+          {isLoading ? null : (
             <PageWorkspaceMain>
               <section className="space-y-layout-md">
                 <div className="flex flex-col gap-layout-sm lg:flex-row lg:items-end lg:justify-between">
@@ -1253,13 +1120,7 @@ export function CashControlsDashboard() {
   );
 
   if (isLoadingAccess) {
-    return (
-      <View hideBorder hideHeaderBottomBorder scrollMode="page">
-        <FadeIn className="container mx-auto py-layout-xl">
-          <div aria-label="Loading cash controls workspace" />
-        </FadeIn>
-      </View>
-    );
+    return null;
   }
 
   if (!isAuthenticated) {

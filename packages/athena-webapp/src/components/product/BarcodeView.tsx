@@ -2,14 +2,9 @@ import { useRef } from "react";
 import { useProduct } from "~/src/contexts/ProductContext";
 import useGetActiveProduct from "~/src/hooks/useGetActiveProduct";
 import View from "../View";
-import { Button } from "../ui/button";
-import { Download, Printer } from "lucide-react";
 import QRCode from "react-qr-code";
-import { toPng } from "html-to-image";
-import { toast } from "sonner";
 import config from "~/src/config";
 import { FadeIn } from "../common/FadeIn";
-import { Skeleton } from "../ui/skeleton";
 
 export function BarcodeView() {
   const { activeProductVariant } = useProduct();
@@ -24,30 +19,6 @@ export function BarcodeView() {
   // This allows the QR code to work both for customers (opening product page)
   // and for POS systems (extracting barcode from URL)
   const productUrl = `${config.storeFrontUrl}/shop/product/${activeProduct?._id}?variant=${activeProductVariant?.sku}&barcode=${activeProductVariant.barcode}`;
-
-  const handlePrint = () => {
-    window.print();
-  };
-
-  const handleDownload = async () => {
-    if (!qrCodeRef.current) return;
-
-    try {
-      const dataUrl = await toPng(qrCodeRef.current, {
-        cacheBust: true,
-        backgroundColor: "#ffffff",
-      });
-
-      const link = document.createElement("a");
-      link.download = `${activeProductVariant.sku || "barcode"}-qr-code.png`;
-      link.href = dataUrl;
-      link.click();
-      toast.success("QR code saved successfully");
-    } catch (error) {
-      console.error("Error downloading QR code:", error);
-      toast.error("Failed to save QR code");
-    }
-  };
 
   return (
     <View

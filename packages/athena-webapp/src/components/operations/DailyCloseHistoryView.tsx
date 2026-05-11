@@ -299,13 +299,7 @@ function DailyCloseHistoryConnectedView({
   }, [selectedRecord, selectedRecordId]);
 
   if (isLoadingAccess) {
-    return (
-      <View hideBorder hideHeaderBottomBorder scrollMode="page">
-        <FadeIn className="container mx-auto py-layout-xl">
-          <div aria-label="Loading Daily Close history access" />
-        </FadeIn>
-      </View>
-    );
+    return null;
   }
 
   if (!isAuthenticated) {

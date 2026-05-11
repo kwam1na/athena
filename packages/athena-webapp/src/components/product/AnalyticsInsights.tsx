@@ -2,20 +2,15 @@ import { useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { useProduct } from "~/src/contexts/ProductContext";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import {
   ChartNoAxesColumn,
   Clock,
-  ClockAlert,
-  ClockArrowUp,
   Eye,
-  TrendingUp,
   Users,
 } from "lucide-react";
 import useGetActiveProduct from "~/src/hooks/useGetActiveProduct";
 import { getRelativeTime } from "~/src/lib/utils";
 import { FadeIn } from "../common/FadeIn";
-import { Skeleton } from "../ui/skeleton";
 
 export const AnalyticsInsights = () => {
   const { activeStore } = useGetActiveStore();
