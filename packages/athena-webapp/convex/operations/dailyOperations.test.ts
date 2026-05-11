@@ -218,7 +218,7 @@ describe("daily operations overview read model", () => {
     vi.restoreAllMocks();
   });
 
-  it("treats a store day with no opening as not opened and points to Opening Handoff", async () => {
+  it("treats a store day with no opening as ready to start when opening has no review work", async () => {
     const snapshot = await buildDailyOperationsSnapshotWithCtx(
       buildCtx({
         dailyClose: [priorClose],
@@ -232,14 +232,40 @@ describe("daily operations overview read model", () => {
       label: "Start Opening Handoff",
       to: "/$orgUrlSlug/store/$storeUrlSlug/operations/opening",
     });
-    expect(snapshot.attentionItems[0]).toMatchObject({
-      owner: "daily_opening",
-      severity: "warning",
+    expect(snapshot.attentionItems).toHaveLength(0);
+    expect(snapshot.lanes.find((lane) => lane.key === "opening")).toMatchObject(
+      {
+        description: "Opening Handoff is ready to start.",
+        status: "ready",
+      },
+    );
+  });
+
+  it("keeps Opening Handoff in review when prior End-of-Day Review is missing", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.lifecycle.status).toBe("not_opened");
+    expect(snapshot.primaryAction).toMatchObject({
+      label: "Start Opening Handoff",
+      to: "/$orgUrlSlug/store/$storeUrlSlug/operations/opening",
     });
     expect(snapshot.lanes.find((lane) => lane.key === "opening")).toMatchObject(
       {
+        description: "1 opening item will be reviewed when Opening Handoff starts.",
         status: "needs_attention",
       },
+    );
+    expect(snapshot.attentionItems).toContainEqual(
+      expect.objectContaining({
+        label: "Prior End-of-Day Review not found",
+        owner: "daily_opening",
+        severity: "warning",
+      }),
     );
   });
 

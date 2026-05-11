@@ -601,6 +601,7 @@ function buildLanes(args: {
   isCloseReopened: boolean;
   isOpeningStarted: boolean;
   openingAttentionCount: number;
+  openingStatus: string;
   queueCounts: {
     approvalCount: number;
     approvalCountLabel: string;
@@ -610,7 +611,11 @@ function buildLanes(args: {
 }): DailyOperationsLane[] {
   const openingStatus: LaneStatus = args.isOpeningStarted
     ? "ready"
-    : "needs_attention";
+    : args.openingStatus === "blocked"
+      ? "blocked"
+      : args.openingStatus === "needs_attention"
+        ? "needs_attention"
+        : "ready";
   const closeStatus: LaneStatus =
     args.closeStatus === "blocked"
       ? "blocked"
@@ -630,8 +635,8 @@ function buildLanes(args: {
       description: args.isOpeningStarted
         ? "Opening Handoff is complete."
         : args.openingAttentionCount > 0
-          ? `${pluralize(args.openingAttentionCount, "opening item")} still needs operator acknowledgement.`
-          : "Opening Handoff still needs operator acknowledgement.",
+          ? `${pluralize(args.openingAttentionCount, "opening item")} will be reviewed when Opening Handoff starts.`
+          : "Opening Handoff is ready to start.",
       key: "opening",
       label: "Opening Handoff",
       status: openingStatus,
@@ -764,7 +769,9 @@ export async function buildDailyOperationsSnapshotWithCtx(
   const attentionItems: DailyOperationsAttentionItem[] = [];
 
   if (!isOpeningStarted) {
-    attentionItems.push(openingNotStartedAttention(args));
+    if (openingSnapshot.status !== "ready") {
+      attentionItems.push(openingNotStartedAttention(args));
+    }
     attentionItems.push(
       ...openingAttention.map((item) =>
         sourceAttentionItem("daily_opening", item),
@@ -847,6 +854,7 @@ export async function buildDailyOperationsSnapshotWithCtx(
       isCloseReopened,
       isOpeningStarted,
       openingAttentionCount: openingAttention.length,
+      openingStatus: openingSnapshot.status,
       queueCounts: {
         approvalCount: queueCounts.approvalRequests.length,
         approvalCountLabel: queueCounts.approvalRequestsCountLabel,

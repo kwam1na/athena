@@ -5615,7 +5615,7 @@
       "relation": "calls",
       "source": "dailyoperations_buildlanes",
       "source_file": "packages/athena-webapp/convex/operations/dailyOperations.ts",
-      "source_location": "L844",
+      "source_location": "L851",
       "target": "dailyoperations_builddailyoperationssnapshotwithctx",
       "weight": 1
     },
@@ -5627,7 +5627,7 @@
       "relation": "calls",
       "source": "dailyoperations_buildweekmetrics",
       "source_file": "packages/athena-webapp/convex/operations/dailyOperations.ts",
-      "source_location": "L750",
+      "source_location": "L755",
       "target": "dailyoperations_builddailyoperationssnapshotwithctx",
       "weight": 1
     },
@@ -5639,7 +5639,7 @@
       "relation": "calls",
       "source": "dailyoperations_getcloseitemcounts",
       "source_file": "packages/athena-webapp/convex/operations/dailyOperations.ts",
-      "source_location": "L825",
+      "source_location": "L832",
       "target": "dailyoperations_builddailyoperationssnapshotwithctx",
       "weight": 1
     },
@@ -5651,7 +5651,7 @@
       "relation": "calls",
       "source": "dailyoperations_getdailycloserecordfordate",
       "source_file": "packages/athena-webapp/convex/operations/dailyOperations.ts",
-      "source_location": "L746",
+      "source_location": "L751",
       "target": "dailyoperations_builddailyoperationssnapshotwithctx",
       "weight": 1
     },
@@ -5663,7 +5663,7 @@
       "relation": "calls",
       "source": "dailyoperations_lifecyclecopy",
       "source_file": "packages/athena-webapp/convex/operations/dailyOperations.ts",
-      "source_location": "L823",
+      "source_location": "L830",
       "target": "dailyoperations_builddailyoperationssnapshotwithctx",
       "weight": 1
     },
@@ -5675,7 +5675,7 @@
       "relation": "calls",
       "source": "dailyoperations_listopenqueuesnapshot",
       "source_file": "packages/athena-webapp/convex/operations/dailyOperations.ts",
-      "source_location": "L747",
+      "source_location": "L752",
       "target": "dailyoperations_builddailyoperationssnapshotwithctx",
       "weight": 1
     },
@@ -5687,7 +5687,7 @@
       "relation": "calls",
       "source": "dailyoperations_listtimelineevents",
       "source_file": "packages/athena-webapp/convex/operations/dailyOperations.ts",
-      "source_location": "L748",
+      "source_location": "L753",
       "target": "dailyoperations_builddailyoperationssnapshotwithctx",
       "weight": 1
     },
@@ -5699,7 +5699,7 @@
       "relation": "calls",
       "source": "dailyoperations_openingnotstartedattention",
       "source_file": "packages/athena-webapp/convex/operations/dailyOperations.ts",
-      "source_location": "L767",
+      "source_location": "L773",
       "target": "dailyoperations_builddailyoperationssnapshotwithctx",
       "weight": 1
     },
@@ -5711,7 +5711,7 @@
       "relation": "calls",
       "source": "dailyoperations_primaryaction",
       "source_file": "packages/athena-webapp/convex/operations/dailyOperations.ts",
-      "source_location": "L859",
+      "source_location": "L867",
       "target": "dailyoperations_builddailyoperationssnapshotwithctx",
       "weight": 1
     },
@@ -5723,7 +5723,7 @@
       "relation": "calls",
       "source": "dailyoperations_queueattentionitems",
       "source_file": "packages/athena-webapp/convex/operations/dailyOperations.ts",
-      "source_location": "L803",
+      "source_location": "L810",
       "target": "dailyoperations_builddailyoperationssnapshotwithctx",
       "weight": 1
     },
@@ -5735,7 +5735,7 @@
       "relation": "calls",
       "source": "dailyoperations_resolverange",
       "source_file": "packages/athena-webapp/convex/operations/dailyOperations.ts",
-      "source_location": "L733",
+      "source_location": "L738",
       "target": "dailyoperations_builddailyoperationssnapshotwithctx",
       "weight": 1
     },
@@ -5747,7 +5747,7 @@
       "relation": "calls",
       "source": "dailyoperations_pluralize",
       "source_file": "packages/athena-webapp/convex/operations/dailyOperations.ts",
-      "source_location": "L633",
+      "source_location": "L638",
       "target": "dailyoperations_buildlanes",
       "weight": 1
     },
@@ -17447,7 +17447,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_convex_operations_dailyoperations_ts",
       "source_file": "packages/athena-webapp/convex/operations/dailyOperations.ts",
-      "source_location": "L722",
+      "source_location": "L727",
       "target": "dailyoperations_builddailyoperationssnapshotwithctx",
       "weight": 1
     },
@@ -74995,7 +74995,7 @@
       "label": "buildDailyOperationsSnapshotWithCtx()",
       "norm_label": "builddailyoperationssnapshotwithctx()",
       "source_file": "packages/athena-webapp/convex/operations/dailyOperations.ts",
-      "source_location": "L722"
+      "source_location": "L727"
     },
     {
       "community": 18,
