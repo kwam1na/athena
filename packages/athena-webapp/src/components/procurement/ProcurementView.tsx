@@ -25,7 +25,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
-import { Skeleton } from "../ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
 import {
   SkuDetailPanel,
@@ -1577,28 +1576,7 @@ export function ProcurementViewContent({
                     purchaseOrderId={receivingPurchaseOrder._id}
                     storeId={storeId}
                   />
-                ) : (
-                  <div
-                    aria-label="Loading receiving details"
-                    className="space-y-layout-md"
-                  >
-                    <Skeleton className="h-5 w-28" />
-                    <div className="space-y-3 rounded-md border border-border bg-surface px-3 py-3">
-                      <div className="space-y-2">
-                        <Skeleton className="h-4 w-44" />
-                        <Skeleton className="h-3 w-32" />
-                      </div>
-                      <div className="flex items-end justify-between gap-layout-md border-t border-border/70 pt-3">
-                        <div className="space-y-2">
-                          <Skeleton className="h-3 w-24" />
-                          <Skeleton className="h-3 w-36" />
-                        </div>
-                        <Skeleton className="h-9 w-24" />
-                      </div>
-                    </div>
-                    <Skeleton className="h-10 w-full" />
-                  </div>
-                )}
+                ) : null}
               </section>
             ) : null}
 

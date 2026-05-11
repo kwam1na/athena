@@ -1465,11 +1465,7 @@ export function RegisterSessionViewContent({
       <FadeIn>
         <div className="container mx-auto space-y-6 p-6">
           <section className="overflow-hidden rounded-[calc(var(--radius)*1.35)] border border-border bg-surface shadow-surface">
-            {isLoading ? (
-              <div className="px-layout-lg py-layout-lg text-sm text-muted-foreground">
-                Loading register session...
-              </div>
-            ) : !registerSession ? (
+            {isLoading ? null : !registerSession ? (
               <div className="px-layout-lg py-layout-xl">
                 <EmptyState
                   description="Try re-opening the cash-controls workspace and selecting a register session again"

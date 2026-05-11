@@ -1,19 +1,10 @@
 import { useState, useEffect } from "react";
 import { useProduct } from "@/contexts/ProductContext";
 import { getErrorForField } from "@/lib/utils";
-import { Skeleton } from "../ui/skeleton";
 import DefaultAttributesToggleGroup from "./DefaultAttributesToggleGroup";
 import AttributesTable from "./AttributesTable";
 import useGetActiveProduct from "@/hooks/useGetActiveProduct";
 import { FadeIn } from "../common/FadeIn";
-
-// Define the allowed attributes
-type AllowedAttribute = "color" | "length" | "size" | "weight";
-
-// Type guard to check if a string is an AllowedAttribute
-function isAllowedAttribute(attr: string): attr is AllowedAttribute {
-  return ["color", "length", "size", "weight"].includes(attr);
-}
 
 function ProductAttributes() {
   const {
@@ -101,15 +92,15 @@ function ProductAttributes() {
 
   return (
     <FadeIn className="flex flex-col gap-8 py-4">
-      {isLoading && <Skeleton className="h-[40px] w-full" />}
-
-      <div className="flex w-full px-4">
-        <DefaultAttributesToggleGroup
-          selectedAttributes={selectedAttributes}
-          setSelectedAttributes={setSelectedAttributes}
-          disabled={showLoaderForProduct}
-        />
-      </div>
+      {isLoading ? null : (
+        <div className="flex w-full px-4">
+          <DefaultAttributesToggleGroup
+            selectedAttributes={selectedAttributes}
+            setSelectedAttributes={setSelectedAttributes}
+            disabled={showLoaderForProduct}
+          />
+        </div>
+      )}
 
       {selectedAttributes.length > 0 && (
         <AttributesTable selectedAttributes={selectedAttributes} />

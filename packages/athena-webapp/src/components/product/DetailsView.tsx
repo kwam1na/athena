@@ -1,34 +1,22 @@
-import {
-  Check,
-  CheckCircle2,
-  HandCoins,
-  Landmark,
-  XCircle,
-} from "lucide-react";
+import { Landmark } from "lucide-react";
 import View from "../View";
-import { useOnlineOrder } from "~/src/contexts/OnlineOrderContext";
-import { currencyFormatter, getRelativeTime } from "~/src/lib/utils";
+import { currencyFormatter } from "~/src/lib/utils";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { useProduct } from "~/src/contexts/ProductContext";
-import { useQuery } from "convex/react";
-import { api } from "~/convex/_generated/api";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "../ui/tooltip";
-import { ProductStockStatus } from "./ProductStock";
 import { FadeIn } from "../common/FadeIn";
-import { Skeleton } from "../ui/skeleton";
 
 export function DetailsView() {
   const { activeStore } = useGetActiveStore();
 
   const { activeProductVariant, activeProduct } = useProduct();
 
-  if (!activeStore || activeProduct === undefined)
-    return <Skeleton className="w-full h-80" />;
+  if (!activeStore || activeProduct === undefined) return null;
 
   if (activeProduct === null) return null;
 

@@ -2625,13 +2625,7 @@ export function DailyCloseViewContent({
   }, [snapshot?.operatingDate]);
 
   if (isLoadingAccess) {
-    return (
-      <View hideBorder hideHeaderBottomBorder scrollMode="page">
-        <FadeIn className="container mx-auto py-layout-xl">
-          <div aria-label="Loading end-of-day review access" />
-        </FadeIn>
-      </View>
-    );
+    return null;
   }
 
   if (!isAuthenticated) {

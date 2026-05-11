@@ -1256,21 +1256,6 @@ function OpeningRail({
   );
 }
 
-function LoadingWorkspace() {
-  return (
-    <div
-      aria-label="Loading daily opening workspace"
-      className="grid gap-layout-2xl xl:grid-cols-[minmax(0,1fr)_320px]"
-    >
-      <div className="space-y-layout-md">
-        <div className="h-24 rounded-lg border border-border bg-surface-raised shadow-surface" />
-        <div className="h-64 rounded-lg border border-border bg-surface-raised shadow-surface" />
-      </div>
-      <div className="h-80 rounded-lg border border-border bg-surface-raised shadow-surface" />
-    </div>
-  );
-}
-
 export function DailyOpeningViewContent({
   currency,
   hasFullAdminAccess,
@@ -1330,13 +1315,7 @@ export function DailyOpeningViewContent({
   }, [snapshot, storeId]);
 
   if (isLoadingAccess) {
-    return (
-      <View hideBorder hideHeaderBottomBorder scrollMode="page">
-        <FadeIn className="container mx-auto py-layout-xl">
-          <div aria-label="Loading daily opening access" />
-        </FadeIn>
-      </View>
-    );
+    return null;
   }
 
   if (!isAuthenticated) {
@@ -1463,7 +1442,7 @@ export function DailyOpeningViewContent({
       description="Review prior close handoff, acknowledge carry-forward work, and confirm whether the store day can start."
       eyebrow="Store Ops"
       isLoading={isLoadingSnapshot || !snapshot}
-      loadingContent={<LoadingWorkspace />}
+      loadingContent={null}
       showBackButton
       main={
         snapshot ? (

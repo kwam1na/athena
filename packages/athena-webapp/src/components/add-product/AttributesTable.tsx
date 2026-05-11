@@ -9,7 +9,6 @@ import {
   TableRow,
 } from "../ui/table";
 import { Input } from "../ui/input";
-import { Skeleton } from "../ui/skeleton";
 import { ProductVariant } from "./ProductStock";
 import { Button } from "../ui/button";
 import { Ban, CheckCircle2, Plus } from "lucide-react";
@@ -19,6 +18,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 interface AttributesTableProps {
   selectedAttributes: string[];
 }
+
+type ColorOption = {
+  id: string;
+  name: string;
+};
 
 function AttributesTable({ selectedAttributes }: AttributesTableProps) {
   const {
@@ -46,7 +50,7 @@ function AttributesTable({ selectedAttributes }: AttributesTableProps) {
 
   const colors =
     colorsData
-      ?.map((color: any) => ({
+      ?.map((color): ColorOption => ({
         name: color.name,
         id: color._id,
       }))
@@ -102,15 +106,13 @@ function AttributesTable({ selectedAttributes }: AttributesTableProps) {
             </TableCell>
             {selectedAttributes.map((attr) => (
               <TableCell key={`${variant.id}-${attr}`}>
-                {isLoading ? (
-                  <Skeleton className="h-[40px] w-full" />
-                ) : attr == "color" ? (
+                {isLoading ? null : attr == "color" ? (
                   <Select
                     onValueChange={(value: string) => {
                       updateProductVariant(variant.id, {
                         color: value,
                         colorName: colors.find(
-                          (color: any) => color.id === value
+                          (color) => color.id === value
                         )?.name,
                       });
                     }}
@@ -126,7 +128,7 @@ function AttributesTable({ selectedAttributes }: AttributesTableProps) {
 
                     <SelectContent>
                       <SelectGroup>
-                        {colors.map((color: any) => {
+                        {colors.map((color) => {
                           return (
                             <SelectItem key={color.id} value={color.id}>
                               {capitalizeWords(color.name)}
@@ -222,7 +224,7 @@ export function ColorPopover() {
       toast(`Color '${color?.name}' created`, {
         icon: <CheckCircle2 className="h-4 w-4" />,
       });
-    } catch (e) {
+    } catch {
       presentUnexpectedErrorToast("Something went wrong", {
         icon: <Ban className="h-4 w-4" />,
       });

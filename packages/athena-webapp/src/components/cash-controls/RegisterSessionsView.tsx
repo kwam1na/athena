@@ -215,11 +215,7 @@ export function RegisterSessionsViewContent({
             </Badge>
           </div>
 
-          {isLoading ? (
-            <div className="rounded-lg border border-border bg-surface-raised p-layout-lg text-sm text-muted-foreground shadow-surface">
-              Loading register sessions...
-            </div>
-          ) : registerSessions.length === 0 ? (
+          {isLoading ? null : registerSessions.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border bg-surface-raised px-layout-lg py-layout-xl">
               <EmptyState
                 description="Register sessions will appear after drawers are opened from POS"
@@ -262,13 +258,7 @@ export function RegisterSessionsView() {
   ) as CashControlsDashboardSnapshot | undefined;
 
   if (isLoadingAccess) {
-    return (
-      <View>
-        <div className="container mx-auto py-10 text-sm text-muted-foreground">
-          Loading register sessions...
-        </div>
-      </View>
-    );
+    return null;
   }
 
   if (!isAuthenticated) {

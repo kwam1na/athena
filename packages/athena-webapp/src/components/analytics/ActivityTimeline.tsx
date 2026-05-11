@@ -2,7 +2,6 @@ import { useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { Skeleton } from "../ui/skeleton";
 import {
   Activity,
   Eye,
@@ -85,7 +84,7 @@ export function ActivityTimeline({
   const formatter = useGetCurrencyFormatter();
 
   if (!timeline) {
-    return <TimelineSkeleton />;
+    return null;
   }
 
   return (
@@ -213,39 +212,6 @@ export function ActivityTimeline({
             </p>
           </div>
         )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function TimelineSkeleton() {
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <Skeleton className="w-4 h-4" />
-          <Skeleton className="h-4 w-24" />
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-3">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="flex items-start gap-3 p-2">
-              <Skeleton className="w-8 h-8 rounded-full" />
-              <div className="flex-1 space-y-2">
-                <div className="flex justify-between items-center">
-                  <Skeleton className="h-3 w-20" />
-                  <Skeleton className="h-3 w-12" />
-                </div>
-                <Skeleton className="h-3 w-32" />
-                <div className="flex justify-between items-center">
-                  <Skeleton className="h-3 w-16" />
-                  <Skeleton className="h-3 w-20" />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
       </CardContent>
     </Card>
   );

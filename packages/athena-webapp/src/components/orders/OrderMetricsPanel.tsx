@@ -5,7 +5,6 @@ import { Id } from "~/convex/_generated/dataModel";
 import View from "../View";
 import { currencyFormatter } from "~/src/lib/utils";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
-import { Skeleton } from "../ui/skeleton";
 import { FadeIn } from "../common/FadeIn";
 
 type TimeRange = "day" | "week" | "month" | "all";
@@ -59,33 +58,7 @@ export default function OrderMetricsPanel({
           </Tabs>
         </div>
 
-        {isLoading ? (
-          <div className="grid grid-cols-4 gap-6">
-            {/* Gross Sales Card Skeleton */}
-            <div className="border rounded-lg p-6">
-              <Skeleton className="h-4 w-24 mb-2" />
-              <Skeleton className="h-9 w-32" />
-            </div>
-
-            {/* Total Discounts Card Skeleton */}
-            <div className="border rounded-lg p-6">
-              <Skeleton className="h-4 w-24 mb-2" />
-              <Skeleton className="h-9 w-32" />
-            </div>
-
-            {/* Net Revenue Card Skeleton */}
-            <div className="border rounded-lg p-6">
-              <Skeleton className="h-4 w-24 mb-2" />
-              <Skeleton className="h-9 w-32" />
-            </div>
-
-            {/* Total Orders Card Skeleton */}
-            <div className="border rounded-lg p-6">
-              <Skeleton className="h-4 w-24 mb-2" />
-              <Skeleton className="h-9 w-20" />
-            </div>
-          </div>
-        ) : (
+        {isLoading ? null : (
           <div className="grid grid-cols-3 gap-6">
             {/* Gross Sales Card */}
             <div className="border rounded-lg p-6">

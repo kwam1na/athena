@@ -60,26 +60,7 @@ export default function StorefrontObservabilityPanel() {
   );
 
   if (!activeStore || report === undefined) {
-    return (
-      <Card className="border-border bg-surface shadow-surface">
-        <CardHeader>
-          <CardTitle className="text-lg">Storefront health</CardTitle>
-          <CardDescription>
-            Loading the latest storefront signal.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 md:grid-cols-4">
-            {[0, 1, 2, 3].map((index) => (
-              <div
-                key={index}
-                className="h-24 animate-pulse rounded-lg bg-muted/50"
-              />
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    );
+    return null;
   }
 
   const visibleFunnel = report.funnel.slice(0, 5);

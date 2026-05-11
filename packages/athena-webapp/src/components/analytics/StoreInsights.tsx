@@ -24,11 +24,23 @@ interface StoreInsightsProps {
   storeId: Id<"store">;
 }
 
+type StoreInsightsResult = {
+  activity_trend: string;
+  device_distribution: {
+    desktop: number;
+    mobile: number;
+  };
+  peak_activity_times: string;
+  popular_actions: string[];
+  recommendations: string[];
+  summary: string;
+};
+
 export default function StoreInsights({ storeId }: StoreInsightsProps) {
   const storeInsights = useAction(
     api.llm.storeInsights.getStoreInsightsFromLlm
   );
-  const [insights, setInsights] = useState<any>(null);
+  const [insights, setInsights] = useState<StoreInsightsResult | null>(null);
   const [insightsLoading, setInsightsLoading] = useState(false);
 
   useEffect(() => {
@@ -44,21 +56,7 @@ export default function StoreInsights({ storeId }: StoreInsightsProps) {
   }, [storeId]);
 
   if (insightsLoading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">Store Insights</CardTitle>
-          <CardDescription>Analyzing store activity...</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4 animate-pulse">
-            <div className="h-4 bg-muted rounded w-3/4" />
-            <div className="h-4 bg-muted rounded w-1/2" />
-            <div className="h-4 bg-muted rounded w-2/3" />
-          </div>
-        </CardContent>
-      </Card>
-    );
+    return null;
   }
 
   if (!insights) return null;

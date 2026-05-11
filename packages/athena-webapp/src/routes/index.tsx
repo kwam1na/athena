@@ -34,14 +34,7 @@ export function Index() {
   }, [isLoading, navigate, user]);
 
   if (isLoading || user === undefined || (user && userOrgs === undefined)) {
-    return (
-      <div
-        className="flex min-h-[60vh] w-full items-center justify-center text-sm text-muted-foreground"
-        aria-live="polite"
-      >
-        Loading workspace...
-      </div>
-    );
+    return null;
   }
 
   if (user === null) {

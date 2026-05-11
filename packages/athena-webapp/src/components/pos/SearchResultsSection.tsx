@@ -3,7 +3,6 @@ import { Product } from "./types";
 import { ProductCard } from "./ProductCard";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "../ui/skeleton";
 import { useEffect } from "react";
 
 interface SearchResultsSectionProps {
@@ -18,38 +17,8 @@ interface SearchResultsSectionProps {
   className?: string;
 }
 
-const SEARCH_RESULTS_LOADING_ROWS = 4;
 const searchResultsViewportClassName =
   "max-h-[586px] space-y-1 overflow-y-auto scrollbar-hide";
-
-function SearchResultsLoadingSkeleton() {
-  return (
-    <div className="space-y-8 py-8">
-      {Array.from({ length: SEARCH_RESULTS_LOADING_ROWS }).map((_, index) => (
-        <div
-          key={index}
-          className="flex items-center gap-4 rounded-lg border border-gray-200 bg-white/80 p-3"
-        >
-          <Skeleton className="h-16 w-16 rounded flex-shrink-0 self-center mx-1 mt-4" />
-          <div className="flex-1 min-w-0 space-y-2">
-            <div className="flex items-center justify-between gap-3">
-              <Skeleton className="h-5 w-2/5" />
-              <Skeleton className="h-7 w-28" />
-            </div>
-            <div className="flex items-center gap-2">
-              <Skeleton className="h-4 w-24 rounded-full" />
-            </div>
-            <div className="flex items-center gap-2">
-              <Skeleton className="h-4 w-12 rounded-full" />
-              <Skeleton className="h-4 w-12 rounded-full" />
-            </div>
-            <Skeleton className="h-4 w-24" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 export function SearchResultsSection({
   isLoading,
@@ -58,7 +27,6 @@ export function SearchResultsSection({
   formatter,
   onClearSearch,
   onQuickAddProduct,
-  quickAddQuery,
   quickAddShortcutDisabled = false,
   className,
 }: SearchResultsSectionProps) {
@@ -135,12 +103,7 @@ export function SearchResultsSection({
   }, [onQuickAddProduct, products.length, shouldEnableQuickAddShortcut]);
 
   if (isLoading) {
-    return (
-      <div className={cn(searchResultsViewportClassName, className)}>
-        <span className="sr-only">Searching products…</span>
-        <SearchResultsLoadingSkeleton />
-      </div>
-    );
+    return null;
   }
 
   if (products.length === 0) {

@@ -11,13 +11,11 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  Cell,
 } from "recharts";
 import { GenericDataTable } from "../../base/table/data-table";
 import { analyticsColumns } from "../../analytics/analytics-data-table/analytics-columns";
 import CapturedEmails from "../captured/CapturedEmails";
 import { useState } from "react";
-import { Button } from "../../ui/button";
 import { Tabs, TabsList, TabsTrigger } from "../../ui/tabs";
 
 // Define types for view state
@@ -41,11 +39,7 @@ const PromoCodeAnalytics = ({
   });
 
   if (!analytics) {
-    return (
-      <div className="flex items-center justify-center h-48">
-        <p className="text-muted-foreground">Loading analytics...</p>
-      </div>
-    );
+    return null;
   }
 
   if (analytics.length === 0) {

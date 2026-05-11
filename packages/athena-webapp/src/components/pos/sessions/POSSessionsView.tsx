@@ -12,7 +12,6 @@ import { EmptyState } from "@/components/states/empty/empty-state";
 import { NoPermissionView } from "@/components/states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "@/components/states/signed-out/ProtectedAdminSignInView";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { currencyFormatter } from "@/lib/utils";
 import { formatStoredAmount } from "@/lib/pos/displayAmounts";
@@ -259,25 +258,6 @@ function getStatusBadgeClass(status: string) {
   }
 }
 
-function POSSessionsLoadingState() {
-  return (
-    <View>
-      <div className="container mx-auto space-y-layout-md py-layout-xl">
-        <div className="space-y-2">
-          <Skeleton className="h-7 w-56" />
-          <Skeleton className="h-4 w-96 max-w-full" />
-        </div>
-        <div className="grid gap-layout-sm md:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <Skeleton className="h-20" key={index} />
-          ))}
-        </div>
-        <Skeleton className="h-[420px] w-full" />
-      </div>
-    </View>
-  );
-}
-
 function POSSessionsHeader() {
   return (
     <div className="container mx-auto flex h-10 items-center justify-between gap-3">
@@ -407,11 +387,7 @@ export function POSSessionsViewContent({
           </div>
         </section>
 
-        {isLoading ? (
-          <div className="rounded-lg border border-border bg-surface-raised p-layout-lg shadow-surface">
-            <Skeleton className="h-[360px] w-full" />
-          </div>
-        ) : rows.length === 0 ? (
+        {isLoading ? null : rows.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border bg-surface-raised px-layout-lg py-layout-xl">
             <EmptyState
               description="Active and held POS sessions will appear here when carts reserve inventory."
@@ -454,7 +430,7 @@ export function POSSessionsView() {
   ) as POSSessionOperationsResult | undefined;
 
   if (isLoadingAccess) {
-    return <POSSessionsLoadingState />;
+    return null;
   }
 
   if (!isAuthenticated) {

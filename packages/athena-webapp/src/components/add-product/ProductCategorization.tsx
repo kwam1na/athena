@@ -8,7 +8,6 @@ import {
   SelectValue,
 } from "../ui/select";
 import View from "../View";
-import { getErrorForField } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -21,7 +20,6 @@ import CategorySubcategoryManager, {
   CategoryManageOption,
 } from "./CategorySubcategoryManager";
 import { Plus } from "lucide-react";
-import { Skeleton } from "../ui/skeleton";
 import { useProduct } from "@/contexts/ProductContext";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useMutation, useQuery } from "convex/react";
@@ -102,8 +100,7 @@ function ProductCategorization({
               New
             </Button>
           </div>
-          {showLoaderForProduct && <Skeleton className="h-[40px]" />}
-          {!showLoaderForProduct && (
+          {showLoaderForProduct ? null : (
             <Select
               onValueChange={(value: string) => {
                 updateProductData({
@@ -152,8 +149,7 @@ function ProductCategorization({
               New
             </Button>
           </div>
-          {showLoaderForProduct && <Skeleton className="h-[40px]" />}
-          {!showLoaderForProduct && (
+          {showLoaderForProduct ? null : (
             <Select
               onValueChange={(value: string) => {
                 updateProductData({
@@ -271,9 +267,7 @@ export function ProductCategorizationView() {
           Name
         </Label>
 
-        {showLoaderForProduct ? (
-          <Skeleton className="h-10 w-full" />
-        ) : (
+        {showLoaderForProduct ? null : (
           <Input
             value={productData.name || ""}
             onChange={(e) => updateProductData({ name: e.target.value })}
