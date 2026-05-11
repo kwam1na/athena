@@ -218,10 +218,8 @@ type CompletionArgs = {
 
 type ReopenArgs = {
   approvalProofId?: Id<"approvalProof">;
-  endAt: number;
-  operatingDate: string;
+  dailyCloseId: Id<"dailyClose"> | string;
   reason: string;
-  startAt: number;
 };
 
 export type BucketStatus = "blocked" | "carry-forward" | "ready" | "review";
@@ -2816,11 +2814,20 @@ export function DailyCloseViewContent({
 
     setCommandMessage(null);
 
+    const dailyCloseId = snapshot.existingClose?._id;
+
+    if (!dailyCloseId) {
+      setCommandMessage({
+        kind: "error",
+        message:
+          "End-of-Day Review record unavailable. Refresh before reopening.",
+      });
+      return;
+    }
+
     const reopenArgs = {
-      endAt: snapshot.endAt,
-      operatingDate: snapshot.operatingDate,
+      dailyCloseId,
       reason,
-      startAt: snapshot.startAt,
     };
 
     const result = await completionApprovalRunner.run({
@@ -3166,10 +3173,8 @@ function DailyCloseConnectedView({
         () =>
           reopenDailyCloseMutation({
             approvalProofId: args.approvalProofId,
-            endAt: args.endAt,
-            operatingDate: args.operatingDate,
+            dailyCloseId: args.dailyCloseId,
             reason: args.reason,
-            startAt: args.startAt,
             storeId: activeStore._id,
           }) as Promise<ApprovalCommandResult<unknown>>,
       );
