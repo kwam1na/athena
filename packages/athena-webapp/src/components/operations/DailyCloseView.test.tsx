@@ -22,6 +22,7 @@ const mockedApi = vi.hoisted(() => ({
     "authenticateStaffCredentialForApproval",
   completeDailyClose: "completeDailyClose",
   getDailyCloseSnapshot: "getDailyCloseSnapshot",
+  reopenDailyClose: "reopenDailyClose",
 }));
 
 const mockedRouter = vi.hoisted(() => ({
@@ -1204,10 +1205,8 @@ describe("DailyCloseViewContent", () => {
     await user.click(reopenButton);
 
     expect(onReopen).toHaveBeenCalledWith({
-      endAt: readySnapshot.endAt,
-      operatingDate: readySnapshot.operatingDate,
+      dailyCloseId: "daily-close-1",
       reason: "Cash deposit corrected.",
-      startAt: readySnapshot.startAt,
     });
   });
 
@@ -1451,5 +1450,46 @@ describe("DailyCloseView", () => {
         storeId: "store-1",
       },
     );
+  });
+
+  it("reopens the current completed close with its daily close id", async () => {
+    const user = userEvent.setup();
+    const completeMutation = vi.fn(async () => ok({}));
+    const reopenMutation = vi.fn(async () => ok({ action: "reopened" }));
+
+    mockedHooks.useMutation.mockImplementation((mutation) => {
+      if (mutation === mockedApi.reopenDailyClose) return reopenMutation;
+      return completeMutation;
+    });
+    mockedHooks.useQuery.mockReturnValue({
+      ...readySnapshot,
+      completedClose: {
+        completedAt: Date.UTC(2026, 4, 7, 23, 15),
+        completedByStaffName: "Ama Mensah",
+      },
+      existingClose: {
+        _id: "daily-close-1",
+        isCurrent: true,
+        lifecycleStatus: "active",
+      },
+      status: "completed",
+    });
+
+    render(<DailyCloseView />);
+
+    await user.type(
+      screen.getByLabelText("Reopen reason"),
+      "Cash deposit corrected.",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Reopen End-of-Day Review" }),
+    );
+
+    expect(reopenMutation).toHaveBeenCalledWith({
+      approvalProofId: undefined,
+      dailyCloseId: "daily-close-1",
+      reason: "Cash deposit corrected.",
+      storeId: "store-1",
+    });
   });
 });

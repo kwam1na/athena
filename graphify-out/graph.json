@@ -4403,7 +4403,7 @@
       "relation": "calls",
       "source": "dailycloseview_getlocaloperatingdate",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L550",
+      "source_location": "L548",
       "target": "dailycloseview_builddailyclosetransactionsearch",
       "weight": 1
     },
@@ -4415,7 +4415,7 @@
       "relation": "calls",
       "source": "dailycloseview_getdailyclosestatus",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L631",
+      "source_location": "L629",
       "target": "dailycloseview_canreopendailyclose",
       "weight": 1
     },
@@ -4427,7 +4427,7 @@
       "relation": "calls",
       "source": "dailycloseview_formatcarriedoverregistercount",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L2976",
+      "source_location": "L2983",
       "target": "dailycloseview_formatdailyclosemoney",
       "weight": 1
     },
@@ -4439,7 +4439,7 @@
       "relation": "calls",
       "source": "dailycloseview_formatdailyclosemoney",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L2977",
+      "source_location": "L2984",
       "target": "dailycloseview_getsummarycount",
       "weight": 1
     },
@@ -4451,7 +4451,7 @@
       "relation": "calls",
       "source": "dailycloseview_formatmetadatavalue",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L998",
+      "source_location": "L996",
       "target": "dailycloseview_formatmetadatadisplayvalue",
       "weight": 1
     },
@@ -4463,7 +4463,7 @@
       "relation": "calls",
       "source": "dailycloseview_getmetadatastringvalue",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1000",
+      "source_location": "L998",
       "target": "dailycloseview_formatmetadatadisplayvalue",
       "weight": 1
     },
@@ -4475,7 +4475,7 @@
       "relation": "calls",
       "source": "dailycloseview_getnumericmetadatavalue",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1049",
+      "source_location": "L1047",
       "target": "dailycloseview_formatmetadatadisplayvalue",
       "weight": 1
     },
@@ -4487,7 +4487,7 @@
       "relation": "calls",
       "source": "dailycloseview_getvariancetone",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1054",
+      "source_location": "L1052",
       "target": "dailycloseview_formatmetadatadisplayvalue",
       "weight": 1
     },
@@ -4499,7 +4499,7 @@
       "relation": "calls",
       "source": "dailycloseview_normalizemetadatalabel",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1008",
+      "source_location": "L1006",
       "target": "dailycloseview_formatmetadatadisplayvalue",
       "weight": 1
     },
@@ -4511,7 +4511,7 @@
       "relation": "calls",
       "source": "dailycloseview_formatdailyclosemoney",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L942",
+      "source_location": "L940",
       "target": "dailycloseview_formatmetadatavalue",
       "weight": 1
     },
@@ -4523,7 +4523,7 @@
       "relation": "calls",
       "source": "dailycloseview_formattimestampmetadata",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L938",
+      "source_location": "L936",
       "target": "dailycloseview_formatmetadatavalue",
       "weight": 1
     },
@@ -4535,7 +4535,7 @@
       "relation": "calls",
       "source": "dailycloseview_humanizemetadatalabel",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L970",
+      "source_location": "L968",
       "target": "dailycloseview_formatmetadatavalue",
       "weight": 1
     },
@@ -4547,7 +4547,7 @@
       "relation": "calls",
       "source": "dailycloseview_ismoneymetadatalabel",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L941",
+      "source_location": "L939",
       "target": "dailycloseview_formatmetadatavalue",
       "weight": 1
     },
@@ -4559,7 +4559,7 @@
       "relation": "calls",
       "source": "dailycloseview_istimestampmetadatalabel",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L937",
+      "source_location": "L935",
       "target": "dailycloseview_formatmetadatavalue",
       "weight": 1
     },
@@ -4571,7 +4571,7 @@
       "relation": "calls",
       "source": "dailycloseview_normalizemetadatalabel",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L930",
+      "source_location": "L928",
       "target": "dailycloseview_formatmetadatavalue",
       "weight": 1
     },
@@ -4583,7 +4583,7 @@
       "relation": "calls",
       "source": "dailycloseview_iszeroactivitydailyclose",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1475",
+      "source_location": "L1473",
       "target": "dailycloseview_getbucketconfigs",
       "weight": 1
     },
@@ -4595,7 +4595,7 @@
       "relation": "calls",
       "source": "dailycloseview_getbucketcountclassname",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L443",
+      "source_location": "L441",
       "target": "dailycloseview_cn",
       "weight": 1
     },
@@ -4607,7 +4607,7 @@
       "relation": "calls",
       "source": "dailycloseview_getitemid",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L653",
+      "source_location": "L651",
       "target": "dailycloseview_getcarryforwardworkitemid",
       "weight": 1
     },
@@ -4619,7 +4619,7 @@
       "relation": "calls",
       "source": "dailycloseview_getlocaloperatingdate",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L556",
+      "source_location": "L554",
       "target": "dailycloseview_getdailyclosesalesmetriclabels",
       "weight": 1
     },
@@ -4631,7 +4631,7 @@
       "relation": "calls",
       "source": "dailycloseview_humanizemetadatalabel",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L895",
+      "source_location": "L893",
       "target": "dailycloseview_getdisplaymetadatalabel",
       "weight": 1
     },
@@ -4643,7 +4643,7 @@
       "relation": "calls",
       "source": "dailycloseview_normalizemetadatalabel",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L883",
+      "source_location": "L881",
       "target": "dailycloseview_getdisplaymetadatalabel",
       "weight": 1
     },
@@ -4655,7 +4655,7 @@
       "relation": "calls",
       "source": "dailycloseview_getitemcontextlabel",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L672",
+      "source_location": "L670",
       "target": "dailycloseview_humanizemetadatalabel",
       "weight": 1
     },
@@ -4667,7 +4667,7 @@
       "relation": "calls",
       "source": "dailycloseview_getlocaloperatingdate",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L577",
+      "source_location": "L575",
       "target": "dailycloseview_getlocaloperatingdaterange",
       "weight": 1
     },
@@ -4679,7 +4679,7 @@
       "relation": "calls",
       "source": "dailycloseview_getlocaldatefromoperatingdate",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L585",
+      "source_location": "L583",
       "target": "dailycloseview_getlocaloperatingdaterangefromsearch",
       "weight": 1
     },
@@ -4691,7 +4691,7 @@
       "relation": "calls",
       "source": "dailycloseview_getlocaloperatingdaterange",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L588",
+      "source_location": "L586",
       "target": "dailycloseview_getlocaloperatingdaterangefromsearch",
       "weight": 1
     },
@@ -4703,7 +4703,7 @@
       "relation": "calls",
       "source": "dailycloseview_normalizemetadatalabel",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1073",
+      "source_location": "L1071",
       "target": "dailycloseview_getmetadataentries",
       "weight": 1
     },
@@ -4715,7 +4715,7 @@
       "relation": "calls",
       "source": "dailycloseview_getmetadatavalue",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1547",
+      "source_location": "L1545",
       "target": "dailycloseview_getmetadatastringornumber",
       "weight": 1
     },
@@ -4727,7 +4727,7 @@
       "relation": "calls",
       "source": "dailycloseview_normalizemetadatalabel",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L920",
+      "source_location": "L918",
       "target": "dailycloseview_getmetadatavalue",
       "weight": 1
     },
@@ -4739,7 +4739,7 @@
       "relation": "calls",
       "source": "dailycloseview_iszeroactivitydailyclose",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1396",
+      "source_location": "L1394",
       "target": "dailycloseview_getstatusdisplaycopy",
       "weight": 1
     },
@@ -4751,7 +4751,7 @@
       "relation": "calls",
       "source": "dailycloseview_getstatuslabelclassname",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L372",
+      "source_location": "L370",
       "target": "dailycloseview_cn",
       "weight": 1
     },
@@ -4763,7 +4763,7 @@
       "relation": "calls",
       "source": "dailycloseview_getstatusrailbadgeclassname",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L434",
+      "source_location": "L432",
       "target": "dailycloseview_cn",
       "weight": 1
     },
@@ -4775,7 +4775,7 @@
       "relation": "calls",
       "source": "dailycloseview_getstatusrailiconclassname",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L384",
+      "source_location": "L382",
       "target": "dailycloseview_cn",
       "weight": 1
     },
@@ -4787,7 +4787,7 @@
       "relation": "calls",
       "source": "dailycloseview_formatexpensetransactioncount",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L2994",
+      "source_location": "L3001",
       "target": "dailycloseview_getsummaryamount",
       "weight": 1
     },
@@ -4799,7 +4799,7 @@
       "relation": "calls",
       "source": "dailycloseview_getsummaryamount",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L2995",
+      "source_location": "L3002",
       "target": "dailycloseview_getexpensetransactioncount",
       "weight": 1
     },
@@ -4811,7 +4811,7 @@
       "relation": "calls",
       "source": "dailycloseview_getsummaryamount",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1319",
+      "source_location": "L1317",
       "target": "dailycloseview_getsummaryregistervariancecount",
       "weight": 1
     },
@@ -4823,7 +4823,7 @@
       "relation": "calls",
       "source": "dailycloseview_formatdailyclosemoney",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1566",
+      "source_location": "L1564",
       "target": "dailycloseview_gettransactionreportamount",
       "weight": 1
     },
@@ -4835,7 +4835,7 @@
       "relation": "calls",
       "source": "dailycloseview_getmetadatastringornumber",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1563",
+      "source_location": "L1561",
       "target": "dailycloseview_gettransactionreportamount",
       "weight": 1
     },
@@ -4847,7 +4847,7 @@
       "relation": "calls",
       "source": "dailycloseview_getnumericmetadatavalue",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1562",
+      "source_location": "L1560",
       "target": "dailycloseview_gettransactionreportamount",
       "weight": 1
     },
@@ -4859,7 +4859,7 @@
       "relation": "calls",
       "source": "dailycloseview_getmetadatastringornumber",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1553",
+      "source_location": "L1551",
       "target": "dailycloseview_gettransactionreportidentifier",
       "weight": 1
     },
@@ -4871,7 +4871,7 @@
       "relation": "calls",
       "source": "dailycloseview_getmetadatastringornumber",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1575",
+      "source_location": "L1573",
       "target": "dailycloseview_gettransactionreportpayment",
       "weight": 1
     },
@@ -4883,7 +4883,7 @@
       "relation": "calls",
       "source": "dailycloseview_getmetadatastringornumber",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1570",
+      "source_location": "L1568",
       "target": "dailycloseview_gettransactionreportstaff",
       "weight": 1
     },
@@ -4895,7 +4895,7 @@
       "relation": "calls",
       "source": "dailycloseview_formattimestampmetadata",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1628",
+      "source_location": "L1626",
       "target": "dailycloseview_gettransactionreporttime",
       "weight": 1
     },
@@ -4907,7 +4907,7 @@
       "relation": "calls",
       "source": "dailycloseview_getmetadatastringornumber",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1624",
+      "source_location": "L1622",
       "target": "dailycloseview_gettransactionreporttime",
       "weight": 1
     },
@@ -4919,7 +4919,7 @@
       "relation": "calls",
       "source": "dailycloseview_getnumericmetadatavalue",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1623",
+      "source_location": "L1621",
       "target": "dailycloseview_gettransactionreporttime",
       "weight": 1
     },
@@ -4931,7 +4931,7 @@
       "relation": "calls",
       "source": "dailycloseview_normalizemetadatalabel",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L829",
+      "source_location": "L827",
       "target": "dailycloseview_ismoneymetadatalabel",
       "weight": 1
     },
@@ -4943,7 +4943,7 @@
       "relation": "calls",
       "source": "dailycloseview_normalizemetadatalabel",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L833",
+      "source_location": "L831",
       "target": "dailycloseview_istimestampmetadatalabel",
       "weight": 1
     },
@@ -4955,7 +4955,7 @@
       "relation": "calls",
       "source": "dailycloseview_getmetadatastringvalue",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L913",
+      "source_location": "L911",
       "target": "dailycloseview_isvarianceapprovalitem",
       "weight": 1
     },
@@ -4967,7 +4967,7 @@
       "relation": "calls",
       "source": "dailycloseview_normalizemetadatalabel",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L909",
+      "source_location": "L907",
       "target": "dailycloseview_isvarianceapprovalitem",
       "weight": 1
     },
@@ -4979,7 +4979,7 @@
       "relation": "calls",
       "source": "dailycloseview_getexpensestaffcount",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1374",
+      "source_location": "L1372",
       "target": "dailycloseview_iszeroactivitydailyclose",
       "weight": 1
     },
@@ -4991,7 +4991,7 @@
       "relation": "calls",
       "source": "dailycloseview_getsummaryamount",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1376",
+      "source_location": "L1374",
       "target": "dailycloseview_iszeroactivitydailyclose",
       "weight": 1
     },
@@ -5003,7 +5003,7 @@
       "relation": "calls",
       "source": "dailycloseview_getsummarycount",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1359",
+      "source_location": "L1357",
       "target": "dailycloseview_iszeroactivitydailyclose",
       "weight": 1
     },
@@ -5015,7 +5015,7 @@
       "relation": "calls",
       "source": "dailycloseview_getsummaryregistervariancecount",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1375",
+      "source_location": "L1373",
       "target": "dailycloseview_iszeroactivitydailyclose",
       "weight": 1
     },
@@ -5027,7 +5027,7 @@
       "relation": "calls",
       "source": "dailycloseview_getnumericmetadatavalue",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L865",
+      "source_location": "L863",
       "target": "dailycloseview_shouldshowmetadataentry",
       "weight": 1
     },
@@ -5039,7 +5039,7 @@
       "relation": "calls",
       "source": "dailycloseview_normalizemetadatalabel",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L858",
+      "source_location": "L856",
       "target": "dailycloseview_shouldshowmetadataentry",
       "weight": 1
     },
@@ -29159,7 +29159,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_test_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.test.tsx",
-      "source_location": "L312",
+      "source_location": "L313",
       "target": "dailycloseview_test_disconnect",
       "weight": 1
     },
@@ -29171,7 +29171,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_test_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.test.tsx",
-      "source_location": "L313",
+      "source_location": "L314",
       "target": "dailycloseview_test_observe",
       "weight": 1
     },
@@ -29183,7 +29183,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_test_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.test.tsx",
-      "source_location": "L314",
+      "source_location": "L315",
       "target": "dailycloseview_test_unobserve",
       "weight": 1
     },
@@ -29195,7 +29195,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L541",
+      "source_location": "L539",
       "target": "dailycloseview_builddailyclosetransactionsearch",
       "weight": 1
     },
@@ -29207,7 +29207,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L629",
+      "source_location": "L627",
       "target": "dailycloseview_canreopendailyclose",
       "weight": 1
     },
@@ -29219,7 +29219,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L2525",
+      "source_location": "L2523",
       "target": "dailycloseview_cn",
       "weight": 1
     },
@@ -29231,7 +29231,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L394",
+      "source_location": "L392",
       "target": "dailycloseview_dailyclosestatustitle",
       "weight": 1
     },
@@ -29243,7 +29243,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L359",
+      "source_location": "L357",
       "target": "dailycloseview_formatcarriedoverregistercount",
       "weight": 1
     },
@@ -29255,7 +29255,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L342",
+      "source_location": "L340",
       "target": "dailycloseview_formatchecklistcount",
       "weight": 1
     },
@@ -29267,7 +29267,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L521",
+      "source_location": "L519",
       "target": "dailycloseview_formatdailyclosecompletedat",
       "weight": 1
     },
@@ -29279,7 +29279,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L2966",
+      "source_location": "L2973",
       "target": "dailycloseview_formatdailyclosemoney",
       "weight": 1
     },
@@ -29291,7 +29291,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L487",
+      "source_location": "L485",
       "target": "dailycloseview_formatdailycloseoperatingdate",
       "weight": 1
     },
@@ -29303,7 +29303,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L332",
+      "source_location": "L330",
       "target": "dailycloseview_formatentitycount",
       "weight": 1
     },
@@ -29315,7 +29315,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L454",
+      "source_location": "L452",
       "target": "dailycloseview_formatexpensetransactioncount",
       "weight": 1
     },
@@ -29327,7 +29327,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L983",
+      "source_location": "L981",
       "target": "dailycloseview_formatmetadatadisplayvalue",
       "weight": 1
     },
@@ -29339,7 +29339,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L927",
+      "source_location": "L925",
       "target": "dailycloseview_formatmetadatavalue",
       "weight": 1
     },
@@ -29351,7 +29351,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L460",
+      "source_location": "L458",
       "target": "dailycloseview_formatpossalecount",
       "weight": 1
     },
@@ -29363,7 +29363,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L365",
+      "source_location": "L363",
       "target": "dailycloseview_formatregistervariancecount",
       "weight": 1
     },
@@ -29375,7 +29375,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L872",
+      "source_location": "L870",
       "target": "dailycloseview_formattimestampmetadata",
       "weight": 1
     },
@@ -29387,7 +29387,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L353",
+      "source_location": "L351",
       "target": "dailycloseview_formattodaycashtransactioncount",
       "weight": 1
     },
@@ -29399,7 +29399,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L466",
+      "source_location": "L464",
       "target": "dailycloseview_formatvoidedsalecount",
       "weight": 1
     },
@@ -29411,7 +29411,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1474",
+      "source_location": "L1472",
       "target": "dailycloseview_getbucketconfigs",
       "weight": 1
     },
@@ -29423,7 +29423,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L442",
+      "source_location": "L440",
       "target": "dailycloseview_getbucketcountclassname",
       "weight": 1
     },
@@ -29435,7 +29435,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L650",
+      "source_location": "L648",
       "target": "dailycloseview_getcarryforwardworkitemid",
       "weight": 1
     },
@@ -29447,7 +29447,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L656",
+      "source_location": "L654",
       "target": "dailycloseview_getcarryforwardworkitemids",
       "weight": 1
     },
@@ -29459,7 +29459,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1258",
+      "source_location": "L1256",
       "target": "dailycloseview_getcollapsedmetadataentries",
       "weight": 1
     },
@@ -29471,7 +29471,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L322",
+      "source_location": "L320",
       "target": "dailycloseview_getdailycloseapi",
       "weight": 1
     },
@@ -29483,7 +29483,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L555",
+      "source_location": "L553",
       "target": "dailycloseview_getdailyclosesalesmetriclabels",
       "weight": 1
     },
@@ -29495,7 +29495,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L608",
+      "source_location": "L606",
       "target": "dailycloseview_getdailyclosestatus",
       "weight": 1
     },
@@ -29507,7 +29507,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1451",
+      "source_location": "L1449",
       "target": "dailycloseview_getdefaultbucketvalue",
       "weight": 1
     },
@@ -29519,7 +29519,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L882",
+      "source_location": "L880",
       "target": "dailycloseview_getdisplaymetadatalabel",
       "weight": 1
     },
@@ -29531,7 +29531,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1327",
+      "source_location": "L1325",
       "target": "dailycloseview_getexpensestaffcount",
       "weight": 1
     },
@@ -29543,7 +29543,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1339",
+      "source_location": "L1337",
       "target": "dailycloseview_getexpensetransactioncount",
       "weight": 1
     },
@@ -29555,7 +29555,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L670",
+      "source_location": "L668",
       "target": "dailycloseview_getitemcontextlabel",
       "weight": 1
     },
@@ -29567,7 +29567,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L660",
+      "source_location": "L658",
       "target": "dailycloseview_getitemdescription",
       "weight": 1
     },
@@ -29579,7 +29579,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L638",
+      "source_location": "L636",
       "target": "dailycloseview_getitemid",
       "weight": 1
     },
@@ -29591,7 +29591,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L502",
+      "source_location": "L500",
       "target": "dailycloseview_getlocaldatefromoperatingdate",
       "weight": 1
     },
@@ -29603,7 +29603,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L533",
+      "source_location": "L531",
       "target": "dailycloseview_getlocaloperatingdate",
       "weight": 1
     },
@@ -29615,7 +29615,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L564",
+      "source_location": "L562",
       "target": "dailycloseview_getlocaloperatingdaterange",
       "weight": 1
     },
@@ -29627,7 +29627,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L583",
+      "source_location": "L581",
       "target": "dailycloseview_getlocaloperatingdaterangefromsearch",
       "weight": 1
     },
@@ -29639,7 +29639,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1065",
+      "source_location": "L1063",
       "target": "dailycloseview_getmetadataentries",
       "weight": 1
     },
@@ -29651,7 +29651,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1541",
+      "source_location": "L1539",
       "target": "dailycloseview_getmetadatastringornumber",
       "weight": 1
     },
@@ -29663,7 +29663,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L898",
+      "source_location": "L896",
       "target": "dailycloseview_getmetadatastringvalue",
       "weight": 1
     },
@@ -29675,7 +29675,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L919",
+      "source_location": "L917",
       "target": "dailycloseview_getmetadatavalue",
       "weight": 1
     },
@@ -29687,7 +29687,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L844",
+      "source_location": "L842",
       "target": "dailycloseview_getnumericmetadatavalue",
       "weight": 1
     },
@@ -29699,7 +29699,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L646",
+      "source_location": "L644",
       "target": "dailycloseview_getrevieweditemkeys",
       "weight": 1
     },
@@ -29711,7 +29711,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1392",
+      "source_location": "L1390",
       "target": "dailycloseview_getstatusdisplaycopy",
       "weight": 1
     },
@@ -29723,7 +29723,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L371",
+      "source_location": "L369",
       "target": "dailycloseview_getstatuslabelclassname",
       "weight": 1
     },
@@ -29735,7 +29735,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L433",
+      "source_location": "L431",
       "target": "dailycloseview_getstatusrailbadgeclassname",
       "weight": 1
     },
@@ -29747,7 +29747,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L383",
+      "source_location": "L381",
       "target": "dailycloseview_getstatusrailiconclassname",
       "weight": 1
     },
@@ -29759,7 +29759,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L2986",
+      "source_location": "L2993",
       "target": "dailycloseview_getsummaryamount",
       "weight": 1
     },
@@ -29771,7 +29771,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1297",
+      "source_location": "L1295",
       "target": "dailycloseview_getsummarycount",
       "weight": 1
     },
@@ -29783,7 +29783,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1312",
+      "source_location": "L1310",
       "target": "dailycloseview_getsummaryregistervariancecount",
       "weight": 1
     },
@@ -29795,7 +29795,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1561",
+      "source_location": "L1559",
       "target": "dailycloseview_gettransactionreportamount",
       "weight": 1
     },
@@ -29807,7 +29807,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1551",
+      "source_location": "L1549",
       "target": "dailycloseview_gettransactionreportidentifier",
       "weight": 1
     },
@@ -29819,7 +29819,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1522",
+      "source_location": "L1520",
       "target": "dailycloseview_gettransactionreportitems",
       "weight": 1
     },
@@ -29831,7 +29831,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1631",
+      "source_location": "L1629",
       "target": "dailycloseview_gettransactionreportlink",
       "weight": 1
     },
@@ -29843,7 +29843,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1574",
+      "source_location": "L1572",
       "target": "dailycloseview_gettransactionreportpayment",
       "weight": 1
     },
@@ -29855,7 +29855,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1569",
+      "source_location": "L1567",
       "target": "dailycloseview_gettransactionreportstaff",
       "weight": 1
     },
@@ -29867,7 +29867,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1622",
+      "source_location": "L1620",
       "target": "dailycloseview_gettransactionreporttime",
       "weight": 1
     },
@@ -29879,7 +29879,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L836",
+      "source_location": "L834",
       "target": "dailycloseview_getvariancetone",
       "weight": 1
     },
@@ -29891,7 +29891,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1872",
+      "source_location": "L1870",
       "target": "dailycloseview_handlepagechange",
       "weight": 1
     },
@@ -29903,7 +29903,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L678",
+      "source_location": "L676",
       "target": "dailycloseview_humanizemetadatalabel",
       "weight": 1
     },
@@ -29915,7 +29915,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L3152",
+      "source_location": "L3159",
       "target": "dailycloseview_if",
       "weight": 1
     },
@@ -29927,7 +29927,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L828",
+      "source_location": "L826",
       "target": "dailycloseview_ismoneymetadatalabel",
       "weight": 1
     },
@@ -29939,7 +29939,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L832",
+      "source_location": "L830",
       "target": "dailycloseview_istimestampmetadatalabel",
       "weight": 1
     },
@@ -29951,7 +29951,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L908",
+      "source_location": "L906",
       "target": "dailycloseview_isvarianceapprovalitem",
       "weight": 1
     },
@@ -29963,7 +29963,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1353",
+      "source_location": "L1351",
       "target": "dailycloseview_iszeroactivitydailyclose",
       "weight": 1
     },
@@ -29975,7 +29975,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1461",
+      "source_location": "L1459",
       "target": "dailycloseview_normalizebuckettab",
       "weight": 1
     },
@@ -29987,7 +29987,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L595",
+      "source_location": "L593",
       "target": "dailycloseview_normalizecommandmessage",
       "weight": 1
     },
@@ -29999,7 +29999,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1408",
+      "source_location": "L1406",
       "target": "dailycloseview_normalizecompletedreportsnapshot",
       "weight": 1
     },
@@ -30011,7 +30011,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L824",
+      "source_location": "L822",
       "target": "dailycloseview_normalizemetadatalabel",
       "weight": 1
     },
@@ -30023,7 +30023,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1468",
+      "source_location": "L1466",
       "target": "dailycloseview_normalizepage",
       "weight": 1
     },
@@ -30035,7 +30035,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1587",
+      "source_location": "L1585",
       "target": "dailycloseview_normalizetransactionreportpaymentmethod",
       "weight": 1
     },
@@ -30047,7 +30047,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L472",
+      "source_location": "L470",
       "target": "dailycloseview_sentencefragment",
       "weight": 1
     },
@@ -30059,7 +30059,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L664",
+      "source_location": "L662",
       "target": "dailycloseview_shouldshowcollapseddescription",
       "weight": 1
     },
@@ -30071,7 +30071,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L857",
+      "source_location": "L855",
       "target": "dailycloseview_shouldshowmetadataentry",
       "weight": 1
     },
@@ -30083,7 +30083,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L411",
+      "source_location": "L409",
       "target": "dailycloseview_successcheckicon",
       "weight": 1
     },
@@ -30095,7 +30095,7 @@
       "relation": "contains",
       "source": "packages_athena_webapp_src_components_operations_dailycloseview_tsx",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1594",
+      "source_location": "L1592",
       "target": "dailycloseview_transactionreportpaymenticon",
       "weight": 1
     },
@@ -61261,7 +61261,7 @@
       "label": "buildDailyCloseTransactionSearch()",
       "norm_label": "builddailyclosetransactionsearch()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L541"
+      "source_location": "L539"
     },
     {
       "community": 0,
@@ -61270,7 +61270,7 @@
       "label": "canReopenDailyClose()",
       "norm_label": "canreopendailyclose()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L629"
+      "source_location": "L627"
     },
     {
       "community": 0,
@@ -61279,7 +61279,7 @@
       "label": "cn()",
       "norm_label": "cn()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1994"
+      "source_location": "L1992"
     },
     {
       "community": 0,
@@ -61288,7 +61288,7 @@
       "label": "DailyCloseStatusTitle()",
       "norm_label": "dailyclosestatustitle()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L394"
+      "source_location": "L392"
     },
     {
       "community": 0,
@@ -61297,7 +61297,7 @@
       "label": "formatCarriedOverRegisterCount()",
       "norm_label": "formatcarriedoverregistercount()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L359"
+      "source_location": "L357"
     },
     {
       "community": 0,
@@ -61306,7 +61306,7 @@
       "label": "formatChecklistCount()",
       "norm_label": "formatchecklistcount()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L342"
+      "source_location": "L340"
     },
     {
       "community": 0,
@@ -61315,7 +61315,7 @@
       "label": "formatDailyCloseCompletedAt()",
       "norm_label": "formatdailyclosecompletedat()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L521"
+      "source_location": "L519"
     },
     {
       "community": 0,
@@ -61324,7 +61324,7 @@
       "label": "formatDailyCloseMoney()",
       "norm_label": "formatdailyclosemoney()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L476"
+      "source_location": "L474"
     },
     {
       "community": 0,
@@ -61333,7 +61333,7 @@
       "label": "formatDailyCloseOperatingDate()",
       "norm_label": "formatdailycloseoperatingdate()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L487"
+      "source_location": "L485"
     },
     {
       "community": 0,
@@ -61342,7 +61342,7 @@
       "label": "formatEntityCount()",
       "norm_label": "formatentitycount()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L332"
+      "source_location": "L330"
     },
     {
       "community": 0,
@@ -61351,7 +61351,7 @@
       "label": "formatExpenseTransactionCount()",
       "norm_label": "formatexpensetransactioncount()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L454"
+      "source_location": "L452"
     },
     {
       "community": 0,
@@ -61360,7 +61360,7 @@
       "label": "formatMetadataDisplayValue()",
       "norm_label": "formatmetadatadisplayvalue()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L983"
+      "source_location": "L981"
     },
     {
       "community": 0,
@@ -61369,7 +61369,7 @@
       "label": "formatMetadataValue()",
       "norm_label": "formatmetadatavalue()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L927"
+      "source_location": "L925"
     },
     {
       "community": 0,
@@ -61378,7 +61378,7 @@
       "label": "formatPosSaleCount()",
       "norm_label": "formatpossalecount()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L460"
+      "source_location": "L458"
     },
     {
       "community": 0,
@@ -61387,7 +61387,7 @@
       "label": "formatRegisterVarianceCount()",
       "norm_label": "formatregistervariancecount()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L365"
+      "source_location": "L363"
     },
     {
       "community": 0,
@@ -61396,7 +61396,7 @@
       "label": "formatTimestampMetadata()",
       "norm_label": "formattimestampmetadata()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L872"
+      "source_location": "L870"
     },
     {
       "community": 0,
@@ -61405,7 +61405,7 @@
       "label": "formatTodayCashTransactionCount()",
       "norm_label": "formattodaycashtransactioncount()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L353"
+      "source_location": "L351"
     },
     {
       "community": 0,
@@ -61414,7 +61414,7 @@
       "label": "formatVoidedSaleCount()",
       "norm_label": "formatvoidedsalecount()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L466"
+      "source_location": "L464"
     },
     {
       "community": 0,
@@ -61423,7 +61423,7 @@
       "label": "getBucketConfigs()",
       "norm_label": "getbucketconfigs()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1474"
+      "source_location": "L1472"
     },
     {
       "community": 0,
@@ -61432,7 +61432,7 @@
       "label": "getBucketCountClassName()",
       "norm_label": "getbucketcountclassname()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L442"
+      "source_location": "L440"
     },
     {
       "community": 0,
@@ -61441,7 +61441,7 @@
       "label": "getCarryForwardWorkItemId()",
       "norm_label": "getcarryforwardworkitemid()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L650"
+      "source_location": "L648"
     },
     {
       "community": 0,
@@ -61450,7 +61450,7 @@
       "label": "getCarryForwardWorkItemIds()",
       "norm_label": "getcarryforwardworkitemids()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L656"
+      "source_location": "L654"
     },
     {
       "community": 0,
@@ -61459,7 +61459,7 @@
       "label": "getCollapsedMetadataEntries()",
       "norm_label": "getcollapsedmetadataentries()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1258"
+      "source_location": "L1256"
     },
     {
       "community": 0,
@@ -61468,7 +61468,7 @@
       "label": "getDailyCloseApi()",
       "norm_label": "getdailycloseapi()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L322"
+      "source_location": "L320"
     },
     {
       "community": 0,
@@ -61477,7 +61477,7 @@
       "label": "getDailyCloseSalesMetricLabels()",
       "norm_label": "getdailyclosesalesmetriclabels()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L555"
+      "source_location": "L553"
     },
     {
       "community": 0,
@@ -61486,7 +61486,7 @@
       "label": "getDailyCloseStatus()",
       "norm_label": "getdailyclosestatus()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L608"
+      "source_location": "L606"
     },
     {
       "community": 0,
@@ -61495,7 +61495,7 @@
       "label": "getDefaultBucketValue()",
       "norm_label": "getdefaultbucketvalue()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1451"
+      "source_location": "L1449"
     },
     {
       "community": 0,
@@ -61504,7 +61504,7 @@
       "label": "getDisplayMetadataLabel()",
       "norm_label": "getdisplaymetadatalabel()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L882"
+      "source_location": "L880"
     },
     {
       "community": 0,
@@ -61513,7 +61513,7 @@
       "label": "getExpenseStaffCount()",
       "norm_label": "getexpensestaffcount()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1327"
+      "source_location": "L1325"
     },
     {
       "community": 0,
@@ -61522,7 +61522,7 @@
       "label": "getExpenseTransactionCount()",
       "norm_label": "getexpensetransactioncount()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1339"
+      "source_location": "L1337"
     },
     {
       "community": 0,
@@ -61531,7 +61531,7 @@
       "label": "getItemContextLabel()",
       "norm_label": "getitemcontextlabel()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L670"
+      "source_location": "L668"
     },
     {
       "community": 0,
@@ -61540,7 +61540,7 @@
       "label": "getItemDescription()",
       "norm_label": "getitemdescription()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L660"
+      "source_location": "L658"
     },
     {
       "community": 0,
@@ -61549,7 +61549,7 @@
       "label": "getItemId()",
       "norm_label": "getitemid()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L638"
+      "source_location": "L636"
     },
     {
       "community": 0,
@@ -61558,7 +61558,7 @@
       "label": "getLocalDateFromOperatingDate()",
       "norm_label": "getlocaldatefromoperatingdate()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L502"
+      "source_location": "L500"
     },
     {
       "community": 0,
@@ -61567,7 +61567,7 @@
       "label": "getLocalOperatingDate()",
       "norm_label": "getlocaloperatingdate()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L533"
+      "source_location": "L531"
     },
     {
       "community": 0,
@@ -61576,7 +61576,7 @@
       "label": "getLocalOperatingDateRange()",
       "norm_label": "getlocaloperatingdaterange()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L564"
+      "source_location": "L562"
     },
     {
       "community": 0,
@@ -61585,7 +61585,7 @@
       "label": "getLocalOperatingDateRangeFromSearch()",
       "norm_label": "getlocaloperatingdaterangefromsearch()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L583"
+      "source_location": "L581"
     },
     {
       "community": 0,
@@ -61594,7 +61594,7 @@
       "label": "getMetadataEntries()",
       "norm_label": "getmetadataentries()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1065"
+      "source_location": "L1063"
     },
     {
       "community": 0,
@@ -61603,7 +61603,7 @@
       "label": "getMetadataStringOrNumber()",
       "norm_label": "getmetadatastringornumber()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1541"
+      "source_location": "L1539"
     },
     {
       "community": 0,
@@ -61612,7 +61612,7 @@
       "label": "getMetadataStringValue()",
       "norm_label": "getmetadatastringvalue()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L898"
+      "source_location": "L896"
     },
     {
       "community": 0,
@@ -61621,7 +61621,7 @@
       "label": "getMetadataValue()",
       "norm_label": "getmetadatavalue()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L919"
+      "source_location": "L917"
     },
     {
       "community": 0,
@@ -61630,7 +61630,7 @@
       "label": "getNumericMetadataValue()",
       "norm_label": "getnumericmetadatavalue()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L844"
+      "source_location": "L842"
     },
     {
       "community": 0,
@@ -61639,7 +61639,7 @@
       "label": "getReviewedItemKeys()",
       "norm_label": "getrevieweditemkeys()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L646"
+      "source_location": "L644"
     },
     {
       "community": 0,
@@ -61648,7 +61648,7 @@
       "label": "getStatusDisplayCopy()",
       "norm_label": "getstatusdisplaycopy()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1392"
+      "source_location": "L1390"
     },
     {
       "community": 0,
@@ -61657,7 +61657,7 @@
       "label": "getStatusLabelClassName()",
       "norm_label": "getstatuslabelclassname()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L371"
+      "source_location": "L369"
     },
     {
       "community": 0,
@@ -61666,7 +61666,7 @@
       "label": "getStatusRailBadgeClassName()",
       "norm_label": "getstatusrailbadgeclassname()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L433"
+      "source_location": "L431"
     },
     {
       "community": 0,
@@ -61675,7 +61675,7 @@
       "label": "getStatusRailIconClassName()",
       "norm_label": "getstatusrailiconclassname()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L383"
+      "source_location": "L381"
     },
     {
       "community": 0,
@@ -61684,7 +61684,7 @@
       "label": "getSummaryAmount()",
       "norm_label": "getsummaryamount()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1282"
+      "source_location": "L1280"
     },
     {
       "community": 0,
@@ -61693,7 +61693,7 @@
       "label": "getSummaryCount()",
       "norm_label": "getsummarycount()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1297"
+      "source_location": "L1295"
     },
     {
       "community": 0,
@@ -61702,7 +61702,7 @@
       "label": "getSummaryRegisterVarianceCount()",
       "norm_label": "getsummaryregistervariancecount()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1312"
+      "source_location": "L1310"
     },
     {
       "community": 0,
@@ -61711,7 +61711,7 @@
       "label": "getTransactionReportAmount()",
       "norm_label": "gettransactionreportamount()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1561"
+      "source_location": "L1559"
     },
     {
       "community": 0,
@@ -61720,7 +61720,7 @@
       "label": "getTransactionReportIdentifier()",
       "norm_label": "gettransactionreportidentifier()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1551"
+      "source_location": "L1549"
     },
     {
       "community": 0,
@@ -61729,7 +61729,7 @@
       "label": "getTransactionReportItems()",
       "norm_label": "gettransactionreportitems()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1522"
+      "source_location": "L1520"
     },
     {
       "community": 0,
@@ -61738,7 +61738,7 @@
       "label": "getTransactionReportLink()",
       "norm_label": "gettransactionreportlink()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1631"
+      "source_location": "L1629"
     },
     {
       "community": 0,
@@ -61747,7 +61747,7 @@
       "label": "getTransactionReportPayment()",
       "norm_label": "gettransactionreportpayment()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1574"
+      "source_location": "L1572"
     },
     {
       "community": 0,
@@ -61756,7 +61756,7 @@
       "label": "getTransactionReportStaff()",
       "norm_label": "gettransactionreportstaff()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1569"
+      "source_location": "L1567"
     },
     {
       "community": 0,
@@ -61765,7 +61765,7 @@
       "label": "getTransactionReportTime()",
       "norm_label": "gettransactionreporttime()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1622"
+      "source_location": "L1620"
     },
     {
       "community": 0,
@@ -61774,7 +61774,7 @@
       "label": "getVarianceTone()",
       "norm_label": "getvariancetone()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L836"
+      "source_location": "L834"
     },
     {
       "community": 0,
@@ -61783,7 +61783,7 @@
       "label": "handlePageChange()",
       "norm_label": "handlepagechange()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1872"
+      "source_location": "L1870"
     },
     {
       "community": 0,
@@ -61792,7 +61792,7 @@
       "label": "humanizeMetadataLabel()",
       "norm_label": "humanizemetadatalabel()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L678"
+      "source_location": "L676"
     },
     {
       "community": 0,
@@ -61801,7 +61801,7 @@
       "label": "if()",
       "norm_label": "if()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L3152"
+      "source_location": "L3159"
     },
     {
       "community": 0,
@@ -61810,7 +61810,7 @@
       "label": "isMoneyMetadataLabel()",
       "norm_label": "ismoneymetadatalabel()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L828"
+      "source_location": "L826"
     },
     {
       "community": 0,
@@ -61819,7 +61819,7 @@
       "label": "isTimestampMetadataLabel()",
       "norm_label": "istimestampmetadatalabel()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L832"
+      "source_location": "L830"
     },
     {
       "community": 0,
@@ -61828,7 +61828,7 @@
       "label": "isVarianceApprovalItem()",
       "norm_label": "isvarianceapprovalitem()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L908"
+      "source_location": "L906"
     },
     {
       "community": 0,
@@ -61837,7 +61837,7 @@
       "label": "isZeroActivityDailyClose()",
       "norm_label": "iszeroactivitydailyclose()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1353"
+      "source_location": "L1351"
     },
     {
       "community": 0,
@@ -61846,7 +61846,7 @@
       "label": "normalizeBucketTab()",
       "norm_label": "normalizebuckettab()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1461"
+      "source_location": "L1459"
     },
     {
       "community": 0,
@@ -61855,7 +61855,7 @@
       "label": "normalizeCommandMessage()",
       "norm_label": "normalizecommandmessage()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L595"
+      "source_location": "L593"
     },
     {
       "community": 0,
@@ -61864,7 +61864,7 @@
       "label": "normalizeCompletedReportSnapshot()",
       "norm_label": "normalizecompletedreportsnapshot()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1408"
+      "source_location": "L1406"
     },
     {
       "community": 0,
@@ -61873,7 +61873,7 @@
       "label": "normalizeMetadataLabel()",
       "norm_label": "normalizemetadatalabel()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L824"
+      "source_location": "L822"
     },
     {
       "community": 0,
@@ -61882,7 +61882,7 @@
       "label": "normalizePage()",
       "norm_label": "normalizepage()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1468"
+      "source_location": "L1466"
     },
     {
       "community": 0,
@@ -61891,7 +61891,7 @@
       "label": "normalizeTransactionReportPaymentMethod()",
       "norm_label": "normalizetransactionreportpaymentmethod()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1587"
+      "source_location": "L1585"
     },
     {
       "community": 0,
@@ -61900,7 +61900,7 @@
       "label": "sentenceFragment()",
       "norm_label": "sentencefragment()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L472"
+      "source_location": "L470"
     },
     {
       "community": 0,
@@ -61909,7 +61909,7 @@
       "label": "shouldShowCollapsedDescription()",
       "norm_label": "shouldshowcollapseddescription()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L664"
+      "source_location": "L662"
     },
     {
       "community": 0,
@@ -61918,7 +61918,7 @@
       "label": "shouldShowMetadataEntry()",
       "norm_label": "shouldshowmetadataentry()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L857"
+      "source_location": "L855"
     },
     {
       "community": 0,
@@ -61927,7 +61927,7 @@
       "label": "SuccessCheckIcon()",
       "norm_label": "successcheckicon()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L411"
+      "source_location": "L409"
     },
     {
       "community": 0,
@@ -61936,7 +61936,7 @@
       "label": "TransactionReportPaymentIcon()",
       "norm_label": "transactionreportpaymenticon()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.tsx",
-      "source_location": "L1594"
+      "source_location": "L1592"
     },
     {
       "community": 0,
@@ -82222,7 +82222,7 @@
       "label": "disconnect()",
       "norm_label": "disconnect()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.test.tsx",
-      "source_location": "L312"
+      "source_location": "L313"
     },
     {
       "community": 289,
@@ -82231,7 +82231,7 @@
       "label": "observe()",
       "norm_label": "observe()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.test.tsx",
-      "source_location": "L313"
+      "source_location": "L314"
     },
     {
       "community": 289,
@@ -82240,7 +82240,7 @@
       "label": "unobserve()",
       "norm_label": "unobserve()",
       "source_file": "packages/athena-webapp/src/components/operations/DailyCloseView.test.tsx",
-      "source_location": "L314"
+      "source_location": "L315"
     },
     {
       "community": 289,
