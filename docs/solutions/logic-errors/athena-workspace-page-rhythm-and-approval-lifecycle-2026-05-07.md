@@ -53,7 +53,7 @@ For dense work queues, prefer calm separation over more labels:
 - Use restrained design-system button and badge treatments instead of loud
   one-off colors.
 
-For approval commands, keep the command boundary authoritative. The UI can use
+For approval commands, keep the command boundary authoritative. The ui can use
 same-submission manager credentials only after the server returns an
 `ApprovalRequirement`. If that requirement includes an async approval request and
 the inline proof retry succeeds, pass the approval request id into the retry.
