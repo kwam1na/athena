@@ -546,6 +546,91 @@ describe("DailyOperationsViewContent", () => {
     );
   });
 
+  it("incorporates workflow lane counts into the description", () => {
+    renderContent({
+      ...operatingSnapshot,
+      lanes: [
+        ...operatingSnapshot.lanes,
+        {
+          count: 2,
+          countLabel: "2 registers",
+          description: "2 registers need attention before close.",
+          key: "registers",
+          label: "Registers",
+          status: "blocked",
+          to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+        },
+      ],
+      operatingDate: getCurrentLocalOperatingDate(),
+    });
+
+    const workflowSection = screen
+      .getByRole("heading", { name: "Workflow status" })
+      .closest("section");
+
+    expect(workflowSection).not.toBeNull();
+    const workflow = within(workflowSection!);
+
+    expect(workflow.queryByText("0")).not.toBeInTheDocument();
+    expect(workflow.queryByText("2 registers")).not.toBeInTheDocument();
+    expect(
+      workflow.getByText("2 registers need attention before close."),
+    ).toBeInTheDocument();
+  });
+
+  it("uses compact icons for workflow lanes that need attention or are blocked", () => {
+    renderContent({
+      ...operatingSnapshot,
+      lanes: [
+        {
+          ...operatingSnapshot.lanes[0],
+          status: "ready",
+        },
+        {
+          ...operatingSnapshot.lanes[1],
+          description: "End-of-Day Review was reopened and needs a revised close.",
+          status: "needs_attention",
+        },
+        {
+          count: 2,
+          description: "2 registers need attention before close.",
+          key: "registers",
+          label: "Registers",
+          status: "blocked",
+          to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+        },
+      ],
+      operatingDate: getCurrentLocalOperatingDate(),
+    });
+
+    expect(screen.getByLabelText("Opening ready")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("End-of-Day Review needs attention"),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Registers blocked")).toBeInTheDocument();
+    expect(screen.queryByText("Needs attention")).not.toBeInTheDocument();
+    expect(screen.queryByText("Blocked")).not.toBeInTheDocument();
+  });
+
+  it("marks reopened operating days in the week strip", () => {
+    renderContent({
+      ...operatingSnapshot,
+      operatingDate: getCurrentLocalOperatingDate(),
+      weekMetrics: [
+        {
+          ...weekMetrics[0],
+          isClosed: false,
+          isReopened: true,
+          isSelected: true,
+          operatingDate: getCurrentLocalOperatingDate(),
+        },
+      ],
+    });
+
+    expect(screen.getByText("Reopened")).toBeInTheDocument();
+    expect(screen.queryByText("Closed")).not.toBeInTheDocument();
+  });
+
   it("disables future dates in the week strip", () => {
     const currentOperatingDate = getCurrentLocalOperatingDate();
     const futureOperatingDate = shiftTestOperatingDate(currentOperatingDate, 1);
@@ -770,6 +855,7 @@ describe("DailyOperationsView", () => {
     expect(mockedHooks.useQuery).toHaveBeenCalledWith(
       mockedApi.getDailyOperationsSnapshot,
       expect.objectContaining({
+        operatingTimezoneOffsetMinutes: expect.any(Number),
         storeId: "store-1",
         weekEndOperatingDate: getCurrentSaturdayWeekEndOperatingDate(),
       }),
@@ -791,6 +877,7 @@ describe("DailyOperationsView", () => {
       mockedApi.getDailyOperationsSnapshot,
       expect.objectContaining({
         operatingDate: "2026-05-07",
+        operatingTimezoneOffsetMinutes: new Date(2026, 4, 7).getTimezoneOffset(),
         storeId: "store-1",
         weekEndOperatingDate: "2026-05-09",
       }),

@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 5084 nodes · 5104 edges · 1610 communities detected
+- 5085 nodes · 5107 edges · 1610 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1688,8 +1688,8 @@ Cohesion: 0.09
 Nodes (19): applyCloseoutCommandResult(), applyCommandResult(), buildDepositSubmissionKey(), formatRegisterHeaderName(), formatRegisterName(), handleAuthenticatedCloseoutStaff(), handleOpeningFloatApprovalApproved(), handleRecordDeposit() (+11 more)
 
 ### Community 10 - "Community 10"
-Cohesion: 0.11
-Nodes (18): buildDailyCloseSearch(), buildDailyOperationsSearch(), buildOperationsTransactionSearch(), formatWeekdayDate(), formatWeekdayLabel(), getDailyOperationsMetricLabels(), getLocalDateFromOperatingDate(), getLocalOperatingDate() (+10 more)
+Cohesion: 0.12
+Nodes (19): buildDailyCloseSearch(), buildDailyOperationsSearch(), buildOperationsTransactionSearch(), formatWeekdayDate(), formatWeekdayLabel(), getDailyOperationsMetricLabels(), getLocalDateFromOperatingDate(), getLocalOperatingDate() (+11 more)
 
 ### Community 11 - "Community 11"
 Cohesion: 0.15
@@ -1720,12 +1720,12 @@ Cohesion: 0.13
 Nodes (18): buildCartSummary(), buildSessionOperationsRow(), expirePosSessionNow(), hasCustomerSnapshotValue(), isUsableRegisterSession(), loadPosSessionItems(), loadSessionCustomer(), loadSessionOperator() (+10 more)
 
 ### Community 18 - "Community 18"
-Cohesion: 0.15
-Nodes (19): acquireExpenseQuantityPatchHold(), adjustExpenseQuantityPatchHold(), createDefaultExpenseSessionCommandService(), createExpenseInventoryHoldGateway(), createExpenseSessionCommandService(), failure(), isActiveRegisterSession(), isSessionExpired() (+11 more)
+Cohesion: 0.16
+Nodes (22): attentionSeverity(), buildDailyOperationsSnapshotWithCtx(), buildLanes(), buildWeekMetricForDate(), buildWeekMetrics(), emptyCloseSummary(), getCloseItemCounts(), getDailyCloseRecordForDate() (+14 more)
 
 ### Community 19 - "Community 19"
-Cohesion: 0.17
-Nodes (21): attentionSeverity(), buildDailyOperationsSnapshotWithCtx(), buildLanes(), buildWeekMetricForDate(), buildWeekMetrics(), emptyCloseSummary(), getCloseItemCounts(), getDailyCloseRecordForDate() (+13 more)
+Cohesion: 0.15
+Nodes (19): acquireExpenseQuantityPatchHold(), adjustExpenseQuantityPatchHold(), createDefaultExpenseSessionCommandService(), createExpenseInventoryHoldGateway(), createExpenseSessionCommandService(), failure(), isActiveRegisterSession(), isSessionExpired() (+11 more)
 
 ### Community 20 - "Community 20"
 Cohesion: 0.15
@@ -1808,12 +1808,12 @@ Cohesion: 0.22
 Nodes (16): buildDegreeIndex(), buildHotspotLines(), buildPackagePage(), buildRootIndexPage(), collectRepoCodeFiles(), compareHotspots(), countCommunities(), fileExists() (+8 more)
 
 ### Community 40 - "Community 40"
-Cohesion: 0.12
-Nodes (1): DataTableViewOptions()
-
-### Community 41 - "Community 41"
 Cohesion: 0.25
 Nodes (14): buildCompleteTransactionResult(), calculateCanonicalTransactionTotals(), calculateTotalPaid(), completeTransaction(), createTransactionFromSessionHandler(), isUsableRegisterSession(), recordRegisterSessionSale(), recordRegisterSessionVoid() (+6 more)
+
+### Community 41 - "Community 41"
+Cohesion: 0.12
+Nodes (1): DataTableViewOptions()
 
 ### Community 42 - "Community 42"
 Cohesion: 0.19
@@ -1932,24 +1932,24 @@ Cohesion: 0.18
 Nodes (2): formatBlockerList(), runPrePushReview()
 
 ### Community 71 - "Community 71"
+Cohesion: 0.29
+Nodes (7): formatDeliveryAddress(), getAmountPaidForOrder(), getDiscountValue(), getOrderAmount(), getOrderState(), getPickupActionState(), getPotentialPoints()
+
+### Community 72 - "Community 72"
 Cohesion: 0.33
 Nodes (2): OrdersTableToolbarProvider(), useOrdersTableToolbar()
 
-### Community 72 - "Community 72"
+### Community 73 - "Community 73"
 Cohesion: 0.31
 Nodes (7): buildCustomerCreateInput(), cancelPendingAdd(), commitCustomer(), handleAddFromSearch(), handleClearCustomer(), handleSelectCustomer(), toCustomerInfo()
 
-### Community 73 - "Community 73"
+### Community 74 - "Community 74"
 Cohesion: 0.25
 Nodes (6): handleEdit(), handleReset(), handleSubmit(), itemToFormState(), parseServiceCatalogForm(), validateServiceCatalogForm()
 
-### Community 74 - "Community 74"
+### Community 75 - "Community 75"
 Cohesion: 0.18
 Nodes (0):
-
-### Community 75 - "Community 75"
-Cohesion: 0.29
-Nodes (7): formatDeliveryAddress(), getAmountPaidForOrder(), getDiscountValue(), getOrderAmount(), getOrderState(), getPickupActionState(), getPotentialPoints()
 
 ### Community 76 - "Community 76"
 Cohesion: 0.18
