@@ -8,12 +8,12 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 
 ## Repo Summary
 - Code files discovered: 1681
-- Graph nodes: 5085
-- Graph edges: 5107
+- Graph nodes: 5091
+- Graph edges: 5114
 - Communities: 1610
 
 ## Graph Hotspots
-- `DailyCloseView.tsx` (76 edges, Community 0) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)
+- `DailyCloseView.tsx` (82 edges, Community 0) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)
 - `dailyClose.ts` (57 edges, Community 1) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../packages/athena-webapp/convex/operations/dailyClose.ts)
 - `harness-inferential-review.ts` (46 edges, Community 2) - [`scripts/harness-inferential-review.ts`](../../scripts/harness-inferential-review.ts)
 - `storefrontJourneyEvents.ts` (45 edges, Community 3) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)

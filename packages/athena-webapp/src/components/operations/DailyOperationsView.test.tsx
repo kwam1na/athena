@@ -180,7 +180,7 @@ const operatingSnapshot: DailyOperationsSnapshot = {
       count: 0,
       description: "No close blockers are active.",
       key: "close",
-      label: "End-of-Day Review",
+      label: "EOD Review",
       status: "ready",
       to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
     },
@@ -195,13 +195,13 @@ const operatingSnapshot: DailyOperationsSnapshot = {
   ],
   lifecycle: {
     description:
-      "Opening Handoff is complete and End-of-Day Review has no blockers.",
+      "Opening Handoff is complete and the end of day review has no blockers.",
     label: "Ready to close",
     status: "ready_to_close",
   },
   operatingDate: "2026-05-08",
   primaryAction: {
-    label: "Start End-of-Day Review",
+    label: "Start EOD Review",
     to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
   },
   storeId: "store-1" as Id<"store">,
@@ -215,7 +215,7 @@ const blockedSnapshot: DailyOperationsSnapshot = {
     {
       id: "register_session:register-1:open",
       label: "Register session is still open",
-      message: "Close the register session before completing End-of-Day Review.",
+      message: "Close the register session before completing the end of day review.",
       owner: "daily_close",
       severity: "critical",
       source: {
@@ -268,7 +268,7 @@ const closedSnapshot: DailyOperationsSnapshot = {
     lane.key === "close"
       ? {
           ...lane,
-          description: "End-of-Day Review is saved for this store day.",
+          description: "The end of day review is saved for this store day.",
           status: "closed",
         }
       : lane,
@@ -279,14 +279,14 @@ const closedSnapshot: DailyOperationsSnapshot = {
     status: "closed",
   },
   primaryAction: {
-    label: "Review End-of-Day Review",
+    label: "Review EOD Review",
     to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
   },
   timeline: [
     {
       createdAt: Date.UTC(2026, 4, 8, 22),
       id: "event-close",
-      message: "End-of-Day Review completed.",
+      message: "EOD Review completed.",
       subject: {
         id: "close-1",
         type: "daily_close",
@@ -469,7 +469,7 @@ describe("DailyOperationsViewContent", () => {
       }),
     ).toBeDisabled();
     expect(
-      screen.queryByRole("link", { name: "Start End-of-Day Review" }),
+      screen.queryByRole("link", { name: "Start EOD Review" }),
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Historical store-day view" }),
@@ -491,7 +491,7 @@ describe("DailyOperationsViewContent", () => {
       screen.queryByRole("link", { name: "Open Opening" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("link", { name: "Open End-of-Day Review" }),
+      screen.queryByRole("link", { name: "Open EOD Review" }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("link", { name: "Open Open work" }),
@@ -519,7 +519,7 @@ describe("DailyOperationsViewContent", () => {
       "/wigclub/store/osu/pos/transactions?o=%252Fwigclub%252Fstore%252Fosu%252Foperations&paymentMethod=cash",
     );
     expect(
-      screen.getByRole("link", { name: "Start End-of-Day Review" }),
+      screen.getByRole("link", { name: "Start EOD Review" }),
     ).toHaveAttribute(
       "href",
       "/wigclub/store/osu/operations/daily-close?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
@@ -527,7 +527,7 @@ describe("DailyOperationsViewContent", () => {
     expect(screen.queryByText("Current day only")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Opening ready")).toBeInTheDocument();
     expect(
-      screen.getByLabelText("End-of-Day Review ready"),
+      screen.getByLabelText("EOD Review ready"),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Open work ready")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open Opening" })).toHaveAttribute(
@@ -535,7 +535,7 @@ describe("DailyOperationsViewContent", () => {
       "/wigclub/store/osu/operations/opening?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
     );
     expect(
-      screen.getByRole("link", { name: "Open End-of-Day Review" }),
+      screen.getByRole("link", { name: "Open EOD Review" }),
     ).toHaveAttribute(
       "href",
       "/wigclub/store/osu/operations/daily-close?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
@@ -588,7 +588,7 @@ describe("DailyOperationsViewContent", () => {
         },
         {
           ...operatingSnapshot.lanes[1],
-          description: "End-of-Day Review was reopened and needs a revised close.",
+          description: "EOD Review was reopened and needs a revised close.",
           status: "needs_attention",
         },
         {
@@ -605,7 +605,7 @@ describe("DailyOperationsViewContent", () => {
 
     expect(screen.getByLabelText("Opening ready")).toBeInTheDocument();
     expect(
-      screen.getByLabelText("End-of-Day Review needs attention"),
+      screen.getByLabelText("EOD Review needs attention"),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Registers blocked")).toBeInTheDocument();
     expect(screen.queryByText("Needs attention")).not.toBeInTheDocument();
@@ -734,7 +734,7 @@ describe("DailyOperationsViewContent", () => {
     expect(screen.queryByText("Register session is still open")).not.toBeInTheDocument();
   });
 
-  it("keeps historical End-of-Day Review links on the selected operating date", () => {
+  it("keeps historical EOD Review links on the selected operating date", () => {
     renderContent(closedSnapshot);
 
     expect(
@@ -742,7 +742,7 @@ describe("DailyOperationsViewContent", () => {
     ).toBeInTheDocument();
     expect(
       screen.queryByText(
-        "This operating date is closed. The saved End-of-Day Review is available for this store-day record.",
+        "This operating date is closed. The saved The end of day review is available for this store-day record.",
       ),
     ).not.toBeInTheDocument();
     expect(
@@ -751,18 +751,18 @@ describe("DailyOperationsViewContent", () => {
       ),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Review End-of-Day Review" }),
+      screen.getByRole("link", { name: "Review EOD Review" }),
     ).toHaveAttribute(
       "href",
       "/wigclub/store/osu/operations/daily-close?o=%252Fwigclub%252Fstore%252Fosu%252Foperations&operatingDate=2026-05-08",
     );
     expect(screen.queryByText("Workflow status")).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("link", { name: "Open End-of-Day Review" }),
+      screen.queryByRole("link", { name: "Open EOD Review" }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", {
-        name: "Open End-of-Day Review unavailable for May 8, 2026",
+        name: "Open EOD Review unavailable for May 8, 2026",
       }),
     ).not.toBeInTheDocument();
   });
@@ -771,14 +771,14 @@ describe("DailyOperationsViewContent", () => {
     renderContent(closedSnapshot);
 
     expect(
-      screen.getByRole("link", { name: "Review End-of-Day Review" }),
+      screen.getByRole("link", { name: "Review EOD Review" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("End-of-Day Review completed.")).toBeInTheDocument();
+    expect(screen.getByText("EOD Review completed.")).toBeInTheDocument();
     expect(
       screen.getByText("Store day acknowledged for May 8, 2026."),
     ).toBeInTheDocument();
     expect(screen.queryByText("2026-05-08")).not.toBeInTheDocument();
-    expect(screen.queryByText("Complete End-of-Day Review")).not.toBeInTheDocument();
+    expect(screen.queryByText("Complete EOD Review")).not.toBeInTheDocument();
   });
 
   it("previews the five most recent timeline events and opens the full list in a sheet", () => {

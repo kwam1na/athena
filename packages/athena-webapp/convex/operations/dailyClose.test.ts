@@ -250,7 +250,7 @@ function dailyCloseApprovalProof(overrides: Partial<Row> = {}): Row {
     requestedByStaffProfileId: "staff-1",
     storeId: "store-1",
     subjectId: "store-1:2026-05-07",
-    subjectLabel: "End-of-Day Review 2026-05-07",
+    subjectLabel: "EOD Review 2026-05-07",
     subjectType: "daily_close",
     ...overrides,
   };
@@ -268,7 +268,7 @@ function dailyCloseReopenApprovalProof(overrides: Partial<Row> = {}): Row {
     requestedByStaffProfileId: "staff-1",
     storeId: "store-1",
     subjectId: "daily-close-1",
-    subjectLabel: "End-of-Day Review 2026-05-07",
+    subjectLabel: "EOD Review 2026-05-07",
     subjectType: "daily_close",
     ...overrides,
   };
@@ -305,7 +305,7 @@ function completedDailyCloseSnapshot(overrides: Record<string, unknown> = {}) {
         severity: "ready",
         category: "sale",
         title: "Completed sale",
-        message: "Completed sale is included in End-of-Day Review.",
+        message: "Completed sale is included in the end of day review.",
         subject: {
           id: "txn-1",
           label: "TXN-1",
@@ -840,6 +840,18 @@ describe("end-of-day review backend foundation", () => {
       netCashVariance: -2500,
       openWorkItemCount: 1,
       pendingApprovalCount: 1,
+      paymentTotals: expect.arrayContaining([
+        {
+          amount: 10000,
+          method: "cash",
+          transactionCount: 1,
+        },
+        {
+          amount: 2500,
+          method: "mobile_money",
+          transactionCount: 1,
+        },
+      ]),
       registerCount: 3,
       registerVarianceCount: 2,
       salesTotal: 12000,
@@ -863,7 +875,7 @@ describe("end-of-day review backend foundation", () => {
     );
   });
 
-  it("serves the persisted report snapshot for completed End-of-Day Reviews", async () => {
+  it("serves the persisted report snapshot for completed EOD Reviews", async () => {
     vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 9, 12));
 
     const { db } = createDb({
@@ -921,7 +933,7 @@ describe("end-of-day review backend foundation", () => {
               {
                 category: "sale",
                 key: "pos_transaction:txn-closed-day:completed",
-                message: "Completed sale is included in End-of-Day Review.",
+                message: "Completed sale is included in the end of day review.",
                 severity: "ready",
                 subject: {
                   id: "txn-closed-day",
@@ -1227,14 +1239,14 @@ describe("end-of-day review backend foundation", () => {
           _id: "event-1",
           createdAt: Date.UTC(2026, 4, 9, 1, 8),
           eventType: "daily_close_completed",
-          message: "End-of-Day Review completed for 2026-05-08.",
+          message: "EOD Review completed for 2026-05-08.",
           metadata: {
             approvedByStaffProfileId: "staff-manager-1",
           },
           organizationId: "org-1",
           storeId: "store-1",
           subjectId: "daily-close-1",
-          subjectLabel: "End-of-Day Review 2026-05-08",
+          subjectLabel: "EOD Review 2026-05-08",
           subjectType: "daily_close",
         },
       ],
@@ -1431,7 +1443,7 @@ describe("end-of-day review backend foundation", () => {
       error: {
         code: "precondition_failed",
         message:
-          "End-of-Day Review cannot be completed while blocker items remain.",
+          "EOD Review cannot be completed while blocker items remain.",
         metadata: { blockerCount: 1 },
       },
     });
@@ -1511,11 +1523,11 @@ describe("end-of-day review backend foundation", () => {
       approval: {
         action: {
           key: "operations.daily_close.complete",
-          label: "Complete End-of-Day Review",
+          label: "Complete EOD Review",
         },
         copy: {
           message:
-            "A manager needs to approve this End-of-Day Review before the operating day is saved.",
+            "A manager needs to approve this end of day review before the operating day is saved.",
           primaryActionLabel: "Approve and complete",
           secondaryActionLabel: "Cancel",
           title: "Manager approval required",
@@ -1523,13 +1535,13 @@ describe("end-of-day review backend foundation", () => {
         metadata: {
           operatingDate: "2026-05-07",
         },
-        reason: "Manager approval is required to complete End-of-Day Review.",
+        reason: "Manager approval is required to complete EOD Review.",
         requiredRole: "manager",
         resolutionModes: [{ kind: "inline_manager_proof" }],
         selfApproval: "allowed",
         subject: {
           id: "store-1:2026-05-07",
-          label: "End-of-Day Review 2026-05-07",
+          label: "EOD Review 2026-05-07",
           type: "daily_close",
         },
       },
@@ -1736,11 +1748,11 @@ describe("end-of-day review backend foundation", () => {
       approval: {
         action: {
           key: "operations.daily_close.reopen",
-          label: "Reopen End-of-Day Review",
+          label: "Reopen EOD Review",
         },
         copy: {
           message:
-            "A manager needs to approve reopening this End-of-Day Review before the operating day can be revised.",
+            "A manager needs to approve reopening this EOD Review before the operating day can be revised.",
           primaryActionLabel: "Approve and reopen",
           secondaryActionLabel: "Cancel",
           title: "Manager approval required",
@@ -1749,13 +1761,13 @@ describe("end-of-day review backend foundation", () => {
           dailyCloseId: "daily-close-1",
           operatingDate: "2026-05-07",
         },
-        reason: "Manager approval is required to reopen End-of-Day Review.",
+        reason: "Manager approval is required to reopen EOD Review.",
         requiredRole: "manager",
         resolutionModes: [{ kind: "inline_manager_proof" }],
         selfApproval: "allowed",
         subject: {
           id: "daily-close-1",
-          label: "End-of-Day Review 2026-05-07",
+          label: "EOD Review 2026-05-07",
           type: "daily_close",
         },
       },
@@ -2055,7 +2067,7 @@ describe("end-of-day review backend foundation", () => {
           category: "open_work",
           title: "Carry forward",
           message:
-            "Open operational work will carry forward after End-of-Day Review.",
+            "Open operational work will carry forward after the end of day review.",
           subject: {
             id: "work-1",
             label: "Carry forward",
@@ -2069,7 +2081,7 @@ describe("end-of-day review backend foundation", () => {
           severity: "ready",
           category: "sales",
           title: "Completed transaction",
-          message: "Transaction included in End-of-Day Review.",
+          message: "Transaction included in the end of day review.",
           subject: {
             id: "txn-2",
             label: "TXN-2",
@@ -2188,14 +2200,14 @@ describe("end-of-day review backend foundation", () => {
           _id: "event-old-complete",
           createdAt: Date.UTC(2026, 4, 7, 22),
           eventType: "daily_close_completed",
-          message: "End-of-Day Review completed for 2026-05-07.",
+          message: "EOD Review completed for 2026-05-07.",
           metadata: {
             approvedByStaffProfileId: "staff-manager-1",
           },
           organizationId: "org-1",
           storeId: "store-1",
           subjectId: "daily-close-old",
-          subjectLabel: "End-of-Day Review 2026-05-07",
+          subjectLabel: "EOD Review 2026-05-07",
           subjectType: "daily_close",
         },
       ],

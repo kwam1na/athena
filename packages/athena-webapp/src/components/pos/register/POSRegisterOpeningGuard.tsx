@@ -201,8 +201,8 @@ function StoreDayClosedState() {
             Store day closed
           </h2>
           <p className="mt-3 max-w-lg text-base leading-7 text-muted-foreground">
-            End-of-Day Review has already closed this operating day. Reopen the
-            day from End-of-Day Review before entering POS.
+            The end of day review has already closed this operating day. Reopen the
+            day from the end of day review before entering POS.
           </p>
           {canLinkToDailyClose ? (
             <Button
@@ -218,7 +218,7 @@ function StoreDayClosedState() {
                 }}
                 to="/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close"
               >
-                End-of-Day Review
+                EOD Review
                 <ArrowUpRight className="h-4 w-4" />
               </Link>
             </Button>

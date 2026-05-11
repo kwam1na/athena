@@ -168,7 +168,7 @@ describe("POSRegisterOpeningGuard", () => {
     );
   });
 
-  it("directs the operator to End-of-Day Review when the store day is closed", () => {
+  it("directs the operator to EOD Review when the store day is closed", () => {
     useQueryMock.mockImplementation((queryName: string) => {
       if (queryName === "getDailyOpeningSnapshot") {
         return { status: "started" };
@@ -191,11 +191,11 @@ describe("POSRegisterOpeningGuard", () => {
     expect(screen.getByText("Store day closed")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "End-of-Day Review has already closed this operating day. Reopen the day from End-of-Day Review before entering POS.",
+        "The end of day review has already closed this operating day. Reopen the day from the end of day review before entering POS.",
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /End-of-Day Review/i }),
+      screen.getByRole("link", { name: /EOD Review/i }),
     ).toHaveAttribute(
       "href",
       "/wigclub/store/wigclub/operations/daily-close",

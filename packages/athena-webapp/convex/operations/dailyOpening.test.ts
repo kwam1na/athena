@@ -199,7 +199,7 @@ describe("daily opening backend foundation", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns a ready snapshot when the prior End-of-Day Review completed cleanly", async () => {
+  it("returns a ready snapshot when the prior EOD Review completed cleanly", async () => {
     const { db } = createDb({
       dailyClose: [completedDailyClose()],
       store: [store],
@@ -233,7 +233,7 @@ describe("daily opening backend foundation", () => {
     expect(snapshot.sourceSubjects).toEqual([
       {
         id: "daily-close-1",
-        label: "End-of-Day Review 2026-05-07",
+        label: "EOD Review 2026-05-07",
         type: "daily_close",
       },
     ]);
@@ -261,9 +261,9 @@ describe("daily opening backend foundation", () => {
     expect(snapshot.reviewItems).toContainEqual(
       expect.objectContaining({
         key: "daily_close:daily-close-1:reopened",
-        title: "Prior End-of-Day Review reopened",
+        title: "Prior EOD Review reopened",
         message:
-          "The prior store day was reopened. Complete the revised End-of-Day Review before treating the prior close as clean.",
+          "The prior store day was reopened. Complete the revised end of day review before treating the prior close as clean.",
       }),
     );
   });
@@ -581,7 +581,7 @@ describe("daily opening backend foundation", () => {
     expect(inserts).toEqual([]);
   });
 
-  it("requires acknowledgement when there is no prior completed End-of-Day Review", async () => {
+  it("requires acknowledgement when there is no prior completed EOD Review", async () => {
     vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 8, 8));
 
     const { db, inserts } = createDb({

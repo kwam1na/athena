@@ -345,12 +345,12 @@ function DailyCloseHistoryConnectedView({
           <PageLevelHeader
             eyebrow="Store Ops"
             title="Daily Close History"
-            description="Review completed End-of-Day Reviews as read-only store-day records."
+            description="Review completed EOD Reviews as read-only store-day records."
           />
 
           {completedRecords.length === 0 ? (
             <EmptyState
-              description="Completed End-of-Day Reviews will appear here after store days are closed."
+              description="Completed EOD Reviews will appear here after store days are closed."
               title="No completed Daily Close records"
             />
           ) : (
@@ -467,7 +467,7 @@ function DailyCloseHistoryConnectedView({
                     to="/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close"
                   >
                     <ArrowUpRight aria-hidden="true" />
-                    Current End-of-Day Review
+                    Current EOD Review
                   </Link>
                 </Button>
               </PageWorkspaceRail>

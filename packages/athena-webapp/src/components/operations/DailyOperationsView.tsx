@@ -257,7 +257,9 @@ function getLocalOperatingDateRangeFromSearch(operatingDate?: unknown) {
 function getOperatingTimezoneOffsetMinutes(operatingDate: string) {
   const localDate = getLocalDateFromOperatingDate(operatingDate);
 
-  return localDate ? localDate.getTimezoneOffset() : new Date().getTimezoneOffset();
+  return localDate
+    ? localDate.getTimezoneOffset()
+    : new Date().getTimezoneOffset();
 }
 
 function formatOperatingDate(operatingDate?: string | null) {
@@ -608,7 +610,7 @@ function HistoricalWorkflowPanel({
               }
               to="/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close"
             >
-              Review End-of-Day Review
+              Review EOD Review
               <ArrowUpRight aria-hidden="true" className="h-4 w-4" />
             </Link>
           </Button>

@@ -530,7 +530,7 @@ function lifecycleCopy(status: LifecycleStatus) {
 
   if (status === "ready_to_close") {
     return {
-      description: "Opening Handoff is complete and End-of-Day Review has no blockers.",
+      description: "Opening Handoff is complete and the end of day review has no blockers.",
       label: "Ready to close",
     };
   }
@@ -545,14 +545,14 @@ function lifecycleCopy(status: LifecycleStatus) {
   if (status === "reopened") {
     return {
       description:
-        "End-of-Day Review was reopened. Complete the revised review before treating the store day as closed.",
+        "The end of day review was reopened. Complete the revised review before treating the store day as closed.",
       label: "Reopened",
     };
   }
 
   return {
     description:
-      "Opening Handoff is complete. Keep open work visible through End-of-Day Review.",
+      "Opening Handoff is complete. Keep open work visible through end of day review.",
     label: "Operating",
   };
 }
@@ -577,20 +577,20 @@ function primaryAction(status: LifecycleStatus): {
 
   if (status === "closed") {
     return {
-      label: "Review End-of-Day Review",
+      label: "Review EOD Review",
       to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
     };
   }
 
   if (status === "reopened") {
     return {
-      label: "Revise End-of-Day Review",
+      label: "Revise EOD Review",
       to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
     };
   }
 
   return {
-    label: "Start End-of-Day Review",
+    label: "Start EOD Review",
     to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
   };
 }
@@ -649,14 +649,14 @@ function buildLanes(args: {
           : closeBlockerCount,
       description:
         args.closeStatus === "blocked" && args.isCloseReopened
-          ? `${pluralize(closeBlockerCount, "close blocker")} must be resolved after reopening End-of-Day Review.`
+          ? `${pluralize(closeBlockerCount, "close blocker")} must be resolved after reopening the end of day review.`
           : args.closeStatus === "completed"
-            ? "End-of-Day Review is saved for this store day."
+            ? "The end of day review is saved for this store day."
             : args.closeStatus === "blocked"
               ? `${pluralize(closeBlockerCount, "close blocker")} must be resolved before close.`
-              : "End-of-Day Review is available for review.",
+              : "The end of day review is available for review.",
       key: "close",
-      label: "End-of-Day Review",
+      label: "EOD Review",
       status: closeStatus,
       to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
     },
@@ -785,9 +785,9 @@ export async function buildDailyOperationsSnapshotWithCtx(
     ) {
       attentionItems.push({
         id: `daily_close:${args.storeId}:${args.operatingDate}:reopened`,
-        label: "End-of-Day Review reopened",
+        label: "EOD Review reopened",
         message:
-          "Complete the revised End-of-Day Review before treating the store day as closed.",
+          "Complete the revised end of day review before treating the store day as closed.",
         owner: "daily_close",
         severity: "warning",
         source: {
@@ -795,7 +795,7 @@ export async function buildDailyOperationsSnapshotWithCtx(
             closeSnapshot.existingClose?._id ??
             dailyCloseRecord?._id ??
             `${args.storeId}:${args.operatingDate}`,
-          label: `End-of-Day Review ${args.operatingDate}`,
+          label: `EOD Review ${args.operatingDate}`,
           type: "daily_close",
         },
         to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",

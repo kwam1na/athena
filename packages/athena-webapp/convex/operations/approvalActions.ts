@@ -26,11 +26,11 @@ export const APPROVAL_ACTIONS = {
   },
   dailyCloseCompletion: {
     key: "operations.daily_close.complete",
-    label: "Complete End-of-Day Review",
+    label: "Complete EOD Review",
   },
   dailyCloseReopen: {
     key: "operations.daily_close.reopen",
-    label: "Reopen End-of-Day Review",
+    label: "Reopen EOD Review",
   },
   transactionPaymentMethodCorrection: {
     key: "pos.transaction.correct_payment_method",

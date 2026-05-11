@@ -228,72 +228,7 @@ export function AppSidebar() {
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuSubItem>
-                </SidebarMenuSub>
 
-                <SidebarMenuSub>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuButton
-                      disabled={!canAccessStoreDaySurfaces()}
-                      asChild
-                    >
-                      <Link
-                        to="/$orgUrlSlug/store/$storeUrlSlug/operations/open-work"
-                        params={(p) => ({
-                          ...p,
-                          orgUrlSlug: activeOrganization?.slug,
-                          storeUrlSlug: activeStore?.slug,
-                        })}
-                        className="flex items-center"
-                      >
-                        <p className="font-medium">Open work</p>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuSubItem>
-                </SidebarMenuSub>
-
-                <SidebarMenuSub>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuButton
-                      disabled={!canAccessStoreDaySurfaces()}
-                      asChild
-                    >
-                      <Link
-                        to="/$orgUrlSlug/store/$storeUrlSlug/operations/approvals"
-                        params={(p) => ({
-                          ...p,
-                          orgUrlSlug: activeOrganization?.slug,
-                          storeUrlSlug: activeStore?.slug,
-                        })}
-                        className="flex items-center"
-                      >
-                        <p className="font-medium">Approvals</p>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuSubItem>
-                </SidebarMenuSub>
-
-                <SidebarMenuSub>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuButton
-                      disabled={!canAccessStoreDaySurfaces()}
-                      asChild
-                    >
-                      <Link
-                        to="/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments"
-                        params={(p) => ({
-                          ...p,
-                          orgUrlSlug: activeOrganization?.slug,
-                          storeUrlSlug: activeStore?.slug,
-                        })}
-                        className="flex items-center"
-                      >
-                        <p className="font-medium">Stock adjustments</p>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuSubItem>
-                </SidebarMenuSub>
-
-                <SidebarMenuSub>
                   <SidebarMenuSubItem>
                     <SidebarMenuButton
                       disabled={!canAccessStoreDaySurfaces()}
@@ -312,9 +247,7 @@ export function AppSidebar() {
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuSubItem>
-                </SidebarMenuSub>
 
-                <SidebarMenuSub>
                   <SidebarMenuSubItem>
                     <SidebarMenuButton
                       disabled={!canAccessStoreDaySurfaces()}
@@ -329,7 +262,64 @@ export function AppSidebar() {
                         })}
                         className="flex items-center"
                       >
-                        <p className="font-medium">End-of-Day Review</p>
+                        <p className="font-medium">EOD Review</p>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuSubItem>
+
+                  <SidebarMenuSubItem>
+                    <SidebarMenuButton
+                      disabled={!canAccessStoreDaySurfaces()}
+                      asChild
+                    >
+                      <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/operations/open-work"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: activeOrganization?.slug,
+                          storeUrlSlug: activeStore?.slug,
+                        })}
+                        className="flex items-center"
+                      >
+                        <p className="font-medium">Open work</p>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuSubItem>
+
+                  <SidebarMenuSubItem>
+                    <SidebarMenuButton
+                      disabled={!canAccessStoreDaySurfaces()}
+                      asChild
+                    >
+                      <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/operations/approvals"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: activeOrganization?.slug,
+                          storeUrlSlug: activeStore?.slug,
+                        })}
+                        className="flex items-center"
+                      >
+                        <p className="font-medium">Approvals</p>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuSubItem>
+
+                  <SidebarMenuSubItem>
+                    <SidebarMenuButton
+                      disabled={!canAccessStoreDaySurfaces()}
+                      asChild
+                    >
+                      <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: activeOrganization?.slug,
+                          storeUrlSlug: activeStore?.slug,
+                        })}
+                        className="flex items-center"
+                      >
+                        <p className="font-medium">Stock adjustments</p>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuSubItem>

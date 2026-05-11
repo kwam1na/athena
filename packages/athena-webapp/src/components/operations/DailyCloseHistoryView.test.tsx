@@ -119,7 +119,7 @@ function snapshot(
     readyItems: [
       {
         category: "sale",
-        description: "Completed sale is included in End-of-Day Review.",
+        description: "Completed sale is included in the end of day review.",
         id: "sale-1",
         link: {
           label: "Open transaction",
@@ -356,7 +356,7 @@ describe("DailyCloseHistoryView", () => {
     render(<DailyCloseHistoryView />);
 
     expect(
-      screen.queryByRole("button", { name: "Complete End-of-Day Review" }),
+      screen.queryByRole("button", { name: "Complete EOD Review" }),
     ).not.toBeInTheDocument();
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Close notes")).not.toBeInTheDocument();
@@ -378,7 +378,7 @@ describe("DailyCloseHistoryView", () => {
     expect(screen.getByText("Reopened after completion")).toBeInTheDocument();
     expect(screen.getByText(/Cash deposit corrected/i)).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Reopen End-of-Day Review" }),
+      screen.queryByRole("button", { name: "Reopen EOD Review" }),
     ).not.toBeInTheDocument();
   });
 
