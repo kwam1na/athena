@@ -1,0 +1,44 @@
+[
+  {
+    "file": "01-daily-operations-clean.png",
+    "url": "https://athena.wigclub.store/wigclub/store/wigclub/operations",
+    "needle": "Daily Operations",
+    "body": "athena / Wigclub kwami.nuh@gmail.com Store Point of Sale Cash Controls Operations Daily operations Opening Handoff EOD Review Open work Approvals Stock adjustments Procurement Analytics Homepage Orders Products Bulk Operations Promo codes Reviews Storefront Services Service Intake Appointments Active Cases Catalog Management Organization Members STORE OPS Daily Operations Review the store day, see what needs attention, and move into the workflow that owns the next action. Operating date Tuesday, May 12, 2026 Start Opening Handoff TODAY'S NET SALES GH₵0 No transactions TODAY'S CASH GH₵0 No cash transactions CARRIED-OVER CASH GH₵0 No registers from prior days EXPENSES GH₵0 No expense transactions VARIANCE GH₵0 No register variances Week at a glance Seven days ending May 16, 2026. Week sales GH₵0 SUN May 10 GH₵0 No transactions MON May "
+  },
+  {
+    "file": "02-point-of-sale-clean.png",
+    "url": "https://athena.wigclub.store/wigclub/store/wigclub/pos/",
+    "needle": "Point of Sale",
+    "body": "athena / Wigclub kwami.nuh@gmail.com Store Point of Sale Cash Controls Operations Procurement Analytics Homepage Orders Products Bulk Operations Promo codes Reviews Storefront Services Service Intake Appointments Active Cases Catalog Management Organization Members Point of Sale POS Transact in-store sales Expense Products Track products expensed Product Lookup Search and scan products for quick reference Transactions View completed transaction history Active Sessions Review active and held sales reserving inventory Expense Reports View expense reports POS Settings Configure terminal settings Summary Total Sales GH₵0 Today Transactions 0 Today Items Sold 0 Today"
+  },
+  {
+    "file": "03-procurement-clean.png",
+    "url": "https://athena.wigclub.store/wigclub/store/wigclub/procurement",
+    "needle": "Procurement",
+    "body": "athena / Wigclub kwami.nuh@gmail.com Store Point of Sale Cash Controls Operations Procurement Analytics Homepage Orders Products Bulk Operations Promo codes Reviews Storefront Services Service Intake Appointments Active Cases Catalog Management Organization Members STOCK OPS Procurement Review stock pressure, create vendor-backed orders, and track receiving in one workspace. NEEDS ACTION 137 PLANNED 0 INBOUND 0 EXCEPTIONS 0 Needs action Planned Inbound Exceptions All Stock pressure Review low-stock items and decide what needs a purchase order. 137 need action 5X5 GLUELESS DEEPWAVE WIG KK38-G69-8AP Exposed No planned or inbound replenishment is covering this SKU right now. STOCK NOW 0 on hand / 0 available COVER 0 planned, 0 inbound · ETA No ETA Add to draft 5X5 GLUELESS DEEPWAVE WIG KK38-G69-ARM Exposed No planned or inbound replenishment is coverin"
+  },
+  {
+    "file": "04-cash-controls-clean.png",
+    "url": "https://athena.wigclub.store/wigclub/store/wigclub/cash-controls",
+    "needle": "Cash controls",
+    "body": "athena / Wigclub kwami.nuh@gmail.com Store Point of Sale Cash Controls Operations Procurement Analytics Homepage Orders Products Bulk Operations Promo codes Reviews Storefront Services Service Intake Appointments Active Cases Catalog Management Organization Members CASH OPS Cash controls Track live drawers, review deposited totals, and move into session detail before shifting work into closeouts. CURRENT CONTROL SNAPSHOT Live drawers, recent deposits, and session history EXPECTED IN DRAWERS GH₵0 No drawers in cashroom flow DEPOSITS RECORDED GH₵0 No recent drops STILL IN DRAWERS GH₵0 Live and review drawers minus deposits VARIANCE TO REVIEW GH₵0 0 unresolved No register sessions New register sessions will appear here after the drawer opens Recent deposits Recorded bank deposits grouped by register, with a quick path back into deposit entry when another"
+  },
+  {
+    "file": "05-analytics-clean.png",
+    "url": "https://athena.wigclub.store/wigclub/store/wigclub/analytics",
+    "needle": "Storefront activity",
+    "body": "athena / Wigclub kwami.nuh@gmail.com Store Point of Sale Cash Controls Operations Procurement Analytics Homepage Orders Products Bulk Operations Promo codes Reviews Storefront Services Service Intake Appointments Active Cases Catalog Management Organization Members STOREFRONT OPS Storefront activity See what customers are doing now, where checkout needs attention, and which products are drawing interest. wigclub.store Live storefront pulse Start with current movement, then inspect shoppers, products, and journey health when the signal changes. Live storefront signal KNOWN SHOPPERS 55 People with storefront activity in the current data set. PRODUCT VIEWS 87 Product interest captured from browsing behavior. ACTIVE CHECKOUTS 0 Carts currently moving through the storefront. VISITORS TODAY 2 Distinct shoppers seen since opening today. LATEST ACTIVITY S"
+  },
+  {
+    "file": "06-service-intake-clean.png",
+    "url": "https://athena.wigclub.store/wigclub/store/wigclub/services/intake",
+    "needle": "Service Intake",
+    "body": "athena / Wigclub kwami.nuh@gmail.com Store Point of Sale Cash Controls Operations Procurement Analytics Homepage Orders Products Bulk Operations Promo codes Reviews Storefront Services Service Intake Appointments Active Cases Catalog Management Organization Members SERVICE OPS Service Intake Capture walk-in or booked service work with the customer, staff owner, priority, and deposit details ready for operations. Customer Link an existing customer or capture the walk-in details directly. Search existing customers Customer name Email Phone number Customer notes Intake Capture the work, assignee, and optional deposit without a full calendar. Service title Assigned staff Select staff member Channel Walk-in Priority Normal Deposit amount Deposit method No deposit collected Item description Intake notes Create intake"
+  },
+  {
+    "file": "07-orders-clean.png",
+    "url": "https://athena.wigclub.store/wigclub/store/wigclub/orders/completed",
+    "needle": "Completed orders",
+    "body": "athena / Wigclub kwami.nuh@gmail.com Store Point of Sale Cash Controls Operations Procurement Analytics Homepage Orders Open 1 Ready Out for delivery Completed 46 Refunded Cancelled Products Bulk Operations Promo codes Reviews Storefront Services Service Intake Appointments Active Cases Catalog Management Organization Members Completed orders Day Week Month All Time Gross Sales GH₵393 Net Revenue GH₵433 Total Orders 1 Delivery method ORDER STATUS CUSTOMER AMOUNT PAID DELIVERY PAYMENT PLACED #575421 Delivered winiluv61@yahoo.com GH₵205 Delivery Mobile Money Online 37 days ago #342627 Delivered Emmanuellaomaboe@gmail.com GH₵217 Delivery Mobile Money Online 38 days ago #981941 Delivered kwamina.0x00@gmail.com GH₵50 Delivery Card Online 38 days ago #806563 Delivered kwamina.0x00@gmail.co"
+  }
+]

@@ -1,0 +1,591 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/qdjuyu",
+    "id": "qdjuyu",
+    "slide": 5,
+    "layoutId": "6c34f00d-b3fe-41d6-b925-74ff7ca7bb12",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "7644c244-920e-4537-85b6-d0ca3a241d9a",
+    "masterLayoutName": "Master",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Aptos",
+      "Aptos Display"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "6c34f00d-b3fe-41d6-b925-74ff7ca7bb12",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "7644c244-920e-4537-85b6-d0ca3a241d9a",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "7644c244-920e-4537-85b6-d0ca3a241d9a",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ovahoza1",
+      "id": "1",
+      "bbox": [
+        0,
+        0,
+        1280,
+        720
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/vahoza1g",
+      "id": "2",
+      "bbox": [
+        54,
+        42,
+        360,
+        26
+      ],
+      "geometry": "rect",
+      "text": "CONTROL",
+      "textPreview": "CONTROL",
+      "resolvedFontSize": 14,
+      "resolvedTextStyle": {
+        "fontSize": 14,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "CONTROL"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "CONTROL",
+          "runs": [
+            {
+              "index": 1,
+              "text": "CONTROL",
+              "fontSize": 14,
+              "typeface": "Aptos",
+              "color": "#2E7D5B",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/6tovahoz",
+      "id": "3",
+      "bbox": [
+        54,
+        78,
+        520,
+        120
+      ],
+      "geometry": "rect",
+      "text": "Cash and stock stop living in memory.",
+      "textPreview": "Cash and stock stop living in memory.",
+      "resolvedFontSize": 48,
+      "resolvedTextStyle": {
+        "fontSize": 48,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Cash and stock stop"
+          },
+          {
+            "index": 2,
+            "text": "living in memory."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Cash and stock stop living in memory.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Cash and stock stop living in memory.",
+              "fontSize": 48,
+              "typeface": "Aptos Display",
+              "color": "#101827",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/d8v6psfi",
+      "id": "4",
+      "bbox": [
+        58,
+        214,
+        500,
+        92
+      ],
+      "geometry": "rect",
+      "text": "Athena binds the physical shop back to operational evidence: drawer sessions, deposits, variances, low-stock pressure, purchase drafts, and receiving.",
+      "textPreview": "Athena binds the physical shop back to operational evidence: drawer sessions, deposits, variances, low-stock pressure, purchase drafts, a...",
+      "resolvedFontSize": 20,
+      "resolvedTextStyle": {
+        "fontSize": 20,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Athena binds the physical shop back to operational"
+          },
+          {
+            "index": 2,
+            "text": "evidence: drawer sessions, deposits, variances,"
+          },
+          {
+            "index": 3,
+            "text": "low-stock pressure, purchase drafts, and receiving."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Athena binds the physical shop back to operational evidence: drawer sessions, deposits, variances, low-stock pressure, purchase drafts, and receiving.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Athena binds the physical shop back to operational evidence: drawer sessions, deposits, variances, low-stock pressure, purchase drafts, and receiving.",
+              "fontSize": 20,
+              "typeface": "Aptos",
+              "color": "#5B6472"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/lwval87e",
+      "id": "5",
+      "bbox": [
+        626,
+        62,
+        548,
+        250
+      ],
+      "alt": "04-cash-controls-clean.png",
+      "contentType": "image/png",
+      "asset": {
+        "assetId": "376e008d-f0fc-49d2-9905-cc05f01efddb",
+        "contentType": "image/png",
+        "byteLength": 108095
+      }
+    },
+    {
+      "order": 6,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/e9cvixcz",
+      "id": "6",
+      "bbox": [
+        626,
+        350,
+        548,
+        260
+      ],
+      "alt": "03-procurement-clean.png",
+      "contentType": "image/png",
+      "asset": {
+        "assetId": "9bf65d64-9eb1-4614-85cf-3f4c47765130",
+        "contentType": "image/png",
+        "byteLength": 165255
+      }
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/6hcrmhk3",
+      "id": "7",
+      "bbox": [
+        70,
+        378,
+        168,
+        84
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#D9D4C8",
+      "lineWidth": 1
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/d4vmtwra",
+      "id": "8",
+      "bbox": [
+        86,
+        394,
+        136,
+        34
+      ],
+      "geometry": "rect",
+      "text": "137",
+      "textPreview": "137",
+      "resolvedFontSize": 28,
+      "resolvedTextStyle": {
+        "fontSize": 28,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "137"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "137",
+          "runs": [
+            {
+              "index": 1,
+              "text": "137",
+              "fontSize": 28,
+              "typeface": "Aptos Display",
+              "color": "#B9832E",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/oj2t83it",
+      "id": "9",
+      "bbox": [
+        86,
+        430,
+        136,
+        20
+      ],
+      "geometry": "rect",
+      "text": "SKUs needing action",
+      "textPreview": "SKUs needing action",
+      "resolvedFontSize": 12,
+      "resolvedTextStyle": {
+        "fontSize": 12,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "SKUs needing action"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "SKUs needing action",
+          "runs": [
+            {
+              "index": 1,
+              "text": "SKUs needing action",
+              "fontSize": 12,
+              "typeface": "Aptos",
+              "color": "#5B6472"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/2x4nap4r",
+      "id": "10",
+      "bbox": [
+        258,
+        378,
+        168,
+        84
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#D9D4C8",
+      "lineWidth": 1
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/vixczed8",
+      "id": "11",
+      "bbox": [
+        274,
+        394,
+        136,
+        34
+      ],
+      "geometry": "rect",
+      "text": "GH₵0",
+      "textPreview": "GH₵0",
+      "resolvedFontSize": 28,
+      "resolvedTextStyle": {
+        "fontSize": 28,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "GH₵0"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "GH₵0",
+          "runs": [
+            {
+              "index": 1,
+              "text": "GH₵0",
+              "fontSize": 28,
+              "typeface": "Aptos Display",
+              "color": "#2E7D5B",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/k3q5o7qp",
+      "id": "12",
+      "bbox": [
+        274,
+        430,
+        136,
+        20
+      ],
+      "geometry": "rect",
+      "text": "variance to review",
+      "textPreview": "variance to review",
+      "resolvedFontSize": 12,
+      "resolvedTextStyle": {
+        "fontSize": 12,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "variance to review"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "variance to review",
+          "runs": [
+            {
+              "index": 1,
+              "text": "variance to review",
+              "fontSize": 12,
+              "typeface": "Aptos",
+              "color": "#5B6472"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/donyd0z6",
+      "id": "13",
+      "bbox": [
+        70,
+        512,
+        500,
+        74
+      ],
+      "geometry": "rect",
+      "fillColor": "#F6F3EC",
+      "lineColor": "#D9D4C8",
+      "lineWidth": 1
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/6psfil0r",
+      "id": "14",
+      "bbox": [
+        94,
+        536,
+        448,
+        28
+      ],
+      "geometry": "rect",
+      "text": "The owner sees what to order, what to deposit, and what to close before the day drifts.",
+      "textPreview": "The owner sees what to order, what to deposit, and what to close before the day drifts.",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "fontSize": 18,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "The owner sees what to order, what to deposit, and"
+          },
+          {
+            "index": 2,
+            "text": "what to close before the day drifts."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "The owner sees what to order, what to deposit, and what to close before the day drifts.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "The owner sees what to order, what to deposit, and what to close before the day drifts.",
+              "fontSize": 18,
+              "typeface": "Aptos",
+              "color": "#101827",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

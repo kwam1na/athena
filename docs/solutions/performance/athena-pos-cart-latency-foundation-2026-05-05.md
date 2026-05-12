@@ -40,7 +40,7 @@ Keep the register search index stable and make cart operations optimistic:
 
 - Build local search from metadata-only catalog rows.
 - Fetch availability through a bounded query for the displayed or exact-match
-  SKUs.
+  skus.
 - Compute bounded availability through the same hold-aware availability helper
   used by POS commands.
 - Represent POS cart holds as `inventoryHold` rows instead of patching

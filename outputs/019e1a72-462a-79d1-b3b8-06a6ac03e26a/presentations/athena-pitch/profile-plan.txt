@@ -1,0 +1,8 @@
+task mode: create
+primary deck-profile: product-platform
+secondary gates: consumer-retail proof quality for real app screenshots
+required proof objects: platform map, workflow journey, live product screenshots, product-to-business linkage
+source requirements: README business OS audit, Graphify repo map, live authenticated Athena screenshots, route index
+asset constraints: no fabricated logo or brand mark; use text-only Athena wordmark and live product UI
+QA gates: each slide has one claim, one proof object, and no generic feature-card grid
+known missing inputs: no external pricing or customer outcome metrics supplied; use live demo-state metrics only

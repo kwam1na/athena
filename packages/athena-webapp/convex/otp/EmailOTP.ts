@@ -33,7 +33,7 @@ export const EmailOTP = Email({
 
     const responseBody = await response.text().catch(() => "");
     throw new Error(
-      responseBody || `MailerSend failed with status ${response.status}`
+      responseBody || `MailerSend failed with status ${response.status}`,
     );
   },
 });

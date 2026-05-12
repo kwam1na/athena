@@ -268,6 +268,61 @@ describe("POSRegisterView", () => {
     expect(screen.queryByText("cashier-auth-dialog")).not.toBeInTheDocument();
   });
 
+  it("focuses the product lookup entry when the empty lookup workspace is clicked", async () => {
+    const setShowProductLookup = vi.fn();
+
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: true,
+      },
+      registerInfo: {
+        customerName: "Ama Serwa",
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: false,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        setShowProductLookup,
+        onBarcodeSubmit: vi.fn(),
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: {},
+      cashierCard: {},
+      closeoutControl: {
+        canCloseout: true,
+        canShowOpeningFloatCorrection: true,
+        canCorrectOpeningFloat: true,
+        onRequestCloseout: vi.fn(),
+        onRequestOpeningFloatCorrection: vi.fn(),
+      },
+      authDialog: {
+        open: false,
+      },
+      drawerGate: null,
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /Ready for product lookup/i }),
+    );
+
+    expect(setShowProductLookup).toHaveBeenCalledWith(true);
+    expect(screen.getByLabelText("product search input")).toHaveFocus();
+  });
+
   it("renders POS onboarding when register setup is incomplete", async () => {
     mockUseRegisterViewModel.mockReturnValue({
       hasActiveStore: true,

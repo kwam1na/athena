@@ -1,6 +1,11 @@
 import { OrganizationModal } from "@/components/ui/modals/organization-modal";
 import { StoreModal } from "@/components/ui/modals/store-modal";
-import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Outlet,
+  useNavigate,
+  useRouterState,
+} from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   SidebarProvider,
@@ -21,6 +26,7 @@ import {
   ManagerElevationProvider,
   useManagerElevation,
 } from "../contexts/ManagerElevationContext";
+import { AppShellFullscreenContext } from "@/contexts/AppShellFullscreenContext";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,6 +37,20 @@ import {
 export const Route = createFileRoute("/_authed")({
   component: Layout,
 });
+
+const POS_REGISTER_PATH_PATTERN = /\/store\/[^/]+\/pos\/register\/?$/;
+
+function isPosRegisterPath(pathname?: string) {
+  return Boolean(pathname && POS_REGISTER_PATH_PATTERN.test(pathname));
+}
+
+function getBrowserPathname() {
+  return typeof window === "undefined" ? "" : window.location.pathname;
+}
+
+function isUnknownRouterPath(pathname?: string) {
+  return !pathname || pathname === "/";
+}
 
 function AuthedComponent() {
   return (
@@ -138,9 +158,19 @@ function TopBar({ userEmail }: { userEmail: string }) {
 
 export default function Layout() {
   const [defaultOpen] = useState<boolean | null>(true);
+  const [fullscreenOverride, setFullscreenOverride] = useState<
+    boolean | null
+  >(null);
   const navigate = useNavigate();
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
   const { isLoading, user } = useAuth();
   const userEmail = user?.email ?? "";
+  const routeWantsFullscreen =
+    isPosRegisterPath(pathname) ||
+    (isUnknownRouterPath(pathname) && isPosRegisterPath(getBrowserPathname()));
+  const isFullscreenActive = fullscreenOverride ?? routeWantsFullscreen;
 
   // useEffect(() => {
   //   // Read the sidebar state from cookies
@@ -165,6 +195,10 @@ export default function Layout() {
     }
   }, [isLoading, navigate, user]);
 
+  useEffect(() => {
+    setFullscreenOverride(null);
+  }, [routeWantsFullscreen]);
+
   if (defaultOpen === null || isLoading || user === null) {
     return null; // or a loading spinner if you prefer
   }
@@ -172,20 +206,29 @@ export default function Layout() {
   return (
     <PermissionsProvider>
       <ManagerElevationProvider>
-        <SidebarProvider
-          className="fixed inset-0 h-svh !min-h-0 flex-col overflow-hidden"
-          defaultOpen={defaultOpen}
+        <AppShellFullscreenContext.Provider
+          value={{ setFullscreenOverride }}
         >
-          <TopBar userEmail={userEmail} />
-          <div className="flex h-[calc(100svh-4rem)] !min-h-0 flex-1">
-            <AppSidebar />
-            <SidebarInset className="h-full !min-h-0 overflow-hidden">
-              <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-transparent p-8">
-                <AuthedComponent />
-              </main>
-            </SidebarInset>
-          </div>
-        </SidebarProvider>
+          <SidebarProvider
+            className="fixed inset-0 h-svh !min-h-0 flex-col overflow-hidden"
+            defaultOpen={defaultOpen}
+          >
+            {isFullscreenActive ? null : <TopBar userEmail={userEmail} />}
+            <div
+              className={cn(
+                "flex !min-h-0 flex-1",
+                isFullscreenActive ? "h-svh" : "h-[calc(100svh-4rem)]",
+              )}
+            >
+              <AppSidebar />
+              <SidebarInset className="h-full !min-h-0 overflow-hidden">
+                <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-transparent p-8">
+                  <AuthedComponent />
+                </main>
+              </SidebarInset>
+            </div>
+          </SidebarProvider>
+        </AppShellFullscreenContext.Provider>
       </ManagerElevationProvider>
     </PermissionsProvider>
   );
