@@ -1,54 +1,6 @@
 import { useCallback } from "react";
 
-export const usePrint = () => {
-  const printReceipt = useCallback((receiptContent: string) => {
-    // Create a new window for printing with specific dimensions for receipt
-    const printWindow = window.open(
-      "",
-      "_blank",
-      "width=300,height=600,scrollbars=yes"
-    );
-
-    if (!printWindow) {
-      console.error(
-        "Could not open print window - may be blocked by popup blocker"
-      );
-      // Try alternative approach - print in current window
-      const printDiv = document.createElement("div");
-      printDiv.style.display = "none";
-      printDiv.innerHTML = `
-        <div class="receipt" style="font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.3; color: #000; background: #fff; max-width: 80mm; margin: 0 auto; width: 100%;">
-          ${receiptContent}
-        </div>
-      `;
-      document.body.appendChild(printDiv);
-
-      const originalContent = document.body.innerHTML;
-      document.body.innerHTML = printDiv.innerHTML;
-      window.print();
-      document.body.innerHTML = originalContent;
-
-      return;
-    }
-
-    // Set up close event handler to prevent reopening
-    let isClosing = false;
-    const handleClose = () => {
-      if (!isClosing) {
-        isClosing = true;
-      }
-    };
-
-    printWindow.addEventListener("beforeunload", handleClose);
-    printWindow.addEventListener("unload", handleClose);
-
-    try {
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>Receipt</title>
-            <style>
+const receiptPrintStyles = `
             * {
               margin: 0;
               padding: 0;
@@ -56,7 +8,7 @@ export const usePrint = () => {
             }
             
             body {
-              font-family: 'Consolas', 'Monaco', 'Lucida Console', 'DejaVu Sans Mono', 'Courier New', monospace;
+              font-family: Arial, 'Helvetica Neue', Helvetica, 'DejaVu Sans', sans-serif;
               font-size: 13px;
               line-height: 1.35;
               color: #000;
@@ -67,7 +19,7 @@ export const usePrint = () => {
               font-weight: 800;
             }
            
-                        .receipt {
+            .receipt {
               max-width: 80mm;
               margin: 0 auto;
               width: 100%;
@@ -79,17 +31,17 @@ export const usePrint = () => {
             
             .text-xs {
               font-size: 11px;
-              font-weight: 600;
+              font-weight: 700;
             }
             
             .text-sm {
               font-size: 12px;
-              font-weight: 600;
+              font-weight: 700;
             }
             
             .text-base {
               font-size: 13px;
-              font-weight: 600;
+              font-weight: 700;
             }
             
             .text-lg {
@@ -187,16 +139,16 @@ export const usePrint = () => {
               margin-left: 8px;
             }
             
-                         @page {
-               size: 80mm auto;
-               margin: 0;
-             }
+            @page {
+              size: 80mm auto;
+              margin: 0;
+            }
              
-             /* Fallback for browsers that don't support custom page sizes */
-             @page :first {
-               size: 80mm auto;
-               margin: 0;
-             }
+            /* Fallback for browsers that don't support custom page sizes */
+            @page :first {
+              size: 80mm auto;
+              margin: 0;
+            }
             
             @media print {
               body {
@@ -204,7 +156,7 @@ export const usePrint = () => {
                 margin: 0;
                 width: 80mm;
                 font-size: 11px;
-                font-weight: 600;
+                font-weight: 700;
                 color: #000 !important;
               }
               
@@ -222,17 +174,17 @@ export const usePrint = () => {
               
               .text-base {
                 font-size: 11px;
-                font-weight: 600 !important;
+                font-weight: 700 !important;
               }
               
               .text-sm {
                 font-size: 10px;
-                font-weight: 600 !important;
+                font-weight: 700 !important;
               }
               
-                            .text-xs {
+              .text-xs {
                 font-size: 9px;
-                font-weight: 600 !important;
+                font-weight: 700 !important;
               }
               
               .border-b {
@@ -247,16 +199,97 @@ export const usePrint = () => {
                 font-weight: 900 !important;
               }
                
-               /* Ensure proper spacing for thermal printers */
-               .mb-1 { margin-bottom: 2mm !important; }
-               .mb-2 { margin-bottom: 3mm !important; }
-               .mb-3 { margin-bottom: 4mm !important; }
-               .mb-4 { margin-bottom: 5mm !important; }
-               .mb-6 { margin-bottom: 6mm !important; }
-               .pb-4 { padding-bottom: 3mm !important; }
-               .pt-2 { padding-top: 2mm !important; }
-               .pt-4 { padding-top: 3mm !important; }
-             }
+              /* Ensure proper spacing for thermal printers */
+              .mb-1 { margin-bottom: 2mm !important; }
+              .mb-2 { margin-bottom: 3mm !important; }
+              .mb-3 { margin-bottom: 4mm !important; }
+              .mb-4 { margin-bottom: 5mm !important; }
+              .mb-6 { margin-bottom: 6mm !important; }
+              .pb-4 { padding-bottom: 3mm !important; }
+              .pt-2 { padding-top: 2mm !important; }
+              .pt-4 { padding-top: 3mm !important; }
+            }
+
+            .receipt,
+            .receipt * {
+              color: #000 !important;
+              -webkit-text-fill-color: #000 !important;
+              font-family: Arial, 'Helvetica Neue', Helvetica, 'DejaVu Sans', sans-serif !important;
+              opacity: 1 !important;
+              text-shadow: none !important;
+            }
+
+            .receipt * {
+              font-weight: 700 !important;
+            }
+
+            .receipt b,
+            .receipt strong,
+            .receipt h1,
+            .receipt h2,
+            .receipt h3,
+            .receipt .font-bold,
+            .receipt .text-lg {
+              font-weight: 900 !important;
+            }
+
+            .receipt > table,
+            .receipt > div {
+              border: 0 !important;
+              box-shadow: none !important;
+              outline: 0 !important;
+            }
+`;
+
+export const usePrint = () => {
+  const printReceipt = useCallback((receiptContent: string) => {
+    // Create a new window for printing with specific dimensions for receipt
+    const printWindow = window.open(
+      "",
+      "_blank",
+      "width=300,height=600,scrollbars=yes"
+    );
+
+    if (!printWindow) {
+      console.error(
+        "Could not open print window - may be blocked by popup blocker"
+      );
+      // Try alternative approach - print in current window
+      const printDiv = document.createElement("div");
+      printDiv.style.display = "none";
+      printDiv.innerHTML = `
+        <style>${receiptPrintStyles}</style>
+        <div class="receipt">${receiptContent}</div>
+      `;
+      document.body.appendChild(printDiv);
+
+      const originalContent = document.body.innerHTML;
+      document.body.innerHTML = printDiv.innerHTML;
+      window.print();
+      document.body.innerHTML = originalContent;
+
+      return;
+    }
+
+    // Set up close event handler to prevent reopening
+    let isClosing = false;
+    const handleClose = () => {
+      if (!isClosing) {
+        isClosing = true;
+      }
+    };
+
+    printWindow.addEventListener("beforeunload", handleClose);
+    printWindow.addEventListener("unload", handleClose);
+
+    try {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Receipt</title>
+            <style>
+${receiptPrintStyles}
             </style>
           </head>
           <body>

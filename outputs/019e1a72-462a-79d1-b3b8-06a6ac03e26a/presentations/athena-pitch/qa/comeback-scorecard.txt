@@ -1,0 +1,20 @@
+story: 5
+specificity: 5
+rhythm: 4
+whitespace: 4
+chart clarity: 5
+typography: 4
+restraint: 5
+precision: 4
+coherence: 4
+reference delta: n/a
+
+total: 40 / 45
+
+profile gates:
+- product-platform: pass. The deck uses a concrete operating-loop map and live app proof instead of a generic module list.
+- brand authenticity: pass. No fabricated logo or unofficial mark is used.
+- source precision: pass with caveat. Live demo metrics are used only as demo-state proof, not market/customer outcome claims.
+
+iteration note:
+- First render had title/screenshot collisions on slides 3-7. The final pass tightened titles and moved body copy/metrics to avoid overlap at contact-sheet size.

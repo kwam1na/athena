@@ -1,12 +1,14 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import Layout from "./_authed";
 import { LOGGED_IN_USER_ID_KEY } from "@/lib/constants";
+import { useAppShellFullscreenMode } from "@/contexts/AppShellFullscreenContext";
 
 const mocked = vi.hoisted(() => ({
+  OutletComponent: null as (() => ReactNode) | null,
   navigate: vi.fn(),
   signOut: vi.fn().mockResolvedValue(undefined),
   startManagerElevation: vi.fn(),
@@ -14,12 +16,21 @@ const mocked = vi.hoisted(() => ({
   useAuth: vi.fn(),
   useManagerElevation: vi.fn(),
   usePermissions: vi.fn(),
+  useRouterState: vi.fn(),
 }));
 
 vi.mock("@tanstack/react-router", () => ({
   createFileRoute: () => () => ({}),
-  Outlet: () => <div data-testid="authed-outlet">Authed outlet</div>,
+  Outlet: () => {
+    const OutletComponent = mocked.OutletComponent;
+    return OutletComponent ? (
+      <OutletComponent />
+    ) : (
+      <div data-testid="authed-outlet">Authed outlet</div>
+    );
+  },
   useNavigate: () => mocked.navigate,
+  useRouterState: mocked.useRouterState,
 }));
 
 vi.mock("../hooks/useAuth", () => ({
@@ -81,8 +92,15 @@ vi.mock("@/components/ui/modals/store-modal", () => ({
   StoreModal: () => <div data-testid="store-modal" />,
 }));
 
+function FullscreenOutlet() {
+  useAppShellFullscreenMode();
+  return <div data-testid="fullscreen-outlet">Fullscreen outlet</div>;
+}
+
 describe("Authed layout", () => {
   beforeEach(() => {
+    mocked.OutletComponent = null;
+    window.history.replaceState({}, "", "/wigclub/store/wigclub/products");
     mocked.navigate.mockReset();
     mocked.signOut.mockClear();
     mocked.startManagerElevation.mockReset();
@@ -97,6 +115,9 @@ describe("Authed layout", () => {
     mocked.usePermissions.mockReturnValue({
       hasFullAdminAccess: false,
     });
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({ location: { pathname: "/wigclub/store/wigclub/products" } }),
+    );
   });
 
   it("stays empty while auth is still loading", () => {
@@ -220,5 +241,141 @@ describe("Authed layout", () => {
       screen.queryByRole("button", { name: /start manager elevation/i }),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /sign out/i })).toBeInTheDocument();
+  });
+
+  it("starts fullscreen when the POS register route becomes active", () => {
+    mocked.useAuth.mockReturnValue({
+      user: { _id: "user-1", email: "operator@example.com" },
+      isLoading: false,
+    });
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({
+        location: { pathname: "/wigclub/store/wigclub/pos/register" },
+      }),
+    );
+
+    render(<Layout />);
+
+    expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
+    expect(screen.getByTestId("app-sidebar")).toBeInTheDocument();
+  });
+
+  it("starts fullscreen from the browser pathname on first register render", () => {
+    mocked.useAuth.mockReturnValue({
+      user: { _id: "user-1", email: "operator@example.com" },
+      isLoading: false,
+    });
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({ location: { pathname: "/" } }),
+    );
+    window.history.replaceState({}, "", "/wigclub/store/wigclub/pos/register");
+
+    render(<Layout />);
+
+    expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
+    expect(screen.getByTestId("app-sidebar")).toBeInTheDocument();
+  });
+
+  it("toggles the mounted register flow with F", () => {
+    mocked.useAuth.mockReturnValue({
+      user: { _id: "user-1", email: "operator@example.com" },
+      isLoading: false,
+    });
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({
+        location: { pathname: "/wigclub/store/wigclub/pos/register" },
+      }),
+    );
+    mocked.OutletComponent = FullscreenOutlet;
+
+    render(<Layout />);
+
+    expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "f" });
+
+    expect(screen.getByTestId("app-header")).toBeInTheDocument();
+    expect(screen.getByTestId("app-sidebar")).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "F" });
+
+    expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
+  });
+
+  it("uses the route default again after toggling away and returning to the register flow", () => {
+    mocked.useAuth.mockReturnValue({
+      user: { _id: "user-1", email: "operator@example.com" },
+      isLoading: false,
+    });
+    let pathname = "/wigclub/store/wigclub/pos/register";
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({ location: { pathname } }),
+    );
+    mocked.OutletComponent = FullscreenOutlet;
+
+    const { rerender } = render(<Layout />);
+
+    fireEvent.keyDown(document, { key: "f" });
+    expect(screen.getByTestId("app-header")).toBeInTheDocument();
+
+    pathname = "/wigclub/store/wigclub/pos";
+    rerender(<Layout />);
+    expect(screen.getByTestId("app-header")).toBeInTheDocument();
+
+    pathname = "/wigclub/store/wigclub/pos/register";
+    rerender(<Layout />);
+    expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
+  });
+
+  it("shows the global nav after leaving the register flow even if the browser pathname is stale", () => {
+    mocked.useAuth.mockReturnValue({
+      user: { _id: "user-1", email: "operator@example.com" },
+      isLoading: false,
+    });
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({ location: { pathname: "/wigclub/store/wigclub/pos" } }),
+    );
+    window.history.replaceState({}, "", "/wigclub/store/wigclub/pos/register");
+
+    render(<Layout />);
+
+    expect(screen.getByTestId("app-header")).toBeInTheDocument();
+  });
+
+  it("keeps F available for typing while the register flow is mounted", () => {
+    mocked.useAuth.mockReturnValue({
+      user: { _id: "user-1", email: "operator@example.com" },
+      isLoading: false,
+    });
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({
+        location: { pathname: "/wigclub/store/wigclub/pos/register" },
+      }),
+    );
+    mocked.OutletComponent = FullscreenOutlet;
+
+    render(<Layout />);
+
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+
+    fireEvent.keyDown(input, { key: "f" });
+
+    expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
+
+    input.remove();
+  });
+
+  it("does not toggle fullscreen outside the register flow without a mounted fullscreen outlet", () => {
+    mocked.useAuth.mockReturnValue({
+      user: { _id: "user-1", email: "operator@example.com" },
+      isLoading: false,
+    });
+
+    render(<Layout />);
+
+    fireEvent.keyDown(document, { key: "f" });
+
+    expect(screen.getByTestId("app-header")).toBeInTheDocument();
   });
 });

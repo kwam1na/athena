@@ -14,16 +14,28 @@ const mockPrintWindow = {
   addEventListener: vi.fn(),
   removeEventListener: vi.fn(),
   closed: false,
-  onload: null as any,
+  onload: null as null | (() => void),
 };
+
+function setWindowOpenMock(returnValue: Window | null) {
+  Object.defineProperty(window, "open", {
+    configurable: true,
+    value: vi.fn(() => returnValue),
+  });
+}
 
 describe("usePrint Hook", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     vi.useRealTimers();
+    mockPrintWindow.document.write.mockReset();
+    mockPrintWindow.document.close.mockReset();
+    mockPrintWindow.print.mockReset();
+    mockPrintWindow.close.mockReset();
+    mockPrintWindow.addEventListener.mockReset();
+    mockPrintWindow.removeEventListener.mockReset();
 
     // Reset window.open mock
-    (window.open as any) = vi.fn(() => mockPrintWindow);
+    setWindowOpenMock(mockPrintWindow as unknown as Window);
 
     // Reset print window state
     mockPrintWindow.closed = false;
@@ -208,7 +220,7 @@ describe("usePrint Hook", () => {
       const { result } = renderHook(() => usePrint());
 
       // Mock window.open returning null (blocked popup)
-      (window.open as any) = vi.fn(() => null);
+      setWindowOpenMock(null);
 
       expect(() => {
         act(() => {
@@ -321,6 +333,20 @@ describe("usePrint Hook", () => {
       expect(htmlContent).toContain("10%");
     });
 
+    it("should preserve cedi symbols in receipt currency", () => {
+      const { result } = renderHook(() => usePrint());
+
+      act(() => {
+        result.current.printReceipt(
+          "<p>Total: GH₵1,878.99</p><p>Change: &#x20B5;12.00</p>"
+        );
+      });
+
+      const htmlContent = mockPrintWindow.document.write.mock.calls[0][0];
+      expect(htmlContent).toContain("Total: GH₵1,878.99");
+      expect(htmlContent).toContain("Change: &#x20B5;12.00");
+    });
+
     it("should include thermal printer optimizations", () => {
       const { result } = renderHook(() => usePrint());
 
@@ -330,8 +356,42 @@ describe("usePrint Hook", () => {
 
       const htmlContent = mockPrintWindow.document.write.mock.calls[0][0];
       expect(htmlContent).toContain("80mm");
-      expect(htmlContent).toContain("Courier New");
+      expect(htmlContent).toContain("DejaVu Sans");
       expect(htmlContent).toContain("@page");
+    });
+
+    it("should force receipt text to print dark and legibly", () => {
+      const { result } = renderHook(() => usePrint());
+
+      act(() => {
+        result.current.printReceipt(
+          '<p style="color: #999999; opacity: 0.45; font-weight: 400;">Muted label</p>'
+        );
+      });
+
+      const htmlContent = mockPrintWindow.document.write.mock.calls[0][0];
+      expect(htmlContent).toContain("color: #000 !important");
+      expect(htmlContent).toContain("font-family: Arial");
+      expect(htmlContent).toContain("-webkit-text-fill-color: #000 !important");
+      expect(htmlContent).toContain("opacity: 1 !important");
+      expect(htmlContent).toContain("font-weight: 700 !important");
+    });
+
+    it("should remove the receipt template outer border", () => {
+      const { result } = renderHook(() => usePrint());
+
+      act(() => {
+        result.current.printReceipt(
+          '<table style="border: 1px solid #111111;"><tr><td>Receipt</td></tr></table>'
+        );
+      });
+
+      const htmlContent = mockPrintWindow.document.write.mock.calls[0][0];
+      expect(htmlContent).toContain(".receipt > table");
+      expect(htmlContent).toContain(".receipt > div");
+      expect(htmlContent).toContain("border: 0 !important");
+      expect(htmlContent).toContain("box-shadow: none !important");
+      expect(htmlContent).toContain("outline: 0 !important");
     });
   });
 
@@ -343,16 +403,15 @@ describe("usePrint Hook", () => {
       const { result } = renderHook(() => usePrint());
 
       // Mock window.open returning null (blocked popup)
-      (window.open as any) = vi.fn(() => null);
+      setWindowOpenMock(null);
 
-      // Mock document methods
-      const mockDiv = {
-        style: {},
-        innerHTML: "",
-      };
-      const originalCreateElement = document.createElement;
-      document.createElement = vi.fn(() => mockDiv as any);
-      document.body.appendChild = vi.fn();
+      const mockDiv = document.createElement("div");
+      const createElementSpy = vi
+        .spyOn(document, "createElement")
+        .mockReturnValue(mockDiv);
+      const appendChildSpy = vi
+        .spyOn(document.body, "appendChild")
+        .mockReturnValue(mockDiv);
 
       const originalBodyInnerHTML = document.body.innerHTML;
       Object.defineProperty(document.body, "innerHTML", {
@@ -365,14 +424,15 @@ describe("usePrint Hook", () => {
         result.current.printReceipt("<div>Test Receipt</div>");
       });
 
-      expect(document.createElement).toHaveBeenCalledWith("div");
-      expect(document.body.appendChild).toHaveBeenCalled();
+      expect(createElementSpy).toHaveBeenCalledWith("div");
+      expect(appendChildSpy).toHaveBeenCalled();
       expect(consoleError).toHaveBeenCalledWith(
         "Could not open print window - may be blocked by popup blocker"
       );
+      expect(mockDiv.innerHTML).toContain("<style>");
+      expect(mockDiv.innerHTML).toContain("color: #000 !important");
+      expect(mockDiv.innerHTML).toContain("border: 0 !important");
 
-      // Restore original methods
-      document.createElement = originalCreateElement;
     });
   });
 });

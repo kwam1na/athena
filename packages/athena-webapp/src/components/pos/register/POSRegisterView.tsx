@@ -71,14 +71,21 @@ function useCollapseSidebarForPosFlow() {
 }
 
 function ProductLookupEmptyState({
+  onActivate,
   workflowMode,
 }: {
+  onActivate?: () => void;
   workflowMode: RegisterWorkflowMode;
 }) {
   const isExpenseWorkflow = workflowMode === "expense";
 
   return (
-    <div className="flex h-full min-h-0 flex-col items-center justify-center rounded-lg border border-gray-200 bg-gradient-to-br from-gray-50/50 to-gray-100/30 p-8 text-center">
+    <button
+      type="button"
+      onClick={onActivate}
+      className="flex h-full min-h-0 w-full flex-col items-center justify-center rounded-lg border border-gray-200 bg-gradient-to-br from-gray-50/50 to-gray-100/30 p-8 text-center transition hover:border-blue-200 hover:from-blue-50/40 hover:to-gray-100/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-default disabled:hover:border-gray-200 disabled:hover:from-gray-50/50"
+      disabled={!onActivate}
+    >
       <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white text-muted-foreground shadow-sm ">
         <Search className="h-7 w-7" />
       </div>
@@ -107,7 +114,7 @@ function ProductLookupEmptyState({
           </kbd>
         </span>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -493,6 +500,16 @@ export function POSRegisterView({
     setIsPaymentEntryActive(true);
   }, [hasProductSearchIntent, viewModel.productEntry]);
 
+  const handleProductLookupEmptyStateActivate = useCallback(() => {
+    if (!isHeaderProductSearchSupported) {
+      return;
+    }
+
+    viewModel.productEntry?.setShowProductLookup?.(true);
+    headerProductSearchInputRef.current?.focus();
+    headerProductSearchInputRef.current?.select();
+  }, [isHeaderProductSearchSupported, viewModel.productEntry]);
+
   if (!viewModel.hasActiveStore) {
     return (
       <View
@@ -644,6 +661,11 @@ export function POSRegisterView({
                   </div>
                 ) : (
                   <ProductLookupEmptyState
+                    onActivate={
+                      isHeaderProductSearchSupported
+                        ? handleProductLookupEmptyStateActivate
+                        : undefined
+                    }
                     workflowMode={effectiveWorkflowMode}
                   />
                 )}

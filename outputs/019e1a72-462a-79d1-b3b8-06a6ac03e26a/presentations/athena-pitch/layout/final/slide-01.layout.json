@@ -1,0 +1,386 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/tr7bxq",
+    "id": "tr7bxq",
+    "slide": 1,
+    "layoutId": "6c34f00d-b3fe-41d6-b925-74ff7ca7bb12",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "7644c244-920e-4537-85b6-d0ca3a241d9a",
+    "masterLayoutName": "Master",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Aptos",
+      "Aptos Display"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "6c34f00d-b3fe-41d6-b925-74ff7ca7bb12",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "7644c244-920e-4537-85b6-d0ca3a241d9a",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "7644c244-920e-4537-85b6-d0ca3a241d9a",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/u9knih4b",
+      "id": "1",
+      "bbox": [
+        0,
+        0,
+        1280,
+        720
+      ],
+      "geometry": "rect",
+      "fillColor": "#FBFAF7",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/wb2hwfyx",
+      "id": "2",
+      "bbox": [
+        650,
+        84,
+        560,
+        392
+      ],
+      "alt": "01-daily-operations-clean.png",
+      "contentType": "image/png",
+      "asset": {
+        "assetId": "f6cc488c-b9ef-4813-b8cc-3939ca6a98e9",
+        "contentType": "image/png",
+        "byteLength": 140643
+      }
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/cfa9w3m9",
+      "id": "3",
+      "bbox": [
+        650,
+        84,
+        560,
+        392
+      ],
+      "geometry": "rect",
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "#CFC8BA",
+      "lineWidth": 1
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/jm1cfa9w",
+      "id": "4",
+      "bbox": [
+        58,
+        48,
+        360,
+        26
+      ],
+      "geometry": "rect",
+      "text": "ATHENA",
+      "textPreview": "ATHENA",
+      "resolvedFontSize": 14,
+      "resolvedTextStyle": {
+        "fontSize": 14,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "ATHENA"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "ATHENA",
+          "runs": [
+            {
+              "index": 1,
+              "text": "ATHENA",
+              "fontSize": 14,
+              "typeface": "Aptos",
+              "color": "#2E7D5B",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/u18jqh0f",
+      "id": "5",
+      "bbox": [
+        58,
+        108,
+        560,
+        156
+      ],
+      "geometry": "rect",
+      "text": "The business OS for the owner who runs everything.",
+      "textPreview": "The business OS for the owner who runs everything.",
+      "resolvedFontSize": 48,
+      "resolvedTextStyle": {
+        "fontSize": 48,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "The business OS for the"
+          },
+          {
+            "index": 2,
+            "text": "owner who runs"
+          },
+          {
+            "index": 3,
+            "text": "everything."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "The business OS for the owner who runs everything.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "The business OS for the owner who runs everything.",
+              "fontSize": 48,
+              "typeface": "Aptos Display",
+              "color": "#101827",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/1orytsvu",
+      "id": "6",
+      "bbox": [
+        62,
+        286,
+        500,
+        116
+      ],
+      "geometry": "rect",
+      "text": "Sell in person. Sell online. Replenish stock. Control cash. Run services. Close the day with evidence instead of guesswork.",
+      "textPreview": "Sell in person. Sell online. Replenish stock. Control cash. Run services. Close the day with evidence instead of guesswork.",
+      "resolvedFontSize": 20,
+      "resolvedTextStyle": {
+        "fontSize": 20,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Sell in person. Sell online. Replenish stock. Control"
+          },
+          {
+            "index": 2,
+            "text": "cash. Run services. Close the day with evidence"
+          },
+          {
+            "index": 3,
+            "text": "instead of guesswork."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Sell in person. Sell online. Replenish stock. Control cash. Run services. Close the day with evidence instead of guesswork.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Sell in person. Sell online. Replenish stock. Control cash. Run services. Close the day with evidence instead of guesswork.",
+              "fontSize": 20,
+              "typeface": "Aptos",
+              "color": "#5B6472"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/c7u54zid",
+      "id": "7",
+      "bbox": [
+        62,
+        438,
+        420,
+        28
+      ],
+      "geometry": "rect",
+      "text": "Built for solo retail and service operators",
+      "textPreview": "Built for solo retail and service operators",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "fontSize": 18,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Built for solo retail and service operators"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Built for solo retail and service operators",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Built for solo retail and service operators",
+              "fontSize": 18,
+              "typeface": "Aptos",
+              "color": "#101827",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/nap4r65w",
+      "id": "8",
+      "bbox": [
+        54,
+        684,
+        760,
+        22
+      ],
+      "geometry": "rect",
+      "text": "Source: Athena live app and repo business OS audit.",
+      "textPreview": "Source: Athena live app and repo business OS audit.",
+      "resolvedFontSize": 11,
+      "resolvedTextStyle": {
+        "fontSize": 11,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Source: Athena live app and repo business OS audit."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Source: Athena live app and repo business OS audit.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Source: Athena live app and repo business OS audit.",
+              "fontSize": 11,
+              "typeface": "Aptos",
+              "color": "#7B817E"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

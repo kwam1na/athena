@@ -1,0 +1,781 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/23eoxp",
+    "id": "23eoxp",
+    "slide": 8,
+    "layoutId": "6c34f00d-b3fe-41d6-b925-74ff7ca7bb12",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "7644c244-920e-4537-85b6-d0ca3a241d9a",
+    "masterLayoutName": "Master",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Aptos",
+      "Aptos Display"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "6c34f00d-b3fe-41d6-b925-74ff7ca7bb12",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "7644c244-920e-4537-85b6-d0ca3a241d9a",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "7644c244-920e-4537-85b6-d0ca3a241d9a",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/vy90je9c",
+      "id": "1",
+      "bbox": [
+        0,
+        0,
+        1280,
+        720
+      ],
+      "geometry": "rect",
+      "fillColor": "#101827",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/oj2t83it",
+      "id": "2",
+      "bbox": [
+        58,
+        48,
+        360,
+        26
+      ],
+      "geometry": "rect",
+      "text": "THE ASK",
+      "textPreview": "THE ASK",
+      "resolvedFontSize": 14,
+      "resolvedTextStyle": {
+        "fontSize": 14,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "THE ASK"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "THE ASK",
+          "runs": [
+            {
+              "index": 1,
+              "text": "THE ASK",
+              "fontSize": 14,
+              "typeface": "Aptos",
+              "color": "#91C7A9",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/d4vmtwra",
+      "id": "3",
+      "bbox": [
+        58,
+        110,
+        700,
+        116
+      ],
+      "geometry": "rect",
+      "text": "Athena helps one owner run like a team.",
+      "textPreview": "Athena helps one owner run like a team.",
+      "resolvedFontSize": 48,
+      "resolvedTextStyle": {
+        "fontSize": 48,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Athena helps one owner run"
+          },
+          {
+            "index": 2,
+            "text": "like a team."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Athena helps one owner run like a team.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Athena helps one owner run like a team.",
+              "fontSize": 48,
+              "typeface": "Aptos Display",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/61032lsz",
+      "id": "4",
+      "bbox": [
+        64,
+        260,
+        670,
+        90
+      ],
+      "geometry": "rect",
+      "text": "The pitch is simple: compress the daily back office into one calm control surface, then let every sale, stock move, service case, and cash action strengthen the next decision.",
+      "textPreview": "The pitch is simple: compress the daily back office into one calm control surface, then let every sale, stock move, service case, and cas...",
+      "resolvedFontSize": 24,
+      "resolvedTextStyle": {
+        "fontSize": 24,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "The pitch is simple: compress the daily back office into one"
+          },
+          {
+            "index": 2,
+            "text": "calm control surface, then let every sale, stock move, service"
+          },
+          {
+            "index": 3,
+            "text": "case, and cash action strengthen the next decision."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "The pitch is simple: compress the daily back office into one calm control surface, then let every sale, stock move, service case, and cash action strengthen the next decision.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "The pitch is simple: compress the daily back office into one calm control surface, then let every sale, stock move, service case, and cash action strengthen the next decision.",
+              "fontSize": 24,
+              "typeface": "Aptos",
+              "color": "#DDE4E0"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/vmtwra5g",
+      "id": "5",
+      "bbox": [
+        72,
+        416,
+        470,
+        70
+      ],
+      "geometry": "rect",
+      "fillColor": "#182330",
+      "lineColor": "#344457",
+      "lineWidth": 1
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/o7qpg3ex",
+      "id": "6",
+      "bbox": [
+        96,
+        430,
+        240,
+        24
+      ],
+      "geometry": "rect",
+      "text": "Fewer blind spots",
+      "textPreview": "Fewer blind spots",
+      "resolvedFontSize": 20,
+      "resolvedTextStyle": {
+        "fontSize": 20,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Fewer blind spots"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Fewer blind spots",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Fewer blind spots",
+              "fontSize": 20,
+              "typeface": "Aptos",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/dsji5sne",
+      "id": "7",
+      "bbox": [
+        96,
+        458,
+        390,
+        18
+      ],
+      "geometry": "rect",
+      "text": "cash, stock, orders, services, approvals",
+      "textPreview": "cash, stock, orders, services, approvals",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "fontSize": 13,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "cash, stock, orders, services, approvals"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "cash, stock, orders, services, approvals",
+          "runs": [
+            {
+              "index": 1,
+              "text": "cash, stock, orders, services, approvals",
+              "fontSize": 13,
+              "typeface": "Aptos",
+              "color": "#BFC9D1"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/6tovahoz",
+      "id": "8",
+      "bbox": [
+        612,
+        416,
+        470,
+        70
+      ],
+      "geometry": "rect",
+      "fillColor": "#182330",
+      "lineColor": "#344457",
+      "lineWidth": 1
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/vahoza1g",
+      "id": "9",
+      "bbox": [
+        636,
+        430,
+        240,
+        24
+      ],
+      "geometry": "rect",
+      "text": "Faster handoffs",
+      "textPreview": "Faster handoffs",
+      "resolvedFontSize": 20,
+      "resolvedTextStyle": {
+        "fontSize": 20,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Faster handoffs"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Faster handoffs",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Faster handoffs",
+              "fontSize": 20,
+              "typeface": "Aptos",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/7qpg3ex0",
+      "id": "10",
+      "bbox": [
+        636,
+        458,
+        390,
+        18
+      ],
+      "geometry": "rect",
+      "text": "daily open, close, queues, staff work",
+      "textPreview": "daily open, close, queues, staff work",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "fontSize": 13,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "daily open, close, queues, staff work"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "daily open, close, queues, staff work",
+          "runs": [
+            {
+              "index": 1,
+              "text": "daily open, close, queues, staff work",
+              "fontSize": 13,
+              "typeface": "Aptos",
+              "color": "#BFC9D1"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/i5sneloj",
+      "id": "11",
+      "bbox": [
+        72,
+        518,
+        470,
+        70
+      ],
+      "geometry": "rect",
+      "fillColor": "#182330",
+      "lineColor": "#344457",
+      "lineWidth": 1
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/pwb2hwfy",
+      "id": "12",
+      "bbox": [
+        96,
+        532,
+        240,
+        24
+      ],
+      "geometry": "rect",
+      "text": "Better customer memory",
+      "textPreview": "Better customer memory",
+      "resolvedFontSize": 20,
+      "resolvedTextStyle": {
+        "fontSize": 20,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Better customer memory"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Better customer memory",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Better customer memory",
+              "fontSize": 20,
+              "typeface": "Aptos",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/0bi9s36h",
+      "id": "13",
+      "bbox": [
+        96,
+        560,
+        390,
+        18
+      ],
+      "geometry": "rect",
+      "text": "online behavior plus transaction history",
+      "textPreview": "online behavior plus transaction history",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "fontSize": 13,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "online behavior plus transaction history"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "online behavior plus transaction history",
+          "runs": [
+            {
+              "index": 1,
+              "text": "online behavior plus transaction history",
+              "fontSize": 13,
+              "typeface": "Aptos",
+              "color": "#BFC9D1"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/7y1kre1w",
+      "id": "14",
+      "bbox": [
+        612,
+        518,
+        470,
+        70
+      ],
+      "geometry": "rect",
+      "fillColor": "#182330",
+      "lineColor": "#344457",
+      "lineWidth": 1
+    },
+    {
+      "order": 15,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ed8v6psf",
+      "id": "15",
+      "bbox": [
+        636,
+        532,
+        240,
+        24
+      ],
+      "geometry": "rect",
+      "text": "Owner leverage",
+      "textPreview": "Owner leverage",
+      "resolvedFontSize": 20,
+      "resolvedTextStyle": {
+        "fontSize": 20,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Owner leverage"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Owner leverage",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Owner leverage",
+              "fontSize": 20,
+              "typeface": "Aptos",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 16,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/p4r65wju",
+      "id": "16",
+      "bbox": [
+        636,
+        560,
+        390,
+        18
+      ],
+      "geometry": "rect",
+      "text": "the system remembers what the owner cannot",
+      "textPreview": "the system remembers what the owner cannot",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "fontSize": 13,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "the system remembers what the owner cannot"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "the system remembers what the owner cannot",
+          "runs": [
+            {
+              "index": 1,
+              "text": "the system remembers what the owner cannot",
+              "fontSize": 13,
+              "typeface": "Aptos",
+              "color": "#BFC9D1"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 17,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/wjudg7ad",
+      "id": "17",
+      "bbox": [
+        382,
+        640,
+        516,
+        38
+      ],
+      "geometry": "rect",
+      "fillColor": "#91C7A9",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 1
+    },
+    {
+      "order": 18,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/72x4nap4",
+      "id": "18",
+      "bbox": [
+        394,
+        650,
+        492,
+        18
+      ],
+      "geometry": "rect",
+      "text": "Run the business from the operating day outward",
+      "textPreview": "Run the business from the operating day outward",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "fontSize": 13,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Run the business from the operating day outward"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Run the business from the operating day outward",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Run the business from the operating day outward",
+              "fontSize": 13,
+              "typeface": "Aptos",
+              "color": "#101827",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}
