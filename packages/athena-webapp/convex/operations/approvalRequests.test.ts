@@ -104,6 +104,7 @@ function createApprovalRequestMutationCtx(args: {
         },
       ],
     ]),
+    skuActivityEvent: new Map<string, Record<string, unknown>>(),
     stockAdjustmentBatch: new Map<string, Record<string, unknown>>([
       [
         "batch-1",
@@ -148,11 +149,12 @@ function createApprovalRequestMutationCtx(args: {
     ]),
   };
   const insertCounters: Record<
-    "inventoryMovement" | "operationalEvent",
+    "inventoryMovement" | "operationalEvent" | "skuActivityEvent",
     number
   > = {
     inventoryMovement: 0,
     operationalEvent: 0,
+    skuActivityEvent: 0,
   };
 
   mockedAuthServer.getAuthUserId.mockResolvedValue(args.authUserId ?? null);
@@ -197,7 +199,11 @@ function createApprovalRequestMutationCtx(args: {
       };
     }
 
-    if (table === "inventoryMovement" || table === "operationalEvent") {
+    if (
+      table === "inventoryMovement" ||
+      table === "operationalEvent" ||
+      table === "skuActivityEvent"
+    ) {
       return {
         withIndex(
           _index: string,
@@ -220,6 +226,10 @@ function createApprovalRequestMutationCtx(args: {
               Array.from(tables[table].values()).filter((record) =>
                 filters.every(([field, value]) => record[field] === value),
               ),
+            first: async () =>
+              Array.from(tables[table].values()).find((record) =>
+                filters.every(([field, value]) => record[field] === value),
+              ) ?? null,
           };
         },
       };
@@ -239,7 +249,7 @@ function createApprovalRequestMutationCtx(args: {
         return tables[tableOrId as keyof typeof tables].get(id) ?? null;
       },
       async insert(
-        table: "inventoryMovement" | "operationalEvent",
+        table: "inventoryMovement" | "operationalEvent" | "skuActivityEvent",
         value: Record<string, unknown>,
       ) {
         insertCounters[table] += 1;

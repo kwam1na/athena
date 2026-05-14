@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Athena SKU Activity Tracing Plan</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #eef2f6;
+        --paper: #ffffff;
+        --ink: #17202a;
+        --muted: #596574;
+        --line: #d7dee8;
+        --strong: #263a54;
+        --accent: #0f6b5f;
+        --accent-soft: #dcefed;
+        --blue: #315f96;
+        --blue-soft: #e3edf8;
+        --amber: #765b16;
+        --amber-soft: #f3e8c9;
+        --red: #8a3d3a;
+        --red-soft: #f0dddc;
+        --green: #216b3c;
+        --green-soft: #e1f0e6;
+        --shadow: 0 24px 70px rgba(23, 32, 42, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        background:
+          linear-gradient(135deg, rgba(15, 107, 95, 0.12), transparent 34%),
+          linear-gradient(225deg, rgba(49, 95, 150, 0.16), transparent 36%),
+          var(--bg);
+        color: var(--ink);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        line-height: 1.55;
+      }
+
+      a {
+        color: var(--accent);
+        text-underline-offset: 0.18em;
+      }
+
+      .page {
+        width: min(1180px, calc(100% - 32px));
+        margin: 32px auto 56px;
+        background: var(--paper);
+        border: 1px solid var(--line);
+        box-shadow: var(--shadow);
+      }
+
+      .hero,
+      .section {
+        padding: 36px 54px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .hero {
+        background: linear-gradient(135deg, #ffffff 0%, #edf7f5 52%, #e9f0f8 100%);
+        padding-top: 52px;
+      }
+
+      .section:last-child {
+        border-bottom: 0;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin-top: 0;
+      }
+
+      h1 {
+        max-width: 860px;
+        margin-bottom: 16px;
+        font-size: clamp(2.15rem, 4vw, 4.2rem);
+        line-height: 1.02;
+        letter-spacing: 0;
+      }
+
+      h2 {
+        margin-bottom: 18px;
+        font-size: 1.55rem;
+        letter-spacing: 0;
+      }
+
+      h3 {
+        margin-bottom: 8px;
+        font-size: 1.05rem;
+      }
+
+      p {
+        max-width: 850px;
+      }
+
+      .eyebrow {
+        margin-bottom: 18px;
+        color: var(--accent);
+        font-size: 0.82rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .lede {
+        max-width: 880px;
+        color: #243246;
+        font-size: 1.1rem;
+      }
+
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 24px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 30px;
+        padding: 4px 10px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: #fff;
+        color: var(--muted);
+        font-size: 0.82rem;
+        font-weight: 650;
+      }
+
+      .toc {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 26px;
+      }
+
+      .toc a {
+        padding: 8px 11px;
+        border: 1px solid rgba(15, 107, 95, 0.24);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.72);
+        color: var(--accent);
+        font-size: 0.9rem;
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      .grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .grid.two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .grid.three {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+        padding: 18px;
+      }
+
+      .panel strong {
+        color: var(--strong);
+      }
+
+      .callout {
+        border-left: 5px solid var(--accent);
+        background: var(--accent-soft);
+        padding: 18px 20px;
+      }
+
+      .callout.warning {
+        border-left-color: var(--amber);
+        background: var(--amber-soft);
+      }
+
+      .callout.risk {
+        border-left-color: var(--red);
+        background: var(--red-soft);
+      }
+
+      ul,
+      ol {
+        margin: 0;
+        padding-left: 1.2rem;
+      }
+
+      li + li {
+        margin-top: 0.45rem;
+      }
+
+      code {
+        border-radius: 4px;
+        background: #edf1f6;
+        padding: 0.12rem 0.28rem;
+        font-family: "SFMono-Regular", Consolas, monospace;
+        font-size: 0.88em;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        font-size: 0.95rem;
+      }
+
+      th,
+      td {
+        padding: 13px 14px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        background: var(--blue-soft);
+        color: #203a58;
+        font-size: 0.78rem;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .flow {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 18px;
+      }
+
+      .flow-step {
+        min-height: 86px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #f9fbfd;
+        padding: 14px;
+      }
+
+      .flow-step span {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--accent);
+        font-size: 0.75rem;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+
+      .unit {
+        border-top: 4px solid var(--blue);
+      }
+
+      .unit h3 {
+        display: flex;
+        gap: 8px;
+        align-items: baseline;
+      }
+
+      .uid {
+        color: var(--blue);
+        font-size: 0.88rem;
+        font-weight: 850;
+      }
+
+      .unit-meta {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .footer-note {
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      @media (max-width: 880px) {
+        .page {
+          width: min(100%, calc(100% - 20px));
+          margin: 10px auto 28px;
+        }
+
+        .hero,
+        .section {
+          padding: 28px 22px;
+        }
+
+        .grid.two,
+        .grid.three,
+        .flow {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="hero">
+        <div class="eyebrow">Athena implementation plan</div>
+        <h1>Definitive SKU Activity Tracing</h1>
+        <p class="lede">
+          Add a source-aware SKU activity ledger and inspection surface so Athena can explain why a SKU is reserved, how availability changed, and which workflow caused each SKU-affecting event.
+        </p>
+        <div class="meta">
+          <span class="pill">Type: feature</span>
+          <span class="pill">Status: active</span>
+          <span class="pill">Date: 2026-05-13</span>
+          <span class="pill">Markdown sibling: <code>2026-05-13-002-feat-sku-activity-tracing-plan.md</code></span>
+        </div>
+        <div class="toc" aria-label="Plan sections">
+          <a href="#problem">Problem</a>
+          <a href="#decisions">Decisions</a>
+          <a href="#design">Design</a>
+          <a href="#units">Units</a>
+          <a href="#risks">Risks</a>
+          <a href="#success">Success</a>
+        </div>
+      </div>
+
+      <div id="problem" class="section">
+        <h2>Problem Frame</h2>
+        <div class="grid two">
+          <div class="callout warning">
+            <h3>Production symptom</h3>
+            <p>
+              SKU <code>KK38-X3C-MQE</code> had a traceable POS hold/release history, but the current <code>inventoryCount</code> and <code>quantityAvailable</code> gap still had no definitive source.
+            </p>
+          </div>
+          <div class="callout">
+            <h3>Target behavior</h3>
+            <p>
+              A store-scoped SKU query should return the current reservation explanation, historical timeline, linked source records, and a clear diagnostic when the remaining gap is unexplained.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Requirements Digest</h2>
+        <div class="grid three">
+          <div class="panel">
+            <h3>Trace reservations</h3>
+            <p>Record POS holds, checkout reservations, releases, expirations, and consumption with source context.</p>
+          </div>
+          <div class="panel">
+            <h3>Keep ledgers focused</h3>
+            <p><code>inventoryMovement</code> stays the committed stock-delta ledger; SKU activity covers both transient and committed facts.</p>
+          </div>
+          <div class="panel">
+            <h3>Expose answers</h3>
+            <p>Provide a backend query and small inspection surface that can answer future support/operator questions directly.</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="decisions" class="section">
+        <h2>Key Technical Decisions</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Decision</th>
+              <th>Why</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Add <code>skuActivityEvent</code></td>
+              <td>Reservations and releases are SKU facts but not always committed stock deltas, so they do not belong only in <code>inventoryMovement</code>.</td>
+            </tr>
+            <tr>
+              <td>Link to source records</td>
+              <td>The answer should point to POS sessions, checkout sessions, holds, orders, movements, operational events, or traces instead of standalone prose.</td>
+            </tr>
+            <tr>
+              <td>Instrument mutation boundaries</td>
+              <td>The ledger must be written where reservation or inventory state changes, otherwise cleanup and deletion will keep erasing evidence.</td>
+            </tr>
+            <tr>
+              <td>Trace checkout before changing checkout</td>
+              <td>Checkout currently reserves through <code>quantityAvailable</code>. The first release should explain that model without changing its semantics.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="design" class="section">
+        <h2>System Shape</h2>
+        <p>
+          Existing workflow-specific records remain authoritative. The new SKU activity layer records SKU-scoped facts and joins them into one timeline.
+        </p>
+        <div class="flow" aria-label="System flow">
+          <div class="flow-step"><span>Sources</span>POS, checkout, stock ops, orders, service usage</div>
+          <div class="flow-step"><span>Ledger</span><code>skuActivityEvent</code> rows with source links</div>
+          <div class="flow-step"><span>Read model</span>Timeline plus current reservation explanation</div>
+          <div class="flow-step"><span>Use</span>Operator/debug inspection and production diagnosis</div>
+        </div>
+      </div>
+
+      <div id="units" class="section">
+        <h2>Implementation Units</h2>
+        <div class="grid two">
+          <div class="panel unit">
+            <h3><span class="uid">U1</span> Ledger foundation</h3>
+            <p>Create schema, indexes, and helper functions for idempotent SKU activity events.</p>
+            <p class="unit-meta">Files: <code>convex/schemas/operations/skuActivityEvent.ts</code>, <code>convex/operations/skuActivity.ts</code></p>
+          </div>
+          <div class="panel unit">
+            <h3><span class="uid">U2</span> Read model and explainer</h3>
+            <p>Return timeline rows, current reservation summary, source labels, and unexplained-gap diagnostics.</p>
+            <p class="unit-meta">Depends on U1</p>
+          </div>
+          <div class="panel unit">
+            <h3><span class="uid">U3</span> POS reservation lifecycle</h3>
+            <p>Instrument hold acquire, adjust, release, expire, consume, void, and completion paths without changing POS inventory math.</p>
+            <p class="unit-meta">Depends on U1</p>
+          </div>
+          <div class="panel unit">
+            <h3><span class="uid">U4</span> Checkout reservations</h3>
+            <p>Record checkout reservation, adjustment, and release activity before cleanup deletes checkout rows.</p>
+            <p class="unit-meta">Depends on U1</p>
+          </div>
+          <div class="panel unit">
+            <h3><span class="uid">U5</span> Committed movements</h3>
+            <p>Link receiving, adjustments, sales, returns, exchanges, and service usage into SKU activity through <code>inventoryMovement</code>.</p>
+            <p class="unit-meta">Depends on U1</p>
+          </div>
+          <div class="panel unit">
+            <h3><span class="uid">U6</span> Inspection surface and docs</h3>
+            <p>Add a focused timeline/explainer UI or debug route, update agent docs, and add a solution note.</p>
+            <p class="unit-meta">Depends on U2-U5</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="risks" class="section">
+        <h2>Risks &amp; Mitigations</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Risk</th>
+              <th>Mitigation</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Duplicate rows under retry or cron replay</td>
+              <td>Source-scoped idempotency keys and replay tests.</td>
+            </tr>
+            <tr>
+              <td>Checkout availability behavior changes accidentally</td>
+              <td>Characterize existing checkout create/update/expiry behavior before adding activity writes.</td>
+            </tr>
+            <tr>
+              <td>POS hold release regresses into over-availability</td>
+              <td>Keep expired-ledger tests proving release/expiry does not restore SKU availability.</td>
+            </tr>
+            <tr>
+              <td>Historical inferred data appears authoritative</td>
+              <td>Mark backfilled events as inferred and keep unexplained-gap diagnostics explicit.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="success" class="section">
+        <h2>Success Metrics</h2>
+        <ul>
+          <li>A SKU activity query returns current reservation summary, timeline, linked source records, and diagnostics.</li>
+          <li>POS and checkout reservations produce activity for acquire, adjust, release, expire, and consume behavior.</li>
+          <li>Committed stock changes produce linked inventory movement and SKU activity rows.</li>
+          <li>The system distinguishes reserved by POS, reserved by checkout, not currently reserved, and unexplained availability gap.</li>
+        </ul>
+      </div>
+
+      <div class="section">
+        <h2>References</h2>
+        <ul>
+          <li><code>packages/athena-webapp/convex/operations/inventoryMovements.ts</code></li>
+          <li><code>packages/athena-webapp/convex/inventory/helpers/inventoryHolds.ts</code></li>
+          <li><code>packages/athena-webapp/convex/storeFront/checkoutSession.ts</code></li>
+          <li><code>docs/solutions/performance/athena-pos-cart-latency-foundation-2026-05-05.md</code></li>
+          <li><code>docs/solutions/logic-errors/athena-stock-adjustments-checkout-reservations-2026-05-08.md</code></li>
+        </ul>
+        <p class="footer-note">
+          Full implementation details, file lists, and test scenarios are in the markdown plan next to this HTML digest.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

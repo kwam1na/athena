@@ -55,6 +55,7 @@ function createCycleCountDraftCtx() {
         },
       ],
     ]),
+    skuActivityEvent: new Map<string, Record<string, any>>(),
     stockAdjustmentBatch: new Map<string, Record<string, any>>(),
     store: new Map<string, Record<string, any>>([
       ["store-1", { _id: "store-1", organizationId: "org-1" }],

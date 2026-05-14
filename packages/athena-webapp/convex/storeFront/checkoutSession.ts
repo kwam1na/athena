@@ -25,6 +25,11 @@ import {
   calculateItemsSubtotal,
   resolveServerDeliveryFee,
 } from "./helpers/paymentHelpers";
+import {
+  recordSkuActivityEventWithCtx,
+  type RecordSkuActivityEventArgs,
+  type SkuActivityStatus,
+} from "../operations/skuActivity";
 
 const entity = "checkoutSession";
 
@@ -42,6 +47,63 @@ type Product = {
 
 type AvailabilityUpdate = { id: Id<"productSku">; change: number };
 type SessionItemSnapshot = { price: number; quantity: number };
+type CheckoutReservationActivityInput = {
+  activityType: string;
+  status: SkuActivityStatus;
+  sessionId: Id<"checkoutSession">;
+  storeId: Id<"store">;
+  storeFrontUserId: Id<"storeFrontUser"> | Id<"guest">;
+  productId: Id<"product">;
+  productSkuId: Id<"productSku">;
+  quantity: number;
+  quantityDelta: number;
+  sourceLineId?: Id<"checkoutSessionItem">;
+  reason?: string;
+};
+
+export function buildCheckoutReservationActivityArgs(
+  input: CheckoutReservationActivityInput,
+): RecordSkuActivityEventArgs {
+  const sourceLineId = input.sourceLineId ?? input.productSkuId;
+
+  return {
+    activityType: input.activityType,
+    checkoutSessionId: input.sessionId,
+    idempotencyKey: `checkoutSession:${input.sessionId}:${sourceLineId}:${input.activityType}:${input.quantity}:${input.status}`,
+    metadata: {
+      reason: input.reason,
+      storeFrontUserId: input.storeFrontUserId,
+    },
+    occurredAt: Date.now(),
+    productId: input.productId,
+    productSkuId: input.productSkuId,
+    quantityDelta: input.quantityDelta,
+    reservationQuantity: input.quantity,
+    sourceId: input.sessionId,
+    sourceLineId: input.sourceLineId,
+    sourceType: "checkoutSession",
+    status: input.status,
+    storeId: input.storeId,
+  };
+}
+
+export async function recordCheckoutReservationActivities(
+  ctx: MutationCtx,
+  activities: CheckoutReservationActivityInput[],
+) {
+  if (activities.length === 0) {
+    return [];
+  }
+
+  return Promise.all(
+    activities.map((activity) =>
+      recordSkuActivityEventWithCtx(
+        ctx,
+        buildCheckoutReservationActivityArgs(activity),
+      ),
+    ),
+  );
+}
 
 async function listSessionItems(
   ctx: QueryCtx | MutationCtx,
@@ -181,8 +243,7 @@ export const create = mutation({
         unavailableProducts: invisibleProductSkus.map((sku) => ({
           productSkuId: sku._id,
           requested:
-            products.find((p) => p.productSkuId === sku._id)?.quantity ||
-            0,
+            products.find((p) => p.productSkuId === sku._id)?.quantity || 0,
           available: 0,
         })),
       };
@@ -267,15 +328,24 @@ export const create = mutation({
     });
 
     // Create session items
-    await createSessionItems(
-      ctx,
-      sessionId,
-      args.storeFrontUserId,
-      products,
-    );
+    await createSessionItems(ctx, sessionId, args.storeFrontUserId, products);
 
     // Update availability counts
     await updateProductAvailability(ctx, products, productSkus);
+    await recordCheckoutReservationActivities(
+      ctx,
+      products.map((product) => ({
+        activityType: "reservation_acquired",
+        productId: product.productId,
+        productSkuId: product.productSkuId,
+        quantity: product.quantity,
+        quantityDelta: -product.quantity,
+        sessionId,
+        status: "active",
+        storeFrontUserId: args.storeFrontUserId,
+        storeId: args.storeId,
+      })),
+    );
 
     // Auto-apply best-value promo code
     console.log(
@@ -425,6 +495,30 @@ export const releaseCheckoutItems = internalMutation({
         ),
       );
 
+      const releaseStatus =
+        !args.externalReferences || args.externalReferences.length === 0
+          ? "expired"
+          : "released";
+      await recordCheckoutReservationActivities(
+        ctx,
+        sessionItems.map((item) => ({
+          activityType:
+            releaseStatus === "expired"
+              ? "reservation_expired"
+              : "reservation_released",
+          productId: item.productId,
+          productSkuId: item.productSkuId,
+          quantity: item.quantity,
+          quantityDelta: item.quantity,
+          reason: releaseStatus,
+          sessionId: session._id,
+          sourceLineId: item._id,
+          status: releaseStatus,
+          storeFrontUserId: item.storeFrontUserId,
+          storeId: session.storeId,
+        })),
+      );
+
       // Delete session items and the expired session
       await Promise.all([
         ...sessionItems.map((item) =>
@@ -553,11 +647,28 @@ export const completeCheckoutSessions = internalMutation({
 
     // set all sessions to completed
     await Promise.all(
-      sessions.map((session) =>
-        ctx.db.patch("checkoutSession", session._id, {
+      sessions.map(async (session) => {
+        await ctx.db.patch("checkoutSession", session._id, {
           hasCompletedCheckoutSession: true,
-        }),
-      ),
+        });
+        const sessionItems = await listSessionItems(ctx, session._id);
+        await recordCheckoutReservationActivities(
+          ctx,
+          sessionItems.map((item) => ({
+            activityType: "reservation_consumed",
+            productId: item.productId,
+            productSkuId: item.productSkuId,
+            quantity: item.quantity,
+            quantityDelta: 0,
+            reason: "completed",
+            sessionId: session._id,
+            sourceLineId: item._id,
+            status: "consumed",
+            storeFrontUserId: item.storeFrontUserId,
+            storeId: session.storeId,
+          })),
+        );
+      }),
     );
 
     console.log(
@@ -660,6 +771,29 @@ export const updateCheckoutSession = internalMutation({
 
       if (!session) {
         return { success: false, message: "Invalid session." };
+      }
+
+      if (
+        args.hasCompletedCheckoutSession === true &&
+        currentSession.hasCompletedCheckoutSession !== true
+      ) {
+        const sessionItems = await listSessionItems(ctx, args.id);
+        await recordCheckoutReservationActivities(
+          ctx,
+          sessionItems.map((item) => ({
+            activityType: "reservation_consumed",
+            productId: item.productId,
+            productSkuId: item.productSkuId,
+            quantity: item.quantity,
+            quantityDelta: 0,
+            reason: "completed",
+            sessionId: args.id,
+            sourceLineId: item._id,
+            status: "consumed",
+            storeFrontUserId: item.storeFrontUserId,
+            storeId: session.storeId,
+          })),
+        );
       }
 
       if (args.action === "place-order") {
@@ -1106,6 +1240,7 @@ async function updateExistingSession(
   }[] = [];
   const itemsToDelete: Id<"checkoutSessionItem">[] = [];
   const availabilityUpdates: AvailabilityUpdate[] = [];
+  const reservationActivities: CheckoutReservationActivityInput[] = [];
 
   for (const product of products) {
     const existingItem = sessionItemsMap.get(product.productSkuId);
@@ -1121,6 +1256,20 @@ async function updateExistingSession(
 
       if (diff !== 0) {
         availabilityUpdates.push({ id: product.productSkuId, change: -diff });
+        reservationActivities.push({
+          activityType:
+            diff > 0 ? "reservation_acquired" : "reservation_released",
+          productId: product.productId,
+          productSkuId: product.productSkuId,
+          quantity: Math.abs(diff),
+          quantityDelta: -diff,
+          reason: "session_updated",
+          sessionId: session._id,
+          sourceLineId: existingItem._id,
+          status: diff > 0 ? "active" : "released",
+          storeFrontUserId,
+          storeId: session.storeId,
+        });
       }
       sessionItemsMap.delete(product.productSkuId);
     } else {
@@ -1137,6 +1286,18 @@ async function updateExistingSession(
         id: product.productSkuId,
         change: -product.quantity,
       });
+      reservationActivities.push({
+        activityType: "reservation_acquired",
+        productId: product.productId,
+        productSkuId: product.productSkuId,
+        quantity: product.quantity,
+        quantityDelta: -product.quantity,
+        reason: "session_updated",
+        sessionId: session._id,
+        status: "active",
+        storeFrontUserId,
+        storeId: session.storeId,
+      });
     }
   }
 
@@ -1146,19 +1307,48 @@ async function updateExistingSession(
       id: staleItem.productSkuId,
       change: staleItem.quantity,
     });
+    reservationActivities.push({
+      activityType: "reservation_released",
+      productId: staleItem.productId,
+      productSkuId: staleItem.productSkuId,
+      quantity: staleItem.quantity,
+      quantityDelta: staleItem.quantity,
+      reason: "session_updated",
+      sessionId: session._id,
+      sourceLineId: staleItem._id,
+      status: "released",
+      storeFrontUserId,
+      storeId: session.storeId,
+    });
   }
 
   // Perform batch operations
+  const insertedItemIds = await Promise.all(
+    itemsToInsert.map((item) => ctx.db.insert("checkoutSessionItem", item)),
+  );
+
+  let insertedItemIndex = 0;
+  for (const activity of reservationActivities) {
+    if (
+      activity.activityType === "reservation_acquired" &&
+      !activity.sourceLineId
+    ) {
+      activity.sourceLineId = insertedItemIds[insertedItemIndex++];
+    }
+  }
+
   await Promise.all([
-    ...itemsToInsert.map((item) => ctx.db.insert("checkoutSessionItem", item)),
     ...itemsToUpdate.map(({ id, price, quantity }) =>
       ctx.db.patch("checkoutSessionItem", id, { price, quantity }),
     ),
-    ...itemsToDelete.map((id) => ctx.db.delete("checkoutSessionItem", id)),
     ...availabilityUpdates.map(({ id, change }) =>
       updateAvailability(ctx, id, change),
     ),
   ]);
+  await recordCheckoutReservationActivities(ctx, reservationActivities);
+  await Promise.all(
+    itemsToDelete.map((id) => ctx.db.delete("checkoutSessionItem", id)),
+  );
 
   const updatedSessionItems = await ctx.db
     .query("checkoutSessionItem")

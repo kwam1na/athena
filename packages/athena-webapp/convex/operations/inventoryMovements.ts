@@ -1,6 +1,14 @@
-import { internalMutation, internalQuery, MutationCtx } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
+import {
+  internalMutation,
+  internalQuery,
+  MutationCtx,
+} from "../_generated/server";
 import { v } from "convex/values";
+import {
+  recordSkuActivityEventWithCtx,
+  type RecordSkuActivityEventArgs,
+} from "./skuActivity";
 
 export type RecordInventoryMovementArgs = {
   storeId: Id<"store">;
@@ -22,6 +30,75 @@ export type RecordInventoryMovementArgs = {
   notes?: string;
 };
 
+export type RecordSkuActivityForMovementArgs = RecordInventoryMovementArgs & {
+  inventoryMovementId: Id<"inventoryMovement">;
+};
+
+function getSkuActivityTypeForMovement(movementType: string) {
+  const activityTypes: Record<string, string> = {
+    adjustment: "stock_adjustment",
+    cycle_count: "stock_cycle_count",
+    exchange: "stock_exchange",
+    fulfillment: "stock_fulfillment",
+    receipt: "stock_receipt",
+    restock: "stock_restock",
+    sale: "stock_sale",
+    service_item_received: "stock_service_item_received",
+    service_material_consumed: "stock_service_material_consumed",
+    service_material_returned: "stock_service_material_returned",
+  };
+
+  return activityTypes[movementType] ?? `stock_${movementType}`;
+}
+
+export function buildSkuActivityForInventoryMovement(
+  args: RecordSkuActivityForMovementArgs,
+): RecordSkuActivityEventArgs | null {
+  if (!args.productSkuId) {
+    return null;
+  }
+
+  return {
+    actorStaffProfileId: args.actorStaffProfileId,
+    actorUserId: args.actorUserId,
+    activityType: getSkuActivityTypeForMovement(args.movementType),
+    customerProfileId: args.customerProfileId,
+    idempotencyKey: `inventoryMovement:${args.inventoryMovementId}`,
+    inventoryMovementId: args.inventoryMovementId,
+    metadata: {
+      movementType: args.movementType,
+      notes: args.notes,
+      reasonCode: args.reasonCode,
+    },
+    occurredAt: Date.now(),
+    onlineOrderId: args.onlineOrderId,
+    organizationId: args.organizationId,
+    posTransactionId: args.posTransactionId,
+    productId: args.productId,
+    productSkuId: args.productSkuId,
+    registerSessionId: args.registerSessionId,
+    sourceId: args.sourceId,
+    sourceType: args.sourceType,
+    status: "committed",
+    stockQuantityDelta: args.quantityDelta,
+    storeId: args.storeId,
+    workItemId: args.workItemId,
+  };
+}
+
+export async function recordSkuActivityForInventoryMovementWithCtx(
+  ctx: MutationCtx,
+  args: RecordSkuActivityForMovementArgs,
+) {
+  const activityArgs = buildSkuActivityForInventoryMovement(args);
+
+  if (!activityArgs) {
+    return null;
+  }
+
+  return recordSkuActivityEventWithCtx(ctx, activityArgs);
+}
+
 export function buildInventoryMovement(args: RecordInventoryMovementArgs) {
   if (args.quantityDelta === 0) {
     throw new Error("Inventory movement requires a non-zero quantity delta");
@@ -34,7 +111,7 @@ export function buildInventoryMovement(args: RecordInventoryMovementArgs) {
 }
 
 export function summarizeInventoryMovements(
-  movements: Array<Pick<{ quantityDelta: number }, "quantityDelta">>
+  movements: Array<Pick<{ quantityDelta: number }, "quantityDelta">>,
 ) {
   return movements.reduce(
     (summary, movement) => {
@@ -44,7 +121,7 @@ export function summarizeInventoryMovements(
         netDelta: nextNet,
       };
     },
-    { movementCount: 0, netDelta: 0 }
+    { movementCount: 0, netDelta: 0 },
   );
 }
 
@@ -56,7 +133,7 @@ function matchesExistingMovement(
     productSkuId?: Id<"productSku">;
     reasonCode?: string;
   },
-  args: RecordInventoryMovementArgs
+  args: RecordInventoryMovementArgs,
 ) {
   return (
     existingMovement.movementType === args.movementType &&
@@ -69,7 +146,7 @@ function matchesExistingMovement(
 
 export async function recordInventoryMovementWithCtx(
   ctx: MutationCtx,
-  args: RecordInventoryMovementArgs
+  args: RecordInventoryMovementArgs,
 ) {
   // eslint-disable-next-line @convex-dev/no-collect-in-query -- Source-scoped dedupe needs the full indexed set for this source, which is bounded by the originating operation's line items.
   const existingMovements = await ctx.db
@@ -78,23 +155,36 @@ export async function recordInventoryMovementWithCtx(
       q
         .eq("storeId", args.storeId)
         .eq("sourceType", args.sourceType)
-        .eq("sourceId", args.sourceId)
+        .eq("sourceId", args.sourceId),
     )
     .collect();
 
   const existingMovement = existingMovements.find((movement) =>
-    matchesExistingMovement(movement, args)
+    matchesExistingMovement(movement, args),
   );
 
   if (existingMovement) {
+    await recordSkuActivityForInventoryMovementWithCtx(ctx, {
+      ...args,
+      inventoryMovementId: existingMovement._id,
+    });
     return existingMovement;
   }
 
   const movementId = await ctx.db.insert(
     "inventoryMovement",
-    buildInventoryMovement(args)
+    buildInventoryMovement(args),
   );
-  return ctx.db.get("inventoryMovement", movementId);
+  const movement = await ctx.db.get("inventoryMovement", movementId);
+
+  if (movement) {
+    await recordSkuActivityForInventoryMovementWithCtx(ctx, {
+      ...args,
+      inventoryMovementId: movement._id,
+    });
+  }
+
+  return movement;
 }
 
 export const recordInventoryMovement = internalMutation({
@@ -130,7 +220,7 @@ export const listInventoryMovementsForProductSku = internalQuery({
     ctx.db
       .query("inventoryMovement")
       .withIndex("by_storeId_productSkuId", (q) =>
-        q.eq("storeId", args.storeId).eq("productSkuId", args.productSkuId)
+        q.eq("storeId", args.storeId).eq("productSkuId", args.productSkuId),
       )
       .collect(),
 });

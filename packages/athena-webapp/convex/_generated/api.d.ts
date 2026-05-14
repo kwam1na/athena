@@ -140,6 +140,7 @@ import type * as operations_paymentAllocations from "../operations/paymentAlloca
 import type * as operations_registerSessionTracing from "../operations/registerSessionTracing.js";
 import type * as operations_registerSessions from "../operations/registerSessions.js";
 import type * as operations_serviceIntake from "../operations/serviceIntake.js";
+import type * as operations_skuActivity from "../operations/skuActivity.js";
 import type * as operations_staffCredentials from "../operations/staffCredentials.js";
 import type * as operations_staffProfiles from "../operations/staffProfiles.js";
 import type * as operations_staffRoles from "../operations/staffRoles.js";
@@ -226,6 +227,7 @@ import type * as schemas_operations_operationalEvent from "../schemas/operations
 import type * as schemas_operations_operationalWorkItem from "../schemas/operations/operationalWorkItem.js";
 import type * as schemas_operations_paymentAllocation from "../schemas/operations/paymentAllocation.js";
 import type * as schemas_operations_registerSession from "../schemas/operations/registerSession.js";
+import type * as schemas_operations_skuActivityEvent from "../schemas/operations/skuActivityEvent.js";
 import type * as schemas_operations_staffCredential from "../schemas/operations/staffCredential.js";
 import type * as schemas_operations_staffProfile from "../schemas/operations/staffProfile.js";
 import type * as schemas_operations_staffRoleAssignment from "../schemas/operations/staffRoleAssignment.js";
@@ -469,6 +471,7 @@ declare const fullApi: ApiFromModules<{
   "operations/registerSessionTracing": typeof operations_registerSessionTracing;
   "operations/registerSessions": typeof operations_registerSessions;
   "operations/serviceIntake": typeof operations_serviceIntake;
+  "operations/skuActivity": typeof operations_skuActivity;
   "operations/staffCredentials": typeof operations_staffCredentials;
   "operations/staffProfiles": typeof operations_staffProfiles;
   "operations/staffRoles": typeof operations_staffRoles;
@@ -555,6 +558,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/operations/operationalWorkItem": typeof schemas_operations_operationalWorkItem;
   "schemas/operations/paymentAllocation": typeof schemas_operations_paymentAllocation;
   "schemas/operations/registerSession": typeof schemas_operations_registerSession;
+  "schemas/operations/skuActivityEvent": typeof schemas_operations_skuActivityEvent;
   "schemas/operations/staffCredential": typeof schemas_operations_staffCredential;
   "schemas/operations/staffProfile": typeof schemas_operations_staffProfile;
   "schemas/operations/staffRoleAssignment": typeof schemas_operations_staffRoleAssignment;

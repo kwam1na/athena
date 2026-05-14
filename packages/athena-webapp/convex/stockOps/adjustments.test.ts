@@ -216,6 +216,7 @@ function createApprovalDecisionMutationCtx() {
         },
       ],
     ]),
+    skuActivityEvent: new Map<string, Record<string, unknown>>(),
     stockAdjustmentBatch: new Map<string, Record<string, unknown>>([
       [
         "batch-1",
@@ -250,12 +251,18 @@ function createApprovalDecisionMutationCtx() {
       ],
     ]),
   };
-  const insertCounters: Record<"inventoryMovement" | "operationalEvent", number> = {
+  const insertCounters: Record<
+    "inventoryMovement" | "operationalEvent" | "skuActivityEvent",
+    number
+  > = {
     inventoryMovement: 0,
     operationalEvent: 0,
+    skuActivityEvent: 0,
   };
 
-  const queryTable = (table: "inventoryMovement" | "operationalEvent") => ({
+  const queryTable = (
+    table: "inventoryMovement" | "operationalEvent" | "skuActivityEvent"
+  ) => ({
     withIndex(
       _index: string,
       applyIndex: (query: {
@@ -277,6 +284,10 @@ function createApprovalDecisionMutationCtx() {
           Array.from(tables[table].values()).filter((record) =>
             filters.every(([field, value]) => record[field] === value)
           ),
+        first: async () =>
+          Array.from(tables[table].values()).find((record) =>
+            filters.every(([field, value]) => record[field] === value)
+          ) ?? null,
       };
     },
   });
@@ -287,7 +298,7 @@ function createApprovalDecisionMutationCtx() {
         return tables[table].get(id) ?? null;
       },
       async insert(
-        table: "inventoryMovement" | "operationalEvent",
+        table: "inventoryMovement" | "operationalEvent" | "skuActivityEvent",
         value: Record<string, unknown>
       ) {
         insertCounters[table] += 1;
@@ -308,7 +319,9 @@ function createApprovalDecisionMutationCtx() {
 
         tables[table].set(id, { ...existingRecord, ...value });
       },
-      query(table: "inventoryMovement" | "operationalEvent") {
+      query(
+        table: "inventoryMovement" | "operationalEvent" | "skuActivityEvent"
+      ) {
         return queryTable(table);
       },
     },
@@ -364,6 +377,7 @@ function createSubmissionMutationCtx(args: {
         },
       ],
     ]),
+    skuActivityEvent: new Map<string, Record<string, unknown>>(),
     stockAdjustmentBatch: new Map<string, Record<string, unknown>>(),
     store: new Map<string, Record<string, unknown>>([
       [
@@ -389,6 +403,7 @@ function createSubmissionMutationCtx(args: {
     | "inventoryMovement"
     | "operationalEvent"
     | "operationalWorkItem"
+    | "skuActivityEvent"
     | "stockAdjustmentBatch",
     number
   > = {
@@ -396,13 +411,18 @@ function createSubmissionMutationCtx(args: {
     inventoryMovement: 0,
     operationalEvent: 0,
     operationalWorkItem: 0,
+    skuActivityEvent: 0,
     stockAdjustmentBatch: 0,
   };
 
   mockedAuthServer.getAuthUserId.mockResolvedValue(args.authUserId ?? null);
 
   const indexedQuery = (
-    table: "inventoryMovement" | "operationalEvent" | "stockAdjustmentBatch"
+    table:
+      | "inventoryMovement"
+      | "operationalEvent"
+      | "skuActivityEvent"
+      | "stockAdjustmentBatch"
   ) => ({
     withIndex(
       _index: string,
@@ -449,6 +469,7 @@ function createSubmissionMutationCtx(args: {
           | "inventoryMovement"
           | "operationalEvent"
           | "operationalWorkItem"
+          | "skuActivityEvent"
           | "stockAdjustmentBatch",
         value: Record<string, unknown>
       ) {
@@ -513,6 +534,7 @@ function createSubmissionMutationCtx(args: {
         if (
           table === "inventoryMovement" ||
           table === "operationalEvent" ||
+          table === "skuActivityEvent" ||
           table === "stockAdjustmentBatch"
         ) {
           return indexedQuery(table);
