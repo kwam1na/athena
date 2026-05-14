@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { PinInput } from "@/components/pos/PinInput";
@@ -28,6 +28,10 @@ export type StaffAuthenticationResult = {
   approvedByStaffProfileId?: Id<"staffProfile">;
   elevationId?: Id<"managerElevation">;
   expiresAt?: number;
+  posLocalStaffProof?: {
+    expiresAt: number;
+    token: string;
+  };
   staffProfile: {
     firstName?: string | null;
     fullName?: string | null;
@@ -102,13 +106,7 @@ export function StaffAuthenticationDialog({
     return () => window.clearTimeout(focusTimer);
   }, [open]);
 
-  useEffect(() => {
-    if (canSubmit && mode === "authenticate") {
-      void handleSubmit();
-    }
-  }, [canSubmit, mode]);
-
-  async function handleSubmit() {
+  const handleSubmit = useCallback(async () => {
     if (!username.trim()) {
       toast.error("Username required. Enter a username to continue.");
       return;
@@ -164,7 +162,20 @@ export function StaffAuthenticationDialog({
     setUsername("");
     setPin("");
     setMode("authenticate");
-  }
+  }, [
+    getSuccessMessage,
+    mode,
+    onAuthenticate,
+    onAuthenticated,
+    pin,
+    username,
+  ]);
+
+  useEffect(() => {
+    if (canSubmit && mode === "authenticate") {
+      void handleSubmit();
+    }
+  }, [canSubmit, handleSubmit, mode]);
 
   function handleKeyDown(event: React.KeyboardEvent) {
     if (event.key === "Enter" && canSubmit) {

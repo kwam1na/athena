@@ -30,9 +30,16 @@ import { parseDisplayAmountInput } from "@/lib/pos/displayAmounts";
 import { toOperatorMessage } from "@/lib/errors/operatorMessages";
 import { isApprovalRequiredResult, runCommand } from "@/lib/errors/runCommand";
 import type { CommandApprovalProofResult } from "@/components/operations/CommandApprovalDialog";
+import type { StaffAuthenticationResult } from "@/components/staff-auth/StaffAuthenticationDialog";
 import { useApprovedCommand } from "@/components/operations/useApprovedCommand";
 import { logger } from "@/lib/logger";
 import { useConvexCommandGateway } from "@/lib/pos/infrastructure/convex/commandGateway";
+import {
+  createIndexedDbPosLocalStorageAdapter,
+  createPosLocalStore,
+  type PosLocalCloudMapping,
+} from "@/lib/pos/infrastructure/local/posLocalStore";
+import { usePosLocalSyncRuntimeStatus } from "@/lib/pos/infrastructure/local/usePosLocalSyncRuntime";
 import {
   useConvexRegisterCatalog,
   useConvexRegisterCatalogAvailability,
@@ -71,6 +78,24 @@ import {
   type RegisterCatalogAvailability,
 } from "./catalogSearchPresentation";
 import { useRegisterCatalogIndex } from "./useRegisterCatalogIndex";
+import {
+  buildPosSyncStatusPresentation,
+  type PosReconciliationItem,
+} from "@/lib/pos/presentation/syncStatusPresentation";
+
+type LocalSyncStatusSource = {
+  description?: string | null;
+  label?: string | null;
+  onRetrySync?: (() => void) | null;
+  pendingEventCount?: number | null;
+  reconciliationItems?: PosReconciliationItem[] | null;
+  status?: string | null;
+};
+
+type LocalSyncRecord = {
+  localSyncStatus?: LocalSyncStatusSource | null;
+  syncStatus?: LocalSyncStatusSource | string | null;
+};
 
 function hasCustomerDetails(
   customer: CustomerInfo | undefined | null,
@@ -127,6 +152,17 @@ function createPaymentId(): string {
   );
 }
 
+function createLocalFallbackId(prefix: string): string {
+  const uniqueId =
+    globalThis.crypto?.randomUUID?.() ??
+    `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return `${prefix}-${uniqueId}`;
+}
+
+function isLocalFallbackId(value: unknown, prefix: string): boolean {
+  return typeof value === "string" && value.startsWith(`${prefix}-`);
+}
+
 function trimOptional(value: string): string | undefined {
   const trimmedValue = value.trim();
   return trimmedValue.length > 0 ? trimmedValue : undefined;
@@ -134,6 +170,94 @@ function trimOptional(value: string): string | undefined {
 
 function presentOperatorError(message: string): void {
   toast.error(toOperatorMessage(message));
+}
+
+function shouldSaveLocalFallback(result: unknown) {
+  if (!result || typeof result !== "object") {
+    return false;
+  }
+
+  const record = result as {
+    code?: string;
+    error?: { code?: string };
+    kind?: string;
+  };
+  const code = record.code ?? record.error?.code;
+  return (
+    record.kind === "unexpected_error" ||
+    code === "unavailable" ||
+    code === "unknown"
+  );
+}
+
+async function appendSyncedLocalPosEventBestEffort(
+  input: Parameters<ReturnType<typeof createPosLocalStore>["appendEvent"]>[0],
+  mappings: Array<Omit<PosLocalCloudMapping, "mappedAt">> = [],
+) {
+  return appendLocalPosEventBestEffort(input, {
+    mappings,
+    syncStatus: "synced",
+  });
+}
+
+async function appendPendingLocalPosEventBestEffort(
+  input: Parameters<ReturnType<typeof createPosLocalStore>["appendEvent"]>[0],
+) {
+  return appendLocalPosEventBestEffort(input, { syncStatus: "pending" });
+}
+
+async function appendLocalPosEventBestEffort(
+  input: Parameters<ReturnType<typeof createPosLocalStore>["appendEvent"]>[0],
+  options: {
+    mappings?: Array<Omit<PosLocalCloudMapping, "mappedAt">>;
+    syncStatus: "pending" | "synced";
+  },
+) {
+  if (typeof indexedDB === "undefined") return;
+
+  const store = createPosLocalStore({
+    adapter: createIndexedDbPosLocalStorageAdapter(),
+  });
+  const append = await store.appendEvent(input);
+  if (!append.ok) return false;
+
+  if (options.syncStatus === "synced") {
+    await store.markEventsSynced([append.value.localEventId]);
+  }
+  await Promise.all(
+    (options.mappings ?? []).map((mapping) =>
+      store.writeLocalCloudMapping({
+        ...mapping,
+        mappedAt: Date.now(),
+      }),
+    ),
+  );
+  return true;
+}
+
+function readLocalSyncStatus(
+  ...sources: Array<unknown>
+): LocalSyncStatusSource | null {
+  for (const source of sources) {
+    if (!source || typeof source !== "object") {
+      continue;
+    }
+
+    const record = source as LocalSyncRecord;
+    if (record.localSyncStatus && typeof record.localSyncStatus === "object") {
+      return record.localSyncStatus;
+    }
+
+    if (typeof record.syncStatus === "string") {
+      return { status: record.syncStatus };
+    }
+
+    if (record.syncStatus && typeof record.syncStatus === "object") {
+      return record.syncStatus;
+    }
+  }
+
+  return null;
 }
 
 function mapProductToOptimisticCartItem(
@@ -157,6 +281,74 @@ function mapProductToOptimisticCartItem(
   };
 }
 
+function buildLocalCartItemPayload(input: {
+  localItemId: string;
+  product: Product;
+  quantity: number;
+}) {
+  const { localItemId, product, quantity } = input;
+  return {
+    localItemId,
+    productId: product.productId,
+    productSkuId: product.skuId,
+    productSku: product.sku || "",
+    barcode: product.barcode || null,
+    productName: product.name,
+    price: product.price,
+    quantity,
+    quantityAvailable: product.quantityAvailable,
+    image: product.image || null,
+    size: product.size || null,
+    length: product.length || null,
+    color: product.color || null,
+    areProcessingFeesAbsorbed: product.areProcessingFeesAbsorbed,
+  };
+}
+
+function buildCompletedSalePayload(input: {
+  cartItems: CartItem[];
+  localPosSessionId: string;
+  localTransactionId: string;
+  payments: Payment[];
+  receiptNumber: string;
+  totals: { subtotal: number; tax: number; total: number };
+}) {
+  return {
+    localPosSessionId: input.localPosSessionId,
+    localTransactionId: input.localTransactionId,
+    receiptNumber: input.receiptNumber,
+    subtotal: input.totals.subtotal,
+    tax: input.totals.tax,
+    total: input.totals.total,
+    items: input.cartItems.map((item) => ({
+      localItemId: item.id.toString(),
+      productId: item.productId,
+      productSkuId: item.skuId,
+      productSku: item.sku || "",
+      barcode: item.barcode || null,
+      productName: item.name,
+      price: item.price,
+      quantity: item.quantity,
+      image: item.image || null,
+    })),
+    payments: input.payments.map((payment) => ({
+      method: payment.method,
+      amount: payment.amount,
+      timestamp: payment.timestamp,
+    })),
+  };
+}
+
+function completedCustomerInfo(customerInfo: CustomerInfo) {
+  return hasCustomerDetails(customerInfo)
+    ? {
+        name: customerInfo.name,
+        email: customerInfo.email,
+        phone: customerInfo.phone,
+      }
+    : undefined;
+}
+
 type StaffProfileRosterRow = {
   credentialStatus?: "pending" | "active" | "suspended" | "revoked" | null;
   primaryRole?:
@@ -170,6 +362,25 @@ type StaffProfileRosterRow = {
     "manager" | "front_desk" | "stylist" | "technician" | "cashier"
   >;
   status?: "active" | "inactive";
+};
+
+type LocalOperableRegisterSession = {
+  expectedCash: number;
+  localRegisterSessionId: string;
+  openedAt: number;
+  openingFloat: number;
+  registerNumber: string;
+  storeId: Id<"store">;
+  terminalId: Id<"posTerminal">;
+};
+
+type LocalOperablePosSession = {
+  localPosSessionId: string;
+  localRegisterSessionId: string;
+  registerNumber: string;
+  startedAt: number;
+  storeId: Id<"store">;
+  terminalId: Id<"posTerminal">;
 };
 
 function canOperateRegister(staff: StaffProfileRosterRow): boolean {
@@ -188,6 +399,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   const navigateBack = useNavigateBack();
   const [staffProfileId, setStaffProfileId] =
     useState<Id<"staffProfile"> | null>(null);
+  const [staffProofToken, setStaffProofToken] = useState<string | null>(null);
   const terminalRegisterNumber = terminal?.registerNumber
     ? trimOptional(terminal.registerNumber)
     : undefined;
@@ -241,6 +453,10 @@ export function useRegisterViewModel(): RegisterViewModel {
   const [optimisticCartProducts, setOptimisticCartProducts] = useState<
     Record<string, CartItem>
   >({});
+  const [localOperableRegisterSession, setLocalOperableRegisterSession] =
+    useState<LocalOperableRegisterSession | null>(null);
+  const [localOperablePosSession, setLocalOperablePosSession] =
+    useState<LocalOperablePosSession | null>(null);
 
   const registerState = useConvexRegisterState({
     storeId: activeStore?._id,
@@ -347,6 +563,12 @@ export function useRegisterViewModel(): RegisterViewModel {
     isPosUsableRegisterSessionStatus(registerState.activeRegisterSession.status)
       ? registerState.activeRegisterSession
       : null;
+  const locallyOperableRegisterSession =
+    localOperableRegisterSession &&
+    activeStore?._id === localOperableRegisterSession.storeId &&
+    terminal?._id === localOperableRegisterSession.terminalId
+      ? localOperableRegisterSession
+      : null;
   const closeoutBlockedRegisterSession =
     registerState?.activeRegisterSession?.status === "closing"
       ? registerState.activeRegisterSession
@@ -360,6 +582,9 @@ export function useRegisterViewModel(): RegisterViewModel {
   const activeRegisterSessionId = usableActiveRegisterSession?._id as
     | Id<"registerSession">
     | undefined;
+  const activeRegisterSessionLocalId =
+    activeRegisterSessionId?.toString() ??
+    locallyOperableRegisterSession?.localRegisterSessionId;
   const registerNumber = activeRegisterNumber ?? terminalRegisterNumber ?? "";
   const heldSessions = useConvexHeldSessions({
     storeId: activeStore?._id,
@@ -441,7 +666,35 @@ export function useRegisterViewModel(): RegisterViewModel {
   } = useConvexSessionActions();
   const voidSessionRef = useRef<typeof voidSession>(voidSession);
 
-  const operableActiveSession = activeSession;
+  const localActiveSession = useMemo<PosSessionDetail | null>(() => {
+    if (!localOperablePosSession || !locallyOperableRegisterSession) {
+      return null;
+    }
+
+    return {
+      _id: localOperablePosSession.localPosSessionId as Id<"posSession">,
+      _creationTime: localOperablePosSession.startedAt,
+      storeId: localOperablePosSession.storeId,
+      terminalId: localOperablePosSession.terminalId,
+      staffProfileId: staffProfileId ?? undefined,
+      status: "active",
+      createdAt: localOperablePosSession.startedAt,
+      expiresAt: Number.MAX_SAFE_INTEGER,
+      sessionNumber: "Local sale",
+      updatedAt: localOperablePosSession.startedAt,
+      registerNumber: localOperablePosSession.registerNumber,
+      registerSessionId:
+        localOperablePosSession.localRegisterSessionId as Id<"registerSession">,
+      cartItems: [],
+      payments: [],
+      customer: null,
+      localSyncStatus: {
+        status: "pending_sync",
+        pendingEventCount: 1,
+      },
+    } as unknown as PosSessionDetail;
+  }, [localOperablePosSession, locallyOperableRegisterSession, staffProfileId]);
+  const operableActiveSession = activeSession ?? localActiveSession;
   const serverCartItems = useMemo(
     () => operableActiveSession?.cartItems ?? [],
     [operableActiveSession?.cartItems],
@@ -550,11 +803,13 @@ export function useRegisterViewModel(): RegisterViewModel {
     bootstrapState &&
     (bootstrapState.phase === "readyToStart" ||
       bootstrapState.phase === "resumable") &&
-    !usableActiveRegisterSession,
+    !usableActiveRegisterSession &&
+    !locallyOperableRegisterSession,
   );
   const hasMissingDrawerRecoveryState = Boolean(
     bootstrapState &&
     !usableActiveRegisterSession &&
+    !locallyOperableRegisterSession &&
     (bootstrapState.phase === "active" ||
       bootstrapState.phase === "resumable" ||
       hasActivePosSession),
@@ -632,6 +887,9 @@ export function useRegisterViewModel(): RegisterViewModel {
 
       if (!options?.keepCashier) {
         setStaffProfileId(null);
+        setStaffProofToken(null);
+        setLocalOperableRegisterSession(null);
+        setLocalOperablePosSession(null);
       }
     },
     [setPaymentState],
@@ -650,6 +908,8 @@ export function useRegisterViewModel(): RegisterViewModel {
     setDrawerNotes("");
     setDrawerErrorMessage(null);
     setIsOpeningDrawer(false);
+    setLocalOperableRegisterSession(null);
+    setLocalOperablePosSession(null);
   }, [activeRegisterSessionId]);
 
   useEffect(() => {
@@ -746,6 +1006,50 @@ export function useRegisterViewModel(): RegisterViewModel {
       return registerState.activeSession._id as Id<"posSession">;
     }
 
+    if (!activeRegisterSessionId && locallyOperableRegisterSession) {
+      if (!activeStore?._id || !terminal?._id || !staffProfileId) {
+        toast.error("Register sign-in required. Sign in before adding items.");
+        return null;
+      }
+
+      const localPosSessionId = createLocalFallbackId("local-pos-session");
+      const startedAt = Date.now();
+      const savedLocally = await appendPendingLocalPosEventBestEffort({
+        type: "session.started",
+        terminalId: terminal._id,
+        storeId: activeStore._id,
+        registerNumber,
+        localRegisterSessionId:
+          locallyOperableRegisterSession.localRegisterSessionId,
+        localPosSessionId,
+        staffProfileId,
+        staffProofToken: staffProofToken ?? undefined,
+        payload: {
+          localPosSessionId,
+          registerSessionId:
+            locallyOperableRegisterSession.localRegisterSessionId,
+          status: "active",
+        },
+      });
+
+      if (!savedLocally) {
+        toast.error("Unable to save this sale locally. Try again.");
+        return null;
+      }
+
+      setLocalOperablePosSession({
+        localPosSessionId,
+        localRegisterSessionId:
+          locallyOperableRegisterSession.localRegisterSessionId,
+        registerNumber,
+        startedAt,
+        storeId: activeStore._id,
+        terminalId: terminal._id,
+      });
+      bootstrapInitialized.current = true;
+      return localPosSessionId as Id<"posSession">;
+    }
+
     if (!activeRegisterSessionId) {
       toast.error("Drawer closed. Open the drawer before adding items.");
       return null;
@@ -774,13 +1078,41 @@ export function useRegisterViewModel(): RegisterViewModel {
       return null;
     }
 
+    const localPosSessionId = result.data.sessionId.toString();
+    void appendSyncedLocalPosEventBestEffort(
+      {
+        type: "session.started",
+        terminalId: terminal._id,
+        storeId: activeStore._id,
+        registerNumber,
+        localRegisterSessionId: activeRegisterSessionLocalId ?? registerNumber,
+        localPosSessionId,
+        staffProfileId,
+        staffProofToken: staffProofToken ?? undefined,
+        payload: {
+          localPosSessionId,
+          registerSessionId: activeRegisterSessionId,
+          status: "active",
+        },
+      },
+      [
+        {
+          entity: "posSession",
+          localId: localPosSessionId,
+          cloudId: localPosSessionId,
+        },
+      ],
+    );
     bootstrapInitialized.current = true;
     return result.data.sessionId;
   }, [
     operableActiveSession?._id,
     activeRegisterSessionId,
+    activeRegisterSessionLocalId,
     activeStore?._id,
+    locallyOperableRegisterSession,
     staffProfileId,
+    staffProofToken,
     registerNumber,
     registerState?.activeSession?._id,
     startSessionCommand,
@@ -1192,10 +1524,81 @@ export function useRegisterViewModel(): RegisterViewModel {
     setIsOpeningDrawer(false);
 
     if (!result.ok) {
+      if (shouldSaveLocalFallback(result) && staffProofToken) {
+        const openedAt = Date.now();
+        const localRegisterSessionId = createLocalFallbackId(
+          `local-register-${terminal._id}`,
+        );
+        const savedLocally = await appendPendingLocalPosEventBestEffort({
+          type: "register.opened",
+          terminalId: terminal._id,
+          storeId: activeStore._id,
+          registerNumber,
+          localRegisterSessionId,
+          staffProfileId,
+          staffProofToken,
+          payload: {
+            localRegisterSessionId,
+            openingFloat: parsedOpeningFloat,
+            expectedCash: parsedOpeningFloat,
+            notes: trimOptional(drawerNotes) ?? null,
+            status: "open",
+          },
+        });
+
+        if (savedLocally) {
+          setLocalOperableRegisterSession({
+            expectedCash: parsedOpeningFloat,
+            localRegisterSessionId,
+            openedAt,
+            openingFloat: parsedOpeningFloat,
+            registerNumber,
+            storeId: activeStore._id,
+            terminalId: terminal._id,
+          });
+          setDrawerErrorMessage(null);
+          bootstrapInitialized.current = true;
+          toast.success(
+            "Drawer opening saved locally. It will sync when ready.",
+          );
+          return;
+        }
+      }
+
       setDrawerErrorMessage(toOperatorMessage(result.message));
       return;
     }
 
+    const cloudRegisterSessionId = result.data?._id?.toString();
+    const localRegisterSessionId =
+      cloudRegisterSessionId ?? `${terminal._id}:${Date.now()}`;
+    void appendSyncedLocalPosEventBestEffort(
+      {
+        type: "register.opened",
+        terminalId: terminal._id,
+        storeId: activeStore._id,
+        registerNumber,
+        localRegisterSessionId,
+        staffProfileId,
+        staffProofToken: staffProofToken ?? undefined,
+        payload: {
+          localRegisterSessionId,
+          openingFloat: parsedOpeningFloat,
+          expectedCash: parsedOpeningFloat,
+          notes: trimOptional(drawerNotes) ?? null,
+          status: "open",
+        },
+      },
+      cloudRegisterSessionId
+        ? [
+            {
+              entity: "registerSession",
+              localId: localRegisterSessionId,
+              cloudId: cloudRegisterSessionId,
+            },
+          ]
+        : [],
+    );
     requestBootstrap();
     toast.success("Drawer open");
   }, [
@@ -1206,6 +1609,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     openDrawerCommand,
     registerNumber,
     requestBootstrap,
+    staffProofToken,
     terminal?._id,
   ]);
 
@@ -1240,7 +1644,7 @@ export function useRegisterViewModel(): RegisterViewModel {
           : undefined,
         execute: async (approvalArgs) => {
           setIsSubmittingCloseout(true);
-          const result = await runCommand(() =>
+      const result = await runCommand(() =>
             submitRegisterSessionCloseout({
               actorStaffProfileId: staffProfileId,
               actorUserId: user._id,
@@ -1265,8 +1669,34 @@ export function useRegisterViewModel(): RegisterViewModel {
             toast.success("Closeout submitted for manager review");
           }
         },
-        onResult: (result) => {
+        onResult: async (result) => {
           if (isApprovalRequiredResult(result)) {
+            return;
+          }
+
+          if (result.kind !== "ok" && shouldSaveLocalFallback(result)) {
+            const savedLocally = await appendPendingLocalPosEventBestEffort({
+              type: "register.closeout_started",
+              terminalId: terminal?._id ?? "",
+              storeId: activeStore._id,
+              registerNumber,
+              localRegisterSessionId: args.registerSessionId.toString(),
+              staffProfileId,
+              staffProofToken: staffProofToken ?? undefined,
+              payload: {
+                countedCash: args.countedCash,
+                notes: args.notes ?? null,
+              },
+            });
+            if (savedLocally) {
+              setCloseoutCountedCash("");
+              setCloseoutNotes("");
+              setDrawerErrorMessage(null);
+              setIsCloseoutRequested(false);
+              toast.success("Register session closed locally. It will sync when ready.");
+              return;
+            }
+            setDrawerErrorMessage(toOperatorMessage(result.error.message));
             return;
           }
 
@@ -1277,6 +1707,19 @@ export function useRegisterViewModel(): RegisterViewModel {
 
           setCloseoutCountedCash("");
           setCloseoutNotes("");
+          void appendSyncedLocalPosEventBestEffort({
+            type: "register.closeout_started",
+            terminalId: terminal?._id ?? "",
+            storeId: activeStore._id,
+            registerNumber,
+            localRegisterSessionId: args.registerSessionId.toString(),
+            staffProfileId,
+            staffProofToken: staffProofToken ?? undefined,
+            payload: {
+              countedCash: args.countedCash,
+              notes: args.notes ?? null,
+            },
+          });
           if (result.data?.action === "closed") {
             setIsCloseoutRequested(false);
           }
@@ -1289,9 +1732,12 @@ export function useRegisterViewModel(): RegisterViewModel {
       activeStore?._id,
       closeoutApprovalRunner,
       isCashierManager,
+      registerNumber,
       requestBootstrap,
       staffProfileId,
+      staffProofToken,
       submitRegisterSessionCloseout,
+      terminal?._id,
       user?._id,
     ],
   );
@@ -1392,6 +1838,29 @@ export function useRegisterViewModel(): RegisterViewModel {
 
     setIsReopeningCloseout(false);
 
+    if (result.kind !== "ok" && shouldSaveLocalFallback(result)) {
+      const savedLocally = await appendPendingLocalPosEventBestEffort({
+        type: "register.reopened",
+        terminalId: terminal?._id ?? "",
+        storeId: activeStore._id,
+        registerNumber,
+        localRegisterSessionId: registerSessionId.toString(),
+        staffProfileId,
+        staffProofToken: staffProofToken ?? undefined,
+        payload: {
+          reason: "Register closeout reopened from POS drawer gate.",
+        },
+      });
+      if (savedLocally) {
+        setDrawerErrorMessage(null);
+        toast.success("Register reopened locally. It will sync when ready.");
+        requestBootstrap();
+        return;
+      }
+      setDrawerErrorMessage(toOperatorMessage(result.error.message));
+      return;
+    }
+
     if (result.kind !== "ok") {
       setDrawerErrorMessage(toOperatorMessage(result.error.message));
       return;
@@ -1399,15 +1868,30 @@ export function useRegisterViewModel(): RegisterViewModel {
 
     setCloseoutCountedCash("");
     setCloseoutNotes("");
+    void appendSyncedLocalPosEventBestEffort({
+      type: "register.reopened",
+      terminalId: terminal?._id ?? "",
+      storeId: activeStore._id,
+      registerNumber,
+      localRegisterSessionId: registerSessionId.toString(),
+      staffProfileId,
+      staffProofToken: staffProofToken ?? undefined,
+      payload: {
+        reason: "Register closeout reopened from POS drawer gate.",
+      },
+    });
     requestBootstrap();
     toast.success("Register reopened");
   }, [
     activeStore?._id,
     activeCloseoutRegisterSession?._id,
     closeoutBlockedRegisterSession,
+    registerNumber,
     reopenRegisterSessionCloseout,
     requestBootstrap,
     staffProfileId,
+    staffProofToken,
+    terminal?._id,
     user?._id,
   ]);
 
@@ -1638,6 +2122,10 @@ export function useRegisterViewModel(): RegisterViewModel {
       if (!sessionId) {
         return false;
       }
+      const sessionIsLocal = isLocalFallbackId(
+        sessionId.toString(),
+        "local-pos-session",
+      );
 
       const existingItem = activeCartItems.find(
         (item) => item.skuId === product.skuId,
@@ -1663,6 +2151,17 @@ export function useRegisterViewModel(): RegisterViewModel {
         }));
       }
 
+      if (sessionIsLocal) {
+        if (!activeStore?._id || !terminal?._id || !staffProofToken) {
+          presentOperatorError("Unable to save this item locally.");
+          return false;
+        }
+
+        setProductSearchQuery("");
+        toast.success("Item added to local sale. Complete the sale to sync it.");
+        return true;
+      }
+
       const result = await runAddItem({
         gateway: {
           addItem: addItemCommand,
@@ -1686,6 +2185,17 @@ export function useRegisterViewModel(): RegisterViewModel {
       });
 
       if (!result.ok) {
+        if (
+          shouldSaveLocalFallback(result) &&
+          activeStore?._id &&
+          terminal?._id &&
+          staffProofToken
+        ) {
+          setProductSearchQuery("");
+          toast.success("Item added to local sale. Complete the sale to sync it.");
+          return true;
+        }
+
         if (existingItem && !isExistingOptimisticProduct) {
           setOptimisticCartQuantities((current) => {
             const next = { ...current };
@@ -1710,16 +2220,36 @@ export function useRegisterViewModel(): RegisterViewModel {
         return false;
       }
 
+      void appendSyncedLocalPosEventBestEffort({
+        type: "cart.item_added",
+        terminalId: terminal?._id ?? "",
+        storeId: activeStore?._id ?? "",
+        registerNumber,
+        localRegisterSessionId: activeRegisterSessionLocalId ?? registerNumber,
+        localPosSessionId: sessionId.toString(),
+        staffProfileId,
+        staffProofToken: staffProofToken ?? undefined,
+        payload: buildLocalCartItemPayload({
+          localItemId: result.data.itemId.toString(),
+          product,
+          quantity: nextQuantity,
+        }),
+      });
       setProductSearchQuery("");
       return true;
     },
     [
       activeCartItems,
+      activeRegisterSessionLocalId,
+      activeStore?._id,
       activeSessionHasBlockedRegisterBinding,
       addItemCommand,
       ensureSessionId,
       optimisticCartProducts,
+      registerNumber,
       staffProfileId,
+      staffProofToken,
+      terminal?._id,
     ],
   );
 
@@ -1778,10 +2308,32 @@ export function useRegisterViewModel(): RegisterViewModel {
         return;
       }
 
-      const item = operableActiveSession.cartItems.find(
+      const item = activeCartItems.find(
         (candidate) => candidate.id === itemId,
       );
       if (!item) {
+        return;
+      }
+
+      const itemIsLocalOnly = item.id.toString().startsWith("optimistic:");
+      if (itemIsLocalOnly) {
+        if (!item.skuId) return;
+        if (quantity <= 0) {
+          setOptimisticCartProducts((current) => {
+            const next = { ...current };
+            delete next[item.skuId!];
+            return next;
+          });
+          return;
+        }
+
+        setOptimisticCartProducts((current) => ({
+          ...current,
+          [item.skuId!]: {
+            ...item,
+            quantity,
+          },
+        }));
         return;
       }
 
@@ -1854,6 +2406,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       operableActiveSession,
       activeSessionHasBlockedRegisterBinding,
       addItemCommand,
+      activeCartItems,
       removeItem,
       staffProfileId,
     ],
@@ -1869,6 +2422,17 @@ export function useRegisterViewModel(): RegisterViewModel {
         toast.error(
           "Drawer closed. Open the drawer before updating this sale.",
         );
+        return;
+      }
+
+      const item = activeCartItems.find((candidate) => candidate.id === itemId);
+      if (item?.id.toString().startsWith("optimistic:")) {
+        if (!item.skuId) return;
+        setOptimisticCartProducts((current) => {
+          const next = { ...current };
+          delete next[item.skuId!];
+          return next;
+        });
         return;
       }
 
@@ -1895,6 +2459,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     [
       operableActiveSession,
       activeSessionHasBlockedRegisterBinding,
+      activeCartItems,
       removeItem,
       staffProfileId,
     ],
@@ -1922,6 +2487,19 @@ export function useRegisterViewModel(): RegisterViewModel {
     });
     setOptimisticCartProducts({});
 
+    const sessionIsLocal = isLocalFallbackId(
+      operableActiveSession._id.toString(),
+      "local-pos-session",
+    );
+    const hasServerCartItems = operableActiveSession.cartItems.length > 0;
+    if (sessionIsLocal || (!hasServerCartItems && activeCartItems.length > 0)) {
+      setPaymentState([]);
+      if (activeCartItems.length > 0) {
+        toast.success("Sale cleared");
+      }
+      return;
+    }
+
     const result = await releaseSessionInventoryHoldsAndDeleteItems({
       sessionId: operableActiveSession._id as Id<"posSession">,
       staffProfileId,
@@ -1944,6 +2522,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   }, [
     operableActiveSession,
     activeSessionHasBlockedRegisterBinding,
+    activeCartItems,
     allocateCheckoutStateVersion,
     optimisticCartProducts,
     optimisticCartQuantities,
@@ -1992,8 +2571,14 @@ export function useRegisterViewModel(): RegisterViewModel {
   }, [isTransactionCompleted, showProductEntry]);
 
   const handleCashierAuthenticated = useCallback(
-    (nextStaffProfileId: Id<"staffProfile">) => {
-      setStaffProfileId(nextStaffProfileId);
+    (result: StaffAuthenticationResult | Id<"staffProfile">) => {
+      if (typeof result === "string") {
+        setStaffProfileId(result as Id<"staffProfile">);
+        setStaffProofToken(null);
+      } else {
+        setStaffProfileId(result.staffProfileId);
+        setStaffProofToken(result.posLocalStaffProof?.token ?? null);
+      }
       requestBootstrap();
     },
     [requestBootstrap],
@@ -2050,9 +2635,76 @@ export function useRegisterViewModel(): RegisterViewModel {
     }
 
     const currentPayments = paymentsRef.current;
+    const sessionIsLocal = isLocalFallbackId(
+      operableActiveSession._id.toString(),
+      "local-pos-session",
+    );
+    const localPosSessionId = operableActiveSession._id.toString();
+    const finishCompletedSale = (input: {
+      orderNumber: string;
+      successMessage: string;
+      transactionId?: Id<"posTransaction">;
+    }) => {
+      setIsTransactionCompleted(true);
+      setCompletedOrderNumber(input.orderNumber);
+      setCompletedTransactionData({
+        paymentMethod: currentPayments[0]?.method ?? "cash",
+        payments: [...currentPayments],
+        transactionId: input.transactionId,
+        completedAt: new Date(),
+        cartItems: [...activeCartItems],
+        subtotal: activeTotals.subtotal,
+        tax: activeTotals.tax,
+        total: activeTotals.total,
+        customerInfo: completedCustomerInfo(customerInfo),
+      });
+      toast.success(input.successMessage);
+    };
+    const buildSalePayload = (input: {
+      localTransactionId: string;
+      receiptNumber: string;
+    }) =>
+      buildCompletedSalePayload({
+        cartItems: activeCartItems,
+        localPosSessionId,
+        localTransactionId: input.localTransactionId,
+        payments: currentPayments,
+        receiptNumber: input.receiptNumber,
+        totals: activeTotals,
+      });
 
-    const persisted = await persistSessionMetadata(operableActiveSession);
-    if (!persisted) {
+    if (!sessionIsLocal) {
+      const persisted = await persistSessionMetadata(operableActiveSession);
+      if (!persisted) {
+        return false;
+      }
+    }
+
+    if (sessionIsLocal) {
+      const localTransactionId = createLocalFallbackId("local-txn");
+      const savedLocally = await appendPendingLocalPosEventBestEffort({
+        type: "transaction.completed",
+        terminalId: terminal?._id ?? "",
+        storeId: activeStore?._id ?? "",
+        registerNumber,
+        localRegisterSessionId: activeRegisterSessionLocalId ?? registerNumber,
+        localPosSessionId,
+        localTransactionId,
+        staffProfileId,
+        staffProofToken: staffProofToken ?? undefined,
+        payload: buildSalePayload({
+          localTransactionId,
+          receiptNumber: localTransactionId,
+        }),
+      });
+      if (savedLocally) {
+        finishCompletedSale({
+          orderNumber: localTransactionId,
+          successMessage: "Sale completed locally. It will sync when ready.",
+        });
+        return true;
+      }
+      presentOperatorError("Unable to save this sale locally.");
       return false;
     }
 
@@ -2075,45 +2727,86 @@ export function useRegisterViewModel(): RegisterViewModel {
       },
     });
 
+    if (!result.ok && shouldSaveLocalFallback(result)) {
+      const localTransactionId = `local-txn-${Date.now()}`;
+      const savedLocally = await appendPendingLocalPosEventBestEffort({
+        type: "transaction.completed",
+        terminalId: terminal?._id ?? "",
+        storeId: activeStore?._id ?? "",
+        registerNumber,
+        localRegisterSessionId: activeRegisterSessionLocalId ?? registerNumber,
+        localPosSessionId,
+        localTransactionId,
+        staffProfileId,
+        staffProofToken: staffProofToken ?? undefined,
+        payload: buildSalePayload({
+          localTransactionId,
+          receiptNumber: localTransactionId,
+        }),
+      });
+      if (savedLocally) {
+        finishCompletedSale({
+          orderNumber: localTransactionId,
+          successMessage: "Sale completed locally. It will sync when ready.",
+        });
+        return true;
+      }
+      presentOperatorError(result.message);
+      return false;
+    }
+
     if (!result.ok) {
       presentOperatorError(result.message);
       return false;
     }
 
-    setIsTransactionCompleted(true);
-    setCompletedOrderNumber(result.data.transactionNumber);
-    setCompletedTransactionData({
-      paymentMethod: currentPayments[0]?.method ?? "cash",
-      payments: [...currentPayments],
-      transactionId: result.data.transactionId,
-      completedAt: new Date(),
-      cartItems: [...activeCartItems],
-      subtotal: activeTotals.subtotal,
-      tax: activeTotals.tax,
-      total: activeTotals.total,
-      customerInfo: hasCustomerDetails(customerInfo)
-        ? {
-            name: customerInfo.name,
-            email: customerInfo.email,
-            phone: customerInfo.phone,
-          }
-        : undefined,
-    });
-    toast.success(
-      `Sale completed. Transaction #${result.data.transactionNumber} recorded.`,
+    const localTransactionId =
+      result.data.transactionId?.toString() ?? result.data.transactionNumber;
+    void appendSyncedLocalPosEventBestEffort(
+      {
+        type: "transaction.completed",
+        terminalId: terminal?._id ?? "",
+        storeId: activeStore?._id ?? "",
+        registerNumber,
+        localRegisterSessionId: activeRegisterSessionLocalId ?? registerNumber,
+        localPosSessionId,
+        localTransactionId,
+        staffProfileId,
+        staffProofToken: staffProofToken ?? undefined,
+        payload: buildSalePayload({
+          localTransactionId,
+          receiptNumber: result.data.transactionNumber,
+        }),
+      },
+      result.data.transactionId
+        ? [
+            {
+              entity: "posTransaction",
+              localId: localTransactionId,
+              cloudId: result.data.transactionId.toString(),
+            },
+          ]
+        : [],
     );
+    finishCompletedSale({
+      orderNumber: result.data.transactionNumber,
+      transactionId: result.data.transactionId,
+      successMessage: `Sale completed. Transaction #${result.data.transactionNumber} recorded.`,
+    });
     return true;
   }, [
     activeCartItems,
+    activeRegisterSessionLocalId,
+    activeStore?._id,
+    activeTotals,
     operableActiveSession,
-    activeTotals.subtotal,
-    activeTotals.tax,
-    activeTotals.total,
     completeTransactionCommand,
     customerInfo,
     persistSessionMetadata,
     registerNumber,
     staffProfileId,
+    staffProofToken,
+    terminal?._id,
   ]);
 
   const handleStartNewTransaction = useCallback(() => {
@@ -2503,6 +3196,38 @@ export function useRegisterViewModel(): RegisterViewModel {
           },
         }
       : null;
+  const localRuntimeSyncSource = usePosLocalSyncRuntimeStatus({
+    storeId: activeStore?._id,
+    terminalId: terminal?._id,
+    onRetrySync: requestBootstrap,
+  });
+  const localSyncSource = readLocalSyncStatus(
+    localRuntimeSyncSource
+      ? { localSyncStatus: localRuntimeSyncSource }
+      : null,
+    operableActiveSession,
+    locallyOperableRegisterSession
+      ? {
+          localSyncStatus: {
+            status: "pending_sync",
+            pendingEventCount: 1,
+          },
+        }
+      : null,
+    activeCloseoutRegisterSession,
+    registerState?.activeRegisterSession,
+    registerState,
+  );
+  const syncStatus =
+    activeStore?._id && terminal?._id
+      ? {
+          ...buildPosSyncStatusPresentation(localSyncSource),
+          onRetrySync: () => {
+            localSyncSource?.onRetrySync?.();
+            requestBootstrap();
+          },
+        }
+      : null;
 
   const authDialog =
     activeStore?._id && terminal?._id
@@ -2587,6 +3312,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     cashierCard,
     drawerGate,
     closeoutControl,
+    syncStatus,
     authDialog,
     commandApprovalDialog,
     onNavigateBack: handleNavigateBack,

@@ -23,6 +23,7 @@ export interface PosRegisteredTerminalDto {
   registerNumber?: string;
   storeId?: Id<"store">;
   fingerprintHash?: string;
+  syncSecretHash?: string;
   registeredByUserId?: Id<"athenaUser">;
   browserInfo?: {
     userAgent: string;

@@ -3,6 +3,7 @@ import { v } from "convex/values";
 export const posTerminalSchema = v.object({
   storeId: v.id("store"),
   fingerprintHash: v.string(),
+  syncSecretHash: v.optional(v.string()),
   displayName: v.string(),
   registerNumber: v.optional(v.string()),
   registeredByUserId: v.id("athenaUser"),

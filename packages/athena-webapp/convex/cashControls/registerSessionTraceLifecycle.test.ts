@@ -5,6 +5,8 @@ const mocks = vi.hoisted(() => ({
   recordOperationalEventWithCtx: vi.fn(),
   recordPaymentAllocationWithCtx: vi.fn(),
   recordRegisterSessionDepositWithCtx: vi.fn(),
+  requireAuthenticatedAthenaUserWithCtx: vi.fn(),
+  requireOrganizationMemberRoleWithCtx: vi.fn(),
   traceRecord: vi.fn(),
 }));
 
@@ -27,6 +29,13 @@ vi.mock("../operations/registerSessions", async () => {
 
 vi.mock("../operations/registerSessionTracing", () => ({
   recordRegisterSessionTraceBestEffort: mocks.traceRecord,
+}));
+
+vi.mock("../lib/athenaUserAuth", () => ({
+  requireAuthenticatedAthenaUserWithCtx:
+    mocks.requireAuthenticatedAthenaUserWithCtx,
+  requireOrganizationMemberRoleWithCtx:
+    mocks.requireOrganizationMemberRoleWithCtx,
 }));
 
 import {
@@ -77,6 +86,7 @@ type ApprovalProofRecord = {
 
 type StaffProfileRecord = {
   _id: Id<"staffProfile">;
+  linkedUserId?: Id<"athenaUser">;
   organizationId: Id<"organization">;
   status: "active" | "inactive";
   storeId: Id<"store">;
@@ -120,6 +130,13 @@ function createMutationCtx(seed?: {
   const staffProfiles = [
     ...(seed?.staffProfiles ?? [
       {
+        _id: "staff-1" as Id<"staffProfile">,
+        linkedUserId: "user-1" as Id<"athenaUser">,
+        organizationId: "org-1" as Id<"organization">,
+        status: "active" as const,
+        storeId: "store-1" as Id<"store">,
+      },
+      {
         _id: "staff-2" as Id<"staffProfile">,
         organizationId: "org-1" as Id<"organization">,
         status: "active" as const,
@@ -152,6 +169,13 @@ function createMutationCtx(seed?: {
 
       if (table === "approvalProof") {
         return approvalProofs.find((proof) => proof._id === id) ?? null;
+      }
+
+      if (table === "store") {
+        return {
+          _id: "store-1" as Id<"store">,
+          organizationId: "org-1" as Id<"organization">,
+        };
       }
 
       if (table === "staffProfile") {
@@ -326,6 +350,10 @@ describe("register session trace lifecycle handlers", () => {
           expectedCash: 7_500,
         }),
     );
+    mocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
+      _id: "user-1" as Id<"athenaUser">,
+    });
+    mocks.requireOrganizationMemberRoleWithCtx.mockResolvedValue(undefined);
     mocks.traceRecord.mockResolvedValue({
       traceCreated: true,
       traceId: "register_session:session-1",

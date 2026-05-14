@@ -268,6 +268,126 @@ describe("POSRegisterView", () => {
     expect(screen.queryByText("cashier-auth-dialog")).not.toBeInTheDocument();
   });
 
+  it("shows POS sync status and schedules manual retry from the header", async () => {
+    const onRetrySync = vi.fn();
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: true,
+      },
+      registerInfo: {
+        customerName: "Ama Serwa",
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: false,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: {},
+      cashierCard: {},
+      closeoutControl: null,
+      authDialog: {
+        open: false,
+      },
+      drawerGate: null,
+      syncStatus: {
+        description:
+          "Register activity is saved locally and will sync when ready.",
+        label: "Pending sync",
+        pendingEventCount: 2,
+        reconciliationItems: [],
+        status: "pending_sync",
+        tone: "warning",
+        onRetrySync,
+      },
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(screen.getByText("Pending sync")).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /retry pos sync/i }));
+
+    expect(onRetrySync).toHaveBeenCalled();
+  });
+
+  it("hides sale controls while a locally closed register is waiting to sync", async () => {
+    const onRetrySync = vi.fn();
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: false,
+      },
+      registerInfo: {
+        customerName: undefined,
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: true,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: {},
+      cashierCard: {},
+      closeoutControl: {
+        canCloseout: false,
+        canShowOpeningFloatCorrection: false,
+        canCorrectOpeningFloat: false,
+        onRequestCloseout: vi.fn(),
+        onRequestOpeningFloatCorrection: vi.fn(),
+      },
+      authDialog: {
+        open: false,
+      },
+      drawerGate: null,
+      syncStatus: {
+        description:
+          "This register was closed locally. Athena will reconcile the closeout after sync.",
+        label: "Locally closed",
+        reconciliationItems: [],
+        status: "locally_closed_pending_sync",
+        tone: "warning",
+        onRetrySync,
+      },
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(screen.getByText("Register closed locally")).toBeInTheDocument();
+    expect(screen.getByText("Locally closed")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /retry sync/i })).toBeInTheDocument();
+    expect(screen.queryByText("register-customer-panel")).not.toBeInTheDocument();
+    expect(screen.queryByText("register-action-bar")).not.toBeInTheDocument();
+    expect(screen.queryByText("register-checkout-panel")).not.toBeInTheDocument();
+    expect(screen.queryByText("Ready for product lookup")).not.toBeInTheDocument();
+  });
+
   it("focuses the product lookup entry when the empty lookup workspace is clicked", async () => {
     const setShowProductLookup = vi.fn();
 

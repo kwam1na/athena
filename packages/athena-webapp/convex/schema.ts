@@ -55,6 +55,11 @@ import {
   expenseSessionItemSchema,
   expenseTransactionSchema,
   expenseTransactionItemSchema,
+  posLocalSyncConflictSchema,
+  posLocalSyncCursorSchema,
+  posLocalSyncEventSchema,
+  posLocalSyncMappingSchema,
+  posLocalStaffProofSchema,
 } from "./schemas/pos";
 import { posSessionSchema } from "./schemas/pos/posSession";
 import {
@@ -338,6 +343,70 @@ const schema = defineSchema({
   posSessionItem: defineTable(posSessionItemSchema)
     .index("by_sessionId", ["sessionId"])
     .index("by_sessionId_productSkuId", ["sessionId", "productSkuId"]),
+  posLocalSyncEvent: defineTable(posLocalSyncEventSchema)
+    .index("by_store_terminal_localEvent", [
+      "storeId",
+      "terminalId",
+      "localEventId",
+    ])
+    .index("by_store_terminal_register_sequence", [
+      "storeId",
+      "terminalId",
+      "localRegisterSessionId",
+      "sequence",
+    ])
+    .index("by_store_terminal_sequence", ["storeId", "terminalId", "sequence"])
+    .index("by_store_status", ["storeId", "status"])
+    .index("by_localEventId", ["localEventId"]),
+  posLocalSyncCursor: defineTable(posLocalSyncCursorSchema)
+    .index("by_store_terminal_register", [
+      "storeId",
+      "terminalId",
+      "localRegisterSessionId",
+    ])
+    .index("by_store_terminal", ["storeId", "terminalId"]),
+  posLocalSyncMapping: defineTable(posLocalSyncMappingSchema)
+    .index("by_store_terminal_local", [
+      "storeId",
+      "terminalId",
+      "localRegisterSessionId",
+      "localIdKind",
+      "localId",
+    ])
+    .index("by_store_terminal_localKindId", [
+      "storeId",
+      "terminalId",
+      "localIdKind",
+      "localId",
+    ])
+    .index("by_local_kind_id", ["localIdKind", "localId"])
+    .index("by_store_terminal_localEvent", [
+      "storeId",
+      "terminalId",
+      "localEventId",
+    ])
+    .index("by_localEventId", ["localEventId"]),
+  posLocalSyncConflict: defineTable(posLocalSyncConflictSchema)
+    .index("by_store_status", ["storeId", "status"])
+    .index("by_store_type_status", ["storeId", "conflictType", "status"])
+    .index("by_store_terminal_localEvent", [
+      "storeId",
+      "terminalId",
+      "localEventId",
+    ])
+    .index("by_localEventId", ["localEventId"])
+    .index("by_store_terminal_register", [
+      "storeId",
+      "terminalId",
+      "localRegisterSessionId",
+    ]),
+  posLocalStaffProof: defineTable(posLocalStaffProofSchema)
+    .index("by_tokenHash", ["tokenHash"])
+    .index("by_staff_terminal_status", [
+      "staffProfileId",
+      "terminalId",
+      "status",
+    ]),
   expenseSession: defineTable(expenseSessionSchema)
     .index("by_storeId", ["storeId"])
     .index("by_status", ["status"])

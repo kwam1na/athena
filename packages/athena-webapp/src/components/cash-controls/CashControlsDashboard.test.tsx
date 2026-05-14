@@ -660,6 +660,171 @@ describe("CashControlsDashboardContent", () => {
     expect(screen.getByText("Closed session history")).toBeInTheDocument();
   });
 
+  it("separates pending sync from reconciliation issues", () => {
+    render(
+      <CashControlsDashboardContent
+        currency="GHS"
+        dashboardSnapshot={{
+          ...baseSnapshot,
+          pendingCloseouts: [
+            {
+              _id: "session-local-close",
+              countedCash: 17100,
+              expectedCash: 17600,
+              openedAt: new Date("2026-04-21T07:30:00.000Z").getTime(),
+              openingFloat: 5000,
+              registerNumber: "Register 3",
+              status: "closing",
+              totalDeposited: 0,
+              variance: 0,
+              localSyncStatus: {
+                status: "locally_closed_pending_sync",
+                pendingEventCount: 4,
+              },
+            },
+          ],
+          unresolvedVariances: [
+            {
+              _id: "session-needs-review",
+              countedCash: 17100,
+              expectedCash: 17600,
+              openedAt: new Date("2026-04-21T08:30:00.000Z").getTime(),
+              openingFloat: 5000,
+              registerNumber: "Register 4",
+              status: "closing",
+              totalDeposited: 0,
+              variance: 0,
+              localSyncStatus: {
+                status: "needs_review",
+                reconciliationItems: [
+                  {
+                    summary: "Mobile money payment record needs review.",
+                    type: "payment_conflict",
+                  },
+                ],
+              },
+            },
+          ],
+          registerSessions: [
+            {
+              _id: "session-local-close",
+              countedCash: 17100,
+              expectedCash: 17600,
+              openedAt: new Date("2026-04-21T07:30:00.000Z").getTime(),
+              openingFloat: 5000,
+              registerNumber: "Register 3",
+              status: "closing",
+              totalDeposited: 0,
+              variance: 0,
+              localSyncStatus: {
+                status: "locally_closed_pending_sync",
+                pendingEventCount: 4,
+              },
+            },
+            {
+              _id: "session-needs-review",
+              countedCash: 17100,
+              expectedCash: 17600,
+              openedAt: new Date("2026-04-21T08:30:00.000Z").getTime(),
+              openingFloat: 5000,
+              registerNumber: "Register 4",
+              status: "closing",
+              totalDeposited: 0,
+              variance: 0,
+              localSyncStatus: {
+                status: "needs_review",
+                reconciliationItems: [
+                  {
+                    summary: "Mobile money payment record needs review.",
+                    type: "payment_conflict",
+                  },
+                ],
+              },
+            },
+          ],
+        }}
+        isLoading={false}
+        orgUrlSlug="v26"
+        storeUrlSlug="east-legon"
+      />,
+    );
+
+    expect(screen.getByText("Pending reconciliation")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This register was closed locally. Athena will reconcile the closeout after sync.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("Needs review").length).toBeGreaterThan(0);
+    expect(
+      screen.getByText(/Payment review: Mobile money payment record needs review./i),
+    ).toBeInTheDocument();
+  });
+
+  it("uses safe fallback copy for unknown reconciliation types", () => {
+    render(
+      <CashControlsDashboardContent
+        currency="GHS"
+        dashboardSnapshot={{
+          ...baseSnapshot,
+          registerSessions: [
+            {
+              _id: "session-unknown-review",
+              countedCash: 17100,
+              expectedCash: 17600,
+              openedAt: new Date("2026-04-21T08:30:00.000Z").getTime(),
+              openingFloat: 5000,
+              registerNumber: "Register 4",
+              status: "closing",
+              totalDeposited: 0,
+              variance: 0,
+              localSyncStatus: {
+                status: "needs_review",
+                reconciliationItems: [
+                  {
+                    summary: "Review this synced register activity.",
+                    type: "new_reconciliation_kind",
+                  },
+                ],
+              },
+            },
+          ],
+          unresolvedVariances: [
+            {
+              _id: "session-unknown-review",
+              countedCash: 17100,
+              expectedCash: 17600,
+              openedAt: new Date("2026-04-21T08:30:00.000Z").getTime(),
+              openingFloat: 5000,
+              registerNumber: "Register 4",
+              status: "closing",
+              totalDeposited: 0,
+              variance: 0,
+              localSyncStatus: {
+                status: "needs_review",
+                reconciliationItems: [
+                  {
+                    summary: "Review this synced register activity.",
+                    type: "new_reconciliation_kind",
+                  },
+                ],
+              },
+            },
+          ],
+        }}
+        isLoading={false}
+        orgUrlSlug="v26"
+        storeUrlSlug="east-legon"
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        /Reconciliation review: Review this synced register activity./i,
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("links register session cards to the session route", () => {
     render(
       <CashControlsDashboardContent

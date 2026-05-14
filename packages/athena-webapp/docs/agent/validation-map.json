@@ -302,15 +302,22 @@
       "pathPrefixes": [
         "packages/athena-webapp/convex/workflowTraces",
         "packages/athena-webapp/convex/schemas/observability",
+        "packages/athena-webapp/convex/pos/application/sync",
+        "packages/athena-webapp/convex/pos/application/commands/terminals.ts",
         "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
         "packages/athena-webapp/convex/pos/application/commands/posSessionTracing.ts",
         "packages/athena-webapp/convex/pos/application/queries/getTransactions.ts",
+        "packages/athena-webapp/convex/pos/public/sync.ts",
+        "packages/athena-webapp/convex/pos/public/terminals.ts",
         "packages/athena-webapp/convex/pos/public/transactions.ts",
         "packages/athena-webapp/convex/inventory/posSessions.ts",
         "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
         "packages/athena-webapp/convex/operations/registerSessions.ts",
         "packages/athena-webapp/convex/cashControls/closeouts.ts",
         "packages/athena-webapp/convex/cashControls/deposits.ts",
+        "packages/athena-webapp/convex/schemas/pos/posLocalSyncConflict.ts",
+        "packages/athena-webapp/convex/schemas/pos/posLocalSyncEvent.ts",
+        "packages/athena-webapp/convex/schemas/pos/posLocalSyncMapping.ts",
         "packages/athena-webapp/convex/schemas/pos/posTransaction.ts",
         "packages/athena-webapp/shared/workflowTrace.ts",
         "packages/athena-webapp/src/components/traces",
@@ -318,7 +325,9 @@
         "packages/athena-webapp/src/components/pos/register",
         "packages/athena-webapp/src/components/pos/session/HeldSessionsList.tsx",
         "packages/athena-webapp/src/components/pos/transactions",
+        "packages/athena-webapp/src/lib/pos/infrastructure/local",
         "packages/athena-webapp/src/lib/pos/presentation/register",
+        "packages/athena-webapp/src/lib/pos/presentation/syncStatusPresentation.ts",
         "packages/athena-webapp/src/components/cash-controls/CashControlsDashboard.tsx",
         "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx",
         "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces"
@@ -326,7 +335,7 @@
       "commands": [
         {
           "kind": "raw",
-          "command": "bun run --filter '@athena/webapp' test -- convex/workflowTraces/presentation.test.ts convex/workflowTraces/queryUsage.test.ts convex/workflowTraces/schemaIndexes.test.ts convex/workflowTraces/adapters/posSession.test.ts convex/workflowTraces/adapters/registerSession.test.ts convex/pos/application/completeTransaction.test.ts convex/pos/application/getTransactions.test.ts convex/pos/application/posSessionTracing.test.ts convex/inventory/posSessions.trace.test.ts convex/operations/registerSessionTracing.test.ts convex/operations/registerSessions.trace.test.ts convex/cashControls/registerSessionTraceLifecycle.test.ts src/components/traces/WorkflowTraceView.test.tsx 'src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId.test.tsx' src/components/pos/transactions/transactionColumns.test.tsx src/components/pos/transactions/TransactionView.test.tsx src/components/pos/transactions/TransactionsView.test.tsx src/components/pos/SessionManager.test.tsx src/components/pos/register/POSRegisterView.test.tsx src/components/pos/session/HeldSessionsList.test.tsx src/lib/pos/presentation/register/useRegisterViewModel.test.ts src/components/cash-controls/CashControlsDashboard.test.tsx src/components/cash-controls/RegisterSessionView.test.tsx src/lib/traces/createWorkflowTraceId.test.ts"
+          "command": "bun run --filter '@athena/webapp' test -- convex/workflowTraces/presentation.test.ts convex/workflowTraces/queryUsage.test.ts convex/workflowTraces/schemaIndexes.test.ts convex/workflowTraces/adapters/posSession.test.ts convex/workflowTraces/adapters/registerSession.test.ts convex/pos/application/completeTransaction.test.ts convex/pos/application/getTransactions.test.ts convex/pos/application/posSessionTracing.test.ts convex/pos/application/terminals.test.ts convex/pos/application/sync/ingestLocalEvents.test.ts convex/pos/application/sync/projectLocalEvents.test.ts convex/pos/public/sync.test.ts convex/pos/public/terminals.test.ts convex/inventory/posSessions.trace.test.ts convex/operations/registerSessionTracing.test.ts convex/operations/registerSessions.trace.test.ts convex/cashControls/registerSessionTraceLifecycle.test.ts src/components/traces/WorkflowTraceView.test.tsx 'src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId.test.tsx' src/components/pos/transactions/transactionColumns.test.tsx src/components/pos/transactions/TransactionView.test.tsx src/components/pos/transactions/TransactionsView.test.tsx src/components/pos/SessionManager.test.tsx src/components/pos/register/POSRegisterView.test.tsx src/components/pos/session/HeldSessionsList.test.tsx src/lib/pos/infrastructure/local/posLocalStore.test.ts src/lib/pos/infrastructure/local/syncContract.test.ts src/lib/pos/infrastructure/local/syncScheduler.test.ts src/lib/pos/infrastructure/local/syncStatus.test.ts src/lib/pos/presentation/register/useRegisterViewModel.test.ts src/components/cash-controls/CashControlsDashboard.test.tsx src/components/cash-controls/RegisterSessionView.test.tsx src/lib/traces/createWorkflowTraceId.test.ts"
         },
         {
           "kind": "script",

@@ -164,6 +164,11 @@ import type * as pos_application_queries_listRegisterCatalog from "../pos/applic
 import type * as pos_application_queries_searchCatalog from "../pos/application/queries/searchCatalog.js";
 import type * as pos_application_queries_searchCustomers from "../pos/application/queries/searchCustomers.js";
 import type * as pos_application_queries_terminals from "../pos/application/queries/terminals.js";
+import type * as pos_application_sync_ingestLocalEvents from "../pos/application/sync/ingestLocalEvents.js";
+import type * as pos_application_sync_projectLocalEvents from "../pos/application/sync/projectLocalEvents.js";
+import type * as pos_application_sync_staffProof from "../pos/application/sync/staffProof.js";
+import type * as pos_application_sync_terminalSyncSecret from "../pos/application/sync/terminalSyncSecret.js";
+import type * as pos_application_sync_types from "../pos/application/sync/types.js";
 import type * as pos_domain_errors from "../pos/domain/errors.js";
 import type * as pos_domain_sessionRules from "../pos/domain/sessionRules.js";
 import type * as pos_domain_types from "../pos/domain/types.js";
@@ -173,6 +178,7 @@ import type * as pos_infrastructure_repositories_cashierRepository from "../pos/
 import type * as pos_infrastructure_repositories_catalogRepository from "../pos/infrastructure/repositories/catalogRepository.js";
 import type * as pos_infrastructure_repositories_customerRepository from "../pos/infrastructure/repositories/customerRepository.js";
 import type * as pos_infrastructure_repositories_expenseSessionCommandRepository from "../pos/infrastructure/repositories/expenseSessionCommandRepository.js";
+import type * as pos_infrastructure_repositories_localSyncRepository from "../pos/infrastructure/repositories/localSyncRepository.js";
 import type * as pos_infrastructure_repositories_registerSessionRepository from "../pos/infrastructure/repositories/registerSessionRepository.js";
 import type * as pos_infrastructure_repositories_sessionCommandRepository from "../pos/infrastructure/repositories/sessionCommandRepository.js";
 import type * as pos_infrastructure_repositories_sessionRepository from "../pos/infrastructure/repositories/sessionRepository.js";
@@ -181,6 +187,7 @@ import type * as pos_infrastructure_repositories_transactionRepository from "../
 import type * as pos_public_catalog from "../pos/public/catalog.js";
 import type * as pos_public_customers from "../pos/public/customers.js";
 import type * as pos_public_register from "../pos/public/register.js";
+import type * as pos_public_sync from "../pos/public/sync.js";
 import type * as pos_public_terminals from "../pos/public/terminals.js";
 import type * as pos_public_transactions from "../pos/public/transactions.js";
 import type * as schemas_customerMessaging_customerMessageDelivery from "../schemas/customerMessaging/customerMessageDelivery.js";
@@ -229,6 +236,11 @@ import type * as schemas_pos_expenseSessionItem from "../schemas/pos/expenseSess
 import type * as schemas_pos_expenseTransaction from "../schemas/pos/expenseTransaction.js";
 import type * as schemas_pos_expenseTransactionItem from "../schemas/pos/expenseTransactionItem.js";
 import type * as schemas_pos_index from "../schemas/pos/index.js";
+import type * as schemas_pos_posLocalStaffProof from "../schemas/pos/posLocalStaffProof.js";
+import type * as schemas_pos_posLocalSyncConflict from "../schemas/pos/posLocalSyncConflict.js";
+import type * as schemas_pos_posLocalSyncCursor from "../schemas/pos/posLocalSyncCursor.js";
+import type * as schemas_pos_posLocalSyncEvent from "../schemas/pos/posLocalSyncEvent.js";
+import type * as schemas_pos_posLocalSyncMapping from "../schemas/pos/posLocalSyncMapping.js";
 import type * as schemas_pos_posSession from "../schemas/pos/posSession.js";
 import type * as schemas_pos_posSessionItem from "../schemas/pos/posSessionItem.js";
 import type * as schemas_pos_posTerminal from "../schemas/pos/posTerminal.js";
@@ -481,6 +493,11 @@ declare const fullApi: ApiFromModules<{
   "pos/application/queries/searchCatalog": typeof pos_application_queries_searchCatalog;
   "pos/application/queries/searchCustomers": typeof pos_application_queries_searchCustomers;
   "pos/application/queries/terminals": typeof pos_application_queries_terminals;
+  "pos/application/sync/ingestLocalEvents": typeof pos_application_sync_ingestLocalEvents;
+  "pos/application/sync/projectLocalEvents": typeof pos_application_sync_projectLocalEvents;
+  "pos/application/sync/staffProof": typeof pos_application_sync_staffProof;
+  "pos/application/sync/terminalSyncSecret": typeof pos_application_sync_terminalSyncSecret;
+  "pos/application/sync/types": typeof pos_application_sync_types;
   "pos/domain/errors": typeof pos_domain_errors;
   "pos/domain/sessionRules": typeof pos_domain_sessionRules;
   "pos/domain/types": typeof pos_domain_types;
@@ -490,6 +507,7 @@ declare const fullApi: ApiFromModules<{
   "pos/infrastructure/repositories/catalogRepository": typeof pos_infrastructure_repositories_catalogRepository;
   "pos/infrastructure/repositories/customerRepository": typeof pos_infrastructure_repositories_customerRepository;
   "pos/infrastructure/repositories/expenseSessionCommandRepository": typeof pos_infrastructure_repositories_expenseSessionCommandRepository;
+  "pos/infrastructure/repositories/localSyncRepository": typeof pos_infrastructure_repositories_localSyncRepository;
   "pos/infrastructure/repositories/registerSessionRepository": typeof pos_infrastructure_repositories_registerSessionRepository;
   "pos/infrastructure/repositories/sessionCommandRepository": typeof pos_infrastructure_repositories_sessionCommandRepository;
   "pos/infrastructure/repositories/sessionRepository": typeof pos_infrastructure_repositories_sessionRepository;
@@ -498,6 +516,7 @@ declare const fullApi: ApiFromModules<{
   "pos/public/catalog": typeof pos_public_catalog;
   "pos/public/customers": typeof pos_public_customers;
   "pos/public/register": typeof pos_public_register;
+  "pos/public/sync": typeof pos_public_sync;
   "pos/public/terminals": typeof pos_public_terminals;
   "pos/public/transactions": typeof pos_public_transactions;
   "schemas/customerMessaging/customerMessageDelivery": typeof schemas_customerMessaging_customerMessageDelivery;
@@ -546,6 +565,11 @@ declare const fullApi: ApiFromModules<{
   "schemas/pos/expenseTransaction": typeof schemas_pos_expenseTransaction;
   "schemas/pos/expenseTransactionItem": typeof schemas_pos_expenseTransactionItem;
   "schemas/pos/index": typeof schemas_pos_index;
+  "schemas/pos/posLocalStaffProof": typeof schemas_pos_posLocalStaffProof;
+  "schemas/pos/posLocalSyncConflict": typeof schemas_pos_posLocalSyncConflict;
+  "schemas/pos/posLocalSyncCursor": typeof schemas_pos_posLocalSyncCursor;
+  "schemas/pos/posLocalSyncEvent": typeof schemas_pos_posLocalSyncEvent;
+  "schemas/pos/posLocalSyncMapping": typeof schemas_pos_posLocalSyncMapping;
   "schemas/pos/posSession": typeof schemas_pos_posSession;
   "schemas/pos/posSessionItem": typeof schemas_pos_posSessionItem;
   "schemas/pos/posTerminal": typeof schemas_pos_posTerminal;

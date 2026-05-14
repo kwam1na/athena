@@ -246,7 +246,9 @@ describe("CashierAuthDialog", () => {
         "Signed in as Ama Mensah",
       ),
     );
-    expect(onAuthenticated).toHaveBeenCalledWith(staffProfileId);
+    expect(onAuthenticated).toHaveBeenCalledWith(
+      expect.objectContaining({ staffProfileId }),
+    );
     expect(mocks.toastError).not.toHaveBeenCalled();
   });
 
@@ -286,7 +288,7 @@ describe("CashierAuthDialog", () => {
     );
 
     await waitFor(() =>
-      expect(authenticateMutation).toHaveBeenCalledWith({
+      expect(authenticateMutation).toHaveBeenNthCalledWith(1, {
         allowedRoles: ["cashier", "manager"],
         allowActiveSessionsOnOtherTerminals: true,
         pinHash: "hashed:123456",
@@ -301,10 +303,21 @@ describe("CashierAuthDialog", () => {
         terminalId,
       }),
     );
+    await waitFor(() =>
+      expect(authenticateMutation).toHaveBeenNthCalledWith(2, {
+        allowedRoles: ["cashier", "manager"],
+        pinHash: "hashed:123456",
+        storeId,
+        terminalId,
+        username: "frontdesk",
+      }),
+    );
     expect(mocks.toastSuccess).toHaveBeenCalledWith(
       "Signed out from all registers",
     );
-    expect(onAuthenticated).toHaveBeenCalledWith(staffProfileId);
+    expect(onAuthenticated).toHaveBeenCalledWith(
+      expect.objectContaining({ staffProfileId }),
+    );
   });
 });
 
