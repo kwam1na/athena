@@ -68,6 +68,89 @@ describe("createLocalSyncIngestionService", () => {
     expect(repository.createdPaymentAllocations).toHaveLength(2);
   });
 
+  it("accepts sale clear events", async () => {
+    const repository = createFakeSyncRepository();
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 100,
+    });
+
+    const result = await service.ingestBatch(
+      buildBatch({
+        events: [buildSaleClearedEvent({ sequence: 1 })],
+      }),
+    );
+
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("Expected ok result");
+    expect(result.data.accepted).toEqual([
+      expect.objectContaining({
+        localEventId: "event-sale-cleared-1",
+        sequence: 1,
+        status: "projected",
+      }),
+    ]);
+    expect(result.data.syncCursor).toEqual({
+      localRegisterSessionId: "local-register-1",
+      acceptedThroughSequence: 1,
+    });
+  });
+
+  it("rejects malformed sale clear payloads", async () => {
+    const repository = createFakeSyncRepository();
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 100,
+    });
+
+    const missingSession = await service.ingestBatch(
+      buildBatch({
+        events: [
+          buildSaleClearedEvent({
+            sequence: 1,
+            payload: { localPosSessionId: "", reason: "Sale cleared" },
+          }),
+        ],
+      }),
+    );
+    const badReasonRepository = createFakeSyncRepository();
+    const badReasonService = createLocalSyncIngestionService({
+      repository: badReasonRepository,
+      projectionRepository: badReasonRepository,
+      now: () => 100,
+    });
+    const badReason = await badReasonService.ingestBatch(
+      buildBatch({
+        events: [
+          buildSaleClearedEvent({
+            sequence: 1,
+            payload: { localPosSessionId: "local-session-1", reason: "" },
+          }),
+        ],
+      }),
+    );
+
+    expect(missingSession.kind).toBe("ok");
+    expect(badReason.kind).toBe("ok");
+    if (missingSession.kind !== "ok" || badReason.kind !== "ok") {
+      throw new Error("Expected ok result");
+    }
+    expect(missingSession.data.accepted).toEqual([
+      expect.objectContaining({
+        localEventId: "event-sale-cleared-1",
+        status: "rejected",
+      }),
+    ]);
+    expect(badReason.data.accepted).toEqual([
+      expect.objectContaining({
+        localEventId: "event-sale-cleared-1",
+        status: "rejected",
+      }),
+    ]);
+  });
+
   it("returns stable outcomes and mappings when a projected batch is retried", async () => {
     const repository = createFakeSyncRepository();
     const service = createLocalSyncIngestionService({
@@ -480,6 +563,50 @@ describe("createLocalSyncIngestionService", () => {
     ]);
     expect(result.data.conflicts).toEqual([]);
     expect(repository.createdPaymentAllocations).toHaveLength(1);
+    expect(repository.createdTransactions).toHaveLength(1);
+  });
+
+  it("projects valid local sale items when the submitted display SKU is blank", async () => {
+    const repository = createFakeSyncRepository();
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 100,
+    });
+
+    const result = await service.ingestBatch(
+      buildBatch({
+        events: [
+          buildSaleCompletedEvent({
+            sequence: 1,
+            payload: {
+              ...buildSaleCompletedEvent({ sequence: 1 }).payload,
+              items: [
+                {
+                  localTransactionItemId: "local-txn-item-1",
+                  productId: "product-1",
+                  productSkuId: "sku-1",
+                  productName: "Wig Cap",
+                  productSku: "",
+                  quantity: 1,
+                  unitPrice: 25,
+                },
+              ],
+            },
+          }),
+        ],
+      }),
+    );
+
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("Expected ok result");
+    expect(result.data.accepted).toEqual([
+      expect.objectContaining({
+        localEventId: "event-sale-completed-1",
+        status: "projected",
+      }),
+    ]);
+    expect(result.data.conflicts).toEqual([]);
     expect(repository.createdTransactions).toHaveLength(1);
   });
 
@@ -1833,7 +1960,7 @@ describe("createLocalSyncIngestionService", () => {
         summary: "Staff access changed before this POS history synced.",
       }),
     );
-    expect(repository.roleChecks[1]).toEqual(
+    expect(repository.roleChecks.at(-1)).toEqual(
       expect.objectContaining({
         allowedRoles: ["manager"],
       }),
@@ -2465,6 +2592,26 @@ function buildSaleCompletedEvent(
   };
 }
 
+function buildSaleClearedEvent(
+  overrides: Partial<PosLocalSyncEventInput> & { sequence: number },
+): PosLocalSyncEventInput {
+  const { sequence, ...rest } = overrides;
+  return {
+    localEventId: `event-sale-cleared-${sequence}`,
+    localRegisterSessionId: "local-register-1",
+    sequence,
+    eventType: "sale_cleared",
+    occurredAt: 20,
+    staffProfileId: "staff-1" as never,
+    staffProofToken: "proof-token-1",
+    payload: {
+      localPosSessionId: `local-session-${sequence}`,
+      reason: "Sale cleared",
+    },
+    ...rest,
+  };
+}
+
 function createFakeSyncRepository(
   overrides: Partial<{
     terminal: {
@@ -2654,6 +2801,12 @@ function createFakeSyncRepository(
       return (
         overrides.consumedHoldQuantities ?? new Map([["sku-1", 1]])
       ) as never;
+    },
+    async releaseActiveInventoryHoldsForSession() {
+      return {
+        releasedHoldCount: 0,
+        releasedHolds: [],
+      } as never;
     },
     async findEvent(args) {
       return (

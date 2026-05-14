@@ -39,7 +39,7 @@ describe("PaymentView", () => {
     { method: "mobile_money" as const, expectedAmount: 5000 },
   ])("when method is $method", ({ method, expectedAmount }) => {
     it("shows Complete Sale when entered amount covers the full due amount", async () => {
-      const onAddPayment = vi.fn();
+      const onAddPayment = vi.fn().mockResolvedValue(true);
       const onComplete = vi.fn().mockResolvedValue(true);
       const user = userEvent.setup();
 
@@ -73,8 +73,68 @@ describe("PaymentView", () => {
       expect(onComplete).toHaveBeenCalledTimes(1);
     });
 
+    it("waits for durable payment save before completing the sale", async () => {
+      let resolvePayment!: (value: boolean) => void;
+      const onAddPayment = vi.fn(
+        () =>
+          new Promise<boolean>((resolve) => {
+            resolvePayment = resolve;
+          }),
+      );
+      const onComplete = vi.fn().mockResolvedValue(true);
+      const user = userEvent.setup();
+
+      render(
+        <PaymentView
+          cartItemCount={1}
+          totalPaid={0}
+          remainingDue={5000}
+          amountDue={5000}
+          formatter={formatter}
+          selectedPaymentMethod={method}
+          setSelectedPaymentMethod={vi.fn()}
+          onAddPayment={onAddPayment}
+          onComplete={onComplete}
+        />,
+      );
+
+      await user.click(screen.getByRole("button", { name: "Complete Sale" }));
+
+      expect(onAddPayment).toHaveBeenCalledWith(method, expectedAmount);
+      expect(onComplete).not.toHaveBeenCalled();
+
+      resolvePayment(true);
+
+      await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
+    });
+
+    it("does not complete when durable payment save fails", async () => {
+      const onAddPayment = vi.fn().mockResolvedValue(false);
+      const onComplete = vi.fn().mockResolvedValue(true);
+      const user = userEvent.setup();
+
+      render(
+        <PaymentView
+          cartItemCount={1}
+          totalPaid={0}
+          remainingDue={5000}
+          amountDue={5000}
+          formatter={formatter}
+          selectedPaymentMethod={method}
+          setSelectedPaymentMethod={vi.fn()}
+          onAddPayment={onAddPayment}
+          onComplete={onComplete}
+        />,
+      );
+
+      await user.click(screen.getByRole("button", { name: "Complete Sale" }));
+
+      expect(onAddPayment).toHaveBeenCalledWith(method, expectedAmount);
+      expect(onComplete).not.toHaveBeenCalled();
+    });
+
     it("keeps Add Payment and Cancel for partial payments", async () => {
-      const onAddPayment = vi.fn();
+      const onAddPayment = vi.fn().mockResolvedValue(true);
       const onComplete = vi.fn().mockResolvedValue(false);
       const user = userEvent.setup();
 

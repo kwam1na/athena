@@ -34,7 +34,10 @@ interface PaymentViewProps {
   formatter: Intl.NumberFormat;
   selectedPaymentMethod: SelectedPaymentMethod | null;
   setSelectedPaymentMethod: (method: SelectedPaymentMethod | null) => void;
-  onAddPayment: (method: SelectedPaymentMethod, amount: number) => void;
+  onAddPayment: (
+    method: SelectedPaymentMethod,
+    amount: number,
+  ) => boolean | Promise<boolean>;
   onComplete: () => void | Promise<boolean | void>;
   onPaymentAmountChange?: (amount: number | undefined) => void;
   isCompleting?: boolean;
@@ -201,7 +204,13 @@ export const PaymentView = ({
       return;
     }
 
-    onAddPayment(selectedPaymentMethod, currentAmount);
+    const isPaymentSaved = await onAddPayment(
+      selectedPaymentMethod,
+      currentAmount,
+    );
+    if (!isPaymentSaved) {
+      return;
+    }
 
     if (shouldCompleteWithCurrentAmount) {
       const isCompleted = await onComplete();

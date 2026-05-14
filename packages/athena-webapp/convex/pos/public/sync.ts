@@ -146,6 +146,14 @@ const posLocalSyncUploadEventValidator = v.union(
   }),
   v.object({
     ...posLocalSyncEventBaseValidator,
+    eventType: v.literal("sale_cleared"),
+    payload: v.object({
+      localPosSessionId: v.string(),
+      reason: v.optional(v.string()),
+    }),
+  }),
+  v.object({
+    ...posLocalSyncEventBaseValidator,
     eventType: v.literal("register_reopened"),
     payload: v.object({
       reason: v.optional(v.string()),

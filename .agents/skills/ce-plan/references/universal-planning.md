@@ -99,16 +99,19 @@ After structuring the plan, ask the user how they want to receive it using the p
 
 **Options:**
 
-1. **Save to disk** — Write the plan as a markdown file. Ask where:
+1. **Save to disk** — Write the plan as a markdown file plus a paired browser-readable HTML review artifact. Ask where:
    - `docs/plans/` (only show if this directory exists)
    - Current working directory
    - `/tmp`
    - A custom path
    - Use filename convention: `YYYY-MM-DD-<descriptive-name>-plan.md`
+   - Write the HTML artifact next to it by replacing `.md` with `.html`
+   - The markdown file is canonical; the HTML file is a legible static review artifact for browser-first reading
+   - Use plain static HTML/CSS only; no JavaScript, remote assets, external fonts, or build step
    - Start the document with a `# Title` heading, followed by `Created: YYYY-MM-DD` on the next line. No YAML frontmatter.
 
 2. **Open in Proof (web app) — review and comment to iterate with the agent** — Open the doc in Every's Proof editor, iterate with the agent via comments, or copy a link to share with others. Load the `ce-proof` skill to create and open the document.
 
-3. **Save to disk AND open in Proof** — Do both: write the markdown file to disk and open the doc in Proof for review.
+3. **Save to disk AND open in Proof** — Do both: write the markdown file and paired HTML artifact to disk, then open the markdown doc in Proof for review. If Proof review materially changes the markdown, update the HTML artifact after syncing the reviewed markdown locally.
 
 Do not offer `/ce-work` (software-only) or issue creation (not applicable to non-software plans).

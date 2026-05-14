@@ -37,9 +37,12 @@ interface PaymentsAddedListProps {
   editingPaymentId?: string | null;
   onEditingPaymentIdChange?: (paymentId: string | null) => void;
   paymentsExpanded?: boolean;
-  onUpdatePayment?: (paymentId: string, amount: number) => void;
-  onRemovePayment?: (paymentId: string) => void;
-  onClearPayments?: () => void;
+  onUpdatePayment?: (
+    paymentId: string,
+    amount: number,
+  ) => boolean | Promise<boolean>;
+  onRemovePayment?: (paymentId: string) => boolean | Promise<boolean>;
+  onClearPayments?: () => boolean | Promise<boolean>;
   onEditingPaymentChange?: (isEditing: boolean) => void;
   onPaymentsExpandedChange?: (isExpanded: boolean) => void;
   variant?: "default" | "minimized";
@@ -158,7 +161,7 @@ export const PaymentsAddedList = ({
     setEditingKeypadValue("");
   };
 
-  const handleSaveEdit = (paymentId: string) => {
+  const handleSaveEdit = async (paymentId: string) => {
     if (!editingAmount || editingAmount <= 0) {
       toast.error("Please enter a valid amount");
       return;
@@ -185,11 +188,11 @@ export const PaymentsAddedList = ({
       return;
     }
 
+    const saved = await onUpdatePayment(paymentId, editingAmount);
+    if (saved === false) return;
     if (otherPaymentsTotal + editingAmount >= totalAmountDue) {
       setPaymentsExpanded(false);
     }
-
-    onUpdatePayment(paymentId, editingAmount);
     clearPaymentEditing();
   };
 
@@ -211,17 +214,19 @@ export const PaymentsAddedList = ({
     setPaymentsExpanded(false);
   };
 
-  const handleClearPayments = () => {
+  const handleClearPayments = async () => {
+    const saved = await onClearPayments?.();
+    if (saved === false) return;
     resetPaymentCollectionControls();
-    onClearPayments?.();
   };
 
-  const handleRemovePayment = (paymentId: string) => {
-    if (payments.length <= 1 || editingPaymentId === paymentId) {
+  const handleRemovePayment = async (paymentId: string) => {
+    const shouldResetControls = payments.length <= 1 || editingPaymentId === paymentId;
+    const saved = await onRemovePayment?.(paymentId);
+    if (saved === false) return;
+    if (shouldResetControls) {
       resetPaymentCollectionControls();
     }
-
-    onRemovePayment?.(paymentId);
   };
 
   if (payments.length === 0) {

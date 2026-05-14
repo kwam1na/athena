@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Athena POS Always Local-First Flow Plan</title>
+    <style type="text/css">
+      :root {
+        color-scheme: light;
+        --ink: #17201b;
+        --muted: #5f6c64;
+        --line: #d9e2dc;
+        --paper: #fbf8f2;
+        --panel: #ffffff;
+        --panel-soft: #f3f7f2;
+        --accent: #216e58;
+        --accent-2: #8c4f21;
+        --accent-3: #315f8f;
+        --danger: #9f352c;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        line-height: 1.55;
+      }
+
+      a {
+        color: var(--accent);
+      }
+
+      .page {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 48px 24px 72px;
+      }
+
+      .hero {
+        display: grid;
+        gap: 22px;
+        padding: 34px 0 28px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .eyebrow {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        max-width: 920px;
+        margin: 0;
+        font-size: clamp(2.2rem, 5vw, 4.7rem);
+        line-height: 0.98;
+        letter-spacing: 0;
+      }
+
+      .hero p {
+        max-width: 830px;
+        margin: 0;
+        color: var(--muted);
+        font-size: 1.12rem;
+      }
+
+      .pill-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .pill {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        border-radius: 999px;
+        padding: 7px 12px;
+        color: var(--muted);
+        font-size: 0.9rem;
+        font-weight: 700;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 260px) minmax(0, 1fr);
+        gap: 34px;
+        padding-top: 34px;
+      }
+
+      .plan-nav {
+        position: sticky;
+        top: 18px;
+        align-self: start;
+        display: grid;
+        gap: 8px;
+        border-left: 3px solid var(--accent);
+        padding-left: 16px;
+      }
+
+      .plan-nav a {
+        color: var(--muted);
+        font-size: 0.95rem;
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      .plan-nav a:hover {
+        color: var(--accent);
+      }
+
+      .main-content {
+        display: grid;
+        gap: 28px;
+      }
+
+      .main-content > div {
+        display: grid;
+        gap: 16px;
+        padding: 0 0 28px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      h2 {
+        margin: 0;
+        color: var(--ink);
+        font-size: 1.65rem;
+        line-height: 1.15;
+        letter-spacing: 0;
+      }
+
+      h3 {
+        margin: 0;
+        color: var(--ink);
+        font-size: 1.08rem;
+        line-height: 1.2;
+        letter-spacing: 0;
+      }
+
+      p {
+        margin: 0;
+      }
+
+      .lead {
+        color: var(--muted);
+        font-size: 1.04rem;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .unit-grid {
+        display: grid;
+        gap: 14px;
+      }
+
+      .panel,
+      .unit {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 18px;
+      }
+
+      .panel {
+        display: grid;
+        gap: 10px;
+      }
+
+      .unit {
+        display: grid;
+        gap: 12px;
+      }
+
+      .unit .unit-heading {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 14px;
+      }
+
+      .uid {
+        color: var(--accent);
+        font-size: 0.82rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      ul,
+      ol {
+        margin: 0;
+        padding-left: 1.2rem;
+      }
+
+      li + li {
+        margin-top: 0.45rem;
+      }
+
+      code {
+        background: var(--panel-soft);
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        padding: 0.08rem 0.32rem;
+        font-size: 0.9em;
+      }
+
+      .decision-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .decision {
+        display: grid;
+        grid-template-columns: 160px minmax(0, 1fr);
+        gap: 14px;
+        padding: 14px 0;
+        border-top: 1px solid var(--line);
+      }
+
+      .decision:first-child {
+        border-top: 0;
+      }
+
+      .tag {
+        color: var(--accent-2);
+        font-weight: 800;
+      }
+
+      .flow {
+        display: grid;
+        gap: 12px;
+      }
+
+      .flow-row {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .flow-step {
+        min-height: 84px;
+        display: grid;
+        align-content: center;
+        gap: 4px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 12px;
+      }
+
+      .flow-step strong {
+        color: var(--accent);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      th,
+      td {
+        padding: 12px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        background: var(--panel-soft);
+        color: var(--ink);
+        font-size: 0.86rem;
+        text-transform: uppercase;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .note {
+        border-left: 4px solid var(--accent-3);
+        background: #eef5fa;
+        padding: 14px 16px;
+        color: #25445f;
+      }
+
+      .warning {
+        border-left-color: var(--danger);
+        background: #fff1ef;
+        color: #6f2a25;
+      }
+
+      @media (max-width: 860px) {
+        .page {
+          padding: 30px 16px 52px;
+        }
+
+        .layout {
+          grid-template-columns: 1fr;
+        }
+
+        .plan-nav {
+          position: static;
+          border-left: 0;
+          border-top: 3px solid var(--accent);
+          padding: 12px 0 0;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .grid,
+        .flow-row {
+          grid-template-columns: 1fr;
+        }
+
+        .decision {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="hero">
+        <div class="eyebrow">
+          <span>Athena plan</span>
+          <span>May 14, 2026</span>
+          <span>POS local-first</span>
+        </div>
+        <h1>Make the POS register local-first even when internet is available</h1>
+        <p>
+          This follow-up plan inverts the landed offline fallback: cashier actions
+          should write to local POS state first, render from that local state, and
+          let cloud sync project the register history in the background.
+        </p>
+        <div class="pill-row">
+          <span class="pill">POS-only scope</span>
+          <span class="pill">Local append before success</span>
+          <span class="pill">Convex projection remains</span>
+          <span class="pill">Visual validation by user</span>
+        </div>
+      </div>
+
+      <div class="layout">
+        <div class="plan-nav">
+          <a href="#frame">Problem Frame</a>
+          <a href="#requirements">Requirements</a>
+          <a href="#decisions">Decisions</a>
+          <a href="#design">Design Shape</a>
+          <a href="#units">Implementation Units</a>
+          <a href="#risks">Risks</a>
+          <a href="#sources">Sources</a>
+        </div>
+
+        <div class="main-content">
+          <div id="frame">
+            <h2>Problem Frame</h2>
+            <p class="lead">
+              The current implementation has the local store and sync rails, but
+              normal online register actions still try Convex first and only fall
+              back locally after unavailable or unknown failures. That does not
+              satisfy the origin requirement that POS loads and operates from
+              local state first every time.
+            </p>
+            <div class="note">
+              The plan keeps the existing POS-only boundary. It does not make
+              analytics, procurement, admin, staff management, or cash-control
+              review offline-first.
+            </div>
+          </div>
+
+          <div id="requirements">
+            <h2>Requirements</h2>
+            <div class="grid">
+              <div class="panel">
+                <h3>Cashier Path</h3>
+                <ul>
+                  <li>Append local events before cashier success, online or offline.</li>
+                  <li>Render active register, sale, cart, checkout, and closeout from local state.</li>
+                  <li>Do not wait for cloud sync to make the sale complete.</li>
+                  <li>Preserve current payment methods and payment semantics.</li>
+                </ul>
+              </div>
+              <div class="panel">
+                <h3>Cloud Path</h3>
+                <ul>
+                  <li>Keep Convex sync ingestion as the cloud acceptance boundary.</li>
+                  <li>Project local history into register, transaction, inventory, payment, and trace records.</li>
+                  <li>Return mappings and conflicts to update local state.</li>
+                  <li>Separate pending sync from manager review work.</li>
+                </ul>
+              </div>
+              <div class="panel">
+                <h3>Provisioned Terminal</h3>
+                <ul>
+                  <li>Use local seed, staff proof, and catalog snapshot after online provisioning.</li>
+                  <li>Support reload and temporary network loss without blocking POS.</li>
+                  <li>Fail closed for missing, expired, or scope-mismatched staff proof.</li>
+                </ul>
+              </div>
+              <div class="panel">
+                <h3>Explicit Non-Goals</h3>
+                <ul>
+                  <li>No offline new-business creation or first-time provisioning.</li>
+                  <li>No peer-to-peer disconnected sync.</li>
+                  <li>No real-time cross-terminal stock coordination.</li>
+                  <li>No new payment-provider authorization behavior.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div id="decisions">
+            <h2>Key Technical Decisions</h2>
+            <div class="decision-list">
+              <div class="decision">
+                <div class="tag">Primary boundary</div>
+                <p>Local POS command gateway becomes the normal register command path.</p>
+              </div>
+              <div class="decision">
+                <div class="tag">Read model</div>
+                <p>Local register state is explicit and replayable from IndexedDB events.</p>
+              </div>
+              <div class="decision">
+                <div class="tag">Sync</div>
+                <p>Existing Convex ingestion and projection remain the cloud acceptance path.</p>
+              </div>
+              <div class="decision">
+                <div class="tag">Auth</div>
+                <p>Server-issued POS staff proof is persisted locally with expiry and scope.</p>
+              </div>
+              <div class="decision">
+                <div class="tag">Catalog</div>
+                <p>Register search uses the latest local snapshot first; online refresh is opportunistic.</p>
+              </div>
+              <div class="decision">
+                <div class="tag">Closeout</div>
+                <p>Local closeout pauses selling until a permitted local reopen event is recorded.</p>
+              </div>
+            </div>
+          </div>
+
+          <div id="design">
+            <h2>Design Shape</h2>
+            <p class="lead">
+              The implementation should make local storage the first durable
+              write, then treat sync as background projection.
+            </p>
+            <div class="flow">
+              <div class="flow-row">
+                <div class="flow-step">
+                  <strong>1. Cashier action</strong>
+                  <span>Open, add item, pay, complete, closeout, or reopen.</span>
+                </div>
+                <div class="flow-step">
+                  <strong>2. Local command</strong>
+                  <span>Validate local authority and append event.</span>
+                </div>
+                <div class="flow-step">
+                  <strong>3. Local render</strong>
+                  <span>Update register read model and show success.</span>
+                </div>
+                <div class="flow-step">
+                  <strong>4. Background sync</strong>
+                  <span>Upload ordered pending events when possible.</span>
+                </div>
+                <div class="flow-step">
+                  <strong>5. Projection</strong>
+                  <span>Cloud records, mappings, and conflicts catch up.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="units">
+            <h2>Implementation Units</h2>
+            <div class="unit-grid">
+              <div class="unit">
+                <div class="unit-heading">
+                  <span class="uid">U1</span>
+                  <h3>Create the local register read model</h3>
+                </div>
+                <p>
+                  Reconstruct active register, active sale, cart, payments,
+                  closeout, receipt identity, mappings, and sync state from
+                  local seed plus ordered local events.
+                </p>
+                <p><strong>Core files:</strong> <code>posLocalStore.ts</code>, <code>registerReadModel.ts</code>, <code>syncStatus.ts</code></p>
+              </div>
+
+              <div class="unit">
+                <div class="unit-heading">
+                  <span class="uid">U2</span>
+                  <h3>Add the primary local POS command gateway</h3>
+                </div>
+                <p>
+                  Implement local-first register open, sale start, cart edits,
+                  payment capture, transaction completion, closeout, and reopen.
+                </p>
+                <p><strong>Core files:</strong> <code>ports.ts</code>, <code>localCommandGateway.ts</code>, <code>syncContract.ts</code></p>
+              </div>
+
+              <div class="unit">
+                <div class="unit-heading">
+                  <span class="uid">U3</span>
+                  <h3>Wire the register view model to local state first</h3>
+                </div>
+                <p>
+                  Replace online-primary branches in <code>useRegisterViewModel</code>
+                  with the local read model and command gateway.
+                </p>
+                <p><strong>Core files:</strong> <code>useRegisterViewModel.ts</code>, <code>registerUiState.ts</code>, <code>POSRegisterView.tsx</code></p>
+              </div>
+
+              <div class="unit">
+                <div class="unit-heading">
+                  <span class="uid">U4</span>
+                  <h3>Persist and refresh local staff authority</h3>
+                </div>
+                <p>
+                  Store scoped staff proof material locally so provisioned
+                  terminals can sign into POS during temporary network loss.
+                </p>
+                <p><strong>Core files:</strong> <code>staffCredentials.ts</code>, <code>CashierAuthDialog.tsx</code>, <code>localStaffAuthority.ts</code></p>
+              </div>
+
+              <div class="unit">
+                <div class="unit-heading">
+                  <span class="uid">U5</span>
+                  <h3>Make catalog and availability local-first</h3>
+                </div>
+                <p>
+                  Hydrate register search from a local catalog snapshot first,
+                  while online catalog rows refresh the snapshot opportunistically.
+                </p>
+                <p><strong>Core files:</strong> <code>localCatalogSnapshot.ts</code>, <code>catalogGateway.ts</code>, <code>useRegisterCatalogIndex.ts</code></p>
+              </div>
+
+              <div class="unit">
+                <div class="unit-heading">
+                  <span class="uid">U6</span>
+                  <h3>Keep sync projection aligned with richer local events</h3>
+                </div>
+                <p>
+                  Ensure always-local register history still syncs idempotently
+                  into cloud records and returns mappings/conflicts to local state.
+                </p>
+                <p><strong>Core files:</strong> <code>syncContract.ts</code>, <code>ingestLocalEvents.ts</code>, <code>projectLocalEvents.ts</code></p>
+              </div>
+
+              <div class="unit">
+                <div class="unit-heading">
+                  <span class="uid">U7</span>
+                  <h3>Add app-shell and reload readiness</h3>
+                </div>
+                <p>
+                  Distinguish provisioned-ready, needs-provisioning, proof-expired,
+                  catalog-missing, local-store-unavailable, and schema-unsupported states.
+                </p>
+                <p><strong>Core files:</strong> <code>offlineReadiness.ts</code>, <code>pos/register.index.tsx</code>, <code>POSRegisterOpeningGuard.tsx</code></p>
+              </div>
+
+              <div class="unit">
+                <div class="unit-heading">
+                  <span class="uid">U8</span>
+                  <h3>Update tests, docs, and validation coverage</h3>
+                </div>
+                <p>
+                  Make future online-first regressions visible in tests, validation
+                  maps, generated docs, and solution notes.
+                </p>
+                <p><strong>Core files:</strong> <code>validation-map.json</code>, <code>docs/solutions/architecture/...</code>, harness registry files if needed.</p>
+              </div>
+            </div>
+          </div>
+
+          <div id="risks">
+            <h2>Risks &amp; Mitigations</h2>
+            <table summary="POS always local-first implementation risks and mitigations">
+              <thead>
+                <tr>
+                  <th>Risk</th>
+                  <th>Mitigation</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Local store corruption blocks register operation.</td>
+                  <td>Schema handling, explicit unsupported states, and failed-write tests before cashier success.</td>
+                </tr>
+                <tr>
+                  <td>Staff proof storage weakens security.</td>
+                  <td>Persist scoped proof tokens only; enforce expiry, terminal, store, and role scope; validate again during sync.</td>
+                </tr>
+                <tr>
+                  <td>Online refresh overwrites active local sale state.</td>
+                  <td>Treat Convex reads as seed/snapshot refresh only; local event history remains active source.</td>
+                </tr>
+                <tr>
+                  <td>Stale catalog creates inventory or price drift.</td>
+                  <td>Preserve completed receipts and route drift to reconciliation instead of rewriting local history.</td>
+                </tr>
+                <tr>
+                  <td>Cloud projection duplicates records.</td>
+                  <td>Keep local event ids, strict sequence, mappings, and retry equality checks in server ingestion.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div id="sources">
+            <h2>Sources &amp; References</h2>
+            <ul>
+              <li><a href="../brainstorms/2026-05-13-pos-local-first-register-requirements.md">Origin requirements</a></li>
+              <li><a href="./2026-05-14-001-feat-pos-always-local-first-flow-plan.md">Markdown plan</a></li>
+              <li><a href="./2026-05-13-001-feat-pos-local-first-register-plan.md">Prior local-first runtime plan</a></li>
+              <li><a href="../solutions/architecture/athena-pos-local-first-sync-2026-05-13.md">POS local-first sync solution</a></li>
+              <li><a href="../solutions/performance/athena-pos-cart-latency-foundation-2026-05-05.md">POS cart latency foundation</a></li>
+            </ul>
+            <div class="note warning">
+              The HTML is a review artifact. The markdown file remains the canonical
+              implementation plan for execution.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

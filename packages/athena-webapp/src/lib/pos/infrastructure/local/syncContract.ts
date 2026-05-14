@@ -42,6 +42,7 @@ export function isSyncablePosLocalEvent(event: PosLocalEventRecord): boolean {
     ) &&
     (event.type === "register.opened" ||
       event.type === "transaction.completed" ||
+      event.type === "cart.cleared" ||
       event.type === "register.closeout_started" ||
       event.type === "register.reopened")
   );
@@ -94,6 +95,7 @@ function toUploadEvent(
         localReceiptNumber: stringOrEmpty(payload.receiptNumber),
         registerNumber: event.registerNumber,
         customerProfileId: nullableStringToOptional(payload.customerProfileId),
+        customerInfo: customerInfoFromPayload(payload),
         totals: {
           subtotal: numberOrZero(payload.subtotal),
           tax: numberOrZero(payload.tax),
@@ -103,6 +105,28 @@ function toUploadEvent(
         payments: Array.isArray(payload.payments)
           ? payload.payments.map(toPaymentPayload)
           : [],
+      },
+    };
+  }
+
+  if (event.type === "cart.cleared") {
+    const payload = asRecord(event.payload);
+    const localPosSessionId =
+      event.localPosSessionId ?? stringOrEmpty(payload.localPosSessionId);
+    if (hasLaterCompletedSale(event, orderedEvents, localPosSessionId)) {
+      return null;
+    }
+
+    return {
+      localEventId: event.localEventId,
+      localRegisterSessionId: event.localRegisterSessionId,
+      eventType: "sale_cleared",
+      occurredAt: event.createdAt,
+      staffProfileId: event.staffProfileId,
+      staffProofToken: event.staffProofToken,
+      payload: {
+        localPosSessionId,
+        reason: nullableStringToOptional(payload.reason),
       },
     };
   }
@@ -142,6 +166,33 @@ function toUploadEvent(
   return null;
 }
 
+function hasLaterCompletedSale(
+  event: PosLocalEventRecord,
+  orderedEvents: PosLocalEventRecord[],
+  localPosSessionId: string,
+) {
+  return orderedEvents.some(
+    (candidate) =>
+      candidate.sequence > event.sequence &&
+      candidate.type === "transaction.completed" &&
+      (candidate.localPosSessionId ??
+        stringOrEmpty(asRecord(candidate.payload).localPosSessionId)) ===
+        localPosSessionId,
+  );
+}
+
+function customerInfoFromPayload(payload: Record<string, unknown>) {
+  const customerInfo = {
+    name: nullableStringToOptional(payload.customerName),
+    email: nullableStringToOptional(payload.customerEmail),
+    phone: nullableStringToOptional(payload.customerPhone),
+  };
+
+  return customerInfo.name || customerInfo.email || customerInfo.phone
+    ? customerInfo
+    : undefined;
+}
+
 function getSyncableUploadSequence(
   event: PosLocalEventRecord,
   orderedEvents: PosLocalEventRecord[],
@@ -150,26 +201,46 @@ function getSyncableUploadSequence(
     (candidate) =>
       candidate.sequence <= event.sequence &&
       candidate.localRegisterSessionId === event.localRegisterSessionId &&
-      isPendingSyncUploadEvent(candidate),
+      isPendingSyncUploadEvent(candidate, orderedEvents),
   ).length;
 }
 
-function isPendingSyncUploadEvent(event: PosLocalEventRecord): boolean {
-  if (event.sync.uploaded === true && isUploadSequenceEventType(event)) {
+function isPendingSyncUploadEvent(
+  event: PosLocalEventRecord,
+  orderedEvents: PosLocalEventRecord[],
+): boolean {
+  if (
+    event.sync.uploaded === true &&
+    isUploadSequenceEventType(event) &&
+    !isSkippedSaleClearEvent(event, orderedEvents)
+  ) {
     return true;
   }
 
   return (
     isSyncablePosLocalEvent(event) &&
+    toUploadEvent(event, orderedEvents) !== null &&
     (event.sync.status === "pending" ||
       event.sync.status === "syncing" ||
       event.sync.status === "failed")
   );
 }
 
+function isSkippedSaleClearEvent(
+  event: PosLocalEventRecord,
+  orderedEvents: PosLocalEventRecord[],
+) {
+  if (event.type !== "cart.cleared") return false;
+  const payload = asRecord(event.payload);
+  const localPosSessionId =
+    event.localPosSessionId ?? stringOrEmpty(payload.localPosSessionId);
+  return hasLaterCompletedSale(event, orderedEvents, localPosSessionId);
+}
+
 function isUploadSequenceEventType(event: PosLocalEventRecord): boolean {
   return (
     event.type === "register.opened" ||
+    event.type === "cart.cleared" ||
     event.type === "transaction.completed" ||
     event.type === "register.closeout_started" ||
     event.type === "register.reopened"

@@ -11,7 +11,9 @@ type PosOperationalRole =
 
 export interface PosTerminalDto {
   _id: string;
+  cloudTerminalId?: string;
   displayName: string;
+  localTerminalId?: string;
   registerNumber?: string;
   status?: string;
   registeredAt?: number;
@@ -19,7 +21,9 @@ export interface PosTerminalDto {
 
 export interface PosRegisteredTerminalDto {
   _id: Id<"posTerminal">;
+  cloudTerminalId?: string;
   displayName: string;
+  localTerminalId?: string;
   registerNumber?: string;
   storeId?: Id<"store">;
   fingerprintHash?: string;
@@ -241,6 +245,7 @@ export interface PosBindSessionToRegisterSessionInput {
 }
 
 export interface PosPaymentDto {
+  id?: string;
   method: PosPaymentMethod | string;
   amount: number;
   timestamp: number;

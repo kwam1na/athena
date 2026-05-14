@@ -420,6 +420,20 @@ function parseLocalSyncEvent(
     };
   }
 
+  if (event.eventType === "sale_cleared") {
+    return {
+      ok: true,
+      event: {
+        ...event,
+        eventType: "sale_cleared",
+        payload: {
+          localPosSessionId: event.payload.localPosSessionId as string,
+          reason: optionalString(event.payload.reason),
+        },
+      },
+    };
+  }
+
   if (event.eventType === "register_closed") {
     return {
       ok: true,
@@ -456,6 +470,10 @@ function validateLocalSyncEventPayload(event: PosLocalSyncEventInput): string | 
 
   if (event.eventType === "sale_completed") {
     return validateSaleCompletedPayload(event.payload);
+  }
+
+  if (event.eventType === "sale_cleared") {
+    return validateSaleClearedPayload(event.payload);
   }
 
   if (event.eventType === "register_closed") {
@@ -573,7 +591,7 @@ function validateSaleCompletedPayload(payload: Record<string, unknown>) {
         !isNonEmptyString(item.productName) ||
         !isNonEmptyString(item.productId) ||
         !isNonEmptyString(item.productSkuId) ||
-        !isNonEmptyString(item.productSku) ||
+        !isOptionalString(item.productSku) ||
         !isOptionalNonEmptyString(item.localTransactionItemId) ||
         !isPositiveInteger(item.quantity) ||
         !isNonNegativeFiniteNumber(item.unitPrice)
@@ -662,6 +680,18 @@ function validateSaleCompletedPayload(payload: Record<string, unknown>) {
   return null;
 }
 
+function validateSaleClearedPayload(payload: Record<string, unknown>) {
+  if (!isNonEmptyString(payload.localPosSessionId)) {
+    return "POS sale clear is missing the local sale identifier.";
+  }
+
+  if (!isOptionalNonEmptyString(payload.reason)) {
+    return "POS sale clear reason is invalid.";
+  }
+
+  return null;
+}
+
 function validateRegisterReopenedPayload(payload: Record<string, unknown>) {
   if (!isOptionalNonEmptyString(payload.reason)) {
     return "POS register reopen reason is invalid.";
@@ -716,7 +746,7 @@ function parseSaleCompletedPayload(
         item.productSkuId as string,
       ),
       productName: item.productName as string,
-      productSku: item.productSku as string,
+      productSku: optionalDisplayString(item.productSku),
       barcode: optionalString(item.barcode),
       quantity: item.quantity as number,
       unitPrice: item.unitPrice as number,
@@ -749,6 +779,10 @@ function optionalString(value: unknown): string | undefined {
     : undefined;
 }
 
+function optionalDisplayString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 function isRecord(value: unknown): value is Record<string, any> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -759,6 +793,10 @@ function isNonEmptyString(value: unknown): value is string {
 
 function isOptionalNonEmptyString(value: unknown): value is string | undefined {
   return value === undefined || isNonEmptyString(value);
+}
+
+function isOptionalString(value: unknown): value is string | undefined {
+  return value === undefined || typeof value === "string";
 }
 
 function isNonNegativeFiniteNumber(value: unknown): value is number {

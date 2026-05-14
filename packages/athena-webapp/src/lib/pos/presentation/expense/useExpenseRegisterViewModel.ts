@@ -531,10 +531,10 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
 
   const baseCheckoutProps = {
     payments: [],
-    onAddPayment: () => {},
-    onUpdatePayment: () => {},
-    onRemovePayment: () => {},
-    onClearPayments: () => {},
+    onAddPayment: async () => false,
+    onUpdatePayment: async () => false,
+    onRemovePayment: async () => false,
+    onClearPayments: async () => false,
     onStartNewTransaction: () => {
       store.startNewTransaction();
       resetAutoSessionInitialized();

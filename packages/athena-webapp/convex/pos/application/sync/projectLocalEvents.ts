@@ -31,6 +31,7 @@ type ProjectEventArgs = {
 };
 
 type SaleCompletedArgs = ProjectEventArgsFor<"sale_completed">;
+type SaleClearedArgs = ProjectEventArgsFor<"sale_cleared">;
 
 type StoreRecord = Awaited<ReturnType<SyncProjectionRepository["getStore"]>>;
 type TerminalRecord = Awaited<
@@ -89,6 +90,8 @@ type PersistedSale = {
   transactionMapping: LocalSyncMappingRecord;
 };
 
+const POS_USABLE_REGISTER_SESSION_STATUSES = new Set(["open", "active"]);
+
 const INVENTORY_CONFLICT_SUMMARY =
   "Inventory needs manager review for a synced offline sale.";
 const PAYMENT_CONFLICT_SUMMARY =
@@ -99,6 +102,7 @@ const PERMISSION_DRIFT_SUMMARY =
 const POS_SYNC_ALLOWED_ROLES_BY_EVENT = {
   register_opened: ["manager"],
   sale_completed: ["cashier", "manager"],
+  sale_cleared: ["cashier", "manager"],
   register_closed: ["cashier", "manager"],
   register_reopened: ["manager"],
 } satisfies Record<PosLocalSyncEventType, PosSyncOperationalRole[]>;
@@ -130,6 +134,13 @@ export async function projectLocalSyncEvent(
     return projectSaleCompleted(
       repository,
       args as ProjectEventArgsFor<"sale_completed">,
+    );
+  }
+
+  if (args.event.eventType === "sale_cleared") {
+    return projectSaleCleared(
+      repository,
+      args as ProjectEventArgsFor<"sale_cleared">,
     );
   }
 
@@ -196,6 +207,32 @@ async function validateProjectionPermission(
     return null;
   }
 
+  const hasActiveCashierOrManagerRole =
+    args.event.eventType === "register_opened" && staff
+      ? await repository.hasActivePosRole({
+          staffProfileId: args.event.staffProfileId,
+          storeId: args.storeId,
+          allowedRoles: ["cashier", "manager"],
+        })
+      : false;
+  const hasTerminalCashierOrManagerProof =
+    Boolean(staff) &&
+    staff?.storeId === args.storeId &&
+    staff?.status === "active" &&
+    hasActiveCashierOrManagerRole &&
+    hasTerminalAccess &&
+    hasValidStaffProof;
+  if (
+    hasTerminalCashierOrManagerProof &&
+    args.event.eventType === "register_opened" &&
+    (await canMapExistingCloudRegisterSession(
+      repository,
+      args as ProjectEventArgsFor<"register_opened">,
+    ))
+  ) {
+    return null;
+  }
+
   return createConflict(repository, args, {
     conflictType: "permission",
     summary: PERMISSION_DRIFT_SUMMARY,
@@ -211,6 +248,29 @@ async function validateProjectionPermission(
         : {}),
     },
   });
+}
+
+async function canMapExistingCloudRegisterSession(
+  repository: SyncProjectionRepository,
+  args: ProjectEventArgsFor<"register_opened">,
+) {
+  const directRegisterSessionId = repository.normalizeCloudId(
+    "registerSession",
+    args.event.localRegisterSessionId,
+  );
+  if (!directRegisterSessionId) {
+    return false;
+  }
+
+  const registerSession = await repository.getRegisterSession(
+    directRegisterSessionId,
+  );
+  return Boolean(
+    registerSession &&
+      registerSession.storeId === args.storeId &&
+      registerSession.terminalId === args.terminalId &&
+      isPosUsableRegisterSession(registerSession),
+  );
 }
 
 type ProjectEventArgsFor<EventType extends PosLocalSyncEventType> = Omit<
@@ -245,7 +305,8 @@ async function projectRegisterOpened(
     if (
       registerSession &&
       registerSession.storeId === args.storeId &&
-      registerSession.terminalId === args.terminalId
+      registerSession.terminalId === args.terminalId &&
+      isPosUsableRegisterSession(registerSession)
     ) {
       const mapping = await createMapping(repository, args, {
         localIdKind: "registerSession",
@@ -510,13 +571,14 @@ async function resolveSaleRegisterAndSession(
     return conflictResult(conflict);
   }
 
-  if (registerSession.status === "closed") {
+  if (!isPosUsableRegisterSession(registerSession)) {
     const conflict = await createConflict(repository, args, {
       conflictType: "permission",
-      summary: "Register was locally closed before this sale synced.",
+      summary: "Register was not open before this sale synced.",
       details: {
         localRegisterSessionId: args.event.localRegisterSessionId,
         localTransactionId: payload.localTransactionId,
+        status: registerSession.status,
       },
     });
     return conflictResult(conflict);
@@ -561,6 +623,20 @@ async function resolveSaleRegisterAndSession(
         localTransactionId: payload.localTransactionId,
         posSessionStaffProfileId: existingPosSession.staffProfileId,
         eventStaffProfileId: args.event.staffProfileId,
+      },
+    });
+    return conflictResult(conflict);
+  }
+
+  if (existingPosSession?.status === "void") {
+    const conflict = await createConflict(repository, args, {
+      conflictType: "permission",
+      summary: "Cleared POS sessions cannot be completed from synced local history.",
+      details: {
+        localPosSessionId: payload.localPosSessionId,
+        localTransactionId: payload.localTransactionId,
+        posSessionId: existingPosSession._id,
+        status: existingPosSession.status,
       },
     });
     return conflictResult(conflict);
@@ -619,6 +695,116 @@ async function resolveSaleRegisterAndSession(
     registerSession,
     resolvedRegisterNumber,
   };
+}
+
+async function projectSaleCleared(
+  repository: SyncProjectionRepository,
+  args: SaleClearedArgs,
+): Promise<ProjectionResult> {
+  const registerSession = await repository.getRegisterSessionByLocalId({
+    storeId: args.storeId,
+    terminalId: args.terminalId,
+    localRegisterSessionId: args.event.localRegisterSessionId,
+  });
+  if (!registerSession) {
+    const conflict = await createConflict(repository, args, {
+      conflictType: "permission",
+      summary: "Register session mapping is missing for synced POS history.",
+      details: {
+        localRegisterSessionId: args.event.localRegisterSessionId,
+        localPosSessionId: args.event.payload.localPosSessionId,
+      },
+    });
+    return conflictResult(conflict);
+  }
+
+  const existingPosSession = await repository.getPosSessionByLocalId({
+    storeId: args.storeId,
+    terminalId: args.terminalId,
+    localRegisterSessionId: args.event.localRegisterSessionId,
+    localPosSessionId: args.event.payload.localPosSessionId,
+    registerSessionId: registerSession._id,
+  });
+  if (!existingPosSession) {
+    if (
+      repository.normalizeCloudId(
+        "posSession",
+        args.event.payload.localPosSessionId,
+      )
+    ) {
+      const conflict = await createConflict(repository, args, {
+        conflictType: "permission",
+        summary: "POS session does not belong to this synced register history.",
+        details: {
+          localPosSessionId: args.event.payload.localPosSessionId,
+          localRegisterSessionId: args.event.localRegisterSessionId,
+        },
+      });
+      return conflictResult(conflict);
+    }
+
+    return { status: "projected", mappings: [], conflicts: [] };
+  }
+
+  if (existingPosSession.staffProfileId !== args.event.staffProfileId) {
+    const conflict = await createConflict(repository, args, {
+      conflictType: "permission",
+      summary: "POS session does not belong to the synced staff proof.",
+      details: {
+        localPosSessionId: args.event.payload.localPosSessionId,
+        posSessionStaffProfileId: existingPosSession.staffProfileId,
+        eventStaffProfileId: args.event.staffProfileId,
+      },
+    });
+    return conflictResult(conflict);
+  }
+
+  if (
+    existingPosSession.transactionId ||
+    existingPosSession.status === "completed"
+  ) {
+    const conflict = await createConflict(repository, args, {
+      conflictType: "permission",
+      summary: "Completed POS sessions cannot be cleared from synced local history.",
+      details: {
+        localPosSessionId: args.event.payload.localPosSessionId,
+        posSessionId: existingPosSession._id,
+        status: existingPosSession.status,
+        transactionId: existingPosSession.transactionId,
+      },
+    });
+    return conflictResult(conflict);
+  }
+
+  const existingPosSessionMapping = await findMapping(repository, args, {
+    localIdKind: "posSession",
+    localId: args.event.payload.localPosSessionId,
+  });
+  if (existingPosSessionMapping) {
+    return {
+      status: "projected",
+      mappings: [existingPosSessionMapping],
+      conflicts: [],
+    };
+  }
+
+  await repository.releaseActiveInventoryHoldsForSession({
+    sessionId: existingPosSession._id,
+    now: args.event.occurredAt,
+  });
+  await repository.patchPosSession(existingPosSession._id, {
+    notes: args.event.payload.reason,
+    status: "void",
+    updatedAt: args.event.occurredAt,
+  });
+  const mapping = await createMapping(repository, args, {
+    localIdKind: "posSession",
+    localId: args.event.payload.localPosSessionId,
+    cloudTable: "posSession",
+    cloudId: existingPosSession._id,
+  });
+
+  return { status: "projected", mappings: [mapping], conflicts: [] };
 }
 
 async function calculateSalePayments(
@@ -1491,6 +1677,14 @@ function createMapping(
   };
 
   return repository.createMapping(scopedInput);
+}
+
+function isPosUsableRegisterSession(
+  registerSession: Pick<RegisterSessionRecord, "status"> | null | undefined,
+) {
+  return POS_USABLE_REGISTER_SESSION_STATUSES.has(
+    registerSession?.status ?? "",
+  );
 }
 
 function createConflict(
