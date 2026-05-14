@@ -13,10 +13,31 @@ import { mapThrownError } from "~/src/lib/pos/application/results";
 import { CashierAuthDialog } from "./CashierAuthDialog";
 
 const mocks = vi.hoisted(() => ({
+  createPosLocalStore: vi.fn(),
   hashPin: vi.fn(async (pin: string) => `hashed:${pin}`),
   toastError: vi.fn(),
   toastSuccess: vi.fn(),
+  unwrapLocalStaffProofToken: vi.fn(
+    async (): Promise<{ expiresAt: number; token: string } | null> => ({
+      expiresAt: Date.now() + 10_000,
+      token: "proof-token-1",
+    }),
+  ),
   useMutation: vi.fn(),
+  verifyLocalPin: vi.fn(
+    async (): Promise<
+      | { ok: true }
+      | {
+          ok: false;
+          reason: "invalid_pin" | "malformed_verifier" | "unsupported_verifier";
+        }
+    > => ({ ok: true }),
+  ),
+  wrapLocalStaffProofToken: vi.fn(async () => ({
+    ciphertext: "wrapped-proof-token",
+    expiresAt: Date.now() + 10_000,
+    iv: "proof-iv",
+  })),
 }));
 
 vi.mock("convex/react", () => ({
@@ -32,6 +53,17 @@ vi.mock("sonner", () => ({
 
 vi.mock("~/src/lib/security/pinHash", () => ({
   hashPin: mocks.hashPin,
+}));
+
+vi.mock("@/lib/security/localPinVerifier", () => ({
+  unwrapLocalStaffProofToken: mocks.unwrapLocalStaffProofToken,
+  verifyLocalPin: mocks.verifyLocalPin,
+  wrapLocalStaffProofToken: mocks.wrapLocalStaffProofToken,
+}));
+
+vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
+  createIndexedDbPosLocalStorageAdapter: vi.fn(() => ({})),
+  createPosLocalStore: mocks.createPosLocalStore,
 }));
 
 vi.mock("@/components/pos/PinInput", () => ({
@@ -77,13 +109,45 @@ const storeId = "store-1" as Id<"store">;
 const terminalId = "terminal-1" as Id<"posTerminal">;
 const staffProfileId = "staff-1" as Id<"staffProfile">;
 
+function buildLocalAuthorityRecord() {
+  return {
+    activeRoles: ["cashier"],
+    credentialId: "credential-1",
+    credentialVersion: 1,
+    displayName: "Ama Mensah",
+    expiresAt: Date.now() + 10_000,
+    issuedAt: Date.now(),
+    organizationId: "org-1",
+    refreshedAt: Date.now(),
+    staffProfileId,
+    status: "active",
+    storeId,
+    terminalId,
+    username: "frontdesk",
+    verifier: {
+      algorithm: "PBKDF2-SHA256",
+      hash: "hash",
+      iterations: 120000,
+      salt: "salt",
+      version: 1,
+    },
+    wrappedPosLocalStaffProof: {
+      ciphertext: "wrapped-proof-token",
+      expiresAt: Date.now() + 10_000,
+      iv: "proof-iv",
+    },
+  };
+}
+
 function renderDialog({
   authenticateMutation = vi.fn(),
   expireMutation = vi.fn(),
+  refreshAuthorityMutation = vi.fn().mockResolvedValue(ok([])),
   workflowMode,
 }: {
   authenticateMutation?: ReturnType<typeof vi.fn>;
   expireMutation?: ReturnType<typeof vi.fn>;
+  refreshAuthorityMutation?: ReturnType<typeof vi.fn>;
   workflowMode?: "pos" | "expense";
 } = {}) {
   mocks.useMutation.mockReset();
@@ -91,9 +155,9 @@ function renderDialog({
   mocks.useMutation.mockImplementation(() => {
     mutationCallCount += 1;
 
-    return (
-      mutationCallCount % 2 === 1 ? authenticateMutation : expireMutation
-    ) as never;
+    if (mutationCallCount === 1) return authenticateMutation as never;
+    if (mutationCallCount === 2) return refreshAuthorityMutation as never;
+    return expireMutation as never;
   });
 
   const onAuthenticated = vi.fn();
@@ -137,7 +201,32 @@ async function submitCredentials(
 describe("CashierAuthDialog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.createPosLocalStore.mockReturnValue({
+      readStaffAuthorityForUsername: vi.fn(async () => ({
+        ok: true,
+        value: null,
+      })),
+      replaceStaffAuthoritySnapshot: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+    });
+    mocks.verifyLocalPin.mockResolvedValue({ ok: true });
+    mocks.unwrapLocalStaffProofToken.mockResolvedValue({
+      expiresAt: Date.now() + 10_000,
+      token: "proof-token-1",
+    });
+    mocks.wrapLocalStaffProofToken.mockResolvedValue({
+      ciphertext: "wrapped-proof-token",
+      expiresAt: Date.now() + 10_000,
+      iv: "proof-iv",
+    });
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: true,
+    });
     vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -187,6 +276,37 @@ describe("CashierAuthDialog", () => {
     expect(onAuthenticated).not.toHaveBeenCalled();
   });
 
+  it("clears local staff authority when an online refresh is refused", async () => {
+    const replaceStaffAuthoritySnapshot = vi.fn(async () => ({
+      ok: true,
+      value: [],
+    }));
+    mocks.createPosLocalStore.mockReturnValue({
+      readStaffAuthorityForUsername: vi.fn(async () => ({
+        ok: true,
+        value: buildLocalAuthorityRecord(),
+      })),
+      replaceStaffAuthoritySnapshot,
+    });
+    const refreshAuthorityMutation = vi.fn().mockResolvedValue(
+      userError({
+        code: "precondition_failed",
+        message:
+          "Staff sign-in list is too large to refresh safely. Contact support before using offline sign-in.",
+      }),
+    );
+
+    renderDialog({ refreshAuthorityMutation });
+
+    await waitFor(() =>
+      expect(replaceStaffAuthoritySnapshot).toHaveBeenCalledWith({
+        records: [],
+        storeId,
+        terminalId,
+      }),
+    );
+  });
+
   it("uses expense session copy when signing into expense mode", () => {
     const authenticateMutation = vi.fn();
 
@@ -198,6 +318,206 @@ describe("CashierAuthDialog", () => {
     expect(
       screen.getByRole("button", { name: "Sign out from other sessions" }),
     ).toBeInTheDocument();
+  });
+
+  it("does not leave cashier sign-in pending when the browser is offline", async () => {
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    const authenticateMutation = vi.fn();
+
+    const { user, onAuthenticated } = renderDialog({ authenticateMutation });
+
+    await submitCredentials(user);
+
+    await waitFor(() =>
+      expect(mocks.toastError).toHaveBeenCalledWith(
+        "This staff sign-in is not available offline on this terminal. Reconnect, then try again.",
+      ),
+    );
+    expect(authenticateMutation).not.toHaveBeenCalled();
+    expect(onAuthenticated).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByLabelText(/pin/i)).toHaveValue(""));
+    expect(
+      screen.getByRole("button", { name: "Sign in" }),
+    ).toBeInTheDocument();
+  });
+
+  it("authenticates a locally authorized cashier while offline", async () => {
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    const readStaffAuthorityForUsername = vi.fn(async () => ({
+      ok: true,
+      value: buildLocalAuthorityRecord(),
+    }));
+    mocks.createPosLocalStore.mockReturnValue({
+      readStaffAuthorityForUsername,
+      replaceStaffAuthoritySnapshot: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+    });
+    const authenticateMutation = vi.fn();
+
+    const { user, onAuthenticated } = renderDialog({ authenticateMutation });
+
+    await submitCredentials(user);
+
+    await waitFor(() =>
+      expect(onAuthenticated).toHaveBeenCalledWith(
+        expect.objectContaining({
+          activeRoles: ["cashier"],
+          posLocalStaffProof: {
+            expiresAt: expect.any(Number),
+            token: "proof-token-1",
+          },
+          staffProfileId,
+        }),
+      ),
+    );
+    expect(authenticateMutation).not.toHaveBeenCalled();
+    expect(mocks.verifyLocalPin).toHaveBeenCalledWith(
+      expect.objectContaining({ algorithm: "PBKDF2-SHA256" }),
+      "123456",
+    );
+    expect(mocks.unwrapLocalStaffProofToken).toHaveBeenCalledWith(
+      expect.objectContaining({ algorithm: "PBKDF2-SHA256" }),
+      "123456",
+      expect.objectContaining({ ciphertext: "wrapped-proof-token" }),
+    );
+    expect(mocks.toastSuccess).toHaveBeenCalledWith("Signed in as Ama Mensah");
+  });
+
+  it("clears the PIN when local offline authority cannot be read", async () => {
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    mocks.createPosLocalStore.mockReturnValue({
+      readStaffAuthorityForUsername: vi.fn(async () => ({
+        error: { code: "write_failed", message: "No local store" },
+        ok: false,
+      })),
+      replaceStaffAuthoritySnapshot: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+    });
+    const authenticateMutation = vi.fn();
+
+    const { user, onAuthenticated } = renderDialog({ authenticateMutation });
+
+    await submitCredentials(user);
+
+    await waitFor(() =>
+      expect(mocks.toastError).toHaveBeenCalledWith(
+        "Offline staff sign-in is unavailable. Reconnect, then try again.",
+      ),
+    );
+    expect(authenticateMutation).not.toHaveBeenCalled();
+    expect(onAuthenticated).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByLabelText(/pin/i)).toHaveValue(""));
+  });
+
+  it("clears the PIN when offline local PIN verification fails", async () => {
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    mocks.verifyLocalPin.mockResolvedValue({
+      ok: false,
+      reason: "invalid_pin",
+    });
+    mocks.createPosLocalStore.mockReturnValue({
+      readStaffAuthorityForUsername: vi.fn(async () => ({
+        ok: true,
+        value: buildLocalAuthorityRecord(),
+      })),
+      replaceStaffAuthoritySnapshot: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+    });
+    const authenticateMutation = vi.fn();
+
+    const { user, onAuthenticated } = renderDialog({ authenticateMutation });
+
+    await submitCredentials(user);
+
+    await waitFor(() =>
+      expect(mocks.toastError).toHaveBeenCalledWith(
+        "Sign-in details not recognized. Enter the username and PIN again.",
+      ),
+    );
+    expect(authenticateMutation).not.toHaveBeenCalled();
+    expect(onAuthenticated).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByLabelText(/pin/i)).toHaveValue(""));
+  });
+
+  it("clears the PIN when an offline staff proof cannot be unwrapped", async () => {
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    mocks.unwrapLocalStaffProofToken.mockResolvedValue(null);
+    mocks.createPosLocalStore.mockReturnValue({
+      readStaffAuthorityForUsername: vi.fn(async () => ({
+        ok: true,
+        value: buildLocalAuthorityRecord(),
+      })),
+      replaceStaffAuthoritySnapshot: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+    });
+    const authenticateMutation = vi.fn();
+
+    const { user, onAuthenticated } = renderDialog({ authenticateMutation });
+
+    await submitCredentials(user);
+
+    await waitFor(() =>
+      expect(mocks.toastError).toHaveBeenCalledWith(
+        "Offline staff sign-in needs a refresh. Reconnect, then try again.",
+      ),
+    );
+    expect(authenticateMutation).not.toHaveBeenCalled();
+    expect(onAuthenticated).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByLabelText(/pin/i)).toHaveValue(""));
+  });
+
+  it("rejects offline recover mode without claiming other registers were signed out", async () => {
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    const authenticateMutation = vi.fn();
+    const expireMutation = vi.fn();
+
+    const { user, onAuthenticated } = renderDialog({
+      authenticateMutation,
+      expireMutation,
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: "Sign out from other registers" }),
+    );
+    await submitCredentials(user);
+    await user.click(
+      screen.getByRole("button", { name: "Sign out from all registers" }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.toastError).toHaveBeenCalledWith(
+        "Other register sign-outs need a connection. Reconnect, then try again.",
+      ),
+    );
+    expect(authenticateMutation).not.toHaveBeenCalled();
+    expect(expireMutation).not.toHaveBeenCalled();
+    expect(onAuthenticated).not.toHaveBeenCalled();
   });
 
   it("collapses thrown faults to generic fallback copy and clears the PIN", async () => {
@@ -266,10 +586,12 @@ describe("CashierAuthDialog", () => {
       }),
     );
     const expireMutation = vi.fn().mockResolvedValue({ success: true });
+    const refreshAuthorityMutation = vi.fn().mockResolvedValue(ok([]));
 
     const { user, onAuthenticated } = renderDialog({
       authenticateMutation,
       expireMutation,
+      refreshAuthorityMutation,
     });
 
     await user.click(

@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>feat: Add POS local staff authority</title>
+  <style type="text/css">
+    :root {
+      color-scheme: light;
+      --bg: #f7f7f5;
+      --paper: #ffffff;
+      --ink: #18181b;
+      --muted: #666b76;
+      --line: #d9ddd7;
+      --soft: #eef4f1;
+      --accent: #0f766e;
+      --warn: #9a3412;
+      --danger: #991b1b;
+      --code: #f4f4f0;
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+    .page {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 40px 22px 56px;
+    }
+    .hero {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 28px;
+    }
+    .eyebrow {
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    h1 {
+      margin: 8px 0 10px;
+      font-size: 34px;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin: 34px 0 12px;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+    h3 {
+      margin: 20px 0 8px;
+      font-size: 16px;
+      letter-spacing: 0;
+    }
+    p {
+      margin: 0 0 12px;
+    }
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 5px 10px;
+      color: var(--muted);
+      background: #fbfbf9;
+      font-size: 13px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 18px;
+    }
+    .card {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px;
+    }
+    .card strong {
+      display: block;
+      margin-bottom: 6px;
+    }
+    .toc {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 18px 0 4px;
+    }
+    .toc a {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 8px 10px;
+      background: var(--paper);
+      color: var(--ink);
+      font-size: 14px;
+    }
+    ul {
+      margin: 8px 0 0 20px;
+      padding: 0;
+    }
+    li {
+      margin: 6px 0;
+    }
+    code {
+      background: var(--code);
+      border-radius: 4px;
+      padding: 1px 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: .92em;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: var(--soft);
+      font-size: 13px;
+      text-transform: uppercase;
+      color: var(--muted);
+      letter-spacing: .04em;
+    }
+    tr:last-child td {
+      border-bottom: 0;
+    }
+    .flow {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px;
+      overflow-x: auto;
+    }
+    .flow ol {
+      margin: 0 0 0 22px;
+      padding: 0;
+    }
+    .unit {
+      border-left: 4px solid var(--accent);
+      background: var(--paper);
+      border-radius: 8px;
+      padding: 16px 18px;
+      margin: 12px 0;
+      border-top: 1px solid var(--line);
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+    .callout {
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+      color: var(--warn);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin: 14px 0;
+    }
+    .danger {
+      background: #fef2f2;
+      border-color: #fecaca;
+      color: var(--danger);
+    }
+    @media (max-width: 820px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+      h1 {
+        font-size: 28px;
+      }
+      .hero {
+        padding: 22px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="hero">
+      <div class="eyebrow">Implementation Plan</div>
+      <h1>feat: Add POS local staff authority</h1>
+      <p>Add a POS-only local staff authority layer so registered staff can sign into an already-provisioned terminal without a live Convex connection.</p>
+      <div class="meta">
+        <span class="pill">Date: 2026-05-14</span>
+        <span class="pill">Type: feat</span>
+        <span class="pill">Status: active</span>
+        <span class="pill">Canonical markdown: <a href="2026-05-14-003-feat-pos-local-staff-authority-plan.md">plan.md</a></span>
+      </div>
+    </div>
+
+    <div class="toc">
+      <a href="#problem">Problem</a>
+      <a href="#requirements">Requirements</a>
+      <a href="#decisions">Decisions</a>
+      <a href="#flow">Design Flow</a>
+      <a href="#units">Units</a>
+      <a href="#risks">Risks</a>
+      <a href="#verification">Verification</a>
+    </div>
+
+    <div id="problem">
+      <h2>Problem Frame</h2>
+      <p>POS can now render from local readiness work, but cashier authentication still depends on the live Convex terminal staff-auth mutation. A provisioned terminal needs enough scoped local authority to verify registered staff while offline, without turning browser storage into a global login bypass.</p>
+      <div class="callout">
+        This plan separates local login authority from <code>posLocalStaffProof</code>. The proof remains sync/event evidence; local sign-in needs verifier material proving the entered PIN matches a registered staff credential.
+      </div>
+    </div>
+
+    <div id="requirements">
+      <h2>Requirements Digest</h2>
+      <div class="grid">
+        <div class="card">
+          <strong>Offline staff sign-in</strong>
+          <p>Registered active POS staff can sign into a provisioned terminal without a live connection when local authority is fresh and scoped.</p>
+        </div>
+        <div class="card">
+          <strong>Scoped verifier material</strong>
+          <p>Local records include store, terminal, staff, credential, role, version, expiry, and slow verifier metadata. They never include plaintext PINs.</p>
+        </div>
+        <div class="card">
+          <strong>Server reconciliation</strong>
+          <p>Sync validates authority drift and preserves completed local register work while creating review items when permissions changed.</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="decisions">
+      <h2>Key Decisions</h2>
+      <ul>
+        <li>Use a dedicated POS local staff authority store/module instead of trusting <code>posLocalStaffProof</code> as login proof.</li>
+        <li>Use slow salted local verifier metadata for offline PIN checks; keep the current online hash path as compatibility unless migrated deliberately.</li>
+        <li>Refresh local authority after successful online staff auth and terminal authority refresh.</li>
+        <li>Keep local cashier auth separate from manager elevation and command approval proofs.</li>
+        <li>Fail closed when authority is missing, expired, unsupported, or scoped to another terminal/store.</li>
+      </ul>
+    </div>
+
+    <div id="flow">
+      <h2>Design Flow</h2>
+      <div class="flow">
+        <ol>
+          <li>Manager assigns staff credentials online in Athena.</li>
+          <li>Provisioned POS terminal refreshes staff authority for its store and terminal.</li>
+          <li>Client writes scoped verifier records to IndexedDB.</li>
+          <li>Cashier signs in offline with username and PIN.</li>
+          <li>POS verifies against local authority and signs cashier into the local register.</li>
+          <li>Local POS events carry staff context.</li>
+          <li>Sync later validates staff/role/credential state and records permission conflicts when needed.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div id="units">
+      <h2>Implementation Units</h2>
+      <div class="unit">
+        <h3>U1. Model local staff authority in the POS local store</h3>
+        <p>Add durable IndexedDB storage for staff authority records keyed by store, terminal, and normalized username.</p>
+        <p><strong>Primary files:</strong> <code>posLocalStore.ts</code>, <code>localStaffAuthority.ts</code>, and tests.</p>
+      </div>
+      <div class="unit">
+        <h3>U2. Introduce a slow local PIN verifier</h3>
+        <p>Create Web Crypto-compatible verifier generation and matching with per-record salt and explicit algorithm metadata.</p>
+      </div>
+      <div class="unit">
+        <h3>U3. Export online staff authority snapshots from Convex</h3>
+        <p>Project active POS-authorized staff authority from Convex, filtered by terminal/store scope and credential status.</p>
+      </div>
+      <div class="unit">
+        <h3>U4. Refresh terminal-local staff authority in the client</h3>
+        <p>Persist refreshed local authority after online staff authentication and terminal provisioning/readiness refresh.</p>
+      </div>
+      <div class="unit">
+        <h3>U5. Authenticate cashier sign-in from local authority while offline</h3>
+        <p>Replace the offline fail-fast guard with local verification when authority exists, while keeping fail-closed states explicit.</p>
+      </div>
+      <div class="unit">
+        <h3>U6. Revalidate local staff authority during sync projection</h3>
+        <p>Extend sync evidence and projection tests so permission drift creates reconciliation records without deleting local sales.</p>
+      </div>
+      <div class="unit">
+        <h3>U7. Expose operator-safe readiness and diagnostics</h3>
+        <p>Show useful authority readiness states without leaking verifier, token, PIN hash, or raw credential material.</p>
+      </div>
+    </div>
+
+    <div id="risks">
+      <h2>Risk Summary</h2>
+      <table summary="Key implementation risks and mitigations for POS local staff authority">
+        <thead>
+          <tr>
+            <th>Risk</th>
+            <th>Mitigation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>IndexedDB snapshot is copied and attacked offline.</td>
+            <td>Store only scoped, expiring, salted slow verifiers; never raw PINs or global credentials.</td>
+          </tr>
+          <tr>
+            <td>Staff is revoked while the terminal is offline.</td>
+            <td>Expire local authority and create permission-drift reconciliation during sync.</td>
+          </tr>
+          <tr>
+            <td>Cashier auth is mistaken for manager approval.</td>
+            <td>Keep command approval proof minting and consumption server-bound and action-scoped.</td>
+          </tr>
+          <tr>
+            <td>Verifier work factor hurts low-end terminal responsiveness.</td>
+            <td>Choose concrete parameters during implementation with Web Crypto and focused performance-sensitive tests.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div id="verification">
+      <h2>Verification Strategy</h2>
+      <ul>
+        <li>React tests prove offline cashier sign-in succeeds from local authority and never calls Convex.</li>
+        <li>Local store tests prove authority refresh, expiry, scoping, and no raw PIN persistence.</li>
+        <li>Convex tests prove server authority snapshot filtering and permission-drift sync behavior.</li>
+        <li>Register view-model tests prove local staff identity reaches local POS events after offline sign-in.</li>
+      </ul>
+      <div class="callout danger">
+        Command approval and manager elevation remain unchanged authority boundaries. Local cashier auth must not satisfy protected command approvals.
+      </div>
+    </div>
+  </div>
+</body>
+</html>

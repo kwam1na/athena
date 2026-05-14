@@ -7,6 +7,37 @@ import {
   createPosLocalStore,
 } from "./posLocalStore";
 
+function buildAuthorityRecord(overrides = {}) {
+  return {
+    activeRoles: ["cashier" as const],
+    credentialId: "credential-1",
+    credentialVersion: 1,
+    displayName: "Ama Mensah",
+    expiresAt: 2_000,
+    issuedAt: 1_000,
+    organizationId: "org-1",
+    wrappedPosLocalStaffProof: {
+      ciphertext: "wrapped-proof-token",
+      expiresAt: 2_000,
+      iv: "proof-iv",
+    },
+    refreshedAt: 1_000,
+    staffProfileId: "staff-1",
+    status: "active" as const,
+    storeId: "store-1",
+    terminalId: "terminal-1",
+    username: "FrontDesk",
+    verifier: {
+      algorithm: "PBKDF2-SHA256" as const,
+      hash: "hash",
+      iterations: 120000,
+      salt: "salt",
+      version: 1 as const,
+    },
+    ...overrides,
+  };
+}
+
 describe("posLocalStore", () => {
   it("writes and reads a provisioned terminal seed before any network call", async () => {
     const store = createPosLocalStore({
@@ -154,6 +185,47 @@ describe("posLocalStore", () => {
     );
   });
 
+  it("keeps staff proof tokens transient for upload without storing them in events", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      createLocalId: () => "local-event-1",
+    });
+
+    await expect(
+      store.appendEvent({
+        type: "register.opened",
+        terminalId: "local-terminal-1",
+        storeId: "store_cloud_1",
+        localRegisterSessionId: "local-register-session-1",
+        staffProfileId: "staff_cloud_1",
+        staffProofToken: "proof-token-1",
+        payload: { openingFloat: 100 },
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      value: expect.not.objectContaining({
+        staffProofToken: expect.any(String),
+      }),
+    });
+
+    await expect(store.listEvents()).resolves.toEqual({
+      ok: true,
+      value: [
+        expect.not.objectContaining({
+          staffProofToken: expect.any(String),
+        }),
+      ],
+    });
+    await expect(store.listEventsForUpload()).resolves.toEqual({
+      ok: true,
+      value: [
+        expect.objectContaining({
+          staffProofToken: "proof-token-1",
+        }),
+      ],
+    });
+  });
+
   it("marks uploaded events as synced without changing unrelated pending events", async () => {
     let nextLocalId = 1;
     const store = createPosLocalStore({
@@ -231,7 +303,7 @@ describe("posLocalStore", () => {
       error: {
         code: "unsupported_schema_version",
         message:
-          "POS local store schema version 3 is newer than supported version 2.",
+          "POS local store schema version 4 is newer than supported version 3.",
       },
     });
   });
@@ -280,6 +352,103 @@ describe("posLocalStore", () => {
       ok: true,
       value: [],
     });
+  });
+
+  it("replaces and reads terminal-scoped staff authority without store bleed", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 1_500,
+    });
+
+    await expect(
+      store.replaceStaffAuthoritySnapshot({
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        records: [
+          buildAuthorityRecord(),
+          buildAuthorityRecord({
+            credentialId: "credential-2",
+            staffProfileId: "staff-2",
+            storeId: "store-2",
+            username: "other",
+          }),
+        ],
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      value: [
+        expect.objectContaining({
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          username: "frontdesk",
+        }),
+      ],
+    });
+
+    await expect(
+      store.readStaffAuthorityForUsername({
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        username: " FRONTDESK ",
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        credentialId: "credential-1",
+        username: "frontdesk",
+      }),
+    });
+    await expect(
+      store.readStaffAuthorityForUsername({
+        storeId: "store-2",
+        terminalId: "terminal-1",
+        username: "frontdesk",
+      }),
+    ).resolves.toEqual({ ok: true, value: null });
+  });
+
+  it("ignores expired and malformed local staff authority records", async () => {
+    const adapter = createMemoryPosLocalStorageAdapter();
+    const store = createPosLocalStore({
+      adapter,
+      clock: () => 3_000,
+    });
+
+    await store.replaceStaffAuthoritySnapshot({
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      records: [buildAuthorityRecord()],
+    });
+    await expect(
+      store.getStaffAuthorityReadiness({
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).resolves.toEqual({ ok: true, value: "expired" });
+    await expect(
+      store.readStaffAuthorityForUsername({
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        username: "frontdesk",
+      }),
+    ).resolves.toEqual({ ok: true, value: null });
+
+    await adapter.transaction(
+      "readwrite",
+      ["staffAuthority"],
+      async (transaction) => {
+        await transaction.put("staffAuthority", "store-1:terminal-1:broken", {
+          username: "broken",
+        });
+      },
+    );
+    await expect(
+      store.readStaffAuthorityForUsername({
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        username: "broken",
+      }),
+    ).resolves.toEqual({ ok: true, value: null });
   });
 
   it("reads local-to-cloud mappings for later events on the same local entity", async () => {

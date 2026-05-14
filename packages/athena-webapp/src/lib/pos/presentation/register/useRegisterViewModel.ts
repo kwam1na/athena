@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
+import { useParams } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 
@@ -41,6 +42,7 @@ import {
 } from "@/lib/pos/infrastructure/local/registerReadModel";
 import { readProjectedLocalRegisterModel } from "@/lib/pos/infrastructure/local/localRegisterReader";
 import { usePosLocalSyncRuntimeStatus } from "@/lib/pos/infrastructure/local/usePosLocalSyncRuntime";
+import { useLocalPosEntryContext } from "@/lib/pos/infrastructure/local/localPosEntryContext";
 import {
   useConvexRegisterCatalog,
   useConvexRegisterCatalogAvailability,
@@ -98,6 +100,11 @@ type LocalSyncRecord = {
   syncStatus?: LocalSyncStatusSource | string | null;
 };
 
+type LocalAuthenticatedStaff = {
+  activeRoles: string[];
+  displayName: string;
+} | null;
+
 function readStaffProofFromAuthResult(
   result: StaffAuthenticationResult,
 ): string | null {
@@ -115,6 +122,15 @@ function readStaffProofFromAuthResult(
   }
 
   return token;
+}
+
+function getStaffDisplayNameFromAuthResult(result: StaffAuthenticationResult) {
+  return (
+    result.staffProfile.fullName ||
+    [result.staffProfile.firstName, result.staffProfile.lastName]
+      .filter(Boolean)
+      .join(" ")
+  );
 }
 
 function hasCustomerDetails(
@@ -590,13 +606,32 @@ export function useRegisterViewModel(): RegisterViewModel {
   const { activeStore } = useGetActiveStore();
   const { user } = useAuth();
   const terminal = useGetTerminal();
+  const routeParams = useParams({ strict: false }) as
+    | {
+        orgUrlSlug?: string;
+        storeUrlSlug?: string;
+      }
+    | undefined;
+  const localEntryContext = useLocalPosEntryContext({
+    activeStore,
+    routeParams,
+  });
+  const activeStoreId = (activeStore?._id ??
+    (localEntryContext.status === "ready"
+      ? localEntryContext.storeId
+      : undefined)) as Id<"store"> | undefined;
+  const activeStoreCurrency = activeStore?.currency ?? "GHS";
   const navigateBack = useNavigateBack();
   const [staffProfileId, setStaffProfileId] =
     useState<Id<"staffProfile"> | null>(null);
   const [staffProofToken, setStaffProofToken] = useState<string | null>(null);
+  const [localAuthenticatedStaff, setLocalAuthenticatedStaff] =
+    useState<LocalAuthenticatedStaff>(null);
   const terminalRegisterNumber = terminal?.registerNumber
     ? trimOptional(terminal.registerNumber)
     : undefined;
+  const [localStaffAuthorityStatus, setLocalStaffAuthorityStatus] =
+    useState("unknown");
   const [showCustomerPanel, setShowCustomerPanel] = useState(false);
   const [showProductEntry, setShowProductEntry] = useState(true);
   const [productSearchQuery, setProductSearchQuery] = useState("");
@@ -661,7 +696,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     useState(0);
 
   const registerState = useConvexRegisterState({
-    storeId: activeStore?._id,
+    storeId: activeStoreId,
     terminalId: terminal?._id ?? null,
     staffProfileId,
     registerNumber: terminalRegisterNumber,
@@ -671,23 +706,23 @@ export function useRegisterViewModel(): RegisterViewModel {
   });
   const staffRosterResult = useQuery(
     api.operations.staffProfiles.listStaffProfiles,
-    activeStore?._id ? { storeId: activeStore._id } : "skip",
+    activeStoreId ? { storeId: activeStoreId! } : "skip",
   ) as unknown;
   const isStaffRosterLoaded =
-    !activeStore?._id || Array.isArray(staffRosterResult);
+    !activeStoreId || Array.isArray(staffRosterResult);
   const staffRoster = Array.isArray(staffRosterResult)
     ? (staffRosterResult as StaffProfileRosterRow[])
     : [];
   const activeRegisterOperatorCount =
     staffRoster.filter(canOperateRegister).length;
   const activeSession = useConvexActiveSession({
-    storeId: activeStore?._id,
+    storeId: activeStoreId,
     terminalId: terminal?._id ?? null,
     staffProfileId,
     registerNumber: terminalRegisterNumber,
   });
   const registerCatalogRows = useConvexRegisterCatalog({
-    storeId: activeStore?._id,
+    storeId: activeStoreId,
   });
   const registerCatalogIndex = useRegisterCatalogIndex(registerCatalogRows);
   const registerMetadataSearchState = useMemo(
@@ -702,7 +737,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     [registerMetadataSearchState.results],
   );
   const registerCatalogAvailabilityRows = useConvexRegisterCatalogAvailability({
-    storeId: activeStore?._id,
+    storeId: activeStoreId,
     productSkuIds: registerAvailabilityProductSkuIds,
   });
   const registerCatalogAvailabilityBySkuId = useMemo(() => {
@@ -767,7 +802,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       : null;
   const projectedLocalRegisterSession =
     localRegisterReadModel?.activeRegisterSession &&
-    activeStore?._id &&
+    activeStoreId &&
     terminal?._id &&
     isPosUsableRegisterSessionStatus(
       localRegisterReadModel.activeRegisterSession.status,
@@ -781,13 +816,13 @@ export function useRegisterViewModel(): RegisterViewModel {
             localRegisterReadModel.activeRegisterSession.openingFloat,
           registerNumber:
             localRegisterReadModel.activeRegisterSession.registerNumber ?? "",
-          storeId: activeStore._id,
+          storeId: activeStoreId!,
           terminalId: terminal._id,
       }
     : null;
   const projectedLocalCloseoutBlockedRegisterSession =
     localRegisterReadModel?.activeRegisterSession?.status === "closing" &&
-    activeStore?._id &&
+    activeStoreId &&
     terminal?._id
       ? {
           localRegisterSessionId:
@@ -822,7 +857,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       : null;
   const locallyOperableRegisterSession =
     localOperableRegisterSession &&
-    activeStore?._id === localOperableRegisterSession.storeId &&
+    activeStoreId === localOperableRegisterSession.storeId &&
     terminal?._id === localOperableRegisterSession.terminalId
       ? localOperableRegisterSession
       : projectedLocalRegisterSession;
@@ -846,13 +881,16 @@ export function useRegisterViewModel(): RegisterViewModel {
     cloudRegisterSessionId;
   const registerNumber = activeRegisterNumber ?? terminalRegisterNumber ?? "";
   const heldSessions = useConvexHeldSessions({
-    storeId: activeStore?._id,
+    storeId: activeStoreId,
     terminalId: terminal?._id ?? null,
     staffProfileId,
     limit: 10,
   });
   const cashier = registerState?.cashier ?? null;
-  const isCashierManager = Boolean(cashier?.activeRoles?.includes("manager"));
+  const isCashierManager = Boolean(
+    cashier?.activeRoles?.includes("manager") ||
+      localAuthenticatedStaff?.activeRoles.includes("manager"),
+  );
   const activeSessionConflict = registerState?.activeSessionConflict ?? null;
 
   const { holdSession: holdSessionCommand } = useConvexCommandGateway();
@@ -870,7 +908,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       subject: ApprovalRequirement["subject"];
       username: string;
     }) => {
-      if (!activeStore?._id) {
+      if (!activeStoreId) {
         return Promise.resolve(
           userError({
             code: "authentication_failed",
@@ -887,16 +925,16 @@ export function useRegisterViewModel(): RegisterViewModel {
             reason: args.reason,
             requiredRole: args.requiredRole,
             requestedByStaffProfileId: args.requestedByStaffProfileId,
-            storeId: activeStore._id,
+            storeId: activeStoreId!,
             subject: args.subject,
             username: args.username,
           }) as Promise<CommandResult<CommandApprovalProofResult>>,
       );
     },
-    [activeStore?._id, authenticateStaffCredentialForApproval],
+    [activeStoreId, authenticateStaffCredentialForApproval],
   );
   const closeoutApprovalRunner = useApprovedCommand({
-    storeId: activeStore?._id,
+    storeId: activeStoreId,
     onAuthenticateForApproval: authenticateForCloseoutApproval,
   });
   const correctRegisterSessionOpeningFloat = useMutation(
@@ -909,13 +947,18 @@ export function useRegisterViewModel(): RegisterViewModel {
     updateSession,
   } = useConvexSessionActions();
   const voidSessionRef = useRef<typeof voidSession>(voidSession);
+  const localStore = useMemo(
+    () =>
+      createPosLocalStore({
+        adapter: createIndexedDbPosLocalStorageAdapter(),
+      }),
+    [],
+  );
   const localCommandGateway = useMemo(
     () =>
       createLocalCommandGateway({
         allowExplicitRegisterSessionWithoutProjection: true,
-        store: createPosLocalStore({
-          adapter: createIndexedDbPosLocalStorageAdapter(),
-        }),
+        store: localStore,
         createLocalId: (kind) => {
           if (kind === "local-register-session" && terminal?._id) {
             return createLocalFallbackId(`local-register-${terminal._id}`);
@@ -927,10 +970,52 @@ export function useRegisterViewModel(): RegisterViewModel {
             ? (staffProofToken ?? undefined)
             : undefined,
       }),
-    [staffProfileId, staffProofToken, terminal?._id],
+    [localStore, staffProfileId, staffProofToken, terminal?._id],
   );
+  useEffect(() => {
+    if (!staffProfileId || !staffProofToken) {
+      return;
+    }
+
+    void localStore.attachStaffProofTokenToPendingEvents({
+      staffProfileId,
+      staffProofToken,
+    });
+  }, [localStore, staffProfileId, staffProofToken]);
+  useEffect(() => {
+    let cancelled = false;
+
+    async function refreshLocalStaffAuthorityStatus() {
+      if (!activeStoreId || !terminal?._id || typeof indexedDB === "undefined") {
+        setLocalStaffAuthorityStatus("unavailable");
+        return;
+      }
+
+      try {
+        const result = await localStore.getStaffAuthorityReadiness({
+          storeId: activeStoreId,
+          terminalId: terminal._id,
+        });
+        if (!cancelled) {
+          setLocalStaffAuthorityStatus(
+            result.ok ? result.value : "unavailable",
+          );
+        }
+      } catch {
+        if (!cancelled) {
+          setLocalStaffAuthorityStatus("unavailable");
+        }
+      }
+    }
+
+    void refreshLocalStaffAuthorityStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeStoreId, localStore, terminal?._id, staffProfileId]);
   const hasProvisionedLocalSyncSeed = useCallback(async () => {
-    if (!activeStore?._id || !terminal?._id || typeof indexedDB === "undefined") {
+    if (!activeStoreId || !terminal?._id || typeof indexedDB === "undefined") {
       return false;
     }
 
@@ -941,13 +1026,13 @@ export function useRegisterViewModel(): RegisterViewModel {
     return Boolean(
       result.ok &&
         result.value &&
-        result.value.storeId === activeStore._id &&
+        result.value.storeId === activeStoreId! &&
         result.value.cloudTerminalId === terminal._id &&
         result.value.syncSecretHash,
     );
-  }, [activeStore?._id, terminal?._id]);
+  }, [activeStoreId, terminal?._id]);
   const readCurrentLocalRegisterModel = useCallback(async () => {
-    if (!activeStore?._id || !terminal?._id || typeof indexedDB === "undefined") {
+    if (!activeStoreId || !terminal?._id || typeof indexedDB === "undefined") {
       return null;
     }
 
@@ -963,12 +1048,12 @@ export function useRegisterViewModel(): RegisterViewModel {
 
     const model = await readProjectedLocalRegisterModel({
       store,
-      storeId: activeStore._id,
+      storeId: activeStoreId!,
       terminal,
       isOnline: globalThis.navigator?.onLine ?? false,
     });
     return model.ok ? model.value : null;
-  }, [activeStore?._id, terminal]);
+  }, [activeStoreId, terminal]);
 
   const refreshLocalRegisterReadModel = useCallback(async () => {
     const model = await readCurrentLocalRegisterModel();
@@ -1020,7 +1105,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       return {
         _id: sale.localPosSessionId,
         _creationTime: sale.startedAt,
-        storeId: activeStore?._id as Id<"store">,
+        storeId: activeStoreId as Id<"store">,
         terminalId: sale.terminalId,
         staffProfileId: (sale.staffProfileId as Id<"staffProfile">) ?? undefined,
         status: "active",
@@ -1076,7 +1161,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       },
     };
   }, [
-    activeStore?._id,
+    activeStoreId,
     localOperablePosSession,
     localRegisterReadModel,
     locallyOperableRegisterSession,
@@ -1224,7 +1309,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       hasActivePosSession),
   );
   const requiresDrawerGate = Boolean(
-    activeStore?._id &&
+    activeStoreId &&
     terminal?._id &&
     staffProfileId &&
     bootstrapState &&
@@ -1321,6 +1406,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       if (!options?.keepCashier) {
         setStaffProfileId(null);
         setStaffProofToken(null);
+        setLocalAuthenticatedStaff(null);
         setLocalOperableRegisterSession(null);
       }
     },
@@ -1379,7 +1465,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     requestBootstrap();
   }, [
     requestBootstrap,
-    activeStore?._id,
+    activeStoreId,
     terminal?._id,
     staffProfileId,
     registerNumber,
@@ -1444,7 +1530,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       if (
         !usableActiveRegisterSession ||
         usableActiveRegisterSession._id.toString() !== localRegisterSessionId ||
-        !activeStore?._id ||
+        !activeStoreId ||
         !terminal?._id ||
         !staffProfileId
       ) {
@@ -1453,7 +1539,7 @@ export function useRegisterViewModel(): RegisterViewModel {
 
       const savedLocally = await localCommandGateway.seedRegisterSession({
         terminalId: terminal._id,
-        storeId: activeStore._id,
+        storeId: activeStoreId!,
         registerNumber,
         localRegisterSessionId,
         staffProfileId,
@@ -1468,7 +1554,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       return Boolean(savedLocally);
     },
     [
-      activeStore?._id,
+      activeStoreId,
       localRegisterReadModel?.activeRegisterSession?.localRegisterSessionId,
       localRegisterReadModel?.canSell,
       localCommandGateway,
@@ -1495,12 +1581,12 @@ export function useRegisterViewModel(): RegisterViewModel {
         toast.error("Drawer closed. Open the drawer before adding items.");
         return null;
       }
-      if (!activeStore?._id || !terminal?._id || !staffProfileId) {
+      if (!activeStoreId || !terminal?._id || !staffProfileId) {
         toast.error("Register sign-in required. Sign in before adding items.");
         return null;
       }
       const localSession = await localCommandGateway.startSession({
-        storeId: activeStore._id,
+        storeId: activeStoreId!,
         terminalId: terminal._id as Id<"posTerminal">,
         staffProfileId,
         registerNumber,
@@ -1524,7 +1610,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       return null;
     }
 
-    if (!activeStore?._id || !terminal?._id || !staffProfileId) {
+    if (!activeStoreId || !terminal?._id || !staffProfileId) {
       toast.error("Register sign-in required. Sign in before adding items.");
       return null;
     }
@@ -1540,7 +1626,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     }
 
     const result = await localCommandGateway.startSession({
-      storeId: activeStore._id,
+      storeId: activeStoreId!,
       terminalId: terminal._id as Id<"posTerminal">,
       staffProfileId,
       registerNumber,
@@ -1559,7 +1645,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       localRegisterSessionId,
       registerNumber,
       startedAt: Date.now(),
-      storeId: activeStore._id,
+      storeId: activeStoreId!,
       terminalId: terminal._id,
     });
     bootstrapInitialized.current = true;
@@ -1567,7 +1653,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   }, [
     operableActiveSession?._id,
     localEventRegisterSessionId,
-    activeStore?._id,
+    activeStoreId,
     ensureLocalRegisterSessionReady,
     hasProvisionedLocalSyncSeed,
     localCommandGateway,
@@ -1712,7 +1798,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         return false;
       }
 
-      if (!activeStore?._id || !terminal?._id) {
+      if (!activeStoreId || !terminal?._id) {
         return false;
       }
 
@@ -1726,7 +1812,7 @@ export function useRegisterViewModel(): RegisterViewModel {
 
       const savedLocally = await localCommandGateway.appendPaymentState({
         terminalId: terminal._id,
-        storeId: activeStore._id,
+        storeId: activeStoreId!,
         registerNumber,
         localRegisterSessionId: localEventRegisterSessionId ?? registerNumber,
         localPosSessionId: operableActiveSession._id.toString(),
@@ -1753,7 +1839,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       operableActiveSession?._id,
       activeSessionHasBlockedRegisterBinding,
       localEventRegisterSessionId,
-      activeStore?._id,
+      activeStoreId,
       hasProvisionedLocalSyncSeed,
       localCommandGateway,
       noteLocalRegisterEventChanged,
@@ -1875,13 +1961,13 @@ export function useRegisterViewModel(): RegisterViewModel {
       try {
         await waitForCheckoutMutationQueues();
 
-        if (!activeStore?._id || !terminal?._id) {
+        if (!activeStoreId || !terminal?._id) {
           presentOperatorError("Unable to save this cart update locally.");
           return false;
         }
         const savedLocally = await localCommandGateway.clearCart({
           terminalId: terminal._id,
-          storeId: activeStore._id,
+          storeId: activeStoreId!,
           registerNumber,
           localRegisterSessionId: localEventRegisterSessionId ?? registerNumber,
           localPosSessionId: localSaleId,
@@ -1929,7 +2015,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   }, [
     activeCartItems,
     localEventRegisterSessionId,
-    activeStore?._id,
+    activeStoreId,
     localCommandGateway,
     localRegisterReadModel?.activeSale?.localPosSessionId,
     noteLocalRegisterEventChanged,
@@ -1995,7 +2081,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       return;
     }
 
-    if (!activeStore?._id || !terminal?._id || !staffProfileId) {
+    if (!activeStoreId || !terminal?._id || !staffProfileId) {
       toast.error("Register sign-in required. Sign in before starting a sale.");
       return;
     }
@@ -2031,7 +2117,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     }
 
     const result = await localCommandGateway.startSession({
-      storeId: activeStore._id,
+      storeId: activeStoreId!,
       terminalId: terminal._id as Id<"posTerminal">,
       staffProfileId,
       registerNumber,
@@ -2053,7 +2139,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       localRegisterSessionId,
       registerNumber,
       startedAt: Date.now(),
-      storeId: activeStore._id,
+      storeId: activeStoreId!,
       terminalId: terminal._id,
     });
     bootstrapInitialized.current = true;
@@ -2061,7 +2147,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   }, [
     operableActiveSession,
     localEventRegisterSessionId,
-    activeStore?._id,
+    activeStoreId,
     staffProfileId,
     guardActiveSessionConflict,
     ensureLocalRegisterSessionReady,
@@ -2076,7 +2162,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   ]);
 
   const handleOpenDrawer = useCallback(async () => {
-    if (!activeStore?._id || !terminal?._id || !staffProfileId) {
+    if (!activeStoreId || !terminal?._id || !staffProfileId) {
       setDrawerErrorMessage(
         "Register sign-in required. Sign in before opening the drawer.",
       );
@@ -2103,7 +2189,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     }
 
     const result = await localCommandGateway.openDrawer({
-      storeId: activeStore._id,
+      storeId: activeStoreId!,
       terminalId: terminal._id as Id<"posTerminal">,
       staffProfileId,
       registerNumber,
@@ -2126,14 +2212,14 @@ export function useRegisterViewModel(): RegisterViewModel {
       openedAt: result.data.openedAt,
       openingFloat: parsedOpeningFloat,
       registerNumber,
-      storeId: activeStore._id,
+      storeId: activeStoreId!,
       terminalId: terminal._id,
     });
     setDrawerErrorMessage(null);
     bootstrapInitialized.current = true;
     toast.success("Drawer opening saved locally. It will sync when ready.");
   }, [
-    activeStore?._id,
+    activeStoreId,
     staffProfileId,
     drawerNotes,
     drawerOpeningFloat,
@@ -2145,7 +2231,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   ]);
 
   const handleSubmitRegisterCloseout = useCallback(async () => {
-    if (!activeStore?._id || !terminal?._id || !staffProfileId) {
+    if (!activeStoreId || !terminal?._id || !staffProfileId) {
       setDrawerErrorMessage(
         "Register sign-in required. Sign in before submitting closeout.",
       );
@@ -2188,7 +2274,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     await waitForCheckoutMutationQueues();
     const savedLocally = await localCommandGateway.startCloseout({
       terminalId: terminal._id,
-      storeId: activeStore._id,
+      storeId: activeStoreId!,
       registerNumber,
       localRegisterSessionId: registerSessionId,
       staffProfileId,
@@ -2217,7 +2303,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     requestBootstrap();
     toast.success("Register session closed locally. It will sync when ready.");
   }, [
-    activeStore?._id,
+    activeStoreId,
     activeCloseoutRegisterSession,
     closeoutCountedCash,
     closeoutNotes,
@@ -2240,7 +2326,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       return;
     }
 
-    if (!activeStore?._id || !terminal?._id || !staffProfileId) {
+    if (!activeStoreId || !terminal?._id || !staffProfileId) {
       setDrawerErrorMessage(
         "Register sign-in required. Sign in before reopening the register.",
       );
@@ -2270,7 +2356,7 @@ export function useRegisterViewModel(): RegisterViewModel {
 
     const savedLocally = await localCommandGateway.reopenRegister({
       terminalId: terminal._id,
-      storeId: activeStore._id,
+      storeId: activeStoreId!,
       registerNumber,
       localRegisterSessionId: registerSessionId,
       staffProfileId,
@@ -2292,13 +2378,13 @@ export function useRegisterViewModel(): RegisterViewModel {
       openedAt: closeoutBlockedRegisterSession.openedAt,
       openingFloat: closeoutBlockedRegisterSession.openingFloat,
       registerNumber,
-      storeId: activeStore._id,
+      storeId: activeStoreId!,
       terminalId: terminal._id,
     });
     requestBootstrap();
     toast.success("Register reopened locally. It will sync when ready.");
   }, [
-    activeStore?._id,
+    activeStoreId,
     activeCloseoutRegisterSession,
     closeoutBlockedRegisterSession,
     isCashierManager,
@@ -2311,7 +2397,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   ]);
 
   const handleSubmitOpeningFloatCorrection = useCallback(async () => {
-    if (!activeStore?._id || !user?._id || !staffProfileId) {
+    if (!activeStoreId || !user?._id || !staffProfileId) {
       setDrawerErrorMessage(
         "Register sign-in required. Sign in before correcting opening float.",
       );
@@ -2358,7 +2444,7 @@ export function useRegisterViewModel(): RegisterViewModel {
               correctedOpeningFloat: parsedOpeningFloat,
               reason,
               registerSessionId,
-              storeId: activeStore._id,
+              storeId: activeStoreId!,
             }),
           );
         } finally {
@@ -2388,7 +2474,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     });
   }, [
     activeOpeningFloatCorrectionRegisterSession?._id,
-    activeStore?._id,
+    activeStoreId,
     closeoutApprovalRunner,
     correctedOpeningFloat,
     correctRegisterSessionOpeningFloat,
@@ -2440,7 +2526,7 @@ export function useRegisterViewModel(): RegisterViewModel {
 
   useEffect(() => {
     if (
-      !activeStore?._id ||
+      !activeStoreId ||
       !terminal?._id ||
       !staffProfileId ||
       !bootstrapState ||
@@ -2487,7 +2573,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       bootstrapInitialized.current = false;
     })();
   }, [
-    activeStore?._id,
+    activeStoreId,
     activeRegisterSessionId,
     bootstrapState,
     staffProfileId,
@@ -2499,13 +2585,13 @@ export function useRegisterViewModel(): RegisterViewModel {
 
   const appendLocalCartItem = useCallback(
     async (input: { localPosSessionId: string; payload: unknown }) => {
-      if (!activeStore?._id || !terminal?._id || !staffProfileId) {
+      if (!activeStoreId || !terminal?._id || !staffProfileId) {
         return false;
       }
 
       return localCommandGateway.appendCartItem({
         terminalId: terminal._id,
-        storeId: activeStore._id,
+        storeId: activeStoreId!,
         registerNumber,
         localRegisterSessionId: localEventRegisterSessionId ?? registerNumber,
         localPosSessionId: input.localPosSessionId,
@@ -2515,7 +2601,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     },
     [
       localEventRegisterSessionId,
-      activeStore?._id,
+      activeStoreId,
       localCommandGateway,
       registerNumber,
       staffProfileId,
@@ -2902,14 +2988,14 @@ export function useRegisterViewModel(): RegisterViewModel {
     try {
       await waitForCheckoutMutationQueues();
 
-      if (!activeStore?._id || !terminal?._id) {
+      if (!activeStoreId || !terminal?._id) {
         presentOperatorError("Unable to save this cart update locally.");
         return;
       }
 
       const savedLocally = await localCommandGateway.clearCart({
         terminalId: terminal._id,
-        storeId: activeStore._id,
+        storeId: activeStoreId!,
         registerNumber,
         localRegisterSessionId: localEventRegisterSessionId ?? registerNumber,
         localPosSessionId: operableActiveSession._id.toString(),
@@ -2943,7 +3029,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     activeSessionHasBlockedRegisterBinding,
     localEventRegisterSessionId,
     activeCartItems,
-    activeStore?._id,
+    activeStoreId,
     localCommandGateway,
     noteLocalRegisterEventChanged,
     registerNumber,
@@ -2997,9 +3083,14 @@ export function useRegisterViewModel(): RegisterViewModel {
       if (typeof result === "string") {
         setStaffProfileId(result as Id<"staffProfile">);
         setStaffProofToken(null);
+        setLocalAuthenticatedStaff(null);
       } else {
         setStaffProfileId(result.staffProfileId);
         setStaffProofToken(readStaffProofFromAuthResult(result));
+        setLocalAuthenticatedStaff({
+          activeRoles: result.activeRoles ?? [],
+          displayName: getStaffDisplayNameFromAuthResult(result),
+        });
       }
       requestBootstrap();
     },
@@ -3148,7 +3239,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         return false;
       }
 
-      if (!activeStore?._id || !terminal?._id) {
+      if (!activeStoreId || !terminal?._id) {
         presentOperatorError("Unable to save this sale locally.");
         return false;
       }
@@ -3156,7 +3247,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       const localTransactionId = createLocalFallbackId("local-txn");
       const savedLocally = await localCommandGateway.completeTransaction({
         terminalId: terminal._id,
-        storeId: activeStore._id,
+        storeId: activeStoreId!,
         registerNumber,
         localRegisterSessionId: localEventRegisterSessionId ?? registerNumber,
         localPosSessionId,
@@ -3187,7 +3278,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     activeSession?._id,
     activeSession?.cartItems,
     localEventRegisterSessionId,
-    activeStore?._id,
+    activeStoreId,
     activeTotals,
     operableActiveSession,
     customerInfo,
@@ -3396,7 +3487,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   ]);
 
   const sessionPanel =
-    activeStore?._id && terminal?._id && staffProfileId
+    activeStoreId && terminal?._id && staffProfileId
       ? {
           activeSessionNumber: operableActiveSession?.sessionNumber ?? null,
           activeSessionTraceId: operableActiveSession?.workflowTraceId ?? null,
@@ -3447,9 +3538,10 @@ export function useRegisterViewModel(): RegisterViewModel {
       : null;
 
   const cashierCard =
-    activeStore?._id && terminal?._id && staffProfileId
+    activeStoreId && terminal?._id && staffProfileId
       ? {
-          cashierName: getCashierDisplayName(cashier),
+          cashierName:
+            cashier ? getCashierDisplayName(cashier) : localAuthenticatedStaff?.displayName ?? "",
           onSignOut: handleCashierSignOut,
         }
       : null;
@@ -3462,13 +3554,13 @@ export function useRegisterViewModel(): RegisterViewModel {
   );
 
   const drawerGate =
-    activeStore?._id && terminal?._id && staffProfileId && shouldShowDrawerGate
+    activeStoreId && terminal?._id && staffProfileId && shouldShowDrawerGate
       ? drawerGateMode === "openingFloatCorrection"
         ? {
             mode: drawerGateMode,
             registerLabel: terminal.displayName,
             registerNumber,
-            currency: activeStore.currency,
+            currency: activeStoreCurrency,
             currentOpeningFloat:
               activeOpeningFloatCorrectionRegisterSession?.openingFloat,
             correctedOpeningFloat,
@@ -3500,7 +3592,7 @@ export function useRegisterViewModel(): RegisterViewModel {
               isRecovery: closeoutBlockedGateIsRecovery,
               registerLabel: terminal.displayName,
               registerNumber,
-              currency: activeStore.currency,
+              currency: activeStoreCurrency,
               closeoutCountedCash,
               closeoutDraftVariance:
                 parsedCloseoutCountedCash !== undefined &&
@@ -3545,7 +3637,7 @@ export function useRegisterViewModel(): RegisterViewModel {
               mode: drawerGateMode,
               registerLabel: terminal.displayName,
               registerNumber,
-              currency: activeStore.currency,
+              currency: activeStoreCurrency,
               canOpenCashControls: isCashierManager,
               canOpenDrawer: isCashierManager,
               openingFloat: drawerOpeningFloat,
@@ -3569,7 +3661,7 @@ export function useRegisterViewModel(): RegisterViewModel {
             }
       : null;
   const closeoutControl =
-    activeStore?._id && terminal?._id && staffProfileId
+    activeStoreId && terminal?._id && staffProfileId
       ? {
           canCloseout: Boolean(
             (usableActiveRegisterSession ?? localCloseoutRegisterSession) &&
@@ -3615,9 +3707,10 @@ export function useRegisterViewModel(): RegisterViewModel {
         }
       : null;
   const localRuntimeSyncSource = usePosLocalSyncRuntimeStatus({
-    storeId: activeStore?._id,
+    storeId: activeStoreId,
     terminalId: terminal?._id,
     onRetrySync: requestBootstrap,
+    storeFactory: () => localStore,
   });
   const localSyncSource = readLocalSyncStatus(
     localRuntimeSyncSource
@@ -3637,7 +3730,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     registerState,
   );
   const syncStatus =
-    activeStore?._id && terminal?._id
+    activeStoreId && terminal?._id
       ? {
           ...buildPosSyncStatusPresentation(localSyncSource),
           onRetrySync: () => {
@@ -3648,10 +3741,10 @@ export function useRegisterViewModel(): RegisterViewModel {
       : null;
 
   const authDialog =
-    activeStore?._id && terminal?._id
+    activeStoreId && terminal?._id
       ? {
           open: !staffProfileId,
-          storeId: activeStore._id,
+          storeId: activeStoreId!,
           terminalId: terminal._id,
 	          onAuthenticated: (
 	            result: StaffAuthenticationResult | Id<"staffProfile">,
@@ -3666,7 +3759,27 @@ export function useRegisterViewModel(): RegisterViewModel {
     closeoutApprovalRunner.approvalDialog as RegisterCommandApprovalDialogState | null;
 
   return {
-    hasActiveStore: Boolean(activeStore),
+    hasActiveStore: Boolean(activeStoreId),
+    debug: {
+      activeStoreSource: activeStore
+        ? "live"
+        : activeStoreId
+          ? "local"
+          : "missing",
+      authDialogOpen: Boolean(authDialog?.open),
+      hasLiveActiveStore: Boolean(activeStore),
+      localStaffAuthorityStatus,
+      localEntryStatus: localEntryContext.status,
+      online: globalThis.navigator?.onLine ?? true,
+      staffSignedIn: Boolean(staffProfileId),
+      ...(activeStoreId ? { storeId: activeStoreId } : {}),
+      ...(terminal?._id ? { terminalId: terminal._id } : {}),
+      terminalSource: terminal
+        ? terminal.status === "local"
+          ? "local"
+          : "live"
+        : "missing",
+    },
     header,
     registerInfo,
     onboarding,

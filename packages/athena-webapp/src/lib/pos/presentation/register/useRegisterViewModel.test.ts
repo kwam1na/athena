@@ -32,6 +32,7 @@ const mockUsePosLocalSyncRuntimeStatus = vi.fn();
 const mockAppendLocalEvent = vi.fn();
 const mockListLocalEvents = vi.fn();
 const mockReadProvisionedTerminalSeed = vi.fn();
+const mockGetStaffAuthorityReadiness = vi.fn();
 const mockMarkLocalEventsSynced = vi.fn();
 const mockWriteLocalCloudMapping = vi.fn();
 
@@ -177,6 +178,13 @@ vi.mock("sonner", () => ({
   },
 }));
 
+vi.mock("@tanstack/react-router", () => ({
+  useParams: () => ({
+    orgUrlSlug: "wigclub",
+    storeUrlSlug: "wigclub",
+  }),
+}));
+
 vi.mock("@/hooks/useGetActiveStore", () => ({
   default: () => ({
     activeStore: mockActiveStore,
@@ -250,7 +258,13 @@ vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
   createIndexedDbPosLocalStorageAdapter: vi.fn(() => ({})),
   createPosLocalStore: vi.fn(() => ({
     appendEvent: mockAppendLocalEvent,
+    attachStaffProofTokenToPendingEvents: vi.fn(async () => ({
+      ok: true,
+      value: 0,
+    })),
+    getStaffAuthorityReadiness: mockGetStaffAuthorityReadiness,
     listEvents: mockListLocalEvents,
+    listEventsForUpload: mockListLocalEvents,
     readProvisionedTerminalSeed: mockReadProvisionedTerminalSeed,
     markEventsSynced: mockMarkLocalEventsSynced,
     writeLocalCloudMapping: mockWriteLocalCloudMapping,
@@ -398,6 +412,11 @@ describe("useRegisterViewModel", () => {
         storeId: "store-1",
         terminalId: "local-terminal-1",
       },
+    });
+    mockGetStaffAuthorityReadiness.mockReset();
+    mockGetStaffAuthorityReadiness.mockResolvedValue({
+      ok: true,
+      value: "ready",
     });
     mockMarkLocalEventsSynced.mockReset();
     mockMarkLocalEventsSynced.mockResolvedValue({ ok: true, value: [] });
@@ -719,6 +738,40 @@ describe("useRegisterViewModel", () => {
     expect(result.current.cashierCard).toBeNull();
   });
 
+  it("uses the local POS entry seed as store authority when the live active store is unavailable", async () => {
+    mockActiveStore = null;
+    mockRegisterState = undefined;
+    mockActiveSession = null;
+    mockTerminal = {
+      _id: "terminal-1" as Id<"posTerminal">,
+      displayName: "Front Counter",
+      registerNumber: "1",
+    };
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await waitFor(() =>
+      expect(result.current.debug?.localEntryStatus).toBe("ready"),
+    );
+
+    expect(result.current.hasActiveStore).toBe(true);
+    expect(result.current.authDialog).toEqual(
+      expect.objectContaining({
+        open: true,
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    );
+    expect(result.current.debug).toEqual(
+      expect.objectContaining({
+        activeStoreSource: "local",
+        hasLiveActiveStore: false,
+        localEntryStatus: "ready",
+      }),
+    );
+  });
+
   it("uses the short-lived local POS staff proof for local events", async () => {
     const { useRegisterViewModel } = await import("./useRegisterViewModel");
     const { result } = renderHook(() => useRegisterViewModel());
@@ -936,6 +989,40 @@ describe("useRegisterViewModel", () => {
     expect(result.current.drawerGate?.errorMessage).toBeNull();
     expect(result.current.checkout.registerNumber).toBe("1");
     expect(mockStartSession).not.toHaveBeenCalled();
+  });
+
+  it("uses offline authenticated manager roles for drawer access", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: null,
+      activeRegisterSession: null,
+      activeSession: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated({
+        activeRoles: ["manager"],
+        staffProfileId: "staff-1" as Id<"staffProfile">,
+        staffProfile: {
+          fullName: "Offline Manager",
+        },
+        posLocalStaffProof: {
+          expiresAt: Date.now() + 60_000,
+          token: "staff-proof-token",
+        },
+      });
+    });
+
+    expect(result.current.drawerGate).not.toBeNull();
+    expect(result.current.drawerGate?.mode).toBe("initialSetup");
+    expect(result.current.drawerGate?.canOpenDrawer).toBe(true);
+    expect(result.current.cashierCard?.cashierName).toBe("Offline Manager");
   });
 
   it("holds bootstrap on a closing drawer and exposes the closeout-blocked gate", async () => {

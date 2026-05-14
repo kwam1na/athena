@@ -268,6 +268,61 @@ describe("POSRegisterView", () => {
     expect(screen.queryByText("cashier-auth-dialog")).not.toBeInTheDocument();
   });
 
+  it("renders local-only register context with debug state instead of the blank shell", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      debug: {
+        activeStoreSource: "local",
+        authDialogOpen: true,
+        hasLiveActiveStore: false,
+        localEntryStatus: "ready",
+        online: false,
+        staffSignedIn: false,
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        terminalSource: "local",
+      },
+      header: {
+        title: "POS",
+        isSessionActive: false,
+      },
+      registerInfo: {
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: true,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: null,
+      cashierCard: null,
+      closeoutControl: null,
+      authDialog: {
+        open: true,
+      },
+      drawerGate: null,
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(screen.getByText("Register connection details")).toBeInTheDocument();
+    expect(screen.getByText("offline")).toBeInTheDocument();
+    expect(screen.getByText("local:store-1")).toBeInTheDocument();
+    expect(screen.getByText("local:terminal-1")).toBeInTheDocument();
+    expect(screen.getByText("cashier-auth-dialog")).toBeInTheDocument();
+  });
+
   it("shows POS sync status and schedules manual retry from the header", async () => {
     const onRetrySync = vi.fn();
     mockUseRegisterViewModel.mockReturnValue({

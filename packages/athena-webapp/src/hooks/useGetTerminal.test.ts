@@ -6,6 +6,7 @@ import { useGetTerminal } from "./useGetTerminal";
 const mockUseConvexTerminalByFingerprint = vi.fn();
 const mockReadStoredTerminalFingerprintHash = vi.fn();
 const mockReadProvisionedTerminalSeed = vi.fn();
+let mockActiveStore: { _id: string } | null = { _id: "store-1" };
 
 vi.mock("@/lib/pos/infrastructure/convex/registerGateway", () => ({
   useConvexTerminalByFingerprint: (...args: unknown[]) =>
@@ -26,7 +27,7 @@ vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
 
 vi.mock("./useGetActiveStore", () => ({
   default: () => ({
-    activeStore: { _id: "store-1" },
+    activeStore: mockActiveStore,
   }),
 }));
 
@@ -52,6 +53,7 @@ describe("useGetTerminal", () => {
     });
     (globalThis as typeof globalThis & { indexedDB?: IDBFactory }).indexedDB =
       {} as IDBFactory;
+    mockActiveStore = { _id: "store-1" };
   });
 
   it("falls back to the provisioned local terminal seed while Convex is unavailable", async () => {
@@ -85,6 +87,23 @@ describe("useGetTerminal", () => {
       registerNumber: "2",
       status: "active",
     });
+  });
+
+  it("falls back to the provisioned local terminal seed when active store is unavailable", async () => {
+    mockActiveStore = null;
+
+    const { result } = renderHook(() => useGetTerminal());
+
+    await waitFor(() =>
+      expect(result.current).toEqual({
+        _id: "terminal-1",
+        cloudTerminalId: "terminal-1",
+        displayName: "Front Counter",
+        localTerminalId: "fingerprint-1",
+        registerNumber: "1",
+        status: "local",
+      }),
+    );
   });
 
   it("rejects a provisioned local terminal seed for another store", async () => {

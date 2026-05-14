@@ -2,7 +2,6 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useMutation, useQuery } from "convex/react";
-import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
 import { StaffManagement } from "./StaffManagement";
 import { ok, userError } from "~/shared/commandResult";
@@ -22,6 +21,16 @@ vi.mock("sonner", () => ({
 
 vi.mock("~/src/lib/security/pinHash", () => ({
   hashPin: vi.fn(async (pin: string) => `hashed:${pin}`),
+}));
+
+vi.mock("~/src/lib/security/localPinVerifier", () => ({
+  createLocalPinVerifier: vi.fn(async (pin: string) => ({
+    algorithm: "PBKDF2-SHA256",
+    hash: `local:${pin}`,
+    iterations: 120000,
+    salt: "salt",
+    version: 1,
+  })),
 }));
 
 vi.mock("../ui/select", () => ({
@@ -117,7 +126,8 @@ function mockConvex({
       })
     | undefined;
 } = {}) {
-  mockedUseQuery.mockImplementation((...[_reference, args]) => {
+  mockedUseQuery.mockImplementation((...callArgs) => {
+    const args = callArgs[1];
     if (args === "skip") {
       return undefined as never;
     }
@@ -294,6 +304,13 @@ describe("StaffManagement", () => {
 
     await waitFor(() => expect(updateStaffCredential).toHaveBeenCalledTimes(1));
     expect(updateStaffCredential).toHaveBeenCalledWith({
+      localPinVerifier: {
+        algorithm: "PBKDF2-SHA256",
+        hash: "local:123456",
+        iterations: 120000,
+        salt: "salt",
+        version: 1,
+      },
       organizationId: "org-1",
       pinHash: "hashed:123456",
       staffProfileId: "staff-1",

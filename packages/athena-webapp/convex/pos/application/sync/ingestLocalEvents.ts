@@ -824,20 +824,16 @@ function advanceAcceptedThroughSequence(
     : acceptedThroughSequence;
 }
 
-async function isSameLocalEvent(
+function isSameLocalEvent(
   existing: LocalSyncEventRecord,
   incoming: PosLocalSyncEventInput,
 ) {
-  const incomingStaffProofTokenHash = await hashPosLocalStaffProofToken(
-    incoming.staffProofToken,
-  );
   return (
     existing.localRegisterSessionId === incoming.localRegisterSessionId &&
     existing.sequence === incoming.sequence &&
     existing.eventType === incoming.eventType &&
     existing.occurredAt === incoming.occurredAt &&
     existing.staffProfileId === incoming.staffProfileId &&
-    existing.staffProofTokenHash === incomingStaffProofTokenHash &&
     canonicalJson(existing.payload) === canonicalJson(incoming.payload)
   );
 }

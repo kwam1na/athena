@@ -56,6 +56,7 @@ export type StaffAuthenticationDialogProps = {
   ) => string | null;
   onAuthenticate: (args: {
     mode: StaffAuthMode;
+    pin: string;
     pinHash: string;
     username: string;
   }) => Promise<NormalizedCommandResult<StaffAuthenticationResult>>;
@@ -107,6 +108,10 @@ export function StaffAuthenticationDialog({
   }, [open]);
 
   const handleSubmit = useCallback(async () => {
+    if (isAuthenticating) {
+      return;
+    }
+
     if (!username.trim()) {
       toast.error("Username required. Enter a username to continue.");
       return;
@@ -128,6 +133,7 @@ export function StaffAuthenticationDialog({
 
       result = await onAuthenticate({
         mode,
+        pin,
         pinHash: submittedPinHash,
         username: submittedUsername,
       });
@@ -164,6 +170,7 @@ export function StaffAuthenticationDialog({
     setMode("authenticate");
   }, [
     getSuccessMessage,
+    isAuthenticating,
     mode,
     onAuthenticate,
     onAuthenticated,
@@ -172,10 +179,10 @@ export function StaffAuthenticationDialog({
   ]);
 
   useEffect(() => {
-    if (canSubmit && mode === "authenticate") {
+    if (canSubmit && !isAuthenticating && mode === "authenticate") {
       void handleSubmit();
     }
-  }, [canSubmit, handleSubmit, mode]);
+  }, [canSubmit, handleSubmit, isAuthenticating, mode]);
 
   function handleKeyDown(event: React.KeyboardEvent) {
     if (event.key === "Enter" && canSubmit) {

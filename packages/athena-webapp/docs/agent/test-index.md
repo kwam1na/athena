@@ -249,6 +249,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/lib/pos/presentation/register/useRegisterViewModel.test.ts`](../../src/lib/pos/presentation/register/useRegisterViewModel.test.ts)
 - [`src/lib/pos/presentation/syncStatusPresentation.test.ts`](../../src/lib/pos/presentation/syncStatusPresentation.test.ts)
 - [`src/lib/productUtils.test.ts`](../../src/lib/productUtils.test.ts)
+- [`src/lib/security/localPinVerifier.test.ts`](../../src/lib/security/localPinVerifier.test.ts)
 - [`src/lib/storeConfig.test.ts`](../../src/lib/storeConfig.test.ts)
 - [`src/lib/traces/createWorkflowTraceId.test.ts`](../../src/lib/traces/createWorkflowTraceId.test.ts)
 - [`src/lib/utils.test.ts`](../../src/lib/utils.test.ts)

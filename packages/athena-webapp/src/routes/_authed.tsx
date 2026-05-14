@@ -52,6 +52,18 @@ function isUnknownRouterPath(pathname?: string) {
   return !pathname || pathname === "/";
 }
 
+function isBrowserOffline() {
+  return typeof navigator !== "undefined" && navigator.onLine === false;
+}
+
+function hasStoredLocalSession() {
+  if (typeof localStorage === "undefined") {
+    return false;
+  }
+
+  return Boolean(localStorage.getItem(LOGGED_IN_USER_ID_KEY));
+}
+
 function AuthedComponent() {
   return (
     <>
@@ -166,10 +178,20 @@ export default function Layout() {
     select: (state) => state.location.pathname,
   });
   const { isLoading, user } = useAuth();
-  const userEmail = user?.email ?? "";
+  const browserPathname = getBrowserPathname();
+  const routeWantsPos =
+    isPosRegisterPath(pathname) ||
+    (isUnknownRouterPath(pathname) && isPosRegisterPath(browserPathname));
+  const canRenderOfflinePosShell =
+    routeWantsPos &&
+    isLoading &&
+    isBrowserOffline() &&
+    hasStoredLocalSession();
+  const userEmail =
+    user?.email ?? (canRenderOfflinePosShell ? "Offline POS" : "");
   const routeWantsFullscreen =
     isPosRegisterPath(pathname) ||
-    (isUnknownRouterPath(pathname) && isPosRegisterPath(getBrowserPathname()));
+    (isUnknownRouterPath(pathname) && isPosRegisterPath(browserPathname));
   const isFullscreenActive = fullscreenOverride ?? routeWantsFullscreen;
 
   // useEffect(() => {
@@ -190,16 +212,23 @@ export default function Layout() {
 
   // Don't render until we've read the cookie
   useEffect(() => {
+    if (canRenderOfflinePosShell) {
+      return;
+    }
+
     if (!isLoading && user === null) {
       navigate({ to: "/login" });
     }
-  }, [isLoading, navigate, user]);
+  }, [canRenderOfflinePosShell, isLoading, navigate, user]);
 
   useEffect(() => {
     setFullscreenOverride(null);
   }, [routeWantsFullscreen]);
 
-  if (defaultOpen === null || isLoading || user === null) {
+  if (
+    defaultOpen === null ||
+    (!canRenderOfflinePosShell && (isLoading || user === null))
+  ) {
     return null; // or a loading spinner if you prefer
   }
 
