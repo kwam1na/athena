@@ -8,7 +8,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
-import { PageLevelHeader, PageWorkspace } from "~/src/components/common/PageLevelHeader";
+import { FadeIn } from "~/src/components/common/FadeIn";
+import {
+  PageLevelHeader,
+  PageWorkspace,
+} from "~/src/components/common/PageLevelHeader";
 import { SkuActivityTimeline } from "~/src/components/operations/SkuActivityTimeline";
 import {
   buildSkuActivityTimelineViewModel,
@@ -80,38 +84,44 @@ function SkuActivityRouteContent({
   }
 
   return (
-    <View>
-      <PageWorkspace>
-        <PageLevelHeader
-          eyebrow="Operations"
-          title="SKU activity"
-          description="Inspect current stock, active reservations, and source-linked activity for a SKU."
-        />
+    <View hideBorder hideHeaderBottomBorder scrollMode="page">
+      <FadeIn className="container mx-auto py-layout-xl">
+        <PageWorkspace>
+          <PageLevelHeader
+            eyebrow="Store Ops"
+            title="SKU activity"
+            description="Inspect current stock, active reservations, and source-linked activity for a SKU."
+          />
 
-        <form
-          className="flex flex-col gap-layout-sm rounded-lg border border-border bg-surface-raised px-layout-md py-layout-md shadow-surface md:flex-row md:items-end"
-          onSubmit={handleSubmit}
-        >
-          <div className="min-w-0 flex-1 space-y-layout-xs">
-            <Label htmlFor="sku-activity-search">SKU</Label>
-            <Input
-              id="sku-activity-search"
-              onChange={(event) => setSkuInput(event.target.value)}
-              placeholder="Enter SKU"
-              value={skuInput}
-            />
-          </div>
-          <Button className="gap-layout-xs md:w-auto" type="submit">
-            <Search className="h-4 w-4" />
-            Inspect
-          </Button>
-        </form>
+          <form
+            className="flex w-full flex-col gap-layout-sm md:w-fit md:flex-row md:items-end"
+            onSubmit={handleSubmit}
+          >
+            <div className="min-w-0 space-y-layout-xs md:w-56 md:flex-none">
+              <Label htmlFor="sku-activity-search">SKU</Label>
+              <Input
+                id="sku-activity-search"
+                onChange={(event) => setSkuInput(event.target.value)}
+                placeholder="Enter SKU"
+                value={skuInput}
+              />
+            </div>
+            <Button
+              className="gap-layout-xs md:w-auto"
+              type="submit"
+              variant="workflow"
+            >
+              <Search className="h-4 w-4" />
+              Inspect
+            </Button>
+          </form>
 
-        <SkuActivityTimeline
-          isLoading={hasSelection && skuActivity === undefined}
-          viewModel={viewModel}
-        />
-      </PageWorkspace>
+          <SkuActivityTimeline
+            isLoading={hasSelection && skuActivity === undefined}
+            viewModel={viewModel}
+          />
+        </PageWorkspace>
+      </FadeIn>
     </View>
   );
 }
@@ -198,15 +208,17 @@ function SkuActivityRoute() {
 
 function SkuActivityRouteErrorView() {
   return (
-    <View>
-      <PageWorkspace>
-        <PageLevelHeader
-          eyebrow="Operations"
-          title="SKU activity"
-          description="Inspect current stock, active reservations, and source-linked activity for a SKU."
-        />
-        <SkuActivityTimeline error={true} viewModel={null} />
-      </PageWorkspace>
+    <View hideBorder hideHeaderBottomBorder scrollMode="page">
+      <FadeIn className="container mx-auto py-layout-xl">
+        <PageWorkspace>
+          <PageLevelHeader
+            eyebrow="Store Ops"
+            title="SKU activity"
+            description="Inspect current stock, active reservations, and source-linked activity for a SKU."
+          />
+          <SkuActivityTimeline error={true} viewModel={null} />
+        </PageWorkspace>
+      </FadeIn>
     </View>
   );
 }

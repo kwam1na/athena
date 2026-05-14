@@ -320,23 +320,15 @@ export function SkuActivityTimeline({
   return (
     <section className="space-y-layout-lg rounded-lg border border-border bg-surface-raised px-layout-md py-layout-md shadow-surface">
       <div className="flex flex-col gap-layout-sm border-b border-border pb-layout-md">
-        <div className="flex flex-wrap items-start justify-between gap-layout-sm">
+        <div className="flex flex-wrap items-end gap-layout-xs">
           <div className="min-w-0">
             <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
               SKU activity
             </p>
             <h2 className="mt-1 line-clamp-2 text-base font-medium text-foreground">
-              {viewModel.sku.displayName}
+              {capitalizeWords(viewModel.sku.displayName)}
             </h2>
           </div>
-          {viewModel.sku.sku ? (
-            <Badge
-              className="rounded-md border-border bg-background font-mono text-[11px] text-foreground"
-              variant="outline"
-            >
-              {viewModel.sku.sku}
-            </Badge>
-          ) : null}
         </div>
         {viewModel.sku.barcode ? (
           <p className="text-xs text-muted-foreground">
