@@ -19,6 +19,7 @@ import {
   CogIcon,
   Image,
   PanelTop,
+  PackageSearch,
   RotateCcw,
   ScanBarcode,
   ShoppingBag,
@@ -320,6 +321,26 @@ export function AppSidebar() {
                         className="flex items-center"
                       >
                         <p className="font-medium">Stock adjustments</p>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuSubItem>
+
+                  <SidebarMenuSubItem>
+                    <SidebarMenuButton
+                      disabled={!canAccessStoreDaySurfaces()}
+                      asChild
+                    >
+                      <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/operations/sku-activity"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: activeOrganization?.slug,
+                          storeUrlSlug: activeStore?.slug,
+                        })}
+                        className="flex items-center gap-2"
+                      >
+                        <PackageSearch className="h-3.5 w-3.5" />
+                        <p className="font-medium">SKU activity</p>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuSubItem>
