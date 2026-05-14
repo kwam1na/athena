@@ -122,10 +122,10 @@ export interface RegisterCheckoutState {
   } | null;
   cashierName?: string;
   actorStaffProfileId?: Id<"staffProfile"> | null;
-  onAddPayment: (method: PosPaymentMethod, amount: number) => void;
-  onUpdatePayment: (paymentId: string, amount: number) => void;
-  onRemovePayment: (paymentId: string) => void;
-  onClearPayments: () => void;
+  onAddPayment: (method: PosPaymentMethod, amount: number) => Promise<boolean>;
+  onUpdatePayment: (paymentId: string, amount: number) => Promise<boolean>;
+  onRemovePayment: (paymentId: string) => Promise<boolean>;
+  onClearPayments: () => Promise<boolean>;
   onCompleteTransaction: () => Promise<boolean>;
   onStartNewTransaction: () => void;
 }

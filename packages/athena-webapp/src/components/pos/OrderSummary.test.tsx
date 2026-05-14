@@ -12,7 +12,7 @@ const mockStoreState = vi.hoisted(() => ({
     currency: "GHS",
     name: "Wig Club",
     config: {},
-  } as Record<string, any>,
+  } as Record<string, unknown>,
 }));
 
 vi.mock("@react-email/components", () => ({
@@ -550,7 +550,7 @@ describe("OrderSummary completed transaction summary", () => {
     expect(onPaymentsExpandedChange).toHaveBeenCalledWith(false);
   });
 
-  it("collapses payment-summary state before removing the final payment", async () => {
+  it("collapses payment-summary state after removing the final payment succeeds", async () => {
     const user = userEvent.setup();
     const onPaymentsExpandedChange = vi.fn();
     const onRemovePayment = vi.fn();
@@ -591,12 +591,12 @@ describe("OrderSummary completed transaction summary", () => {
 
     expect(onPaymentsExpandedChange).toHaveBeenCalledWith(false);
     expect(onRemovePayment).toHaveBeenCalledWith("payment-1");
-    expect(onPaymentsExpandedChange.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(onPaymentsExpandedChange.mock.invocationCallOrder[0]).toBeGreaterThan(
       onRemovePayment.mock.invocationCallOrder[0],
     );
   });
 
-  it("collapses payment-summary state before clearing all payments", async () => {
+  it("collapses payment-summary state after clearing all payments succeeds", async () => {
     const user = userEvent.setup();
     const onPaymentsExpandedChange = vi.fn();
     const onClearPayments = vi.fn();
@@ -641,9 +641,50 @@ describe("OrderSummary completed transaction summary", () => {
 
     expect(onPaymentsExpandedChange).toHaveBeenCalledWith(false);
     expect(onClearPayments).toHaveBeenCalled();
-    expect(onPaymentsExpandedChange.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(onPaymentsExpandedChange.mock.invocationCallOrder[0]).toBeGreaterThan(
       onClearPayments.mock.invocationCallOrder[0],
     );
+  });
+
+  it("keeps payment-summary state when clearing all payments fails", async () => {
+    const user = userEvent.setup();
+    const onClearPayments = vi.fn().mockResolvedValue(false);
+    const onPaymentFlowChange = vi.fn();
+
+    render(
+      <OrderSummary
+        cartItems={[
+          {
+            id: "item-1",
+            name: "Hair",
+            barcode: "123456789012",
+            price: 1700,
+            quantity: 2,
+            productId: "product-1",
+            skuId: "sku-1",
+          } as never,
+        ]}
+        total={1700}
+        payments={[
+          {
+            id: "payment-1",
+            amount: 800,
+            method: "cash",
+            timestamp: 1,
+          },
+        ]}
+        onClearPayments={onClearPayments}
+        onPaymentFlowChange={onPaymentFlowChange}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /show payments/i }));
+    onPaymentFlowChange.mockClear();
+    await user.click(screen.getByRole("button", { name: /clear all/i }));
+
+    expect(onClearPayments).toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /clear all/i })).toBeInTheDocument();
+    expect(onPaymentFlowChange).not.toHaveBeenCalledWith(false);
   });
 
   it("reports payment edit mode synchronously when editing starts and ends", async () => {
@@ -748,7 +789,7 @@ describe("OrderSummary completed transaction summary", () => {
     );
   });
 
-  it("collapses expanded payments before saving an edit that leaves the sale fully paid", async () => {
+  it("collapses expanded payments after saving an edit that leaves the sale fully paid", async () => {
     const user = userEvent.setup();
     const onEditingPaymentChange = vi.fn();
     const onPaymentsExpandedChange = vi.fn();
@@ -792,7 +833,7 @@ describe("OrderSummary completed transaction summary", () => {
     expect(onPaymentsExpandedChange).toHaveBeenCalledWith(false);
     expect(onUpdatePayment).toHaveBeenCalledWith("payment-1", 1700);
     expect(onEditingPaymentChange).toHaveBeenCalledWith(false);
-    expect(onPaymentsExpandedChange.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(onPaymentsExpandedChange.mock.invocationCallOrder[0]).toBeGreaterThan(
       onUpdatePayment.mock.invocationCallOrder[0],
     );
     expect(onUpdatePayment.mock.invocationCallOrder[0]).toBeLessThan(

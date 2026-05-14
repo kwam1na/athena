@@ -4,6 +4,7 @@ import { isRegisterSessionConflictBlockingStatus } from "../../../../shared/regi
 import {
   consumeInventoryHoldsForSession as consumeInventoryHoldsForSessionHelper,
   readActiveInventoryHoldQuantitiesForSession,
+  releaseActiveInventoryHoldsForSession as releaseActiveInventoryHoldsForSessionHelper,
 } from "../../../inventory/helpers/inventoryHolds";
 import type {
   LocalSyncCursorRecord,
@@ -136,6 +137,9 @@ export function createConvexLocalSyncRepository(
         })),
         now: args.now,
       });
+    },
+    releaseActiveInventoryHoldsForSession(args) {
+      return releaseActiveInventoryHoldsForSessionHelper(ctx.db, args);
     },
     async findEvent(args) {
       return (

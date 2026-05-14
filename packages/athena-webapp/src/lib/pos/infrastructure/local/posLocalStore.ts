@@ -9,6 +9,8 @@ export type PosLocalEventType =
   | "terminal.seeded"
   | "register.opened"
   | "session.started"
+  | "session.payments_updated"
+  | "cart.cleared"
   | "cart.item_added"
   | "transaction.completed"
   | "register.closeout_started"
@@ -441,6 +443,25 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
             return updated.sort(
               (left, right) => left.sequence - right.sequence,
             );
+          },
+        );
+
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async listLocalCloudMappings(): Promise<
+      PosLocalStoreResult<PosLocalCloudMapping[]>
+    > {
+      try {
+        const value = await options.adapter.transaction(
+          "readonly",
+          ["meta", "mappings"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readonly");
+            return transaction.getAll<PosLocalCloudMapping>("mappings");
           },
         );
 

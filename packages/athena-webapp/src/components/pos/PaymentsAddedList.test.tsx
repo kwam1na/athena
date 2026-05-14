@@ -1,5 +1,6 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
 
 import { PaymentsAddedList } from "./PaymentsAddedList";
 import type { Payment } from "./types";
@@ -42,6 +43,15 @@ function getSummaryPanel() {
   return label.closest(".rounded-xl");
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve;
+  });
+
+  return { promise, resolve };
+}
+
 describe("PaymentsAddedList", () => {
   const basePayments: Payment[] = [
     {
@@ -82,6 +92,146 @@ describe("PaymentsAddedList", () => {
       expect(label).toHaveClass("text-signal");
     },
   );
+
+  it("keeps payment edit controls open when a durable edit save fails", async () => {
+    const user = userEvent.setup();
+    const onUpdatePayment = vi.fn().mockResolvedValue(false);
+
+    render(
+      <PaymentsAddedList
+        payments={basePayments}
+        formatter={currencyFormatter}
+        totalAmountDue={800}
+        balanceDue={0}
+        onUpdatePayment={onUpdatePayment}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /show payments/i }));
+    await user.click(screen.getByRole("button", { name: /edit/i }));
+    await user.click(screen.getByRole("button", { name: /save/i }));
+
+    expect(onUpdatePayment).toHaveBeenCalledWith("payment-1", 800);
+    expect(screen.getByText("Edit payment")).toBeInTheDocument();
+  });
+
+  it("clears payment edit controls after an async durable edit save succeeds", async () => {
+    const user = userEvent.setup();
+    const saved = deferred<boolean>();
+    const onUpdatePayment = vi.fn(() => saved.promise);
+
+    render(
+      <PaymentsAddedList
+        payments={basePayments}
+        formatter={currencyFormatter}
+        totalAmountDue={800}
+        balanceDue={0}
+        onUpdatePayment={onUpdatePayment}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /show payments/i }));
+    await user.click(screen.getByRole("button", { name: /edit/i }));
+    await user.click(screen.getByRole("button", { name: /save/i }));
+
+    expect(screen.getByText("Edit payment")).toBeInTheDocument();
+    saved.resolve(true);
+    await waitFor(() => {
+      expect(screen.queryByText("Edit payment")).not.toBeInTheDocument();
+    });
+  });
+
+  it("keeps expanded payment controls when clearing payments fails locally", async () => {
+    const user = userEvent.setup();
+    const onClearPayments = vi.fn().mockResolvedValue(false);
+
+    render(
+      <PaymentsAddedList
+        payments={basePayments}
+        formatter={currencyFormatter}
+        totalAmountDue={800}
+        balanceDue={0}
+        onClearPayments={onClearPayments}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /show payments/i }));
+    await user.click(screen.getByRole("button", { name: /clear all/i }));
+
+    expect(onClearPayments).toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /clear all/i })).toBeInTheDocument();
+  });
+
+  it("collapses expanded payment controls after clearing payments succeeds", async () => {
+    const user = userEvent.setup();
+    const saved = deferred<boolean>();
+    const onClearPayments = vi.fn(() => saved.promise);
+
+    render(
+      <PaymentsAddedList
+        payments={basePayments}
+        formatter={currencyFormatter}
+        totalAmountDue={800}
+        balanceDue={0}
+        onClearPayments={onClearPayments}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /show payments/i }));
+    await user.click(screen.getByRole("button", { name: /clear all/i }));
+
+    expect(screen.getByRole("button", { name: /clear all/i })).toBeInTheDocument();
+    saved.resolve(true);
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: /clear all/i })).not.toBeInTheDocument();
+    });
+  });
+
+  it("keeps expanded payment controls when removing the last payment fails locally", async () => {
+    const user = userEvent.setup();
+    const onRemovePayment = vi.fn().mockResolvedValue(false);
+
+    render(
+      <PaymentsAddedList
+        payments={basePayments}
+        formatter={currencyFormatter}
+        totalAmountDue={800}
+        balanceDue={0}
+        onRemovePayment={onRemovePayment}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /show payments/i }));
+    await user.click(screen.getByRole("button", { name: /remove cash payment/i }));
+
+    expect(onRemovePayment).toHaveBeenCalledWith("payment-1");
+    expect(screen.getByRole("button", { name: /remove cash payment/i })).toBeInTheDocument();
+  });
+
+  it("collapses expanded payment controls after removing the last payment succeeds", async () => {
+    const user = userEvent.setup();
+    const saved = deferred<boolean>();
+    const onRemovePayment = vi.fn(() => saved.promise);
+
+    render(
+      <PaymentsAddedList
+        payments={basePayments}
+        formatter={currencyFormatter}
+        totalAmountDue={800}
+        balanceDue={0}
+        onRemovePayment={onRemovePayment}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /show payments/i }));
+    await user.click(screen.getByRole("button", { name: /remove cash payment/i }));
+
+    expect(screen.getByRole("button", { name: /remove cash payment/i })).toBeInTheDocument();
+    saved.resolve(true);
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: /remove cash payment/i })).not.toBeInTheDocument();
+    });
+  });
 
   it.each([
     { method: "cash" as const, expected: 100 },

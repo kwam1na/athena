@@ -3,6 +3,7 @@ export const POS_LOCAL_SYNC_EVENT_TYPES = [
   "sale_completed",
   "register_closed",
   "register_reopened",
+  "sale_cleared",
 ] as const;
 
 export const POS_LOCAL_SYNC_EVENT_STATUSES = [
@@ -69,6 +70,11 @@ export type PosLocalSyncRegisterClosedPayload = {
   notes?: string;
 };
 
+export type PosLocalSyncSaleClearedPayload = {
+  localPosSessionId: string;
+  reason?: string;
+};
+
 export type PosLocalSyncRegisterReopenedPayload = {
   reason?: string;
 };
@@ -76,6 +82,7 @@ export type PosLocalSyncRegisterReopenedPayload = {
 export type PosLocalSyncPayloadByEventType = {
   register_opened: PosLocalSyncRegisterOpenedPayload;
   sale_completed: PosLocalSyncSaleCompletedPayload;
+  sale_cleared: PosLocalSyncSaleClearedPayload;
   register_closed: PosLocalSyncRegisterClosedPayload;
   register_reopened: PosLocalSyncRegisterReopenedPayload;
 };

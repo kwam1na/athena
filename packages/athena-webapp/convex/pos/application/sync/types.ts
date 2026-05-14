@@ -72,6 +72,11 @@ export type PosLocalRegisterClosedPayload = {
   notes?: string;
 };
 
+export type PosLocalSaleClearedPayload = {
+  localPosSessionId: string;
+  reason?: string;
+};
+
 export type PosLocalRegisterReopenedPayload = {
   reason?: string;
 };
@@ -96,6 +101,7 @@ type ParsedPosLocalSyncEventBase<
 export type ParsedPosLocalSyncEventInput =
   | ParsedPosLocalSyncEventBase<"register_opened", PosLocalRegisterOpenedPayload>
   | ParsedPosLocalSyncEventBase<"sale_completed", PosLocalSalePayload>
+  | ParsedPosLocalSyncEventBase<"sale_cleared", PosLocalSaleClearedPayload>
   | ParsedPosLocalSyncEventBase<"register_closed", PosLocalRegisterClosedPayload>
   | ParsedPosLocalSyncEventBase<"register_reopened", PosLocalRegisterReopenedPayload>;
 
@@ -217,6 +223,17 @@ export type SyncProjectionRepository = {
     items: Array<{ productSkuId: Id<"productSku">; quantity: number }>;
     now: number;
   }): Promise<Map<Id<"productSku">, number>>;
+  releaseActiveInventoryHoldsForSession(args: {
+    sessionId: Id<"posSession">;
+    now: number;
+  }): Promise<{
+    releasedHoldCount: number;
+    releasedHolds: Array<{
+      holdId: Id<"inventoryHold">;
+      productSkuId: Id<"productSku">;
+      quantity: number;
+    }>;
+  }>;
   normalizeCloudId<TableName extends TableNames>(
     tableName: TableName,
     value: string,

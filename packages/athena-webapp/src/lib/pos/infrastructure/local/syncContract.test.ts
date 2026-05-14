@@ -11,6 +11,7 @@ describe("syncContract", () => {
     const syncableEvents = [
       buildLocalEvent({ type: "register.opened" }),
       buildLocalEvent({ type: "transaction.completed" }),
+      buildLocalEvent({ type: "cart.cleared" }),
       buildLocalEvent({ type: "register.closeout_started" }),
       buildLocalEvent({ type: "register.reopened" }),
     ];
@@ -23,6 +24,7 @@ describe("syncContract", () => {
     ];
 
     expect(syncableEvents.map(isSyncablePosLocalEvent)).toEqual([
+      true,
       true,
       true,
       true,
@@ -98,6 +100,165 @@ describe("syncContract", () => {
     ]);
   });
 
+  it("maps clear-only sales to syncable sale clear events", () => {
+    const event = buildLocalEvent({
+      localEventId: "event-clear",
+      sequence: 1,
+      type: "cart.cleared",
+      payload: {
+        localPosSessionId: "session-1",
+        reason: "Sale cleared",
+      },
+    });
+
+    expect(buildPosLocalSyncUploadEvents([event], [event])).toEqual([
+      expect.objectContaining({
+        localEventId: "event-clear",
+        sequence: 1,
+        eventType: "sale_cleared",
+        payload: {
+          localPosSessionId: "local-session-1",
+          reason: "Sale cleared",
+        },
+      }),
+    ]);
+  });
+
+  it("counts uploaded sale clear events when sequencing later uploads", () => {
+    const events: PosLocalEventRecord[] = [
+      buildLocalEvent({
+        localEventId: "event-open",
+        sequence: 1,
+        sync: { status: "synced", uploaded: true },
+        type: "register.opened",
+      }),
+      buildLocalEvent({
+        localEventId: "event-clear",
+        localPosSessionId: "local-session-cleared",
+        sequence: 2,
+        sync: { status: "synced", uploaded: true },
+        type: "cart.cleared",
+        payload: {
+          localPosSessionId: "local-session-cleared",
+          reason: "Sale cleared",
+        },
+      }),
+      buildLocalEvent({
+        localEventId: "event-sale",
+        sequence: 3,
+        type: "transaction.completed",
+        payload: {
+          localPosSessionId: "local-session-2",
+          localTransactionId: "local-txn-1",
+          receiptNumber: "LOCAL-1-000002",
+          subtotal: 0,
+          tax: 0,
+          total: 0,
+          payments: [],
+        },
+      }),
+    ];
+
+    expect(buildPosLocalSyncUploadEvents([events[2]], events)).toEqual([
+      expect.objectContaining({
+        localEventId: "event-sale",
+        sequence: 3,
+      }),
+    ]);
+  });
+
+  it("does not count skipped pending sale clear events when a later completion supersedes them", () => {
+    const events: PosLocalEventRecord[] = [
+      buildLocalEvent({
+        localEventId: "event-open",
+        sequence: 1,
+        sync: { status: "synced", uploaded: true },
+        type: "register.opened",
+      }),
+      buildLocalEvent({
+        localEventId: "event-clear",
+        sequence: 2,
+        type: "cart.cleared",
+        payload: {
+          localPosSessionId: "local-session-1",
+          reason: "Sale cleared",
+        },
+      }),
+      buildLocalEvent({
+        localEventId: "event-sale",
+        sequence: 3,
+        type: "transaction.completed",
+        payload: {
+          localPosSessionId: "local-session-1",
+          localTransactionId: "local-txn-1",
+          receiptNumber: "LOCAL-1-000002",
+          subtotal: 0,
+          tax: 0,
+          total: 0,
+          payments: [],
+        },
+      }),
+    ];
+
+    expect(buildPosLocalSyncUploadEvents([events[2]], events)).toEqual([
+      expect.objectContaining({
+        localEventId: "event-sale",
+        sequence: 2,
+      }),
+    ]);
+  });
+
+  it("does not count uploaded skipped sale clear events when sequencing later uploads", () => {
+    const events: PosLocalEventRecord[] = [
+      buildLocalEvent({
+        localEventId: "event-open",
+        sequence: 1,
+        sync: { status: "synced", uploaded: true },
+        type: "register.opened",
+      }),
+      buildLocalEvent({
+        localEventId: "event-clear",
+        sequence: 2,
+        sync: { status: "synced", uploaded: true },
+        type: "cart.cleared",
+        payload: {
+          localPosSessionId: "local-session-1",
+          reason: "Sale cleared",
+        },
+      }),
+      buildLocalEvent({
+        localEventId: "event-sale",
+        sequence: 3,
+        sync: { status: "synced", uploaded: true },
+        type: "transaction.completed",
+        payload: {
+          localPosSessionId: "local-session-1",
+          localTransactionId: "local-txn-1",
+          receiptNumber: "LOCAL-1-000002",
+          subtotal: 0,
+          tax: 0,
+          total: 0,
+          payments: [],
+        },
+      }),
+      buildLocalEvent({
+        localEventId: "event-closeout",
+        sequence: 4,
+        type: "register.closeout_started",
+        payload: {
+          countedCash: 0,
+        },
+      }),
+    ];
+
+    expect(buildPosLocalSyncUploadEvents([events[3]], events)).toEqual([
+      expect.objectContaining({
+        localEventId: "event-closeout",
+        sequence: 3,
+      }),
+    ]);
+  });
+
   it("embeds prior cart events into the sale upload event", () => {
     const events: PosLocalEventRecord[] = [
       buildLocalEvent({
@@ -127,6 +288,10 @@ describe("syncContract", () => {
           localPosSessionId: "local-session-1",
           localTransactionId: "local-txn-1",
           receiptNumber: "LOCAL-1-000001",
+          customerProfileId: "profile-1",
+          customerName: "Efua Mensah",
+          customerEmail: "efua@example.com",
+          customerPhone: "555-2222",
           subtotal: 50,
           tax: 0,
           total: 50,
@@ -144,6 +309,12 @@ describe("syncContract", () => {
           localPosSessionId: "local-session-1",
           localTransactionId: "local-txn-1",
           localReceiptNumber: "LOCAL-1-000001",
+          customerProfileId: "profile-1",
+          customerInfo: {
+            name: "Efua Mensah",
+            email: "efua@example.com",
+            phone: "555-2222",
+          },
           items: [
             expect.objectContaining({
               localTransactionItemId: "local-item-1",

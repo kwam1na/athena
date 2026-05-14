@@ -102,10 +102,16 @@ interface OrderSummaryProps {
   receiptMessaging?: ReceiptMessagingConfig;
   actorStaffProfileId?: Id<"staffProfile"> | string | null;
   receiptNumberOverride?: string;
-  onAddPayment?: (method: SelectedPaymentMethod, amount: number) => void;
-  onUpdatePayment?: (paymentId: string, amount: number) => void;
-  onRemovePayment?: (paymentId: string) => void;
-  onClearPayments?: () => void;
+  onAddPayment?: (
+    method: SelectedPaymentMethod,
+    amount: number,
+  ) => boolean | Promise<boolean>;
+  onUpdatePayment?: (
+    paymentId: string,
+    amount: number,
+  ) => boolean | Promise<boolean>;
+  onRemovePayment?: (paymentId: string) => boolean | Promise<boolean>;
+  onClearPayments?: () => boolean | Promise<boolean>;
   onCompleteTransaction?: () => Promise<boolean>;
   onStartNewTransaction?: () => void;
   onPaymentFlowChange?: (isActive: boolean) => void;
@@ -886,12 +892,18 @@ export function OrderSummary({
             paymentsExpanded={paymentsExpanded}
             onUpdatePayment={onUpdatePayment}
             onRemovePayment={onRemovePayment}
-            onClearPayments={() => {
-              setSelectedPaymentMethod(null);
-              handleEditingPaymentIdChange(null);
-              onPaymentFlowChange?.(false);
-              onClearPayments?.();
-            }}
+            onClearPayments={
+              onClearPayments
+                ? async () => {
+                    const saved = await onClearPayments();
+                    if (saved === false) return false;
+                    setSelectedPaymentMethod(null);
+                    handleEditingPaymentIdChange(null);
+                    onPaymentFlowChange?.(false);
+                    return saved;
+                  }
+                : undefined
+            }
             onPaymentsExpandedChange={onPaymentsExpandedChange}
             variant={selectedPaymentMethod ? "minimized" : "default"}
           />
@@ -1005,7 +1017,9 @@ export function OrderSummary({
               formatter={formatter}
               selectedPaymentMethod={selectedPaymentMethod}
               setSelectedPaymentMethod={handleSelectedPaymentMethodChange}
-              onAddPayment={(method, amount) => onAddPayment?.(method, amount)}
+              onAddPayment={(method, amount) =>
+                onAddPayment?.(method, amount) ?? false
+              }
               onPaymentAmountChange={setPaymentAmountDraft}
               onComplete={handleCompleteTransaction}
               isCompleting={isCompleting}

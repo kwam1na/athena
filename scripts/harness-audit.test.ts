@@ -844,6 +844,12 @@ async function createFixtureRepo() {
     rootDir
   );
   await write("packages/athena-webapp/src/contexts/AuthContext.tsx", "export {};\n", rootDir);
+  await write("packages/athena-webapp/src/hooks/useGetTerminal.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/src/hooks/useGetTerminal.test.ts",
+    "export {};\n",
+    rootDir
+  );
   await write("packages/athena-webapp/src/lib/session.ts", "export {};\n", rootDir);
   await write(
     "packages/athena-webapp/src/lib/errors/runCommand.ts",
@@ -875,18 +881,24 @@ async function createFixtureRepo() {
     "export {};\n",
     rootDir
   );
-  await write(
+  for (const localSyncPath of [
     "packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.ts",
-    "export {};\n",
-    rootDir
-  );
-  for (const localSyncTestPath of [
+    "packages/athena-webapp/src/lib/pos/infrastructure/local/syncContract.ts",
+    "packages/athena-webapp/src/lib/pos/infrastructure/local/syncScheduler.ts",
+    "packages/athena-webapp/src/lib/pos/infrastructure/local/syncStatus.ts",
+    "packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts",
+    "packages/athena-webapp/src/lib/pos/infrastructure/local/registerReadModel.ts",
+    "packages/athena-webapp/src/lib/pos/infrastructure/local/localCommandGateway.ts",
+    "packages/athena-webapp/src/lib/pos/infrastructure/local/terminalScope.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.test.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/syncContract.test.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/syncScheduler.test.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/syncStatus.test.ts",
+    "packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.test.ts",
+    "packages/athena-webapp/src/lib/pos/infrastructure/local/registerReadModel.test.ts",
+    "packages/athena-webapp/src/lib/pos/infrastructure/local/localCommandGateway.test.ts",
   ]) {
-    await write(localSyncTestPath, "export {};\n", rootDir);
+    await write(localSyncPath, "export {};\n", rootDir);
   }
   await write(
     "packages/athena-webapp/src/lib/pos/presentation/syncStatusPresentation.ts",
@@ -896,6 +908,11 @@ async function createFixtureRepo() {
   await write("packages/athena-webapp/src/stores/expenseStore.ts", "export {};\n", rootDir);
   await write(
     "packages/athena-webapp/shared/commandResult.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/shared/posLocalSyncContract.ts",
     "export {};\n",
     rootDir
   );

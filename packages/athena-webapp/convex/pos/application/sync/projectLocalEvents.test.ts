@@ -14,6 +14,10 @@ type ParsedSaleCompletedEvent = Extract<
   ParsedPosLocalSyncEventInput,
   { eventType: "sale_completed" }
 >;
+type ParsedSaleClearedEvent = Extract<
+  ParsedPosLocalSyncEventInput,
+  { eventType: "sale_cleared" }
+>;
 
 describe("projectLocalSyncEvent", () => {
   it("projects a completed local cash sale into transaction, payment, inventory, and trace-like records", async () => {
@@ -247,6 +251,97 @@ describe("projectLocalSyncEvent", () => {
       }),
     ]);
   });
+
+  it("maps cashier-seeded already-open cloud register sessions before manager open permission", async () => {
+    const repository = createProjectionRepository({
+      hasActivePosRole: ({ allowedRoles }) => allowedRoles.includes("cashier"),
+      registerSession: {
+        _id: "register-session-1",
+        expectedCash: 100,
+        closeoutRecords: [],
+        registerNumber: "1",
+        status: "active",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      } as never,
+      validCloudIds: new Set(["register-session-1"]),
+      validStaffProof: true,
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-register-opened-seed",
+        localRegisterSessionId: "register-session-1",
+        sequence: 1,
+        eventType: "register_opened",
+        occurredAt: 20,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          openingFloat: 100,
+          registerNumber: "1",
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(result.conflicts).toEqual([]);
+    expect(result.mappings).toEqual([
+      expect.objectContaining({
+        localIdKind: "registerSession",
+        localId: "register-session-1",
+        cloudTable: "registerSession",
+        cloudId: "register-session-1",
+      }),
+    ]);
+  });
+
+  it.each(["closing", "closed"])(
+    "conflicts cashier-seeded cloud register sessions that are %s",
+    async (status) => {
+      const repository = createProjectionRepository({
+        hasActivePosRole: ({ allowedRoles }) => allowedRoles.includes("cashier"),
+        registerSession: {
+          _id: "register-session-1",
+          expectedCash: 100,
+          closeoutRecords: [],
+          registerNumber: "1",
+          status,
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        } as never,
+        validCloudIds: new Set(["register-session-1"]),
+        validStaffProof: true,
+      });
+
+      const result = await projectLocalSyncEvent(repository, {
+        storeId: "store-1" as never,
+        terminalId: "terminal-1" as never,
+        event: {
+          localEventId: `event-register-opened-${status}`,
+          localRegisterSessionId: "register-session-1",
+          sequence: 1,
+          eventType: "register_opened",
+          occurredAt: 20,
+          staffProfileId: "staff-1" as never,
+          staffProofToken: "proof-token-1",
+          payload: {
+            openingFloat: 100,
+            registerNumber: "1",
+          },
+        },
+        syncEventId: "sync-event-1",
+        now: 100,
+      });
+
+      expect(result.status).toBe("conflicted");
+      expect(result.mappings).toEqual([]);
+    },
+  );
 
   it("conflicts register closeouts without valid offline staff proof", async () => {
     const repository = createProjectionRepository({ validStaffProof: false });
@@ -511,6 +606,43 @@ describe("projectLocalSyncEvent", () => {
       }),
     ]);
     expect(repository.createdTransactions).toHaveLength(0);
+  });
+
+  it("conflicts sale completion for a session already voided by a synced clear", async () => {
+    const repository = createProjectionRepository({
+      existingPosSession: {
+        _id: "pos-session-1",
+        registerSessionId: "register-session-1",
+        staffProfileId: "staff-1",
+        status: "void",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+      validCloudIds: new Set(["pos-session-1"]),
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        payload: {
+          ...buildSaleCompletedEvent().payload,
+          localPosSessionId: "pos-session-1",
+        },
+      }),
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        conflictType: "permission",
+        summary: "Cleared POS sessions cannot be completed from synced local history.",
+      }),
+    ]);
+    expect(repository.createdTransactions).toEqual([]);
+    expect(repository.posSessionPatches).toEqual([]);
   });
 
   it("conflicts existing cloud POS sessions owned by a different staff profile", async () => {
@@ -879,7 +1011,7 @@ describe("projectLocalSyncEvent", () => {
     );
   });
 
-  it("preserves completed offline sales when catalog price changed before sync", async () => {
+  it("projects completed offline sales with submitted prices when catalog prices drift", async () => {
     const repository = createProjectionRepository();
 
     const result = await projectLocalSyncEvent(repository, {
@@ -924,10 +1056,24 @@ describe("projectLocalSyncEvent", () => {
     expect(repository.createdTransactions).toEqual([
       expect.objectContaining({
         total: 10,
-        transactionNumber: "LR-001",
+        paymentMethod: "cash",
       }),
     ]);
-    expect(repository.createdPaymentAllocations).toHaveLength(1);
+    expect(repository.createdTransactionItems).toEqual([
+      expect.objectContaining({
+        productSkuId: "sku-1",
+        quantity: 1,
+        unitPrice: 10,
+        totalPrice: 10,
+      }),
+    ]);
+    expect(repository.createdPaymentAllocations).toEqual([
+      expect.objectContaining({
+        amount: 10,
+        method: "cash",
+        registerSessionId: "register-session-1",
+      }),
+    ]);
     expect(repository.registerSessionPatches).toEqual([
       {
         registerSessionId: "register-session-1",
@@ -935,6 +1081,226 @@ describe("projectLocalSyncEvent", () => {
           expectedCash: 110,
         },
       },
+    ]);
+  });
+
+  it("projects clear-only cloud-backed local sales into voided POS sessions", async () => {
+    const repository = createProjectionRepository({
+      existingPosSession: {
+        _id: "session-1",
+        registerSessionId: "register-session-1",
+        staffProfileId: "staff-1",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-clear-1",
+        localRegisterSessionId: "local-register-1",
+        sequence: 2,
+        eventType: "sale_cleared",
+        occurredAt: 20,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          localPosSessionId: "session-1",
+          reason: "Sale cleared",
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(repository.releasedHoldRequests).toEqual([
+      {
+        sessionId: "session-1",
+        now: 20,
+      },
+    ]);
+    expect(repository.posSessionPatches).toEqual([
+      {
+        posSessionId: "session-1",
+        patch: {
+          notes: "Sale cleared",
+          status: "void",
+          updatedAt: 20,
+        },
+      },
+    ]);
+    expect(result.mappings).toEqual([
+      expect.objectContaining({
+        localIdKind: "posSession",
+        localId: "session-1",
+        cloudId: "session-1",
+      }),
+    ]);
+  });
+
+  it("treats repeated sale clears for an already-voided mapped POS session as idempotent", async () => {
+    const repository = createProjectionRepository({
+      existingPosSession: {
+        _id: "session-1",
+        registerSessionId: "register-session-1",
+        staffProfileId: "staff-1",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+    });
+    const first = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleClearedEvent({ localPosSessionId: "session-1" }),
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+    const second = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        ...buildSaleClearedEvent({ localPosSessionId: "session-1" }),
+        localEventId: "event-clear-2",
+        sequence: 3,
+        occurredAt: 30,
+      },
+      syncEventId: "sync-event-2",
+      now: 110,
+    });
+
+    expect(first.status).toBe("projected");
+    expect(second.status).toBe("projected");
+    expect(repository.posSessionPatches).toHaveLength(1);
+    expect(repository.releasedHoldRequests).toHaveLength(1);
+    expect(second.mappings).toEqual([
+      expect.objectContaining({
+        localIdKind: "posSession",
+        localId: "session-1",
+        cloudId: "session-1",
+      }),
+    ]);
+  });
+
+  it("accepts clear-only always-local sales that never reached the cloud", async () => {
+    const repository = createProjectionRepository();
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleClearedEvent({ localPosSessionId: "local-session-1" }),
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(result.conflicts).toEqual([]);
+    expect(result.mappings).toEqual([]);
+    expect(repository.posSessionPatches).toEqual([]);
+  });
+
+  it("conflicts sale clear for cloud POS session ids not bound to the synced register session", async () => {
+    const repository = createProjectionRepository({
+      validCloudIds: new Set(["session-other"]),
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleClearedEvent({ localPosSessionId: "session-other" }),
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(repository.posSessionPatches).toEqual([]);
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        conflictType: "permission",
+        summary: "POS session does not belong to this synced register history.",
+      }),
+    ]);
+  });
+
+  it("conflicts sale clear when the register mapping is missing", async () => {
+    const repository = createProjectionRepository({ registerSession: null });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleClearedEvent({ localPosSessionId: "session-1" }),
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        conflictType: "permission",
+        summary: "Register session mapping is missing for synced POS history.",
+      }),
+    ]);
+  });
+
+  it("conflicts sale clear when the POS session belongs to another staff profile", async () => {
+    const repository = createProjectionRepository({
+      existingPosSession: {
+        _id: "session-1",
+        registerSessionId: "register-session-1",
+        staffProfileId: "staff-2",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleClearedEvent({ localPosSessionId: "session-1" }),
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(repository.posSessionPatches).toEqual([]);
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        conflictType: "permission",
+        summary: "POS session does not belong to the synced staff proof.",
+      }),
+    ]);
+  });
+
+  it("conflicts sale clear when the POS session is already completed", async () => {
+    const repository = createProjectionRepository({
+      existingPosSession: {
+        _id: "session-1",
+        registerSessionId: "register-session-1",
+        staffProfileId: "staff-1",
+        status: "completed",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        transactionId: "transaction-1",
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleClearedEvent({ localPosSessionId: "session-1" }),
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(repository.posSessionPatches).toEqual([]);
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        conflictType: "permission",
+        summary: "Completed POS sessions cannot be cleared from synced local history.",
+      }),
     ]);
   });
 
@@ -1003,10 +1369,12 @@ describe("projectLocalSyncEvent", () => {
 
   it("conflicts reused local child ids from a different sale in the same register session", async () => {
     const repository = createProjectionRepository();
+    const baseSale = buildSaleCompletedEvent();
+    const baseItem = baseSale.payload.items[0];
     const first = await projectLocalSyncEvent(repository, {
       storeId: "store-1" as never,
       terminalId: "terminal-1" as never,
-      event: buildSaleCompletedEvent(),
+      event: baseSale,
       syncEventId: "sync-event-1",
       now: 100,
     });
@@ -1022,7 +1390,7 @@ describe("projectLocalSyncEvent", () => {
           localReceiptNumber: "LR-002",
           items: [
             {
-              ...(buildSaleCompletedEvent().payload as any).items[0],
+              ...baseItem,
               productSku: "CAP-1",
             },
           ],
@@ -1040,6 +1408,52 @@ describe("projectLocalSyncEvent", () => {
         summary: "Local POS sync id was reused by a different synced sale.",
         details: expect.objectContaining({
           localIdKind: "transactionItem",
+        }),
+      }),
+    ]);
+  });
+
+  it("conflicts reused local payment ids from a different sale in the same terminal", async () => {
+    const repository = createProjectionRepository();
+    const baseSale = buildSaleCompletedEvent();
+    const baseItem = baseSale.payload.items[0];
+    const first = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: baseSale,
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+    const second = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        localEventId: "event-sale-completed-2",
+        payload: {
+          ...buildSaleCompletedEvent().payload,
+          localPosSessionId: "local-session-2",
+          localTransactionId: "local-txn-2",
+          localReceiptNumber: "LR-002",
+          items: [
+            {
+              ...baseItem,
+              localTransactionItemId: "local-txn-item-2",
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-2",
+      now: 200,
+    });
+
+    expect(first.status).toBe("projected");
+    expect(second.status).toBe("conflicted");
+    expect(second.conflicts).toEqual([
+      expect.objectContaining({
+        conflictType: "duplicate_local_id",
+        details: expect.objectContaining({
+          localIdKind: "payment",
+          localId: "local-payment-1",
         }),
       }),
     ]);
@@ -1089,6 +1503,49 @@ describe("projectLocalSyncEvent", () => {
         details: expect.objectContaining({
           localIdKind: "transactionItem",
           localId: "local-item-1",
+        }),
+      }),
+    ]);
+  });
+
+  it("conflicts duplicate local payment ids inside one synced sale before projection", async () => {
+    const repository = createProjectionRepository();
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        payload: {
+          ...buildSaleCompletedEvent().payload,
+          payments: [
+            {
+              localPaymentId: "local-payment-1",
+              method: "cash",
+              amount: 10,
+              timestamp: 21,
+            },
+            {
+              localPaymentId: "local-payment-1",
+              method: "cash",
+              amount: 15,
+              timestamp: 22,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(repository.createdTransactions).toEqual([]);
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        conflictType: "duplicate_local_id",
+        summary: "Local POS sync id was reused inside one synced sale.",
+        details: expect.objectContaining({
+          localIdKind: "payment",
+          localId: "local-payment-1",
         }),
       }),
     ]);
@@ -1434,7 +1891,7 @@ describe("projectLocalSyncEvent", () => {
     expect(result.conflicts).toEqual([
       expect.objectContaining({
         conflictType: "permission",
-        summary: "Register was locally closed before this sale synced.",
+        summary: "Register was not open before this sale synced.",
       }),
     ]);
   });
@@ -1691,6 +2148,25 @@ function buildSaleCompletedEvent(
   };
 }
 
+function buildSaleClearedEvent(
+  payloadOverrides: Partial<ParsedSaleClearedEvent["payload"]> = {},
+): ParsedSaleClearedEvent {
+  return {
+    localEventId: "event-clear-1",
+    localRegisterSessionId: "local-register-1",
+    sequence: 2,
+    eventType: "sale_cleared",
+    occurredAt: 20,
+    staffProfileId: "staff-1" as never,
+    staffProofToken: "proof-token-1",
+    payload: {
+      localPosSessionId: "session-1",
+      reason: "Sale cleared",
+      ...payloadOverrides,
+    },
+  };
+}
+
 function createProjectionRepository(
   overrides: Partial<{
     registerSession: {
@@ -1704,7 +2180,7 @@ function createProjectionRepository(
       registerNumber?: string;
       status: string;
       variance?: number;
-    };
+    } | null;
     blockingRegisterSession: {
       _id: string;
       expectedCash: number;
@@ -1731,6 +2207,7 @@ function createProjectionRepository(
 	      _id: string;
 	      registerSessionId: string;
 	      staffProfileId?: string;
+        status?: string;
 	      storeId: string;
 	      terminalId: string;
 	      transactionId?: string;
@@ -1743,12 +2220,15 @@ function createProjectionRepository(
     };
     terminalRegisteredByUserId: string;
     validCloudIds: Set<string>;
-    hasActivePosRole: boolean;
+    hasActivePosRole:
+      | boolean
+      | ((args: Parameters<SyncProjectionRepository["hasActivePosRole"]>[0]) => boolean);
     validStaffProof: boolean;
-	  }> = {},
+  }> = {},
 ): SyncProjectionRepository & {
   createdConflicts: LocalSyncConflictRecord[];
   consumedHoldRequests: unknown[];
+  releasedHoldRequests: unknown[];
   createdOperationalEvents: unknown[];
   createdPaymentAllocations: unknown[];
   createdPosSessions: unknown[];
@@ -1785,6 +2265,7 @@ function createProjectionRepository(
   const productPatches: unknown[] = [];
   const registerSessionPatches: unknown[] = [];
   const consumedHoldRequests: unknown[] = [];
+  const releasedHoldRequests: unknown[] = [];
   const sku = overrides.sku ?? {
     _id: "sku-1",
     storeId: "store-1",
@@ -1795,13 +2276,16 @@ function createProjectionRepository(
     inventoryCount: 10,
     images: [],
   };
-  const registerSession = overrides.registerSession ?? {
-    _id: "register-session-1",
-    expectedCash: 100,
-    closeoutRecords: [],
-    registerNumber: "1",
-    status: "active",
-  };
+  const registerSession =
+    overrides.registerSession === null
+      ? null
+      : (overrides.registerSession ?? {
+          _id: "register-session-1",
+          expectedCash: 100,
+          closeoutRecords: [],
+          registerNumber: "1",
+          status: "active",
+        });
   const terminal = {
     _id: "terminal-1",
     storeId: "store-1",
@@ -1822,6 +2306,7 @@ function createProjectionRepository(
     productPatches,
     registerSessionPatches,
     consumedHoldRequests,
+    releasedHoldRequests,
     async getTerminal(terminalId) {
       return terminalId === "terminal-1" ? (terminal as never) : null;
     },
@@ -1840,7 +2325,10 @@ function createProjectionRepository(
           } as never)
         : null;
     },
-    async hasActivePosRole() {
+    async hasActivePosRole(args) {
+      if (typeof overrides.hasActivePosRole === "function") {
+        return overrides.hasActivePosRole(args);
+      }
       return overrides.hasActivePosRole ?? true;
     },
     async validateLocalStaffProof(args) {
@@ -1878,7 +2366,7 @@ function createProjectionRepository(
       return productSkuId === "sku-1" ? (sku as never) : null;
     },
     async getRegisterSession(registerSessionId) {
-      return registerSessionId === registerSession._id
+      return registerSession && registerSessionId === registerSession._id
         ? (registerSession as never)
         : null;
     },
@@ -1896,6 +2384,19 @@ function createProjectionRepository(
     async consumeInventoryHoldsForSession(args) {
       consumedHoldRequests.push(args);
       return (overrides.consumedHoldQuantities ?? new Map()) as never;
+    },
+    async releaseActiveInventoryHoldsForSession(args) {
+      releasedHoldRequests.push(args);
+      return {
+        releasedHoldCount: 1,
+        releasedHolds: [
+          {
+            holdId: "hold-1",
+            productSkuId: "sku-1",
+            quantity: 1,
+          },
+        ],
+      } as never;
     },
     normalizeCloudId(_tableName, value) {
       return overrides.validCloudIds?.has(value) ? (value as never) : null;
@@ -1988,7 +2489,7 @@ function createProjectionRepository(
     },
     async patchRegisterSession(registerSessionId, patch) {
       registerSessionPatches.push({ registerSessionId, patch });
-      Object.assign(registerSession, patch);
+      if (registerSession) Object.assign(registerSession, patch);
     },
     async createPosSession(input) {
       const id = `pos-session-${input.localPosSessionId ?? nextId++}`;

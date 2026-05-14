@@ -47,6 +47,7 @@ Every plan should contain:
 - A clear problem frame and scope boundary
 - Concrete requirements traceability back to the request or origin document
 - Repo-relative file paths for the work being proposed (never absolute paths — see Planning Rules)
+- A paired browser-readable HTML review artifact next to the markdown plan, using the same basename and `.html` extension
 - Explicit test file paths for feature-bearing implementation units
 - Decisions with rationale, not just tasks
 - Existing patterns or code references to follow
@@ -329,6 +330,7 @@ Ask the user only when the answer materially affects architecture, scope, sequen
   - Keep the descriptive name concise (3-5 words) and kebab-cased
   - Examples: `2026-01-15-001-feat-user-authentication-flow-plan.md`, `2026-02-03-002-fix-checkout-race-condition-plan.md`
   - Avoid: missing sequence numbers, vague names like "new-feature", invalid characters (colons, spaces)
+- Build the companion HTML review artifact filename by replacing `.md` with `.html` in the same `docs/plans/` directory. The markdown plan remains canonical; the HTML file is a browser-readable review artifact.
 
 #### 3.2 Stakeholder and Impact Awareness
 
@@ -779,6 +781,31 @@ For larger `Deep` plans, extend the core template only when useful with sections
 
 When the plan contains 4+ implementation units with non-linear dependencies, 3+ interacting surfaces in System-Wide Impact, 3+ behavioral modes/variants in Summary or Problem Frame, or 3+ interacting decisions in Key Technical Decisions or alternatives in Alternative Approaches, read `references/visual-communication.md` for diagram and table guidance. This covers plan-structure visuals (dependency graphs, interaction diagrams, comparison tables) — not solution-design diagrams, which are covered in Section 3.4.
 
+#### 4.5 HTML Review Artifact
+
+Every saved markdown plan must have a paired HTML artifact at the same path with the `.html` extension.
+
+Purpose:
+- The markdown file is the canonical source for implementation, Proof review, issue creation, and later edits
+- The HTML file is a digestible, legible review artifact for browser-first reading and stakeholder handoff
+
+The HTML artifact should include:
+- Plan title, created date, plan type, status, and a link or reference to the markdown source
+- Summary/problem frame, scope, key decisions, implementation-unit digest, risks, and verification strategy
+- Stable anchors or a short table of contents for Standard and Deep plans
+- Tables, diagrams, or compact callouts when they make the plan easier to scan than prose alone
+
+HTML rules:
+- Use plain static HTML and CSS only; no JavaScript, remote assets, external fonts, or build step
+- Keep styling restrained and review-focused; optimize for reading dense plan content, not marketing presentation
+- Use repo-relative links inside the artifact when linking to repo files or sibling artifacts
+- Escape ampersands and other HTML-sensitive characters
+- Include `meta http-equiv="Content-Type" content="text/html; charset=utf-8"` and use `style type="text/css"` for compatibility with local validators
+- If tables are used, add a concise `summary` attribute when doing so helps older HTML validators
+- Avoid validator-noisy semantic HTML if the local repo tooling is old; simple `div` structure with classes is acceptable
+- If `tidy` is installed, run `tidy -errors -quiet <html_path>` after writing the artifact and fix real errors. If `tidy` is unavailable, inspect the HTML manually and note that validation was not run.
+- If the markdown plan changes materially after confidence deepening, document review, Proof HITL review, or a requested revision, regenerate or update the HTML artifact before handoff.
+
 ### Phase 5: Final Review, Write File, and Handoff
 
 #### 5.1 Review Before Writing
@@ -799,6 +826,7 @@ Before finalizing, check:
 - If Scope Boundaries lists items that are planned work for a separate PR, issue, or repo, are they under `### Deferred to Follow-Up Work` rather than mixed with true non-goals?
 - U-IDs are unique within the plan and follow the stability rule — no two units share an ID; reordering or splitting did not renumber existing units; gaps from deletions are preserved
 - Would a visual aid (dependency graph, interaction diagram, comparison table) help a reader grasp the plan structure faster than scanning prose alone?
+- The HTML review artifact will be useful as a standalone browser-readable digest and stays faithful to the markdown source
 
 If the plan originated from a requirements document, re-read that document and verify:
 - The chosen approach still matches the product intent
@@ -818,27 +846,36 @@ Fires **only when the plan was sourced from an upstream brainstorm doc** (Phase 
 
 **Headless mode**: synthesis is composed but not confirmed (no synchronous user). Proceed to Phase 5.2 plan-write. Inferred bets route to a `## Assumptions` section in the plan instead of Key Technical Decisions. See `references/synthesis-summary.md` Headless mode for the full routing.
 
-#### 5.2 Write Plan File
+#### 5.2 Write Plan Files
 
-**REQUIRED: Write the plan file to disk before presenting any options.**
+**REQUIRED: Write both the markdown plan and the HTML review artifact to disk before presenting any options.**
 
-Use the Write tool to save the complete plan to:
+Use the Write tool to save the complete markdown plan to:
 
 ```text
 docs/plans/YYYY-MM-DD-NNN-<type>-<descriptive-name>-plan.md
 ```
 
+Then write the companion HTML review artifact to:
+
+```text
+docs/plans/YYYY-MM-DD-NNN-<type>-<descriptive-name>-plan.html
+```
+
+The markdown plan is canonical. The HTML artifact should be generated from, or manually kept faithful to, the markdown plan's current content.
+
 Confirm (use absolute path so the reference is clickable in modern terminals):
 
 ```text
 Plan written to <absolute path to plan>
+HTML review artifact written to <absolute path to html artifact>
 ```
 
 **Pipeline mode:** If invoked from an automated workflow such as LFG or any `disable-model-invocation` context, skip interactive questions. Make the needed choices automatically and proceed to writing the plan.
 
 #### 5.3 Confidence Check and Deepening
 
-After writing the plan file, automatically evaluate whether the plan needs strengthening.
+After writing the plan files, automatically evaluate whether the plan needs strengthening.
 
 **Two deepening modes:**
 
@@ -888,23 +925,23 @@ When deepening is warranted, read `references/deepening-workflow.md` for confide
 
 After document review and final checks, present this menu using the platform's blocking question tool: `AskUserQuestion` in Claude Code (call `ToolSearch` with `select:AskUserQuestion` first if its schema isn't loaded), `request_user_input` in Codex, `ask_user` in Gemini, `ask_user` in Pi (requires the `pi-ask-user` extension). Fall back to numbered options in chat only when no blocking tool exists in the harness or the call errors (e.g., Codex edit modes) — not because a schema load is required. Never silently skip the question.
 
-**Question:** "Plan ready at `<absolute path to plan>`. What would you like to do next?" (use absolute path so the reference is clickable in modern terminals)
+**Question:** "Plan ready at `<absolute path to plan>`. HTML review artifact: `<absolute path to html artifact>`. What would you like to do next?" (use absolute paths so the references are clickable in modern terminals)
 
 **Options:**
 1. **Start `/ce-work`** (recommended) - Begin implementing this plan in the current session
 2. **Create Issue** - Create a tracked issue from this plan in your configured issue tracker (GitHub or Linear)
 3. **Open in Proof (web app) — review and comment to iterate with the agent** - Open the doc in Every's Proof editor, iterate with the agent via comments, or copy a link to share with others
-4. **Done for now** - Pause; the plan file is saved and can be resumed later
+4. **Done for now** - Pause; the plan files are saved and can be resumed later
 
 **Routing.** Act on the user's selection — do not just announce it. Elaborate sub-flows (Proof HITL state machine, Issue Creation tracker detection, post-HITL resync) live in `references/plan-handoff.md`.
 
 - **Start `/ce-work`** — Invoke the `ce-work` skill via the platform's skill-invocation primitive (`Skill` in Claude Code, `Skill` in Codex, the equivalent on Gemini/Pi), passing the plan path as the skill argument. Do not merely tell the user to type `/ce-work` — fire the invocation now so the plan executes in this session.
 - **Create Issue** — Detect the project tracker (`gh` for GitHub, `linear` for Linear) and create the issue from the plan file as described under "Issue Creation" in `references/plan-handoff.md`. After creation, display the issue URL and ask whether to proceed to `/ce-work` via the platform's blocking question tool.
 - **Open in Proof (web app) — review and comment to iterate with the agent** — Load the `ce-proof` skill in HITL-review mode with the plan file as `source file`, the plan title as `doc title`, identity `ai:compound-engineering` / `Compound Engineering`, and recommended next step `/ce-work`. Then follow the post-HITL resync logic in `references/plan-handoff.md`, which handles the four `ce-proof` return statuses, re-runs `ce-doc-review` after material edits, and falls back gracefully on upload failure.
-- **Done for now** — Display a brief confirmation that the plan file is saved and end the turn. Do not start follow-up work without an explicit further user prompt.
+- **Done for now** — Display a brief confirmation that the plan files are saved and end the turn. Do not start follow-up work without an explicit further user prompt.
 
 If the user asks for another document review (either from a contextual prompt about residual findings or via free-form request), load the `ce-doc-review` skill with the plan path for another pass and then return to this menu. For free-text revisions outside the four options, accept the input and loop back to this menu after applying the revision.
 
 **Completion check:** This skill is not complete until the post-generation menu above has been presented, the user has selected an action, and the inline routing for that selection has been executed. Presenting the menu and stopping at the user's selection is not completion — fire the routed action.
 
-**Pipeline mode exception:** In LFG or any `disable-model-invocation` context, skip the interactive menu and return control to the caller after the plan file is written, confidence check has run, and `ce-doc-review` has run in headless mode (per `references/plan-handoff.md`).
+**Pipeline mode exception:** In LFG or any `disable-model-invocation` context, skip the interactive menu and return control to the caller after the plan files are written, confidence check has run, and `ce-doc-review` has run in headless mode (per `references/plan-handoff.md`).
