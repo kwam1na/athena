@@ -110,6 +110,21 @@ describe("operations query indexing", () => {
         fields: ["storeId", "sourceType", "sourceId"],
       },
       {
+        table: "skuActivityEvent",
+        descriptor: "by_storeId_productSkuId_occurredAt",
+        fields: ["storeId", "productSkuId", "occurredAt"],
+      },
+      {
+        table: "skuActivityEvent",
+        descriptor: "by_storeId_source",
+        fields: ["storeId", "sourceType", "sourceId"],
+      },
+      {
+        table: "skuActivityEvent",
+        descriptor: "by_storeId_idempotencyKey",
+        fields: ["storeId", "idempotencyKey"],
+      },
+      {
         table: "cycleCountDraft",
         descriptor: "by_storeId_status_scope_owner",
         fields: ["storeId", "status", "scopeKey", "ownerUserId"],
@@ -196,6 +211,7 @@ describe("operations query indexing", () => {
     const customerProfilesSource = getSource("./customerProfiles.ts");
     const staffProfilesSource = getSource("./staffProfiles.ts");
     const inventoryMovementsSource = getSource("./inventoryMovements.ts");
+    const skuActivitySource = getSource("./skuActivity.ts");
     const paymentAllocationsSource = getSource("./paymentAllocations.ts");
     const operationalEventsSource = getSource("./operationalEvents.ts");
     const dailyOperationsSource = getSource("./dailyOperations.ts");
@@ -218,6 +234,13 @@ describe("operations query indexing", () => {
     expect(staffProfilesSource).toContain('.withIndex("by_staffProfileId"');
     expect(inventoryMovementsSource).toContain(
       '.withIndex("by_storeId_productSkuId"',
+    );
+    expect(skuActivitySource).toContain(
+      '.withIndex("by_storeId_productSkuId_occurredAt"',
+    );
+    expect(skuActivitySource).toContain('.withIndex("by_storeId_source"');
+    expect(skuActivitySource).toContain(
+      '.withIndex("by_storeId_idempotencyKey"',
     );
     expect(paymentAllocationsSource).toContain(
       '.withIndex("by_storeId_target"',

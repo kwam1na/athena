@@ -5,10 +5,12 @@ import {
   acquireInventoryHold,
   adjustInventoryHold,
   consumeInventoryHoldsForSession,
+  type RecordSkuActivityEventArgs,
   releaseActiveInventoryHoldsForSession,
   releaseInventoryHold,
   releaseInventoryHoldsBatch,
   releaseLegacyExpenseQuantityPatchHolds,
+  type SkuActivityRecorder,
 } from "./inventoryHolds";
 
 type HoldStatus = "active" | "released" | "consumed" | "expired";
@@ -41,6 +43,13 @@ function createDb(seed: { sku: SkuRecord; holds?: HoldRecord[] }) {
   const holds = [...(seed.holds ?? [])];
   const insertedHolds: HoldRecord[] = [];
   const productSkuPatches: Array<Record<string, unknown>> = [];
+  const skuActivityEvents: RecordSkuActivityEventArgs[] = [];
+  const recordSkuActivityEvent: SkuActivityRecorder = vi.fn(
+    async (_db, event) => {
+      skuActivityEvents.push(event);
+      return { _id: `activity-${skuActivityEvents.length}`, ...event };
+    },
+  );
 
   const db = {
     get: vi.fn(async (tableNameOrId: string, maybeId?: string) => {
@@ -145,12 +154,25 @@ function createDb(seed: { sku: SkuRecord; holds?: HoldRecord[] }) {
     })),
   };
 
-  return { db, holds, insertedHolds, productSkuPatches };
+  return {
+    db,
+    holds,
+    insertedHolds,
+    productSkuPatches,
+    recordSkuActivityEvent,
+    skuActivityEvents,
+  };
 }
 
 describe("POS inventory hold ledger", () => {
   it("acquires a hold row without patching productSku availability", async () => {
-    const { db, insertedHolds, productSkuPatches } = createDb({
+    const {
+      db,
+      insertedHolds,
+      productSkuPatches,
+      recordSkuActivityEvent,
+      skuActivityEvents,
+    } = createDb({
       sku: {
         _id: "sku-1",
         storeId: "store-1",
@@ -167,6 +189,13 @@ describe("POS inventory hold ledger", () => {
       quantity: 4,
       expiresAt: 10_000,
       now: 1_000,
+      activityContext: {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        registerSessionId: "drawer-1" as Id<"registerSession">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        workflowTraceId: "pos_session:session-1",
+      },
+      recordSkuActivityEvent,
     });
 
     expect(result).toMatchObject({ success: true });
@@ -180,10 +209,33 @@ describe("POS inventory hold ledger", () => {
       }),
     ]);
     expect(productSkuPatches).toEqual([]);
+    expect(skuActivityEvents).toEqual([
+      expect.objectContaining({
+        activityType: "pos_reservation_acquired",
+        storeId: "store-1",
+        productSkuId: "sku-1",
+        sourceType: "posSession",
+        sourceId: "session-1",
+        inventoryHoldId: "hold-1",
+        reservationQuantity: 4,
+        quantityDelta: 4,
+        status: "active",
+        actorStaffProfileId: "staff-1",
+        registerSessionId: "drawer-1",
+        terminalId: "terminal-1",
+        workflowTraceId: "pos_session:session-1",
+      }),
+    ]);
   });
 
   it("adjusts same-session quantity without double-counting the existing hold", async () => {
-    const { db, holds, productSkuPatches } = createDb({
+    const {
+      db,
+      holds,
+      productSkuPatches,
+      recordSkuActivityEvent,
+      skuActivityEvents,
+    } = createDb({
       sku: {
         _id: "sku-1",
         storeId: "store-1",
@@ -213,6 +265,10 @@ describe("POS inventory hold ledger", () => {
       newQuantity: 5,
       expiresAt: 10_000,
       now: 1_000,
+      activityContext: {
+        posSessionItemId: "item-1" as Id<"posSessionItem">,
+      },
+      recordSkuActivityEvent,
     });
 
     expect(result).toMatchObject({ success: true });
@@ -224,10 +280,31 @@ describe("POS inventory hold ledger", () => {
       }),
     );
     expect(productSkuPatches).toEqual([]);
+    expect(skuActivityEvents).toEqual([
+      expect.objectContaining({
+        activityType: "pos_reservation_adjusted",
+        sourceId: "session-1",
+        sourceLineId: "item-1",
+        inventoryHoldId: "hold-own",
+        reservationQuantity: 3,
+        quantityDelta: 3,
+        status: "active",
+        metadata: expect.objectContaining({
+          previousQuantity: 2,
+          newQuantity: 5,
+        }),
+      }),
+    ]);
   });
 
   it("releases active hold rows without restoring productSku availability", async () => {
-    const { db, holds, productSkuPatches } = createDb({
+    const {
+      db,
+      holds,
+      productSkuPatches,
+      recordSkuActivityEvent,
+      skuActivityEvents,
+    } = createDb({
       sku: {
         _id: "sku-1",
         storeId: "store-1",
@@ -248,6 +325,7 @@ describe("POS inventory hold ledger", () => {
       sessionId: "session-1" as Id<"posSession">,
       skuId: "sku-1" as Id<"productSku">,
       now: 1_000,
+      recordSkuActivityEvent,
     });
 
     expect(result).toMatchObject({ success: true });
@@ -258,10 +336,25 @@ describe("POS inventory hold ledger", () => {
       }),
     );
     expect(productSkuPatches).toEqual([]);
+    expect(skuActivityEvents).toEqual([
+      expect.objectContaining({
+        activityType: "pos_reservation_released",
+        inventoryHoldId: "hold-own",
+        reservationQuantity: 2,
+        quantityDelta: -2,
+        status: "released",
+      }),
+    ]);
   });
 
   it("reduces only the requested quantity when releasing a partial hold", async () => {
-    const { db, holds, productSkuPatches } = createDb({
+    const {
+      db,
+      holds,
+      productSkuPatches,
+      recordSkuActivityEvent,
+      skuActivityEvents,
+    } = createDb({
       sku: {
         _id: "sku-1",
         storeId: "store-1",
@@ -283,6 +376,7 @@ describe("POS inventory hold ledger", () => {
       skuId: "sku-1" as Id<"productSku">,
       quantity: 2,
       now: 1_000,
+      recordSkuActivityEvent,
     });
 
     expect(result).toMatchObject({ success: true });
@@ -294,6 +388,48 @@ describe("POS inventory hold ledger", () => {
       }),
     );
     expect(productSkuPatches).toEqual([]);
+    expect(skuActivityEvents).toEqual([
+      expect.objectContaining({
+        activityType: "pos_reservation_released",
+        inventoryHoldId: "hold-own",
+        reservationQuantity: 2,
+        quantityDelta: -2,
+        status: "released",
+        metadata: expect.objectContaining({
+          previousQuantity: 5,
+          remainingQuantity: 3,
+        }),
+      }),
+    ]);
+  });
+
+  it("does not record activity when hold acquisition fails availability", async () => {
+    const { db, recordSkuActivityEvent, skuActivityEvents } = createDb({
+      sku: {
+        _id: "sku-1",
+        storeId: "store-1",
+        sku: "SKU-1",
+        quantityAvailable: 1,
+        inventoryCount: 1,
+      },
+    });
+
+    const result = await acquireInventoryHold(db as never, {
+      storeId: "store-1" as Id<"store">,
+      sessionId: "session-1" as Id<"posSession">,
+      skuId: "sku-1" as Id<"productSku">,
+      quantity: 2,
+      expiresAt: 10_000,
+      now: 1_000,
+      recordSkuActivityEvent,
+    });
+
+    expect(result).toMatchObject({
+      success: false,
+      available: 1,
+    });
+    expect(skuActivityEvents).toEqual([]);
+    expect(recordSkuActivityEvent).not.toHaveBeenCalled();
   });
 
   it("does not restore SKU availability when no ledger hold exists", async () => {
@@ -319,7 +455,13 @@ describe("POS inventory hold ledger", () => {
   });
 
   it("expires matching ledger holds without restoring SKU availability", async () => {
-    const { db, holds, productSkuPatches } = createDb({
+    const {
+      db,
+      holds,
+      productSkuPatches,
+      recordSkuActivityEvent,
+      skuActivityEvents,
+    } = createDb({
       sku: {
         _id: "sku-1",
         storeId: "store-1",
@@ -342,6 +484,7 @@ describe("POS inventory hold ledger", () => {
       skuId: "sku-1" as Id<"productSku">,
       quantity: 2,
       now: 1_000,
+      recordSkuActivityEvent,
     });
 
     expect(result).toMatchObject({ success: true });
@@ -352,10 +495,25 @@ describe("POS inventory hold ledger", () => {
       }),
     );
     expect(productSkuPatches).toEqual([]);
+    expect(skuActivityEvents).toEqual([
+      expect.objectContaining({
+        activityType: "pos_reservation_expired",
+        inventoryHoldId: "hold-expired",
+        reservationQuantity: 2,
+        quantityDelta: -2,
+        status: "expired",
+      }),
+    ]);
   });
 
   it("releases expired POS-session batch holds without restoring SKU availability", async () => {
-    const { db, holds, productSkuPatches } = createDb({
+    const {
+      db,
+      holds,
+      productSkuPatches,
+      recordSkuActivityEvent,
+      skuActivityEvents,
+    } = createDb({
       sku: {
         _id: "sku-1",
         storeId: "store-1",
@@ -377,6 +535,7 @@ describe("POS inventory hold ledger", () => {
       sessionId: "session-expired" as Id<"posSession">,
       items: [{ skuId: "sku-1" as Id<"productSku">, quantity: 4 }],
       now: 1_000,
+      recordSkuActivityEvent,
     });
 
     expect(holds[0]).toEqual(
@@ -386,6 +545,15 @@ describe("POS inventory hold ledger", () => {
       }),
     );
     expect(productSkuPatches).toEqual([]);
+    expect(skuActivityEvents).toEqual([
+      expect.objectContaining({
+        activityType: "pos_reservation_expired",
+        inventoryHoldId: "hold-expired",
+        reservationQuantity: 4,
+        quantityDelta: -4,
+        status: "expired",
+      }),
+    ]);
   });
 
   it("restores explicit legacy expense quantity-patch holds", async () => {
@@ -407,7 +575,7 @@ describe("POS inventory hold ledger", () => {
   });
 
   it("consumes matching completion holds and releases leftover session holds", async () => {
-    const { db, holds } = createDb({
+    const { db, holds, recordSkuActivityEvent, skuActivityEvents } = createDb({
       sku: {
         _id: "sku-1",
         storeId: "store-1",
@@ -435,6 +603,10 @@ describe("POS inventory hold ledger", () => {
       sessionId: "session-1" as Id<"posSession">,
       items: [{ skuId: "sku-1" as Id<"productSku">, quantity: 2 }],
       now: 1_000,
+      activityContext: {
+        posTransactionId: "txn-1" as Id<"posTransaction">,
+      },
+      recordSkuActivityEvent,
     });
 
     expect(consumed.get("sku-1" as Id<"productSku">)).toBe(2);
@@ -450,10 +622,36 @@ describe("POS inventory hold ledger", () => {
         releasedAt: 1_000,
       }),
     ]);
+    expect(skuActivityEvents).toEqual([
+      expect.objectContaining({
+        activityType: "pos_reservation_consumed",
+        inventoryHoldId: "hold-sale",
+        productSkuId: "sku-1",
+        reservationQuantity: 2,
+        quantityDelta: -2,
+        status: "consumed",
+        posTransactionId: "txn-1",
+      }),
+      expect.objectContaining({
+        activityType: "pos_reservation_released",
+        inventoryHoldId: "hold-leftover",
+        productSkuId: "sku-2",
+        reservationQuantity: 1,
+        quantityDelta: -1,
+        status: "released",
+        posTransactionId: "txn-1",
+      }),
+    ]);
   });
 
   it("releases only active session holds once and reports released quantities", async () => {
-    const { db, holds, productSkuPatches } = createDb({
+    const {
+      db,
+      holds,
+      productSkuPatches,
+      recordSkuActivityEvent,
+      skuActivityEvents,
+    } = createDb({
       sku: {
         _id: "sku-1",
         storeId: "store-1",
@@ -500,6 +698,7 @@ describe("POS inventory hold ledger", () => {
     const result = await releaseActiveInventoryHoldsForSession(db as never, {
       sessionId: "session-1" as Id<"posSession">,
       now: 1_000,
+      recordSkuActivityEvent,
     });
 
     expect(result).toEqual({
@@ -549,10 +748,27 @@ describe("POS inventory hold ledger", () => {
       }),
     );
     expect(productSkuPatches).toEqual([]);
+    expect(skuActivityEvents).toEqual([
+      expect.objectContaining({
+        activityType: "pos_reservation_released",
+        inventoryHoldId: "hold-active-1",
+        productSkuId: "sku-1",
+        reservationQuantity: 2,
+        quantityDelta: -2,
+      }),
+      expect.objectContaining({
+        activityType: "pos_reservation_released",
+        inventoryHoldId: "hold-active-2",
+        productSkuId: "sku-2",
+        reservationQuantity: 3,
+        quantityDelta: -3,
+      }),
+    ]);
 
     const replay = await releaseActiveInventoryHoldsForSession(db as never, {
       sessionId: "session-1" as Id<"posSession">,
       now: 2_000,
+      recordSkuActivityEvent,
     });
 
     expect(replay).toEqual({
@@ -560,6 +776,7 @@ describe("POS inventory hold ledger", () => {
       releasedQuantity: 0,
       releasedHolds: [],
     });
+    expect(skuActivityEvents).toHaveLength(2);
   });
 });
 

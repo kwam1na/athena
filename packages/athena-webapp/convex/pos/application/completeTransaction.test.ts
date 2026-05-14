@@ -16,6 +16,7 @@ import {
   readActiveInventoryHoldQuantitiesForSession,
   validateInventoryAvailability,
 } from "../../inventory/helpers/inventoryHolds";
+import { recordInventoryMovementWithCtx } from "../../operations/inventoryMovements";
 import {
   createPosTransaction,
   createPosTransactionItem,
@@ -67,6 +68,10 @@ vi.mock("../../inventory/helpers/inventoryHolds", () => ({
   validateInventoryAvailability: vi.fn(),
 }));
 
+vi.mock("../../operations/inventoryMovements", () => ({
+  recordInventoryMovementWithCtx: vi.fn(),
+}));
+
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(validateInventoryAvailability).mockResolvedValue({
@@ -83,6 +88,7 @@ function expectNoCompletionSideEffects() {
   expect(createPosTransaction).not.toHaveBeenCalled();
   expect(createPosTransactionItem).not.toHaveBeenCalled();
   expect(patchProductSku).not.toHaveBeenCalled();
+  expect(recordInventoryMovementWithCtx).not.toHaveBeenCalled();
   expect(patchPosSession).not.toHaveBeenCalled();
   expect(patchPosTransaction).not.toHaveBeenCalled();
   expect(recordRetailSalePaymentAllocations).not.toHaveBeenCalled();
@@ -244,6 +250,19 @@ describe("completeTransaction checkout side effects", () => {
         posTransactionId: "txn-1",
         registerSessionId: "register-1",
         storeId: "store-1",
+      }),
+    );
+    expect(recordInventoryMovementWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        movementType: "sale",
+        sourceType: "posTransaction",
+        sourceId: "txn-1",
+        quantityDelta: -1,
+        productSkuId: "sku-1",
+        posTransactionId: "txn-1",
+        registerSessionId: "register-1",
+        reasonCode: "pos_sale",
       }),
     );
   });
@@ -690,6 +709,21 @@ describe("completeTransaction trace ordering", () => {
       quantityAvailable: 9,
       inventoryCount: 9,
     });
+    expect(recordInventoryMovementWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        movementType: "sale",
+        sourceType: "posTransaction",
+        sourceId: "txn-1",
+        quantityDelta: -1,
+        productSkuId: "sku-1",
+        posTransactionId: "txn-1",
+        registerSessionId: "register-1",
+        actorStaffProfileId: "staff-1",
+        customerProfileId: "profile-1",
+        reasonCode: "pos_sale",
+      }),
+    );
   });
 
   it("rejects session checkout when submitted totals no longer match persisted items", async () => {
@@ -981,6 +1015,20 @@ describe("completeTransaction trace ordering", () => {
       quantityAvailable: 10,
       inventoryCount: 9,
     });
+    expect(recordInventoryMovementWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        movementType: "sale",
+        sourceType: "posTransaction",
+        sourceId: "txn-1",
+        quantityDelta: -1,
+        productSkuId: "sku-1",
+        posTransactionId: "txn-1",
+        registerSessionId: "register-1",
+        actorStaffProfileId: "staff-1",
+        reasonCode: "pos_sale",
+      }),
+    );
   });
 
   it("blocks ledger sessions before side effects when active hold coverage is missing", async () => {

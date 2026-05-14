@@ -1,5 +1,11 @@
 import { DatabaseReader, DatabaseWriter } from "../../_generated/server";
 import { Id } from "../../_generated/dataModel";
+import {
+  recordSkuActivityEventWithDb,
+  type RecordSkuActivityEventArgs,
+} from "../../operations/skuActivity";
+
+export type { RecordSkuActivityEventArgs } from "../../operations/skuActivity";
 
 /**
  * POS inventory holds are a ledger over durable SKU inventory. Cart editing
@@ -33,12 +39,16 @@ type HoldContext = {
 type AcquireHoldArgs = HoldContext & {
   quantity: number;
   expiresAt: number;
+  activityContext?: PosSkuActivityContext;
+  recordSkuActivityEvent?: SkuActivityRecorder;
 };
 
 type AdjustHoldArgs = HoldContext & {
   oldQuantity: number;
   newQuantity: number;
   expiresAt: number;
+  activityContext?: PosSkuActivityContext;
+  recordSkuActivityEvent?: SkuActivityRecorder;
 };
 
 type ReleaseHoldArgs = {
@@ -46,6 +56,32 @@ type ReleaseHoldArgs = {
   skuId: Id<"productSku">;
   quantity?: number;
   now?: number;
+  activityContext?: PosSkuActivityContext;
+  recordSkuActivityEvent?: SkuActivityRecorder;
+};
+
+type PosSkuActivityType =
+  | "pos_reservation_acquired"
+  | "pos_reservation_adjusted"
+  | "pos_reservation_released"
+  | "pos_reservation_expired"
+  | "pos_reservation_consumed";
+
+type PosSkuActivityStatus = "active" | "released" | "expired" | "consumed";
+
+export type SkuActivityRecorder = (
+  db: DatabaseWriter,
+  args: RecordSkuActivityEventArgs,
+) => Promise<unknown>;
+
+type PosSkuActivityContext = {
+  actorStaffProfileId?: Id<"staffProfile">;
+  posSessionItemId?: Id<"posSessionItem">;
+  registerSessionId?: Id<"registerSession">;
+  terminalId?: Id<"posTerminal">;
+  posTransactionId?: Id<"posTransaction">;
+  workflowTraceId?: string;
+  metadata?: Record<string, unknown>;
 };
 
 export type ActiveInventoryHoldDetail = {
@@ -162,14 +198,18 @@ export async function acquireInventoryHold(
     now,
   });
 
+  let inventoryHoldId: Id<"inventoryHold">;
+  let previousQuantity = 0;
   if (existingHold) {
+    inventoryHoldId = existingHold._id;
+    previousQuantity = existingHold.quantity;
     await db.patch("inventoryHold", existingHold._id, {
       quantity: existingHold.quantity + args.quantity,
       expiresAt: args.expiresAt,
       updatedAt: now,
     });
   } else {
-    await db.insert("inventoryHold", {
+    inventoryHoldId = (await db.insert("inventoryHold", {
       storeId: args.storeId,
       productSkuId: args.skuId,
       sourceType: "posSession",
@@ -179,8 +219,41 @@ export async function acquireInventoryHold(
       expiresAt: args.expiresAt,
       createdAt: now,
       updatedAt: now,
-    });
+    })) as Id<"inventoryHold">;
   }
+
+  await recordSkuActivityBestEffort(db, args.recordSkuActivityEvent, {
+    storeId: args.storeId,
+    productSkuId: args.skuId,
+    activityType: "pos_reservation_acquired",
+    occurredAt: now,
+    sourceType: "posSession",
+    sourceId: args.sessionId,
+    sourceLineId: args.activityContext?.posSessionItemId,
+    inventoryHoldId,
+    reservationQuantity: args.quantity,
+    quantityDelta: args.quantity,
+    status: "active",
+    actorStaffProfileId: args.activityContext?.actorStaffProfileId,
+    registerSessionId: args.activityContext?.registerSessionId,
+    terminalId: args.activityContext?.terminalId,
+    posTransactionId: args.activityContext?.posTransactionId,
+    workflowTraceId: args.activityContext?.workflowTraceId,
+    idempotencyKey: buildSkuActivityIdempotencyKey({
+      activityType: "pos_reservation_acquired",
+      sessionId: args.sessionId,
+      skuId: args.skuId,
+      inventoryHoldId,
+      occurredAt: now,
+      quantity: args.quantity,
+    }),
+    metadata: {
+      ...args.activityContext?.metadata,
+      previousQuantity,
+      newQuantity: previousQuantity + args.quantity,
+      expiresAt: args.expiresAt,
+    },
+  });
 
   return {
     success: true,
@@ -202,6 +275,19 @@ export async function releaseInventoryHold(
   for (const hold of activeHolds) {
     if (hold.expiresAt <= now) {
       await markHoldExpired(db, hold._id, now);
+      await recordHoldSkuActivity(db, args.recordSkuActivityEvent, {
+        hold,
+        activityType: "pos_reservation_expired",
+        status: "expired",
+        occurredAt: now,
+        quantity: hold.quantity,
+        quantityDelta: -hold.quantity,
+        context: args.activityContext,
+        metadata: {
+          requestedReleaseQuantity: args.quantity,
+          expiresAt: hold.expiresAt,
+        },
+      });
       if (remainingQuantity !== undefined) {
         remainingQuantity = Math.max(0, remainingQuantity - hold.quantity);
       }
@@ -214,9 +300,24 @@ export async function releaseInventoryHold(
       }
 
       if (hold.quantity > remainingQuantity) {
+        const releasedQuantity = remainingQuantity;
+        const previousQuantity = hold.quantity;
         await db.patch("inventoryHold", hold._id, {
-          quantity: hold.quantity - remainingQuantity,
+          quantity: hold.quantity - releasedQuantity,
           updatedAt: now,
+        });
+        await recordHoldSkuActivity(db, args.recordSkuActivityEvent, {
+          hold,
+          activityType: "pos_reservation_released",
+          status: "released",
+          occurredAt: now,
+          quantity: releasedQuantity,
+          quantityDelta: -releasedQuantity,
+          context: args.activityContext,
+          metadata: {
+            previousQuantity,
+            remainingQuantity: previousQuantity - releasedQuantity,
+          },
         });
         remainingQuantity = 0;
         break;
@@ -229,6 +330,15 @@ export async function releaseInventoryHold(
       status: "released",
       releasedAt: now,
       updatedAt: now,
+    });
+    await recordHoldSkuActivity(db, args.recordSkuActivityEvent, {
+      hold,
+      activityType: "pos_reservation_released",
+      status: "released",
+      occurredAt: now,
+      quantity: hold.quantity,
+      quantityDelta: -hold.quantity,
+      context: args.activityContext,
     });
   }
 
@@ -249,6 +359,8 @@ export async function adjustInventoryHold(
       sessionId: args.sessionId,
       skuId: args.skuId,
       now,
+      activityContext: args.activityContext,
+      recordSkuActivityEvent: args.recordSkuActivityEvent,
     });
   }
 
@@ -295,8 +407,22 @@ export async function adjustInventoryHold(
       expiresAt: args.expiresAt,
       updatedAt: now,
     });
+    await recordHoldSkuActivity(db, args.recordSkuActivityEvent, {
+      hold: existingHold,
+      activityType: "pos_reservation_adjusted",
+      status: "active",
+      occurredAt: now,
+      quantity: Math.abs(args.newQuantity - args.oldQuantity),
+      quantityDelta: args.newQuantity - args.oldQuantity,
+      context: args.activityContext,
+      metadata: {
+        previousQuantity: args.oldQuantity,
+        newQuantity: args.newQuantity,
+        expiresAt: args.expiresAt,
+      },
+    });
   } else {
-    await db.insert("inventoryHold", {
+    const inventoryHoldId = (await db.insert("inventoryHold", {
       storeId: args.storeId,
       productSkuId: args.skuId,
       sourceType: "posSession",
@@ -306,6 +432,38 @@ export async function adjustInventoryHold(
       expiresAt: args.expiresAt,
       createdAt: now,
       updatedAt: now,
+    })) as Id<"inventoryHold">;
+    await recordSkuActivityBestEffort(db, args.recordSkuActivityEvent, {
+      storeId: args.storeId,
+      productSkuId: args.skuId,
+      activityType: "pos_reservation_acquired",
+      occurredAt: now,
+      sourceType: "posSession",
+      sourceId: args.sessionId,
+      sourceLineId: args.activityContext?.posSessionItemId,
+      inventoryHoldId,
+      reservationQuantity: args.newQuantity,
+      quantityDelta: args.newQuantity,
+      status: "active",
+      actorStaffProfileId: args.activityContext?.actorStaffProfileId,
+      registerSessionId: args.activityContext?.registerSessionId,
+      terminalId: args.activityContext?.terminalId,
+      posTransactionId: args.activityContext?.posTransactionId,
+      workflowTraceId: args.activityContext?.workflowTraceId,
+      idempotencyKey: buildSkuActivityIdempotencyKey({
+        activityType: "pos_reservation_acquired",
+        sessionId: args.sessionId,
+        skuId: args.skuId,
+        inventoryHoldId,
+        occurredAt: now,
+        quantity: args.newQuantity,
+      }),
+      metadata: {
+        ...args.activityContext?.metadata,
+        previousQuantity: args.oldQuantity,
+        newQuantity: args.newQuantity,
+        expiresAt: args.expiresAt,
+      },
     });
   }
 
@@ -350,6 +508,8 @@ export async function releaseInventoryHoldsBatch(
     sessionId: Id<"posSession">;
     items: Array<{ skuId: Id<"productSku">; quantity: number }>;
     now?: number;
+    activityContext?: PosSkuActivityContext;
+    recordSkuActivityEvent?: SkuActivityRecorder;
   },
 ): Promise<void> {
   await Promise.all(
@@ -359,6 +519,8 @@ export async function releaseInventoryHoldsBatch(
         skuId: item.skuId,
         quantity: item.quantity,
         now: input.now,
+        activityContext: input.activityContext,
+        recordSkuActivityEvent: input.recordSkuActivityEvent,
       }),
     ),
   );
@@ -387,6 +549,8 @@ export async function releaseInventoryHoldsForSession(
   args: {
     sessionId: Id<"posSession">;
     now?: number;
+    activityContext?: PosSkuActivityContext;
+    recordSkuActivityEvent?: SkuActivityRecorder;
   },
 ): Promise<void> {
   const now = args.now ?? Date.now();
@@ -395,14 +559,28 @@ export async function releaseInventoryHoldsForSession(
   });
 
   await Promise.all(
-    activeHolds.map((hold) =>
-      db.patch("inventoryHold", hold._id, {
-        status: hold.expiresAt <= now ? "expired" : "released",
-        releasedAt: hold.expiresAt <= now ? undefined : now,
-        expiredAt: hold.expiresAt <= now ? now : undefined,
+    activeHolds.map(async (hold) => {
+      const status = hold.expiresAt <= now ? "expired" : "released";
+      await db.patch("inventoryHold", hold._id, {
+        status,
+        releasedAt: status === "released" ? now : undefined,
+        expiredAt: status === "expired" ? now : undefined,
         updatedAt: now,
-      }),
-    ),
+      });
+      await recordHoldSkuActivity(db, args.recordSkuActivityEvent, {
+        hold,
+        activityType:
+          status === "expired"
+            ? "pos_reservation_expired"
+            : "pos_reservation_released",
+        status,
+        occurredAt: now,
+        quantity: hold.quantity,
+        quantityDelta: -hold.quantity,
+        context: args.activityContext,
+        metadata: { expiresAt: hold.expiresAt },
+      });
+    }),
   );
 }
 
@@ -411,6 +589,8 @@ export async function releaseActiveInventoryHoldsForSession(
   args: {
     sessionId: Id<"posSession">;
     now?: number;
+    activityContext?: PosSkuActivityContext;
+    recordSkuActivityEvent?: SkuActivityRecorder;
   },
 ): Promise<ReleasedInventoryHoldSummary> {
   const now = args.now ?? Date.now();
@@ -433,6 +613,15 @@ export async function releaseActiveInventoryHoldsForSession(
       releasedAt: now,
       updatedAt: now,
     });
+    await recordHoldSkuActivity(db, args.recordSkuActivityEvent, {
+      hold,
+      activityType: "pos_reservation_released",
+      status: "released",
+      occurredAt: now,
+      quantity: hold.quantity,
+      quantityDelta: -hold.quantity,
+      context: args.activityContext,
+    });
   }
 
   return {
@@ -448,6 +637,8 @@ export async function consumeInventoryHoldsForSession(
     sessionId: Id<"posSession">;
     items: Array<{ skuId: Id<"productSku">; quantity: number }>;
     now?: number;
+    activityContext?: PosSkuActivityContext;
+    recordSkuActivityEvent?: SkuActivityRecorder;
   },
 ): Promise<Map<Id<"productSku">, number>> {
   const now = args.now ?? Date.now();
@@ -460,6 +651,16 @@ export async function consumeInventoryHoldsForSession(
   for (const hold of activeHolds) {
     if (hold.expiresAt <= now) {
       await markHoldExpired(db, hold._id, now);
+      await recordHoldSkuActivity(db, args.recordSkuActivityEvent, {
+        hold,
+        activityType: "pos_reservation_expired",
+        status: "expired",
+        occurredAt: now,
+        quantity: hold.quantity,
+        quantityDelta: -hold.quantity,
+        context: args.activityContext,
+        metadata: { expiresAt: hold.expiresAt },
+      });
       continue;
     }
 
@@ -468,6 +669,15 @@ export async function consumeInventoryHoldsForSession(
         status: "released",
         releasedAt: now,
         updatedAt: now,
+      });
+      await recordHoldSkuActivity(db, args.recordSkuActivityEvent, {
+        hold,
+        activityType: "pos_reservation_released",
+        status: "released",
+        occurredAt: now,
+        quantity: hold.quantity,
+        quantityDelta: -hold.quantity,
+        context: args.activityContext,
       });
       continue;
     }
@@ -480,6 +690,15 @@ export async function consumeInventoryHoldsForSession(
       status: "consumed",
       consumedAt: now,
       updatedAt: now,
+    });
+    await recordHoldSkuActivity(db, args.recordSkuActivityEvent, {
+      hold,
+      activityType: "pos_reservation_consumed",
+      status: "consumed",
+      occurredAt: now,
+      quantity: hold.quantity,
+      quantityDelta: -hold.quantity,
+      context: args.activityContext,
     });
   }
 
@@ -674,4 +893,82 @@ async function markHoldExpired(
     expiredAt: now,
     updatedAt: now,
   });
+}
+
+async function recordSkuActivityBestEffort(
+  db: DatabaseWriter,
+  recorder: SkuActivityRecorder | undefined,
+  event: RecordSkuActivityEventArgs,
+) {
+  const resolvedRecorder = recorder ?? recordSkuActivityEventWithDb;
+  await resolvedRecorder(db, event);
+}
+
+async function recordHoldSkuActivity(
+  db: DatabaseWriter,
+  recorder: SkuActivityRecorder | undefined,
+  input: {
+    hold: HoldDoc;
+    activityType: PosSkuActivityType;
+    status: PosSkuActivityStatus;
+    occurredAt: number;
+    quantity: number;
+    quantityDelta: number;
+    context?: PosSkuActivityContext;
+    metadata?: Record<string, unknown>;
+  },
+) {
+  if (input.quantity <= 0) {
+    return;
+  }
+
+  await recordSkuActivityBestEffort(db, recorder, {
+    storeId: input.hold.storeId,
+    productSkuId: input.hold.productSkuId,
+    activityType: input.activityType,
+    occurredAt: input.occurredAt,
+    sourceType: "posSession",
+    sourceId: input.hold.sourceSessionId,
+    sourceLineId: input.context?.posSessionItemId,
+    inventoryHoldId: input.hold._id,
+    reservationQuantity: input.quantity,
+    quantityDelta: input.quantityDelta,
+    status: input.status,
+    actorStaffProfileId: input.context?.actorStaffProfileId,
+    registerSessionId: input.context?.registerSessionId,
+    terminalId: input.context?.terminalId,
+    posTransactionId: input.context?.posTransactionId,
+    workflowTraceId: input.context?.workflowTraceId,
+    idempotencyKey: buildSkuActivityIdempotencyKey({
+      activityType: input.activityType,
+      sessionId: input.hold.sourceSessionId,
+      skuId: input.hold.productSkuId,
+      inventoryHoldId: input.hold._id,
+      occurredAt: input.occurredAt,
+      quantity: input.quantity,
+    }),
+    metadata: {
+      ...input.context?.metadata,
+      ...input.metadata,
+    },
+  });
+}
+
+function buildSkuActivityIdempotencyKey(args: {
+  activityType: PosSkuActivityType;
+  sessionId: Id<"posSession">;
+  skuId: Id<"productSku">;
+  inventoryHoldId: Id<"inventoryHold">;
+  occurredAt: number;
+  quantity: number;
+}) {
+  return [
+    "pos",
+    args.activityType,
+    args.sessionId,
+    args.skuId,
+    args.inventoryHoldId,
+    args.occurredAt,
+    args.quantity,
+  ].join(":");
 }

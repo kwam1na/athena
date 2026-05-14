@@ -1,7 +1,9 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
+import type { SkuActivityRecorder } from "../../../inventory/helpers/inventoryHolds";
 
 import { calculateSessionExpiration } from "../../../inventory/helpers/sessionExpiration";
+import { recordSkuActivityEventWithCtx } from "../../../operations/skuActivity";
 import {
   createInventoryHoldGateway,
   type PosInventoryHoldGateway,
@@ -517,6 +519,18 @@ export function createPosSessionCommandService(
           newQuantity: args.quantity,
           expiresAt,
           now,
+          activityContext: {
+            actorStaffProfileId: args.staffProfileId,
+            posSessionItemId: existingItem._id,
+            registerSessionId: validation.data.registerSessionId,
+            terminalId: validation.data.terminalId,
+            workflowTraceId: validation.data.workflowTraceId,
+            metadata: {
+              productName: args.productName,
+              previousQuantity: existingItem.quantity,
+              newQuantity: args.quantity,
+            },
+          },
         });
         if (!adjustResult.success) {
           return failure(
@@ -541,6 +555,15 @@ export function createPosSessionCommandService(
           quantity: args.quantity,
           expiresAt,
           now,
+          activityContext: {
+            actorStaffProfileId: args.staffProfileId,
+            registerSessionId: validation.data.registerSessionId,
+            terminalId: validation.data.terminalId,
+            workflowTraceId: validation.data.workflowTraceId,
+            metadata: {
+              productName: args.productName,
+            },
+          },
         });
         if (!holdResult.success) {
           return failure(
@@ -634,6 +657,16 @@ export function createPosSessionCommandService(
         skuId: item.productSkuId,
         quantity: item.quantity,
         now,
+        activityContext: {
+          actorStaffProfileId: args.staffProfileId,
+          posSessionItemId: item._id,
+          registerSessionId: validation.data.registerSessionId,
+          terminalId: validation.data.terminalId,
+          workflowTraceId: validation.data.workflowTraceId,
+          metadata: {
+            productName: item.productName,
+          },
+        },
       });
       if (!releaseResult.success) {
         return failure(
@@ -673,7 +706,9 @@ export function runStartSessionCommand(
 ) {
   return (async () => {
     const terminal = await ctx.db.get("posTerminal", args.terminalId);
-    const terminalRegisterNumber = normalizeRegisterNumber(terminal?.registerNumber);
+    const terminalRegisterNumber = normalizeRegisterNumber(
+      terminal?.registerNumber,
+    );
     const nextRegisterNumber =
       terminalRegisterNumber ?? normalizeRegisterNumber(args.registerNumber);
 
@@ -721,11 +756,37 @@ export function runRemoveSessionItemCommand(
 function createDefaultSessionCommandService(
   ctx: MutationCtx,
 ): PosSessionCommandService {
+  const inventoryGateway = createInventoryHoldGateway(ctx);
+  const recordSkuActivityEvent: SkuActivityRecorder = (_db, event) =>
+    recordSkuActivityEventWithCtx(ctx, event);
+
   return createPosSessionCommandService({
     now: () => Date.now(),
     calculateExpiration: calculateSessionExpiration,
     repository: createSessionCommandRepository(ctx),
-    inventory: createInventoryHoldGateway(ctx),
+    inventory: {
+      acquireHold(args) {
+        return inventoryGateway.acquireHold({
+          ...args,
+          recordSkuActivityEvent:
+            args.recordSkuActivityEvent ?? recordSkuActivityEvent,
+        });
+      },
+      adjustHold(args) {
+        return inventoryGateway.adjustHold({
+          ...args,
+          recordSkuActivityEvent:
+            args.recordSkuActivityEvent ?? recordSkuActivityEvent,
+        });
+      },
+      releaseHold(args) {
+        return inventoryGateway.releaseHold({
+          ...args,
+          recordSkuActivityEvent:
+            args.recordSkuActivityEvent ?? recordSkuActivityEvent,
+        });
+      },
+    },
     tracing: createPosSessionTraceRecorder(ctx),
   });
 }

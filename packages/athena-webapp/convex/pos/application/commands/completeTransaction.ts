@@ -29,8 +29,11 @@ import { isPosUsableRegisterSessionStatus } from "../../../../shared/registerSes
 import {
   consumeInventoryHoldsForSession,
   readActiveInventoryHoldQuantitiesForSession,
+  type SkuActivityRecorder,
   validateInventoryAvailability,
 } from "../../../inventory/helpers/inventoryHolds";
+import { recordInventoryMovementWithCtx } from "../../../operations/inventoryMovements";
+import { recordSkuActivityEventWithCtx } from "../../../operations/skuActivity";
 
 type PosPaymentInput = {
   method: string;
@@ -77,6 +80,39 @@ export function buildCompleteTransactionResult(input: {
 
 function calculateTotalPaid(payments: PosPaymentInput[]) {
   return payments.reduce((sum, payment) => sum + payment.amount, 0);
+}
+
+async function recordPosSaleInventoryMovement(
+  ctx: MutationCtx,
+  args: {
+    storeId: Id<"store">;
+    organizationId?: Id<"organization">;
+    productId: Id<"product">;
+    productSkuId: Id<"productSku">;
+    quantity: number;
+    posTransactionId: Id<"posTransaction">;
+    registerSessionId?: Id<"registerSession">;
+    staffProfileId?: Id<"staffProfile">;
+    customerProfileId?: Id<"customerProfile">;
+    transactionNumber: string;
+  },
+) {
+  await recordInventoryMovementWithCtx(ctx, {
+    storeId: args.storeId,
+    organizationId: args.organizationId,
+    movementType: "sale",
+    sourceType: "posTransaction",
+    sourceId: args.posTransactionId,
+    quantityDelta: -args.quantity,
+    productId: args.productId,
+    productSkuId: args.productSkuId,
+    actorStaffProfileId: args.staffProfileId,
+    customerProfileId: args.customerProfileId,
+    registerSessionId: args.registerSessionId,
+    posTransactionId: args.posTransactionId,
+    reasonCode: "pos_sale",
+    notes: `POS sale ${args.transactionNumber}`,
+  });
 }
 
 function roundStoredAmount(amount: number) {
@@ -473,6 +509,18 @@ export async function completeTransaction(
         quantityAvailable: sku.quantityAvailable - item.quantity,
         inventoryCount: Math.max(0, sku.inventoryCount - item.quantity),
       });
+      await recordPosSaleInventoryMovement(ctx, {
+        storeId: args.storeId,
+        organizationId: store?.organizationId,
+        productId: sku.productId,
+        productSkuId: item.skuId,
+        quantity: item.quantity,
+        posTransactionId: transactionId,
+        registerSessionId: args.registerSessionId,
+        staffProfileId: args.staffProfileId,
+        customerProfileId: args.customerProfileId,
+        transactionNumber,
+      });
 
       return transactionItemId;
     }),
@@ -779,6 +827,18 @@ export async function createTransactionFromSessionHandler(
       quantity: item.quantity,
     })),
     now: completedAt,
+    activityContext: {
+      actorStaffProfileId: args.staffProfileId,
+      posTransactionId: transactionId,
+      registerSessionId: resolvedRegisterSessionId.data,
+      terminalId: session.terminalId,
+      workflowTraceId: session.workflowTraceId,
+      metadata: {
+        transactionNumber,
+      },
+    },
+    recordSkuActivityEvent: ((_db, event) =>
+      recordSkuActivityEventWithCtx(ctx, event)) satisfies SkuActivityRecorder,
   });
 
   const transactionItems = await Promise.all(
@@ -815,6 +875,18 @@ export async function createTransactionFromSessionHandler(
           sku.quantityAvailable - quantityAvailableToSubtract,
         ),
         inventoryCount: Math.max(0, sku.inventoryCount - item.quantity),
+      });
+      await recordPosSaleInventoryMovement(ctx, {
+        storeId: session.storeId,
+        organizationId: store?.organizationId,
+        productId: item.productId,
+        productSkuId: item.productSkuId,
+        quantity: item.quantity,
+        posTransactionId: transactionId,
+        registerSessionId: resolvedRegisterSessionId.data,
+        staffProfileId: session.staffProfileId,
+        customerProfileId: session.customerProfileId,
+        transactionNumber,
       });
 
       return transactionItemId;

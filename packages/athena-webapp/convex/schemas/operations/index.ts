@@ -8,6 +8,7 @@ export * from "./managerElevation";
 export * from "./dailyClose";
 export * from "./dailyOpening";
 export * from "./inventoryMovement";
+export * from "./skuActivityEvent";
 export * from "./paymentAllocation";
 export * from "./registerSession";
 export * from "./approvalRequest";

@@ -81,6 +81,7 @@ import {
   operationalWorkItemSchema,
   paymentAllocationSchema,
   registerSessionSchema,
+  skuActivityEventSchema,
   staffCredentialSchema,
   staffProfileSchema,
   staffRoleAssignmentSchema,
@@ -244,6 +245,14 @@ const schema = defineSchema({
     .index("by_storeId_productSkuId", ["storeId", "productSkuId"])
     .index("by_storeId_source", ["storeId", "sourceType", "sourceId"])
     .index("by_workItemId", ["workItemId"]),
+  skuActivityEvent: defineTable(skuActivityEventSchema)
+    .index("by_storeId_productSkuId_occurredAt", [
+      "storeId",
+      "productSkuId",
+      "occurredAt",
+    ])
+    .index("by_storeId_source", ["storeId", "sourceType", "sourceId"])
+    .index("by_storeId_idempotencyKey", ["storeId", "idempotencyKey"]),
   stockAdjustmentBatch: defineTable(stockAdjustmentBatchSchema)
     .index("by_storeId", ["storeId"])
     .index("by_storeId_adjustmentType_submissionKey", [
