@@ -236,6 +236,8 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/lib/pos/infrastructure/convex/registerGateway.test.ts`](../../src/lib/pos/infrastructure/convex/registerGateway.test.ts)
 - [`src/lib/pos/infrastructure/convex/sessionGateway.test.ts`](../../src/lib/pos/infrastructure/convex/sessionGateway.test.ts)
 - [`src/lib/pos/infrastructure/local/localCommandGateway.test.ts`](../../src/lib/pos/infrastructure/local/localCommandGateway.test.ts)
+- [`src/lib/pos/infrastructure/local/localPosEntryContext.test.ts`](../../src/lib/pos/infrastructure/local/localPosEntryContext.test.ts)
+- [`src/lib/pos/infrastructure/local/localPosReadiness.test.ts`](../../src/lib/pos/infrastructure/local/localPosReadiness.test.ts)
 - [`src/lib/pos/infrastructure/local/posLocalStore.test.ts`](../../src/lib/pos/infrastructure/local/posLocalStore.test.ts)
 - [`src/lib/pos/infrastructure/local/registerReadModel.test.ts`](../../src/lib/pos/infrastructure/local/registerReadModel.test.ts)
 - [`src/lib/pos/infrastructure/local/syncContract.test.ts`](../../src/lib/pos/infrastructure/local/syncContract.test.ts)

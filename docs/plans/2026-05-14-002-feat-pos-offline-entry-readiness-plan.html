@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>feat: Make POS entry and readiness local-first</title>
+  <style type="text/css">
+    :root {
+      color-scheme: light;
+      --bg: #f7f8f8;
+      --paper: #ffffff;
+      --ink: #17201c;
+      --muted: #5f6f67;
+      --line: #dce3df;
+      --soft: #eef3f0;
+      --accent: #1f6f5b;
+      --warn: #8a5a12;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .page {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 40px 24px 64px;
+    }
+
+    .paper {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 36px;
+      box-shadow: 0 1px 2px rgba(20, 32, 28, 0.06);
+    }
+
+    h1, h2, h3 {
+      margin: 0;
+      line-height: 1.2;
+    }
+
+    h1 {
+      font-size: 32px;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin-top: 34px;
+      padding-top: 28px;
+      border-top: 1px solid var(--line);
+      font-size: 22px;
+    }
+
+    h3 {
+      margin-top: 22px;
+      font-size: 17px;
+    }
+
+    p {
+      margin: 12px 0 0;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    ul {
+      margin: 10px 0 0;
+      padding-left: 22px;
+    }
+
+    li {
+      margin: 6px 0;
+    }
+
+    code {
+      padding: 2px 5px;
+      border-radius: 4px;
+      background: var(--soft);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .chip {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 10px;
+      background: #fbfcfb;
+    }
+
+    .summary {
+      margin-top: 24px;
+      padding: 18px;
+      border-left: 4px solid var(--accent);
+      background: #f2f7f4;
+      border-radius: 6px;
+    }
+
+    .toc {
+      margin-top: 24px;
+      padding: 16px 18px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfb;
+    }
+
+    .toc strong {
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    .toc a {
+      display: inline-block;
+      margin: 4px 14px 4px 0;
+      color: var(--ink);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      background: #fbfcfb;
+    }
+
+    .card h3 {
+      margin-top: 0;
+    }
+
+    table {
+      width: 100%;
+      margin-top: 16px;
+      border-collapse: collapse;
+      font-size: 15px;
+    }
+
+    th, td {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--soft);
+    }
+
+    .unit {
+      margin-top: 18px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px;
+      background: #ffffff;
+    }
+
+    .unit h3 {
+      margin-top: 0;
+    }
+
+    .callout {
+      margin-top: 16px;
+      padding: 14px 16px;
+      border-radius: 8px;
+      border: 1px solid #ead8b4;
+      background: #fff8e8;
+      color: var(--warn);
+    }
+
+    .diagram {
+      margin-top: 14px;
+      padding: 14px;
+      background: #f7faf8;
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      overflow-x: auto;
+      white-space: pre;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+    }
+
+    @media (max-width: 720px) {
+      .page {
+        padding: 20px 12px 40px;
+      }
+
+      .paper {
+        padding: 24px 18px;
+      }
+
+      h1 {
+        font-size: 26px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="paper">
+      <h1>feat: Make POS entry and readiness local-first</h1>
+      <div class="meta">
+        <span class="chip">Type: feat</span>
+        <span class="chip">Status: active</span>
+        <span class="chip">Date: 2026-05-14</span>
+        <span class="chip">Source: <a href="2026-05-14-002-feat-pos-offline-entry-readiness-plan.md">Markdown plan</a></span>
+      </div>
+
+      <div class="summary">
+        Make the path from <code>/pos</code> into <code>/pos/register</code> use the landed POS local-first runtime instead of waiting on live Convex reads. A provisioned terminal should be able to launch POS from the route, resolve store and terminal authority from local state, and pass the register readiness gate when its local store-day state allows selling.
+      </div>
+
+      <div class="toc">
+        <strong>Contents</strong>
+        <a href="#problem">Problem</a>
+        <a href="#requirements">Requirements</a>
+        <a href="#scope">Scope</a>
+        <a href="#decisions">Decisions</a>
+        <a href="#design">Design</a>
+        <a href="#units">Implementation Units</a>
+        <a href="#risks">Risks</a>
+      </div>
+
+      <h2 id="problem">Problem Frame</h2>
+      <p>The landed POS local-first work gives the cashier path durable local events, a local command gateway, a local register read model, and background sync. The remaining gap is before those pieces can help: <code>/pos</code> currently blanks behind live analytics/store reads, and <code>POSRegisterOpeningGuard</code> waits on live daily-opening and daily-close snapshots before rendering the register.</p>
+      <p>This plan complements <code>docs/plans/2026-05-14-001-feat-pos-always-local-first-flow-plan.md</code>; it does not re-plan the already-landed command-gateway inversion. It focuses on entry, local context, and readiness gates.</p>
+
+      <h2 id="requirements">Requirements</h2>
+      <ul>
+        <li>A provisioned POS terminal must render the POS entry action from <code>/pos</code> without live analytics, summary, organization, or store reads.</li>
+        <li><code>/pos</code> must treat POS as the offline-first launcher while non-POS cards and summaries may remain unavailable or stale.</li>
+        <li><code>/pos/register</code> must evaluate POS readiness from local terminal and store-day state when live snapshots are unavailable.</li>
+        <li>Online daily-opening, daily-close, store, organization, and terminal reads may refresh local POS state, but must not be required after provisioning.</li>
+        <li>If no provisioned local POS seed exists, offline entry must fail closed with setup guidance instead of a blank route.</li>
+        <li>Local readiness must preserve the distinction between store-day state and register/drawer state.</li>
+        <li>Existing local command gateway, register read model, terminal seed, sync runtime, and sync projection behavior must be reused.</li>
+        <li>Offline-first behavior must not expand into non-POS Athena workspaces.</li>
+      </ul>
+
+      <h2 id="scope">Scope Boundaries</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>In Scope</h3>
+          <ul>
+            <li>POS launcher rendering from local context.</li>
+            <li>Local POS entry context using route params plus terminal seed.</li>
+            <li>Local store-day readiness consumed by the register guard.</li>
+            <li>Tests and harness metadata for the route-entry contract.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Out of Scope</h3>
+          <ul>
+            <li>Offline first-time provisioning or new business creation.</li>
+            <li>Full service-worker app-shell caching.</li>
+            <li>Offline analytics, procurement, admin, cash-controls review, or expense sessions.</li>
+            <li>Payment, receipt messaging, sync projection, or reconciliation changes.</li>
+          </ul>
+        </div>
+      </div>
+
+      <h2 id="decisions">Key Technical Decisions</h2>
+      <ul>
+        <li><strong>Use the landed local runtime as foundation.</strong> Consume <code>posLocalStore</code>, terminal seed fallback, local register projection, local command gateway, and sync status rather than re-planning them.</li>
+        <li><strong>Separate navigation identity from POS authority.</strong> Route params provide org/store slugs for links; the provisioned seed provides local store and terminal authority.</li>
+        <li><strong>Add a POS-local entry/readiness helper.</strong> Route components should not own direct IndexedDB orchestration.</li>
+        <li><strong>Refresh local readiness opportunistically.</strong> Live daily-opening and daily-close snapshots update local readiness when available.</li>
+        <li><strong>Fail closed when authority is absent or unsafe.</strong> Missing seed, mismatched store, local closed day, or unsupported schema renders blocked guidance.</li>
+      </ul>
+
+      <h2 id="design">High-Level Design</h2>
+      <p>This illustrates the intended approach and is directional guidance for review, not implementation specification.</p>
+      <div class="diagram">/pos route params
+  + provisioned terminal seed
+  + optional live org/store reads
+        |
+        v
+POS local entry context
+        |
+        +--> render POS launcher
+        +--> degrade non-POS cards and summaries
+        |
+        v
+/pos/register guard
+  + local POS readiness
+  + local register read model
+  + opportunistic live snapshot refresh
+        |
+        +--> render register
+        +--> blocked/setup guidance</div>
+
+      <table summary="Offline and online POS entry modes">
+        <thead>
+          <tr>
+            <th>Mode</th>
+            <th><code>/pos</code> behavior</th>
+            <th><code>/pos/register</code> behavior</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Online with live data</td>
+            <td>Render full landing and refresh local context</td>
+            <td>Use fresh snapshots and update local readiness</td>
+          </tr>
+          <tr>
+            <td>Offline with provisioned seed and open local day</td>
+            <td>Render POS launcher without analytics blocking</td>
+            <td>Allow register entry from local readiness</td>
+          </tr>
+          <tr>
+            <td>Offline without provisioned seed</td>
+            <td>Show setup-required POS guidance</td>
+            <td>Block register entry with setup guidance</td>
+          </tr>
+          <tr>
+            <td>Local day closed or local closeout blocking sales</td>
+            <td>POS launcher remains visible</td>
+            <td>Block sales until permitted reopen/readiness change</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2 id="units">Implementation Units</h2>
+      <div class="unit">
+        <h3>U1. Add POS local entry context</h3>
+        <p><strong>Goal:</strong> Provide a local-first context API that can resolve route slugs, store id, terminal seed, terminal identity, and local availability without live Convex reads.</p>
+        <p><strong>Primary files:</strong> <code>packages/athena-webapp/src/lib/pos/infrastructure/local/localPosEntryContext.ts</code>, <code>localPosEntryContext.test.ts</code>, and focused updates around <code>posLocalStore.ts</code> or <code>useGetTerminal.ts</code> if needed.</p>
+        <p><strong>Verification:</strong> POS route consumers can derive a register link and local store/terminal authority without Convex resolving first.</p>
+      </div>
+
+      <div class="unit">
+        <h3>U2. Make <code>/pos</code> a local-first launcher</h3>
+        <p><strong>Goal:</strong> Ensure the POS landing page renders the POS entry action when local POS context is available, even if analytics, today summary, active organization, or active store queries are unavailable.</p>
+        <p><strong>Primary files:</strong> <code>packages/athena-webapp/src/components/pos/PointOfSaleView.tsx</code> and <code>PointOfSaleView.test.tsx</code>.</p>
+        <p><strong>Verification:</strong> <code>/pos</code> no longer returns blank solely because live analytics or summary queries are unresolved.</p>
+      </div>
+
+      <div class="unit">
+        <h3>U3. Persist and read local POS readiness</h3>
+        <p><strong>Goal:</strong> Give POS a local store-day readiness source that can represent started, not-started, closed, reopened, unknown, and stale states without live daily-operation snapshots.</p>
+        <p><strong>Primary files:</strong> <code>packages/athena-webapp/src/lib/pos/infrastructure/local/localPosReadiness.ts</code>, <code>localPosReadiness.test.ts</code>, and focused local store/read-model updates.</p>
+        <p><strong>Verification:</strong> POS readiness can be evaluated from local state and refreshed from live daily-operation snapshots.</p>
+      </div>
+
+      <div class="unit">
+        <h3>U4. Make <code>POSRegisterOpeningGuard</code> local-first</h3>
+        <p><strong>Goal:</strong> Replace the live-snapshot render gate with a local-first readiness decision that still honors daily opening, daily close, local closeout, and setup-required states.</p>
+        <p><strong>Primary files:</strong> <code>packages/athena-webapp/src/components/pos/register/POSRegisterOpeningGuard.tsx</code> and <code>POSRegisterOpeningGuard.test.tsx</code>.</p>
+        <p><strong>Verification:</strong> The guard no longer requires live Convex snapshots to render a locally authorized register.</p>
+      </div>
+
+      <div class="unit">
+        <h3>U5. Update validation coverage and planning docs</h3>
+        <p><strong>Goal:</strong> Make the new POS entry/readiness contract visible in tests, harness metadata, and durable local-first learnings.</p>
+        <p><strong>Primary files:</strong> <code>packages/athena-webapp/docs/agent/testing.md</code>, <code>packages/athena-webapp/docs/agent/validation-map.json</code>, <code>scripts/harness-app-registry.ts</code> if needed, and a new solution note.</p>
+        <p><strong>Verification:</strong> Harness metadata routes future touched POS entry/readiness files to the focused POS local/register validation surface.</p>
+      </div>
+
+      <h2 id="risks">Risks &amp; Mitigations</h2>
+      <table summary="POS offline entry readiness risks and mitigations">
+        <thead>
+          <tr>
+            <th>Risk</th>
+            <th>Mitigation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Local readiness lets a cashier sell after the store day was closed online.</td>
+            <td>Refresh readiness from live snapshots when available and fail closed for stale or unknown closed-day states.</td>
+          </tr>
+          <tr>
+            <td>Route params and terminal seed disagree about store identity.</td>
+            <td>Validate seed and store scope explicitly, then render setup-required guidance on mismatch.</td>
+          </tr>
+          <tr>
+            <td>POS landing becomes a general offline dashboard.</td>
+            <td>Keep <code>/pos</code> as a launcher and degrade non-POS cards instead of making them offline-capable.</td>
+          </tr>
+          <tr>
+            <td>Harness misses the new route-entry contract.</td>
+            <td>Add validation-map coverage and focused tests for POS landing and opening guard.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout">
+        <strong>Planning boundary:</strong> this plan assumes the local cashier command path has landed. It only calls for checking narrow residual online-only actions if they directly affect POS entry or readiness.
+      </div>
+
+      <h2>Sources</h2>
+      <ul>
+        <li><a href="../brainstorms/2026-05-13-pos-local-first-register-requirements.md">Origin requirements</a></li>
+        <li><a href="2026-05-14-001-feat-pos-always-local-first-flow-plan.md">Related always-local plan</a></li>
+        <li><a href="../solutions/architecture/athena-pos-local-first-sync-2026-05-13.md">POS local-first sync solution note</a></li>
+        <li><a href="../solutions/architecture/athena-pos-always-local-first-register-2026-05-14.md">Always-local register solution note</a></li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>

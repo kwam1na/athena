@@ -10,7 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Link } from "@tanstack/react-router";
+import { Link, useParams } from "@tanstack/react-router";
 import {
   ScanBarcode,
   BarChart3,
@@ -25,10 +25,10 @@ import { useGetActiveOrganization } from "@/hooks/useGetOrganizations";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import { useGetCurrencyFormatter } from "~/src/hooks/useGetCurrencyFormatter";
 import { Badge } from "../ui/badge";
-import { cn } from "~/src/lib/utils";
 import { usePermissions } from "~/src/hooks/usePermissions";
 import { toDisplayAmount } from "~/convex/lib/currency";
 import { PageLevelHeader, PageWorkspace } from "../common/PageLevelHeader";
+import { useLocalPosEntryContext } from "@/lib/pos/infrastructure/local/localPosEntryContext";
 
 type FeatureLinkProps = {
   children: ReactNode;
@@ -48,11 +48,17 @@ const FeatureLink = Link as unknown as ComponentType<FeatureLinkProps>;
 export default function PointOfSaleView() {
   const { activeStore } = useGetActiveStore();
   const { activeOrganization } = useGetActiveOrganization();
-
-  const analytics = useQuery(
-    api.storeFront.analytics.getAll,
-    activeStore?._id ? { storeId: activeStore._id } : "skip",
-  );
+  const routeParams = useParams({ strict: false }) as
+    | {
+        orgUrlSlug?: string;
+        storeUrlSlug?: string;
+      }
+    | undefined;
+  const localEntryContext = useLocalPosEntryContext({
+    activeOrganization,
+    activeStore,
+    routeParams,
+  });
 
   // Get today's POS transaction summary
   const todaySummary = useQuery(
@@ -65,34 +71,56 @@ export default function PointOfSaleView() {
 
   const { hasFullAdminAccess } = usePermissions();
 
-  if (!activeStore || !analytics || !activeOrganization) return null;
+  const liveLinkParams =
+    activeOrganization?.slug && activeStore?.slug
+      ? {
+          orgUrlSlug: activeOrganization.slug,
+          storeUrlSlug: activeStore.slug,
+        }
+      : null;
+  const posLinkParams =
+    localEntryContext.status === "ready"
+      ? {
+          orgUrlSlug: localEntryContext.orgUrlSlug,
+          storeUrlSlug: localEntryContext.storeUrlSlug,
+        }
+      : null;
+  const setupRequired =
+    localEntryContext.status !== "loading" &&
+    localEntryContext.status !== "ready";
 
   const posFeatures = [
     {
       title: "POS",
-      description: "Transact in-store sales",
+      description: setupRequired
+        ? "Connect this terminal before starting sales"
+        : "Transact in-store sales",
       icon: ScanBarcode,
       href: "/$orgUrlSlug/store/$storeUrlSlug/pos/register" as const,
+      params: posLinkParams,
       color: "bg-blue-500",
       available: true,
-      enabled: true,
+      enabled: Boolean(posLinkParams),
+      badge: setupRequired ? "Setup required" : undefined,
     },
     {
       title: "Expense Products",
       description: "Track products expensed",
       icon: HandCoins,
       href: "/$orgUrlSlug/store/$storeUrlSlug/pos/expense" as const,
+      params: liveLinkParams,
       color: "bg-rose-500",
-      available: true,
-      enabled: true,
+      available: Boolean(liveLinkParams),
+      enabled: Boolean(liveLinkParams),
     },
     {
       title: "Product Lookup",
       description: "Search and scan products for quick reference",
       icon: Search,
       href: "/$orgUrlSlug/store/$storeUrlSlug/products" as const,
+      params: liveLinkParams,
       color: "bg-green-500",
-      available: true,
+      available: Boolean(liveLinkParams),
     },
 
     {
@@ -100,6 +128,7 @@ export default function PointOfSaleView() {
       description: "View daily sales and transaction reports",
       icon: BarChart3,
       href: "/$orgUrlSlug/store/$storeUrlSlug/analytics" as const,
+      params: liveLinkParams,
       color: "bg-purple-500",
       available: false,
     },
@@ -108,30 +137,34 @@ export default function PointOfSaleView() {
       description: "View completed transaction history",
       icon: Receipt,
       href: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions" as const,
+      params: liveLinkParams,
       color: "bg-orange-500",
-      available: true,
+      available: Boolean(liveLinkParams),
     },
     {
       title: "Active Sessions",
       description: "Review active and held sales reserving inventory",
       icon: ClipboardList,
       href: "/$orgUrlSlug/store/$storeUrlSlug/pos/sessions" as const,
+      params: liveLinkParams,
       color: "bg-cyan-600",
-      available: hasFullAdminAccess,
+      available: hasFullAdminAccess && Boolean(liveLinkParams),
     },
     {
       title: "Expense Reports",
       description: "View expense reports",
       icon: Receipt,
       href: "/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports" as const,
+      params: liveLinkParams,
       color: "bg-yellow-500",
-      available: true,
+      available: Boolean(liveLinkParams),
     },
     {
       title: "Customers",
       description: "Manage customer information and purchase history",
       icon: Users,
       href: null,
+      params: null,
       color: "bg-pink-500",
       available: false,
     },
@@ -140,8 +173,9 @@ export default function PointOfSaleView() {
       description: "Configure terminal settings",
       icon: Settings,
       href: "/$orgUrlSlug/store/$storeUrlSlug/pos/settings" as const,
+      params: liveLinkParams,
       color: "bg-gray-500",
-      available: hasFullAdminAccess,
+      available: hasFullAdminAccess && Boolean(liveLinkParams),
     },
   ];
 
@@ -160,7 +194,12 @@ export default function PointOfSaleView() {
                 .map((feature) => {
                   const Icon = feature.icon;
 
-                  if (!feature.available || !feature.href) {
+                  if (
+                    !feature.available ||
+                    !feature.href ||
+                    !feature.params ||
+                    feature.enabled === false
+                  ) {
                     return (
                       <div
                         key={feature.title}
@@ -173,9 +212,9 @@ export default function PointOfSaleView() {
                             </div>
                             <CardTitle className="text-lg flex items-center gap-2">
                               {feature.title}
-                              <span className="text-xs bg-muted px-2 py-1 rounded">
-                                Coming Soon
-                              </span>
+                              <Badge variant="outline">
+                                {feature.badge ?? "Unavailable"}
+                              </Badge>
                             </CardTitle>
                           </div>
                         </CardHeader>
@@ -191,17 +230,11 @@ export default function PointOfSaleView() {
                   return (
                     <div
                       key={feature.title}
-                      className={cn(
-                        "border rounded-lg cursor-pointer",
-                        feature.enabled === false && "cursor-not-allowed",
-                      )}
+                      className="border rounded-lg cursor-pointer"
                     >
                       <FeatureLink
                         to={feature.href}
-                        params={{
-                          orgUrlSlug: activeOrganization.slug,
-                          storeUrlSlug: activeStore.slug,
-                        }}
+                        params={feature.params}
                         search={{
                           o: getOrigin(),
                         }}
@@ -215,9 +248,6 @@ export default function PointOfSaleView() {
                             <CardTitle className="text-lg">
                               {feature.title}
                             </CardTitle>
-                            {feature.enabled === false && (
-                              <Badge variant="outline">Disabled</Badge>
-                            )}
                           </div>
                         </CardHeader>
                         <CardContent>

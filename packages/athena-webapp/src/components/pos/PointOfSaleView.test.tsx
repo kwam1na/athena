@@ -5,6 +5,7 @@ import PointOfSaleView from "./PointOfSaleView";
 
 const useGetActiveOrganizationMock = vi.fn();
 const useGetActiveStoreMock = vi.fn();
+const useLocalPosEntryContextMock = vi.fn();
 const usePermissionsMock = vi.fn();
 const useQueryMock = vi.fn();
 
@@ -28,7 +29,7 @@ vi.mock("@tanstack/react-router", () => ({
       {children}
     </a>
   ),
-  useParams: () => ({}),
+  useParams: () => ({ orgUrlSlug: "acme", storeUrlSlug: "downtown" }),
   useSearch: () => ({}),
 }));
 
@@ -53,6 +54,10 @@ vi.mock("~/src/hooks/useGetCurrencyFormatter", () => ({
 
 vi.mock("~/src/hooks/useGetTerminal", () => ({
   useGetTerminal: () => ({ terminal: null }),
+}));
+
+vi.mock("@/lib/pos/infrastructure/local/localPosEntryContext", () => ({
+  useLocalPosEntryContext: () => useLocalPosEntryContextMock(),
 }));
 
 vi.mock("~/src/hooks/usePermissions", () => ({
@@ -96,7 +101,15 @@ describe("PointOfSaleView", () => {
     usePermissionsMock.mockReturnValue({
       hasFullAdminAccess: true,
     });
-    useQueryMock.mockReturnValueOnce({}).mockReturnValueOnce({
+    useLocalPosEntryContextMock.mockReturnValue({
+      status: "ready",
+      orgUrlSlug: "acme",
+      storeUrlSlug: "downtown",
+      storeId: "store-1",
+      terminalSeed: null,
+      source: "live",
+    });
+    useQueryMock.mockReturnValue({
       totalItemsSold: 3,
       totalSales: 12_500,
       totalTransactions: 2,
@@ -119,6 +132,62 @@ describe("PointOfSaleView", () => {
     expect(link).toHaveAttribute("href", "/acme/store/downtown/pos/sessions");
     expect(
       screen.getByText("Review active and held sales reserving inventory"),
+    ).toBeInTheDocument();
+  });
+
+  it("renders the POS launcher from local entry context when live summary and store context are unavailable", () => {
+    useGetActiveStoreMock.mockReturnValue({
+      activeStore: null,
+    });
+    useGetActiveOrganizationMock.mockReturnValue({
+      activeOrganization: null,
+    });
+    useLocalPosEntryContextMock.mockReturnValue({
+      status: "ready",
+      orgUrlSlug: "acme",
+      storeUrlSlug: "downtown",
+      storeId: "store-1",
+      terminalSeed: {
+        terminalId: "local-terminal-1",
+        cloudTerminalId: "terminal-cloud-1",
+        syncSecretHash: "secret-hash",
+        storeId: "store-1",
+        displayName: "Front register",
+        provisionedAt: 1_700,
+        schemaVersion: 2,
+      },
+      source: "local",
+    });
+    useQueryMock.mockReturnValue(undefined);
+
+    render(<PointOfSaleView />);
+
+    expect(screen.getByRole("link", { name: /^POS/i })).toHaveAttribute(
+      "href",
+      "/acme/store/downtown/pos/register",
+    );
+    expect(
+      screen.queryByRole("link", { name: /Active Sessions/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByText("--").length).toBeGreaterThan(0);
+  });
+
+  it("shows setup guidance instead of blanking when local POS authority is missing", () => {
+    useGetActiveStoreMock.mockReturnValue({
+      activeStore: null,
+    });
+    useGetActiveOrganizationMock.mockReturnValue({
+      activeOrganization: null,
+    });
+    useLocalPosEntryContextMock.mockReturnValue({ status: "missing_seed" });
+    useQueryMock.mockReturnValue(undefined);
+
+    render(<PointOfSaleView />);
+
+    expect(screen.getByText("POS")).toBeInTheDocument();
+    expect(screen.getByText("Setup required")).toBeInTheDocument();
+    expect(
+      screen.getByText("Connect this terminal before starting sales"),
     ).toBeInTheDocument();
   });
 });

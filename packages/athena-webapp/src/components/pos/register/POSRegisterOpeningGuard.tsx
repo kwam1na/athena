@@ -9,6 +9,9 @@ import { Button } from "@/components/ui/button";
 import View from "@/components/View";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
+import type { Id } from "~/convex/_generated/dataModel";
+import { useLocalPosEntryContext } from "@/lib/pos/infrastructure/local/localPosEntryContext";
+import { useLocalPosReadiness } from "@/lib/pos/infrastructure/local/localPosReadiness";
 
 type DailyOpeningSnapshot = {
   status?: "blocked" | "needs_attention" | "ready" | "started";
@@ -54,44 +57,70 @@ export function POSRegisterOpeningGuard({
   children: ReactNode;
 }) {
   const { activeStore, isLoadingStores } = useGetActiveStore();
+  const routeParams = useParams({ strict: false }) as
+    | {
+        orgUrlSlug?: string;
+        storeUrlSlug?: string;
+      }
+    | undefined;
+  const entryContext = useLocalPosEntryContext({
+    activeStore,
+    routeParams,
+  });
   const operatingDateRange = useMemo(() => getLocalOperatingDateRange(), []);
+  const storeId = (activeStore?._id ??
+    (entryContext.status === "ready"
+      ? entryContext.storeId
+      : undefined)) as Id<"store"> | undefined;
   const snapshot = useQuery(
     api.operations.dailyOpening.getDailyOpeningSnapshot,
-    activeStore?._id
+    storeId
       ? {
           ...operatingDateRange,
-          storeId: activeStore._id,
+          storeId,
         }
       : "skip",
   ) as DailyOpeningSnapshot | undefined;
   const dailyCloseSnapshot = useQuery(
     api.operations.dailyClose.getDailyCloseSnapshot,
-    activeStore?._id
+    storeId
       ? {
           ...operatingDateRange,
-          storeId: activeStore._id,
+          storeId,
         }
       : "skip",
   ) as DailyCloseSnapshot | undefined;
+  const localReadiness = useLocalPosReadiness({
+    closeSnapshot: dailyCloseSnapshot,
+    entryContext,
+    openingSnapshot: snapshot,
+    operatingDate: operatingDateRange.operatingDate,
+  });
 
-  if (
-    isLoadingStores ||
-    !activeStore?._id ||
-    snapshot === undefined ||
-    dailyCloseSnapshot === undefined
-  ) {
+  if (isLoadingStores && entryContext.status === "loading") {
     return null;
   }
 
-  if (snapshot.status !== "started") {
+  if (localReadiness.status === "loading") {
+    return null;
+  }
+
+  if (
+    localReadiness.status === "blocked" &&
+    localReadiness.reason === "not_started"
+  ) {
     return <StoreDayNotStartedState />;
   }
 
   if (
-    dailyCloseSnapshot.status === "completed" &&
-    dailyCloseSnapshot.existingClose?.lifecycleStatus !== "reopened"
+    localReadiness.status === "blocked" &&
+    localReadiness.reason === "closed"
   ) {
     return <StoreDayClosedState />;
+  }
+
+  if (localReadiness.status === "blocked") {
+    return <POSSetupRequiredState message={localReadiness.message} />;
   }
 
   return <>{children}</>;
@@ -223,6 +252,44 @@ function StoreDayClosedState() {
               </Link>
             </Button>
           ) : null}
+        </div>
+      </FadeIn>
+    </View>
+  );
+}
+
+function POSSetupRequiredState({ message }: { message: string }) {
+  return (
+    <View
+      fullHeight
+      width="full"
+      contentClassName="flex h-full max-h-full flex-col overflow-hidden rounded-2xl border border-border/80 bg-white"
+      headerClassName="shrink-0"
+      mainClassName="min-h-0 flex-1"
+      header={
+        <ComposedPageHeader
+          width="full"
+          className="h-auto flex-wrap gap-x-4 gap-y-3 py-4"
+          leadingContent={
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <div className="w-2 h-2 bg-background rounded-full" />
+              <p className="text-lg font-semibold text-gray-900">POS</p>
+            </div>
+          }
+        />
+      }
+    >
+      <FadeIn className="flex h-full min-h-0 items-center justify-center p-6">
+        <div className="flex w-full max-w-2xl flex-col items-center rounded-lg border border-border bg-surface px-12 py-16 text-center shadow-sm">
+          <div className="mb-6 flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-full bg-warning/10 text-warning">
+            <Store className="h-7 w-7" />
+          </div>
+          <h2 className="text-xl font-medium text-foreground/80">
+            POS setup required
+          </h2>
+          <p className="mt-3 max-w-lg text-base leading-7 text-muted-foreground">
+            {message}
+          </p>
         </div>
       </FadeIn>
     </View>

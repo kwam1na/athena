@@ -5,6 +5,8 @@ import { POSRegisterOpeningGuard } from "./POSRegisterOpeningGuard";
 
 const useQueryMock = vi.fn();
 const getActiveStoreMock = vi.fn();
+const useLocalPosEntryContextMock = vi.fn();
+const useLocalPosReadinessMock = vi.fn();
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
@@ -69,6 +71,14 @@ vi.mock("@/hooks/useGetActiveStore", () => ({
   default: () => getActiveStoreMock(),
 }));
 
+vi.mock("@/lib/pos/infrastructure/local/localPosEntryContext", () => ({
+  useLocalPosEntryContext: () => useLocalPosEntryContextMock(),
+}));
+
+vi.mock("@/lib/pos/infrastructure/local/localPosReadiness", () => ({
+  useLocalPosReadiness: () => useLocalPosReadinessMock(),
+}));
+
 vi.mock("~/convex/_generated/api", () => ({
   api: {
     operations: {
@@ -92,6 +102,19 @@ describe("POSRegisterOpeningGuard", () => {
         _id: "store-1",
       },
       isLoadingStores: false,
+    });
+    useLocalPosEntryContextMock.mockReturnValue({
+      status: "ready",
+      orgUrlSlug: "wigclub",
+      storeUrlSlug: "wigclub",
+      storeId: "store-1",
+      terminalSeed: null,
+      source: "live",
+    });
+    useLocalPosReadinessMock.mockReturnValue({
+      status: "ready",
+      source: "live",
+      storeDayStatus: "started",
     });
     useQueryMock.mockImplementation((queryName: string) => {
       if (queryName === "getDailyOpeningSnapshot") {
@@ -146,6 +169,12 @@ describe("POSRegisterOpeningGuard", () => {
 
       return undefined;
     });
+    useLocalPosReadinessMock.mockReturnValue({
+      status: "blocked",
+      reason: "not_started",
+      message:
+        "Store day not started. Complete Opening Handoff before starting sales.",
+    });
 
     render(
       <POSRegisterOpeningGuard>
@@ -179,6 +208,12 @@ describe("POSRegisterOpeningGuard", () => {
       }
 
       return undefined;
+    });
+    useLocalPosReadinessMock.mockReturnValue({
+      status: "blocked",
+      reason: "closed",
+      message:
+        "Store day closed. Reopen the end of day review before entering POS.",
     });
 
     render(
@@ -217,6 +252,11 @@ describe("POSRegisterOpeningGuard", () => {
 
       return undefined;
     });
+    useLocalPosReadinessMock.mockReturnValue({
+      status: "ready",
+      source: "live",
+      storeDayStatus: "reopened",
+    });
 
     render(
       <POSRegisterOpeningGuard>
@@ -228,8 +268,7 @@ describe("POSRegisterOpeningGuard", () => {
     expect(screen.queryByText("Store day closed")).not.toBeInTheDocument();
   });
 
-
-  it("waits for the opening snapshot before rendering or redirecting", () => {
+  it("renders the register from local readiness before the opening snapshot resolves", () => {
     useQueryMock.mockImplementation((queryName: string) => {
       if (queryName === "getDailyCloseSnapshot") {
         return { status: "ready" };
@@ -244,10 +283,10 @@ describe("POSRegisterOpeningGuard", () => {
       </POSRegisterOpeningGuard>,
     );
 
-    expect(screen.queryByText("Register workspace")).not.toBeInTheDocument();
+    expect(screen.getByText("Register workspace")).toBeInTheDocument();
   });
 
-  it("waits for the close snapshot before rendering or redirecting", () => {
+  it("renders the register from local readiness before the close snapshot resolves", () => {
     useQueryMock.mockImplementation((queryName: string) => {
       if (queryName === "getDailyOpeningSnapshot") {
         return { status: "started" };
@@ -262,6 +301,26 @@ describe("POSRegisterOpeningGuard", () => {
       </POSRegisterOpeningGuard>,
     );
 
+    expect(screen.getByText("Register workspace")).toBeInTheDocument();
+  });
+
+  it("shows setup-required guidance when local authority is missing", () => {
+    useLocalPosReadinessMock.mockReturnValue({
+      status: "blocked",
+      reason: "missing_seed",
+      message: "POS setup required. Connect this terminal before starting sales.",
+    });
+
+    render(
+      <POSRegisterOpeningGuard>
+        <div>Register workspace</div>
+      </POSRegisterOpeningGuard>,
+    );
+
     expect(screen.queryByText("Register workspace")).not.toBeInTheDocument();
+    expect(screen.getByText("POS setup required")).toBeInTheDocument();
+    expect(
+      screen.getByText("POS setup required. Connect this terminal before starting sales."),
+    ).toBeInTheDocument();
   });
 });
