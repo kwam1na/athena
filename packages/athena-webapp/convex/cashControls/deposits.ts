@@ -11,6 +11,10 @@ import {
   listCompletedTransactions,
   listTransactionItems,
 } from "../pos/infrastructure/repositories/transactionRepository";
+import {
+  requireAuthenticatedAthenaUserWithCtx,
+  requireOrganizationMemberRoleWithCtx,
+} from "../lib/athenaUserAuth";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { isPosUsableRegisterSessionStatus } from "../../shared/registerSessionStatus";
 import { formatStaffDisplayName } from "../../shared/staffDisplayName";
@@ -19,6 +23,7 @@ const CASH_DEPOSIT_ALLOCATION_TYPE = "cash_deposit";
 const CASH_DEPOSIT_SUBJECT_TYPE = "register_cash_deposit";
 const RECENT_DEPOSIT_LIMIT = 10;
 const SESSION_LIMIT = 100;
+const SYNC_CONFLICT_LIMIT = 500;
 const TIMELINE_LIMIT = 200;
 
 const userErrorValidator = v.object({
@@ -93,6 +98,11 @@ type CashControlRegisterSession = Pick<
   | "workflowTraceId"
 >;
 
+type CashControlSyncConflict = Pick<
+  Doc<"posLocalSyncConflict">,
+  "_id" | "conflictType" | "status" | "summary"
+>;
+
 type CashControlTransaction = Pick<
   Doc<"posTransaction">,
   | "_id"
@@ -112,6 +122,51 @@ type RecordRegisterSessionDepositResult = {
   deposit: Doc<"paymentAllocation"> | null;
   registerSession: Doc<"registerSession"> | null;
 };
+
+async function requireCashControlsStoreAccess(
+  ctx: QueryCtx | MutationCtx,
+  storeId: Id<"store">,
+) {
+  const store = await ctx.db.get("store", storeId);
+  if (!store) {
+    throw new Error("Store not found.");
+  }
+
+  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+  await requireOrganizationMemberRoleWithCtx(ctx, {
+    allowedRoles: ["full_admin", "pos_only"],
+    failureMessage: "You do not have access to cash controls.",
+    organizationId: store.organizationId,
+    userId: athenaUser._id,
+  });
+
+  return { athenaUser, store };
+}
+
+async function resolveDepositActorStaffProfileId(
+  ctx: MutationCtx,
+  args: {
+    athenaUserId: Id<"athenaUser">;
+    staffProfileId?: Id<"staffProfile">;
+    storeId: Id<"store">;
+  },
+) {
+  if (!args.staffProfileId) {
+    throw new Error("Deposit staff actor is required.");
+  }
+
+  const staffProfile = await ctx.db.get("staffProfile", args.staffProfileId);
+  if (
+    !staffProfile ||
+    staffProfile.storeId !== args.storeId ||
+    staffProfile.status !== "active" ||
+    staffProfile.linkedUserId !== args.athenaUserId
+  ) {
+    throw new Error("Deposit staff actor does not match the signed-in user.");
+  }
+
+  return staffProfile._id;
+}
 
 function trimOptional(value?: string | null) {
   const nextValue = value?.trim();
@@ -195,9 +250,11 @@ function buildRegisterSessionSummary(args: {
   approvalRequest?: CashControlApprovalRequest | null;
   registerSession: CashControlRegisterSession;
   staffNamesById: StaffNameMap;
+  syncConflicts?: CashControlSyncConflict[];
   terminalNamesById: Map<Id<"posTerminal">, string>;
   totalDeposited: number;
 }) {
+  const syncConflicts = args.syncConflicts ?? [];
   return {
     ...args.registerSession,
     closedByStaffName: args.registerSession.closedByStaffProfileId
@@ -220,6 +277,18 @@ function buildRegisterSessionSummary(args: {
           status: args.approvalRequest.status,
         }
       : null,
+    localSyncStatus:
+      syncConflicts.length > 0
+        ? {
+            status: "needs_review",
+            reconciliationItems: syncConflicts.map((conflict) => ({
+              id: conflict._id,
+              status: conflict.status,
+              summary: conflict.summary,
+              type: conflict.conflictType,
+            })),
+          }
+        : null,
     totalDeposited: args.totalDeposited,
   };
 }
@@ -229,6 +298,7 @@ export function buildCashControlsDashboardSnapshot(args: {
   deposits: CashControlDepositAllocation[];
   registerSessions: CashControlRegisterSession[];
   staffNamesById: StaffNameMap;
+  syncConflictsBySessionId?: Map<Id<"registerSession">, CashControlSyncConflict[]>;
   terminalNamesById?: Map<Id<"posTerminal">, string>;
 }) {
   const totalDepositedBySessionId = sumDepositsBySession(args.deposits);
@@ -246,6 +316,8 @@ export function buildCashControlsDashboardSnapshot(args: {
         approvalRequest: args.approvalRequestsBySessionId.get(registerSession._id) ?? null,
         registerSession,
         staffNamesById: args.staffNamesById,
+        syncConflicts:
+          args.syncConflictsBySessionId?.get(registerSession._id) ?? [],
         terminalNamesById: args.terminalNamesById ?? new Map(),
         totalDeposited: totalDepositedBySessionId.get(registerSession._id) ?? 0,
       })
@@ -280,12 +352,88 @@ export function buildCashControlsDashboardSnapshot(args: {
       const variance = registerSession.variance ?? 0;
 
       return (
-        variance !== 0 &&
-        (registerSession.status === "closing" ||
-          Boolean(registerSession.pendingApprovalRequest))
+        registerSession.localSyncStatus?.status === "needs_review" ||
+        (variance !== 0 &&
+          (registerSession.status === "closing" ||
+            Boolean(registerSession.pendingApprovalRequest)))
       );
     }),
   };
+}
+
+export async function listOpenLocalSyncConflictsByRegisterSession(
+  ctx: Pick<QueryCtx, "db">,
+  storeId: Id<"store">,
+) {
+  const conflicts = await ctx.db
+    .query("posLocalSyncConflict")
+    .withIndex("by_store_status", (q) =>
+      q.eq("storeId", storeId).eq("status", "needs_review"),
+    )
+    .take(SYNC_CONFLICT_LIMIT);
+  const entries = await Promise.all(
+    conflicts.map(async (conflict) => {
+      const registerSessionMapping = await ctx.db
+        .query("posLocalSyncMapping")
+        .withIndex("by_store_terminal_local", (q) =>
+          q
+            .eq("storeId", conflict.storeId)
+            .eq("terminalId", conflict.terminalId)
+            .eq("localRegisterSessionId", conflict.localRegisterSessionId)
+            .eq("localIdKind", "registerSession")
+            .eq("localId", conflict.localRegisterSessionId),
+        )
+        .unique();
+      if (registerSessionMapping?.cloudTable === "registerSession") {
+        return [
+          registerSessionMapping.cloudId as Id<"registerSession">,
+          conflict,
+        ] as const;
+      }
+
+      const normalizeId = (
+        ctx.db as unknown as {
+          normalizeId?: (
+            tableName: string,
+            value: string,
+          ) => Id<"registerSession"> | null;
+        }
+      ).normalizeId;
+      const cloudRegisterSessionId =
+        normalizeId?.call(
+          ctx.db,
+          "registerSession",
+          conflict.localRegisterSessionId,
+        ) ?? null;
+      if (cloudRegisterSessionId) {
+        const registerSession = await ctx.db.get(
+          "registerSession",
+          cloudRegisterSessionId,
+        );
+        if (
+          registerSession?.storeId === conflict.storeId &&
+          registerSession.terminalId === conflict.terminalId
+        ) {
+          return [cloudRegisterSessionId, conflict] as const;
+        }
+      }
+
+      return null;
+    }),
+  );
+
+  return entries.reduce(
+    (conflictsBySessionId, entry) => {
+      if (!entry) return conflictsBySessionId;
+      const [registerSessionId, conflict] = entry;
+      conflictsBySessionId.set(registerSessionId, [
+        ...(conflictsBySessionId.get(registerSessionId) ?? []),
+        conflict,
+      ]);
+      return conflictsBySessionId;
+    },
+    new Map<Id<"registerSession">, CashControlSyncConflict[]>(),
+  );
 }
 
 async function listRegisterSessionsForDashboard(
@@ -297,6 +445,31 @@ async function listRegisterSessionsForDashboard(
     .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
     .order("desc")
     .take(SESSION_LIMIT);
+}
+
+async function appendRegisterSessionsForSyncConflicts(
+  ctx: Pick<QueryCtx, "db">,
+  registerSessions: Doc<"registerSession">[],
+  syncConflictsBySessionId: Map<Id<"registerSession">, CashControlSyncConflict[]>,
+) {
+  const knownSessionIds = new Set(
+    registerSessions.map((registerSession) => registerSession._id),
+  );
+  const missingSessionIds = Array.from(syncConflictsBySessionId.keys()).filter(
+    (registerSessionId) => !knownSessionIds.has(registerSessionId),
+  );
+  if (missingSessionIds.length === 0) return registerSessions;
+
+  const missingSessions = await Promise.all(
+    missingSessionIds.map((registerSessionId) =>
+      ctx.db.get("registerSession", registerSessionId),
+    ),
+  );
+
+  return [
+    ...registerSessions,
+    ...missingSessions.filter(Boolean),
+  ] as Doc<"registerSession">[];
 }
 
 async function listTerminalNames(
@@ -421,7 +594,14 @@ export const getDashboardSnapshot = query({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
-    const [registerSessions, pendingApprovalRequests, deposits] = await Promise.all([
+    await requireCashControlsStoreAccess(ctx, args.storeId);
+
+    const [
+      registerSessions,
+      pendingApprovalRequests,
+      deposits,
+      syncConflictsBySessionId,
+    ] = await Promise.all([
       listRegisterSessionsForDashboard(ctx, args.storeId),
       ctx.db
         .query("approvalRequest")
@@ -431,8 +611,15 @@ export const getDashboardSnapshot = query({
         .order("desc")
         .take(SESSION_LIMIT),
       listStoreDeposits(ctx, args.storeId),
+      listOpenLocalSyncConflictsByRegisterSession(ctx, args.storeId),
     ]);
 
+    const dashboardRegisterSessions =
+      await appendRegisterSessionsForSyncConflicts(
+        ctx,
+        registerSessions,
+        syncConflictsBySessionId,
+      );
     const relevantApprovalRequests = pendingApprovalRequests.filter(
       (approvalRequest) =>
         approvalRequest.requestType === "variance_review" &&
@@ -449,13 +636,13 @@ export const getDashboardSnapshot = query({
       collectStaffProfileIds({
         approvalRequests: relevantApprovalRequests,
         deposits,
-        registerSessions,
+        registerSessions: dashboardRegisterSessions,
       })
     );
     const terminalNamesById = await listTerminalNames(
       ctx,
       new Set(
-        registerSessions
+        dashboardRegisterSessions
           .map((registerSession) => registerSession.terminalId)
           .filter(Boolean) as Id<"posTerminal">[],
       ),
@@ -464,8 +651,9 @@ export const getDashboardSnapshot = query({
     return buildCashControlsDashboardSnapshot({
       approvalRequestsBySessionId,
       deposits,
-      registerSessions,
+      registerSessions: dashboardRegisterSessions,
       staffNamesById,
+      syncConflictsBySessionId,
       terminalNamesById,
     });
   },
@@ -477,14 +665,20 @@ export const getRegisterSessionSnapshot = query({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
+    const { store } = await requireCashControlsStoreAccess(ctx, args.storeId);
     const registerSession = await ctx.db.get("registerSession", args.registerSessionId);
 
     if (!registerSession || registerSession.storeId !== args.storeId) {
       throw new Error("Register session not found for this store.");
     }
 
-    const [store, deposits, timeline, transactions, approvalRequest] = await Promise.all([
-      ctx.db.get("store", args.storeId),
+    const [
+      deposits,
+      timeline,
+      transactions,
+      approvalRequest,
+      syncConflictsBySessionId,
+    ] = await Promise.all([
       listSessionDeposits(ctx, args.registerSessionId),
       listRegisterSessionTimeline(ctx, args.registerSessionId),
       listRegisterSessionTransactions(ctx, {
@@ -494,6 +688,7 @@ export const getRegisterSessionSnapshot = query({
       registerSession.managerApprovalRequestId
         ? ctx.db.get("approvalRequest", registerSession.managerApprovalRequestId)
         : Promise.resolve(null),
+      listOpenLocalSyncConflictsByRegisterSession(ctx, args.storeId),
     ]);
     const approvalRequests = approvalRequest ? [approvalRequest] : [];
     const staffNamesById = await listStaffNames(
@@ -596,6 +791,8 @@ export const getRegisterSessionSnapshot = query({
           approvalRequest,
           registerSession,
           staffNamesById,
+          syncConflicts:
+            syncConflictsBySessionId.get(args.registerSessionId) ?? [],
           terminalNamesById,
           totalDeposited,
         }),
@@ -632,6 +829,41 @@ export const recordRegisterSessionDeposit = mutation({
     ctx,
     args
   ): Promise<CommandResult<RecordRegisterSessionDepositResult>> => {
+    let athenaUserId: Id<"athenaUser">;
+    try {
+      const { athenaUser } = await requireCashControlsStoreAccess(
+        ctx,
+        args.storeId,
+      );
+      athenaUserId = athenaUser._id;
+    } catch {
+      return userError({
+        code: "authorization_failed",
+        message: "You do not have access to cash controls.",
+      });
+    }
+
+    if (args.actorUserId && args.actorUserId !== athenaUserId) {
+      return userError({
+        code: "authorization_failed",
+        message: "Deposit actor does not match the signed-in user.",
+      });
+    }
+
+    let actorStaffProfileId: Id<"staffProfile"> | undefined;
+    try {
+      actorStaffProfileId = await resolveDepositActorStaffProfileId(ctx, {
+        athenaUserId,
+        staffProfileId: args.actorStaffProfileId,
+        storeId: args.storeId,
+      });
+    } catch {
+      return userError({
+        code: "authorization_failed",
+        message: "Deposit staff actor does not match the signed-in user.",
+      });
+    }
+
     if (!Number.isFinite(args.amount) || args.amount <= 0) {
       return userError({
         code: "validation_failed",
@@ -686,8 +918,8 @@ export const recordRegisterSessionDeposit = mutation({
     }
 
     const deposit = await recordPaymentAllocationWithCtx(ctx, {
-      actorStaffProfileId: args.actorStaffProfileId,
-      actorUserId: args.actorUserId,
+      actorStaffProfileId,
+      actorUserId: athenaUserId,
       allocationType: CASH_DEPOSIT_ALLOCATION_TYPE,
       amount: storedAmount,
       collectedInStore: true,
@@ -714,8 +946,8 @@ export const recordRegisterSessionDeposit = mutation({
     }
 
     await recordOperationalEventWithCtx(ctx, {
-      actorStaffProfileId: args.actorStaffProfileId,
-      actorUserId: args.actorUserId,
+      actorStaffProfileId,
+      actorUserId: athenaUserId,
       eventType: "register_session_cash_deposit_recorded",
       message: `Recorded cash deposit of ${args.amount}.`,
       metadata: {
@@ -739,8 +971,8 @@ export const recordRegisterSessionDeposit = mutation({
       session: updatedRegisterSession,
       occurredAt,
       amount: storedAmount,
-      actorStaffProfileId: args.actorStaffProfileId,
-      actorUserId: args.actorUserId,
+      actorStaffProfileId,
+      actorUserId: athenaUserId,
     });
 
     await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {

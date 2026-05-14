@@ -1,0 +1,941 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Athena POS Local-First Register Runtime Plan</title>
+    <style type="text/css">
+      :root {
+        color-scheme: light;
+        --bg: #f4f1ea;
+        --paper: #fffdf8;
+        --ink: #25231f;
+        --muted: #686158;
+        --line: #d9d1c3;
+        --strong-line: #b9ad9d;
+        --accent: #245e52;
+        --accent-soft: #dfeee7;
+        --blue: #2b5277;
+        --blue-soft: #e1ebf4;
+        --amber: #84610f;
+        --amber-soft: #f4e7c6;
+        --red: #7a3430;
+        --red-soft: #eddad7;
+        --green-soft: #edf5e9;
+        --shadow: 0 22px 70px rgba(35, 31, 24, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        line-height: 1.55;
+      }
+
+      a {
+        color: var(--accent);
+        text-underline-offset: 0.18em;
+      }
+
+      .page {
+        width: min(1180px, calc(100% - 32px));
+        margin: 32px auto 56px;
+        background: var(--paper);
+        border: 1px solid var(--line);
+        box-shadow: var(--shadow);
+      }
+
+      .hero,
+      .section {
+        padding: 34px 56px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .hero {
+        padding-top: 52px;
+        padding-bottom: 40px;
+      }
+
+      .section:last-child {
+        border-bottom: 0;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin-top: 0;
+      }
+
+      h1,
+      h2,
+      h3 {
+        line-height: 1.14;
+        letter-spacing: 0;
+      }
+
+      h1 {
+        max-width: 930px;
+        margin-bottom: 20px;
+        font-size: clamp(2.25rem, 5vw, 4.5rem);
+        font-weight: 850;
+      }
+
+      h2 {
+        margin-bottom: 18px;
+        font-size: 1.45rem;
+      }
+
+      h3 {
+        margin-bottom: 8px;
+        font-size: 1.02rem;
+      }
+
+      p {
+        margin-bottom: 14px;
+      }
+
+      p:last-child {
+        margin-bottom: 0;
+      }
+
+      ul,
+      ol {
+        margin: 0;
+        padding-left: 1.2rem;
+      }
+
+      li {
+        margin: 8px 0;
+      }
+
+      code {
+        padding: 0.08rem 0.3rem;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: #f6efe4;
+        font-size: 0.92em;
+      }
+
+      pre {
+        overflow-x: auto;
+        margin: 0;
+        padding: 18px;
+        border: 1px solid var(--line);
+        background: #f8f0e4;
+        font-size: 0.88rem;
+        line-height: 1.45;
+      }
+
+      table {
+        width: 100%;
+        min-width: 820px;
+        border-collapse: collapse;
+        background: #fffaf0;
+      }
+
+      th,
+      td {
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        background: #eee6d8;
+        color: #4f4a42;
+        font-size: 0.78rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .eyebrow {
+        margin: 0 0 12px;
+        color: var(--accent);
+        font-size: 0.78rem;
+        font-weight: 780;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .lede {
+        max-width: 900px;
+        color: var(--muted);
+        font-size: 1.13rem;
+      }
+
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 26px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 30px;
+        padding: 4px 10px;
+        border: 1px solid var(--strong-line);
+        border-radius: 999px;
+        background: #fff8ec;
+        color: #514a3f;
+        font-size: 0.82rem;
+        font-weight: 680;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 15rem minmax(0, 1fr);
+        gap: 0;
+      }
+
+      .nav {
+        position: sticky;
+        top: 0;
+        align-self: start;
+        max-height: 100vh;
+        overflow: auto;
+        padding: 28px 20px;
+        border-right: 1px solid var(--line);
+        background: #faf5eb;
+      }
+
+      .nav a {
+        display: block;
+        padding: 7px 0;
+        color: #504941;
+        font-size: 0.9rem;
+        text-decoration: none;
+      }
+
+      .nav a:hover {
+        color: var(--accent);
+      }
+
+      .content {
+        min-width: 0;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .grid.two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .card {
+        min-height: 100%;
+        padding: 18px;
+        border: 1px solid var(--line);
+        background: #fffaf0;
+      }
+
+      .card.green {
+        border-color: #adc8b6;
+        background: var(--green-soft);
+      }
+
+      .card.accent {
+        border-color: #9eb9ad;
+        background: var(--accent-soft);
+      }
+
+      .card.blue {
+        border-color: #a7bad0;
+        background: var(--blue-soft);
+      }
+
+      .card.warn {
+        border-color: #d6b06c;
+        background: var(--amber-soft);
+      }
+
+      .card.danger {
+        border-color: #d6a29d;
+        background: var(--red-soft);
+      }
+
+      .label {
+        display: inline-flex;
+        min-height: 27px;
+        align-items: center;
+        padding: 3px 9px;
+        margin-bottom: 12px;
+        border: 1px solid currentColor;
+        color: var(--accent);
+        font-size: 0.72rem;
+        font-weight: 780;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      .small {
+        font-size: 0.92rem;
+      }
+
+      .callout {
+        padding: 20px;
+        border-left: 5px solid var(--accent);
+        background: var(--accent-soft);
+      }
+
+      .warning {
+        border-left-color: var(--amber);
+        background: var(--amber-soft);
+      }
+
+      .flow {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 16px;
+      }
+
+      .flow-step {
+        min-height: 112px;
+        padding: 14px;
+        border: 1px solid var(--line);
+        background: #fffaf0;
+      }
+
+      .flow-step strong {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--accent);
+      }
+
+      .unit {
+        display: grid;
+        grid-template-columns: 8rem minmax(0, 1fr);
+        gap: 18px;
+        padding: 20px 0;
+        border-top: 1px solid var(--line);
+      }
+
+      .unit:first-of-type {
+        border-top: 0;
+        padding-top: 0;
+      }
+
+      .unit-id {
+        color: var(--accent);
+        font-size: 1.05rem;
+        font-weight: 850;
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .chip {
+        display: inline-flex;
+        padding: 3px 8px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: #fff7eb;
+        color: #5b5348;
+        font-size: 0.78rem;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+        border: 1px solid var(--line);
+      }
+
+      .split {
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+        gap: 18px;
+      }
+
+      .timeline {
+        display: grid;
+        gap: 12px;
+      }
+
+      .timeline div {
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        background: #fffaf0;
+      }
+
+      @media (max-width: 980px) {
+        .page {
+          width: 100%;
+          margin: 0;
+          border-left: 0;
+          border-right: 0;
+        }
+
+        .layout {
+          display: block;
+        }
+
+        .nav {
+          position: static;
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          max-height: none;
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+
+        .hero,
+        .section {
+          padding-left: 24px;
+          padding-right: 24px;
+        }
+
+        .grid,
+        .grid.two,
+        .split,
+        .flow,
+        .unit {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media print {
+        body {
+          background: white;
+        }
+
+        .page {
+          width: 100%;
+          margin: 0;
+          border: 0;
+          box-shadow: none;
+        }
+
+        .nav {
+          display: none;
+        }
+
+        .hero,
+        .section,
+        .card,
+        .unit,
+        .flow-step {
+          break-inside: avoid;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="hero">
+        <p class="eyebrow">Implementation plan · May 13, 2026 · Status: active</p>
+        <h1>POS local-first register runtime</h1>
+        <p class="lede">
+          Make Athena POS usable first from local terminal state for already
+          provisioned businesses. Register actions are durably recorded in the
+          browser before the cashier sees completion, then synced later through
+          an ordered and idempotent Convex ingestion boundary.
+        </p>
+        <div class="meta">
+          <span class="pill">POS only</span>
+          <span class="pill">Offline-first by default</span>
+          <span class="pill">No new payment confirmations</span>
+          <span class="pill">Closeout and reopen preserved</span>
+          <span class="pill">Non-POS offline states deferred</span>
+        </div>
+      </div>
+
+      <div class="layout">
+        <div class="nav">
+          <a href="#summary">Summary</a>
+          <a href="#scope">Scope</a>
+          <a href="#decisions">Key Decisions</a>
+          <a href="#sync">Sync Strategy</a>
+          <a href="#closeout">Closeout and Reopen</a>
+          <a href="#architecture">Architecture</a>
+          <a href="#units">Implementation Units</a>
+          <a href="#risks">Risks</a>
+          <a href="#validation">Validation</a>
+          <a href="#references">References</a>
+        </div>
+
+        <div class="content">
+          <div class="section" id="summary">
+            <h2>Plan Summary</h2>
+            <div class="grid">
+              <div class="card accent">
+                <span class="label">Product promise</span>
+                <p>
+                  POS should boot from local state first and keep selling when
+                  field connectivity is unreliable.
+                </p>
+              </div>
+              <div class="card">
+                <span class="label">Operating boundary</span>
+                <p>
+                  This applies only to provisioned POS terminals for already
+                  claimed businesses and stores.
+                </p>
+              </div>
+              <div class="card">
+                <span class="label">Sync model</span>
+                <p>
+                  Local POS events are uploaded in stable order and projected
+                  into existing Athena cloud records after acceptance.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="section" id="scope">
+            <h2>Scope Boundary</h2>
+            <div class="split">
+              <div class="card green">
+                <h3>In Scope</h3>
+                <ul>
+                  <li>Provisioned terminal local boot state.</li>
+                  <li>Local register open, selling, checkout, receipt, cash movement, closeout, and permitted reopen.</li>
+                  <li>All configured POS payment methods using the existing method and amount model.</li>
+                  <li>Local event log, sync outbox, id mapping, and reconciliation records.</li>
+                  <li>POS app-shell/offline-readiness for already provisioned terminals.</li>
+                </ul>
+              </div>
+              <div class="card danger">
+                <h3>Out of Scope</h3>
+                <ul>
+                  <li>Offline state handling for non-POS surfaces.</li>
+                  <li>Brand-new business creation without prior online claim.</li>
+                  <li>Peer-to-peer sync between disconnected devices.</li>
+                  <li>Real-time offline stock coordination across terminals.</li>
+                  <li>Payment-provider-specific offline authorization.</li>
+                  <li>Automatic conflict resolution or a full manager reconciliation workbench.</li>
+                </ul>
+              </div>
+            </div>
+            <div class="callout warning" style="margin-top: 18px">
+              <strong>Explicit deferral:</strong> R4 remains only as a boundary.
+              This plan must not design or implement stale, unavailable,
+              read-only, or offline UI states for non-POS Athena workspaces.
+            </div>
+          </div>
+
+          <div class="section" id="decisions">
+            <h2>Key Technical Decisions</h2>
+            <div class="grid">
+              <div class="card accent">
+                <h3>IndexedDB local store</h3>
+                <p class="small">
+                  Use transactional structured browser storage for terminal
+                  seed, catalog snapshot, register state, event outbox, sync
+                  cursors, and id mappings. Do not use <code>localStorage</code>
+                  for the POS ledger.
+                </p>
+              </div>
+              <div class="card accent">
+                <h3>Event-log sync</h3>
+                <p class="small">
+                  Append ordered local events first. Sync through a dedicated
+                  ingestion boundary instead of replaying existing Convex
+                  mutations from the browser.
+                </p>
+              </div>
+              <div class="card accent">
+                <h3>Projection over replay</h3>
+                <p class="small">
+                  Server ingestion validates terminal, store, staff, order, and
+                  idempotency, then projects accepted history into current POS,
+                  cash-control, inventory, payment, and trace rails.
+                </p>
+              </div>
+              <div class="card">
+                <h3>Foreground scheduler first</h3>
+                <p class="small">
+                  Sync is driven by app/POS entry, online hints, visibility
+                  regain, local event append, manual retry, foreground interval,
+                  and high-priority closeout attempts.
+                </p>
+              </div>
+              <div class="card">
+                <h3>App shell separate from sync</h3>
+                <p class="small">
+                  POS needs local runtime assets to reopen offline. Background
+                  Sync is not the v1 guarantee for delivery of the event outbox.
+                </p>
+              </div>
+              <div class="card">
+                <h3>Reconciliation over rollback</h3>
+                <p class="small">
+                  Completed customer-facing local history stays visible.
+                  Inventory, payment, or permission conflicts become
+                  manager-review work.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="section" id="sync">
+            <h2>Sync Strategy</h2>
+            <p>
+              Sync is ordered per terminal and local register session. The
+              cashier never waits for cloud sync to complete a locally allowed
+              checkout. The cloud side deduplicates accepted events and returns
+              mappings, cursors, and reconciliation outcomes.
+            </p>
+            <div class="flow">
+              <div class="flow-step">
+                <strong>1. Local action</strong>
+                Cashier opens register, edits cart, checks out, closes, or reopens.
+              </div>
+              <div class="flow-step">
+                <strong>2. Durable append</strong>
+                POS writes an ordered IndexedDB event before showing success.
+              </div>
+              <div class="flow-step">
+                <strong>3. Sync hint</strong>
+                Scheduler collapses triggers and reads the next ordered batch.
+              </div>
+              <div class="flow-step">
+                <strong>4. Server ingest</strong>
+                Convex validates identity, order, and idempotency.
+              </div>
+              <div class="flow-step">
+                <strong>5. Projection</strong>
+                Accepted history updates cloud records and local mappings.
+              </div>
+            </div>
+
+            <h3 style="margin-top: 24px">Sync Triggers</h3>
+            <div class="chips">
+              <span class="chip">POS route entry</span>
+              <span class="chip">App boot</span>
+              <span class="chip">Browser online event</span>
+              <span class="chip">Visibility regain</span>
+              <span class="chip">Manual retry</span>
+              <span class="chip">Debounced local event append</span>
+              <span class="chip">Foreground interval with backoff</span>
+              <span class="chip">High-priority closeout attempt</span>
+            </div>
+          </div>
+
+          <div class="section" id="closeout">
+            <h2>Closeout and Reopen</h2>
+            <div class="callout">
+              <p>
+                Offline closeout preserves the current Athena behavior: closing
+                pauses selling on the register session, but the existing
+                permitted reopen-for-correction path remains available.
+              </p>
+            </div>
+            <div class="timeline" style="margin-top: 18px">
+              <div>
+                <strong>Closeout:</strong> append a local closeout event, pause
+                sale controls, preserve full local timeline, and schedule a
+                high-priority sync attempt.
+              </div>
+              <div>
+                <strong>Reopen:</strong> if the current workflow permits it,
+                append a local reopen event before sale controls resume.
+              </div>
+              <div>
+                <strong>Sync order:</strong> project
+                <code>sale events -> closeout -> reopen -> later sale events</code>
+                exactly in timeline order.
+              </div>
+            </div>
+          </div>
+
+          <div class="section" id="architecture">
+            <h2>Architecture Shape</h2>
+            <div class="split">
+              <div>
+                <h3>Browser-side local runtime</h3>
+                <pre><code>packages/athena-webapp/src/lib/pos/infrastructure/local/
+  posLocalStore.ts
+  localGateway.ts
+  syncScheduler.ts
+  syncStatus.ts
+  offlineReadiness.ts</code></pre>
+              </div>
+              <div>
+                <h3>Convex sync boundary</h3>
+                <pre><code>packages/athena-webapp/convex/pos/application/sync/
+  ingestLocalEvents.ts
+  projectLocalEvents.ts
+
+packages/athena-webapp/convex/pos/public/sync.ts</code></pre>
+              </div>
+            </div>
+            <div class="callout" style="margin-top: 18px">
+              Keep <code>useRegisterViewModel</code> focused on orchestration.
+              Local persistence belongs under POS infrastructure, not inside
+              component-level state.
+            </div>
+          </div>
+
+          <div class="section" id="units">
+            <h2>Implementation Units</h2>
+
+            <div class="unit">
+              <div class="unit-id">U1</div>
+              <div>
+                <h3>Define the local POS event and storage foundation</h3>
+                <p>
+                  Create the IndexedDB-backed store for provisioned terminal
+                  state, catalog snapshots, local register/session state,
+                  ordered events, sync cursors, and cloud id mappings.
+                </p>
+                <p class="small muted">
+                  Key proof: event append ordering, failed-write behavior,
+                  schema-version handling, and local sync status derivation.
+                </p>
+              </div>
+            </div>
+
+            <div class="unit">
+              <div class="unit-id">U2</div>
+              <div>
+                <h3>Capture online provisioning into the local POS seed</h3>
+                <p>
+                  Persist the store, terminal, staff, permissions, register
+                  config, catalog snapshot, price/tax context, and inventory
+                  snapshot required for local POS boot.
+                </p>
+                <p class="small muted">
+                  Staff auth storage must be scoped verifier material only. No
+                  plaintext PINs or reusable server credentials.
+                </p>
+              </div>
+            </div>
+
+            <div class="unit">
+              <div class="unit-id">U3</div>
+              <div>
+                <h3>Implement the local-first POS command gateway</h3>
+                <p>
+                  Add local command paths for register open, session
+                  start/resume, cart changes, checkout, receipt creation, cash
+                  movements, closeout, and permitted reopen.
+                </p>
+                <p class="small muted">
+                  Preserve existing payment semantics: method, amount,
+                  timestamp, and staff context. No extra payment confirmation
+                  states.
+                </p>
+              </div>
+            </div>
+
+            <div class="unit">
+              <div class="unit-id">U4</div>
+              <div>
+                <h3>Wire POS register UI to local-first runtime</h3>
+                <p>
+                  Make the active register render from local state by default,
+                  show synced/syncing/pending/needs-review states, and preserve
+                  closeout and reopen controls.
+                </p>
+                <p class="small muted">
+                  Do not change routed non-POS workspaces for offline behavior.
+                </p>
+              </div>
+            </div>
+
+            <div class="unit">
+              <div class="unit-id">U5</div>
+              <div>
+                <h3>Build the sync scheduler and trigger model</h3>
+                <p>
+                  Centralize sync triggering, batching, ordering, retry/backoff,
+                  and concurrency control for local POS events.
+                </p>
+                <p class="small muted">
+                  Checkout and local closeout stay independent from sync
+                  completion.
+                </p>
+              </div>
+            </div>
+
+            <div class="unit">
+              <div class="unit-id">U6</div>
+              <div>
+                <h3>Add Convex sync ingestion, idempotency, and mappings</h3>
+                <p>
+                  Create a dedicated sync boundary that accepts ordered local
+                  batches, validates terminal/store/staff context, dedupes
+                  accepted events, and stores local-to-cloud mappings.
+                </p>
+              </div>
+            </div>
+
+            <div class="unit">
+              <div class="unit-id">U7</div>
+              <div>
+                <h3>Project accepted events into existing Athena rails</h3>
+                <p>
+                  Convert accepted local history into register sessions, POS
+                  sessions, transactions, transaction items, payment
+                  allocations, inventory effects, cash controls, and workflow
+                  traces.
+                </p>
+                <p class="small muted">
+                  Inventory and payment conflicts become reconciliation records
+                  rather than silent rewrites of completed sales.
+                </p>
+              </div>
+            </div>
+
+            <div class="unit">
+              <div class="unit-id">U8</div>
+              <div>
+                <h3>Surface pending sync and reconciliation</h3>
+                <p>
+                  Keep pending sync distinct from conflicts requiring action in
+                  POS and minimal cash-control visibility.
+                </p>
+              </div>
+            </div>
+
+            <div class="unit">
+              <div class="unit-id">U9</div>
+              <div>
+                <h3>Make the provisioned POS app shell offline-ready</h3>
+                <p>
+                  Ensure a provisioned terminal can reopen the POS runtime from
+                  locally available browser assets without relying on a live
+                  network fetch.
+                </p>
+              </div>
+            </div>
+
+            <div class="unit">
+              <div class="unit-id">U10</div>
+              <div>
+                <h3>Refresh validation, harness coverage, and docs</h3>
+                <p>
+                  Add validation-map coverage, browser-facing verification where
+                  needed, generated-doc refreshes, and a durable solution note
+                  for the POS event-log sync pattern.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="section" id="risks">
+            <h2>Risks and Mitigations</h2>
+            <div class="table-wrap">
+              <table summary="POS local-first runtime risks and mitigations">
+                <thead>
+                  <tr>
+                    <th>Risk</th>
+                    <th>Mitigation</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Local browser storage is lost before sync.</td>
+                    <td>Use IndexedDB, surface local storage health, and sync opportunistically whenever connectivity exists.</td>
+                  </tr>
+                  <tr>
+                    <td>Retries duplicate sales, payments, receipts, or closeouts.</td>
+                    <td>Add server idempotency records and tests for repeated accepted batches.</td>
+                  </tr>
+                  <tr>
+                    <td>Closeout or reopen projects out of order.</td>
+                    <td>Enforce strict per-register-session ordering and treat closeout/reopen as timeline checkpoints.</td>
+                  </tr>
+                  <tr>
+                    <td>Local staff permissions drift from cloud policy.</td>
+                    <td>Validate on sync and create permission reconciliation items without rewriting local history.</td>
+                  </tr>
+                  <tr>
+                    <td>Offline POS scope spreads to non-POS workspaces.</td>
+                    <td>Keep local runtime under POS infrastructure and do not edit non-POS screens for offline behavior.</td>
+                  </tr>
+                  <tr>
+                    <td>Runtime assets are unavailable when the terminal reopens offline.</td>
+                    <td>Add POS app-shell/offline-readiness validation separately from sync scheduling.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="section" id="validation">
+            <h2>Validation Expectations</h2>
+            <div class="grid two">
+              <div class="card">
+                <h3>Core tests</h3>
+                <ul>
+                  <li>Local store ordering, schema versioning, failed writes, and id mappings.</li>
+                  <li>Local command durability before UI success.</li>
+                  <li>Payment-model preservation across all configured POS methods.</li>
+                  <li>Closeout pause, permitted reopen, and ordered projection.</li>
+                  <li>Sync scheduler trigger collapse, backoff, and no concurrent upload for the same queue.</li>
+                </ul>
+              </div>
+              <div class="card">
+                <h3>Integration tests</h3>
+                <ul>
+                  <li>Convex ingestion identity validation, idempotency, and mapping persistence.</li>
+                  <li>Projection into transactions, register sessions, cash controls, inventory, payment allocation, and traces.</li>
+                  <li>Pending sync versus needs-review visibility.</li>
+                  <li>POS app shell and local seed load without live backend availability.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="section" id="references">
+            <h2>References</h2>
+            <ul>
+              <li>
+                Origin requirements:
+                <a href="../brainstorms/2026-05-13-pos-local-first-register-requirements.md">docs/brainstorms/2026-05-13-pos-local-first-register-requirements.md</a>
+              </li>
+              <li>
+                Markdown plan:
+                <a href="./2026-05-13-001-feat-pos-local-first-register-plan.md">docs/plans/2026-05-13-001-feat-pos-local-first-register-plan.md</a>
+              </li>
+              <li>
+                Related learning:
+                <a href="../solutions/performance/athena-pos-cart-latency-foundation-2026-05-05.md">athena-pos-cart-latency-foundation-2026-05-05.md</a>
+              </li>
+              <li>
+                Related learning:
+                <a href="../solutions/performance/athena-expense-register-local-index-parity-2026-05-08.md">athena-expense-register-local-index-parity-2026-05-08.md</a>
+              </li>
+              <li>
+                External docs:
+                <a href="https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API">MDN IndexedDB API</a>,
+                <a href="https://developer.mozilla.org/en-US/docs/Web/API/Background_Synchronization_API">MDN Background Synchronization API</a>,
+                <a href="https://docs.convex.dev/client/react/optimistic-updates">Convex Optimistic Updates</a>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

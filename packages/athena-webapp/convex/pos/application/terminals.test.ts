@@ -20,6 +20,7 @@ const existingTerminal = {
   _creationTime: 111,
   storeId: "store-1" as Id<"store">,
   fingerprintHash: "fingerprint-1",
+  syncSecretHash: "sync-secret-1",
   displayName: "Old Terminal",
   registerNumber: "A1",
   registeredByUserId: "user-1" as Id<"athenaUser">,
@@ -33,6 +34,7 @@ const newTerminal = {
   _creationTime: 222,
   storeId: "store-1" as Id<"store">,
   fingerprintHash: "fingerprint-2",
+  syncSecretHash: "sync-secret-2",
   displayName: "New Terminal",
   registerNumber: "B2",
   registeredByUserId: "user-1" as Id<"athenaUser">,
@@ -68,23 +70,22 @@ describe("registerTerminal", () => {
     );
     vi.mocked(getTerminalById).mockResolvedValue(newTerminal);
 
-    const result = await registerTerminal(
-      { db: null as never } as never,
-      {
-        storeId: "store-1" as Id<"store">,
-        fingerprintHash: "fingerprint-2",
-        displayName: "New Terminal",
-        registerNumber: "B2",
-        registeredByUserId: "user-1" as Id<"athenaUser">,
-        browserInfo,
-      },
-    );
+    const result = await registerTerminal({ db: null as never } as never, {
+      storeId: "store-1" as Id<"store">,
+      fingerprintHash: "fingerprint-2",
+      syncSecretHash: "sync-secret-2",
+      displayName: "New Terminal",
+      registerNumber: "B2",
+      registeredByUserId: "user-1" as Id<"athenaUser">,
+      browserInfo,
+    });
 
     expect(vi.mocked(registerTerminalRecord)).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         storeId: "store-1",
         fingerprintHash: "fingerprint-2",
+        syncSecretHash: "sync-secret-2",
         displayName: "New Terminal",
         registerNumber: "B2",
       }),
@@ -104,17 +105,15 @@ describe("registerTerminal", () => {
       registerNumber: "A1",
     });
 
-    const result = await registerTerminal(
-      { db: null as never } as never,
-      {
-        storeId: "store-1" as Id<"store">,
-        fingerprintHash: "fingerprint-1",
-        displayName: "Updated Terminal",
-        registerNumber: "A1",
-        registeredByUserId: "user-1" as Id<"athenaUser">,
-        browserInfo,
-      },
-    );
+    const result = await registerTerminal({ db: null as never } as never, {
+      storeId: "store-1" as Id<"store">,
+      fingerprintHash: "fingerprint-1",
+      syncSecretHash: "sync-secret-rotated",
+      displayName: "Updated Terminal",
+      registerNumber: "A1",
+      registeredByUserId: "user-1" as Id<"athenaUser">,
+      browserInfo,
+    });
 
     expect(vi.mocked(patchTerminalRecord)).toHaveBeenCalledWith(
       expect.anything(),
@@ -123,28 +122,108 @@ describe("registerTerminal", () => {
         displayName: "Updated Terminal",
         registeredByUserId: "user-1",
         browserInfo,
+        syncSecretHash: "sync-secret-rotated",
         status: "active",
         registerNumber: "A1",
       }),
     );
-    expect(result.kind).toBe("ok");
+    expect(result).toEqual(
+      expect.objectContaining({
+        kind: "ok",
+        data: expect.objectContaining({
+          syncSecretHash: "sync-secret-rotated",
+        }),
+      }),
+    );
+  });
+
+  it("does not rebind an existing terminal to a different signed-in user", async () => {
+    vi.mocked(getTerminalByFingerprint).mockResolvedValue(existingTerminal);
+    vi.mocked(getTerminalByStoreIdAndRegisterNumber).mockResolvedValue(null);
+
+    const result = await registerTerminal({ db: null as never } as never, {
+      storeId: "store-1" as Id<"store">,
+      fingerprintHash: "fingerprint-1",
+      syncSecretHash: "sync-secret-1",
+      displayName: "Updated Terminal",
+      registerNumber: "A1",
+      registeredByUserId: "user-2" as Id<"athenaUser">,
+      browserInfo,
+    });
+
+    expect(result).toEqual(
+      userError({
+        code: "authorization_failed",
+        message:
+          "This terminal is already registered to another signed-in user.",
+      }),
+    );
+    expect(vi.mocked(patchTerminalRecord)).not.toHaveBeenCalled();
+  });
+
+  it("does not reassign an existing terminal to another register number", async () => {
+    vi.mocked(getTerminalByFingerprint).mockResolvedValue(existingTerminal);
+    vi.mocked(getTerminalByStoreIdAndRegisterNumber).mockResolvedValue(null);
+
+    const result = await registerTerminal({ db: null as never } as never, {
+      storeId: "store-1" as Id<"store">,
+      fingerprintHash: "fingerprint-1",
+      syncSecretHash: "sync-secret-1",
+      displayName: "Updated Terminal",
+      registerNumber: "B2",
+      registeredByUserId: "user-1" as Id<"athenaUser">,
+      browserInfo,
+    });
+
+    expect(result).toEqual(
+      userError({
+        code: "validation_failed",
+        message:
+          "This terminal is already assigned to another register number.",
+      }),
+    );
+    expect(vi.mocked(patchTerminalRecord)).not.toHaveBeenCalled();
+  });
+
+  it("does not reactivate a revoked terminal through normal registration", async () => {
+    vi.mocked(getTerminalByFingerprint).mockResolvedValue({
+      ...existingTerminal,
+      status: "revoked",
+    });
+    vi.mocked(getTerminalByStoreIdAndRegisterNumber).mockResolvedValue(null);
+
+    const result = await registerTerminal({ db: null as never } as never, {
+      storeId: "store-1" as Id<"store">,
+      fingerprintHash: "fingerprint-1",
+      syncSecretHash: "sync-secret-1",
+      displayName: "Updated Terminal",
+      registerNumber: "A1",
+      registeredByUserId: "user-1" as Id<"athenaUser">,
+      browserInfo,
+    });
+
+    expect(result).toEqual(
+      userError({
+        code: "authorization_failed",
+        message: "This terminal must be reactivated by an administrator.",
+      }),
+    );
+    expect(vi.mocked(patchTerminalRecord)).not.toHaveBeenCalled();
   });
 
   it("returns validation failure when register number is missing", async () => {
     vi.mocked(getTerminalByFingerprint).mockResolvedValue(null);
     vi.mocked(getTerminalByStoreIdAndRegisterNumber).mockResolvedValue(null);
 
-    const result = await registerTerminal(
-      { db: null as never } as never,
-      {
-        storeId: "store-1" as Id<"store">,
-        fingerprintHash: "fingerprint-2",
-        displayName: "New Terminal",
-        registerNumber: " ",
-        registeredByUserId: "user-1" as Id<"athenaUser">,
-        browserInfo,
-      },
-    );
+    const result = await registerTerminal({ db: null as never } as never, {
+      storeId: "store-1" as Id<"store">,
+      fingerprintHash: "fingerprint-2",
+      syncSecretHash: "sync-secret-2",
+      displayName: "New Terminal",
+      registerNumber: " ",
+      registeredByUserId: "user-1" as Id<"athenaUser">,
+      browserInfo,
+    });
 
     expect(result).toEqual(
       userError({
@@ -162,17 +241,15 @@ describe("registerTerminal", () => {
       registerNumber: "A1",
     });
 
-    const result = await registerTerminal(
-      { db: null as never } as never,
-      {
-        storeId: "store-1" as Id<"store">,
-        fingerprintHash: "fingerprint-2",
-        displayName: "New Terminal",
-        registerNumber: "A1",
-        registeredByUserId: "user-1" as Id<"athenaUser">,
-        browserInfo,
-      },
-    );
+    const result = await registerTerminal({ db: null as never } as never, {
+      storeId: "store-1" as Id<"store">,
+      fingerprintHash: "fingerprint-2",
+      syncSecretHash: "sync-secret-2",
+      displayName: "New Terminal",
+      registerNumber: "A1",
+      registeredByUserId: "user-1" as Id<"athenaUser">,
+      browserInfo,
+    });
 
     expect(result).toEqual(
       userError({

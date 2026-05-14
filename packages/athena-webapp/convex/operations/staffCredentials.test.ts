@@ -1,6 +1,19 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
+
+const authMocks = vi.hoisted(() => ({
+  requireAuthenticatedAthenaUserWithCtx: vi.fn(),
+  requireOrganizationMemberRoleWithCtx: vi.fn(),
+}));
+
+vi.mock("../lib/athenaUserAuth", () => ({
+  requireAuthenticatedAthenaUserWithCtx:
+    authMocks.requireAuthenticatedAthenaUserWithCtx,
+  requireOrganizationMemberRoleWithCtx:
+    authMocks.requireOrganizationMemberRoleWithCtx,
+}));
+
 import {
   authenticateStaffCredential,
   authenticateStaffCredentialForApprovalWithCtx,
@@ -12,12 +25,16 @@ import {
   listStaffCredentialsByStoreWithCtx,
   updateStaffCredentialWithCtx,
 } from "./staffCredentials";
+import { hashPosLocalStaffProofToken } from "../pos/application/sync/staffProof";
 
 type TableName =
   | "approvalProof"
   | "expenseSession"
   | "operationalEvent"
+  | "posTerminal"
+  | "posLocalStaffProof"
   | "posSession"
+  | "store"
   | "staffCredential"
   | "staffProfile"
   | "staffRoleAssignment";
@@ -27,7 +44,10 @@ function createStaffCredentialsMutationCtx(seed?: {
   approvalProofs?: Row[];
   expenseSessions?: Row[];
   operationalEvents?: Row[];
+  posTerminals?: Row[];
+  posLocalStaffProofs?: Row[];
   posSessions?: Row[];
+  stores?: Row[];
   credentials?: Row[];
   profiles?: Row[];
   roles?: Row[];
@@ -42,7 +62,40 @@ function createStaffCredentialsMutationCtx(seed?: {
     operationalEvent: new Map(
       (seed?.operationalEvents ?? []).map((row) => [row._id, row])
     ),
+    posTerminal: new Map(
+      (
+        seed?.posTerminals ?? [
+          {
+            _id: "terminal-1",
+            storeId: "store_1",
+            organizationId: "org_1",
+            status: "active",
+            registeredByUserId: "athena-user-1",
+          },
+          {
+            _id: "terminal-2",
+            storeId: "store_1",
+            organizationId: "org_1",
+            status: "active",
+            registeredByUserId: "athena-user-1",
+          },
+        ]
+      ).map((row) => [row._id, row])
+    ),
+    posLocalStaffProof: new Map(
+      (seed?.posLocalStaffProofs ?? []).map((row) => [row._id, row])
+    ),
     posSession: new Map((seed?.posSessions ?? []).map((row) => [row._id, row])),
+    store: new Map(
+      (
+        seed?.stores ?? [
+          {
+            _id: "store_1",
+            organizationId: "org_1",
+          },
+        ]
+      ).map((row) => [row._id, row])
+    ),
     staffCredential: new Map(
       (seed?.credentials ?? []).map((row) => [row._id, row])
     ),
@@ -55,7 +108,10 @@ function createStaffCredentialsMutationCtx(seed?: {
     approvalProof: 0,
     expenseSession: 0,
     operationalEvent: 0,
+    posTerminal: 0,
+    posLocalStaffProof: 0,
     posSession: 0,
+    store: 0,
     staffCredential: 0,
     staffProfile: 0,
     staffRoleAssignment: 0,
@@ -120,6 +176,13 @@ function getHandler(definition: unknown) {
 }
 
 describe("staff credential operations", () => {
+  beforeEach(() => {
+    authMocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
+      _id: "athena-user-1",
+    });
+    authMocks.requireOrganizationMemberRoleWithCtx.mockResolvedValue(undefined);
+  });
+
   it("reports store-scoped username availability", async () => {
     const { ctx } = createStaffCredentialsMutationCtx({
       credentials: [
@@ -592,6 +655,278 @@ describe("staff credential operations", () => {
     });
     expect(tables.staffCredential.get("credential-1")?.lastAuthenticatedAt).toEqual(
       expect.any(Number)
+    );
+  });
+
+  it("mints and persists a scoped local staff proof after terminal authentication", async () => {
+    const { ctx, tables } = createStaffCredentialsMutationCtx({
+      credentials: [
+        {
+          _id: "credential-1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          username: "frontdesk",
+          pinHash: "hash-1",
+          status: "active",
+        },
+      ],
+      profiles: [
+        {
+          _id: "staff_profile_1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Ari Mensah",
+        },
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "cashier",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+      ],
+    });
+
+    const result = await authenticateStaffCredentialForTerminalWithCtx(ctx, {
+      allowedRoles: ["cashier"],
+      pinHash: "hash-1",
+      storeId: "store_1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+      username: "frontdesk",
+    });
+
+    expect(result).toEqual({
+      kind: "ok",
+      data: expect.objectContaining({
+        posLocalStaffProof: {
+          expiresAt: expect.any(Number),
+          token: expect.any(String),
+        },
+        staffProfileId: "staff_profile_1",
+      }),
+    });
+    if (result.kind !== "ok") throw new Error("Expected ok result");
+
+    const proofRows = Array.from(tables.posLocalStaffProof.values());
+    expect(proofRows).toEqual([
+      expect.objectContaining({
+        credentialId: "credential-1",
+        expiresAt: result.data.posLocalStaffProof?.expiresAt,
+        staffProfileId: "staff_profile_1",
+        status: "active",
+        storeId: "store_1",
+        terminalId: "terminal-1",
+        tokenHash: expect.any(String),
+      }),
+    ]);
+    expect(proofRows[0]?.tokenHash).not.toBe(
+      result.data.posLocalStaffProof?.token,
+    );
+    expect(result.data.posLocalStaffProof).toBeDefined();
+    if (!result.data.posLocalStaffProof) {
+      throw new Error("Expected local staff proof");
+    }
+    await expect(
+      hashPosLocalStaffProofToken(result.data.posLocalStaffProof.token),
+    ).resolves.toBe(proofRows[0]?.tokenHash);
+  });
+
+  it("rejects public terminal authentication when the signed-in user does not own the terminal", async () => {
+    const { ctx } = createStaffCredentialsMutationCtx({
+      posTerminals: [
+        {
+          _id: "terminal-1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          registeredByUserId: "athena-user-2",
+        },
+      ],
+      credentials: [
+        {
+          _id: "credential-1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          username: "frontdesk",
+          pinHash: "hash-1",
+          status: "active",
+        },
+      ],
+      profiles: [
+        {
+          _id: "staff_profile_1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Ari Mensah",
+        },
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "cashier",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(authenticateStaffCredentialForTerminal)(ctx, {
+        allowedRoles: ["cashier"],
+        pinHash: "hash-1",
+        storeId: "store_1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        username: "frontdesk",
+      })
+    ).resolves.toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "This terminal is not available for staff authentication.",
+      },
+    });
+  });
+
+  it("requires the terminal owner to have POS access before public terminal authentication", async () => {
+    const { ctx } = createStaffCredentialsMutationCtx({
+      credentials: [
+        {
+          _id: "credential-1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          username: "frontdesk",
+          pinHash: "hash-1",
+          status: "active",
+        },
+      ],
+      profiles: [
+        {
+          _id: "staff_profile_1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Ari Mensah",
+        },
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "cashier",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+      ],
+    });
+    authMocks.requireOrganizationMemberRoleWithCtx.mockRejectedValueOnce(
+      new Error("No POS access"),
+    );
+
+    await expect(
+      getHandler(authenticateStaffCredentialForTerminal)(ctx, {
+        allowedRoles: ["cashier"],
+        pinHash: "hash-1",
+        storeId: "store_1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        username: "frontdesk",
+      }),
+    ).resolves.toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "This terminal is not available for staff authentication.",
+      },
+    });
+    expect(authMocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      ctx,
+      {
+        allowedRoles: ["full_admin", "pos_only"],
+        failureMessage: "You do not have access to this POS terminal.",
+        organizationId: "org_1",
+        userId: "athena-user-1",
+      },
+    );
+  });
+
+  it("checks the terminal owner's POS access before minting a public local staff proof", async () => {
+    const { ctx } = createStaffCredentialsMutationCtx({
+      credentials: [
+        {
+          _id: "credential-1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          username: "frontdesk",
+          pinHash: "hash-1",
+          status: "active",
+        },
+      ],
+      profiles: [
+        {
+          _id: "staff_profile_1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Ari Mensah",
+        },
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "cashier",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(authenticateStaffCredentialForTerminal)(ctx, {
+        allowedRoles: ["cashier"],
+        pinHash: "hash-1",
+        storeId: "store_1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        username: "frontdesk",
+      }),
+    ).resolves.toEqual({
+      kind: "ok",
+      data: expect.objectContaining({
+        posLocalStaffProof: {
+          expiresAt: expect.any(Number),
+          token: expect.any(String),
+        },
+        staffProfileId: "staff_profile_1",
+      }),
+    });
+    expect(authMocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      ctx,
+      {
+        allowedRoles: ["full_admin", "pos_only"],
+        failureMessage: "You do not have access to this POS terminal.",
+        organizationId: "org_1",
+        userId: "athena-user-1",
+      },
     );
   });
 

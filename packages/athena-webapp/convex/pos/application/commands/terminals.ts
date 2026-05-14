@@ -1,6 +1,10 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
-import { ok, userError, type CommandResult } from "../../../../shared/commandResult";
+import {
+  ok,
+  userError,
+  type CommandResult,
+} from "../../../../shared/commandResult";
 
 import {
   getTerminalByFingerprint,
@@ -24,7 +28,9 @@ const REGISTER_TERMINAL_VALIDATION_MESSAGES = new Set([
 
 function normalizeRegisterNumber(value?: string): string | undefined {
   const registerNumber = value?.trim();
-  return registerNumber && registerNumber.length > 0 ? registerNumber : undefined;
+  return registerNumber && registerNumber.length > 0
+    ? registerNumber
+    : undefined;
 }
 
 function mapRegisterTerminalError(
@@ -73,6 +79,7 @@ export async function registerTerminal(
   args: {
     storeId: Id<"store">;
     fingerprintHash: string;
+    syncSecretHash: string;
     displayName: string;
     registerNumber: string;
     registeredByUserId: Id<"athenaUser">;
@@ -91,8 +98,32 @@ export async function registerTerminal(
     });
 
     if (existing) {
+      if (existing.status !== "active") {
+        return userError({
+          code: "authorization_failed",
+          message: "This terminal must be reactivated by an administrator.",
+        });
+      }
+
+      if (existing.registeredByUserId !== args.registeredByUserId) {
+        return userError({
+          code: "authorization_failed",
+          message:
+            "This terminal is already registered to another signed-in user.",
+        });
+      }
+
+      if (existing.registerNumber !== nextRegisterNumber) {
+        return userError({
+          code: "validation_failed",
+          message:
+            "This terminal is already assigned to another register number.",
+        });
+      }
+
       await patchTerminalRecord(ctx, existing._id, {
         displayName: args.displayName,
+        syncSecretHash: args.syncSecretHash,
         registeredByUserId: args.registeredByUserId,
         browserInfo: args.browserInfo,
         status: "active",
@@ -101,6 +132,7 @@ export async function registerTerminal(
 
       return ok({
         ...mapTerminalRecord(existing),
+        syncSecretHash: args.syncSecretHash,
         displayName: args.displayName,
         registeredByUserId: args.registeredByUserId,
         browserInfo: args.browserInfo,
@@ -112,6 +144,7 @@ export async function registerTerminal(
     const terminalId = await registerTerminalRecord(ctx, {
       storeId: args.storeId,
       fingerprintHash: args.fingerprintHash,
+      syncSecretHash: args.syncSecretHash,
       displayName: args.displayName,
       registerNumber: nextRegisterNumber,
       registeredByUserId: args.registeredByUserId,
@@ -121,7 +154,10 @@ export async function registerTerminal(
     });
     const terminal = await getTerminalById(ctx, terminalId);
 
-    return ok(mapTerminalRecord(terminal!));
+    return ok({
+      ...mapTerminalRecord(terminal!),
+      syncSecretHash: args.syncSecretHash,
+    });
   } catch (error) {
     const mappedError = mapRegisterTerminalError(error);
     if (mappedError) {

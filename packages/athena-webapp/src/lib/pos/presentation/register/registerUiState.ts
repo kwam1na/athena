@@ -1,6 +1,7 @@
 import type { FormEvent } from "react";
 
 import type { CommandApprovalDialogProps } from "@/components/operations/CommandApprovalDialog";
+import type { StaffAuthenticationResult } from "@/components/staff-auth/StaffAuthenticationDialog";
 import type {
   CustomerInfo,
   CartItem,
@@ -9,6 +10,7 @@ import type {
 } from "@/components/pos/types";
 import type { Id } from "~/convex/_generated/dataModel";
 import type { PosPaymentMethod } from "@/lib/pos/domain";
+import type { PosSyncStatusPresentation } from "@/lib/pos/presentation/syncStatusPresentation";
 
 export interface RegisterHeaderState {
   title: string;
@@ -191,7 +193,9 @@ export interface RegisterAuthDialogState {
   storeId: Id<"store">;
   terminalId: Id<"posTerminal">;
   workflowMode?: RegisterWorkflowMode;
-  onAuthenticated: (staffProfileId: Id<"staffProfile">) => void;
+  onAuthenticated: (
+    result: StaffAuthenticationResult | Id<"staffProfile">,
+  ) => void;
   onDismiss: () => void;
 }
 
@@ -230,6 +234,9 @@ export interface RegisterViewModel {
   cashierCard: RegisterCashierCardState | null;
   drawerGate: RegisterDrawerGateState | null;
   closeoutControl: RegisterCloseoutControlState | null;
+  syncStatus?: (PosSyncStatusPresentation & {
+    onRetrySync?: () => void;
+  }) | null;
   authDialog: RegisterAuthDialogState | null;
   commandApprovalDialog: RegisterCommandApprovalDialogState | null;
   onNavigateBack: () => Promise<void>;

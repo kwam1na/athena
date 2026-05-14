@@ -28,6 +28,10 @@ const mockAuthenticateStaffCredentialForApproval = vi.fn();
 const mockReopenRegisterSessionCloseout = vi.fn();
 const mockCorrectRegisterSessionOpeningFloat = vi.fn();
 const mockNavigateBack = vi.fn();
+const mockUsePosLocalSyncRuntimeStatus = vi.fn();
+const mockAppendLocalEvent = vi.fn();
+const mockMarkLocalEventsSynced = vi.fn();
+const mockWriteLocalCloudMapping = vi.fn();
 
 let mockActiveStore: { _id: Id<"store">; currency: string } | null;
 let mockTerminal:
@@ -95,6 +99,22 @@ let mockActiveSession:
         amount: number;
         timestamp: number;
       }>;
+      localSyncStatus?: {
+        description?: string;
+        label?: string;
+        onRetrySync?: () => void;
+        pendingEventCount?: number;
+        reconciliationItems?: Array<{
+          summary?: string;
+          type?: string;
+        }>;
+        status:
+          | "synced"
+          | "syncing"
+          | "pending_sync"
+          | "locally_closed_pending_sync"
+          | "needs_review";
+      };
       customer: {
         _id: Id<"posCustomer">;
         name: string;
@@ -219,6 +239,20 @@ vi.mock("@/lib/pos/infrastructure/convex/commandGateway", () => ({
   }),
 }));
 
+vi.mock("@/lib/pos/infrastructure/local/usePosLocalSyncRuntime", () => ({
+  usePosLocalSyncRuntimeStatus: (...args: unknown[]) =>
+    mockUsePosLocalSyncRuntimeStatus(...args),
+}));
+
+vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
+  createIndexedDbPosLocalStorageAdapter: vi.fn(() => ({})),
+  createPosLocalStore: vi.fn(() => ({
+    appendEvent: mockAppendLocalEvent,
+    markEventsSynced: mockMarkLocalEventsSynced,
+    writeLocalCloudMapping: mockWriteLocalCloudMapping,
+  })),
+}));
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((nextResolve) => {
@@ -338,6 +372,19 @@ describe("useRegisterViewModel", () => {
     mockRegisterCatalogAvailabilityRows = [];
 
     mockUseQuery.mockImplementation(() => mockCashier);
+    mockUsePosLocalSyncRuntimeStatus.mockReset();
+    mockUsePosLocalSyncRuntimeStatus.mockReturnValue(null);
+    mockAppendLocalEvent.mockReset();
+    mockAppendLocalEvent.mockResolvedValue({
+      ok: true,
+      value: { localEventId: "local-event-1" },
+    });
+    mockMarkLocalEventsSynced.mockReset();
+    mockMarkLocalEventsSynced.mockResolvedValue({ ok: true, value: [] });
+    mockWriteLocalCloudMapping.mockReset();
+    mockWriteLocalCloudMapping.mockResolvedValue({ ok: true, value: {} });
+    (globalThis as typeof globalThis & { indexedDB?: IDBFactory }).indexedDB =
+      {} as IDBFactory;
     mockUseMutation.mockReset();
     mockUseMutation.mockImplementation(
       () => (args: Record<string, unknown>) => {
@@ -489,6 +536,136 @@ describe("useRegisterViewModel", () => {
     expect(result.current.cashierCard?.cashierName).toBe("Ama K.");
     expect(result.current.productEntry.canQuickAddProduct).toBe(true);
     expect(result.current.authDialog?.open).toBe(false);
+    expect(result.current.syncStatus?.status).toBe("synced");
+  });
+
+  it("maps local pending-sync status into POS presentation state", async () => {
+    const onRetrySync = vi.fn();
+    mockActiveSession = {
+      ...mockActiveSession!,
+      localSyncStatus: {
+        status: "pending_sync",
+        pendingEventCount: 3,
+        onRetrySync,
+      },
+    };
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    expect(result.current.syncStatus).toEqual(
+      expect.objectContaining({
+        description:
+          "Register activity is saved locally and will sync when ready.",
+        label: "Pending sync",
+        pendingEventCount: 3,
+        status: "pending_sync",
+        tone: "warning",
+      }),
+    );
+
+    act(() => {
+      result.current.syncStatus?.onRetrySync?.();
+    });
+
+    expect(onRetrySync).toHaveBeenCalled();
+  });
+
+  it("uses pending status from the local-first runtime before Convex session state", async () => {
+    const onRetrySync = vi.fn();
+    mockUsePosLocalSyncRuntimeStatus.mockReturnValue({
+      status: "pending",
+      pendingEventCount: 2,
+      onRetrySync,
+    });
+    mockActiveSession = {
+      ...mockActiveSession!,
+      localSyncStatus: {
+        status: "synced",
+      },
+    };
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    expect(mockUsePosLocalSyncRuntimeStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    );
+    expect(result.current.syncStatus).toEqual(
+      expect.objectContaining({
+        label: "Pending sync",
+        pendingEventCount: 2,
+        status: "pending_sync",
+        tone: "warning",
+      }),
+    );
+
+    act(() => {
+      result.current.syncStatus?.onRetrySync?.();
+    });
+
+    expect(onRetrySync).toHaveBeenCalled();
+  });
+
+  it("maps local reconciliation exceptions without blocking the retry callback", async () => {
+    const onRetrySync = vi.fn();
+    mockActiveSession = {
+      ...mockActiveSession!,
+      localSyncStatus: {
+        status: "needs_review",
+        reconciliationItems: [
+          {
+            summary: "Payment record needs manager review.",
+            type: "payment_conflict",
+          },
+        ],
+        onRetrySync,
+      },
+    };
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    expect(result.current.syncStatus).toEqual(
+      expect.objectContaining({
+        label: "Needs review",
+        reconciliationItems: [
+          {
+            summary: "Payment record needs manager review.",
+            type: "payment_conflict",
+          },
+        ],
+        status: "needs_review",
+        tone: "danger",
+      }),
+    );
+
+    act(() => {
+      result.current.syncStatus?.onRetrySync?.();
+    });
+
+    expect(onRetrySync).toHaveBeenCalled();
   });
 
   it("holds the active POS session before signing the cashier out when session data is present", async () => {
@@ -723,7 +900,81 @@ describe("useRegisterViewModel", () => {
       registerSessionId: "drawer-1",
       storeId: "store-1",
     });
+    await waitFor(() =>
+      expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "register.closeout_started",
+          localRegisterSessionId: "drawer-1",
+          payload: expect.objectContaining({
+            countedCash: 4_800,
+            notes: "End of shift count",
+          }),
+        }),
+      ),
+    );
+    expect(mockMarkLocalEventsSynced).toHaveBeenCalledWith(["local-event-1"]);
     expect(toast.success).toHaveBeenCalledWith("Register session closed");
+  });
+
+  it("records a pending local closeout when cloud closeout fails", async () => {
+    mockRegisterState = {
+      phase: "active",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
+      activeRegisterSession: {
+        _id: "drawer-1",
+        status: "closing",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        openingFloat: 5_000,
+        expectedCash: 5_000,
+        openedAt: Date.now(),
+      },
+      activeSession: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+    mockSubmitRegisterSessionCloseout.mockResolvedValueOnce(
+      userError({
+        code: "unavailable",
+        message: "Connection unavailable.",
+      }),
+    );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.drawerGate?.onCloseoutCountedCashChange?.("50.00");
+    });
+
+    await act(async () => {
+      await result.current.drawerGate?.onSubmitCloseout?.();
+    });
+
+    await waitFor(() =>
+      expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "register.closeout_started",
+          localRegisterSessionId: "drawer-1",
+          staffProfileId: "staff-1",
+          payload: expect.objectContaining({
+            countedCash: 5_000,
+            notes: null,
+          }),
+        }),
+      ),
+    );
+    expect(mockMarkLocalEventsSynced).not.toHaveBeenCalled();
+    expect(toast.success).toHaveBeenCalledWith(
+      "Register session closed locally. It will sync when ready.",
+    );
   });
 
   it("requires closeout notes for POS closeout variance", async () => {
@@ -1171,6 +1422,15 @@ describe("useRegisterViewModel", () => {
       registerSessionId: "drawer-1",
       storeId: "store-1",
     });
+    await waitFor(() =>
+      expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "register.reopened",
+          localRegisterSessionId: "drawer-1",
+        }),
+      ),
+    );
+    expect(mockMarkLocalEventsSynced).toHaveBeenCalledWith(["local-event-1"]);
     expect(toast.success).toHaveBeenCalledWith("Register reopened");
   });
 
@@ -1337,6 +1597,81 @@ describe("useRegisterViewModel", () => {
     expect(mockAddItem).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalledWith(
       "Drawer closed. Open the drawer before adding items.",
+    );
+  });
+
+  it("records synced local session and cart events after starting a sale online", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
+      activeRegisterSession: {
+        _id: "drawer-1",
+        status: "open",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        openingFloat: 5_000,
+        expectedCash: 5_000,
+        openedAt: Date.now(),
+      },
+      activeSession: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    await act(async () => {
+      await result.current.productEntry.onAddProduct({
+        id: "sku-2",
+        name: "Deep Wave",
+        price: 100,
+        barcode: "1234567890123",
+        productId: "product-2" as Id<"product">,
+        skuId: "sku-2" as Id<"productSku">,
+        sku: "DW-18",
+        category: "Hair",
+        description: "Deep wave bundle",
+        image: null,
+        inStock: true,
+        quantityAvailable: 5,
+      });
+    });
+
+    await waitFor(() =>
+      expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "session.started",
+          localRegisterSessionId: "drawer-1",
+          localPosSessionId: "session-2",
+        }),
+      ),
+    );
+    expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "cart.item_added",
+        localRegisterSessionId: "drawer-1",
+        localPosSessionId: "session-2",
+        payload: expect.objectContaining({
+          localItemId: "item-2",
+          productSkuId: "sku-2",
+          quantity: 1,
+        }),
+      }),
+    );
+    expect(mockWriteLocalCloudMapping).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entity: "posSession",
+        localId: "session-2",
+        cloudId: "session-2",
+      }),
     );
   });
 
@@ -2006,6 +2341,286 @@ describe("useRegisterViewModel", () => {
     expect(mockStartSession).not.toHaveBeenCalled();
   });
 
+  it("records a synced local drawer-open event after opening the drawer online", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
+      activeRegisterSession: null,
+      activeSession: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.drawerGate?.onOpeningFloatChange?.("50.00");
+    });
+
+    await act(async () => {
+      await result.current.drawerGate?.onSubmit?.();
+    });
+
+    await waitFor(() =>
+      expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "register.opened",
+          localRegisterSessionId: "drawer-2",
+          payload: expect.objectContaining({
+            openingFloat: 5_000,
+          }),
+        }),
+      ),
+    );
+    expect(mockWriteLocalCloudMapping).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entity: "registerSession",
+        localId: "drawer-2",
+        cloudId: "drawer-2",
+      }),
+    );
+    expect(mockMarkLocalEventsSynced).toHaveBeenCalledWith(["local-event-1"]);
+  });
+
+  it("lets a pending local drawer open build an offline cart without cloud drawer or session ids", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
+      activeRegisterSession: null,
+      activeSession: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+    mockOpenDrawer.mockResolvedValueOnce(
+      userError({
+        code: "unavailable",
+        message: "Connection unavailable.",
+      }),
+    );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated({
+        staffProfileId: "staff-1" as Id<"staffProfile">,
+        staffProfile: {
+          firstName: "Ama",
+          lastName: "Kusi",
+        },
+        posLocalStaffProof: {
+          expiresAt: Date.now() + 60_000,
+          token: "staff-proof-token",
+        },
+      });
+    });
+
+    act(() => {
+      result.current.drawerGate?.onOpeningFloatChange?.("50.00");
+      result.current.drawerGate?.onNotesChange?.("Opening float ready");
+    });
+
+    await act(async () => {
+      await result.current.drawerGate?.onSubmit?.();
+    });
+
+    await waitFor(() =>
+      expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "register.opened",
+          localRegisterSessionId: expect.stringMatching(
+            /^local-register-terminal-1-/,
+          ),
+          staffProofToken: "staff-proof-token",
+          payload: expect.objectContaining({
+            openingFloat: 5_000,
+            notes: "Opening float ready",
+          }),
+        }),
+      ),
+    );
+    expect(mockMarkLocalEventsSynced).not.toHaveBeenCalled();
+    expect(toast.success).toHaveBeenCalledWith(
+      "Drawer opening saved locally. It will sync when ready.",
+    );
+    expect(toast.success).not.toHaveBeenCalledWith("Drawer open");
+    await waitFor(() => expect(result.current.drawerGate).toBeNull());
+    expect(result.current.productEntry.disabled).toBe(false);
+    expect(result.current.syncStatus).toEqual(
+      expect.objectContaining({
+        status: "pending_sync",
+        label: "Pending sync",
+      }),
+    );
+    expect(mockStartSession).not.toHaveBeenCalled();
+
+    let added = false;
+    await act(async () => {
+      added = await result.current.productEntry.onAddProduct({
+        id: "sku-2",
+        name: "Deep Wave",
+        price: 100,
+        barcode: "1234567890123",
+        productId: "product-2" as Id<"product">,
+        skuId: "sku-2" as Id<"productSku">,
+        sku: "DW-18",
+        category: "Hair",
+        description: "Deep wave bundle",
+        image: null,
+        inStock: true,
+        quantityAvailable: 5,
+      });
+    });
+
+    expect(added).toBe(true);
+    expect(mockStartSession).not.toHaveBeenCalled();
+    expect(mockAddItem).not.toHaveBeenCalled();
+    expect(result.current.cart.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "Deep Wave",
+          skuId: "sku-2",
+          quantity: 1,
+        }),
+      ]),
+    );
+    await waitFor(() =>
+      expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "session.started",
+          localRegisterSessionId: expect.stringMatching(
+            /^local-register-terminal-1-/,
+          ),
+          localPosSessionId: expect.stringMatching(/^local-pos-session-/),
+          staffProofToken: "staff-proof-token",
+        }),
+      ),
+    );
+    expect(mockAppendLocalEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "cart.item_added",
+      }),
+    );
+
+    await act(async () => {
+      await result.current.cart.onUpdateQuantity(
+        "optimistic:sku-2" as Id<"posSessionItem">,
+        2,
+      );
+    });
+    expect(mockAddItem).not.toHaveBeenCalled();
+    expect(result.current.cart.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          skuId: "sku-2",
+          quantity: 2,
+        }),
+      ]),
+    );
+
+    await act(async () => {
+      await result.current.cart.onRemoveItem(
+        "optimistic:sku-2" as Id<"posSessionItem">,
+      );
+    });
+    expect(mockRemoveItem).not.toHaveBeenCalled();
+    expect(result.current.cart.items).toEqual([]);
+
+    await act(async () => {
+      await result.current.productEntry.onAddProduct({
+        id: "sku-2",
+        name: "Deep Wave",
+        price: 100,
+        barcode: "1234567890123",
+        productId: "product-2" as Id<"product">,
+        skuId: "sku-2" as Id<"productSku">,
+        sku: "DW-18",
+        category: "Hair",
+        description: "Deep wave bundle",
+        image: null,
+        inStock: true,
+        quantityAvailable: 5,
+      });
+    });
+    await act(async () => {
+      await result.current.cart.onClearCart();
+    });
+    expect(mockReleaseSessionInventoryHoldsAndDeleteItems).not.toHaveBeenCalled();
+    expect(result.current.cart.items).toEqual([]);
+
+    await act(async () => {
+      await result.current.productEntry.onAddProduct({
+        id: "sku-2",
+        name: "Deep Wave",
+        price: 100,
+        barcode: "1234567890123",
+        productId: "product-2" as Id<"product">,
+        skuId: "sku-2" as Id<"productSku">,
+        sku: "DW-18",
+        category: "Hair",
+        description: "Deep wave bundle",
+        image: null,
+        inStock: true,
+        quantityAvailable: 5,
+      });
+    });
+
+    await act(async () => {
+      await result.current.cart.onUpdateQuantity(
+        "optimistic:sku-2" as Id<"posSessionItem">,
+        2,
+      );
+    });
+
+    act(() => {
+      result.current.checkout.onAddPayment("cash", 200);
+    });
+
+    let completed = false;
+    await act(async () => {
+      completed = await result.current.checkout.onCompleteTransaction();
+    });
+
+    expect(completed).toBe(true);
+    expect(mockUpdateSession).not.toHaveBeenCalled();
+    expect(mockCompleteTransaction).not.toHaveBeenCalled();
+    expect(result.current.checkout.completedOrderNumber).toMatch(
+      /^local-txn-/,
+    );
+    expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "transaction.completed",
+        localRegisterSessionId: expect.stringMatching(
+          /^local-register-terminal-1-/,
+        ),
+        localPosSessionId: expect.stringMatching(/^local-pos-session-/),
+        localTransactionId: expect.stringMatching(/^local-txn-/),
+        staffProofToken: "staff-proof-token",
+        payload: expect.objectContaining({
+          total: 200,
+          items: [
+            expect.objectContaining({
+              localItemId: "optimistic:sku-2",
+              productSkuId: "sku-2",
+              price: 100,
+              quantity: 2,
+            }),
+          ],
+          payments: [expect.objectContaining({ method: "cash", amount: 200 })],
+        }),
+      }),
+    );
+  });
+
   it("voids an empty active session when navigating away/unmounting", async () => {
     mockActiveSession = {
       ...mockActiveSession!,
@@ -2330,6 +2945,21 @@ describe("useRegisterViewModel", () => {
     await act(async () => {
       await addPromise;
     });
+    await waitFor(() =>
+      expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "cart.item_added",
+          localRegisterSessionId: "drawer-1",
+          localPosSessionId: "session-1",
+          payload: expect.objectContaining({
+            localItemId: "item-2",
+            productSkuId: "sku-2",
+            quantity: 1,
+          }),
+        }),
+      ),
+    );
+    expect(mockMarkLocalEventsSynced).toHaveBeenCalledWith(["local-event-1"]);
   });
 
   it("optimistically increments existing product selections while the server mutation is pending", async () => {
@@ -2491,6 +3121,228 @@ describe("useRegisterViewModel", () => {
     expect(toast.error).toHaveBeenCalledWith(
       "Deep Wave is no longer available.",
     );
+  });
+
+  it("keeps an optimistic cart item and records a pending local cart event when Convex is unavailable", async () => {
+    mockAddItem.mockResolvedValueOnce(
+      userError({
+        code: "unavailable",
+        message: "Connection unavailable.",
+      }),
+    );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated({
+        staffProfileId: "staff-1" as Id<"staffProfile">,
+        staffProfile: {
+          firstName: "Ama",
+          lastName: "Kusi",
+        },
+        posLocalStaffProof: {
+          expiresAt: Date.now() + 60_000,
+          token: "staff-proof-token",
+        },
+      });
+    });
+
+    let added = false;
+    await act(async () => {
+      added = await result.current.productEntry.onAddProduct({
+        id: "sku-2",
+        name: "Deep Wave",
+        price: 100,
+        barcode: "1234567890123",
+        productId: "product-2" as Id<"product">,
+        skuId: "sku-2" as Id<"productSku">,
+        sku: "DW-18",
+        category: "Hair",
+        description: "Deep wave bundle",
+        image: null,
+        inStock: true,
+        quantityAvailable: 5,
+      });
+    });
+
+    expect(added).toBe(true);
+    expect(result.current.cart.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "Deep Wave",
+          skuId: "sku-2",
+          quantity: 1,
+        }),
+      ]),
+    );
+    expect(mockAppendLocalEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "cart.item_added",
+      }),
+    );
+    expect(mockMarkLocalEventsSynced).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalledWith("Connection unavailable.");
+    expect(toast.success).toHaveBeenCalledWith(
+      "Item added to local sale. Complete the sale to sync it.",
+    );
+  });
+
+  it("snapshots fallback cart items into a pending local sale when cloud completion fails", async () => {
+    mockAddItem.mockResolvedValueOnce(
+      userError({
+        code: "unavailable",
+        message: "Connection unavailable.",
+      }),
+    );
+    mockCompleteTransaction.mockResolvedValueOnce(
+      userError({
+        code: "unavailable",
+        message: "Connection unavailable.",
+      }),
+    );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated({
+        staffProfileId: "staff-1" as Id<"staffProfile">,
+        staffProfile: {
+          firstName: "Ama",
+          lastName: "Kusi",
+        },
+        posLocalStaffProof: {
+          expiresAt: Date.now() + 60_000,
+          token: "staff-proof-token",
+        },
+      });
+    });
+
+    await act(async () => {
+      await result.current.productEntry.onAddProduct({
+        id: "sku-2",
+        name: "Deep Wave",
+        price: 100,
+        barcode: "1234567890123",
+        productId: "product-2" as Id<"product">,
+        skuId: "sku-2" as Id<"productSku">,
+        sku: "DW-18",
+        category: "Hair",
+        description: "Deep wave bundle",
+        image: null,
+        inStock: true,
+        quantityAvailable: 5,
+      });
+    });
+
+    await act(async () => {
+      await result.current.cart.onUpdateQuantity(
+        "optimistic:sku-2" as Id<"posSessionItem">,
+        2,
+      );
+    });
+    act(() => {
+      result.current.checkout.onAddPayment("cash", 200);
+    });
+
+    let completed = false;
+    await act(async () => {
+      completed = await result.current.checkout.onCompleteTransaction();
+    });
+
+    expect(completed).toBe(true);
+    expect(mockAppendLocalEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "cart.item_added",
+      }),
+    );
+    expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "transaction.completed",
+        localRegisterSessionId: "drawer-1",
+        localPosSessionId: "session-1",
+        staffProofToken: "staff-proof-token",
+        payload: expect.objectContaining({
+          items: expect.arrayContaining([
+            expect.objectContaining({
+              localItemId: "optimistic:sku-2",
+              productSkuId: "sku-2",
+              price: 100,
+              quantity: 2,
+            }),
+          ]),
+          payments: [expect.objectContaining({ method: "cash", amount: 200 })],
+        }),
+      }),
+    );
+  });
+
+  it("does not claim a local cart add when the sale session cannot be opened", async () => {
+    mockRegisterState = {
+      phase: "active",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
+      activeRegisterSession: {
+        _id: "drawer-1",
+        status: "open",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        openingFloat: 5_000,
+        expectedCash: 5_000,
+        openedAt: Date.now(),
+      },
+      activeSession: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+    mockStartSession.mockResolvedValueOnce(
+      userError({
+        code: "unavailable",
+        message: "Connection unavailable.",
+      }),
+    );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated({
+        staffProfileId: "staff-1" as Id<"staffProfile">,
+        staffProfile: {
+          firstName: "Ama",
+          lastName: "Kusi",
+        },
+        posLocalStaffProof: {
+          expiresAt: Date.now() + 60_000,
+          token: "staff-proof-token",
+        },
+      });
+    });
+
+    let added = true;
+    await act(async () => {
+      added = await result.current.productEntry.onAddProduct({
+        id: "sku-2",
+        name: "Deep Wave",
+        price: 100,
+        barcode: "1234567890123",
+        productId: "product-2" as Id<"product">,
+        skuId: "sku-2" as Id<"productSku">,
+        sku: "DW-18",
+        category: "Hair",
+        description: "Deep wave bundle",
+        image: null,
+        inStock: true,
+        quantityAvailable: 5,
+      });
+    });
+
+    expect(added).toBe(false);
+    expect(mockAddItem).not.toHaveBeenCalled();
+    expect(mockAppendLocalEvent).not.toHaveBeenCalled();
+    expect(result.current.cart.items).toEqual([]);
+    expect(toast.error).toHaveBeenCalledWith("Connection unavailable.");
   });
 
   it("rolls back optimistic existing product selections when the server update fails", async () => {
@@ -2996,13 +3848,40 @@ describe("useRegisterViewModel", () => {
       }),
     );
     expect(mockCompleteTransaction).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "transaction.completed",
+          localRegisterSessionId: "drawer-1",
+          localPosSessionId: "session-1",
+          payload: expect.objectContaining({
+            receiptNumber: "TXN-0001",
+            items: [
+              expect.objectContaining({
+                localItemId: "item-1",
+                productSkuId: "sku-1",
+                quantity: 1,
+                price: 120,
+              }),
+            ],
+            payments: [
+              expect.objectContaining({
+                method: "cash",
+                amount: 120,
+              }),
+            ],
+          }),
+        }),
+      ),
+    );
+    expect(mockMarkLocalEventsSynced).toHaveBeenCalledWith(["local-event-1"]);
   });
 
-  it("keeps the sale editable when completion fails", async () => {
+  it("records a pending local sale when cloud completion fails", async () => {
     mockCompleteTransaction.mockResolvedValueOnce(
       userError({
-        code: "conflict",
-        message: "Open the cash drawer before completing this sale.",
+        code: "unavailable",
+        message: "Connection unavailable.",
       }),
     );
 
@@ -3024,16 +3903,26 @@ describe("useRegisterViewModel", () => {
       completed = await result.current.checkout.onCompleteTransaction();
     });
 
-    expect(completed).toBe(false);
-    expect(result.current.checkout.isTransactionCompleted).toBe(false);
-    expect(result.current.checkout.completedOrderNumber).toBeNull();
-    expect(result.current.checkout.cartItems).toHaveLength(1);
-    expect(result.current.checkout.payments).toEqual([
-      expect.objectContaining({ method: "cash", amount: 120 }),
-    ]);
-    expect(result.current.productEntry.disabled).toBe(false);
-    expect(toast.error).toHaveBeenCalledWith(
-      "Drawer closed. Open the drawer before completing this sale.",
+    expect(completed).toBe(true);
+    expect(result.current.checkout.isTransactionCompleted).toBe(true);
+    expect(result.current.checkout.completedOrderNumber).toMatch(/^local-txn-/);
+    await waitFor(() =>
+      expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "transaction.completed",
+          localRegisterSessionId: "drawer-1",
+          localPosSessionId: "session-1",
+          staffProfileId: "staff-1",
+          payload: expect.objectContaining({
+            items: [expect.objectContaining({ localItemId: "item-1" })],
+            payments: [expect.objectContaining({ method: "cash", amount: 120 })],
+          }),
+        }),
+      ),
+    );
+    expect(mockMarkLocalEventsSynced).not.toHaveBeenCalled();
+    expect(toast.success).toHaveBeenCalledWith(
+      "Sale completed locally. It will sync when ready.",
     );
   });
 

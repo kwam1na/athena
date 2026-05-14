@@ -675,15 +675,22 @@ describe("HARNESS_APP_REGISTRY", () => {
     expect(workflowTraceScenario?.touchedPaths).toEqual([
       "convex/workflowTraces",
       "convex/schemas/observability",
+      "convex/pos/application/sync",
+      "convex/pos/application/commands/terminals.ts",
       "convex/pos/application/commands/completeTransaction.ts",
       "convex/pos/application/commands/posSessionTracing.ts",
       "convex/pos/application/queries/getTransactions.ts",
+      "convex/pos/public/sync.ts",
+      "convex/pos/public/terminals.ts",
       "convex/pos/public/transactions.ts",
       "convex/inventory/posSessions.ts",
       "convex/operations/registerSessionTracing.ts",
       "convex/operations/registerSessions.ts",
       "convex/cashControls/closeouts.ts",
       "convex/cashControls/deposits.ts",
+      "convex/schemas/pos/posLocalSyncConflict.ts",
+      "convex/schemas/pos/posLocalSyncEvent.ts",
+      "convex/schemas/pos/posLocalSyncMapping.ts",
       "convex/schemas/pos/posTransaction.ts",
       "shared/workflowTrace.ts",
       "src/components/traces",
@@ -691,7 +698,9 @@ describe("HARNESS_APP_REGISTRY", () => {
       "src/components/pos/register",
       "src/components/pos/session/HeldSessionsList.tsx",
       "src/components/pos/transactions",
+      "src/lib/pos/infrastructure/local",
       "src/lib/pos/presentation/register",
+      "src/lib/pos/presentation/syncStatusPresentation.ts",
       "src/components/cash-controls/CashControlsDashboard.tsx",
       "src/components/cash-controls/RegisterSessionView.tsx",
       "src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces",
@@ -700,7 +709,7 @@ describe("HARNESS_APP_REGISTRY", () => {
       {
         kind: "raw",
         command:
-          "bun run --filter '@athena/webapp' test -- convex/workflowTraces/presentation.test.ts convex/workflowTraces/queryUsage.test.ts convex/workflowTraces/schemaIndexes.test.ts convex/workflowTraces/adapters/posSession.test.ts convex/workflowTraces/adapters/registerSession.test.ts convex/pos/application/completeTransaction.test.ts convex/pos/application/getTransactions.test.ts convex/pos/application/posSessionTracing.test.ts convex/inventory/posSessions.trace.test.ts convex/operations/registerSessionTracing.test.ts convex/operations/registerSessions.trace.test.ts convex/cashControls/registerSessionTraceLifecycle.test.ts src/components/traces/WorkflowTraceView.test.tsx 'src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId.test.tsx' src/components/pos/transactions/transactionColumns.test.tsx src/components/pos/transactions/TransactionView.test.tsx src/components/pos/transactions/TransactionsView.test.tsx src/components/pos/SessionManager.test.tsx src/components/pos/register/POSRegisterView.test.tsx src/components/pos/session/HeldSessionsList.test.tsx src/lib/pos/presentation/register/useRegisterViewModel.test.ts src/components/cash-controls/CashControlsDashboard.test.tsx src/components/cash-controls/RegisterSessionView.test.tsx src/lib/traces/createWorkflowTraceId.test.ts",
+          "bun run --filter '@athena/webapp' test -- convex/workflowTraces/presentation.test.ts convex/workflowTraces/queryUsage.test.ts convex/workflowTraces/schemaIndexes.test.ts convex/workflowTraces/adapters/posSession.test.ts convex/workflowTraces/adapters/registerSession.test.ts convex/pos/application/completeTransaction.test.ts convex/pos/application/getTransactions.test.ts convex/pos/application/posSessionTracing.test.ts convex/pos/application/terminals.test.ts convex/pos/application/sync/ingestLocalEvents.test.ts convex/pos/application/sync/projectLocalEvents.test.ts convex/pos/public/sync.test.ts convex/pos/public/terminals.test.ts convex/inventory/posSessions.trace.test.ts convex/operations/registerSessionTracing.test.ts convex/operations/registerSessions.trace.test.ts convex/cashControls/registerSessionTraceLifecycle.test.ts src/components/traces/WorkflowTraceView.test.tsx 'src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/traces/$traceId.test.tsx' src/components/pos/transactions/transactionColumns.test.tsx src/components/pos/transactions/TransactionView.test.tsx src/components/pos/transactions/TransactionsView.test.tsx src/components/pos/SessionManager.test.tsx src/components/pos/register/POSRegisterView.test.tsx src/components/pos/session/HeldSessionsList.test.tsx src/lib/pos/infrastructure/local/posLocalStore.test.ts src/lib/pos/infrastructure/local/syncContract.test.ts src/lib/pos/infrastructure/local/syncScheduler.test.ts src/lib/pos/infrastructure/local/syncStatus.test.ts src/lib/pos/presentation/register/useRegisterViewModel.test.ts src/components/cash-controls/CashControlsDashboard.test.tsx src/components/cash-controls/RegisterSessionView.test.tsx src/lib/traces/createWorkflowTraceId.test.ts",
       },
       { kind: "script", script: "audit:convex" },
       { kind: "script", script: "lint:convex:changed" },
@@ -711,7 +720,7 @@ describe("HARNESS_APP_REGISTRY", () => {
       { kind: "script", script: "build" },
     ]);
     expect(workflowTraceScenario?.note).toBe(
-      "Use this when the shared workflow-trace contract, the POS register bootstrap or drawer gate, the `pos_session` / `register_session` trace writers, the trace route/view, or POS register, transaction, and cash-controls trace entry points change. It exercises the trace schema and presentation contract, the session/register trace writers, the drawer-open bootstrap handoff, the shared trace route, and the operator-facing POS and cash-controls surfaces before broader package validation."
+      "Use this when the shared workflow-trace contract, POS local-first sync/storage/projection files, the POS register bootstrap or drawer gate, the `pos_session` / `register_session` trace writers, the trace route/view, or POS register, transaction, and cash-controls trace entry points change. It exercises the trace schema and presentation contract, the session/register trace writers, local sync ingestion/projection adjacency, the drawer-open bootstrap handoff, the shared trace route, and the operator-facing POS and cash-controls surfaces before broader package validation."
     );
     expect(workflowTraceScenario?.behaviorScenarios).toEqual([
       "athena-admin-shell-boot",

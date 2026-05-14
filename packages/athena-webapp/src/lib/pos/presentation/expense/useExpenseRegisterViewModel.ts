@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useQuery } from "convex/react";
 import { useMutation } from "convex/react";
 
+import type { StaffAuthenticationResult } from "@/components/staff-auth/StaffAuthenticationDialog";
 import { useExpenseActiveSession } from "@/hooks/useExpenseSessions";
 import { useExpenseOperations } from "@/hooks/useExpenseOperations";
 import { useSessionManagementExpense } from "@/hooks/useSessionManagementExpense";
@@ -140,8 +141,12 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
   );
 
   const handleCashierAuthenticated = useCallback(
-    (staffProfileId: Id<"staffProfile">) => {
-      store.setCashier(staffProfileId);
+    (result: Id<"staffProfile"> | StaffAuthenticationResult) => {
+      store.setCashier(
+        typeof result === "string"
+          ? (result as Id<"staffProfile">)
+          : result.staffProfileId,
+      );
       resetAutoSessionInitialized();
     },
     [resetAutoSessionInitialized, store],
@@ -442,8 +447,6 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
     activeSessionQuery?._id,
     cart,
     releaseSessionInventoryHoldsAndDeleteItems,
-    store.session.currentSessionId,
-    store.session.isUpdating,
     store,
   ]);
 
@@ -486,12 +489,7 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
     }
   }, [
     activeSessionQuery?._id,
-    cart,
     completeExpenseSession,
-    store.session.currentSessionId,
-    store.cart.items,
-    store.cart.total,
-    store.ui.notes,
     store,
     resetAutoSessionInitialized,
   ]);

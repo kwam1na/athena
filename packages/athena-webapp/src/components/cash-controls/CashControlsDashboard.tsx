@@ -28,6 +28,12 @@ import {
 } from "../ui/table";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import { formatStaffDisplayName } from "~/shared/staffDisplayName";
+import {
+  buildPosSyncStatusPresentation,
+  formatPosReconciliationType,
+  type PosReconciliationItem,
+  type PosSyncStatusPresentation,
+} from "@/lib/pos/presentation/syncStatusPresentation";
 
 const CLOSED_SESSION_PREVIEW_LIMIT = 3;
 
@@ -54,6 +60,14 @@ export type CashControlsDashboardSession = {
   totalDeposited: number;
   variance?: number;
   workflowTraceId?: string | null;
+  localSyncStatus?: {
+    description?: string | null;
+    label?: string | null;
+    pendingEventCount?: number | null;
+    reconciliationItems?: PosReconciliationItem[] | null;
+    status?: string | null;
+  } | null;
+  reconciliationItems?: PosReconciliationItem[] | null;
 };
 
 export type CashControlsDashboardDeposit = {
@@ -264,7 +278,37 @@ function getSessionActionLabel(session: CashControlsDashboardSession) {
 }
 
 function needsVarianceReview(session: CashControlsDashboardSession) {
-  return Boolean(session.pendingApprovalRequest || session.variance);
+  const syncStatus = getSessionSyncStatus(session);
+  return Boolean(
+    session.pendingApprovalRequest ||
+      session.variance ||
+      syncStatus.status === "needs_review",
+  );
+}
+
+function getSessionSyncStatus(
+  session: CashControlsDashboardSession,
+): PosSyncStatusPresentation {
+  return buildPosSyncStatusPresentation({
+    ...session.localSyncStatus,
+    reconciliationItems:
+      session.localSyncStatus?.reconciliationItems ??
+      session.reconciliationItems ??
+      [],
+  });
+}
+
+function getSyncBadgeClass(tone: PosSyncStatusPresentation["tone"]) {
+  switch (tone) {
+    case "success":
+      return "border-transparent bg-success/10 text-success";
+    case "danger":
+      return "border-transparent bg-danger/10 text-danger";
+    case "warning":
+      return "border-transparent bg-warning/15 text-warning";
+    default:
+      return "border-border bg-background text-muted-foreground";
+  }
 }
 
 function formatStaffByline(staffName?: string | null) {
@@ -345,6 +389,9 @@ function DrawerSessionCard({
   const showVariance = variance !== 0;
   const showCountedCash = variance !== 0 && session.countedCash !== undefined;
   const showDeposited = session.totalDeposited > 0;
+  const syncStatus = getSessionSyncStatus(session);
+  const showSyncBadge = syncStatus.status !== "synced";
+  const firstReconciliationItem = syncStatus.reconciliationItems[0];
   const metricColumnCount =
     1 +
     (showDeposited ? 1 : 0) +
@@ -389,6 +436,17 @@ function DrawerSessionCard({
               variant="outline"
             >
               Needs review
+            </Badge>
+          ) : null}
+          {showSyncBadge ? (
+            <Badge
+              className={getSyncBadgeClass(syncStatus.tone)}
+              size="sm"
+              variant="outline"
+            >
+              {syncStatus.status === "locally_closed_pending_sync"
+                ? "Pending reconciliation"
+                : syncStatus.label}
             </Badge>
           ) : null}
           <Badge
@@ -465,6 +523,18 @@ function DrawerSessionCard({
         {getSessionActionLabel(session)}
         <ArrowRight aria-hidden className="h-4 w-4" />
       </span>
+      {showSyncBadge ? (
+        <p className="mt-layout-xs text-xs leading-5 text-muted-foreground">
+          {syncStatus.description}
+        </p>
+      ) : null}
+      {syncStatus.status === "needs_review" && firstReconciliationItem ? (
+        <p className="mt-layout-xs text-xs leading-5 text-danger">
+          {formatPosReconciliationType(firstReconciliationItem.type)}:{" "}
+          {firstReconciliationItem.summary?.trim() ||
+            "Review synced register activity before closeout is settled."}
+        </p>
+      ) : null}
     </Link>
   );
 }
@@ -840,7 +910,9 @@ function CashroomWorkflow({
   const sessions = snapshot.registerSessions;
   const needsAttention = sessions.filter(
     (session) =>
-      session.status === "closing" || Boolean(session.pendingApprovalRequest),
+      session.status === "closing" ||
+      Boolean(session.pendingApprovalRequest) ||
+      getSessionSyncStatus(session).status !== "synced",
   );
   const liveDrawers = sessions.filter((session) =>
     ["active", "open"].includes(session.status),

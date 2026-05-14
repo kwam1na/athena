@@ -7,3 +7,8 @@ export * from "./expenseSession";
 export * from "./expenseSessionItem";
 export * from "./expenseTransaction";
 export * from "./expenseTransactionItem";
+export * from "./posLocalSyncConflict";
+export * from "./posLocalSyncCursor";
+export * from "./posLocalSyncEvent";
+export * from "./posLocalSyncMapping";
+export * from "./posLocalStaffProof";

@@ -102,6 +102,7 @@ describe("RegisterSessionView auth readiness", () => {
 
     expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
       "skip",
+      "skip",
     ]);
   });
 
@@ -117,6 +118,7 @@ describe("RegisterSessionView auth readiness", () => {
     expect(screen.getByText("Sign in required")).toBeInTheDocument();
     expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
       "skip",
+      "skip",
     ]);
   });
 
@@ -128,6 +130,10 @@ describe("RegisterSessionView auth readiness", () => {
     expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
       {
         registerSessionId: "session-1",
+        storeId: "store-1",
+      },
+      {
+        status: "active",
         storeId: "store-1",
       },
     ]);

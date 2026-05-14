@@ -66,6 +66,12 @@ import {
 } from "../ui/table";
 import { Textarea } from "../ui/textarea";
 import { WorkflowTraceRouteLink } from "../traces/WorkflowTraceRouteLink";
+import {
+  buildPosSyncStatusPresentation,
+  formatPosReconciliationType,
+  type PosReconciliationItem,
+  type PosSyncStatusPresentation,
+} from "@/lib/pos/presentation/syncStatusPresentation";
 
 const LINKED_TRANSACTIONS_PREVIEW_LIMIT = 5;
 
@@ -100,6 +106,14 @@ type RegisterSessionDetail = {
   totalDeposited: number;
   variance?: number;
   workflowTraceId?: string | null;
+  localSyncStatus?: {
+    description?: string | null;
+    label?: string | null;
+    pendingEventCount?: number | null;
+    reconciliationItems?: PosReconciliationItem[] | null;
+    status?: string | null;
+  } | null;
+  reconciliationItems?: PosReconciliationItem[] | null;
 };
 
 type RegisterSessionDeposit = {
@@ -409,6 +423,74 @@ function getPaymentMethodIcon({
     default:
       return Receipt;
   }
+}
+
+function getSyncBadgeClass(tone: PosSyncStatusPresentation["tone"]) {
+  switch (tone) {
+    case "success":
+      return "border-transparent bg-success/10 text-success";
+    case "danger":
+      return "border-transparent bg-danger/10 text-danger";
+    case "warning":
+      return "border-transparent bg-warning/15 text-warning";
+    default:
+      return "border-border bg-background text-muted-foreground";
+  }
+}
+
+function RegisterSessionSyncNotice({
+  syncStatus,
+}: {
+  syncStatus: PosSyncStatusPresentation;
+}) {
+  if (syncStatus.status === "synced") {
+    return null;
+  }
+
+  const firstReconciliationItem = syncStatus.reconciliationItems[0];
+
+  return (
+    <section
+      className={`rounded-lg border p-layout-md ${
+        syncStatus.tone === "danger"
+          ? "border-danger/25 bg-danger/10"
+          : "border-warning/30 bg-warning/10"
+      }`}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-layout-md">
+        <div className="space-y-1">
+          <p
+            className={`text-[11px] font-medium uppercase tracking-[0.18em] ${
+              syncStatus.tone === "danger" ? "text-danger" : "text-warning"
+            }`}
+          >
+            {syncStatus.status === "locally_closed_pending_sync"
+              ? "Pending reconciliation"
+              : syncStatus.label}
+          </p>
+          <p className="text-sm leading-6 text-muted-foreground">
+            {syncStatus.description}
+          </p>
+          {syncStatus.status === "needs_review" && firstReconciliationItem ? (
+            <p className="text-sm leading-6 text-foreground">
+              {formatPosReconciliationType(firstReconciliationItem.type)}:{" "}
+              {firstReconciliationItem.summary?.trim() ||
+                "Review synced register activity before closeout is settled."}
+            </p>
+          ) : null}
+        </div>
+        <Badge
+          className={getSyncBadgeClass(syncStatus.tone)}
+          size="sm"
+          variant="outline"
+        >
+          {syncStatus.pendingEventCount
+            ? `${syncStatus.pendingEventCount} pending`
+            : syncStatus.label}
+        </Badge>
+      </div>
+    </section>
+  );
 }
 
 export function RegisterSessionViewContent({
@@ -1118,6 +1200,13 @@ export function RegisterSessionViewContent({
   const headerTitle = registerSession
     ? formatRegisterHeaderName(registerSession.registerNumber)
     : "Register detail";
+  const syncStatus = buildPosSyncStatusPresentation({
+    ...registerSession?.localSyncStatus,
+    reconciliationItems:
+      registerSession?.localSyncStatus?.reconciliationItems ??
+      registerSession?.reconciliationItems ??
+      [],
+  });
   const headerTerminalName = registerSession?.terminalName?.trim();
   const sessionCode = registerSession
     ? formatSessionCode(registerSession._id)
@@ -1325,6 +1414,17 @@ export function RegisterSessionViewContent({
                   >
                     {formatStatusLabel(registerSession.status)}
                   </Badge>
+                  {syncStatus.status !== "synced" ? (
+                    <Badge
+                      className={getSyncBadgeClass(syncStatus.tone)}
+                      size="sm"
+                      variant="outline"
+                    >
+                      {syncStatus.status === "locally_closed_pending_sync"
+                        ? "Pending reconciliation"
+                        : syncStatus.label}
+                    </Badge>
+                  ) : null}
                 </>
               ) : null}
             </div>
@@ -1464,6 +1564,9 @@ export function RegisterSessionViewContent({
       />
       <FadeIn>
         <div className="container mx-auto space-y-6 p-6">
+          {registerSession ? (
+            <RegisterSessionSyncNotice syncStatus={syncStatus} />
+          ) : null}
           <section className="overflow-hidden rounded-[calc(var(--radius)*1.35)] border border-border bg-surface shadow-surface">
             {isLoading ? null : !registerSession ? (
               <div className="px-layout-lg py-layout-xl">
@@ -2488,6 +2591,25 @@ export function RegisterSessionView() {
     api.cashControls.deposits.getRegisterSessionSnapshot,
     registerSessionSnapshotArgs,
   );
+  const activeStaffProfiles = useQuery(
+    api.operations.staffProfiles.listStaffProfiles,
+    canQueryProtectedData && activeStore && user?._id
+      ? {
+          status: "active" as const,
+          storeId: activeStore._id,
+        }
+      : "skip",
+  );
+  const actorStaffProfileId = useMemo(
+    () =>
+      activeStaffProfiles?.find(
+        (staffProfile) =>
+          staffProfile.linkedUserId === user?._id &&
+          staffProfile.storeId === activeStore?._id &&
+          staffProfile.status === "active",
+      )?._id,
+    [activeStaffProfiles, activeStore?._id, user?._id],
+  );
   const recordRegisterSessionDeposit = useMutation(
     api.cashControls.deposits.recordRegisterSessionDeposit,
   );
@@ -2806,9 +2928,13 @@ export function RegisterSessionView() {
 
   return (
     <RegisterSessionViewContent
+      actorStaffProfileId={actorStaffProfileId}
       actorUserId={user?._id}
       currency={activeStore.currency || "USD"}
-      isLoading={registerSessionSnapshot === undefined}
+      isLoading={
+        registerSessionSnapshot === undefined ||
+        (user?._id !== undefined && activeStaffProfiles === undefined)
+      }
       onAuthenticateForApproval={onAuthenticateForApproval}
       onAuthenticateCloseoutReviewApproval={
         onAuthenticateCloseoutReviewApproval

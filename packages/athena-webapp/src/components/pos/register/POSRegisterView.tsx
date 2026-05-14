@@ -14,8 +14,12 @@ import View from "@/components/View";
 import { cn } from "~/src/lib/utils";
 import {
   ArrowRight,
+  AlertTriangle,
   CheckCircle2,
   Circle,
+  Cloud,
+  CloudUpload,
+  RefreshCw,
   ScanBarcode,
   Search,
   ShoppingBasket,
@@ -184,6 +188,97 @@ function CartCountSummary({
         </div>
       </div>
     </button>
+  );
+}
+
+function RegisterSyncStatusChip({
+  syncStatus,
+}: {
+  syncStatus: RegisterViewModel["syncStatus"];
+}) {
+  if (!syncStatus) {
+    return null;
+  }
+
+  const Icon =
+    syncStatus.status === "needs_review"
+      ? AlertTriangle
+      : syncStatus.status === "syncing"
+        ? CloudUpload
+        : syncStatus.status === "synced"
+          ? CheckCircle2
+          : Cloud;
+  const className =
+    syncStatus.tone === "success"
+      ? "border-success/25 bg-success/10 text-success"
+      : syncStatus.tone === "danger"
+        ? "border-danger/25 bg-danger/10 text-danger"
+        : syncStatus.tone === "warning"
+          ? "border-warning/30 bg-warning/15 text-warning"
+          : "border-border bg-background text-muted-foreground";
+
+  return (
+    <div
+      className={cn(
+        "inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium",
+        className,
+      )}
+    >
+      <Icon aria-hidden className="h-3.5 w-3.5 shrink-0" />
+      <span className="truncate">{syncStatus.label}</span>
+      {syncStatus.pendingEventCount ? (
+        <span className="font-numeric tabular-nums">
+          {syncStatus.pendingEventCount}
+        </span>
+      ) : null}
+      {syncStatus.status !== "synced" && syncStatus.onRetrySync ? (
+        <button
+          aria-label="Retry POS sync"
+          className="ml-1 rounded-full p-0.5 transition hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={syncStatus.onRetrySync}
+          type="button"
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function LocalRegisterClosedWorkspace({
+  syncStatus,
+}: {
+  syncStatus: NonNullable<RegisterViewModel["syncStatus"]>;
+}) {
+  return (
+    <section className="flex h-full min-h-0 items-center justify-center rounded-lg border border-warning/30 bg-warning/10 px-layout-lg py-layout-xl text-center">
+      <div className="max-w-xl space-y-layout-md">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-warning/30 bg-background text-warning">
+          <Cloud aria-hidden className="h-5 w-5" />
+        </div>
+        <div className="space-y-layout-xs">
+          <p className="text-xs font-medium uppercase tracking-[0.18em] text-warning">
+            Pending sync
+          </p>
+          <h2 className="font-display text-2xl font-semibold text-foreground">
+            Register closed locally
+          </h2>
+          <p className="text-sm leading-6 text-muted-foreground">
+            {syncStatus.description}
+          </p>
+        </div>
+        {syncStatus.onRetrySync ? (
+          <button
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            onClick={syncStatus.onRetrySync}
+            type="button"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Retry sync
+          </button>
+        ) : null}
+      </div>
+    </section>
   );
 }
 
@@ -385,6 +480,9 @@ export function POSRegisterView({
       cashierCount: viewModel.cashierCard ? 1 : 0,
       nextStep: "ready",
     } satisfies RegisterViewModel["onboarding"]);
+  const isLocallyClosedPendingSync =
+    isPosWorkflow &&
+    viewModel.syncStatus?.status === "locally_closed_pending_sync";
   const shouldShowOnboarding =
     isPosWorkflow &&
     onboardingState.shouldShow &&
@@ -399,14 +497,16 @@ export function POSRegisterView({
     !viewModel.checkout.isTransactionCompleted;
   const canSearchProducts =
     !viewModel.checkout.isTransactionCompleted &&
+    !isLocallyClosedPendingSync &&
     !viewModel.drawerGate &&
     !isAwaitingCashierAuth &&
     !shouldShowOnboarding &&
     !isResolvingRegisterSetup;
   const isHeaderProductSearchSupported =
     isSessionActive && canSearchProducts && !viewModel.productEntry.disabled;
-  const shouldRenderSaleSurface =
-    isPosWorkflow ? !viewModel.checkout.isTransactionCompleted : true;
+  const shouldRenderSaleSurface = isPosWorkflow
+    ? !viewModel.checkout.isTransactionCompleted && !isLocallyClosedPendingSync
+    : true;
   const shouldRenderExpenseCompletionPanel = !isPosWorkflow;
   const shouldRenderCheckoutPanel =
     isPosWorkflow || shouldRenderExpenseCompletionPanel;
@@ -432,7 +532,8 @@ export function POSRegisterView({
     !isResolvingRegisterSetup &&
     (shouldRenderCartSidebar ||
       shouldRenderCheckoutPanel ||
-      isAwaitingCashierAuth);
+      isAwaitingCashierAuth) &&
+    !isLocallyClosedPendingSync;
 
   useEffect(() => {
     const handleCmdK = (event: KeyboardEvent) => {
@@ -567,6 +668,9 @@ export function POSRegisterView({
                 <p className="text-lg font-semibold text-gray-900">
                   {viewModel.header.title}
                 </p>
+                {isPosWorkflow ? (
+                  <RegisterSyncStatusChip syncStatus={viewModel.syncStatus} />
+                ) : null}
               </div>
 
               {!shouldShowOnboarding && !isResolvingRegisterSetup ? (
@@ -585,7 +689,7 @@ export function POSRegisterView({
             </div>
           }
           trailingContent={
-            canSearchProducts && isPosWorkflow ? (
+            canSearchProducts && isPosWorkflow && !isLocallyClosedPendingSync ? (
               <RegisterActionBar
                 closeoutControl={viewModel.closeoutControl}
                 registerInfo={viewModel.registerInfo}
@@ -609,7 +713,11 @@ export function POSRegisterView({
           ) : null}
 
           <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 overflow-hidden lg:grid-cols-[minmax(0,2fr)_minmax(340px,1fr)]">
-            {shouldRenderSaleSurface ? (
+            {isLocallyClosedPendingSync && viewModel.syncStatus ? (
+              <div className="lg:col-span-2">
+                <LocalRegisterClosedWorkspace syncStatus={viewModel.syncStatus} />
+              </div>
+            ) : shouldRenderSaleSurface ? (
               <div
                 className={cn(
                   "flex min-h-0 flex-col overflow-hidden pr-1",

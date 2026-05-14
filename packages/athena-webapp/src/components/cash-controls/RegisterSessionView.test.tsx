@@ -7,10 +7,20 @@ import {
   userError,
 } from "~/shared/commandResult";
 
-import { RegisterSessionViewContent } from "./RegisterSessionView";
+import { RegisterSessionView, RegisterSessionViewContent } from "./RegisterSessionView";
 
 const routerMocks = vi.hoisted(() => ({
   navigate: vi.fn(),
+}));
+const convexMocks = vi.hoisted(() => ({
+  useMutation: vi.fn(),
+  useQuery: vi.fn(),
+}));
+const authMocks = vi.hoisted(() => ({
+  useAuth: vi.fn(),
+}));
+const protectedPageMocks = vi.hoisted(() => ({
+  useProtectedAdminPageState: vi.fn(),
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -35,7 +45,18 @@ vi.mock("@tanstack/react-router", () => ({
     );
   },
   useNavigate: () => routerMocks.navigate,
+  useParams: () => ({
+    orgUrlSlug: "org",
+    sessionId: "session-1",
+    storeUrlSlug: "store",
+  }),
 }));
+
+vi.mock("convex/react", () => convexMocks);
+
+vi.mock("@/hooks/useAuth", () => authMocks);
+
+vi.mock("@/hooks/useProtectedAdminPageState", () => protectedPageMocks);
 
 vi.mock("../common/PageHeader", () => ({
   ComposedPageHeader: ({
@@ -231,6 +252,10 @@ const baseSnapshot = {
 
 describe("RegisterSessionViewContent", () => {
   beforeEach(() => {
+    authMocks.useAuth.mockReset();
+    convexMocks.useMutation.mockReset();
+    convexMocks.useQuery.mockReset();
+    protectedPageMocks.useProtectedAdminPageState.mockReset();
     routerMocks.navigate.mockReset();
     window.scrollTo = vi.fn();
   });
@@ -246,6 +271,7 @@ describe("RegisterSessionViewContent", () => {
   it("renders the register summary, closeout review, and deposits", () => {
     render(
       <RegisterSessionViewContent
+        actorStaffProfileId="staff-1"
         actorUserId="user-1"
         currency="USD"
         isLoading={false}
@@ -333,6 +359,68 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getByText("BANK-339")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "View trace" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows locally closed pending-sync sessions as pending reconciliation", () => {
+    render(
+      <RegisterSessionViewContent
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            localSyncStatus: {
+              status: "locally_closed_pending_sync",
+              pendingEventCount: 4,
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getAllByText("Pending reconciliation")[0]).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This register was closed locally. Athena will reconcile the closeout after sync.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("4 pending")).toBeInTheDocument();
+  });
+
+  it("shows reconciliation review with fallback copy for unknown types", () => {
+    render(
+      <RegisterSessionViewContent
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            localSyncStatus: {
+              status: "needs_review",
+              reconciliationItems: [
+                {
+                  summary: "Review synced register activity.",
+                  type: "unexpected_reconciliation_kind",
+                },
+              ],
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getAllByText("Needs review")[0]).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Reconciliation review: Review synced register activity./i,
+      ),
     ).toBeInTheDocument();
   });
 
@@ -1011,6 +1099,7 @@ describe("RegisterSessionViewContent", () => {
 
     render(
       <RegisterSessionViewContent
+        actorStaffProfileId="staff-1"
         actorUserId="user-1"
         currency="USD"
         isLoading={false}
@@ -1585,6 +1674,7 @@ describe("RegisterSessionViewContent", () => {
 
     render(
       <RegisterSessionViewContent
+        actorStaffProfileId="staff-1"
         actorUserId="user-1"
         currency="USD"
         isLoading={false}
@@ -1605,7 +1695,7 @@ describe("RegisterSessionViewContent", () => {
 
     await waitFor(() =>
       expect(onRecordDeposit).toHaveBeenCalledWith({
-        actorStaffProfileId: undefined,
+        actorStaffProfileId: "staff-1",
         actorUserId: "user-1",
         amount: 2500,
         notes: "Safe drop before final closeout.",
@@ -1614,6 +1704,64 @@ describe("RegisterSessionViewContent", () => {
         storeId: "store-1",
         submissionKey: "register-session-deposit-session-1-rs",
       }),
+    );
+  });
+
+  it("supplies the linked active staff profile from the production container when recording deposits", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(1000);
+
+    const user = userEvent.setup();
+    const recordDepositMutation = vi.fn().mockResolvedValue(
+      ok({
+        action: "recorded",
+      }),
+    );
+    protectedPageMocks.useProtectedAdminPageState.mockReturnValue({
+      activeStore: {
+        _id: "store-1",
+        currency: "USD",
+      },
+      canAccessProtectedSurface: true,
+      canQueryProtectedData: true,
+      hasFullAdminAccess: false,
+      isAuthenticated: true,
+      isLoadingAccess: false,
+    });
+    authMocks.useAuth.mockReturnValue({
+      user: { _id: "user-1" },
+    });
+    convexMocks.useMutation.mockReturnValue(recordDepositMutation);
+    convexMocks.useQuery.mockImplementation((_query, args) => {
+      if (args === "skip") {
+        return undefined;
+      }
+
+      if ("registerSessionId" in args) {
+        return baseSnapshot;
+      }
+
+      return [
+        {
+          _id: "staff-1",
+          linkedUserId: "user-1",
+          status: "active",
+          storeId: "store-1",
+        },
+      ];
+    });
+
+    render(<RegisterSessionView />);
+
+    await user.type(screen.getByLabelText("Deposit amount"), "2500");
+    await user.click(screen.getByRole("button", { name: "Record deposit" }));
+
+    await waitFor(() =>
+      expect(recordDepositMutation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorStaffProfileId: "staff-1",
+          actorUserId: "user-1",
+        }),
+      ),
     );
   });
 

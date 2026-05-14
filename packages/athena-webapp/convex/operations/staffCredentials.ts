@@ -11,6 +11,15 @@ import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import type { ApprovalSubjectIdentity } from "../../shared/approvalPolicy";
 import { createApprovalProofWithCtx } from "./approvalProofs";
+import {
+  createPosLocalStaffProofToken,
+  hashPosLocalStaffProofToken,
+  POS_LOCAL_STAFF_PROOF_TTL_MS,
+} from "../pos/application/sync/staffProof";
+import {
+  requireAuthenticatedAthenaUserWithCtx,
+  requireOrganizationMemberRoleWithCtx,
+} from "../lib/athenaUserAuth";
 
 export const STAFF_CREDENTIAL_STATUS = v.union(
   v.literal("pending"),
@@ -29,6 +38,10 @@ type StaffCredentialReaderCtx = Pick<QueryCtx, "db"> | Pick<MutationCtx, "db">;
 type StaffCredentialAuthenticationData = {
   activeRoles: OperationalRole[];
   credentialId: Id<"staffCredential">;
+  posLocalStaffProof?: {
+    expiresAt: number;
+    token: string;
+  };
   staffProfile: Doc<"staffProfile">;
   staffProfileId: Id<"staffProfile">;
 };
@@ -513,6 +526,17 @@ export async function authenticateStaffCredentialForTerminalWithCtx(
     username: string;
   },
 ): Promise<StaffCredentialAuthenticationResult> {
+  const terminal = await ctx.db.get("posTerminal", args.terminalId);
+  if (
+    !terminal ||
+    terminal.storeId !== args.storeId ||
+    terminal.status !== "active"
+  ) {
+    return staffAuthorizationFailedResult(
+      "This terminal is not available for staff authentication.",
+    );
+  }
+
   const authentication = await authenticateStaffCredentialWithCtx(ctx, args);
 
   if (authentication.kind === "user_error") {
@@ -560,7 +584,41 @@ export async function authenticateStaffCredentialForTerminalWithCtx(
     );
   }
 
-  return authentication;
+  return withPosLocalStaffProof(ctx, authentication, args);
+}
+
+async function withPosLocalStaffProof(
+  ctx: Pick<MutationCtx, "db">,
+  authentication: StaffCredentialAuthenticationResult,
+  args: {
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  },
+): Promise<StaffCredentialAuthenticationResult> {
+  if (authentication.kind !== "ok") {
+    return authentication;
+  }
+
+  const now = Date.now();
+  const token = createPosLocalStaffProofToken();
+  await ctx.db.insert("posLocalStaffProof", {
+    credentialId: authentication.data.credentialId,
+    createdAt: now,
+    expiresAt: now + POS_LOCAL_STAFF_PROOF_TTL_MS,
+    staffProfileId: authentication.data.staffProfileId,
+    status: "active",
+    storeId: args.storeId,
+    terminalId: args.terminalId,
+    tokenHash: await hashPosLocalStaffProofToken(token),
+  });
+
+  return ok({
+    ...authentication.data,
+    posLocalStaffProof: {
+      expiresAt: now + POS_LOCAL_STAFF_PROOF_TTL_MS,
+      token,
+    },
+  });
 }
 
 export async function authenticateStaffCredentialForApprovalWithCtx(
@@ -736,8 +794,41 @@ export const authenticateStaffCredentialForTerminal = mutation({
     terminalId: v.id("posTerminal"),
     username: v.string(),
   },
-  handler: (ctx, args) =>
-    authenticateStaffCredentialForTerminalWithCtx(ctx, args),
+  handler: async (ctx, args) => {
+    const terminal = await ctx.db.get("posTerminal", args.terminalId);
+    if (!terminal || terminal.storeId !== args.storeId || terminal.status !== "active") {
+      return staffAuthorizationFailedResult(
+        "This terminal is not available for staff authentication.",
+      );
+    }
+
+    try {
+      const store = await ctx.db.get("store", args.storeId);
+      if (!store) {
+        return staffAuthorizationFailedResult(
+          "This terminal is not available for staff authentication.",
+        );
+      }
+      const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      if (terminal.registeredByUserId !== athenaUser._id) {
+        return staffAuthorizationFailedResult(
+          "This terminal is not available for staff authentication.",
+        );
+      }
+      await requireOrganizationMemberRoleWithCtx(ctx, {
+        allowedRoles: ["full_admin", "pos_only"],
+        failureMessage: "You do not have access to this POS terminal.",
+        organizationId: store.organizationId,
+        userId: athenaUser._id,
+      });
+    } catch {
+      return staffAuthorizationFailedResult(
+        "This terminal is not available for staff authentication.",
+      );
+    }
+
+    return authenticateStaffCredentialForTerminalWithCtx(ctx, args);
+  },
 });
 
 export const authenticateStaffCredentialForApproval = mutation({

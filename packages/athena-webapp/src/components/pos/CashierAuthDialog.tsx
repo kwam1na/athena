@@ -12,7 +12,7 @@ import { userError } from "~/shared/commandResult";
 import type { RegisterWorkflowMode } from "~/src/lib/pos/presentation/register/registerUiState";
 
 interface CashierAuthDialogProps {
-  onAuthenticated: (staffProfileId: Id<"staffProfile">) => void;
+  onAuthenticated: (result: StaffAuthenticationResult) => void;
   onDismiss: () => void;
   open: boolean;
   presentation?: "dialog" | "inline";
@@ -85,7 +85,15 @@ export function CashierAuthDialog({
       });
     }
 
-    return authenticationResult;
+    return runCommand(() =>
+      authenticateStaffCredentialForTerminal({
+        allowedRoles: ["cashier", "manager"],
+        pinHash: args.pinHash,
+        storeId,
+        terminalId,
+        username: args.username,
+      }),
+    );
   }
 
   const primaryCopy = isExpenseWorkflow
@@ -136,7 +144,7 @@ export function CashierAuthDialog({
           : "Signed in";
       }}
       onAuthenticated={(result) => {
-        onAuthenticated(result.staffProfileId);
+        onAuthenticated(result);
       }}
     />
   );

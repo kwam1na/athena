@@ -875,6 +875,24 @@ async function createFixtureRepo() {
     "export {};\n",
     rootDir
   );
+  await write(
+    "packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.ts",
+    "export {};\n",
+    rootDir
+  );
+  for (const localSyncTestPath of [
+    "packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.test.ts",
+    "packages/athena-webapp/src/lib/pos/infrastructure/local/syncContract.test.ts",
+    "packages/athena-webapp/src/lib/pos/infrastructure/local/syncScheduler.test.ts",
+    "packages/athena-webapp/src/lib/pos/infrastructure/local/syncStatus.test.ts",
+  ]) {
+    await write(localSyncTestPath, "export {};\n", rootDir);
+  }
+  await write(
+    "packages/athena-webapp/src/lib/pos/presentation/syncStatusPresentation.ts",
+    "export {};\n",
+    rootDir
+  );
   await write("packages/athena-webapp/src/stores/expenseStore.ts", "export {};\n", rootDir);
   await write(
     "packages/athena-webapp/shared/commandResult.ts",
@@ -927,6 +945,16 @@ async function createFixtureRepo() {
     rootDir
   );
   await write(
+    "packages/athena-webapp/convex/pos/application/commands/terminals.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/pos/application/terminals.test.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
     "packages/athena-webapp/convex/pos/application/commands/posSessionTracing.ts",
     "export {};\n",
     rootDir
@@ -938,6 +966,41 @@ async function createFixtureRepo() {
   );
   await write(
     "packages/athena-webapp/convex/pos/application/queries/getRegisterState.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.test.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.test.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/pos/public/sync.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/pos/public/sync.test.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/pos/public/terminals.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/pos/public/terminals.test.ts",
     "export {};\n",
     rootDir
   );
@@ -1115,6 +1178,21 @@ async function createFixtureRepo() {
   );
   await write(
     "packages/athena-webapp/convex/schemas/pos/posTransaction.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/schemas/pos/posLocalSyncConflict.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/schemas/pos/posLocalSyncEvent.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/schemas/pos/posLocalSyncMapping.ts",
     "export {};\n",
     rootDir
   );
