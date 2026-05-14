@@ -114,8 +114,8 @@ describe("SkuActivityTimeline", () => {
       },
     });
 
-    expect(screen.getByText("Kinky closure wig")).toBeInTheDocument();
-    expect(screen.getByText("KK38-X3C-MQE")).toBeInTheDocument();
+    expect(screen.getByText("Kinky Closure Wig")).toBeInTheDocument();
+    expect(screen.queryByText("KK38-X3C-MQE")).not.toBeInTheDocument();
     expect(screen.getByText("On hand")).toBeInTheDocument();
     expect(screen.getAllByText("6").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("No SKU activity recorded.")).toBeInTheDocument();

@@ -19,7 +19,6 @@ import {
   CogIcon,
   Image,
   PanelTop,
-  PackageSearch,
   RotateCcw,
   ScanBarcode,
   ShoppingBag,
@@ -179,7 +178,10 @@ export function AppSidebar() {
               </SidebarMenuItem>
 
               <SidebarMenuItem>
-                <SidebarMenuButton disabled={!canAccessStoreDaySurfaces()} asChild>
+                <SidebarMenuButton
+                  disabled={!canAccessStoreDaySurfaces()}
+                  asChild
+                >
                   <Link
                     to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls"
                     params={(p) => ({
@@ -339,7 +341,6 @@ export function AppSidebar() {
                         })}
                         className="flex items-center gap-2"
                       >
-                        <PackageSearch className="h-3.5 w-3.5" />
                         <p className="font-medium">SKU activity</p>
                       </Link>
                     </SidebarMenuButton>
