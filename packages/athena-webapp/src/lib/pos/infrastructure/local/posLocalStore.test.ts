@@ -231,8 +231,54 @@ describe("posLocalStore", () => {
       error: {
         code: "unsupported_schema_version",
         message:
-          "POS local store schema version 2 is newer than supported version 1.",
+          "POS local store schema version 3 is newer than supported version 2.",
       },
+    });
+  });
+
+  it("stores POS store-day readiness separately from register events", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 2_000,
+    });
+
+    await expect(
+      store.writeStoreDayReadiness({
+        storeId: "store-1",
+        operatingDate: "2026-05-14",
+        status: "started",
+        source: "daily_opening",
+        updatedAt: 2_000,
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      value: {
+        storeId: "store-1",
+        operatingDate: "2026-05-14",
+        status: "started",
+        source: "daily_opening",
+        updatedAt: 2_000,
+      },
+    });
+
+    await expect(
+      store.readStoreDayReadiness({
+        storeId: "store-1",
+        operatingDate: "2026-05-14",
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      value: {
+        storeId: "store-1",
+        operatingDate: "2026-05-14",
+        status: "started",
+        source: "daily_opening",
+        updatedAt: 2_000,
+      },
+    });
+    await expect(store.listEvents()).resolves.toEqual({
+      ok: true,
+      value: [],
     });
   });
 

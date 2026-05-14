@@ -1,4 +1,4 @@
-export const POS_LOCAL_STORE_SCHEMA_VERSION = 1;
+export const POS_LOCAL_STORE_SCHEMA_VERSION = 2;
 
 export type PosLocalEntityKind =
   | "registerSession"
@@ -65,6 +65,22 @@ export interface PosLocalCloudMapping {
   mappedAt: number;
 }
 
+export type PosLocalStoreDayReadinessStatus =
+  | "started"
+  | "not_started"
+  | "closed"
+  | "reopened"
+  | "unknown";
+
+export interface PosLocalStoreDayReadiness {
+  storeId: string;
+  operatingDate: string;
+  status: PosLocalStoreDayReadinessStatus;
+  source: "daily_opening" | "daily_close" | "local";
+  updatedAt: number;
+  closeLifecycleStatus?: "active" | "reopened" | "superseded";
+}
+
 export type PosLocalStoreErrorCode =
   | "unsupported_schema_version"
   | "write_failed";
@@ -83,7 +99,8 @@ export type PosLocalObjectStoreName =
   | "meta"
   | "terminalSeed"
   | "events"
-  | "mappings";
+  | "mappings"
+  | "readiness";
 
 export interface PosLocalStoreTransaction {
   get<T>(
@@ -260,6 +277,55 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
               (await transaction.get<PosProvisionedTerminalSeed>(
                 "terminalSeed",
                 TERMINAL_SEED_KEY,
+              )) ?? null
+            );
+          },
+        );
+
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async writeStoreDayReadiness(
+      readiness: PosLocalStoreDayReadiness,
+    ): Promise<PosLocalStoreResult<PosLocalStoreDayReadiness>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readwrite",
+          ["meta", "readiness"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            await transaction.put(
+              "readiness",
+              readinessKey(readiness.storeId, readiness.operatingDate),
+              readiness,
+            );
+            return readiness;
+          },
+        );
+
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async readStoreDayReadiness(input: {
+      storeId: string;
+      operatingDate: string;
+    }): Promise<PosLocalStoreResult<PosLocalStoreDayReadiness | null>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readonly",
+          ["meta", "readiness"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readonly");
+            return (
+              (await transaction.get<PosLocalStoreDayReadiness>(
+                "readiness",
+                readinessKey(input.storeId, input.operatingDate),
               )) ?? null
             );
           },
@@ -483,6 +549,10 @@ function mappingKey(entity: PosLocalEntityKind, localId: string) {
   return `${entity}:${localId}`;
 }
 
+function readinessKey(storeId: string, operatingDate: string) {
+  return `${storeId}:${operatingDate}`;
+}
+
 export function createIndexedDbPosLocalStorageAdapter(options?: {
   databaseName?: string;
 }): PosLocalStorageAdapter {
@@ -490,7 +560,7 @@ export function createIndexedDbPosLocalStorageAdapter(options?: {
 
   async function openDatabase(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open(databaseName, 1);
+      const request = indexedDB.open(databaseName, POS_LOCAL_STORE_SCHEMA_VERSION);
 
       request.onupgradeneeded = () => {
         const database = request.result;
@@ -499,6 +569,7 @@ export function createIndexedDbPosLocalStorageAdapter(options?: {
           "terminalSeed",
           "events",
           "mappings",
+          "readiness",
         ] satisfies PosLocalObjectStoreName[]) {
           if (!database.objectStoreNames.contains(storeName)) {
             database.createObjectStore(storeName);
@@ -651,6 +722,7 @@ function createEmptyMemoryStore(): MemoryStore {
     terminalSeed: new Map(),
     events: new Map(),
     mappings: new Map(),
+    readiness: new Map(),
   };
 }
 
@@ -660,6 +732,7 @@ function cloneMemoryStore(store: MemoryStore): MemoryStore {
     terminalSeed: new Map(store.terminalSeed),
     events: new Map(store.events),
     mappings: new Map(store.mappings),
+    readiness: new Map(store.readiness),
   };
 }
 

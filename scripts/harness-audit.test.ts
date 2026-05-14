@@ -653,6 +653,11 @@ async function createFixtureRepo() {
     rootDir
   );
   await write(
+    "packages/athena-webapp/src/components/pos/PointOfSaleView.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
     "packages/athena-webapp/src/components/pos/transactions/TransactionsView.tsx",
     "export {};\n",
     rootDir
@@ -890,6 +895,8 @@ async function createFixtureRepo() {
     "packages/athena-webapp/src/lib/pos/infrastructure/local/registerReadModel.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/localCommandGateway.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/terminalScope.ts",
+    "packages/athena-webapp/src/lib/pos/infrastructure/local/localPosEntryContext.ts",
+    "packages/athena-webapp/src/lib/pos/infrastructure/local/localPosReadiness.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.test.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/syncContract.test.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/syncScheduler.test.ts",
@@ -897,6 +904,8 @@ async function createFixtureRepo() {
     "packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.test.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/registerReadModel.test.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/localCommandGateway.test.ts",
+    "packages/athena-webapp/src/lib/pos/infrastructure/local/localPosEntryContext.test.ts",
+    "packages/athena-webapp/src/lib/pos/infrastructure/local/localPosReadiness.test.ts",
   ]) {
     await write(localSyncPath, "export {};\n", rootDir);
   }
