@@ -55,6 +55,12 @@ The inspection component is
 accepts a view-model prop so the Convex query adapter can be wired at the route
 or workspace boundary without coupling browser tests to generated client refs.
 
+The operator-facing surface is not complete until the component is mounted in a
+reachable app route and the navigation exposes that route. A reusable component
+plus public Convex query is only the foundation; the shipped inspection surface
+must include the route/search adapter and an entry point such as the Operations
+sidebar.
+
 ## Prevention
 
 - Every SKU-affecting command path must write source-aware activity evidence in
@@ -68,10 +74,14 @@ or workspace boundary without coupling browser tests to generated client refs.
 - UI copy should name proven states such as `Reserved by checkout`, `Reserved by
   POS session`, `Released`, and `Consumed by sale`. Use `Unexplained
   availability gap` when stock fields disagree with active reservation evidence.
+- Acceptance criteria that say operators or support can inspect a SKU require a
+  browser-reachable path, route-level query wiring, and a navigation affordance.
+  Do not close the ticket on an unmounted component.
 
 ## Related Validation
 
 - `bun run --filter '@athena/webapp' test -- src/components/operations/SkuActivityTimeline.test.tsx`
+- `bun run --filter '@athena/webapp' test -- src/components/operations/skuActivityTimelineAdapter.test.ts src/components/app-sidebar.test.tsx`
 - Backend query and instrumentation changes should also run the focused Convex
   tests for the touched ledger, POS hold, checkout reservation, and movement
   files before broader package validation.

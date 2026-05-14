@@ -169,6 +169,10 @@ describe("AppSidebar capability gates", () => {
     expect(
       screen.getByRole("link", { name: /stock adjustments/i }),
     ).toHaveAttribute("aria-disabled", "false");
+    expect(screen.getByRole("link", { name: /sku activity/i })).toHaveAttribute(
+      "aria-disabled",
+      "false",
+    );
 
     expect(screen.getByRole("link", { name: /procurement/i })).toHaveAttribute(
       "aria-disabled",
