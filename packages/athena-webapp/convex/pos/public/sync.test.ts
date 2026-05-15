@@ -289,6 +289,33 @@ describe("POS local sync public mutation", () => {
       }),
     );
   });
+
+  it("passes sale completed display receipt numbers through the public sync boundary", async () => {
+    const ctx = buildCtx();
+    const event = buildSaleCompletedEvent();
+
+    await getHandler(ingestLocalEvents)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      syncSecretHash: "sync-secret-1",
+      events: [event],
+    });
+
+    expect(mocks.ingestLocalEventsWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        events: [
+          expect.objectContaining({
+            eventType: "sale_completed",
+            payload: expect.objectContaining({
+              localReceiptNumber: "local-txn-1",
+              receiptNumber: "123456",
+            }),
+          }),
+        ],
+      }),
+    );
+  });
 });
 
 function buildCtx(
@@ -358,6 +385,49 @@ function buildEvent() {
     payload: {
       openingFloat: 100,
       registerNumber: "1",
+    },
+  };
+}
+
+function buildSaleCompletedEvent() {
+  return {
+    localEventId: "event-sale-1",
+    localRegisterSessionId: "local-register-1",
+    sequence: 2,
+    eventType: "sale_completed",
+    occurredAt: 124,
+    staffProfileId: "staff-1",
+    staffProofToken: "proof-token-1",
+    payload: {
+      localPosSessionId: "local-session-1",
+      localTransactionId: "local-txn-1",
+      localReceiptNumber: "local-txn-1",
+      receiptNumber: "123456",
+      registerNumber: "1",
+      totals: {
+        subtotal: 25,
+        tax: 0,
+        total: 25,
+      },
+      items: [
+        {
+          localTransactionItemId: "local-item-1",
+          productId: "product-1",
+          productSkuId: "sku-1",
+          productName: "Wig Cap",
+          productSku: "CAP-1",
+          quantity: 1,
+          unitPrice: 25,
+        },
+      ],
+      payments: [
+        {
+          localPaymentId: "local-payment-1",
+          method: "cash",
+          amount: 25,
+          timestamp: 124,
+        },
+      ],
     },
   };
 }

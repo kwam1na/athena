@@ -87,4 +87,19 @@ describe("RegisterDrawerGate", () => {
     expect(screen.getByText("GH₵100.02")).toBeInTheDocument();
     expect(screen.getByText("GH₵-0.02")).toHaveClass("text-red-700");
   });
+
+  it("runs the closeout secondary action for return-to-sale states", async () => {
+    const user = userEvent.setup();
+    const onCloseoutSecondaryAction = vi.fn();
+    renderGate({
+      closeoutSecondaryActionLabel: "Return to sale",
+      expectedCash: 10002,
+      mode: "closeoutBlocked",
+      onCloseoutSecondaryAction,
+    });
+
+    await user.click(screen.getByRole("button", { name: "Return to sale" }));
+
+    expect(onCloseoutSecondaryAction).toHaveBeenCalledTimes(1);
+  });
 });

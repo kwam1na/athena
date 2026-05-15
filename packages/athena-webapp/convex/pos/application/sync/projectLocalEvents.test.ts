@@ -98,6 +98,39 @@ describe("projectLocalSyncEvent", () => {
     ]);
   });
 
+  it("keeps the display receipt number separate from the local sync receipt id", async () => {
+    const repository = createProjectionRepository();
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        payload: {
+          ...buildSaleCompletedEvent().payload,
+          localReceiptNumber: "local-txn-1",
+          receiptNumber: "123456",
+        },
+      }),
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(repository.createdTransactions).toEqual([
+      expect.objectContaining({
+        transactionNumber: "123456",
+      }),
+    ]);
+    expect(result.mappings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          localIdKind: "receipt",
+          localId: "local-txn-1",
+        }),
+      ]),
+    );
+  });
+
   it("projects cashier sales on admin-provisioned shared terminals", async () => {
     const repository = createProjectionRepository({
       terminalRegisteredByUserId: "admin-user-1",
@@ -2118,6 +2151,7 @@ function buildSaleCompletedEvent(
       localPosSessionId: "local-session-1",
       localTransactionId: "local-txn-1",
       localReceiptNumber: "LR-001",
+      receiptNumber: "LR-001",
       registerNumber: "1",
       totals: {
         subtotal: 25,

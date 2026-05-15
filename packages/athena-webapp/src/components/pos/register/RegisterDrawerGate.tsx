@@ -404,7 +404,7 @@ export function RegisterDrawerGate({
                     drawerGate.isReopeningCloseout,
                   )}
                   isLoading={Boolean(drawerGate.isReopeningCloseout)}
-                  onClick={() => void drawerGate.onReopenRegister?.()}
+                  onClick={() => void drawerGate.onCloseoutSecondaryAction?.()}
                   type="button"
                   variant="outline"
                 >

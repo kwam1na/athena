@@ -7,6 +7,7 @@ const useGetActiveOrganizationMock = vi.fn();
 const useGetActiveStoreMock = vi.fn();
 const useLocalPosEntryContextMock = vi.fn();
 const usePermissionsMock = vi.fn();
+const usePrewarmRegisterCatalogOfflineSnapshotsMock = vi.fn();
 const useQueryMock = vi.fn();
 
 vi.mock("@tanstack/react-router", () => ({
@@ -58,6 +59,12 @@ vi.mock("~/src/hooks/useGetTerminal", () => ({
 
 vi.mock("@/lib/pos/infrastructure/local/localPosEntryContext", () => ({
   useLocalPosEntryContext: () => useLocalPosEntryContextMock(),
+}));
+
+vi.mock("@/lib/pos/infrastructure/convex/catalogGateway", () => ({
+  usePrewarmRegisterCatalogOfflineSnapshots: (
+    input: Record<string, unknown>,
+  ) => usePrewarmRegisterCatalogOfflineSnapshotsMock(input),
 }));
 
 vi.mock("~/src/hooks/usePermissions", () => ({
@@ -122,6 +129,34 @@ describe("PointOfSaleView", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Point of Sale" }),
     ).toBeInTheDocument();
+  });
+
+  it("prewarms POS register offline snapshots from the POS landing page", () => {
+    render(<PointOfSaleView />);
+
+    expect(usePrewarmRegisterCatalogOfflineSnapshotsMock).toHaveBeenCalledWith({
+      storeId: "store-1",
+    });
+  });
+
+  it("prewarms POS register offline snapshots from local entry context when live store context is unavailable", () => {
+    useGetActiveStoreMock.mockReturnValue({
+      activeStore: null,
+    });
+    useLocalPosEntryContextMock.mockReturnValue({
+      status: "ready",
+      orgUrlSlug: "acme",
+      storeUrlSlug: "downtown",
+      storeId: "local-store-1",
+      terminalSeed: null,
+      source: "local",
+    });
+
+    render(<PointOfSaleView />);
+
+    expect(usePrewarmRegisterCatalogOfflineSnapshotsMock).toHaveBeenCalledWith({
+      storeId: "local-store-1",
+    });
   });
 
   it("links managers to active POS session operations from the POS landing page", () => {

@@ -910,7 +910,7 @@ async function persistSaleRecord(
 ): Promise<PersistedSale> {
   const { payments, payload, saleSession, session } = input;
   const transactionId = await repository.createTransaction({
-    transactionNumber: payload.localReceiptNumber,
+    transactionNumber: payload.receiptNumber,
     storeId: args.storeId,
     sessionId: saleSession.posSessionId,
     registerSessionId: session.registerSession._id,

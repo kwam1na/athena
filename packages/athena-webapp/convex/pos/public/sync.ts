@@ -99,6 +99,7 @@ const posLocalSyncUploadEventValidator = v.union(
       localPosSessionId: v.string(),
       localTransactionId: v.string(),
       localReceiptNumber: v.string(),
+      receiptNumber: v.string(),
       registerNumber: v.optional(v.string()),
       customerProfileId: v.optional(v.string()),
       customerInfo: v.optional(

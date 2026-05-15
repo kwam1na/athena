@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation } from "convex/react";
 import type { FunctionArgs } from "convex/server";
 
@@ -16,7 +16,10 @@ import {
   isSyncablePosLocalEvent,
   type PosLocalUploadEvent,
 } from "./syncContract";
-import { createPosLocalSyncScheduler } from "./syncScheduler";
+import {
+  createPosLocalSyncScheduler,
+  type PosLocalSyncTrigger,
+} from "./syncScheduler";
 import { derivePosLocalSyncStatus } from "./syncStatus";
 import { readScopedPosLocalEvents } from "./localRegisterReader";
 import {
@@ -25,11 +28,18 @@ import {
 } from "./terminalScope";
 
 export type PosLocalRuntimeSyncStatusSource = {
+  debug?: PosLocalRuntimeSyncDebug;
   description?: string | null;
   label?: string | null;
   onRetrySync?: (() => void) | null;
   pendingEventCount?: number | null;
   status?: string | null;
+};
+
+export type PosLocalRuntimeSyncDebug = {
+  lastTrigger?: PosLocalSyncTrigger;
+  lastTriggerAt?: number;
+  lastTriggerPriority?: "high" | "normal";
 };
 
 type PosLocalRuntimeStore = ReturnType<typeof createPosLocalStore>;
@@ -40,6 +50,8 @@ type IngestLocalEventsArgs = FunctionArgs<
 export function usePosLocalSyncRuntimeStatus(input: {
   storeId?: string | null;
   terminalId?: string | null;
+  eventAppendToken?: number;
+  onLocalEventsChanged?: (() => void) | null;
   onRetrySync?: (() => void) | null;
   storeFactory?: (() => PosLocalRuntimeStore) | null;
 }): PosLocalRuntimeSyncStatusSource | null {
@@ -47,7 +59,11 @@ export function usePosLocalSyncRuntimeStatus(input: {
   const [events, setEvents] = useState<PosLocalEventRecord[]>([]);
   const [readError, setReadError] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
+  const [debug, setDebug] = useState<PosLocalRuntimeSyncDebug>({});
+  const lastEventAppendTokenRef = useRef(0);
   const { storeFactory, storeId, terminalId } = input;
+  const eventAppendToken = input.eventAppendToken ?? 0;
+  const onLocalEventsChanged = input.onLocalEventsChanged;
   const onRetrySync = input.onRetrySync;
   const isOnline = typeof navigator === "undefined" ? true : navigator.onLine;
 
@@ -67,6 +83,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
     let stopScheduler: (() => void) | null = null;
 
     void (async () => {
+      const shouldStop = () => cancelled;
       const seed = await store.readProvisionedTerminalSeed();
       if (!seed.ok) {
         if (!cancelled) {
@@ -80,6 +97,9 @@ export function usePosLocalSyncRuntimeStatus(input: {
         terminalId,
         terminalSeed: seed.value,
       });
+      if (shouldStop()) {
+        return;
+      }
       const provisionedSeed = scope.provisionedSeed;
       const cloudTerminalId = provisionedSeed?.cloudTerminalId ?? terminalId;
       if (scope.terminalIds.size === 0 || !cloudTerminalId) {
@@ -105,14 +125,18 @@ export function usePosLocalSyncRuntimeStatus(input: {
           storeId,
           terminalId,
         });
+        if (shouldStop()) {
+          return false;
+        }
         if (!refreshedEvents.ok || cancelled) {
           if (!cancelled) {
             setReadError(refreshedEvents.ok ? null : refreshedEvents.error.message);
           }
-          return;
+          return false;
         }
         setReadError(null);
         setEvents(refreshedEvents.value.events);
+        return true;
       };
       setEvents(eventsResult.value.events);
       setReadError(null);
@@ -134,6 +158,9 @@ export function usePosLocalSyncRuntimeStatus(input: {
             storeId,
             terminalId,
           });
+          if (shouldStop()) {
+            return [];
+          }
           if (!pending.ok) {
             setReadError(pending.error.message);
             throw new Error(pending.error.message);
@@ -159,8 +186,17 @@ export function usePosLocalSyncRuntimeStatus(input: {
           const result = await store.markEventsSynced(eventIds, {
             uploaded: true,
           });
+          if (shouldStop()) {
+            return;
+          }
           assertPosLocalStoreOk(result);
-          await refreshEvents();
+          if (!(await refreshEvents())) {
+            return;
+          }
+          if (shouldStop()) {
+            return;
+          }
+          onLocalEventsChanged?.();
         },
         uploadBatch: async (pendingEvents) => {
           const latestEvents = await readScopedPosLocalUploadEvents({
@@ -168,6 +204,9 @@ export function usePosLocalSyncRuntimeStatus(input: {
             storeId,
             terminalId,
           });
+          if (shouldStop()) {
+            return { syncedEventIds: [] };
+          }
           if (!latestEvents.ok) {
             setReadError(latestEvents.error.message);
             throw new Error(latestEvents.error.message);
@@ -192,6 +231,9 @@ export function usePosLocalSyncRuntimeStatus(input: {
               terminalId: cloudTerminalId,
             }),
           );
+          if (shouldStop()) {
+            return { syncedEventIds: [] };
+          }
           if (result.kind !== "ok") {
             return {
               syncedEventIds: [],
@@ -206,6 +248,9 @@ export function usePosLocalSyncRuntimeStatus(input: {
             store,
             result.data.mappings,
           );
+          if (shouldStop()) {
+            return { syncedEventIds: [] };
+          }
           if (!mappingWrite.ok) {
             setReadError(mappingWrite.message);
             return {
@@ -236,12 +281,37 @@ export function usePosLocalSyncRuntimeStatus(input: {
             "Cloud sync needs review before this local event can finish.",
             { uploaded: true },
           );
+          if (shouldStop()) {
+            return;
+          }
           assertPosLocalStoreOk(result);
-          await refreshEvents();
+          if (!(await refreshEvents())) {
+            return;
+          }
+          if (shouldStop()) {
+            return;
+          }
+          onLocalEventsChanged?.();
         },
       });
       stopScheduler = scheduler.startForegroundTriggers();
-      scheduler.trigger("route-entry");
+      const trigger: PosLocalSyncTrigger =
+        eventAppendToken !== lastEventAppendTokenRef.current
+          ? "event-appended"
+          : "route-entry";
+      const triggerPriority = trigger === "event-appended" ? "high" : "normal";
+      lastEventAppendTokenRef.current = eventAppendToken;
+      if (!cancelled) {
+        setDebug({
+          lastTrigger: trigger,
+          lastTriggerAt: Date.now(),
+          lastTriggerPriority: triggerPriority,
+        });
+      }
+      scheduler.trigger(
+        trigger,
+        triggerPriority === "high" ? { priority: "high" } : undefined,
+      );
     })();
 
     return () => {
@@ -250,6 +320,8 @@ export function usePosLocalSyncRuntimeStatus(input: {
     };
   }, [
     ingestLocalEvents,
+    eventAppendToken,
+    onLocalEventsChanged,
     storeFactory,
     storeId,
     terminalId,
@@ -261,6 +333,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
       return {
         description:
           "Local register activity could not be read. Check this terminal before continuing.",
+        debug,
         label: "Local sync unavailable",
         onRetrySync: () => {
           setRefreshToken((current) => current + 1);
@@ -271,14 +344,25 @@ export function usePosLocalSyncRuntimeStatus(input: {
       };
     }
 
-    return derivePosLocalRuntimeSyncStatus(events, {
+    const source = derivePosLocalRuntimeSyncStatus(events, {
       isOnline,
       onRetrySync: () => {
         setRefreshToken((current) => current + 1);
         onRetrySync?.();
       },
     });
-  }, [events, isOnline, onRetrySync, readError]);
+    if (source) return { ...source, debug };
+
+    return debug.lastTrigger
+      ? {
+          debug,
+          onRetrySync: () => {
+            setRefreshToken((current) => current + 1);
+            onRetrySync?.();
+          },
+        }
+      : null;
+  }, [debug, events, isOnline, onRetrySync, readError]);
 }
 
 function toIngestLocalEventsArgs(input: {

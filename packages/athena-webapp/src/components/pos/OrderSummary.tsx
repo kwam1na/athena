@@ -113,7 +113,7 @@ interface OrderSummaryProps {
   onRemovePayment?: (paymentId: string) => boolean | Promise<boolean>;
   onClearPayments?: () => boolean | Promise<boolean>;
   onCompleteTransaction?: () => Promise<boolean>;
-  onStartNewTransaction?: () => void;
+  onStartNewTransaction?: () => void | Promise<void>;
   onPaymentFlowChange?: (isActive: boolean) => void;
   onPaymentEntryStart?: () => void;
   onEditingPaymentChange?: (isEditing: boolean) => void;

@@ -45,6 +45,7 @@ export type PosLocalSalePayload = {
   localPosSessionId: string;
   localTransactionId: string;
   localReceiptNumber: string;
+  receiptNumber: string;
   registerNumber?: string;
   customerProfileId?: Id<"customerProfile">;
   customerInfo?: {

@@ -1,9 +1,22 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 const mockUseRegisterViewModel = vi.fn();
+
+function pressDebugPanelShortcut() {
+  fireEvent.keyDown(document, {
+    code: "Slash",
+    key: "/",
+    metaKey: true,
+  });
+  fireEvent.keyUp(document, {
+    code: "Slash",
+    key: "/",
+    metaKey: true,
+  });
+}
 
 vi.mock("@/lib/pos/presentation/register/useRegisterViewModel", () => ({
   useRegisterViewModel: () => mockUseRegisterViewModel(),
@@ -275,10 +288,18 @@ describe("POSRegisterView", () => {
         activeStoreSource: "local",
         authDialogOpen: true,
         hasLiveActiveStore: false,
+        localStaffAuthorityStatus: "ready",
         localEntryStatus: "ready",
         online: false,
         staffSignedIn: false,
         storeId: "store-1",
+        syncFlow: {
+          eventAppendToken: 0,
+          pendingEventCount: 1,
+          source: "runtime",
+          staffProof: "missing",
+          status: "pending_sync",
+        },
         terminalId: "terminal-1",
         terminalSource: "local",
       },
@@ -316,11 +337,99 @@ describe("POSRegisterView", () => {
     const { POSRegisterView } = await import("./POSRegisterView");
     render(<POSRegisterView />);
 
-    expect(screen.getByText("Register connection details")).toBeInTheDocument();
-    expect(screen.getByText("offline")).toBeInTheDocument();
-    expect(screen.getByText("local:store-1")).toBeInTheDocument();
-    expect(screen.getByText("local:terminal-1")).toBeInTheDocument();
-    expect(screen.getByText("cashier-auth-dialog")).toBeInTheDocument();
+    expect(screen.getByLabelText("No staff signed in")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Support sync diagnostics"),
+    ).not.toBeInTheDocument();
+    pressDebugPanelShortcut();
+
+    expect(screen.getByText("Support sync diagnostics")).toBeInTheDocument();
+    expect(screen.getAllByText("Offline")).not.toHaveLength(0);
+    expect(screen.getAllByText("Local")).not.toHaveLength(0);
+    expect(screen.getByText("Open")).toBeInTheDocument();
+  });
+
+  it("shows the debug strip while the register has an active connection", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      debug: {
+        activeStoreSource: "live",
+        authDialogOpen: false,
+        hasLiveActiveStore: true,
+        localStaffAuthorityStatus: "ready",
+        localEntryStatus: "ready",
+        online: true,
+        staffSignedIn: true,
+        storeId: "store-1",
+        syncFlow: {
+          eventAppendToken: 2,
+          lastLocalSequence: 4,
+          lastRuntimeTrigger: "event-appended",
+          lastRuntimeTriggerAt: Date.UTC(2026, 4, 15, 12, 34, 56),
+          lastRuntimeTriggerPriority: "high",
+          lastSyncedSequence: 4,
+          nextPendingSequence: null,
+          pendingEventCount: 0,
+          source: "none",
+          staffProof: "present",
+          status: "synced",
+        },
+        terminalId: "terminal-1",
+        terminalSource: "live",
+      },
+      header: {
+        title: "POS",
+        isSessionActive: false,
+      },
+      registerInfo: {
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: true,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: null,
+      cashierCard: null,
+      closeoutControl: null,
+      authDialog: {
+        open: false,
+      },
+      drawerGate: null,
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(screen.getByLabelText("Staff signed in")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Support sync diagnostics"),
+    ).not.toBeInTheDocument();
+    pressDebugPanelShortcut();
+
+    expect(screen.getByText("Support sync diagnostics")).toBeInTheDocument();
+    expect(screen.getByText("Online")).toBeInTheDocument();
+    expect(screen.getAllByText("Live")).not.toHaveLength(0);
+    expect(screen.getByText("Server current")).toBeInTheDocument();
+    expect(screen.getByText("New register activity")).toBeInTheDocument();
+    expect(screen.getByText("High")).toBeInTheDocument();
+    expect(screen.getByText("2026-05-15T12:34:56Z")).toBeInTheDocument();
+    expect(screen.getByText("local 4 synced 4 next n/a")).toBeInTheDocument();
+
+    pressDebugPanelShortcut();
+    expect(
+      screen.queryByText("Support sync diagnostics"),
+    ).not.toBeInTheDocument();
   });
 
   it("shows POS sync status and schedules manual retry from the header", async () => {
@@ -375,7 +484,9 @@ describe("POSRegisterView", () => {
     expect(screen.getByText("Pending sync")).toBeInTheDocument();
     expect(screen.getByText("2")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: /retry pos sync/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /retry pos sync: pending sync 2/i }),
+    );
 
     expect(onRetrySync).toHaveBeenCalled();
   });

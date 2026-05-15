@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createLocalCommandGateway } from "./localCommandGateway";
 import {
@@ -57,6 +57,27 @@ describe("createLocalCommandGateway", () => {
         expect.objectContaining({ type: "session.started" }),
       ],
     });
+  });
+
+  it("notifies after a local event is durably appended", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    const onEventAppended = vi.fn();
+    const gateway = createLocalCommandGateway({
+      store,
+      onEventAppended,
+    });
+
+    await gateway.openDrawer({
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      staffProfileId: "staff-1" as never,
+      registerNumber: "1",
+      openingFloat: 100,
+    });
+
+    expect(onEventAppended).toHaveBeenCalledTimes(1);
   });
 
   it("refuses to start a sale from another store's local drawer", async () => {

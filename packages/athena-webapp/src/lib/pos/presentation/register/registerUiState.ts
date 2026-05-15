@@ -127,7 +127,7 @@ export interface RegisterCheckoutState {
   onRemovePayment: (paymentId: string) => Promise<boolean>;
   onClearPayments: () => Promise<boolean>;
   onCompleteTransaction: () => Promise<boolean>;
-  onStartNewTransaction: () => void;
+  onStartNewTransaction: () => void | Promise<void>;
 }
 
 export interface RegisterCashierCardState {
@@ -168,6 +168,7 @@ export interface RegisterDrawerGateState {
   isSubmitting?: boolean;
   onCloseoutCountedCashChange?: (value: string) => void;
   onCloseoutNotesChange?: (value: string) => void;
+  onCloseoutSecondaryAction?: () => void | Promise<void>;
   onCorrectedOpeningFloatChange?: (value: string) => void;
   onCorrectionReasonChange?: (value: string) => void;
   onOpeningFloatChange?: (value: string) => void;
@@ -232,6 +233,19 @@ export interface RegisterViewModel {
     online: boolean;
     staffSignedIn: boolean;
     storeId?: string;
+    syncFlow: {
+      eventAppendToken: number;
+      lastLocalSequence?: number;
+      lastRuntimeTrigger?: string;
+      lastRuntimeTriggerAt?: number;
+      lastRuntimeTriggerPriority?: string;
+      lastSyncedSequence?: number;
+      nextPendingSequence?: number | null;
+      pendingEventCount?: number;
+      source: string;
+      staffProof: "present" | "missing";
+      status: string;
+    };
     terminalId?: string;
     terminalSource: "live" | "local" | "missing";
   };

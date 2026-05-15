@@ -49,6 +49,7 @@ export type PosLocalSyncSaleCompletedPayload = {
   localPosSessionId: string;
   localTransactionId: string;
   localReceiptNumber: string;
+  receiptNumber: string;
   registerNumber?: string;
   customerProfileId?: string;
   customerInfo?: {

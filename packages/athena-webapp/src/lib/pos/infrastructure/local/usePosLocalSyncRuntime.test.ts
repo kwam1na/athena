@@ -26,6 +26,15 @@ import {
 } from "./usePosLocalSyncRuntime";
 import type { PosLocalEventRecord } from "./posLocalStore";
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve;
+  });
+
+  return { promise, resolve };
+}
+
 describe("usePosLocalSyncRuntimeStatus", () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -211,9 +220,11 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       })),
     };
     const storeFactory = () => store as never;
+    const onLocalEventsChanged = vi.fn();
 
     const { result } = renderHook(() =>
       usePosLocalSyncRuntimeStatus({
+        onLocalEventsChanged,
         onRetrySync: retry,
         storeFactory,
         storeId: "store-1",
@@ -224,6 +235,11 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     await waitFor(() => {
       expect(result.current).toEqual(
         expect.objectContaining({
+          debug: expect.objectContaining({
+            lastTrigger: "route-entry",
+            lastTriggerAt: expect.any(Number),
+            lastTriggerPriority: "normal",
+          }),
           pendingEventCount: 5,
           status: "pending",
         }),
@@ -277,6 +293,354 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       mappedAt: 12,
     });
     expect(store.writeLocalCloudMapping).toHaveBeenCalledTimes(3);
+    expect(onLocalEventsChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it("uploads pending events after the append token changes", async () => {
+    let localEvents: PosLocalEventRecord[] = [];
+    mocks.ingestLocalEvents.mockResolvedValue({
+      kind: "ok",
+      data: {
+        accepted: [
+          {
+            localEventId: "event-open",
+            sequence: 1,
+            status: "projected",
+          },
+        ],
+        held: [],
+        mappings: [],
+        conflicts: [],
+        syncCursor: {
+          localRegisterSessionId: "register-1",
+          acceptedThroughSequence: 1,
+        },
+      },
+    });
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: localEvents,
+      })),
+      markEventsSynced: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      writeLocalCloudMapping: vi.fn(async () => ({
+        ok: true,
+        value: {
+          entity: "registerSession",
+          localId: "register-1",
+          cloudId: "register-session-1",
+          mappedAt: 10,
+        },
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+    const storeFactory = () => store as never;
+
+    const { result, rerender } = renderHook(
+      ({ eventAppendToken }: { eventAppendToken: number }) =>
+        usePosLocalSyncRuntimeStatus({
+          eventAppendToken,
+          storeFactory,
+          storeId: "store-1",
+          terminalId: "terminal-cloud-1",
+        }),
+      {
+        initialProps: { eventAppendToken: 0 },
+      },
+    );
+
+    await waitFor(() => expect(store.listEvents).toHaveBeenCalled());
+    expect(mocks.ingestLocalEvents).not.toHaveBeenCalled();
+
+    localEvents = [
+      buildLocalEvent({
+        localEventId: "event-open",
+        payload: {
+          openingFloat: 100,
+          status: "open",
+        },
+        sequence: 1,
+        type: "register.opened",
+      }),
+    ];
+
+    rerender({ eventAppendToken: 1 });
+
+    await waitFor(() =>
+      expect(result.current?.debug).toEqual(
+        expect.objectContaining({
+          lastTrigger: "event-appended",
+          lastTriggerAt: expect.any(Number),
+          lastTriggerPriority: "high",
+        }),
+      ),
+    );
+    await waitFor(() =>
+      expect(mocks.ingestLocalEvents).toHaveBeenCalledWith(
+        expect.objectContaining({
+          events: [
+            expect.objectContaining({
+              eventType: "register_opened",
+              localEventId: "event-open",
+            }),
+          ],
+        }),
+      ),
+    );
+    expect(store.markEventsSynced).toHaveBeenCalledWith(["event-open"], {
+      uploaded: true,
+    });
+  });
+
+  it("ignores stale upload results after the runtime scope changes", async () => {
+    const pendingIngest = deferred<{
+      kind: "error";
+      error: { code: string; message: string };
+    }>();
+    mocks.ingestLocalEvents.mockReturnValue(pendingIngest.promise);
+    const oldStore = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [
+          buildLocalEvent({
+            localEventId: "event-open",
+            payload: {
+              openingFloat: 100,
+              status: "open",
+            },
+            sequence: 1,
+            storeId: "store-1",
+            type: "register.opened",
+          }),
+        ],
+      })),
+      markEventsNeedsReview: vi.fn(async () => ({
+        ok: true,
+        value: undefined,
+      })),
+      markEventsSynced: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      writeLocalCloudMapping: vi.fn(async () => ({
+        ok: true,
+        value: {},
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+    const newStore = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      markEventsNeedsReview: vi.fn(async () => ({
+        ok: true,
+        value: undefined,
+      })),
+      markEventsSynced: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      writeLocalCloudMapping: vi.fn(async () => ({
+        ok: true,
+        value: {},
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-2",
+          displayName: "Back",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-2",
+          storeId: "store-2",
+          terminalId: "local-terminal-2",
+        },
+      })),
+    };
+    const onLocalEventsChanged = vi.fn();
+    let currentStore: typeof oldStore | typeof newStore = oldStore;
+    const storeFactory = () => currentStore as never;
+
+    const { result, rerender } = renderHook(
+      ({
+        eventAppendToken,
+        storeId,
+      }: {
+        eventAppendToken: number;
+        storeId: "store-1" | "store-2";
+      }) =>
+        usePosLocalSyncRuntimeStatus({
+          eventAppendToken,
+          onLocalEventsChanged,
+          storeFactory,
+          storeId,
+          terminalId: storeId === "store-1" ? "terminal-cloud-1" : "terminal-cloud-2",
+        }),
+      {
+        initialProps: {
+          eventAppendToken: 0,
+          storeId: "store-1" as "store-1" | "store-2",
+        },
+      },
+    );
+
+    await waitFor(() => {
+      expect(result.current).toEqual(
+        expect.objectContaining({
+          pendingEventCount: 1,
+          status: "pending",
+        }),
+      );
+    });
+    act(() => {
+      result.current?.onRetrySync?.();
+    });
+    await waitFor(() => expect(oldStore.listEvents).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.ingestLocalEvents).toHaveBeenCalled());
+
+    currentStore = newStore;
+    rerender({ eventAppendToken: 0, storeId: "store-2" });
+    pendingIngest.resolve({
+      kind: "error",
+      error: { code: "unavailable", message: "Old upload failed." },
+    });
+
+    await waitFor(() => expect(newStore.listEvents).toHaveBeenCalled());
+    await act(async () => {
+      await pendingIngest.promise;
+    });
+
+    expect(oldStore.markEventsNeedsReview).not.toHaveBeenCalled();
+    expect(onLocalEventsChanged).not.toHaveBeenCalled();
+  });
+
+  it("treats an already-incremented append token as an immediate event trigger on first observation", async () => {
+    mocks.ingestLocalEvents.mockResolvedValue({
+      kind: "ok",
+      data: {
+        accepted: [
+          {
+            localEventId: "event-open",
+            sequence: 1,
+            status: "projected",
+          },
+        ],
+        held: [],
+        mappings: [
+          {
+            _id: "mapping-open",
+            storeId: "store-1",
+            terminalId: "terminal-cloud-1",
+            localRegisterSessionId: "register-1",
+            localEventId: "event-open",
+            localIdKind: "registerSession",
+            localId: "register-1",
+            cloudTable: "registerSession",
+            cloudId: "register-session-1",
+            createdAt: 12,
+          },
+        ],
+        conflicts: [],
+        syncCursor: {
+          localRegisterSessionId: "register-1",
+          acceptedThroughSequence: 1,
+        },
+      },
+    });
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [
+          buildLocalEvent({
+            localEventId: "event-open",
+            payload: {
+              openingFloat: 100,
+              status: "open",
+            },
+            sequence: 1,
+            type: "register.opened",
+          }),
+        ],
+      })),
+      markEventsSynced: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      writeLocalCloudMapping: vi.fn(async () => ({
+        ok: true,
+        value: {},
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+    const storeFactory = () => store as never;
+
+    const { result } = renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        eventAppendToken: 1,
+        storeFactory,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(result.current?.debug).toEqual(
+        expect.objectContaining({
+          lastTrigger: "event-appended",
+          lastTriggerAt: expect.any(Number),
+          lastTriggerPriority: "high",
+        }),
+      ),
+    );
+    await waitFor(() =>
+      expect(mocks.ingestLocalEvents).toHaveBeenCalledWith(
+        expect.objectContaining({
+          events: [
+            expect.objectContaining({
+              eventType: "register_opened",
+              localEventId: "event-open",
+            }),
+          ],
+        }),
+      ),
+    );
   });
 
   it("marks uploaded events for review when the server rejects the batch", async () => {
