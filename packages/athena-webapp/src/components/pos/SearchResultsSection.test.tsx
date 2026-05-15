@@ -130,4 +130,34 @@ describe("SearchResultsSection", () => {
 
     expect(onQuickAddProduct).not.toHaveBeenCalled();
   });
+
+  it("keeps a missing-availability result visible with readiness copy but does not add it", () => {
+    const onAddProduct = vi.fn();
+    renderSearchResults({
+      onAddProduct,
+      products: [
+        buildProduct({
+          availabilityMessage:
+            "Availability not ready. Reconnect or refresh this terminal before selling this item.",
+          availabilityStatus: "unknown",
+          inStock: false,
+          quantityAvailable: undefined,
+        }),
+      ],
+    });
+
+    expect(
+      screen.getByText(
+        "Availability not ready. Reconnect or refresh this terminal before selling this item.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Club").closest("[aria-disabled]")).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
+
+    fireEvent.click(screen.getByText("Club"));
+
+    expect(onAddProduct).not.toHaveBeenCalled();
+  });
 });

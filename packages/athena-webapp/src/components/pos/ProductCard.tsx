@@ -17,8 +17,9 @@ export function ProductCard({
   formatter,
   onAfterAdd,
 }: ProductCardProps) {
+  const isAvailable = product.inStock;
   const handleClick = () => {
-    if (product.inStock) {
+    if (isAvailable) {
       onAddProduct(product);
       onAfterAdd?.();
     }
@@ -26,9 +27,10 @@ export function ProductCard({
 
   return (
     <div
-      className={`group flex items-center gap-4 p-4 border rounded-lg transition-all duration-200 cursor-pointer bg-white/80 backdrop-blur-sm ${
-        !product.inStock
-          ? "opacity-95 border-gray-200 hover:border-gray-300"
+      aria-disabled={!isAvailable}
+      className={`group flex items-center gap-4 p-4 border rounded-lg transition-all duration-200 bg-white/80 backdrop-blur-sm ${
+        !isAvailable
+          ? "cursor-not-allowed opacity-95 border-gray-200"
           : "border-gray-200 hover:border-blue-200 hover:shadow-md hover:shadow-blue-100/50"
       }`}
       onClick={handleClick}
@@ -102,7 +104,13 @@ export function ProductCard({
 
         {/* Availability */}
         <p className="text-xs text-gray-500 mt-4">
-          <b>{product.quantityAvailable}</b> available
+          {product.availabilityMessage ? (
+            product.availabilityMessage
+          ) : (
+            <>
+              <b>{product.quantityAvailable ?? 0}</b> available
+            </>
+          )}
         </p>
       </div>
     </div>

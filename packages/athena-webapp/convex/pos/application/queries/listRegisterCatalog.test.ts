@@ -5,6 +5,7 @@ import type { QueryCtx } from "../../../_generated/server";
 import {
   listRegisterCatalog,
   listRegisterCatalogAvailability,
+  listRegisterCatalogAvailabilitySnapshot,
 } from "./listRegisterCatalog";
 
 type TableName =
@@ -339,6 +340,164 @@ describe("listRegisterCatalog", () => {
         skuId: "sku-live",
         inStock: true,
         quantityAvailable: 1,
+      },
+      {
+        productSkuId: "sku-out",
+        skuId: "sku-out",
+        inStock: false,
+        quantityAvailable: 0,
+      },
+    ]);
+  });
+
+  it("keeps requested availability capped", async () => {
+    const productSkus = Array.from({ length: 51 }, (_, index) => ({
+      _id: `sku-${index}`,
+      storeId: "store-a",
+      productId: `product-${index}`,
+      sku: `SKU-${index}`,
+      quantityAvailable: 1,
+    }));
+    const { ctx } = createRegisterCatalogCtx({
+      productSku: productSkus,
+    });
+
+    const rows = await listRegisterCatalogAvailability(ctx, {
+      storeId: "store-a" as Id<"store">,
+      productSkuIds: productSkus.map(
+        (sku) => sku._id as Id<"productSku">,
+      ),
+    });
+
+    expect(rows).toHaveLength(50);
+    expect(rows.at(-1)).toMatchObject({
+      productSkuId: "sku-49",
+      quantityAvailable: 1,
+    });
+  });
+
+  it("returns a full-store availability snapshot scoped like register catalog metadata", async () => {
+    const { ctx } = createRegisterCatalogCtx({
+      category: [
+        {
+          _id: "category-store-a",
+          storeId: "store-a",
+          name: "Wigs",
+        },
+      ],
+      inventoryHold: [
+        {
+          _id: "hold-active",
+          storeId: "store-a",
+          productSkuId: "sku-live",
+          sourceType: "posSession",
+          sourceSessionId: "session-active",
+          status: "active",
+          quantity: 3,
+          expiresAt: Date.now() + 60_000,
+          createdAt: 1,
+          updatedAt: 1,
+        },
+        {
+          _id: "hold-expired",
+          storeId: "store-a",
+          productSkuId: "sku-live",
+          sourceType: "posSession",
+          sourceSessionId: "session-expired",
+          status: "active",
+          quantity: 2,
+          expiresAt: Date.now() - 60_000,
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      product: [
+        {
+          _id: "product-live",
+          storeId: "store-a",
+          categoryId: "category-store-a",
+          name: "Live Wig",
+        },
+        {
+          _id: "product-out",
+          storeId: "store-a",
+          categoryId: "category-store-a",
+          name: "Out Wig",
+        },
+        {
+          _id: "product-archived",
+          storeId: "store-a",
+          categoryId: "category-store-a",
+          name: "Archived Wig",
+          availability: "archived",
+        },
+        {
+          _id: "product-zero-price",
+          storeId: "store-a",
+          categoryId: "category-store-a",
+          name: "Zero Price Wig",
+        },
+        {
+          _id: "product-other-store",
+          storeId: "store-b",
+          categoryId: "category-store-a",
+          name: "Other Store Wig",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku-live",
+          storeId: "store-a",
+          productId: "product-live",
+          sku: "SKU-LIVE",
+          price: 100,
+          quantityAvailable: 5,
+        },
+        {
+          _id: "sku-out",
+          storeId: "store-a",
+          productId: "product-out",
+          sku: "SKU-OUT",
+          price: 100,
+          quantityAvailable: 0,
+        },
+        {
+          _id: "sku-archived",
+          storeId: "store-a",
+          productId: "product-archived",
+          sku: "SKU-ARCHIVED",
+          price: 100,
+          quantityAvailable: 9,
+        },
+        {
+          _id: "sku-zero-price",
+          storeId: "store-a",
+          productId: "product-zero-price",
+          sku: "SKU-ZERO",
+          price: 0,
+          quantityAvailable: 9,
+        },
+        {
+          _id: "sku-other-store",
+          storeId: "store-b",
+          productId: "product-other-store",
+          sku: "SKU-OTHER",
+          price: 100,
+          quantityAvailable: 9,
+        },
+      ],
+    });
+
+    const rows = await listRegisterCatalogAvailabilitySnapshot(ctx, {
+      storeId: "store-a" as Id<"store">,
+    });
+
+    expect(rows).toEqual([
+      {
+        productSkuId: "sku-live",
+        skuId: "sku-live",
+        inStock: true,
+        quantityAvailable: 2,
       },
       {
         productSkuId: "sku-out",

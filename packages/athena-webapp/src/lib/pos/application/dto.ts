@@ -149,6 +149,7 @@ export interface PosRegisterCatalogInput {
 }
 
 export interface PosRegisterCatalogAvailabilityRowDto {
+  availabilitySource?: "live" | "local";
   productSkuId: Id<"productSku">;
   skuId: Id<"productSku">;
   inStock: boolean;
@@ -156,6 +157,7 @@ export interface PosRegisterCatalogAvailabilityRowDto {
 }
 
 export interface PosRegisterCatalogAvailabilityInput {
+  refreshFullAvailabilitySnapshot?: boolean;
   storeId?: Id<"store">;
   productSkuIds?: Array<Id<"productSku">>;
 }

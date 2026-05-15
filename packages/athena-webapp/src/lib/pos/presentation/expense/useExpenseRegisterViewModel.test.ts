@@ -478,9 +478,12 @@ describe("useExpenseRegisterViewModel", () => {
 
     expect(result.current.productEntry.searchResults).toEqual([
       expect.objectContaining({
+        availabilityMessage:
+          "Availability not ready. Reconnect or refresh this terminal before selling this item.",
+        availabilityStatus: "unknown",
         skuId: "product-sku-1",
         inStock: false,
-        quantityAvailable: 0,
+        quantityAvailable: undefined,
       }),
     ]);
     await new Promise((resolve) => setTimeout(resolve, 0));

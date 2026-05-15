@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import type { PosRegisterCatalogAvailabilityRowDto } from "@/lib/pos/application/dto";
 import {
   POS_LOCAL_STORE_SCHEMA_VERSION,
   createIndexedDbPosLocalStorageAdapter,
@@ -38,6 +39,18 @@ function buildAuthorityRecord(overrides = {}) {
   };
 }
 
+function buildAvailabilityRow(
+  overrides: Partial<PosRegisterCatalogAvailabilityRowDto> = {},
+): PosRegisterCatalogAvailabilityRowDto {
+  return {
+    productSkuId: "sku-1" as never,
+    skuId: "sku-1" as never,
+    inStock: true,
+    quantityAvailable: 5,
+    ...overrides,
+  };
+}
+
 describe("posLocalStore", () => {
   it("writes and reads a provisioned terminal seed before any network call", async () => {
     const store = createPosLocalStore({
@@ -70,6 +83,172 @@ describe("posLocalStore", () => {
         schemaVersion: POS_LOCAL_STORE_SCHEMA_VERSION,
       },
     });
+  });
+
+  it("writes and reads a register catalog snapshot for offline lookup", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 1_700,
+    });
+
+    const write = await store.writeRegisterCatalogSnapshot({
+      storeId: "store-1",
+      rows: [
+        {
+          id: "sku-1" as never,
+          productSkuId: "sku-1" as never,
+          skuId: "sku-1" as never,
+          productId: "product-1" as never,
+          name: "Deep Wave",
+          sku: "DW-18",
+          barcode: "1234567890123",
+          price: 10_000,
+          category: "Hair",
+          description: "Deep wave bundle",
+          image: null,
+          size: "18",
+          length: 18,
+          color: "natural",
+          areProcessingFeesAbsorbed: false,
+        },
+      ],
+    });
+
+    expect(write).toEqual({
+      ok: true,
+      value: {
+        refreshedAt: 1_700,
+        rows: [
+          expect.objectContaining({
+            productSkuId: "sku-1",
+            sku: "DW-18",
+          }),
+        ],
+        schemaVersion: POS_LOCAL_STORE_SCHEMA_VERSION,
+        storeId: "store-1",
+      },
+    });
+    await expect(
+      store.readRegisterCatalogSnapshot({ storeId: "store-1" }),
+    ).resolves.toEqual(write);
+  });
+
+  it("writes and reads a full register availability snapshot separately from catalog metadata", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 1_800,
+    });
+
+    const write = await store.writeRegisterAvailabilitySnapshot({
+      storeId: "store-1",
+      rows: [
+        buildAvailabilityRow(),
+        buildAvailabilityRow({
+          productSkuId: "sku-2" as never,
+          skuId: "sku-2" as never,
+          inStock: false,
+          quantityAvailable: 0,
+        }),
+      ],
+    });
+
+    expect(write).toEqual({
+      ok: true,
+      value: {
+        refreshedAt: 1_800,
+        rows: [
+          expect.objectContaining({
+            productSkuId: "sku-1",
+            quantityAvailable: 5,
+          }),
+          expect.objectContaining({
+            productSkuId: "sku-2",
+            quantityAvailable: 0,
+          }),
+        ],
+        schemaVersion: POS_LOCAL_STORE_SCHEMA_VERSION,
+        storeId: "store-1",
+      },
+    });
+    await expect(
+      store.readRegisterAvailabilitySnapshot({ storeId: "store-1" }),
+    ).resolves.toEqual(write);
+  });
+
+  it("replaces register availability snapshots atomically without merging stale rows", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 1_900,
+    });
+
+    await store.writeRegisterAvailabilitySnapshot({
+      storeId: "store-1",
+      rows: [
+        buildAvailabilityRow(),
+        buildAvailabilityRow({
+          productSkuId: "sku-stale" as never,
+          skuId: "sku-stale" as never,
+          quantityAvailable: 3,
+        }),
+      ],
+    });
+    await store.writeRegisterAvailabilitySnapshot({
+      storeId: "store-1",
+      rows: [
+        buildAvailabilityRow({
+          productSkuId: "sku-2" as never,
+          skuId: "sku-2" as never,
+          quantityAvailable: 8,
+        }),
+      ],
+    });
+
+    await expect(
+      store.readRegisterAvailabilitySnapshot({ storeId: "store-1" }),
+    ).resolves.toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        rows: [
+          expect.objectContaining({
+            productSkuId: "sku-2",
+            quantityAvailable: 8,
+          }),
+        ],
+      }),
+    });
+
+    const failingStore = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter({
+        failNextPutForStore: "registerAvailability",
+      }),
+    });
+    await expect(
+      failingStore.writeRegisterAvailabilitySnapshot({
+        storeId: "store-1",
+        rows: [buildAvailabilityRow()],
+      }),
+    ).resolves.toMatchObject({
+      ok: false,
+      error: { code: "write_failed" },
+    });
+    await expect(
+      failingStore.readRegisterAvailabilitySnapshot({ storeId: "store-1" }),
+    ).resolves.toEqual({ ok: true, value: null });
+  });
+
+  it("keeps register availability snapshots isolated by store", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+
+    await store.writeRegisterAvailabilitySnapshot({
+      storeId: "store-1",
+      rows: [buildAvailabilityRow()],
+    });
+
+    await expect(
+      store.readRegisterAvailabilitySnapshot({ storeId: "store-2" }),
+    ).resolves.toEqual({ ok: true, value: null });
   });
 
   it("appends local register, sale, payment, receipt, closeout, and reopen events in stable sequence order", async () => {
@@ -302,8 +481,9 @@ describe("posLocalStore", () => {
       ok: false,
       error: {
         code: "unsupported_schema_version",
-        message:
-          "POS local store schema version 4 is newer than supported version 3.",
+        message: `POS local store schema version ${
+          POS_LOCAL_STORE_SCHEMA_VERSION + 1
+        } is newer than supported version ${POS_LOCAL_STORE_SCHEMA_VERSION}.`,
       },
     });
   });

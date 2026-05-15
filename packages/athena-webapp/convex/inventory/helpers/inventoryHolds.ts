@@ -793,6 +793,57 @@ export async function readActiveHeldQuantitiesForSkus(
   return heldQuantities;
 }
 
+export async function readActiveHeldQuantitiesForStoreSkus(
+  db: DatabaseReader,
+  args: {
+    storeId: Id<"store">;
+    skuIds: Id<"productSku">[];
+    now?: number;
+  },
+) {
+  const now = args.now ?? Date.now();
+  const heldQuantities = new Map<Id<"productSku">, number>();
+  const uniqueSkuIds = Array.from(new Set(args.skuIds));
+  const requestedSkuIds = new Set(uniqueSkuIds);
+
+  for (const skuId of uniqueSkuIds) {
+    heldQuantities.set(skuId, 0);
+  }
+
+  if (uniqueSkuIds.length === 0) {
+    return heldQuantities;
+  }
+
+  const holds = await db
+    .query("inventoryHold")
+    .withIndex("by_storeId_status_expiresAt", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("status", "active")
+        .gt("expiresAt", now),
+    )
+    .take(ACTIVE_SESSION_HOLD_LIST_LIMIT + 1);
+
+  if (holds.length > ACTIVE_SESSION_HOLD_LIST_LIMIT) {
+    throw new Error(
+      "Too many active POS inventory holds to summarize register availability. Expire stale POS sessions and retry.",
+    );
+  }
+
+  for (const hold of holds) {
+    if (!requestedSkuIds.has(hold.productSkuId)) {
+      continue;
+    }
+
+    heldQuantities.set(
+      hold.productSkuId,
+      (heldQuantities.get(hold.productSkuId) ?? 0) + hold.quantity,
+    );
+  }
+
+  return heldQuantities;
+}
+
 async function sumActiveHeldQuantity(
   db: DatabaseReader,
   args: {

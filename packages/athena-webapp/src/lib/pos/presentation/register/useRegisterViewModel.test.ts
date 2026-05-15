@@ -35,6 +35,7 @@ const mockReadProvisionedTerminalSeed = vi.fn();
 const mockGetStaffAuthorityReadiness = vi.fn();
 const mockMarkLocalEventsSynced = vi.fn();
 const mockWriteLocalCloudMapping = vi.fn();
+const mockListLocalCloudMappings = vi.fn();
 
 let mockActiveStore: { _id: Id<"store">; currency: string } | null;
 let mockTerminal:
@@ -160,6 +161,7 @@ let mockRegisterCatalogRows: Array<{
   areProcessingFeesAbsorbed: boolean;
 }>;
 let mockRegisterCatalogAvailabilityRows: Array<{
+  availabilitySource?: "live" | "local";
   productSkuId: Id<"productSku">;
   skuId: Id<"productSku">;
   inStock: boolean;
@@ -265,6 +267,7 @@ vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
     getStaffAuthorityReadiness: mockGetStaffAuthorityReadiness,
     listEvents: mockListLocalEvents,
     listEventsForUpload: mockListLocalEvents,
+    listLocalCloudMappings: mockListLocalCloudMappings,
     readProvisionedTerminalSeed: mockReadProvisionedTerminalSeed,
     markEventsSynced: mockMarkLocalEventsSynced,
     writeLocalCloudMapping: mockWriteLocalCloudMapping,
@@ -312,6 +315,28 @@ function buildRegisterCatalogAvailabilityRow(
     inStock: true,
     quantityAvailable: 5,
     ...overrides,
+  };
+}
+
+function buildLocalEvent(
+  overrides: Partial<Record<string, unknown>> & { sequence: number; type: string },
+) {
+  const { sequence, type, ...rest } = overrides;
+
+  return {
+    localEventId: `event-${sequence}`,
+    schemaVersion: 1,
+    sequence,
+    type,
+    terminalId: "local-terminal-1",
+    storeId: "store-1",
+    registerNumber: "1",
+    localRegisterSessionId: "drawer-1",
+    staffProfileId: "staff-1",
+    payload: {},
+    createdAt: 1_000 + sequence,
+    sync: { status: "pending" },
+    ...rest,
   };
 }
 
@@ -422,6 +447,8 @@ describe("useRegisterViewModel", () => {
     mockMarkLocalEventsSynced.mockResolvedValue({ ok: true, value: [] });
     mockWriteLocalCloudMapping.mockReset();
     mockWriteLocalCloudMapping.mockResolvedValue({ ok: true, value: {} });
+    mockListLocalCloudMappings.mockReset();
+    mockListLocalCloudMappings.mockResolvedValue({ ok: true, value: [] });
     (globalThis as typeof globalThis & { indexedDB?: IDBFactory }).indexedDB =
       {} as IDBFactory;
     mockUseMutation.mockReset();
@@ -2241,9 +2268,12 @@ describe("useRegisterViewModel", () => {
     expect(result.current.productEntry.searchResults).toHaveLength(1);
     expect(result.current.productEntry.searchResults[0]).toEqual(
       expect.objectContaining({
+        availabilityMessage:
+          "Availability not ready. Reconnect or refresh this terminal before selling this item.",
+        availabilityStatus: "unknown",
         skuId: "sku-2",
         inStock: false,
-        quantityAvailable: 0,
+        quantityAvailable: undefined,
       }),
     );
 
@@ -2254,6 +2284,641 @@ describe("useRegisterViewModel", () => {
     });
 
     expect(mockAddItem).not.toHaveBeenCalled();
+    expect(mockAppendLocalEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "cart.item_added" }),
+    );
+    expect(toast.error).toHaveBeenCalledWith(
+      "Availability not ready. Reconnect or refresh this terminal before selling this item.",
+    );
+  });
+
+  it("subtracts active terminal-local cart quantity from trusted availability", async () => {
+    mockRegisterCatalogRows = [
+      buildRegisterCatalogRow({
+        id: "sku-1" as Id<"productSku">,
+        productSkuId: "sku-1" as Id<"productSku">,
+        skuId: "sku-1" as Id<"productSku">,
+        productId: "product-1" as Id<"product">,
+        name: "Body Wave",
+        sku: "BW-12",
+        barcode: "1234567890",
+      }),
+    ];
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow({
+        availabilitySource: "local",
+        productSkuId: "sku-1" as Id<"productSku">,
+        skuId: "sku-1" as Id<"productSku">,
+        quantityAvailable: 2,
+      }),
+    ];
+    mockListLocalEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        buildLocalEvent({
+          sequence: 1,
+          type: "register.opened",
+          payload: {
+            localRegisterSessionId: "drawer-1",
+            openingFloat: 5_000,
+            expectedCash: 5_000,
+            status: "open",
+          },
+        }),
+        buildLocalEvent({
+          sequence: 2,
+          type: "session.started",
+          localPosSessionId: "local-sale-1",
+          payload: { localPosSessionId: "local-sale-1", status: "active" },
+        }),
+        buildLocalEvent({
+          sequence: 3,
+          type: "cart.item_added",
+          localPosSessionId: "local-sale-1",
+          payload: {
+            localItemId: "local-item-1",
+            productId: "product-1",
+            productSkuId: "sku-1",
+            productSku: "BW-12",
+            productName: "Body Wave",
+            price: 120,
+            quantity: 1,
+          },
+        }),
+      ],
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("BW-12");
+    });
+
+    await waitFor(() =>
+      expect(result.current.productEntry.searchResults).toEqual([
+        expect.objectContaining({
+          skuId: "sku-1",
+          inStock: true,
+          quantityAvailable: 1,
+        }),
+      ]),
+    );
+  });
+
+  it("does not subtract active cart quantity from live hold-aware availability", async () => {
+    mockRegisterCatalogRows = [
+      buildRegisterCatalogRow({
+        id: "sku-1" as Id<"productSku">,
+        productSkuId: "sku-1" as Id<"productSku">,
+        skuId: "sku-1" as Id<"productSku">,
+        productId: "product-1" as Id<"product">,
+        name: "Body Wave",
+        sku: "BW-12",
+        barcode: "1234567890",
+      }),
+    ];
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow({
+        availabilitySource: "live",
+        productSkuId: "sku-1" as Id<"productSku">,
+        skuId: "sku-1" as Id<"productSku">,
+        quantityAvailable: 1,
+      }),
+    ];
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("BW-12");
+    });
+
+    expect(result.current.productEntry.searchResults).toEqual([
+      expect.objectContaining({
+        availabilityStatus: "available",
+        skuId: "sku-1",
+        inStock: true,
+        quantityAvailable: 1,
+      }),
+    ]);
+  });
+
+  it("subtracts unsynced cart updates on mapped cloud-backed local sessions", async () => {
+    mockRegisterCatalogRows = [buildRegisterCatalogRow()];
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow({
+        availabilitySource: "live",
+        quantityAvailable: 1,
+      }),
+    ];
+    mockListLocalEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        buildLocalEvent({
+          sequence: 1,
+          type: "register.opened",
+          payload: {
+            localRegisterSessionId: "drawer-1",
+            openingFloat: 5_000,
+            expectedCash: 5_000,
+            status: "open",
+          },
+          sync: { status: "synced", cloudEventId: "cloud-event-1" },
+        }),
+        buildLocalEvent({
+          sequence: 2,
+          type: "session.started",
+          localPosSessionId: "local-sale-1",
+          payload: { localPosSessionId: "local-sale-1", status: "active" },
+          sync: { status: "synced", cloudEventId: "cloud-event-2" },
+        }),
+        buildLocalEvent({
+          sequence: 3,
+          type: "cart.item_added",
+          localPosSessionId: "local-sale-1",
+          payload: {
+            localItemId: "local-item-1",
+            productId: "product-2",
+            productSkuId: "sku-2",
+            productSku: "DW-18",
+            productName: "Deep Wave",
+            price: 100,
+            quantity: 1,
+          },
+        }),
+      ],
+    });
+    mockListLocalCloudMappings.mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          entity: "posSession",
+          localId: "local-sale-1",
+          cloudId: "session-1",
+          mappedAt: 1_100,
+        },
+      ],
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("1234567890123");
+    });
+
+    await waitFor(() =>
+      expect(result.current.productEntry.searchResults).toEqual([
+        expect.objectContaining({
+          availabilityStatus: "out_of_stock",
+          skuId: "sku-2",
+          inStock: false,
+          quantityAvailable: 0,
+        }),
+      ]),
+    );
+  });
+
+  it("subtracts only the unsynced cart delta on mapped cloud-backed local sessions", async () => {
+    mockRegisterCatalogRows = [buildRegisterCatalogRow()];
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow({
+        availabilitySource: "live",
+        quantityAvailable: 2,
+      }),
+    ];
+    mockListLocalEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        buildLocalEvent({
+          sequence: 1,
+          type: "register.opened",
+          payload: {
+            localRegisterSessionId: "drawer-1",
+            openingFloat: 5_000,
+            expectedCash: 5_000,
+            status: "open",
+          },
+          sync: { status: "synced", cloudEventId: "cloud-event-1" },
+        }),
+        buildLocalEvent({
+          sequence: 2,
+          type: "session.started",
+          localPosSessionId: "local-sale-1",
+          payload: { localPosSessionId: "local-sale-1", status: "active" },
+          sync: { status: "synced", cloudEventId: "cloud-event-2" },
+        }),
+        buildLocalEvent({
+          sequence: 3,
+          type: "cart.item_added",
+          localPosSessionId: "local-sale-1",
+          payload: {
+            localItemId: "local-item-1",
+            productId: "product-2",
+            productSkuId: "sku-2",
+            productSku: "DW-18",
+            productName: "Deep Wave",
+            price: 100,
+            quantity: 1,
+          },
+          sync: { status: "synced", cloudEventId: "cloud-event-3" },
+        }),
+        buildLocalEvent({
+          sequence: 4,
+          type: "cart.item_added",
+          localPosSessionId: "local-sale-1",
+          payload: {
+            localItemId: "local-item-1",
+            productId: "product-2",
+            productSkuId: "sku-2",
+            productSku: "DW-18",
+            productName: "Deep Wave",
+            price: 100,
+            quantity: 2,
+          },
+        }),
+      ],
+    });
+    mockListLocalCloudMappings.mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          entity: "posSession",
+          localId: "local-sale-1",
+          cloudId: "session-1",
+          mappedAt: 1_100,
+        },
+      ],
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("1234567890123");
+    });
+
+    await waitFor(() =>
+      expect(result.current.productEntry.searchResults).toEqual([
+        expect.objectContaining({
+          availabilityStatus: "available",
+          skuId: "sku-2",
+          inStock: true,
+          quantityAvailable: 1,
+        }),
+      ]),
+    );
+  });
+
+  it("does not subtract cloud-held cart quantity from trusted local fallback", async () => {
+    mockRegisterCatalogRows = [
+      buildRegisterCatalogRow({
+        id: "sku-1" as Id<"productSku">,
+        productSkuId: "sku-1" as Id<"productSku">,
+        skuId: "sku-1" as Id<"productSku">,
+        productId: "product-1" as Id<"product">,
+        name: "Body Wave",
+        sku: "BW-12",
+        barcode: "1234567890",
+      }),
+    ];
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow({
+        availabilitySource: "local",
+        productSkuId: "sku-1" as Id<"productSku">,
+        skuId: "sku-1" as Id<"productSku">,
+        quantityAvailable: 1,
+      }),
+    ];
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("BW-12");
+    });
+
+    expect(result.current.productEntry.searchResults).toEqual([
+      expect.objectContaining({
+        availabilityStatus: "available",
+        skuId: "sku-1",
+        inStock: true,
+        quantityAvailable: 1,
+      }),
+    ]);
+  });
+
+  it("keeps completed terminal-local sales consuming trusted availability until sync", async () => {
+    mockRegisterCatalogRows = [
+      buildRegisterCatalogRow({
+        id: "sku-1" as Id<"productSku">,
+        productSkuId: "sku-1" as Id<"productSku">,
+        skuId: "sku-1" as Id<"productSku">,
+        productId: "product-1" as Id<"product">,
+        name: "Body Wave",
+        sku: "BW-12",
+        barcode: "1234567890",
+      }),
+    ];
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow({
+        availabilitySource: "local",
+        productSkuId: "sku-1" as Id<"productSku">,
+        skuId: "sku-1" as Id<"productSku">,
+        quantityAvailable: 1,
+      }),
+    ];
+    mockListLocalEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        buildLocalEvent({
+          sequence: 1,
+          type: "register.opened",
+          payload: {
+            localRegisterSessionId: "drawer-1",
+            openingFloat: 5_000,
+            expectedCash: 5_000,
+            status: "open",
+          },
+        }),
+        buildLocalEvent({
+          sequence: 2,
+          type: "session.started",
+          localPosSessionId: "local-sale-1",
+          payload: { localPosSessionId: "local-sale-1", status: "active" },
+        }),
+        buildLocalEvent({
+          sequence: 3,
+          type: "cart.item_added",
+          localPosSessionId: "local-sale-1",
+          payload: {
+            localItemId: "local-item-1",
+            productId: "product-1",
+            productSkuId: "sku-1",
+            productSku: "BW-12",
+            productName: "Body Wave",
+            price: 120,
+            quantity: 1,
+          },
+        }),
+        buildLocalEvent({
+          sequence: 4,
+          type: "transaction.completed",
+          localPosSessionId: "local-sale-1",
+          localTransactionId: "local-txn-1",
+          payload: {
+            localPosSessionId: "local-sale-1",
+            localTransactionId: "local-txn-1",
+            receiptNumber: "R-1",
+            subtotal: 120,
+            tax: 0,
+            total: 120,
+            payments: [{ method: "cash", amount: 120, timestamp: 1_004 }],
+          },
+        }),
+      ],
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("BW-12");
+    });
+
+    await waitFor(() =>
+      expect(result.current.productEntry.searchResults).toEqual([
+        expect.objectContaining({
+          availabilityStatus: "out_of_stock",
+          skuId: "sku-1",
+          inStock: false,
+          quantityAvailable: 0,
+        }),
+      ]),
+    );
+
+    let added = true;
+    await act(async () => {
+      added = await result.current.productEntry.onAddProduct(
+        result.current.productEntry.searchResults[0],
+      );
+    });
+
+    expect(added).toBe(false);
+    expect(mockAppendLocalEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "cart.item_added" }),
+    );
+    expect(toast.error).toHaveBeenCalledWith(
+      "No trusted availability remains for this item on this terminal.",
+    );
+  });
+
+  it("rechecks trusted availability inside the local add queue", async () => {
+    mockRegisterCatalogRows = [buildRegisterCatalogRow()];
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow({
+        availabilitySource: "local",
+        quantityAvailable: 1,
+      }),
+    ];
+    const localEvents = [
+      buildLocalEvent({
+        sequence: 1,
+        type: "register.opened",
+        payload: {
+          localRegisterSessionId: "drawer-1",
+          openingFloat: 5_000,
+          expectedCash: 5_000,
+          status: "open",
+        },
+      }),
+    ];
+    mockListLocalEvents.mockImplementation(async () => ({
+      ok: true,
+      value: [...localEvents],
+    }));
+    mockAppendLocalEvent.mockImplementation(async (event) => {
+      if (event?.type === "cart.item_added") {
+        localEvents.push(
+          buildLocalEvent({
+            ...event,
+            sequence: localEvents.length + 1,
+          }),
+        );
+      }
+
+      return { ok: true, value: { localEventId: "local-event-1" } };
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("1234567890123");
+    });
+
+    const product = result.current.productEntry.searchResults[0];
+    await act(async () => {
+      await Promise.all([
+        result.current.productEntry.onAddProduct(product),
+        result.current.productEntry.onAddProduct(product),
+      ]);
+    });
+
+    expect(
+      mockAppendLocalEvent.mock.calls.filter(
+        ([event]) => event?.type === "cart.item_added",
+      ),
+    ).toHaveLength(1);
+    expect(toast.error).toHaveBeenCalledWith(
+      "No trusted availability remains for this item on this terminal.",
+    );
+  });
+
+  it("rechecks trusted availability inside queued quantity updates", async () => {
+    mockRegisterCatalogRows = [buildRegisterCatalogRow()];
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow({
+        availabilitySource: "local",
+        quantityAvailable: 1,
+      }),
+    ];
+    const localEvents = [
+      buildLocalEvent({
+        sequence: 1,
+        type: "register.opened",
+        payload: {
+          localRegisterSessionId: "drawer-1",
+          openingFloat: 5_000,
+          expectedCash: 5_000,
+          status: "open",
+        },
+        sync: { status: "synced", cloudEventId: "cloud-event-1" },
+      }),
+      buildLocalEvent({
+        sequence: 2,
+        type: "session.started",
+        localPosSessionId: "session-1",
+        payload: { localPosSessionId: "session-1", status: "active" },
+        sync: { status: "synced", cloudEventId: "cloud-event-2" },
+      }),
+      buildLocalEvent({
+        sequence: 3,
+        type: "cart.item_added",
+        localPosSessionId: "session-1",
+        payload: {
+          localItemId: "item-1",
+          productId: "product-2",
+          productSkuId: "sku-2",
+          productSku: "DW-18",
+          productName: "Deep Wave",
+          price: 100,
+          quantity: 1,
+        },
+        sync: { status: "synced", cloudEventId: "cloud-event-3" },
+      }),
+    ];
+    mockListLocalEvents.mockImplementation(async () => ({
+      ok: true,
+      value: [...localEvents],
+    }));
+    mockListLocalCloudMappings.mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          entity: "posSession",
+          localId: "session-1",
+          cloudId: "session-1",
+          mappedAt: 1_100,
+        },
+      ],
+    });
+    mockAppendLocalEvent.mockImplementation(async (event) => {
+      if (event?.type === "cart.item_added") {
+        localEvents.push(
+          buildLocalEvent({
+            ...event,
+            sequence: localEvents.length + 1,
+          }),
+        );
+      }
+
+      return { ok: true, value: { localEventId: "local-event-1" } };
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    await act(async () => {
+      await Promise.all([
+        result.current.cart.onUpdateQuantity(
+          "item-1" as Id<"posSessionItem">,
+          2,
+        ),
+        result.current.cart.onUpdateQuantity(
+          "item-1" as Id<"posSessionItem">,
+          3,
+        ),
+      ]);
+    });
+
+    expect(
+      mockAppendLocalEvent.mock.calls.filter(
+        ([event]) => event?.type === "cart.item_added",
+      ),
+    ).toHaveLength(1);
+    expect(toast.error).toHaveBeenCalledWith(
+      "No trusted availability remains for this item on this terminal.",
+    );
   });
 
   it("adds an exact in-stock SKU match on submit without auto-adding first", async () => {
@@ -4014,6 +4679,73 @@ describe("useRegisterViewModel", () => {
       sessionId: "session-1" as Id<"posSession">,
     });
     expect(mockNavigateBack).toHaveBeenCalled();
+  });
+
+  it("leaves an unauthenticated empty local sale without requiring register sign-in", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: null,
+      activeRegisterSession: null,
+      activeSession: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+    mockListLocalEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          localEventId: "local-event-open",
+          schemaVersion: 1,
+          sequence: 1,
+          type: "register.opened",
+          terminalId: "terminal-1",
+          storeId: "store-1",
+          registerNumber: "1",
+          localRegisterSessionId: "local-register-1",
+          staffProfileId: "staff-1",
+          payload: {
+            localRegisterSessionId: "local-register-1",
+            openingFloat: 5_000,
+            expectedCash: 5_000,
+          },
+          createdAt: 1_000,
+          sync: { status: "pending" },
+        },
+        {
+          localEventId: "local-event-session",
+          schemaVersion: 1,
+          sequence: 2,
+          type: "session.started",
+          terminalId: "terminal-1",
+          storeId: "store-1",
+          registerNumber: "1",
+          localRegisterSessionId: "local-register-1",
+          localPosSessionId: "local-pos-session-1",
+          staffProfileId: "staff-1",
+          payload: { localPosSessionId: "local-pos-session-1" },
+          createdAt: 1_001,
+          sync: { status: "pending" },
+        },
+      ],
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await waitFor(() => expect(result.current.authDialog?.open).toBe(true));
+    await act(async () => {
+      await result.current.onNavigateBack();
+    });
+
+    expect(mockNavigateBack).toHaveBeenCalled();
+    expect(mockVoidSession).not.toHaveBeenCalled();
+    expect(mockAppendLocalEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "cart.cleared" }),
+    );
+    expect(toast.error).not.toHaveBeenCalledWith(
+      "Register sign-in required. Sign in before clearing it.",
+    );
   });
 
   it("does not show the sale-cleared toast when voiding an empty sale", async () => {
