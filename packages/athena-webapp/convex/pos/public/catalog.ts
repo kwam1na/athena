@@ -1,6 +1,11 @@
 import { v } from "convex/values";
 
-import { mutation, query } from "../../_generated/server";
+import { mutation, query, type QueryCtx } from "../../_generated/server";
+import type { Id } from "../../_generated/dataModel";
+import {
+  requireAuthenticatedAthenaUserWithCtx,
+  requireOrganizationMemberRoleWithCtx,
+} from "../../lib/athenaUserAuth";
 import { quickAddCatalogItem } from "../application/commands/quickAddCatalogItem";
 import {
   lookupByBarcode,
@@ -10,6 +15,7 @@ import {
   REGISTER_CATALOG_AVAILABILITY_LIMIT,
   listRegisterCatalog,
   listRegisterCatalogAvailability as readRegisterCatalogAvailability,
+  listRegisterCatalogAvailabilitySnapshot as readRegisterCatalogAvailabilitySnapshot,
 } from "../application/queries/listRegisterCatalog";
 
 const catalogResultValidator = v.object({
@@ -56,6 +62,26 @@ const registerCatalogAvailabilityValidator = v.object({
   quantityAvailable: v.number(),
 });
 
+async function requireRegisterCatalogStoreAccess(
+  ctx: Pick<QueryCtx, "auth" | "db">,
+  args: {
+    storeId: Id<"store">;
+  },
+) {
+  const store = await ctx.db.get("store", args.storeId);
+  if (!store) {
+    throw new Error("Store not found.");
+  }
+
+  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+  await requireOrganizationMemberRoleWithCtx(ctx, {
+    allowedRoles: ["full_admin", "pos_only"],
+    failureMessage: "You cannot view register catalog availability for this store.",
+    organizationId: store.organizationId,
+    userId: athenaUser._id,
+  });
+}
+
 export const search = query({
   args: {
     storeId: v.id("store"),
@@ -78,14 +104,29 @@ export const listRegisterCatalogAvailability = query({
     productSkuIds: v.array(v.id("productSku")),
   },
   returns: v.array(registerCatalogAvailabilityValidator),
-  handler: async (ctx, args) =>
-    readRegisterCatalogAvailability(ctx, {
+  handler: async (ctx, args) => {
+    await requireRegisterCatalogStoreAccess(ctx, args);
+
+    return readRegisterCatalogAvailability(ctx, {
       storeId: args.storeId,
       productSkuIds: args.productSkuIds.slice(
         0,
         REGISTER_CATALOG_AVAILABILITY_LIMIT,
       ),
-    }),
+    });
+  },
+});
+
+export const listRegisterCatalogAvailabilitySnapshot = query({
+  args: {
+    storeId: v.id("store"),
+  },
+  returns: v.array(registerCatalogAvailabilityValidator),
+  handler: async (ctx, args) => {
+    await requireRegisterCatalogStoreAccess(ctx, args);
+
+    return readRegisterCatalogAvailabilitySnapshot(ctx, args);
+  },
 });
 
 export const barcodeLookup = query({

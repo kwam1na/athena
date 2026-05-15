@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>feat: Add POS offline inventory snapshot</title>
+  <style type="text/css">
+    :root {
+      color-scheme: light;
+      --ink: #18212f;
+      --muted: #627083;
+      --line: #d8dee8;
+      --soft: #f5f7fa;
+      --accent: #0b6b65;
+      --warn: #8a5a00;
+      --bg: #ffffff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .page {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 36px 24px 56px;
+    }
+    .header {
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 20px;
+      margin-bottom: 28px;
+    }
+    h1 {
+      font-size: 34px;
+      line-height: 1.15;
+      margin: 0 0 12px;
+      letter-spacing: 0;
+    }
+    h2 {
+      font-size: 20px;
+      margin: 34px 0 12px;
+      padding-top: 6px;
+      letter-spacing: 0;
+    }
+    h3 {
+      font-size: 16px;
+      margin: 22px 0 8px;
+      letter-spacing: 0;
+    }
+    p { margin: 0 0 12px; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    ul { margin: 8px 0 14px 22px; padding: 0; }
+    li { margin: 5px 0; }
+    code {
+      background: var(--soft);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 1px 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 9px;
+      background: var(--soft);
+    }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin: 18px 0 28px;
+    }
+    .callout {
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--accent);
+      border-radius: 8px;
+      padding: 14px 16px;
+      background: #fbfcfd;
+    }
+    .callout strong { display: block; margin-bottom: 4px; }
+    .toc {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px 18px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 18px;
+      background: var(--soft);
+      margin-bottom: 26px;
+    }
+    .toc a { display: block; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 18px;
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      vertical-align: top;
+      text-align: left;
+    }
+    th { background: var(--soft); }
+    .unit {
+      border-top: 1px solid var(--line);
+      padding-top: 16px;
+      margin-top: 18px;
+    }
+    .unit h3 { color: var(--accent); }
+    .note {
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .warning {
+      border-left-color: var(--warn);
+    }
+    @media (max-width: 780px) {
+      .summary, .toc { grid-template-columns: 1fr; }
+      h1 { font-size: 28px; }
+      .page { padding: 24px 16px 40px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <h1>feat: Add POS offline inventory snapshot</h1>
+      <div class="meta">
+        <span class="pill">Type: feat</span>
+        <span class="pill">Status: active</span>
+        <span class="pill">Date: 2026-05-15</span>
+        <span class="pill">Source: <a href="2026-05-15-001-feat-pos-offline-inventory-snapshot-plan.md">markdown plan</a></span>
+      </div>
+    </div>
+
+    <div class="summary">
+      <div class="callout">
+        <strong>Core change</strong>
+        Add a full local POS availability snapshot beside the local catalog metadata snapshot.
+      </div>
+      <div class="callout">
+        <strong>Online behavior</strong>
+        Keep bounded live availability for visible or exact search rows to protect register latency.
+      </div>
+      <div class="callout warning">
+        <strong>Offline behavior</strong>
+        Use trusted local availability, or show a readiness gap. Do not fabricate stock.
+      </div>
+    </div>
+
+    <div class="toc">
+      <a href="#problem">Problem frame</a>
+      <a href="#requirements">Requirements</a>
+      <a href="#decisions">Key decisions</a>
+      <a href="#design">Technical design</a>
+      <a href="#units">Implementation units</a>
+      <a href="#risks">Risks</a>
+      <a href="#verification">Verification strategy</a>
+      <a href="#references">Sources</a>
+    </div>
+
+    <div id="problem">
+      <h2>Problem Frame</h2>
+      <p>POS catalog lookup has a durable local metadata snapshot, but availability still depends on a bounded live Convex query. Offline search can therefore show product rows with unknown availability, which tempts the UI into fake stock fallbacks. This plan makes inventory readiness explicit by caching a complete, hold-aware sellable availability snapshot for provisioned POS terminals.</p>
+    </div>
+
+    <div id="requirements">
+      <h2>Requirements</h2>
+      <ul>
+        <li>Persist a store-scoped availability snapshot for every sellable SKU in the register catalog.</li>
+        <li>Use hold-aware sellable availability, not raw SKU quantity.</li>
+        <li>Keep bounded live availability for online displayed or exact-match rows.</li>
+        <li>Use local availability offline and expose readiness gaps when the snapshot is missing.</li>
+        <li>Decrement terminal-local availability during disconnected local selling.</li>
+        <li>Preserve completed local sales and route cloud inventory conflicts to manager review.</li>
+        <li>Keep POS as the only offline-first Athena workflow in this release.</li>
+        <li>Do not make expense sessions offline-first; only preserve shared product-entry presentation parity.</li>
+      </ul>
+    </div>
+
+    <div id="decisions">
+      <h2>Key Technical Decisions</h2>
+      <table summary="Key technical decisions and rationale">
+        <tr><th>Decision</th><th>Rationale</th></tr>
+        <tr><td>Separate metadata and availability snapshots</td><td>Preserves the hot-path split that prevents full-catalog reactivity from cart edits.</td></tr>
+        <tr><td>Snapshot sellable availability</td><td>Operators need the same hold-aware concept POS command boundaries use.</td></tr>
+        <tr><td>Refresh full availability separately from bounded live overlay</td><td>Offline readiness gets full coverage while online search stays fast.</td></tr>
+        <tr><td>Treat missing snapshot as not offline-ready</td><td>A missing local snapshot is not proof of inventory and must not become fake stock.</td></tr>
+        <tr><td>Decrement terminal-local availability</td><td>Prevents one terminal from repeatedly selling the same last-known unit while disconnected.</td></tr>
+        <tr><td>Keep cloud reconciliation authoritative</td><td>Offline sales are preserved; conflicts become manager review work.</td></tr>
+      </table>
+    </div>
+
+    <div id="design">
+      <h2>High-Level Technical Design</h2>
+      <table summary="Availability source by operating mode">
+        <tr><th>Mode</th><th>Availability source</th><th>Selectability</th></tr>
+        <tr><td>Online with live overlay</td><td>Bounded live availability for displayed/exact SKUs</td><td>Live quantity controls selection</td></tr>
+        <tr><td>Offline with full snapshot</td><td>Local snapshot plus terminal-local decrements</td><td>Last-known local quantity controls selection</td></tr>
+        <tr><td>Offline missing snapshot</td><td>No trusted local availability source</td><td>Search-visible but not addable; readiness gap shown</td></tr>
+        <tr><td>Sync after oversell</td><td>Cloud projection validates current stock and holds</td><td>Sale preserved; conflict routed to review</td></tr>
+      </table>
+    </div>
+
+    <div id="units">
+      <h2>Implementation Units</h2>
+      <div class="unit">
+        <h3>U1. Add a full-store register availability snapshot query</h3>
+        <p>Create a server read model for hold-aware sellable availability across the register catalog scope while preserving the existing bounded query.</p>
+        <p class="note">Primary files: <code>convex/pos/application/queries/listRegisterCatalog.ts</code>, <code>convex/pos/public/catalog.ts</code>, DTO and port files.</p>
+      </div>
+      <div class="unit">
+        <h3>U2. Persist local register availability snapshots</h3>
+        <p>Add complete store-scoped snapshot storage with atomic replace semantics and explicit missing/stale/error states.</p>
+        <p class="note">Primary files: <code>src/lib/pos/infrastructure/local/posLocalStore.ts</code>, new local snapshot helper and tests.</p>
+      </div>
+      <div class="unit">
+        <h3>U3. Add local availability refresh and gateway overlay</h3>
+        <p>Refresh full snapshots opportunistically online, use them offline, and keep bounded live rows authoritative when available.</p>
+        <p class="note">Primary files: <code>src/lib/pos/infrastructure/convex/catalogGateway.ts</code> and gateway tests.</p>
+      </div>
+      <div class="unit">
+        <h3>U4. Render offline availability readiness in product entry</h3>
+        <p>Keep catalog results visible offline while blocking selection and auto-add when trusted availability is missing or zero. Expense remains online-shaped; only shared search presentation stays aligned.</p>
+        <p class="note">Primary files: register and expense view-model tests plus shared product-entry presentation.</p>
+      </div>
+      <div class="unit">
+        <h3>U5. Apply terminal-local availability decrements and sync evidence</h3>
+        <p>Consume local availability on add/complete, restore uncompleted cart releases, and preserve cloud reconciliation authority.</p>
+        <p class="note">Primary files: local command gateway, register read model, sync contract, ingestion, and projection tests.</p>
+      </div>
+      <div class="unit">
+        <h3>U6. Document the offline inventory snapshot contract</h3>
+        <p>Record the invariant in <code>docs/solutions/</code> and refresh graphify artifacts after implementation.</p>
+      </div>
+    </div>
+
+    <div id="risks">
+      <h2>Risks &amp; Mitigations</h2>
+      <table summary="Plan risks and mitigations">
+        <tr><th>Risk</th><th>Mitigation</th></tr>
+        <tr><td>Full snapshot is expensive for large stores</td><td>Keep it off the active search hot path and retain bounded visible-SKU reads.</td></tr>
+        <tr><td>Stale local availability causes cross-terminal oversells</td><td>Accept as the offline tradeoff and preserve completed sales with manager conflicts.</td></tr>
+        <tr><td>Missing snapshot blocks offline selling</td><td>Treat as correct readiness behavior and surface setup/sync guidance.</td></tr>
+        <tr><td>Expense entry inherits POS session behavior</td><td>Share search presentation only; keep mutation behavior separate.</td></tr>
+      </table>
+    </div>
+
+    <div id="verification">
+      <h2>Verification Strategy</h2>
+      <ul>
+        <li>Server tests for catalog-scope, hold-aware full availability snapshots.</li>
+        <li>Local store tests for atomic complete snapshot persistence.</li>
+        <li>Gateway tests for online bounded, offline snapshot, and missing snapshot behavior.</li>
+        <li>Register and expense view-model tests for selectability, exact-match auto-add, and readiness gaps.</li>
+        <li>Local command/read-model tests for decrement, restore, and completed-sale preservation.</li>
+        <li>Sync tests proving cloud inventory conflict creation preserves offline sales.</li>
+      </ul>
+    </div>
+
+    <div id="references">
+      <h2>Sources</h2>
+      <ul>
+        <li><a href="../brainstorms/2026-05-13-pos-local-first-register-requirements.md">POS local-first requirements</a></li>
+        <li><a href="2026-05-13-001-feat-pos-local-first-register-plan.md">POS local-first register plan</a></li>
+        <li><a href="2026-05-14-001-feat-pos-always-local-first-flow-plan.md">POS always local-first plan</a></li>
+        <li><a href="2026-05-14-002-feat-pos-offline-entry-readiness-plan.md">POS offline entry readiness plan</a></li>
+        <li><a href="../solutions/performance/athena-pos-cart-latency-foundation-2026-05-05.md">POS cart latency foundation</a></li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,6 +1,9 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { QueryCtx } from "../../../_generated/server";
-import { validateInventoryAvailability } from "../../../inventory/helpers/inventoryHolds";
+import {
+  readActiveHeldQuantitiesForStoreSkus,
+  validateInventoryAvailability,
+} from "../../../inventory/helpers/inventoryHolds";
 
 type RegisterCatalogRow = {
   id: Id<"productSku">;
@@ -96,16 +99,14 @@ function getRegisterCatalogPrice(sku: Doc<"productSku">) {
   return sku.netPrice ?? sku.price;
 }
 
-export async function listRegisterCatalog(
+async function listScopedRegisterCatalogSkus(
   ctx: QueryCtx,
   args: {
     storeId: Id<"store">;
   },
 ) {
-  const rows: RegisterCatalogRow[] = [];
+  const rows: Array<{ product: Doc<"product">; sku: Doc<"productSku"> }> = [];
   const productCache = new Map<Id<"product">, Doc<"product"> | null>();
-  const categoryCache = new Map<Id<"category">, string>();
-  const colorCache = new Map<Id<"color">, string>();
 
   for await (const sku of ctx.db
     .query("productSku")
@@ -129,6 +130,26 @@ export async function listRegisterCatalog(
       continue;
     }
 
+    rows.push({ product, sku });
+  }
+
+  return rows;
+}
+
+export async function listRegisterCatalog(
+  ctx: QueryCtx,
+  args: {
+    storeId: Id<"store">;
+  },
+) {
+  const rows: RegisterCatalogRow[] = [];
+  const categoryCache = new Map<Id<"category">, string>();
+  const colorCache = new Map<Id<"color">, string>();
+
+  for (const { product, sku } of await listScopedRegisterCatalogSkus(
+    ctx,
+    args,
+  )) {
     rows.push(
       mapSkuToRegisterCatalogRow({
         product,
@@ -176,4 +197,31 @@ export async function listRegisterCatalogAvailability(
   }
 
   return rows;
+}
+
+export async function listRegisterCatalogAvailabilitySnapshot(
+  ctx: QueryCtx,
+  args: {
+    storeId: Id<"store">;
+  },
+) {
+  const catalogSkus = await listScopedRegisterCatalogSkus(ctx, args);
+  const heldQuantities = await readActiveHeldQuantitiesForStoreSkus(ctx.db, {
+    storeId: args.storeId,
+    skuIds: catalogSkus.map(({ sku }) => sku._id),
+  });
+
+  return catalogSkus.map(({ sku }): RegisterCatalogAvailabilityRow => {
+    const quantityAvailable = Math.max(
+      0,
+      sku.quantityAvailable - (heldQuantities.get(sku._id) ?? 0),
+    );
+
+    return {
+      productSkuId: sku._id,
+      skuId: sku._id,
+      inStock: quantityAvailable > 0,
+      quantityAvailable,
+    };
+  });
 }

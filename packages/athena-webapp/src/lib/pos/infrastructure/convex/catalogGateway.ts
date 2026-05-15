@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "convex/react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   PosBarcodeLookupInput,
@@ -13,6 +13,14 @@ import type {
 } from "@/lib/pos/application/dto";
 import type { PosCatalogReader } from "@/lib/pos/application/ports";
 import {
+  createIndexedDbPosLocalStorageAdapter,
+  createPosLocalStore,
+} from "@/lib/pos/infrastructure/local/posLocalStore";
+import {
+  type RegisterAvailabilitySnapshotState,
+  readRegisterAvailabilitySnapshotState,
+} from "@/lib/pos/infrastructure/local/registerAvailabilitySnapshot";
+import {
   extractBarcodeFromInput,
   isValidConvexId,
 } from "@/lib/pos/barcodeUtils";
@@ -20,6 +28,35 @@ import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 
 const REGISTER_CATALOG_AVAILABILITY_LIMIT = 50;
+const REGISTER_AVAILABILITY_SNAPSHOT_WRITE_RETRY_DELAY_MS = 250;
+
+type RegisterCatalogAvailabilityGatewayState =
+  | {
+      rows: PosRegisterCatalogAvailabilityRowDto[];
+      source: "live" | "local";
+      status: "ready";
+    }
+  | {
+      refreshedAt?: number;
+      rows?: undefined;
+      source: "local";
+      status: "stale";
+    }
+  | {
+      rows?: undefined;
+      source: "none";
+      status: "loading" | "missing";
+    }
+  | {
+      error?: RegisterAvailabilitySnapshotState extends infer State
+        ? State extends { status: "local-store-failure"; error: infer Error }
+          ? Error
+          : never
+        : never;
+      rows?: undefined;
+      source: "none";
+      status: "local-store-failure";
+    };
 
 type ProductByIdResult = {
   _id: Id<"product">;
@@ -71,33 +108,311 @@ function mapProductByIdResult(
   }));
 }
 
+function signatureForAvailabilityRows(
+  storeId: string,
+  rows: readonly PosRegisterCatalogAvailabilityRowDto[],
+) {
+  return `${storeId}|${rows
+    .map(
+      (row) =>
+        `${String(row.productSkuId)}:${row.quantityAvailable}:${row.inStock ? 1 : 0}`,
+    )
+    .join("|")}`;
+}
+
 export function useConvexRegisterCatalog(
   input: PosRegisterCatalogInput,
 ): PosRegisterCatalogRowDto[] | undefined {
-  return useQuery(
+  const liveRows = useQuery(
     api.pos.public.catalog.listRegisterCatalogSnapshot,
     input.storeId ? { storeId: input.storeId } : "skip",
   );
+  const [localRows, setLocalRows] = useState<
+    PosRegisterCatalogRowDto[] | undefined
+  >(undefined);
+  const storeId = input.storeId;
+
+  useEffect(() => {
+    let cancelled = false;
+    setLocalRows(undefined);
+
+    if (!storeId || typeof indexedDB === "undefined") {
+      return;
+    }
+
+    void (async () => {
+      const result = await createPosLocalStore({
+        adapter: createIndexedDbPosLocalStorageAdapter(),
+      }).readRegisterCatalogSnapshot({ storeId });
+
+      if (cancelled) return;
+      if (result.ok && result.value) {
+        setLocalRows(result.value.rows);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [storeId]);
+
+  useEffect(() => {
+    if (!storeId || liveRows === undefined || typeof indexedDB === "undefined") {
+      return;
+    }
+
+    setLocalRows(liveRows);
+    void createPosLocalStore({
+      adapter: createIndexedDbPosLocalStorageAdapter(),
+    }).writeRegisterCatalogSnapshot({ storeId, rows: liveRows });
+  }, [liveRows, storeId]);
+
+  return liveRows ?? localRows;
 }
 
 export function useConvexRegisterCatalogAvailability(
   input: PosRegisterCatalogAvailabilityInput,
 ): PosRegisterCatalogAvailabilityRowDto[] | undefined {
-  const productSkuIds = useMemo(
-    () =>
-      Array.from(new Set(input.productSkuIds ?? [])).slice(
-        0,
-        REGISTER_CATALOG_AVAILABILITY_LIMIT,
-      ),
-    [input.productSkuIds],
-  );
+  const state = useConvexRegisterCatalogAvailabilityState(input);
 
-  return useQuery(
+  return state.status === "ready" ? state.rows : undefined;
+}
+
+export function useConvexRegisterCatalogAvailabilityState(
+  input: PosRegisterCatalogAvailabilityInput,
+): RegisterCatalogAvailabilityGatewayState {
+  const productSkuIdKey = (input.productSkuIds ?? []).join("\u0000");
+  const requestedProductSkuIds = useMemo(
+    () => Array.from(new Set(input.productSkuIds ?? [])),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- depend on the stable SKU-id key, not caller array identity.
+    [productSkuIdKey],
+  );
+  const boundedProductSkuIds = useMemo(
+    () =>
+      requestedProductSkuIds.slice(0, REGISTER_CATALOG_AVAILABILITY_LIMIT),
+    [requestedProductSkuIds],
+  );
+  const storeId = input.storeId;
+  const [localState, setLocalState] =
+    useState<RegisterAvailabilitySnapshotState | null>(null);
+  const [pendingFullSnapshotRefreshStoreId, setPendingFullSnapshotRefreshStoreId] =
+    useState<string | null>(null);
+  const [pendingFullSnapshotPersistence, setPendingFullSnapshotPersistence] =
+    useState<{
+      retryAttempt: number;
+      rows: PosRegisterCatalogAvailabilityRowDto[];
+      signature: string;
+      storeId: string;
+    } | null>(null);
+  const lastPersistedFullSnapshotSignatureRef = useRef<string | null>(null);
+  const liveRows = useQuery(
     api.pos.public.catalog.listRegisterCatalogAvailability,
-    input.storeId && productSkuIds.length > 0
-      ? { storeId: input.storeId, productSkuIds }
+    storeId && boundedProductSkuIds.length > 0
+      ? { storeId, productSkuIds: boundedProductSkuIds }
       : "skip",
   );
+  const shouldRefreshFullSnapshot = Boolean(
+    input.refreshFullAvailabilitySnapshot &&
+      storeId &&
+      pendingFullSnapshotRefreshStoreId === storeId,
+  );
+  const fullSnapshotRows = useQuery(
+    api.pos.public.catalog.listRegisterCatalogAvailabilitySnapshot,
+    shouldRefreshFullSnapshot ? { storeId: storeId! } : "skip",
+  );
+  const localRowsBySkuId = useMemo(() => {
+    if (liveRows !== undefined || localState?.status !== "ready") {
+      return null;
+    }
+
+    return new Map(
+      localState.snapshot.rows.map((row) => [String(row.productSkuId), row]),
+    );
+  }, [liveRows, localState]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLocalState(null);
+
+    if (!storeId) {
+      setLocalState({ status: "missing", snapshot: null });
+      setPendingFullSnapshotRefreshStoreId(null);
+      setPendingFullSnapshotPersistence(null);
+      return;
+    }
+
+    if (!input.refreshFullAvailabilitySnapshot) {
+      setLocalState({ status: "missing", snapshot: null });
+      setPendingFullSnapshotRefreshStoreId(null);
+      setPendingFullSnapshotPersistence(null);
+      return;
+    }
+
+    setPendingFullSnapshotRefreshStoreId(storeId);
+
+    if (typeof indexedDB === "undefined") {
+      setLocalState({
+        error: {
+          code: "write_failed",
+          message: "POS local store is unavailable in this browser context.",
+        },
+        status: "local-store-failure",
+        snapshot: null,
+      });
+      return;
+    }
+
+    void (async () => {
+      const state = await readRegisterAvailabilitySnapshotState({
+        store: createPosLocalStore({
+          adapter: createIndexedDbPosLocalStorageAdapter(),
+        }),
+        storeId,
+      });
+
+      if (!cancelled) {
+        setLocalState((current) => {
+          if (current?.status === "ready") {
+            return current;
+          }
+
+          return state;
+        });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [input.refreshFullAvailabilitySnapshot, storeId]);
+
+  useEffect(() => {
+    if (
+      !storeId ||
+      fullSnapshotRows === undefined ||
+      typeof indexedDB === "undefined"
+    ) {
+      return;
+    }
+
+    const nextSignature = signatureForAvailabilityRows(storeId, fullSnapshotRows);
+    setPendingFullSnapshotRefreshStoreId((current) =>
+      current === storeId ? null : current,
+    );
+    if (lastPersistedFullSnapshotSignatureRef.current === nextSignature) {
+      return;
+    }
+
+    setPendingFullSnapshotPersistence({
+      retryAttempt: 0,
+      rows: fullSnapshotRows,
+      signature: nextSignature,
+      storeId,
+    });
+  }, [fullSnapshotRows, storeId]);
+
+  useEffect(() => {
+    if (!pendingFullSnapshotPersistence || typeof indexedDB === "undefined") {
+      return;
+    }
+
+    let cancelled = false;
+    let retryTimeout: ReturnType<typeof setTimeout> | undefined;
+    const snapshot = pendingFullSnapshotPersistence;
+
+    void (async () => {
+      const writeResult = await createPosLocalStore({
+        adapter: createIndexedDbPosLocalStorageAdapter(),
+      }).writeRegisterAvailabilitySnapshot({
+        storeId: snapshot.storeId,
+        rows: snapshot.rows,
+      });
+
+      if (cancelled) return;
+
+      if (writeResult.ok) {
+        lastPersistedFullSnapshotSignatureRef.current = snapshot.signature;
+        setPendingFullSnapshotPersistence((current) =>
+          current?.signature === snapshot.signature &&
+          current.storeId === snapshot.storeId
+            ? null
+            : current,
+        );
+        setLocalState({
+          status: "ready",
+          snapshot: writeResult.value,
+        });
+        return;
+      }
+
+      setLocalState({
+        error: writeResult.error,
+        status: "local-store-failure",
+        snapshot: null,
+      });
+      retryTimeout = setTimeout(() => {
+        setPendingFullSnapshotPersistence((current) =>
+          current?.signature === snapshot.signature &&
+          current.storeId === snapshot.storeId &&
+          current.retryAttempt === snapshot.retryAttempt
+            ? { ...current, retryAttempt: current.retryAttempt + 1 }
+            : current,
+        );
+      }, REGISTER_AVAILABILITY_SNAPSHOT_WRITE_RETRY_DELAY_MS);
+    })();
+
+    return () => {
+      cancelled = true;
+      if (retryTimeout) {
+        clearTimeout(retryTimeout);
+      }
+    };
+  }, [pendingFullSnapshotPersistence]);
+
+  if (requestedProductSkuIds.length === 0) {
+    return { status: "ready", rows: [], source: "live" };
+  }
+
+  if (liveRows !== undefined) {
+    return {
+      status: "ready",
+      rows: liveRows.map((row) => ({ ...row, availabilitySource: "live" })),
+      source: "live",
+    };
+  }
+
+  if (!localState) {
+    return { status: "loading", source: "none" };
+  }
+
+  if (localState.status === "ready" && localRowsBySkuId) {
+    return {
+      status: "ready",
+      rows: requestedProductSkuIds.flatMap((productSkuId) => {
+        const row = localRowsBySkuId.get(productSkuId);
+        return row ? [{ ...row, availabilitySource: "local" }] : [];
+      }),
+      source: "local",
+    };
+  }
+
+  if (localState.status === "stale") {
+    return {
+      refreshedAt: localState.snapshot.refreshedAt,
+      status: "stale",
+      source: "local",
+    };
+  }
+
+  if (localState.status === "local-store-failure") {
+    return {
+      error: localState.error,
+      status: "local-store-failure",
+      source: "none",
+    };
+  }
+
+  return { status: "missing", source: "none" };
 }
 
 export function useConvexProductSearch(

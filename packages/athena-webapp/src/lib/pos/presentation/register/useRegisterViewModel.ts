@@ -78,6 +78,8 @@ import {
 import {
   mapCatalogRowToProduct,
   normalizeExactInput,
+  POS_AVAILABILITY_NOT_READY_MESSAGE,
+  POS_NO_TRUSTED_AVAILABILITY_REMAINING_MESSAGE,
   type RegisterCatalogAvailability,
 } from "./catalogSearchPresentation";
 import { useRegisterCatalogIndex } from "./useRegisterCatalogIndex";
@@ -337,6 +339,20 @@ function buildLocalCartItemPayloadFromCartItem(input: {
   };
 }
 
+function getProductAvailabilityStatus(product: Product) {
+  if (product.availabilityStatus) {
+    return product.availabilityStatus;
+  }
+
+  if (typeof product.quantityAvailable === "number") {
+    return product.inStock && product.quantityAvailable > 0
+      ? "available"
+      : "out_of_stock";
+  }
+
+  return product.inStock ? "available" : "unknown";
+}
+
 function buildCompletedSalePayload(input: {
   cartItems: CartItem[];
   customerInfo: CustomerInfo;
@@ -416,6 +432,141 @@ function stringFromPayload(
 function cartItemSkuEntry(item: CartItem): readonly [string, CartItem][] {
   const skuId = item.skuId;
   return skuId ? [[skuId.toString(), item]] : [];
+}
+
+function addLocalAvailabilityConsumption(
+  quantities: Map<string, number>,
+  item: PosLocalCartItemReadModel,
+) {
+  if (!item.productSkuId) return;
+
+  quantities.set(
+    item.productSkuId,
+    (quantities.get(item.productSkuId) ?? 0) + item.quantity,
+  );
+}
+
+function localPosSessionIdFromEvent(event: {
+  localPosSessionId?: string;
+  payload: unknown;
+}) {
+  return (
+    event.localPosSessionId ||
+    stringFromPayload(recordFromPayload(event.payload), "localPosSessionId")
+  );
+}
+
+type LocalAvailabilityEventIndexEntry = {
+  hasUnsyncedEvents: boolean;
+  syncedCartQuantityBySku: Map<string, number>;
+};
+
+function buildLocalAvailabilityEventIndex(model: PosLocalRegisterReadModel) {
+  const index = new Map<string, LocalAvailabilityEventIndexEntry>();
+  const lastSyncedSequence = model.syncStatus.lastSyncedSequence;
+
+  for (const event of model.sourceEvents) {
+    const localPosSessionId = localPosSessionIdFromEvent(event);
+    if (!localPosSessionId) {
+      continue;
+    }
+
+    const entry = index.get(localPosSessionId) ?? {
+      hasUnsyncedEvents: false,
+      syncedCartQuantityBySku: new Map<string, number>(),
+    };
+    index.set(localPosSessionId, entry);
+
+    if (event.sequence > lastSyncedSequence) {
+      entry.hasUnsyncedEvents = true;
+      continue;
+    }
+
+    if (event.type !== "cart.item_added") {
+      continue;
+    }
+
+    const payload = recordFromPayload(event.payload);
+    const productSkuId = stringFromPayload(payload, "productSkuId");
+    const quantity = payload.quantity;
+    if (!productSkuId || typeof quantity !== "number") {
+      continue;
+    }
+
+    entry.syncedCartQuantityBySku.set(productSkuId, Math.max(0, quantity));
+  }
+
+  return index;
+}
+
+function addLocalAvailabilityDeltaConsumption(input: {
+  quantities: Map<string, number>;
+  items: PosLocalCartItemReadModel[];
+  syncedCartQuantityBySku: Map<string, number>;
+}) {
+  for (const item of input.items) {
+    if (!item.productSkuId) continue;
+
+    const unsyncedQuantity = Math.max(
+      0,
+      item.quantity - (input.syncedCartQuantityBySku.get(item.productSkuId) ?? 0),
+    );
+    if (unsyncedQuantity <= 0) continue;
+
+    input.quantities.set(
+      item.productSkuId,
+      (input.quantities.get(item.productSkuId) ?? 0) + unsyncedQuantity,
+    );
+  }
+}
+
+function localAvailabilityConsumptionFromReadModel(
+  model: PosLocalRegisterReadModel | null,
+) {
+  const quantities = new Map<string, number>();
+  if (!model) return quantities;
+
+  const eventIndex = buildLocalAvailabilityEventIndex(model);
+
+  if (model.activeSale) {
+    const saleEventIndex = eventIndex.get(model.activeSale.localPosSessionId);
+    const hasUnsyncedSaleEvents = Boolean(saleEventIndex?.hasUnsyncedEvents);
+
+    if (!model.activeSale.cloudPosSessionId) {
+      for (const item of model.activeSale.items) {
+        addLocalAvailabilityConsumption(quantities, item);
+      }
+    } else if (hasUnsyncedSaleEvents) {
+      addLocalAvailabilityDeltaConsumption({
+        quantities,
+        items: model.activeSale.items,
+        syncedCartQuantityBySku:
+          saleEventIndex?.syncedCartQuantityBySku ?? new Map<string, number>(),
+      });
+    }
+  }
+
+  for (const sale of model.completedSales) {
+    const saleEventIndex = eventIndex.get(sale.localPosSessionId);
+    const hasUnsyncedSaleEvents = Boolean(saleEventIndex?.hasUnsyncedEvents);
+
+    if (sale.cloudTransactionId) {
+      if (!hasUnsyncedSaleEvents) continue;
+
+      addLocalAvailabilityDeltaConsumption({
+        quantities,
+        items: sale.items,
+        syncedCartQuantityBySku:
+          saleEventIndex?.syncedCartQuantityBySku ?? new Map<string, number>(),
+      });
+    } else {
+      for (const item of sale.items) {
+        addLocalAvailabilityConsumption(quantities, item);
+      }
+    }
+  }
+
+  return quantities;
 }
 
 function cartItemsFromLocalRegisterModel(
@@ -725,6 +876,10 @@ export function useRegisterViewModel(): RegisterViewModel {
     storeId: activeStoreId,
   });
   const registerCatalogIndex = useRegisterCatalogIndex(registerCatalogRows);
+  const registerCatalogSkuIds = useMemo(
+    () => new Set((registerCatalogRows ?? []).map((row) => row.productSkuId)),
+    [registerCatalogRows],
+  );
   const registerMetadataSearchState = useMemo(
     () => searchRegisterCatalog(registerCatalogIndex, productSearchQuery),
     [productSearchQuery, registerCatalogIndex],
@@ -737,6 +892,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     [registerMetadataSearchState.results],
   );
   const registerCatalogAvailabilityRows = useConvexRegisterCatalogAvailability({
+    refreshFullAvailabilitySnapshot: true,
     storeId: activeStoreId,
     productSkuIds: registerAvailabilityProductSkuIds,
   });
@@ -747,44 +903,6 @@ export function useRegisterViewModel(): RegisterViewModel {
       rows.map((row) => [row.productSkuId, row]),
     );
   }, [registerCatalogAvailabilityRows]);
-  const registerSearchState = useMemo<RegisterCatalogSearchResult>(() => {
-    if (registerMetadataSearchState.intent !== "exact") {
-      return registerMetadataSearchState;
-    }
-
-    const exactAvailability = registerMetadataSearchState.exactMatch
-      ? registerCatalogAvailabilityBySkuId.get(
-          registerMetadataSearchState.exactMatch.productSkuId,
-        )
-      : undefined;
-
-    return {
-      ...registerMetadataSearchState,
-      canAutoAdd: Boolean(
-        registerMetadataSearchState.exactMatch &&
-        exactAvailability &&
-        exactAvailability.quantityAvailable > 0,
-      ),
-    };
-  }, [registerCatalogAvailabilityBySkuId, registerMetadataSearchState]);
-  const registerSearchProducts = useMemo(
-    () =>
-      registerSearchState.results.map((row) =>
-        mapCatalogRowToProduct(
-          row,
-          registerCatalogAvailabilityBySkuId.get(row.productSkuId),
-        ),
-      ),
-    [registerCatalogAvailabilityBySkuId, registerSearchState.results],
-  );
-  const exactSearchProduct = registerSearchState.exactMatch
-    ? mapCatalogRowToProduct(
-        registerSearchState.exactMatch,
-        registerCatalogAvailabilityBySkuId.get(
-          registerSearchState.exactMatch.productSkuId,
-        ),
-      )
-    : null;
   const isRegisterCatalogReady = registerCatalogRows !== undefined;
   const isRegisterSearchLoading =
     productSearchQuery.trim().length > 0 && !isRegisterCatalogReady;
@@ -1220,6 +1338,78 @@ export function useRegisterViewModel(): RegisterViewModel {
 
     return cartItems;
   }, [optimisticCartProducts, optimisticCartQuantities, serverCartItems]);
+  const localAvailabilityConsumptionBySkuId = useMemo(() => {
+    const quantities =
+      localAvailabilityConsumptionFromReadModel(localRegisterReadModel);
+
+    for (const product of Object.values(optimisticCartProducts)) {
+      if (!product.skuId) continue;
+
+      quantities.set(
+        product.skuId,
+        (quantities.get(product.skuId) ?? 0) + product.quantity,
+      );
+    }
+
+    return quantities;
+  }, [localRegisterReadModel, optimisticCartProducts]);
+  const localRegisterCatalogAvailabilityBySkuId = useMemo(() => {
+    const adjusted = new Map<string, RegisterCatalogAvailability>();
+
+    for (const [productSkuId, availability] of registerCatalogAvailabilityBySkuId) {
+      const quantityAvailable = Math.max(
+        0,
+        Math.trunc(availability.quantityAvailable) -
+          (localAvailabilityConsumptionBySkuId.get(productSkuId) ?? 0),
+      );
+
+      adjusted.set(productSkuId, {
+        ...availability,
+        inStock: availability.inStock && quantityAvailable > 0,
+        quantityAvailable,
+      });
+    }
+
+    return adjusted;
+  }, [localAvailabilityConsumptionBySkuId, registerCatalogAvailabilityBySkuId]);
+  const registerSearchState = useMemo<RegisterCatalogSearchResult>(() => {
+    if (registerMetadataSearchState.intent !== "exact") {
+      return registerMetadataSearchState;
+    }
+
+    const exactAvailability = registerMetadataSearchState.exactMatch
+      ? localRegisterCatalogAvailabilityBySkuId.get(
+          registerMetadataSearchState.exactMatch.productSkuId,
+        )
+      : undefined;
+
+    return {
+      ...registerMetadataSearchState,
+      canAutoAdd: Boolean(
+        registerMetadataSearchState.exactMatch &&
+          exactAvailability &&
+          exactAvailability.quantityAvailable > 0,
+      ),
+    };
+  }, [localRegisterCatalogAvailabilityBySkuId, registerMetadataSearchState]);
+  const registerSearchProducts = useMemo(
+    () =>
+      registerSearchState.results.map((row) =>
+        mapCatalogRowToProduct(
+          row,
+          localRegisterCatalogAvailabilityBySkuId.get(row.productSkuId),
+        ),
+      ),
+    [localRegisterCatalogAvailabilityBySkuId, registerSearchState.results],
+  );
+  const exactSearchProduct = registerSearchState.exactMatch
+    ? mapCatalogRowToProduct(
+        registerSearchState.exactMatch,
+        localRegisterCatalogAvailabilityBySkuId.get(
+          registerSearchState.exactMatch.productSkuId,
+        ),
+      )
+    : null;
   if (
     isCloudOperableSession(operableActiveSession)
   ) {
@@ -2627,6 +2817,23 @@ export function useRegisterViewModel(): RegisterViewModel {
         return false;
       }
 
+      const availabilityStatus = getProductAvailabilityStatus(product);
+      if (availabilityStatus === "unknown") {
+        toast.error(
+          product.availabilityMessage ?? POS_AVAILABILITY_NOT_READY_MESSAGE,
+        );
+        return false;
+      }
+
+      if (
+        availabilityStatus !== "available" ||
+        (typeof product.quantityAvailable === "number" &&
+          product.quantityAvailable <= 0)
+      ) {
+        toast.error(POS_NO_TRUSTED_AVAILABILITY_REMAINING_MESSAGE);
+        return false;
+      }
+
       return enqueueCartMutation(async () => {
       const localPosSessionId = await ensureLocalPosSessionId();
       if (!localPosSessionId) {
@@ -2634,6 +2841,23 @@ export function useRegisterViewModel(): RegisterViewModel {
       }
 
       const queuedReadModel = await readCurrentLocalRegisterModel();
+      if (registerCatalogSkuIds.has(productSkuId)) {
+        const availability = registerCatalogAvailabilityBySkuId.get(productSkuId);
+        if (!availability) {
+          toast.error(POS_AVAILABILITY_NOT_READY_MESSAGE);
+          return false;
+        }
+
+        const localConsumption =
+          localAvailabilityConsumptionFromReadModel(queuedReadModel).get(
+            productSkuId,
+          ) ?? 0;
+        if (Math.trunc(availability.quantityAvailable) - localConsumption <= 0) {
+          toast.error(POS_NO_TRUSTED_AVAILABILITY_REMAINING_MESSAGE);
+          return false;
+        }
+      }
+
       const localSaleItem = queuedReadModel?.activeSale?.items.find(
         (item) => item.productSkuId === productSkuId,
       );
@@ -2715,6 +2939,8 @@ export function useRegisterViewModel(): RegisterViewModel {
       noteLocalRegisterEventChanged,
       optimisticCartProducts,
       readCurrentLocalRegisterModel,
+      registerCatalogAvailabilityBySkuId,
+      registerCatalogSkuIds,
       staffProfileId,
     ],
   );
@@ -2775,12 +3001,49 @@ export function useRegisterViewModel(): RegisterViewModel {
       }
 
       return enqueueCartMutation(async () => {
-      const item = activeCartItems.find(
-        (candidate) => candidate.id === itemId,
-      );
-      if (!item) {
-        return;
-      }
+        const item = activeCartItems.find(
+          (candidate) => candidate.id === itemId,
+        );
+        if (!item) {
+          return;
+        }
+
+        const queuedReadModel = await readCurrentLocalRegisterModel();
+        const queuedLocalItem = item.skuId
+          ? queuedReadModel?.activeSale?.items.find(
+              (candidate) =>
+                candidate.localItemId === itemId.toString() ||
+                candidate.productSkuId === item.skuId,
+            )
+          : undefined;
+        const currentQuantity = queuedLocalItem?.quantity ?? item.quantity;
+
+        if (
+          item.skuId &&
+          quantity > currentQuantity &&
+          registerCatalogSkuIds.has(item.skuId)
+        ) {
+          const requestedIncrease = quantity - currentQuantity;
+          const availability = registerCatalogAvailabilityBySkuId.get(item.skuId);
+          if (!availability) {
+            toast.error(POS_AVAILABILITY_NOT_READY_MESSAGE);
+            return;
+          }
+
+          const localConsumption =
+            localAvailabilityConsumptionFromReadModel(queuedReadModel).get(
+              item.skuId,
+            ) ?? 0;
+          const trustedQuantityAvailable = Math.max(
+            0,
+            Math.trunc(availability.quantityAvailable) - localConsumption,
+          );
+
+          if (trustedQuantityAvailable < requestedIncrease) {
+            toast.error(POS_NO_TRUSTED_AVAILABILITY_REMAINING_MESSAGE);
+            return;
+          }
+        }
 
       const itemIsLocalOnly = item.id.toString().startsWith("optimistic:");
       if (itemIsLocalOnly) {
@@ -2891,6 +3154,9 @@ export function useRegisterViewModel(): RegisterViewModel {
       appendLocalCartItem,
       enqueueCartMutation,
       noteLocalRegisterEventChanged,
+      readCurrentLocalRegisterModel,
+      registerCatalogAvailabilityBySkuId,
+      registerCatalogSkuIds,
       staffProfileId,
     ],
   );
@@ -3058,11 +3324,27 @@ export function useRegisterViewModel(): RegisterViewModel {
         return;
       }
 
+      const blockedExactProduct =
+        exactSearchProduct ??
+        (registerSearchProducts.length === 1 ? registerSearchProducts[0] : null);
+
+      if (blockedExactProduct && !registerSearchState.canAutoAdd) {
+        await handleAddProduct(blockedExactProduct);
+        return;
+      }
+
       if (registerSearchState.results.length === 0) {
         toast.error("Item not found. Scan again or search by name.");
       }
     },
-    [addExactSearchProductOnce, productSearchQuery, registerSearchState],
+    [
+      addExactSearchProductOnce,
+      exactSearchProduct,
+      handleAddProduct,
+      productSearchQuery,
+      registerSearchProducts,
+      registerSearchState,
+    ],
   );
 
   useEffect(() => {
@@ -3107,6 +3389,17 @@ export function useRegisterViewModel(): RegisterViewModel {
 
     if (operableActiveSession) {
       const hasDraftState = operableActiveSession.cartItems.length > 0;
+      const isEmptyLocalSale =
+        !hasDraftState &&
+        (isLocalOperableSession(operableActiveSession) ||
+          localRegisterReadModel?.activeSale?.localPosSessionId ===
+            operableActiveSession._id.toString());
+
+      if (isEmptyLocalSale && !staffProfileId) {
+        resetDraftState();
+        navigateBack();
+        return;
+      }
 
       const handled = hasDraftState
         ? await holdCurrentSession("Navigating away from register")
@@ -3123,9 +3416,11 @@ export function useRegisterViewModel(): RegisterViewModel {
     operableActiveSession,
     activeCartItems.length,
     holdCurrentSession,
+    localRegisterReadModel?.activeSale?.localPosSessionId,
     voidCurrentSession,
     navigateBack,
     resetDraftState,
+    staffProfileId,
   ]);
 
   const handleCashierSignOut = useCallback(async () => {

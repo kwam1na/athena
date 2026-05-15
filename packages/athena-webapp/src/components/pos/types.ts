@@ -22,6 +22,8 @@ export interface Product {
   description: string;
   image?: string | null;
   inStock: boolean;
+  availabilityMessage?: string;
+  availabilityStatus?: "available" | "out_of_stock" | "unknown";
   quantityAvailable?: number;
   size?: string;
   length?: number | null;

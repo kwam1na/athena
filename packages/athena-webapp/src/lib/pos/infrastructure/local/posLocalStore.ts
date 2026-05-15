@@ -2,8 +2,12 @@ import type {
   LocalPinVerifierMetadata,
   WrappedLocalStaffProof,
 } from "@/lib/security/localPinVerifier";
+import type {
+  PosRegisterCatalogAvailabilityRowDto,
+  PosRegisterCatalogRowDto,
+} from "@/lib/pos/application/dto";
 
-export const POS_LOCAL_STORE_SCHEMA_VERSION = 3;
+export const POS_LOCAL_STORE_SCHEMA_VERSION = 4;
 
 export type PosLocalEntityKind =
   | "registerSession"
@@ -109,6 +113,20 @@ export type PosLocalStaffAuthorityReadiness =
   | "expired"
   | "ready";
 
+export interface PosLocalRegisterCatalogSnapshot {
+  refreshedAt: number;
+  rows: PosRegisterCatalogRowDto[];
+  schemaVersion: number;
+  storeId: string;
+}
+
+export interface PosLocalRegisterAvailabilitySnapshot {
+  refreshedAt: number;
+  rows: PosRegisterCatalogAvailabilityRowDto[];
+  schemaVersion: number;
+  storeId: string;
+}
+
 export type PosLocalStoreErrorCode =
   | "unsupported_schema_version"
   | "write_failed";
@@ -129,7 +147,9 @@ export type PosLocalObjectStoreName =
   | "events"
   | "mappings"
   | "readiness"
-  | "staffAuthority";
+  | "staffAuthority"
+  | "registerCatalog"
+  | "registerAvailability";
 
 export interface PosLocalStoreTransaction {
   get<T>(
@@ -512,6 +532,114 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       }
     },
 
+    async writeRegisterCatalogSnapshot(input: {
+      rows: PosRegisterCatalogRowDto[];
+      storeId: string;
+    }): Promise<PosLocalStoreResult<PosLocalRegisterCatalogSnapshot>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readwrite",
+          ["meta", "registerCatalog"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            const snapshot: PosLocalRegisterCatalogSnapshot = {
+              refreshedAt: clock(),
+              rows: input.rows,
+              schemaVersion: POS_LOCAL_STORE_SCHEMA_VERSION,
+              storeId: input.storeId,
+            };
+            await transaction.put("registerCatalog", input.storeId, snapshot);
+            return snapshot;
+          },
+        );
+
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async readRegisterCatalogSnapshot(input: {
+      storeId: string;
+    }): Promise<PosLocalStoreResult<PosLocalRegisterCatalogSnapshot | null>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readonly",
+          ["meta", "registerCatalog"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readonly");
+            return (
+              (await transaction.get<PosLocalRegisterCatalogSnapshot>(
+                "registerCatalog",
+                input.storeId,
+              )) ?? null
+            );
+          },
+        );
+
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async writeRegisterAvailabilitySnapshot(input: {
+      rows: PosRegisterCatalogAvailabilityRowDto[];
+      storeId: string;
+    }): Promise<PosLocalStoreResult<PosLocalRegisterAvailabilitySnapshot>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readwrite",
+          ["meta", "registerAvailability"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            const snapshot: PosLocalRegisterAvailabilitySnapshot = {
+              refreshedAt: clock(),
+              rows: input.rows,
+              schemaVersion: POS_LOCAL_STORE_SCHEMA_VERSION,
+              storeId: input.storeId,
+            };
+            await transaction.put(
+              "registerAvailability",
+              input.storeId,
+              snapshot,
+            );
+            return snapshot;
+          },
+        );
+
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async readRegisterAvailabilitySnapshot(input: {
+      storeId: string;
+    }): Promise<
+      PosLocalStoreResult<PosLocalRegisterAvailabilitySnapshot | null>
+    > {
+      try {
+        const value = await options.adapter.transaction(
+          "readonly",
+          ["meta", "registerAvailability"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readonly");
+            return (
+              (await transaction.get<PosLocalRegisterAvailabilitySnapshot>(
+                "registerAvailability",
+                input.storeId,
+              )) ?? null
+            );
+          },
+        );
+
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
     async appendEvent(
       input: PosLocalAppendEventInput,
     ): Promise<PosLocalStoreResult<PosLocalEventRecord>> {
@@ -867,6 +995,8 @@ export function createIndexedDbPosLocalStorageAdapter(options?: {
           "mappings",
           "readiness",
           "staffAuthority",
+          "registerCatalog",
+          "registerAvailability",
         ] satisfies PosLocalObjectStoreName[]) {
           if (!database.objectStoreNames.contains(storeName)) {
             database.createObjectStore(storeName);
@@ -1031,6 +1161,8 @@ function createEmptyMemoryStore(): MemoryStore {
     mappings: new Map(),
     readiness: new Map(),
     staffAuthority: new Map(),
+    registerCatalog: new Map(),
+    registerAvailability: new Map(),
   };
 }
 
@@ -1042,6 +1174,8 @@ function cloneMemoryStore(store: MemoryStore): MemoryStore {
     mappings: new Map(store.mappings),
     readiness: new Map(store.readiness),
     staffAuthority: new Map(store.staffAuthority),
+    registerCatalog: new Map(store.registerCatalog),
+    registerAvailability: new Map(store.registerAvailability),
   };
 }
 
