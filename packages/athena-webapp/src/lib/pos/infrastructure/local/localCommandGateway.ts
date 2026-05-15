@@ -27,6 +27,7 @@ type CreateLocalCommandGatewayOptions = {
   store: PosLocalCommandStore;
   clock?: () => number;
   createLocalId?: (kind: string) => string;
+  onEventAppended?: () => void;
   staffProofToken?: string | ((staffProfileId: string) => string | undefined);
 };
 
@@ -84,6 +85,7 @@ export function createLocalCommandGateway(
   async function append(input: PosLocalAppendEventInput) {
     const result = await options.store.appendEvent(input);
     if (!result.ok) return toLocalUserError(result.error.message);
+    options.onEventAppended?.();
     return null;
   }
 

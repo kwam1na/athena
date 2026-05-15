@@ -29,6 +29,8 @@ import { usePermissions } from "~/src/hooks/usePermissions";
 import { toDisplayAmount } from "~/convex/lib/currency";
 import { PageLevelHeader, PageWorkspace } from "../common/PageLevelHeader";
 import { useLocalPosEntryContext } from "@/lib/pos/infrastructure/local/localPosEntryContext";
+import { usePrewarmRegisterCatalogOfflineSnapshots } from "@/lib/pos/infrastructure/convex/catalogGateway";
+import type { Id } from "~/convex/_generated/dataModel";
 
 type FeatureLinkProps = {
   children: ReactNode;
@@ -59,6 +61,12 @@ export default function PointOfSaleView() {
     activeStore,
     routeParams,
   });
+  const snapshotStoreId =
+    activeStore?._id ??
+    (localEntryContext.status === "ready"
+      ? (localEntryContext.storeId as Id<"store">)
+      : undefined);
+  usePrewarmRegisterCatalogOfflineSnapshots({ storeId: snapshotStoreId });
 
   // Get today's POS transaction summary
   const todaySummary = useQuery(

@@ -8,8 +8,8 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 
 ## Repo Summary
 - Code files discovered: 1742
-- Graph nodes: 5489
-- Graph edges: 5714
+- Graph nodes: 5496
+- Graph edges: 5724
 - Communities: 1671
 
 ## Graph Hotspots
@@ -19,7 +19,7 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 - `storefrontJourneyEvents.ts` (45 edges, Community 3) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)
 - `createJourneyEvent()` (40 edges, Community 3) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)
 - `ProcurementView.tsx` (39 edges, Community 4) - [`packages/athena-webapp/src/components/procurement/ProcurementView.tsx`](../../packages/athena-webapp/src/components/procurement/ProcurementView.tsx)
-- `useRegisterViewModel.ts` (37 edges, Community 5) - [`packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts`](../../packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts)
+- `useRegisterViewModel.ts` (38 edges, Community 5) - [`packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts`](../../packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts)
 - `DailyOpeningView.tsx` (35 edges, Community 7) - [`packages/athena-webapp/src/components/operations/DailyOpeningView.tsx`](../../packages/athena-webapp/src/components/operations/DailyOpeningView.tsx)
 
 ## Registered Packages

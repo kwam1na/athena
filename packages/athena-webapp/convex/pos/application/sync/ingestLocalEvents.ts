@@ -661,6 +661,7 @@ function validateSaleCompletedPayload(payload: Record<string, unknown>) {
 
   if (
     !isOptionalNonEmptyString(payload.registerNumber) ||
+    !isOptionalNonEmptyString(payload.receiptNumber) ||
     !isOptionalNonEmptyString(payload.customerProfileId)
   ) {
     return "POS sale optional identifiers are invalid.";
@@ -718,6 +719,8 @@ function parseSaleCompletedPayload(
     localPosSessionId: payload.localPosSessionId as string,
     localTransactionId: payload.localTransactionId as string,
     localReceiptNumber: payload.localReceiptNumber as string,
+    receiptNumber:
+      optionalString(payload.receiptNumber) ?? (payload.localReceiptNumber as string),
     registerNumber: optionalString(payload.registerNumber),
     customerProfileId: customerProfileId
       ? repository.normalizeCloudId("customerProfile", customerProfileId) ??

@@ -216,6 +216,39 @@ function RegisterSyncStatusChip({
         : syncStatus.tone === "warning"
           ? "border-warning/30 bg-warning/15 text-warning"
           : "border-border bg-background text-muted-foreground";
+  const canRetry = syncStatus.status !== "synced" && syncStatus.onRetrySync;
+  const content = (
+    <>
+      <Icon aria-hidden className="h-3.5 w-3.5 shrink-0" />
+      <span className="truncate">{syncStatus.label}</span>
+      {syncStatus.pendingEventCount ? (
+        <span className="font-numeric tabular-nums">
+          {syncStatus.pendingEventCount}
+        </span>
+      ) : null}
+      {canRetry ? (
+        <RefreshCw aria-hidden className="ml-1 h-3.5 w-3.5 shrink-0" />
+      ) : null}
+    </>
+  );
+
+  if (canRetry) {
+    return (
+      <button
+        aria-label={`Retry POS sync: ${syncStatus.label}${
+          syncStatus.pendingEventCount ? ` ${syncStatus.pendingEventCount}` : ""
+        }`}
+        className={cn(
+          "inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium transition hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          className,
+        )}
+        onClick={syncStatus.onRetrySync}
+        type="button"
+      >
+        {content}
+      </button>
+    );
+  }
 
   return (
     <div
@@ -224,63 +257,229 @@ function RegisterSyncStatusChip({
         className,
       )}
     >
-      <Icon aria-hidden className="h-3.5 w-3.5 shrink-0" />
-      <span className="truncate">{syncStatus.label}</span>
-      {syncStatus.pendingEventCount ? (
-        <span className="font-numeric tabular-nums">
-          {syncStatus.pendingEventCount}
-        </span>
-      ) : null}
-      {syncStatus.status !== "synced" && syncStatus.onRetrySync ? (
-        <button
-          aria-label="Retry POS sync"
-          className="ml-1 rounded-full p-0.5 transition hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          onClick={syncStatus.onRetrySync}
-          type="button"
-        >
-          <RefreshCw className="h-3.5 w-3.5" />
-        </button>
-      ) : null}
+      {content}
     </div>
   );
 }
 
+function formatDebugTimestamp(timestamp?: number) {
+  return timestamp
+    ? new Date(timestamp).toISOString().replace(/\.\d{3}Z$/, "Z")
+    : "n/a";
+}
+
+function formatDebugStatus(value?: string | null) {
+  if (!value) return "not ready";
+
+  return value
+    .replace(/[-_]/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function formatDebugSource(value?: string | null) {
+  switch (value) {
+    case "runtime":
+      return "Upload worker";
+    case "local-read-model":
+      return "Local register record";
+    case "register-state":
+      return "Register record";
+    case "none":
+    default:
+      return "No active source";
+  }
+}
+
+function formatDebugTrigger(value?: string | null) {
+  switch (value) {
+    case "event-appended":
+      return "New register activity";
+    case "route-entry":
+      return "Page opened";
+    case "visibility":
+      return "Page visible";
+    case "interval":
+      return "Scheduled retry";
+    case "online":
+      return "Connection restored";
+    case "manual":
+      return "Manual retry";
+    case "none":
+    default:
+      return "Not triggered";
+  }
+}
+
+function usePosDebugPanelToggle() {
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    function isDebugShortcut(event: KeyboardEvent) {
+      const isDebugShortcut =
+        event.key === "/" || event.code === "Slash";
+      return event.metaKey && isDebugShortcut;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (!isDebugShortcut(event)) {
+        return;
+      }
+
+      event.preventDefault();
+      if (event.repeat) {
+        return;
+      }
+
+      setIsVisible((current) => !current);
+    }
+
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => document.removeEventListener("keydown", handleKeyDown, true);
+  }, []);
+
+  return isVisible;
+}
+
 function POSLocalDebugStrip({
   debug,
+  isVisible,
 }: {
   debug: RegisterViewModel["debug"];
+  isVisible: boolean;
 }) {
-  if (!debug || !import.meta.env.DEV) return null;
-
-  const shouldShow =
-    !debug.online ||
-    debug.activeStoreSource !== "live" ||
-    debug.terminalSource !== "live" ||
-    debug.localEntryStatus !== "ready";
-
-  if (!shouldShow) return null;
+  if (!debug || !isVisible) return null;
 
   const rows = [
-    ["network", debug.online ? "online" : "offline"],
-    ["entry", debug.localEntryStatus],
-    ["authority", debug.localStaffAuthorityStatus],
-    ["store", `${debug.activeStoreSource}${debug.storeId ? `:${debug.storeId}` : ""}`],
+    ["connection", debug.online ? "Online" : "Offline"],
+    ["register activity", formatDebugStatus(debug.localEntryStatus)],
+    ["staff access", formatDebugStatus(debug.localStaffAuthorityStatus)],
+    ["store record", formatDebugStatus(debug.activeStoreSource)],
+    ["register record", formatDebugStatus(debug.terminalSource)],
+    ["staff sign-in", debug.staffSignedIn ? "Signed in" : "Not signed in"],
     [
-      "terminal",
-      `${debug.terminalSource}${debug.terminalId ? `:${debug.terminalId}` : ""}`,
+      "staff authorization",
+      debug.syncFlow.staffProof === "present" ? "Ready" : "Needed",
     ],
-    ["staff", debug.staffSignedIn ? "signed-in" : "not-signed-in"],
-    ["auth", debug.authDialogOpen ? "open" : "closed"],
+    ["sign-in panel", debug.authDialogOpen ? "Open" : "Closed"],
+    ["sync status", formatDebugStatus(debug.syncFlow.status)],
+    ["status source", formatDebugSource(debug.syncFlow.source)],
+    ["activity signal", String(debug.syncFlow.eventAppendToken)],
+    [
+      "last sync attempt",
+      formatDebugTrigger(debug.syncFlow.lastRuntimeTrigger),
+    ],
+    [
+      "attempt priority",
+      debug.syncFlow.lastRuntimeTriggerPriority === "high" ? "High" : "Normal",
+    ],
+    ["attempted at", formatDebugTimestamp(debug.syncFlow.lastRuntimeTriggerAt)],
+    ["waiting to sync", String(debug.syncFlow.pendingEventCount ?? 0)],
+    [
+      "activity count",
+      [
+        `local ${debug.syncFlow.lastLocalSequence ?? "n/a"}`,
+        `synced ${debug.syncFlow.lastSyncedSequence ?? "n/a"}`,
+        `next ${debug.syncFlow.nextPendingSequence ?? "n/a"}`,
+      ].join(" "),
+    ],
   ];
+  const flow = [
+    {
+      label: debug.online ? "Connected" : "Offline",
+      state: debug.online ? "ready" : "blocked",
+    },
+    {
+      label:
+        debug.localEntryStatus === "ready"
+          ? "Register activity ready"
+          : "Register activity",
+      state: debug.localEntryStatus === "ready" ? "ready" : "waiting",
+    },
+    {
+      label:
+        debug.syncFlow.staffProof === "present"
+          ? "Staff authorized"
+          : "Staff authorization",
+      state: debug.syncFlow.staffProof === "present" ? "ready" : "waiting",
+    },
+    {
+      label:
+        debug.syncFlow.status === "syncing"
+          ? "Uploading"
+          : debug.syncFlow.status === "synced"
+            ? "Uploaded"
+            : "Upload",
+      state:
+        debug.syncFlow.status === "needs_review"
+          ? "blocked"
+          : debug.syncFlow.status === "synced"
+            ? "ready"
+            : debug.syncFlow.pendingEventCount
+              ? "active"
+              : "waiting",
+    },
+    {
+      label:
+        debug.syncFlow.status === "synced"
+          ? "Server current"
+          : debug.syncFlow.status === "needs_review"
+            ? "Needs review"
+            : "Server update",
+      state:
+        debug.syncFlow.status === "synced"
+          ? "ready"
+          : debug.syncFlow.status === "needs_review"
+            ? "blocked"
+            : "waiting",
+    },
+  ];
+  const tone =
+    !debug.online || debug.syncFlow.status === "needs_review"
+      ? "warning"
+      : "neutral";
 
   return (
     <details
-      className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-foreground"
+      className={cn(
+        "rounded-lg border px-4 py-3 text-xs text-foreground",
+        tone === "warning"
+          ? "border-warning/30 bg-warning/10"
+          : "border-border bg-muted/25",
+      )}
       open
     >
-      <summary className="cursor-pointer font-medium text-warning">
-        Register connection details
+      <summary
+        className={cn(
+          "cursor-pointer font-medium",
+          tone === "warning" ? "text-warning" : "text-muted-foreground",
+        )}
+      >
+        Support sync diagnostics
       </summary>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {flow.map((step, index) => (
+          <div key={step.label} className="flex items-center gap-2">
+            <span
+              className={cn(
+                "inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 font-medium",
+                step.state === "ready"
+                  ? "border-success/25 bg-success/10 text-success"
+                  : step.state === "blocked"
+                    ? "border-warning/30 bg-warning/15 text-warning"
+                    : step.state === "active"
+                      ? "border-primary/25 bg-primary/10 text-primary"
+                      : "border-border bg-background text-muted-foreground",
+              )}
+            >
+              <Circle className="h-2 w-2 fill-current" />
+              {step.label}
+            </span>
+            {index < flow.length - 1 ? (
+              <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+            ) : null}
+          </div>
+        ))}
+      </div>
       <dl className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {rows.map(([label, value]) => (
           <div key={label} className="min-w-0">
@@ -506,6 +705,7 @@ export function POSRegisterView({
   const [isPaymentsListExpanded, setIsPaymentsListExpanded] = useState(false);
   const productEntryRef = useRef<ProductEntryHandle>(null);
   const headerProductSearchInputRef = useRef<HTMLInputElement>(null);
+  const isDebugPanelVisible = usePosDebugPanelToggle();
 
   useCollapseSidebarForPosFlow();
   const isSessionActive = viewModel.header.isSessionActive;
@@ -520,6 +720,8 @@ export function POSRegisterView({
   const cartItemCount =
     viewModel.cart?.items?.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
   const isAwaitingCashierAuth = Boolean(viewModel.authDialog?.open);
+  const isStaffSignedIn =
+    viewModel.debug?.staffSignedIn === true || Boolean(viewModel.cashierCard);
   const onboardingState =
     viewModel.onboarding ??
     ({
@@ -703,17 +905,19 @@ export function POSRegisterView({
           leadingContent={
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-8">
               <div className="flex shrink-0 items-center gap-3">
-                {isSessionActive ? (
-                  <FadeIn className="flex items-center gap-2">
-                    <div
-                      className={`w-2 h-2 bg-green-600 rounded-full animate-pulse`}
-                    />
-                  </FadeIn>
-                ) : (
+                <FadeIn className="flex items-center gap-2">
                   <div
-                    className={`w-2 h-2 bg-background rounded-full animate-pulse`}
+                    aria-label={
+                      isStaffSignedIn ? "Staff signed in" : "No staff signed in"
+                    }
+                    className={cn(
+                      "h-2 w-2 rounded-full",
+                      isStaffSignedIn
+                        ? "animate-pulse bg-green-600"
+                        : "bg-background",
+                    )}
                   />
-                )}
+                </FadeIn>
 
                 <p className="text-lg font-semibold text-gray-900">
                   {viewModel.header.title}
@@ -752,7 +956,12 @@ export function POSRegisterView({
     >
       <FadeIn className={registerContentClassName}>
         <div className="flex h-full min-h-0 flex-col gap-6 overflow-hidden">
-          {isPosWorkflow ? <POSLocalDebugStrip debug={viewModel.debug} /> : null}
+          {isPosWorkflow ? (
+            <POSLocalDebugStrip
+              debug={viewModel.debug}
+              isVisible={isDebugPanelVisible}
+            />
+          ) : null}
 
           {isPosWorkflow &&
           shouldRenderSaleSurface &&
@@ -908,17 +1117,6 @@ export function POSRegisterView({
           </div>
         </div>
       </FadeIn>
-
-      {viewModel.authDialog && !isAwaitingCashierAuth && (
-        <CashierAuthDialog
-          open={viewModel.authDialog.open}
-          storeId={viewModel.authDialog.storeId}
-          terminalId={viewModel.authDialog.terminalId}
-          workflowMode={viewModel.authDialog.workflowMode}
-          onAuthenticated={viewModel.authDialog.onAuthenticated}
-          onDismiss={viewModel.authDialog.onDismiss}
-        />
-      )}
 
       {viewModel.commandApprovalDialog ? (
         <CommandApprovalDialog

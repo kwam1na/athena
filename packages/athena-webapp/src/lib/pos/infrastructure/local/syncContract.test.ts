@@ -287,7 +287,8 @@ describe("syncContract", () => {
         payload: {
           localPosSessionId: "local-session-1",
           localTransactionId: "local-txn-1",
-          receiptNumber: "LOCAL-1-000001",
+          localReceiptNumber: "local-txn-1",
+          receiptNumber: "123456",
           customerProfileId: "profile-1",
           customerName: "Efua Mensah",
           customerEmail: "efua@example.com",
@@ -308,7 +309,8 @@ describe("syncContract", () => {
         payload: expect.objectContaining({
           localPosSessionId: "local-session-1",
           localTransactionId: "local-txn-1",
-          localReceiptNumber: "LOCAL-1-000001",
+          localReceiptNumber: "local-txn-1",
+          receiptNumber: "123456",
           customerProfileId: "profile-1",
           customerInfo: {
             name: "Efua Mensah",

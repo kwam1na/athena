@@ -178,6 +178,17 @@ export function useConvexRegisterCatalogAvailability(
   return state.status === "ready" ? state.rows : undefined;
 }
 
+export function usePrewarmRegisterCatalogOfflineSnapshots(input: {
+  storeId?: Id<"store">;
+}) {
+  useConvexRegisterCatalog({ storeId: input.storeId });
+  useConvexRegisterCatalogAvailabilityState({
+    refreshFullAvailabilitySnapshot: true,
+    storeId: input.storeId,
+    productSkuIds: [],
+  });
+}
+
 export function useConvexRegisterCatalogAvailabilityState(
   input: PosRegisterCatalogAvailabilityInput,
 ): RegisterCatalogAvailabilityGatewayState {

@@ -92,7 +92,12 @@ function toUploadEvent(
         localPosSessionId,
         localTransactionId:
           event.localTransactionId ?? stringOrEmpty(payload.localTransactionId),
-        localReceiptNumber: stringOrEmpty(payload.receiptNumber),
+        localReceiptNumber:
+          stringOrEmpty(payload.localReceiptNumber) ||
+          stringOrEmpty(payload.receiptNumber),
+        receiptNumber:
+          stringOrEmpty(payload.receiptNumber) ||
+          stringOrEmpty(payload.localReceiptNumber),
         registerNumber: event.registerNumber,
         customerProfileId: nullableStringToOptional(payload.customerProfileId),
         customerInfo: customerInfoFromPayload(payload),
