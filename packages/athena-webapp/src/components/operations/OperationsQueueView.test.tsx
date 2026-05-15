@@ -119,7 +119,7 @@ vi.mock("@/components/staff-auth/StaffAuthenticationDialog", () => ({
           type="button"
           onClick={async () => {
             const credentials = {
-              pinHash: "hashed:123456",
+              pinHash: "hashed:1234",
               username: "manager",
             };
             const result = await onAuthenticate({
@@ -643,7 +643,7 @@ describe("OperationsQueueViewContent", () => {
     await waitFor(() =>
       expect(authenticateStaffCredential).toHaveBeenCalledWith({
         allowedRoles: ["manager"],
-        pinHash: "hashed:123456",
+        pinHash: "hashed:1234",
         storeId: "store-1",
         username: "manager",
       }),
@@ -654,7 +654,7 @@ describe("OperationsQueueViewContent", () => {
     await waitFor(() =>
       expect(authenticateStaffCredentialForApproval).toHaveBeenCalledWith({
         actionKey: "operations.approval_request.decide",
-        pinHash: "hashed:123456",
+        pinHash: "hashed:1234",
         reason: "Resolve pending approval request.",
         requiredRole: "manager",
         storeId: "store-1",

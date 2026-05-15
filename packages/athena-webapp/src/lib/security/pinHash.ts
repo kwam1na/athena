@@ -6,7 +6,7 @@ const PIN_SALT = "athena-pos-cashier-pin-salt-v1";
 
 /**
  * Hash a PIN using SHA-256 with a fixed salt
- * @param pin - The plaintext PIN (should be validated as 6 digits before calling)
+ * @param pin - The plaintext PIN (should be validated before calling)
  * @returns The SHA-256 hash of the PIN as a hex string
  */
 export async function hashPin(pin: string): Promise<string> {

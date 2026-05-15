@@ -69,14 +69,21 @@ vi.mock("../ui/select", () => ({
   ),
 }));
 
-vi.mock("../pos/PinInput", () => ({
-  PinInput: ({
+vi.mock("../staff-auth/staffPinPolicy", () => ({
+  STAFF_PIN_LENGTH: 4,
+  normalizeStaffPin: (value: string) => value.replace(/\D/g, "").slice(0, 4),
+}));
+
+vi.mock("../staff-auth/StaffPinInput", () => ({
+  StaffPinInput: ({
     disabled,
     onChange,
+    onKeyDown,
     value,
   }: {
     disabled: boolean;
     onChange: (value: string) => void;
+    onKeyDown: (event: React.KeyboardEvent) => void;
     value: string;
   }) => (
     <input
@@ -84,6 +91,7 @@ vi.mock("../pos/PinInput", () => ({
       disabled={disabled}
       value={value}
       onChange={(event) => onChange(event.target.value)}
+      onKeyDown={onKeyDown}
     />
   ),
 }));
@@ -285,7 +293,7 @@ describe("StaffManagement", () => {
     );
   });
 
-  it("sets a PIN for a pending credential", async () => {
+  it("sets a four-digit PIN for a pending credential", async () => {
     mockConvex();
     const user = userEvent.setup();
 
@@ -298,25 +306,66 @@ describe("StaffManagement", () => {
 
     await user.click(screen.getByRole("button", { name: /set pin/i }));
     const pinInputs = screen.getAllByLabelText(/pin input/i);
-    await user.type(pinInputs[0]!, "123456");
-    await user.type(pinInputs[1]!, "123456");
+    await user.type(pinInputs[0]!, "1234");
+    await user.type(pinInputs[1]!, "1234");
     await user.click(screen.getByRole("button", { name: /save pin/i }));
 
     await waitFor(() => expect(updateStaffCredential).toHaveBeenCalledTimes(1));
     expect(updateStaffCredential).toHaveBeenCalledWith({
       localPinVerifier: {
         algorithm: "PBKDF2-SHA256",
-        hash: "local:123456",
+        hash: "local:1234",
         iterations: 120000,
         salt: "salt",
         version: 1,
       },
       organizationId: "org-1",
-      pinHash: "hashed:123456",
+      pinHash: "hashed:1234",
       staffProfileId: "staff-1",
       status: "active",
       storeId: "store-1",
     });
+  });
+
+  it("does not save an incomplete staff PIN", async () => {
+    mockConvex();
+    const user = userEvent.setup();
+
+    render(
+      <StaffManagement
+        organizationId={"org-1" as Id<"organization">}
+        storeId={"store-1" as Id<"store">}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /set pin/i }));
+    const pinInputs = screen.getAllByLabelText(/pin input/i);
+    await user.type(pinInputs[0]!, "123");
+    await user.type(pinInputs[1]!, "123");
+
+    expect(screen.getByRole("button", { name: /save pin/i })).toBeDisabled();
+    expect(updateStaffCredential).not.toHaveBeenCalled();
+  });
+
+  it("blocks staff PIN saves when confirmation does not match", async () => {
+    mockConvex();
+    const user = userEvent.setup();
+
+    render(
+      <StaffManagement
+        organizationId={"org-1" as Id<"organization">}
+        storeId={"store-1" as Id<"store">}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /set pin/i }));
+    const pinInputs = screen.getAllByLabelText(/pin input/i);
+    await user.type(pinInputs[0]!, "1234");
+    await user.type(pinInputs[1]!, "1235");
+
+    expect(screen.getByText("PINs don't match")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /save pin/i })).toBeDisabled();
+    expect(updateStaffCredential).not.toHaveBeenCalled();
   });
 
   it("surfaces staff provisioning command errors from the shared toast path", async () => {

@@ -16,14 +16,17 @@ vi.mock("../lib/athenaUserAuth", () => ({
 
 import {
   authenticateStaffCredential,
+  authenticateStaffCredentialForApproval,
   authenticateStaffCredentialForApprovalWithCtx,
   authenticateStaffCredentialForTerminal,
   authenticateStaffCredentialWithCtx,
   authenticateStaffCredentialForTerminalWithCtx,
+  createStaffCredential,
   createStaffCredentialWithCtx,
   getStaffCredentialUsernameAvailabilityWithCtx,
   listStaffCredentialsByStoreWithCtx,
   refreshTerminalStaffAuthority,
+  updateStaffCredential,
   updateStaffCredentialWithCtx,
 } from "./staffCredentials";
 import { hashPosLocalStaffProofToken } from "../pos/application/sync/staffProof";
@@ -227,6 +230,254 @@ describe("staff credential operations", () => {
     ).resolves.toEqual({
       available: true,
       normalizedUsername: "new-user",
+    });
+  });
+
+  it("requires store access before public staff authentication can affect lockout state", async () => {
+    const { ctx, tables } = createStaffCredentialsMutationCtx({
+      credentials: [
+        {
+          _id: "credential-1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          username: "frontdesk",
+          pinHash: "hash-1",
+          status: "active",
+        },
+      ],
+      profiles: [
+        {
+          _id: "staff_profile_1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Ari Mensah",
+        },
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "cashier",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+      ],
+    });
+    authMocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValueOnce(
+      new Error("Sign in again to continue."),
+    );
+
+    const result = await getHandler(authenticateStaffCredential)(ctx, {
+      allowedRoles: ["cashier"],
+      storeId: "store_1" as Id<"store">,
+      username: "frontdesk",
+      pinHash: "wrong-hash",
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "You do not have access to authenticate staff for this store.",
+      },
+    });
+    expect(tables.staffCredential.get("credential-1")).not.toHaveProperty(
+      "failedAuthenticationAttempts",
+    );
+    expect(tables.staffCredential.get("credential-1")).not.toHaveProperty(
+      "authenticationLockedUntil",
+    );
+  });
+
+  it("requires store access before public manager approval authentication can mint proofs", async () => {
+    const { ctx, tables } = createStaffCredentialsMutationCtx({
+      credentials: [
+        {
+          _id: "credential-1",
+          staffProfileId: "manager-1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          username: "manager",
+          pinHash: "hash-1",
+          status: "active",
+        },
+      ],
+      profiles: [
+        {
+          _id: "manager-1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Ari Mensah",
+        },
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          staffProfileId: "manager-1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "manager",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+      ],
+    });
+    authMocks.requireOrganizationMemberRoleWithCtx.mockRejectedValueOnce(
+      new Error("You do not have access to authenticate staff for this store."),
+    );
+
+    const result = await getHandler(authenticateStaffCredentialForApproval)(
+      ctx,
+      {
+        actionKey: "pos.transaction.payment_method.correct",
+        pinHash: "hash-1",
+        reason: "Completed transactions require manager approval.",
+        requiredRole: "manager",
+        requestedByStaffProfileId: "cashier-1" as Id<"staffProfile">,
+        storeId: "store_1" as Id<"store">,
+        subject: {
+          type: "pos_transaction",
+          id: "transaction-1",
+          label: "Receipt 1001",
+        },
+        username: "manager",
+      },
+    );
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "You do not have access to authenticate staff for this store.",
+      },
+    });
+    expect(tables.approvalProof.size).toBe(0);
+    expect(tables.staffCredential.get("credential-1")).not.toHaveProperty(
+      "lastAuthenticatedAt",
+    );
+  });
+
+  it("requires full admin access before creating staff credentials through the public mutation", async () => {
+    const { ctx, tables } = createStaffCredentialsMutationCtx({
+      profiles: [
+        {
+          _id: "staff_profile_1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Ari Mensah",
+        },
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "cashier",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+      ],
+    });
+    authMocks.requireOrganizationMemberRoleWithCtx.mockRejectedValueOnce(
+      new Error("You do not have access to manage staff credentials."),
+    );
+
+    await expect(
+      getHandler(createStaffCredential)(ctx, {
+        organizationId: "org_1" as Id<"organization">,
+        pinHash: "hash-1",
+        staffProfileId: "staff_profile_1" as Id<"staffProfile">,
+        storeId: "store_1" as Id<"store">,
+        username: "frontdesk",
+      }),
+    ).resolves.toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "You do not have access to manage staff credentials.",
+      },
+    });
+    expect(tables.staffCredential.size).toBe(0);
+    expect(authMocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      ctx,
+      {
+        allowedRoles: ["full_admin"],
+        failureMessage: "You do not have access to manage staff credentials.",
+        organizationId: "org_1",
+        userId: "athena-user-1",
+      },
+    );
+  });
+
+  it("requires full admin access before public credential updates can reset PINs or clear lockout", async () => {
+    const { ctx, tables } = createStaffCredentialsMutationCtx({
+      credentials: [
+        {
+          _id: "credential-1",
+          authenticationLockedUntil: Date.now() + 300_000,
+          failedAuthenticationAttempts: 5,
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          username: "frontdesk",
+          pinHash: "hash-1",
+          status: "active",
+        },
+      ],
+      profiles: [
+        {
+          _id: "staff_profile_1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Ari Mensah",
+        },
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "cashier",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+      ],
+    });
+    authMocks.requireOrganizationMemberRoleWithCtx.mockRejectedValueOnce(
+      new Error("You do not have access to manage staff credentials."),
+    );
+
+    await expect(
+      getHandler(updateStaffCredential)(ctx, {
+        organizationId: "org_1" as Id<"organization">,
+        pinHash: "hash-2",
+        staffProfileId: "staff_profile_1" as Id<"staffProfile">,
+        storeId: "store_1" as Id<"store">,
+      }),
+    ).resolves.toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "You do not have access to manage staff credentials.",
+      },
+    });
+    expect(tables.staffCredential.get("credential-1")).toMatchObject({
+      authenticationLockedUntil: expect.any(Number),
+      failedAuthenticationAttempts: 5,
+      pinHash: "hash-1",
     });
   });
 
@@ -809,6 +1060,216 @@ describe("staff credential operations", () => {
     expect(tables.staffCredential.get("credential-1")?.lastAuthenticatedAt).toEqual(
       expect.any(Number)
     );
+  });
+
+  it("locks staff authentication after repeated failed PIN attempts and resets on PIN reset", async () => {
+    const beforeAttempts = Date.now();
+    const { ctx, tables } = createStaffCredentialsMutationCtx({
+      credentials: [
+        {
+          _id: "credential-1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          username: "frontdesk",
+          pinHash: "hash-1",
+          status: "active",
+        },
+      ],
+      profiles: [
+        {
+          _id: "staff_profile_1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Ari Mensah",
+        },
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "cashier",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+      ],
+    });
+
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      await expect(
+        authenticateStaffCredentialWithCtx(ctx, {
+          allowedRoles: ["cashier"],
+          storeId: "store_1" as Id<"store">,
+          username: "frontdesk",
+          pinHash: `wrong-${attempt}`,
+        }),
+      ).resolves.toEqual({
+        kind: "user_error",
+        error: {
+          code: "authentication_failed",
+          message: "Invalid staff credentials.",
+        },
+      });
+    }
+
+    expect(tables.staffCredential.get("credential-1")).toMatchObject({
+      failedAuthenticationAttempts: 5,
+    });
+    expect(
+      tables.staffCredential.get("credential-1")?.authenticationLockedUntil,
+    ).toBeGreaterThan(beforeAttempts);
+
+    await expect(
+      authenticateStaffCredentialWithCtx(ctx, {
+        allowedRoles: ["cashier"],
+        storeId: "store_1" as Id<"store">,
+        username: "frontdesk",
+        pinHash: "hash-1",
+      }),
+    ).resolves.toEqual({
+      kind: "user_error",
+      error: {
+        code: "rate_limited",
+        message: "Too many failed staff PIN attempts. Try again later.",
+      },
+    });
+
+    await expect(
+      updateStaffCredentialWithCtx(ctx, {
+        organizationId: "org_1" as Id<"organization">,
+        pinHash: "hash-2",
+        localPinVerifier,
+        staffProfileId: "staff_profile_1" as Id<"staffProfile">,
+        storeId: "store_1" as Id<"store">,
+      }),
+    ).resolves.toMatchObject({
+      status: "active",
+    });
+
+    expect(tables.staffCredential.get("credential-1")).toMatchObject({
+      authenticationLockedUntil: undefined,
+      failedAuthenticationAttempts: 0,
+      pinHash: "hash-2",
+    });
+  });
+
+  it("resets failed staff authentication attempts after a successful login", async () => {
+    const { ctx, tables } = createStaffCredentialsMutationCtx({
+      credentials: [
+        {
+          _id: "credential-1",
+          authenticationLockedUntil: 1,
+          failedAuthenticationAttempts: 4,
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          username: "frontdesk",
+          pinHash: "hash-1",
+          status: "active",
+        },
+      ],
+      profiles: [
+        {
+          _id: "staff_profile_1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Ari Mensah",
+        },
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "cashier",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+      ],
+    });
+
+    await expect(
+      authenticateStaffCredentialWithCtx(ctx, {
+        allowedRoles: ["cashier"],
+        storeId: "store_1" as Id<"store">,
+        username: "frontdesk",
+        pinHash: "hash-1",
+      }),
+    ).resolves.toMatchObject({
+      kind: "ok",
+    });
+
+    expect(tables.staffCredential.get("credential-1")).toMatchObject({
+      authenticationLockedUntil: undefined,
+      failedAuthenticationAttempts: 0,
+      lastAuthenticatedAt: expect.any(Number),
+    });
+  });
+
+  it("prevents approval proof minting while staff authentication is locked", async () => {
+    const { ctx } = createStaffCredentialsMutationCtx({
+      credentials: [
+        {
+          _id: "credential-1",
+          authenticationLockedUntil: Date.now() + 300_000,
+          failedAuthenticationAttempts: 5,
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          username: "manager",
+          pinHash: "hash-1",
+          status: "active",
+        },
+      ],
+      profiles: [
+        {
+          _id: "staff_profile_1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Ari Mensah",
+        },
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "manager",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+      ],
+    });
+
+    await expect(
+      authenticateStaffCredentialForApprovalWithCtx(ctx, {
+        actionKey: "operations.approval_request.decide",
+        pinHash: "hash-1",
+        requiredRole: "manager",
+        storeId: "store_1" as Id<"store">,
+        subject: {
+          id: "approval-1",
+          type: "approval_request",
+        },
+        username: "manager",
+      }),
+    ).resolves.toEqual({
+      kind: "user_error",
+      error: {
+        code: "rate_limited",
+        message: "Too many failed staff PIN attempts. Try again later.",
+      },
+    });
   });
 
   it("mints and persists a scoped local staff proof after terminal authentication", async () => {

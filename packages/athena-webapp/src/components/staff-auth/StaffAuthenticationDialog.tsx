@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { PinInput } from "@/components/pos/PinInput";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +18,8 @@ import {
   GENERIC_UNEXPECTED_ERROR_MESSAGE,
   GENERIC_UNEXPECTED_ERROR_TITLE,
 } from "~/shared/commandResult";
+import { StaffPinInput } from "./StaffPinInput";
+import { STAFF_PIN_LENGTH } from "./staffPinPolicy";
 
 export type StaffAuthMode = "authenticate" | "recover";
 
@@ -90,7 +91,8 @@ export function StaffAuthenticationDialog({
   const usernameInputRef = useRef<HTMLInputElement>(null);
 
   const activeCopy = mode === "recover" && alternateCopy ? alternateCopy : copy;
-  const canSubmit = username.trim().length > 0 && pin.length === 6;
+  const canSubmit =
+    username.trim().length > 0 && pin.length === STAFF_PIN_LENGTH;
 
   useEffect(() => {
     if (!open) {
@@ -117,8 +119,8 @@ export function StaffAuthenticationDialog({
       return;
     }
 
-    if (pin.length !== 6) {
-      toast.error("PIN required. Enter all 6 digits to continue.");
+    if (pin.length !== STAFF_PIN_LENGTH) {
+      toast.error("PIN required. Enter all 4 digits to continue.");
       return;
     }
 
@@ -233,13 +235,11 @@ export function StaffAuthenticationDialog({
 
         <div className="space-y-layout-xs">
           <Label htmlFor="staff-auth-pin">PIN</Label>
-          <PinInput
+          <StaffPinInput
             value={pin}
             onChange={setPin}
             disabled={isAuthenticating}
             onKeyDown={handleKeyDown}
-            maxLength={6}
-            size="sm"
           />
         </div>
       </div>

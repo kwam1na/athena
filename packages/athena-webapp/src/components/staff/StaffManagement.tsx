@@ -8,7 +8,11 @@ import { hashPin } from "~/src/lib/security/pinHash";
 import { createLocalPinVerifier } from "~/src/lib/security/localPinVerifier";
 import { presentCommandToast } from "~/src/lib/errors/presentCommandToast";
 import { runCommand } from "~/src/lib/errors/runCommand";
-import { PinInput } from "../pos/PinInput";
+import { StaffPinInput } from "../staff-auth/StaffPinInput";
+import {
+  STAFF_PIN_LENGTH,
+  normalizeStaffPin,
+} from "../staff-auth/staffPinPolicy";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import {
@@ -612,6 +616,9 @@ function CredentialPinDialog({
     }
   }, [state]);
 
+  const isPinComplete =
+    pin.length === STAFF_PIN_LENGTH && confirmPin.length === STAFF_PIN_LENGTH;
+
   const showMismatch = Boolean(
     pin.length > 0 && pin.length === confirmPin.length && pin !== confirmPin,
   );
@@ -639,8 +646,8 @@ function CredentialPinDialog({
       return;
     }
 
-    if (!/^\d{6}$/.test(pin)) {
-      toast.error("PIN must be exactly 6 digits");
+    if (pin.length !== STAFF_PIN_LENGTH || !/^\d+$/.test(pin)) {
+      toast.error(`PIN must be exactly ${STAFF_PIN_LENGTH} digits`);
       return;
     }
 
@@ -703,27 +710,21 @@ function CredentialPinDialog({
         <div className="space-y-6">
           <div className="space-y-2">
             <Label htmlFor="staff-pin">PIN</Label>
-            <PinInput
+            <StaffPinInput
               value={pin}
-              onChange={(value) => setPin(value.replace(/\D/g, "").slice(0, 6))}
+              onChange={(value) => setPin(normalizeStaffPin(value))}
               disabled={isSaving}
               onKeyDown={handlePinKeyDown}
-              maxLength={6}
-              size="sm"
             />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="staff-confirm-pin">Confirm PIN</Label>
-            <PinInput
+            <StaffPinInput
               value={confirmPin}
-              onChange={(value) =>
-                setConfirmPin(value.replace(/\D/g, "").slice(0, 6))
-              }
+              onChange={(value) => setConfirmPin(normalizeStaffPin(value))}
               disabled={isSaving}
               onKeyDown={handlePinKeyDown}
-              maxLength={6}
-              size="sm"
             />
           </div>
 
@@ -741,9 +742,7 @@ function CredentialPinDialog({
           <LoadingButton
             onClick={handleSubmit}
             isLoading={isSaving}
-            disabled={
-              pin.length !== 6 || confirmPin.length !== 6 || pin !== confirmPin
-            }
+            disabled={!isPinComplete || pin !== confirmPin}
           >
             {state?.mode === "set" ? "Save PIN" : "Reset PIN"}
           </LoadingButton>

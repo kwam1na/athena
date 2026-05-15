@@ -160,7 +160,7 @@ function renderDialog(
 async function submitCredentials(user: ReturnType<typeof userEvent.setup>) {
   await waitFor(() => expect(screen.getByLabelText(/username/i)).toHaveFocus());
   await user.type(screen.getByLabelText(/username/i), "manager");
-  await user.type(screen.getByLabelText(/pin/i), "123456");
+  await user.type(screen.getByLabelText(/pin/i), "1234");
 }
 
 describe("CommandApprovalDialog", () => {
@@ -237,7 +237,7 @@ describe("CommandApprovalDialog", () => {
     await waitFor(() =>
       expect(onAuthenticateForApproval).toHaveBeenCalledWith({
         actionKey: "transaction.payment_method_correction",
-        pinHash: "hashed:123456",
+        pinHash: "hashed:1234",
         reason: "Payment method changes need manager approval.",
         requiredRole: "manager",
         requestedByStaffProfileId: undefined,

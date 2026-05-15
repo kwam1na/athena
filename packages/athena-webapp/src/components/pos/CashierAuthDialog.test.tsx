@@ -186,7 +186,7 @@ function renderDialog({
 async function submitCredentials(
   user: ReturnType<typeof userEvent.setup>,
   {
-    pin = "123456",
+    pin = "1234",
     username = "frontdesk",
   }: {
     pin?: string;
@@ -381,11 +381,11 @@ describe("CashierAuthDialog", () => {
     expect(authenticateMutation).not.toHaveBeenCalled();
     expect(mocks.verifyLocalPin).toHaveBeenCalledWith(
       expect.objectContaining({ algorithm: "PBKDF2-SHA256" }),
-      "123456",
+      "1234",
     );
     expect(mocks.unwrapLocalStaffProofToken).toHaveBeenCalledWith(
       expect.objectContaining({ algorithm: "PBKDF2-SHA256" }),
-      "123456",
+      "1234",
       expect.objectContaining({ ciphertext: "wrapped-proof-token" }),
     );
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Signed in as Ama Mensah");
@@ -613,7 +613,7 @@ describe("CashierAuthDialog", () => {
       expect(authenticateMutation).toHaveBeenNthCalledWith(1, {
         allowedRoles: ["cashier", "manager"],
         allowActiveSessionsOnOtherTerminals: true,
-        pinHash: "hashed:123456",
+        pinHash: "hashed:1234",
         storeId,
         terminalId,
         username: "frontdesk",
@@ -628,7 +628,7 @@ describe("CashierAuthDialog", () => {
     await waitFor(() =>
       expect(authenticateMutation).toHaveBeenNthCalledWith(2, {
         allowedRoles: ["cashier", "manager"],
-        pinHash: "hashed:123456",
+        pinHash: "hashed:1234",
         storeId,
         terminalId,
         username: "frontdesk",

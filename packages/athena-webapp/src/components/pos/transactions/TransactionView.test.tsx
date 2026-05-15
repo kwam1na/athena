@@ -163,7 +163,7 @@ vi.mock("../../staff-auth/StaffAuthenticationDialog", () => ({
         <button
           onClick={async () => {
             const result = await onAuthenticate({
-              pinHash: "123456",
+              pinHash: "hashed:1234",
               username: "manager",
             });
             if (
@@ -174,7 +174,7 @@ vi.mock("../../staff-auth/StaffAuthenticationDialog", () => ({
               "data" in result
             ) {
               onAuthenticated(result.data as never, "authenticate", {
-                pinHash: "123456",
+                pinHash: "hashed:1234",
                 username: "manager",
               });
             }
@@ -243,7 +243,7 @@ vi.mock("../../operations/CommandApprovalDialog", () => ({
             onClick={async () => {
               const result = await onAuthenticateForApproval({
                 actionKey: approval.action.key,
-                pinHash: "123456",
+                pinHash: "hashed:1234",
                 reason: approval.reason,
                 requiredRole: approval.requiredRole,
                 requestedByStaffProfileId,
@@ -973,7 +973,7 @@ describe("TransactionView", () => {
     expect(approvalMutation).not.toHaveBeenCalled();
     expect(authMutation).toHaveBeenCalledWith({
       allowedRoles: ["cashier", "manager"],
-      pinHash: "123456",
+      pinHash: "hashed:1234",
       storeId: "store_1",
       username: "manager",
     });
@@ -1041,7 +1041,7 @@ describe("TransactionView", () => {
     await waitFor(() => {
       expect(approvalMutation).toHaveBeenCalledWith({
         actionKey: "pos.transaction.correct_payment_method",
-        pinHash: "123456",
+        pinHash: "hashed:1234",
         reason:
           "Manager approval is required to correct a completed transaction payment method.",
         requiredRole: "manager",
