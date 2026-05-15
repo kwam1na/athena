@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Pencil, Plus, UserMinus } from "lucide-react";
+import { Plus, UserMinus } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
 import { hashPin } from "~/src/lib/security/pinHash";
+import { createLocalPinVerifier } from "~/src/lib/security/localPinVerifier";
 import { presentCommandToast } from "~/src/lib/errors/presentCommandToast";
 import { runCommand } from "~/src/lib/errors/runCommand";
 import { PinInput } from "../pos/PinInput";
@@ -123,37 +124,6 @@ const formatRoleLabel = (role?: OperationalRole | null) => {
     .split("_")
     .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
     .join(" ");
-};
-
-const formatStartDate = (timestamp?: number | null) => {
-  if (!timestamp) {
-    return "—";
-  }
-
-  return new Intl.DateTimeFormat(undefined, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(timestamp));
-};
-
-const formatCredentialStatusLabel = (staff: StaffProfileRow) => {
-  if (staff.status !== "active") {
-    return "Inactive";
-  }
-
-  switch (staff.credentialStatus) {
-    case "pending":
-      return "Pending PIN";
-    case "active":
-      return "Active";
-    case "suspended":
-      return "Suspended";
-    case "revoked":
-      return "Revoked";
-    default:
-      return "Missing credential";
-  }
 };
 
 const CredentialStatusBadge = ({ staff }: { staff: StaffProfileRow }) => {
@@ -681,10 +651,14 @@ function CredentialPinDialog({
 
     setIsSaving(true);
     try {
-      const pinHash = await hashPin(pin);
+      const [pinHash, localPinVerifier] = await Promise.all([
+        hashPin(pin),
+        createLocalPinVerifier(pin),
+      ]);
 
       const result = await runCommand(() =>
         updateStaffCredential({
+          localPinVerifier,
           organizationId,
           pinHash,
           staffProfileId: state.staff._id,

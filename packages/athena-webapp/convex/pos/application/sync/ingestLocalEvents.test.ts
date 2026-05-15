@@ -1385,7 +1385,7 @@ describe("createLocalSyncIngestionService", () => {
     );
   });
 
-  it("rejects held event retries when the staff proof token changed", async () => {
+  it("allows held event retries when only the staff proof token changed", async () => {
     const repository = createFakeSyncRepository();
     const service = createLocalSyncIngestionService({
       repository,
@@ -1407,14 +1407,14 @@ describe("createLocalSyncIngestionService", () => {
       }),
     );
 
-    expect(retry).toEqual({
-      kind: "user_error",
-      error: {
-        code: "validation_failed",
-        message:
-          "POS sync event retry does not match the original local event.",
-      },
-    });
+    expect(retry.kind).toBe("ok");
+    if (retry.kind !== "ok") throw new Error("Expected ok result");
+    expect(retry.data.held).toEqual([
+      expect.objectContaining({
+        localEventId: "event-sale-completed-2",
+        sequence: 2,
+      }),
+    ]);
     expect(repository.events[0]).toEqual(
       expect.objectContaining({
         staffProofTokenHash: await hashPosLocalStaffProofToken("proof-token-1"),
@@ -1806,6 +1806,46 @@ describe("createLocalSyncIngestionService", () => {
           "POS sync event retry does not match the original local event.",
       },
     });
+  });
+
+  it("accepts duplicate projected event retries when only the staff proof token changed", async () => {
+    const repository = createFakeSyncRepository();
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 100,
+    });
+
+    await service.ingestBatch(
+      buildBatch({ events: [buildSaleCompletedEvent({ sequence: 1 })] }),
+    );
+    const retry = await service.ingestBatch(
+      buildBatch({
+        events: [
+          buildSaleCompletedEvent({
+            sequence: 1,
+            staffProofToken: "proof-token-2",
+          }),
+        ],
+      }),
+    );
+
+    expect(retry.kind).toBe("ok");
+    if (retry.kind !== "ok") throw new Error("Expected ok result");
+    expect(retry.data.accepted).toEqual([
+      expect.objectContaining({
+        localEventId: "event-sale-completed-1",
+        sequence: 1,
+        status: "projected",
+      }),
+    ]);
+    expect(repository.events).toHaveLength(1);
+    expect(repository.events[0]).toEqual(
+      expect.objectContaining({
+        staffProofTokenHash: await hashPosLocalStaffProofToken("proof-token-1"),
+        status: "projected",
+      }),
+    );
   });
 
   it("rejects malformed nested Convex ids before projection side effects", async () => {
@@ -2250,6 +2290,7 @@ describe("createLocalSyncIngestionService", () => {
         {
           _id: "proof-1",
           credentialId: "credential-1",
+          credentialVersion: 2,
           expiresAt: 200,
           staffProfileId: "staff-1",
           status: "active",
@@ -2261,6 +2302,7 @@ describe("createLocalSyncIngestionService", () => {
       staffCredential: [
         {
           _id: "credential-1",
+          localVerifierVersion: 2,
           staffProfileId: "staff-1",
           status: "active",
           storeId: "store-1",
@@ -2324,12 +2366,63 @@ describe("createLocalSyncIngestionService", () => {
       }),
     ).resolves.toBe(false);
 
+    await ctx.db.patch("staffCredential", "credential-1", {
+      localVerifierVersion: 3,
+    });
+    await expect(
+      repository.validateLocalStaffProof({
+        staffProfileId: "staff-1" as never,
+        storeId: "store-1" as never,
+        terminalId: "terminal-1" as never,
+        token: "proof-token-1",
+        now: 100,
+      }),
+    ).resolves.toBe(false);
+
     const proof = ctx.db
       .query("posLocalStaffProof")
       .withIndex("by_tokenHash", (q: any) => q.eq("tokenHash", tokenHash));
     await expect(proof.unique()).resolves.toEqual(
       expect.objectContaining({ lastUsedAt: 100 }),
     );
+  });
+
+  it("rejects unversioned local staff proofs once a credential has a verifier version", async () => {
+    const tokenHash = await hashPosLocalStaffProofToken("proof-token-1");
+    const ctx = createFakeConvexCtx({
+      posLocalStaffProof: [
+        {
+          _id: "proof-1",
+          credentialId: "credential-1",
+          expiresAt: 200,
+          staffProfileId: "staff-1",
+          status: "active",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          tokenHash,
+        },
+      ],
+      staffCredential: [
+        {
+          _id: "credential-1",
+          localVerifierVersion: 1,
+          staffProfileId: "staff-1",
+          status: "active",
+          storeId: "store-1",
+        },
+      ],
+    });
+    const repository = createConvexLocalSyncRepository(ctx as never);
+
+    await expect(
+      repository.validateLocalStaffProof({
+        staffProfileId: "staff-1" as never,
+        storeId: "store-1" as never,
+        terminalId: "terminal-1" as never,
+        token: "proof-token-1",
+        now: 100,
+      }),
+    ).resolves.toBe(false);
   });
 
   it("rejects production local staff proofs when the bound credential is suspended or revoked", async () => {

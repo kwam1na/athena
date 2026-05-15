@@ -1,4 +1,9 @@
-export const POS_LOCAL_STORE_SCHEMA_VERSION = 2;
+import type {
+  LocalPinVerifierMetadata,
+  WrappedLocalStaffProof,
+} from "@/lib/security/localPinVerifier";
+
+export const POS_LOCAL_STORE_SCHEMA_VERSION = 3;
 
 export type PosLocalEntityKind =
   | "registerSession"
@@ -81,6 +86,29 @@ export interface PosLocalStoreDayReadiness {
   closeLifecycleStatus?: "active" | "reopened" | "superseded";
 }
 
+export type PosLocalStaffAuthorityRecord = {
+  activeRoles: Array<"cashier" | "manager">;
+  credentialId: string;
+  credentialVersion: number;
+  displayName?: string | null;
+  expiresAt: number;
+  issuedAt: number;
+  organizationId: string;
+  refreshedAt: number;
+  staffProfileId: string;
+  status: "active" | "revoked";
+  storeId: string;
+  terminalId: string;
+  username: string;
+  verifier: LocalPinVerifierMetadata;
+  wrappedPosLocalStaffProof?: WrappedLocalStaffProof;
+};
+
+export type PosLocalStaffAuthorityReadiness =
+  | "missing"
+  | "expired"
+  | "ready";
+
 export type PosLocalStoreErrorCode =
   | "unsupported_schema_version"
   | "write_failed";
@@ -100,7 +128,8 @@ export type PosLocalObjectStoreName =
   | "terminalSeed"
   | "events"
   | "mappings"
-  | "readiness";
+  | "readiness"
+  | "staffAuthority";
 
 export interface PosLocalStoreTransaction {
   get<T>(
@@ -113,6 +142,7 @@ export interface PosLocalStoreTransaction {
     key: string,
     value: T,
   ): Promise<void>;
+  delete(storeName: PosLocalObjectStoreName, key: string): Promise<void>;
 }
 
 export interface PosLocalStorageAdapter {
@@ -230,9 +260,6 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
         ? { localTransactionId: input.localTransactionId }
         : {}),
       ...(input.staffProfileId ? { staffProfileId: input.staffProfileId } : {}),
-      ...(input.staffProofToken
-        ? { staffProofToken: input.staffProofToken }
-        : {}),
       payload: input.payload,
       createdAt: clock(),
       sync: { status: "pending" },
@@ -240,8 +267,13 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
 
     await transaction.put("events", String(nextSequence), event);
     await transaction.put("meta", META_SEQUENCE_KEY, nextSequence);
+    if (input.staffProofToken) {
+      transientStaffProofTokens.set(event.localEventId, input.staffProofToken);
+    }
     return event;
   }
+
+  const transientStaffProofTokens = new Map<string, string>();
 
   return {
     async writeProvisionedTerminalSeed(
@@ -337,6 +369,149 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       }
     },
 
+    async replaceStaffAuthoritySnapshot(input: {
+      records: PosLocalStaffAuthorityRecord[];
+      storeId: string;
+      terminalId: string;
+    }): Promise<PosLocalStoreResult<PosLocalStaffAuthorityRecord[]>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readwrite",
+          ["meta", "staffAuthority"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            const existing =
+              await transaction.getAll<unknown>("staffAuthority");
+            const existingByKey = new Map(
+              existing
+                .filter(isStaffAuthorityRecord)
+                .map((record) => [staffAuthorityKey(record), record]),
+            );
+
+            for (const record of existing) {
+              if (
+                isStaffAuthorityRecord(record) &&
+                record.storeId === input.storeId &&
+                record.terminalId === input.terminalId
+              ) {
+                await transaction.delete(
+                  "staffAuthority",
+                  staffAuthorityKey(record),
+                );
+              }
+            }
+
+            const scopedRecords = input.records
+              .filter(
+                (record) =>
+                  record.storeId === input.storeId &&
+                  record.terminalId === input.terminalId,
+              )
+              .map((record) =>
+                normalizeStaffAuthorityRecord(
+                  preserveWrappedStaffProof(record, existingByKey),
+                ),
+              );
+
+            for (const record of scopedRecords) {
+              await transaction.put(
+                "staffAuthority",
+                staffAuthorityKey(record),
+                record,
+              );
+            }
+
+            return scopedRecords;
+          },
+        );
+
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async readStaffAuthorityForUsername(input: {
+      now?: number;
+      storeId: string;
+      terminalId: string;
+      username: string;
+    }): Promise<PosLocalStoreResult<PosLocalStaffAuthorityRecord | null>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readonly",
+          ["meta", "staffAuthority"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readonly");
+            const record =
+              (await transaction.get<unknown>(
+                "staffAuthority",
+                staffAuthorityKey(input),
+              )) ?? null;
+
+            if (!isStaffAuthorityRecord(record)) {
+              return null;
+            }
+
+            if (
+              record.storeId !== input.storeId ||
+              record.terminalId !== input.terminalId ||
+              record.status !== "active" ||
+              record.expiresAt <= (input.now ?? clock())
+            ) {
+              return null;
+            }
+
+            return record;
+          },
+        );
+
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async getStaffAuthorityReadiness(input: {
+      now?: number;
+      storeId: string;
+      terminalId: string;
+    }): Promise<PosLocalStoreResult<PosLocalStaffAuthorityReadiness>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readonly",
+          ["meta", "staffAuthority"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readonly");
+            const records =
+              await transaction.getAll<unknown>("staffAuthority");
+            const scopedRecords = records.filter(
+              (record): record is PosLocalStaffAuthorityRecord =>
+                isStaffAuthorityRecord(record) &&
+                record.storeId === input.storeId &&
+                record.terminalId === input.terminalId,
+            );
+
+            if (scopedRecords.length === 0) {
+              return "missing" as const;
+            }
+
+            return scopedRecords.some(
+              (record) =>
+                record.status === "active" &&
+                record.expiresAt > (input.now ?? clock()),
+            )
+              ? ("ready" as const)
+              : ("expired" as const);
+          },
+        );
+
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
     async appendEvent(
       input: PosLocalAppendEventInput,
     ): Promise<PosLocalStoreResult<PosLocalEventRecord>> {
@@ -373,6 +548,46 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       } catch (error) {
         return toFailure(error);
       }
+    },
+
+    async listEventsForUpload(): Promise<PosLocalStoreResult<PosLocalEventRecord[]>> {
+      const events = await this.listEvents();
+      if (!events.ok) return events;
+
+      return {
+        ok: true,
+        value: events.value.map((event) =>
+          event.staffProofToken || !transientStaffProofTokens.has(event.localEventId)
+            ? event
+            : {
+                ...event,
+                staffProofToken: transientStaffProofTokens.get(event.localEventId),
+              },
+        ),
+      };
+    },
+
+    async attachStaffProofTokenToPendingEvents(input: {
+      staffProfileId: string;
+      staffProofToken: string;
+    }): Promise<PosLocalStoreResult<number>> {
+      const events = await this.listEvents();
+      if (!events.ok) return events;
+
+      let attachedCount = 0;
+      for (const event of events.value) {
+        if (
+          event.staffProfileId === input.staffProfileId &&
+          (event.sync.status === "pending" ||
+            event.sync.status === "syncing" ||
+            event.sync.status === "failed")
+        ) {
+          transientStaffProofTokens.set(event.localEventId, input.staffProofToken);
+          attachedCount += 1;
+        }
+      }
+
+      return { ok: true, value: attachedCount };
     },
 
     async writeLocalCloudMapping(
@@ -553,6 +768,87 @@ function readinessKey(storeId: string, operatingDate: string) {
   return `${storeId}:${operatingDate}`;
 }
 
+function normalizeUsername(username: string) {
+  return username.trim().toLowerCase();
+}
+
+function staffAuthorityKey(input: {
+  storeId: string;
+  terminalId: string;
+  username: string;
+}) {
+  return `${input.storeId}:${input.terminalId}:${normalizeUsername(input.username)}`;
+}
+
+function normalizeStaffAuthorityRecord(
+  record: PosLocalStaffAuthorityRecord,
+): PosLocalStaffAuthorityRecord {
+  return {
+    ...record,
+    username: normalizeUsername(record.username),
+  };
+}
+
+function preserveWrappedStaffProof(
+  record: PosLocalStaffAuthorityRecord,
+  existingByKey: Map<string, PosLocalStaffAuthorityRecord>,
+): PosLocalStaffAuthorityRecord {
+  if (record.wrappedPosLocalStaffProof) {
+    return record;
+  }
+
+  const existing = existingByKey.get(staffAuthorityKey(record));
+  if (
+    !existing?.wrappedPosLocalStaffProof ||
+    existing.credentialVersion !== record.credentialVersion ||
+    existing.wrappedPosLocalStaffProof.expiresAt <= Date.now()
+  ) {
+    return record;
+  }
+
+  return {
+    ...record,
+    wrappedPosLocalStaffProof: existing.wrappedPosLocalStaffProof,
+  };
+}
+
+function isStaffAuthorityRecord(
+  value: unknown,
+): value is PosLocalStaffAuthorityRecord {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  const verifier = record.verifier as Record<string, unknown> | undefined;
+  const wrappedProof = record.wrappedPosLocalStaffProof as
+    | Record<string, unknown>
+    | undefined;
+
+  return (
+    Array.isArray(record.activeRoles) &&
+    record.activeRoles.every((role) => role === "cashier" || role === "manager") &&
+    typeof record.credentialId === "string" &&
+    typeof record.credentialVersion === "number" &&
+    Number.isSafeInteger(record.credentialVersion) &&
+    typeof record.expiresAt === "number" &&
+    typeof record.issuedAt === "number" &&
+    typeof record.organizationId === "string" &&
+    (record.wrappedPosLocalStaffProof === undefined ||
+      (typeof wrappedProof?.ciphertext === "string" &&
+        typeof wrappedProof.expiresAt === "number" &&
+        typeof wrappedProof.iv === "string")) &&
+    typeof record.refreshedAt === "number" &&
+    typeof record.staffProfileId === "string" &&
+    (record.status === "active" || record.status === "revoked") &&
+    typeof record.storeId === "string" &&
+    typeof record.terminalId === "string" &&
+    typeof record.username === "string" &&
+    typeof verifier?.algorithm === "string" &&
+    typeof verifier.hash === "string" &&
+    typeof verifier.iterations === "number" &&
+    typeof verifier.salt === "string" &&
+    typeof verifier.version === "number"
+  );
+}
+
 export function createIndexedDbPosLocalStorageAdapter(options?: {
   databaseName?: string;
 }): PosLocalStorageAdapter {
@@ -570,6 +866,7 @@ export function createIndexedDbPosLocalStorageAdapter(options?: {
           "events",
           "mappings",
           "readiness",
+          "staffAuthority",
         ] satisfies PosLocalObjectStoreName[]) {
           if (!database.objectStoreNames.contains(storeName)) {
             database.createObjectStore(storeName);
@@ -624,6 +921,13 @@ export function createIndexedDbPosLocalStorageAdapter(options?: {
                 const request = transaction
                   .objectStore(storeName)
                   .put(value, key);
+                request.onerror = () => innerReject(request.error);
+                request.onsuccess = () => innerResolve();
+              });
+            },
+            delete(storeName, key) {
+              return new Promise((innerResolve, innerReject) => {
+                const request = transaction.objectStore(storeName).delete(key);
                 request.onerror = () => innerReject(request.error);
                 request.onsuccess = () => innerResolve();
               });
@@ -693,6 +997,9 @@ export function createMemoryPosLocalStorageAdapter(options?: {
             }
             transactionData[storeName].set(key, cloneValue(value));
           },
+          async delete(storeName, key) {
+            transactionData[storeName].delete(key);
+          },
         };
 
         const result = await callback(transaction);
@@ -723,6 +1030,7 @@ function createEmptyMemoryStore(): MemoryStore {
     events: new Map(),
     mappings: new Map(),
     readiness: new Map(),
+    staffAuthority: new Map(),
   };
 }
 
@@ -733,6 +1041,7 @@ function cloneMemoryStore(store: MemoryStore): MemoryStore {
     events: new Map(store.events),
     mappings: new Map(store.mappings),
     readiness: new Map(store.readiness),
+    staffAuthority: new Map(store.staffAuthority),
   };
 }
 

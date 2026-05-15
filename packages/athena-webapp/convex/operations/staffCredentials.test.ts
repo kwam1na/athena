@@ -23,6 +23,7 @@ import {
   createStaffCredentialWithCtx,
   getStaffCredentialUsernameAvailabilityWithCtx,
   listStaffCredentialsByStoreWithCtx,
+  refreshTerminalStaffAuthority,
   updateStaffCredentialWithCtx,
 } from "./staffCredentials";
 import { hashPosLocalStaffProofToken } from "../pos/application/sync/staffProof";
@@ -39,6 +40,14 @@ type TableName =
   | "staffProfile"
   | "staffRoleAssignment";
 type Row = Record<string, unknown> & { _id: string };
+
+const localPinVerifier = {
+  algorithm: "PBKDF2-SHA256",
+  hash: "local-hash",
+  iterations: 120000,
+  salt: "salt",
+  version: 1,
+};
 
 function createStaffCredentialsMutationCtx(seed?: {
   approvalProofs?: Row[];
@@ -184,7 +193,7 @@ describe("staff credential operations", () => {
   });
 
   it("reports store-scoped username availability", async () => {
-    const { ctx } = createStaffCredentialsMutationCtx({
+    const { ctx, tables } = createStaffCredentialsMutationCtx({
       credentials: [
         {
           _id: "credential-1",
@@ -192,6 +201,8 @@ describe("staff credential operations", () => {
           organizationId: "org_1" as Id<"organization">,
           storeId: "store_1" as Id<"store">,
           username: "frontdesk",
+          localPinVerifier,
+          localVerifierVersion: 1,
           pinHash: "hash-1",
           status: "active",
         },
@@ -220,7 +231,7 @@ describe("staff credential operations", () => {
   });
 
   it("lists credentials for a single store, including pending records", async () => {
-    const { ctx } = createStaffCredentialsMutationCtx({
+    const { ctx, tables } = createStaffCredentialsMutationCtx({
       credentials: [
         {
           _id: "credential-1",
@@ -237,6 +248,7 @@ describe("staff credential operations", () => {
           organizationId: "org_1" as Id<"organization">,
           storeId: "store_1" as Id<"store">,
           username: "pending-user",
+          pinHash: "pending-hash",
           status: "pending",
         },
         {
@@ -251,11 +263,11 @@ describe("staff credential operations", () => {
       ],
     });
 
-    await expect(
-      listStaffCredentialsByStoreWithCtx(ctx, {
-        storeId: "store_1" as Id<"store">,
-      })
-    ).resolves.toEqual(
+    const credentials = await listStaffCredentialsByStoreWithCtx(ctx, {
+      storeId: "store_1" as Id<"store">,
+    });
+
+    expect(credentials).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           _id: "credential-1",
@@ -269,12 +281,17 @@ describe("staff credential operations", () => {
           username: "pending-user",
           status: "pending",
         }),
-      ])
+      ]),
     );
+    for (const credential of credentials) {
+      expect(credential).not.toHaveProperty("pinHash");
+      expect(credential).not.toHaveProperty("localPinVerifier");
+      expect(credential).not.toHaveProperty("localVerifierVersion");
+    }
   });
 
   it("keeps pending credentials from authenticating until PIN setup activates them", async () => {
-    const { ctx } = createStaffCredentialsMutationCtx({
+    const { ctx, tables } = createStaffCredentialsMutationCtx({
       credentials: [
         {
           _id: "credential-1",
@@ -346,6 +363,12 @@ describe("staff credential operations", () => {
     });
 
     expect(activated).toMatchObject({
+      status: "active",
+    });
+    expect(activated).not.toHaveProperty("pinHash");
+    expect(activated).not.toHaveProperty("localPinVerifier");
+    expect(activated).not.toHaveProperty("localVerifierVersion");
+    expect(tables.staffCredential.get("credential-1")).toMatchObject({
       pinHash: "hash-1",
       status: "active",
     });
@@ -397,6 +420,7 @@ describe("staff credential operations", () => {
       storeId: "store_1" as Id<"store">,
       username: " FrontDesk ",
       pinHash: "hash-1",
+      localPinVerifier,
     });
 
     expect(result).toMatchObject({
@@ -404,15 +428,22 @@ describe("staff credential operations", () => {
       organizationId: "org_1",
       storeId: "store_1",
       username: "frontdesk",
-      pinHash: "hash-1",
       status: "active",
     });
+    expect(result).not.toHaveProperty("pinHash");
+    expect(result).not.toHaveProperty("localPinVerifier");
+    expect(result).not.toHaveProperty("localVerifierVersion");
     expect(result?.lastAuthenticatedAt).toBeUndefined();
     expect(tables.staffCredential.size).toBe(1);
+    expect(Array.from(tables.staffCredential.values())[0]).toMatchObject({
+      pinHash: "hash-1",
+      localPinVerifier,
+      localVerifierVersion: 1,
+    });
   });
 
   it("rejects credential creation when the username is already taken", async () => {
-    const { ctx } = createStaffCredentialsMutationCtx({
+    const { ctx, tables } = createStaffCredentialsMutationCtx({
       credentials: [
         {
           _id: "credential-1",
@@ -564,11 +595,21 @@ describe("staff credential operations", () => {
       storeId: "store_1" as Id<"store">,
       username: "desk-2",
       pinHash: "hash-2",
+      localPinVerifier,
     });
 
     expect(rotated).toMatchObject({
       username: "desk-2",
+      status: "active",
+    });
+    expect(rotated).not.toHaveProperty("pinHash");
+    expect(rotated).not.toHaveProperty("localPinVerifier");
+    expect(rotated).not.toHaveProperty("localVerifierVersion");
+    expect(tables.staffCredential.get("credential-1")).toMatchObject({
+      username: "desk-2",
       pinHash: "hash-2",
+      localPinVerifier,
+      localVerifierVersion: 1,
       status: "active",
     });
 
@@ -583,6 +624,118 @@ describe("staff credential operations", () => {
       status: "suspended",
     });
     expect(tables.staffCredential.get("credential-1")?.status).toBe("suspended");
+  });
+
+  it("increments the local verifier version when a credential PIN is reset", async () => {
+    const { ctx, tables } = createStaffCredentialsMutationCtx({
+      credentials: [
+        {
+          _id: "credential-1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          username: "frontdesk",
+          pinHash: "hash-1",
+          localPinVerifier,
+          localVerifierVersion: 3,
+          status: "active",
+        },
+      ],
+      profiles: [
+        {
+          _id: "staff_profile_1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Ari Mensah",
+        },
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "cashier",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+      ],
+    });
+    const nextVerifier = { ...localPinVerifier, hash: "next-local-hash" };
+
+    await expect(
+      updateStaffCredentialWithCtx(ctx, {
+        organizationId: "org_1" as Id<"organization">,
+        pinHash: "hash-2",
+        localPinVerifier: nextVerifier,
+        staffProfileId: "staff_profile_1" as Id<"staffProfile">,
+        storeId: "store_1" as Id<"store">,
+      }),
+    ).resolves.toMatchObject({
+      status: "active",
+    });
+    expect(tables.staffCredential.get("credential-1")).toMatchObject({
+      localPinVerifier: nextVerifier,
+      localVerifierVersion: 4,
+      pinHash: "hash-2",
+    });
+  });
+
+  it("clears stale local verifier metadata when a PIN reset omits a verifier", async () => {
+    const { ctx, tables } = createStaffCredentialsMutationCtx({
+      credentials: [
+        {
+          _id: "credential-1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          username: "frontdesk",
+          pinHash: "hash-1",
+          localPinVerifier,
+          localVerifierVersion: 3,
+          status: "active",
+        },
+      ],
+      profiles: [
+        {
+          _id: "staff_profile_1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Ari Mensah",
+        },
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "cashier",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+      ],
+    });
+
+    await expect(
+      updateStaffCredentialWithCtx(ctx, {
+        organizationId: "org_1" as Id<"organization">,
+        pinHash: "hash-2",
+        staffProfileId: "staff_profile_1" as Id<"staffProfile">,
+        storeId: "store_1" as Id<"store">,
+      }),
+    ).resolves.toMatchObject({
+      status: "active",
+    });
+    expect(tables.staffCredential.get("credential-1")).toMatchObject({
+      localPinVerifier: undefined,
+      localVerifierVersion: 4,
+      pinHash: "hash-2",
+    });
   });
 
   it("authenticates only active credentials with active profiles and allowed roles", async () => {
@@ -928,6 +1081,145 @@ describe("staff credential operations", () => {
         userId: "athena-user-1",
       },
     );
+  });
+
+  it("refreshes terminal-scoped local staff authority without exposing legacy credentials", async () => {
+    const { ctx, tables } = createStaffCredentialsMutationCtx({
+      credentials: [
+        {
+          _id: "credential-1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          username: "frontdesk",
+          pinHash: "hash-1",
+          localPinVerifier,
+          localVerifierVersion: 2,
+          status: "active",
+        },
+        {
+          _id: "credential-2",
+          staffProfileId: "staff_profile_2",
+          organizationId: "org_1",
+          storeId: "store_1",
+          username: "legacy",
+          pinHash: "hash-2",
+          status: "active",
+        },
+      ],
+      profiles: [
+        {
+          _id: "staff_profile_1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          firstName: "Ari",
+          fullName: "Ari Mensah",
+          lastName: "Mensah",
+        },
+        {
+          _id: "staff_profile_2",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Legacy Staff",
+        },
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "cashier",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+        {
+          _id: "role_2",
+          staffProfileId: "staff_profile_2",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "cashier",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(refreshTerminalStaffAuthority)(ctx, {
+        storeId: "store_1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+      }),
+    ).resolves.toEqual({
+      kind: "ok",
+      data: [
+        expect.objectContaining({
+          activeRoles: ["cashier"],
+          credentialId: "credential-1",
+          credentialVersion: 2,
+          displayName: "Ari Mensah",
+          staffProfileId: "staff_profile_1",
+          username: "frontdesk",
+          verifier: localPinVerifier,
+        }),
+      ],
+    });
+    expect(tables.posLocalStaffProof.size).toBe(0);
+  });
+
+  it("fails staff authority refresh instead of returning a truncated snapshot", async () => {
+    const credentials = Array.from({ length: 1001 }, (_, index) => ({
+      _id: `credential-${index}`,
+      staffProfileId: `staff_profile_${index}`,
+      organizationId: "org_1",
+      storeId: "store_1",
+      username: `staff${index}`,
+      pinHash: `hash-${index}`,
+      localPinVerifier,
+      localVerifierVersion: 1,
+      status: "active",
+    }));
+    const profiles = credentials.map((credential, index) => ({
+      _id: credential.staffProfileId,
+      storeId: "store_1",
+      organizationId: "org_1",
+      status: "active",
+      fullName: `Staff ${index}`,
+    }));
+    const roles = credentials.map((credential, index) => ({
+      _id: `role_${index}`,
+      staffProfileId: credential.staffProfileId,
+      organizationId: "org_1",
+      storeId: "store_1",
+      role: "cashier",
+      isPrimary: true,
+      status: "active",
+      assignedAt: 1,
+    }));
+    const { ctx, tables } = createStaffCredentialsMutationCtx({
+      credentials,
+      profiles,
+      roles,
+    });
+
+    await expect(
+      getHandler(refreshTerminalStaffAuthority)(ctx, {
+        storeId: "store_1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+      }),
+    ).resolves.toEqual({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message:
+          "Staff sign-in list is too large to refresh safely. Contact support before using offline sign-in.",
+      },
+    });
+    expect(tables.posLocalStaffProof.size).toBe(0);
   });
 
   it("returns a precondition_failed result when the staff member is active on another terminal", async () => {

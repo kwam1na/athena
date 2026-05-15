@@ -223,6 +223,18 @@ export interface RegisterOnboardingState {
 export interface RegisterViewModel {
   workflowMode?: RegisterWorkflowMode;
   hasActiveStore: boolean;
+  debug?: {
+    activeStoreSource: "live" | "local" | "missing";
+    authDialogOpen: boolean;
+    hasLiveActiveStore: boolean;
+    localStaffAuthorityStatus: string;
+    localEntryStatus: string;
+    online: boolean;
+    staffSignedIn: boolean;
+    storeId?: string;
+    terminalId?: string;
+    terminalSource: "live" | "local" | "missing";
+  };
   header: RegisterHeaderState;
   registerInfo: RegisterInfoState;
   onboarding: RegisterOnboardingState;

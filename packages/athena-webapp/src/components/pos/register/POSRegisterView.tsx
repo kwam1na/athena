@@ -245,6 +245,56 @@ function RegisterSyncStatusChip({
   );
 }
 
+function POSLocalDebugStrip({
+  debug,
+}: {
+  debug: RegisterViewModel["debug"];
+}) {
+  if (!debug || !import.meta.env.DEV) return null;
+
+  const shouldShow =
+    !debug.online ||
+    debug.activeStoreSource !== "live" ||
+    debug.terminalSource !== "live" ||
+    debug.localEntryStatus !== "ready";
+
+  if (!shouldShow) return null;
+
+  const rows = [
+    ["network", debug.online ? "online" : "offline"],
+    ["entry", debug.localEntryStatus],
+    ["authority", debug.localStaffAuthorityStatus],
+    ["store", `${debug.activeStoreSource}${debug.storeId ? `:${debug.storeId}` : ""}`],
+    [
+      "terminal",
+      `${debug.terminalSource}${debug.terminalId ? `:${debug.terminalId}` : ""}`,
+    ],
+    ["staff", debug.staffSignedIn ? "signed-in" : "not-signed-in"],
+    ["auth", debug.authDialogOpen ? "open" : "closed"],
+  ];
+
+  return (
+    <details
+      className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-foreground"
+      open
+    >
+      <summary className="cursor-pointer font-medium text-warning">
+        Register connection details
+      </summary>
+      <dl className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {rows.map(([label, value]) => (
+          <div key={label} className="min-w-0">
+            <dt className="uppercase tracking-wide text-muted-foreground">
+              {label}
+            </dt>
+            <dd className="truncate font-mono text-foreground">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </details>
+  );
+}
+
 function LocalRegisterClosedWorkspace({
   syncStatus,
 }: {
@@ -702,6 +752,8 @@ export function POSRegisterView({
     >
       <FadeIn className={registerContentClassName}>
         <div className="flex h-full min-h-0 flex-col gap-6 overflow-hidden">
+          {isPosWorkflow ? <POSLocalDebugStrip debug={viewModel.debug} /> : null}
+
           {isPosWorkflow &&
           shouldRenderSaleSurface &&
           !shouldShowOnboarding &&

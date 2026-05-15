@@ -79,7 +79,8 @@ export function createConvexLocalSyncRepository(
         !credential ||
         credential.status !== "active" ||
         credential.staffProfileId !== args.staffProfileId ||
-        credential.storeId !== args.storeId
+        credential.storeId !== args.storeId ||
+        credential.localVerifierVersion !== proof.credentialVersion
       ) {
         return false;
       }

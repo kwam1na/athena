@@ -101,6 +101,12 @@ describe("Authed layout", () => {
   beforeEach(() => {
     mocked.OutletComponent = null;
     window.history.replaceState({}, "", "/wigclub/store/wigclub/products");
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: true,
+    });
+    vi.mocked(window.localStorage.getItem).mockReset();
+    vi.mocked(window.localStorage.getItem).mockReturnValue(null);
     mocked.navigate.mockReset();
     mocked.signOut.mockClear();
     mocked.startManagerElevation.mockReset();
@@ -132,11 +138,76 @@ describe("Authed layout", () => {
     expect(mocked.navigate).not.toHaveBeenCalled();
   });
 
+  it("renders the POS shell offline when Convex auth is still reconnecting", () => {
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    vi.mocked(window.localStorage.getItem).mockImplementation((key) =>
+      key === LOGGED_IN_USER_ID_KEY ? "user-1" : null,
+    );
+    mocked.useAuth.mockReturnValue({
+      user: undefined,
+      isLoading: true,
+    });
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({ location: { pathname: "/wigclub/store/wigclub/pos/register" } }),
+    );
+
+    render(<Layout />);
+
+    expect(screen.getByTestId("app-sidebar")).toBeInTheDocument();
+    expect(screen.getByTestId("authed-outlet")).toBeInTheDocument();
+    expect(mocked.navigate).not.toHaveBeenCalled();
+  });
+
+  it("keeps non-POS routes blocked while offline auth is still loading", () => {
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    vi.mocked(window.localStorage.getItem).mockImplementation((key) =>
+      key === LOGGED_IN_USER_ID_KEY ? "user-1" : null,
+    );
+    mocked.useAuth.mockReturnValue({
+      user: undefined,
+      isLoading: true,
+    });
+
+    const { container } = render(<Layout />);
+
+    expect(container).toBeEmptyDOMElement();
+    expect(mocked.navigate).not.toHaveBeenCalled();
+  });
+
   it("redirects to login instead of rendering the authed shell when the session is gone", async () => {
     mocked.useAuth.mockReturnValue({
       user: null,
       isLoading: false,
     });
+
+    const { container } = render(<Layout />);
+
+    expect(container).toBeEmptyDOMElement();
+    await waitFor(() => expect(mocked.navigate).toHaveBeenCalledWith({ to: "/login" }));
+    expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
+  });
+
+  it("redirects instead of rendering POS offline when Convex auth settles without a user", async () => {
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    vi.mocked(window.localStorage.getItem).mockImplementation((key) =>
+      key === LOGGED_IN_USER_ID_KEY ? "user-1" : null,
+    );
+    mocked.useAuth.mockReturnValue({
+      user: null,
+      isLoading: false,
+    });
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({ location: { pathname: "/wigclub/store/wigclub/pos/register" } }),
+    );
 
     const { container } = render(<Layout />);
 

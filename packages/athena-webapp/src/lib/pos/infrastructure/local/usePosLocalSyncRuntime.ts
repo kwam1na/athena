@@ -19,7 +19,10 @@ import {
 import { createPosLocalSyncScheduler } from "./syncScheduler";
 import { derivePosLocalSyncStatus } from "./syncStatus";
 import { readScopedPosLocalEvents } from "./localRegisterReader";
-import { resolvePosLocalTerminalScope } from "./terminalScope";
+import {
+  isPosLocalEventInTerminalScope,
+  resolvePosLocalTerminalScope,
+} from "./terminalScope";
 
 export type PosLocalRuntimeSyncStatusSource = {
   description?: string | null;
@@ -126,7 +129,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
         isOnline: () =>
           typeof navigator === "undefined" ? true : navigator.onLine,
         loadPendingEvents: async () => {
-          const pending = await readScopedPosLocalEvents({
+          const pending = await readScopedPosLocalUploadEvents({
             store,
             storeId,
             terminalId,
@@ -160,7 +163,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
           await refreshEvents();
         },
         uploadBatch: async (pendingEvents) => {
-          const latestEvents = await readScopedPosLocalEvents({
+          const latestEvents = await readScopedPosLocalUploadEvents({
             store,
             storeId,
             terminalId,
@@ -305,6 +308,37 @@ export function assertPosLocalStoreOk<T>(result: PosLocalStoreResult<T>) {
   if (!result.ok) {
     throw new Error(result.error.message);
   }
+}
+
+async function readScopedPosLocalUploadEvents(input: {
+  store: PosLocalRuntimeStore;
+  storeId?: string | null;
+  terminalId?: string | null;
+}) {
+  const [events, terminalSeed] = await Promise.all([
+    input.store.listEventsForUpload
+      ? input.store.listEventsForUpload()
+      : input.store.listEvents(),
+    input.store.readProvisionedTerminalSeed(),
+  ]);
+  if (!events.ok) return events;
+  if (!terminalSeed.ok) return terminalSeed;
+
+  const scope = resolvePosLocalTerminalScope({
+    storeId: input.storeId,
+    terminalId: input.terminalId,
+    terminalSeed: terminalSeed.value,
+  });
+
+  return {
+    ok: true as const,
+    value: {
+      events: events.value.filter((event) =>
+        isPosLocalEventInTerminalScope(event, scope),
+      ),
+      terminalSeed: scope.provisionedSeed,
+    },
+  };
 }
 
 export function collectServerSyncedLocalEventIds(

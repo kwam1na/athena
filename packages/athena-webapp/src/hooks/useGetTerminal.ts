@@ -32,7 +32,7 @@ export const useGetTerminal = () => {
   useEffect(() => {
     let cancelled = false;
 
-    if (!activeStore?._id || !fingerprintHash || terminal) {
+    if (!fingerprintHash || terminal) {
       setLocalTerminal(null);
       return;
     }
@@ -52,12 +52,12 @@ export const useGetTerminal = () => {
       if (
         result.ok &&
         result.value &&
-        result.value.storeId === activeStore._id &&
+        (!activeStore?._id || result.value.storeId === activeStore._id) &&
         result.value.terminalId === fingerprintHash
       ) {
         setLocalTerminal({
           fingerprintHash,
-          storeId: activeStore._id,
+          storeId: result.value.storeId,
           terminal: {
             _id: result.value.cloudTerminalId as Id<"posTerminal">,
             cloudTerminalId: result.value.cloudTerminalId,
@@ -84,7 +84,7 @@ export const useGetTerminal = () => {
 
   if (
     localTerminal &&
-    localTerminal.storeId === activeStore?._id &&
+    (!activeStore?._id || localTerminal.storeId === activeStore._id) &&
     localTerminal.fingerprintHash === fingerprintHash
   ) {
     return terminal ?? localTerminal.terminal;
