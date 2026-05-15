@@ -22,5 +22,7 @@ export const staffCredentialSchema = v.object({
     v.literal("suspended"),
     v.literal("revoked")
   ),
+  failedAuthenticationAttempts: v.optional(v.number()),
+  authenticationLockedUntil: v.optional(v.number()),
   lastAuthenticatedAt: v.optional(v.number()),
 });

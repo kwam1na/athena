@@ -1,0 +1,96 @@
+<!doctype html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <title>feat: Move staff PIN collection to four digits</title>
+  <style type="text/css">
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #17202a; background: #f7f8fa; }
+    .page { max-width: 980px; margin: 0 auto; padding: 40px 24px 64px; }
+    .panel { background: #fff; border: 1px solid #d9dee7; border-radius: 8px; padding: 28px; }
+    h1 { margin: 0 0 8px; font-size: 30px; line-height: 1.2; }
+    h2 { margin: 32px 0 12px; font-size: 20px; }
+    h3 { margin: 20px 0 8px; font-size: 16px; }
+    p, li { line-height: 1.55; }
+    .meta { color: #5b6675; margin-bottom: 24px; }
+    .callout { border-left: 4px solid #2454d6; background: #f1f5ff; padding: 12px 16px; margin: 18px 0; }
+    .unit { border: 1px solid #e2e6ee; border-radius: 8px; padding: 16px; margin: 16px 0; }
+    table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+    th, td { border: 1px solid #d9dee7; padding: 10px; text-align: left; vertical-align: top; }
+    th { background: #f3f5f8; }
+    code { background: #f3f5f8; padding: 1px 4px; border-radius: 4px; }
+    a { color: #2454d6; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="panel">
+      <h1>feat: Move staff PIN collection to four digits</h1>
+      <div class="meta">Created 2026-05-15 | Type: feat | Status: active | Source: <a href="2026-05-15-002-feat-four-digit-staff-pins-plan.md">markdown plan</a></div>
+
+      <div class="callout">
+        Athena will require four-digit staff PIN entry in organization members, staff authentication, and manager elevation/approval flows. The plan centralizes the staff PIN policy in one reusable component and adds credential-level throttling at the server authentication boundary.
+      </div>
+
+      <h2>Scope</h2>
+      <ul>
+        <li>Accept and save exactly four digits for staff PIN setup and reset.</li>
+        <li>Collect exactly four digits in shared staff authentication and inherited manager auth surfaces.</li>
+        <li>Throttle repeated failed staff PIN authentication attempts on the credential record.</li>
+        <li>Do not migrate existing credential hashes or local verifier records.</li>
+        <li>Do not change roles, approval policy, audit behavior, or local staff authority proof semantics.</li>
+      </ul>
+
+      <h2>Key Decisions</h2>
+      <ul>
+        <li>Add a staff-specific PIN component that wraps the existing visual <code>PinInput</code>.</li>
+        <li>Use that component in both <code>StaffAuthenticationDialog</code> and organization members PIN setup/reset.</li>
+        <li>Keep <code>pinHash</code>, <code>localPinVerifier</code>, manager elevation, and approval proof contracts unchanged.</li>
+        <li>Add failed-attempt and lockout metadata to staff credentials, and require full-admin access before public create/update mutations can reset PIN or lockout state.</li>
+      </ul>
+
+      <h2>Implementation Units</h2>
+      <div class="unit">
+        <h3>U1. Create shared four-digit staff PIN collection</h3>
+        <p>Add <code>packages/athena-webapp/src/components/staff-auth/StaffPinInput.tsx</code> to centralize numeric sanitization, four-digit length, and slot rendering.</p>
+        <p><strong>Tests:</strong> authentication dialog coverage for four-digit submit, incomplete PIN, and pasted mixed input.</p>
+      </div>
+      <div class="unit">
+        <h3>U2. Apply four-digit collection to staff and manager authentication</h3>
+        <p>Update <code>StaffAuthenticationDialog</code> to remove six-digit assumptions so cashier, staff, command approval, and manager elevation surfaces inherit the new rule.</p>
+        <p><strong>Tests:</strong> staff auth four-digit submission, four-digit error copy, manager elevation credential forwarding.</p>
+      </div>
+      <div class="unit">
+        <h3>U3. Apply four-digit setup/reset in organization members</h3>
+        <p>Update <code>StaffManagement.tsx</code> setup/reset dialog to collect and confirm four digits using the shared component.</p>
+        <p><strong>Tests:</strong> save <code>1234</code> to both server hash and local verifier paths, mismatch handling, incomplete PIN error.</p>
+      </div>
+      <div class="unit">
+        <h3>U4. Protect four-digit staff authentication with credential throttling</h3>
+        <p>Update <code>staffCredentials.ts</code> and the staff credential schema so failed PIN attempts lock the active credential temporarily, authorized resets clear the lockout, and public authentication mutations require authenticated store access.</p>
+        <p><strong>Tests:</strong> repeated wrong attempts, success reset, authorized reset clear, unauthorized reset block, unauthorized public auth block, and manager approval proof lockout.</p>
+      </div>
+
+      <h2>Risks</h2>
+      <table summary="Risks and mitigations for the four-digit staff PIN plan">
+        <tr><th>Risk</th><th>Mitigation</th></tr>
+        <tr><td>Existing six-digit PIN users cannot enter old PINs after deploy.</td><td>Accept as part of the policy change; reset affected staff PINs through organization members.</td></tr>
+        <tr><td>A caller keeps a six-digit assumption.</td><td>Search for hard-coded six-digit PIN checks before final validation.</td></tr>
+        <tr><td>Four-digit PINs increase brute-force feasibility.</td><td>Enforce credential-level failed-attempt lockout across staff authentication and manager approval proof paths.</td></tr>
+        <tr><td>PIN reset clears lockout without authorization.</td><td>Require full-admin organization membership before public staff credential create/update mutations can create, reset, or clear credential state.</td></tr>
+        <tr><td>Public authentication creates denial-of-service lockouts or out-of-band approval proofs.</td><td>Require authenticated store access before public staff authentication and approval-proof mutations can compare PIN hashes.</td></tr>
+        <tr><td>Four-slot layout looks awkward.</td><td>Keep the low-level visual primitive responsive and browser-check affected dialogs when possible.</td></tr>
+      </table>
+
+      <h2>Verification Strategy</h2>
+      <ul>
+        <li>Focused staff authentication tests.</li>
+        <li>Focused staff management tests.</li>
+        <li>Staff credential mutation and lockout tests.</li>
+        <li>Manager elevation context test where credential forwarding is at risk.</li>
+        <li><code>bun run graphify:rebuild</code> after code changes.</li>
+        <li><code>bun run pr:athena</code> before push/merge.</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>

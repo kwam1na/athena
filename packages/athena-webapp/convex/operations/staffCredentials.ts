@@ -93,6 +93,8 @@ type PosTerminalAuthorizationResult = CommandResult<{
 
 const ACTIVE_STAFF_SESSION_LOOKUP_LIMIT = 100;
 const STAFF_AUTHORITY_REFRESH_LIMIT = 1_000;
+const STAFF_AUTH_FAILURE_LIMIT = 5;
+const STAFF_AUTH_LOCKOUT_MS = 5 * 60 * 1_000;
 
 function normalizeUsername(username: string) {
   return username.trim().toLowerCase();
@@ -112,6 +114,13 @@ function invalidStaffCredentialsResult(): StaffCredentialAuthenticationResult {
   return userError({
     code: "authentication_failed",
     message: "Invalid staff credentials.",
+  });
+}
+
+function staffCredentialsRateLimitedResult(): StaffCredentialAuthenticationResult {
+  return userError({
+    code: "rate_limited",
+    message: "Too many failed staff PIN attempts. Try again later.",
   });
 }
 
@@ -137,6 +146,46 @@ function terminalAuthorizationFailedResult(): PosTerminalAuthorizationResult {
   return userError({
     code: "authorization_failed",
     message: "This terminal is not available for staff authentication.",
+  });
+}
+
+function staffStoreAuthorizationFailedResult(): StaffCredentialAuthenticationResult {
+  return userError({
+    code: "authorization_failed",
+    message: "You do not have access to authenticate staff for this store.",
+  });
+}
+
+async function requireStaffCredentialManagementAccessWithCtx(
+  ctx: MutationCtx,
+  organizationId: Id<"organization">,
+) {
+  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+
+  await requireOrganizationMemberRoleWithCtx(ctx, {
+    allowedRoles: ["full_admin"],
+    failureMessage: "You do not have access to manage staff credentials.",
+    organizationId,
+    userId: athenaUser._id,
+  });
+}
+
+async function requireStaffAuthenticationStoreAccessWithCtx(
+  ctx: MutationCtx,
+  storeId: Id<"store">,
+) {
+  const store = await ctx.db.get("store", storeId);
+  if (!store) {
+    throw new Error("You do not have access to authenticate staff for this store.");
+  }
+
+  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+  await requireOrganizationMemberRoleWithCtx(ctx, {
+    allowedRoles: ["full_admin", "pos_only"],
+    failureMessage:
+      "You do not have access to authenticate staff for this store.",
+    organizationId: store.organizationId,
+    userId: athenaUser._id,
   });
 }
 
@@ -508,6 +557,8 @@ export async function updateStaffCredentialWithCtx(
     updates.localPinVerifier = args.localPinVerifier;
     updates.localVerifierVersion =
       (existingCredential.localVerifierVersion ?? 0) + 1;
+    updates.failedAuthenticationAttempts = 0;
+    updates.authenticationLockedUntil = undefined;
   }
 
   const resolvedStatus =
@@ -575,7 +626,28 @@ export async function authenticateStaffCredentialWithCtx(
     throw new Error("Multiple staff credentials match this username.");
   }
 
+  const now = Date.now();
+
+  if (
+    activeCredential.authenticationLockedUntil &&
+    activeCredential.authenticationLockedUntil > now
+  ) {
+    return staffCredentialsRateLimitedResult();
+  }
+
   if (!activeCredential.pinHash || activeCredential.pinHash !== args.pinHash) {
+    const failedAuthenticationAttempts =
+      (activeCredential.failedAuthenticationAttempts ?? 0) + 1;
+    const shouldLock =
+      failedAuthenticationAttempts >= STAFF_AUTH_FAILURE_LIMIT;
+
+    await ctx.db.patch("staffCredential", activeCredential._id, {
+      failedAuthenticationAttempts,
+      ...(shouldLock
+        ? { authenticationLockedUntil: now + STAFF_AUTH_LOCKOUT_MS }
+        : {}),
+    });
+
     return invalidStaffCredentialsResult();
   }
 
@@ -620,7 +692,9 @@ export async function authenticateStaffCredentialWithCtx(
   }
 
   await ctx.db.patch("staffCredential", activeCredential._id, {
-    lastAuthenticatedAt: Date.now(),
+    authenticationLockedUntil: undefined,
+    failedAuthenticationAttempts: 0,
+    lastAuthenticatedAt: now,
   });
 
   return ok({
@@ -832,9 +906,24 @@ export const createStaffCredential = mutation({
   returns: commandResultValidator(v.any()),
   handler: async (ctx, args) => {
     try {
+      await requireStaffCredentialManagementAccessWithCtx(
+        ctx,
+        args.organizationId,
+      );
+
       return ok(await createStaffCredentialWithCtx(ctx, args));
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
+
+      if (
+        message === "Sign in again to continue." ||
+        message === "You do not have access to manage staff credentials."
+      ) {
+        return userError({
+          code: "authorization_failed",
+          message,
+        });
+      }
 
       if (message === "Staff profile not found.") {
         return userError({
@@ -884,9 +973,24 @@ export const updateStaffCredential = mutation({
   returns: commandResultValidator(v.any()),
   handler: async (ctx, args) => {
     try {
+      await requireStaffCredentialManagementAccessWithCtx(
+        ctx,
+        args.organizationId,
+      );
+
       return ok(await updateStaffCredentialWithCtx(ctx, args));
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
+
+      if (
+        message === "Sign in again to continue." ||
+        message === "You do not have access to manage staff credentials."
+      ) {
+        return userError({
+          code: "authorization_failed",
+          message,
+        });
+      }
 
       if (message === "Staff credential not found.") {
         return userError({
@@ -930,7 +1034,15 @@ export const authenticateStaffCredential = mutation({
     storeId: v.id("store"),
     username: v.string(),
   },
-  handler: (ctx, args) => authenticateStaffCredentialWithCtx(ctx, args),
+  handler: async (ctx, args) => {
+    try {
+      await requireStaffAuthenticationStoreAccessWithCtx(ctx, args.storeId);
+    } catch {
+      return staffStoreAuthorizationFailedResult();
+    }
+
+    return authenticateStaffCredentialWithCtx(ctx, args);
+  },
 });
 
 export const authenticateStaffCredentialForTerminal = mutation({
@@ -1097,6 +1209,16 @@ export const authenticateStaffCredentialForApproval = mutation({
       requestedByStaffProfileId: v.optional(v.id("staffProfile")),
     }),
   ),
-  handler: (ctx, args) =>
-    authenticateStaffCredentialForApprovalWithCtx(ctx, args),
+  handler: async (ctx, args) => {
+    try {
+      await requireStaffAuthenticationStoreAccessWithCtx(ctx, args.storeId);
+    } catch {
+      return userError({
+        code: "authorization_failed",
+        message: "You do not have access to authenticate staff for this store.",
+      });
+    }
+
+    return authenticateStaffCredentialForApprovalWithCtx(ctx, args);
+  },
 });
