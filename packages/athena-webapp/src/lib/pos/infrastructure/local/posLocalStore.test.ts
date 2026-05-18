@@ -288,9 +288,14 @@ describe("posLocalStore", () => {
       1, 2, 3, 4, 5, 6,
     ]);
     expect(events.value.map((event) => event.type)).toEqual(eventTypes);
-    expect(events.value.every((event) => event.sync.status === "pending")).toBe(
-      true,
-    );
+    expect(events.value.map((event) => event.sync.status)).toEqual([
+      "pending",
+      "synced",
+      "pending",
+      "pending",
+      "pending",
+      "pending",
+    ]);
   });
 
   it("does not advance the local sequence cursor when an event write fails", async () => {
@@ -399,6 +404,51 @@ describe("posLocalStore", () => {
       ok: true,
       value: [
         expect.objectContaining({
+          staffProofToken: "proof-token-1",
+        }),
+      ],
+    });
+  });
+
+  it("does not attach upload proof to local-only session events", async () => {
+    let nextLocalId = 1;
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      createLocalId: () => `local-event-${nextLocalId++}`,
+    });
+
+    await store.appendEvent({
+      type: "session.started",
+      terminalId: "local-terminal-1",
+      storeId: "store_cloud_1",
+      localRegisterSessionId: "local-register-session-1",
+      localPosSessionId: "local-session-1",
+      staffProfileId: "staff_cloud_1",
+      payload: { localPosSessionId: "local-session-1" },
+    });
+    await store.appendEvent({
+      type: "register.opened",
+      terminalId: "local-terminal-1",
+      storeId: "store_cloud_1",
+      localRegisterSessionId: "local-register-session-1",
+      staffProfileId: "staff_cloud_1",
+      payload: { openingFloat: 100 },
+    });
+
+    await expect(
+      store.attachStaffProofTokenToPendingEvents({
+        staffProfileId: "staff_cloud_1",
+        staffProofToken: "proof-token-1",
+      }),
+    ).resolves.toEqual({ ok: true, value: 1 });
+    await expect(store.listEventsForUpload()).resolves.toEqual({
+      ok: true,
+      value: [
+        expect.not.objectContaining({
+          staffProofToken: expect.any(String),
+        }),
+        expect.objectContaining({
+          localEventId: "local-event-2",
           staffProofToken: "proof-token-1",
         }),
       ],

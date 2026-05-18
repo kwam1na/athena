@@ -800,10 +800,9 @@ HTML rules:
 - Keep styling restrained and review-focused; optimize for reading dense plan content, not marketing presentation
 - Use repo-relative links inside the artifact when linking to repo files or sibling artifacts
 - Escape ampersands and other HTML-sensitive characters
-- Include `meta http-equiv="Content-Type" content="text/html; charset=utf-8"` and use `style type="text/css"` for compatibility with local validators
-- If tables are used, add a concise `summary` attribute when doing so helps older HTML validators
-- Avoid validator-noisy semantic HTML if the local repo tooling is old; simple `div` structure with classes is acceptable
-- If `tidy` is installed, run `tidy -errors -quiet <html_path>` after writing the artifact and fix real errors. If `tidy` is unavailable, inspect the HTML manually and note that validation was not run.
+- Use normal semantic HTML5 structure when it improves readability, such as `main`, `header`, `section`, `nav`, and `article`
+- Include `<!doctype html>`, `<meta charset="utf-8">`, and a non-empty `<title>`
+- If this repo has `scripts/validate-plan-html.ts`, run `bun scripts/validate-plan-html.ts <html_path>` after writing the artifact and fix reported issues. Fall back to manual inspection only when the repo-local validator is unavailable.
 - If the markdown plan changes materially after confidence deepening, document review, Proof HITL review, or a requested revision, regenerate or update the HTML artifact before handoff.
 
 ### Phase 5: Final Review, Write File, and Handoff

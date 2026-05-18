@@ -33,6 +33,16 @@ export type PosLocalSyncEventStatus =
   | "needs_review"
   | "failed";
 
+function canUploadPosLocalEventType(type: PosLocalEventType): boolean {
+  return (
+    type === "register.opened" ||
+    type === "transaction.completed" ||
+    type === "cart.cleared" ||
+    type === "register.closeout_started" ||
+    type === "register.reopened"
+  );
+}
+
 export interface PosProvisionedTerminalSeed {
   terminalId: string;
   cloudTerminalId: string;
@@ -189,6 +199,7 @@ export type PosLocalAppendEventInput = {
   localTransactionId?: string;
   staffProfileId?: string;
   staffProofToken?: string;
+  initialSyncStatus?: PosLocalSyncEventStatus;
   payload: unknown;
 };
 
@@ -282,7 +293,7 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       ...(input.staffProfileId ? { staffProfileId: input.staffProfileId } : {}),
       payload: input.payload,
       createdAt: clock(),
-      sync: { status: "pending" },
+      sync: { status: input.initialSyncStatus ?? getInitialSyncStatus(input.type) },
     };
 
     await transaction.put("events", String(nextSequence), event);
@@ -291,6 +302,10 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       transientStaffProofTokens.set(event.localEventId, input.staffProofToken);
     }
     return event;
+  }
+
+  function getInitialSyncStatus(type: PosLocalEventType): PosLocalSyncEventStatus {
+    return type === "session.started" ? "synced" : "pending";
   }
 
   const transientStaffProofTokens = new Map<string, string>();
@@ -706,6 +721,7 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       for (const event of events.value) {
         if (
           event.staffProfileId === input.staffProfileId &&
+          canUploadPosLocalEventType(event.type) &&
           (event.sync.status === "pending" ||
             event.sync.status === "syncing" ||
             event.sync.status === "failed")

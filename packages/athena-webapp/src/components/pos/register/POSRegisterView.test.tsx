@@ -363,6 +363,8 @@ describe("POSRegisterView", () => {
         storeId: "store-1",
         syncFlow: {
           eventAppendToken: 2,
+          failureCount: 0,
+          lastFailure: null,
           lastLocalSequence: 4,
           lastRuntimeTrigger: "event-appended",
           lastRuntimeTriggerAt: Date.UTC(2026, 4, 15, 12, 34, 56),
@@ -370,6 +372,10 @@ describe("POSRegisterView", () => {
           lastSyncedSequence: 4,
           nextPendingSequence: null,
           pendingEventCount: 0,
+          pendingUploadEventCount: 0,
+          schedulerBackoffUntil: null,
+          schedulerRunning: false,
+          schedulerScheduled: false,
           source: "none",
           staffProof: "present",
           status: "synced",
@@ -425,6 +431,10 @@ describe("POSRegisterView", () => {
     expect(screen.getByText("High")).toBeInTheDocument();
     expect(screen.getByText("2026-05-15T12:34:56Z")).toBeInTheDocument();
     expect(screen.getByText("local 4 synced 4 next n/a")).toBeInTheDocument();
+    expect(screen.getByText("eligible uploads")).toBeInTheDocument();
+    expect(screen.getByText("scheduler")).toBeInTheDocument();
+    expect(screen.getByText("last failure")).toBeInTheDocument();
+    expect(screen.getByText("none")).toBeInTheDocument();
 
     pressDebugPanelShortcut();
     expect(
@@ -481,12 +491,14 @@ describe("POSRegisterView", () => {
     const { POSRegisterView } = await import("./POSRegisterView");
     render(<POSRegisterView />);
 
-    expect(screen.getByText("Pending sync")).toBeInTheDocument();
-    expect(screen.getByText("2")).toBeInTheDocument();
+    const retrySyncButton = screen.getByRole("button", {
+      name: /retry pos sync: pending sync/i,
+    });
 
-    await userEvent.click(
-      screen.getByRole("button", { name: /retry pos sync: pending sync 2/i }),
-    );
+    expect(retrySyncButton).toHaveTextContent("pending sync");
+    expect(retrySyncButton).not.toHaveTextContent("2");
+
+    await userEvent.click(retrySyncButton);
 
     expect(onRetrySync).toHaveBeenCalled();
   });
@@ -546,7 +558,11 @@ describe("POSRegisterView", () => {
     render(<POSRegisterView />);
 
     expect(screen.getByText("Register closed locally")).toBeInTheDocument();
-    expect(screen.getByText("Locally closed")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This register was closed locally. Athena will reconcile the closeout after sync.",
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /retry sync/i })).toBeInTheDocument();
     expect(screen.queryByText("register-customer-panel")).not.toBeInTheDocument();
     expect(screen.queryByText("register-action-bar")).not.toBeInTheDocument();

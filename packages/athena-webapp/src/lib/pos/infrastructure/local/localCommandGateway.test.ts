@@ -391,12 +391,81 @@ describe("createLocalCommandGateway", () => {
           localRegisterSessionId: "drawer-1",
           localPosSessionId: "session-1",
           staffProfileId: "staff-1",
+          sync: { status: "synced" },
           payload: {
             localPosSessionId: "session-1",
             reason: "Cart cleared",
           },
         }),
       ],
+    });
+  });
+
+  it("keeps clear events uploadable when the local sale had cart activity", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      createLocalId: (kind) => `${kind}-1`,
+    });
+    const gateway = createLocalCommandGateway({
+      store,
+      staffProofToken: "proof-token-1",
+    });
+
+    await store.appendEvent({
+      type: "register.opened",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      localRegisterSessionId: "drawer-1",
+      staffProfileId: "staff-1",
+      payload: { openingFloat: 100 },
+    });
+    await store.appendEvent({
+      type: "session.started",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      localRegisterSessionId: "drawer-1",
+      localPosSessionId: "session-1",
+      staffProfileId: "staff-1",
+      payload: { localPosSessionId: "session-1" },
+    });
+    await store.appendEvent({
+      type: "cart.item_added",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      localRegisterSessionId: "drawer-1",
+      localPosSessionId: "session-1",
+      staffProfileId: "staff-1",
+      payload: {
+        localItemId: "item-1",
+        productId: "product-1",
+        productName: "Body Wave",
+        productSkuId: "sku-1",
+        quantity: 1,
+        price: 120,
+      },
+    });
+
+    await expect(
+      gateway.clearCart({
+        terminalId: "terminal-1",
+        storeId: "store-1",
+        registerNumber: "1",
+        localRegisterSessionId: "drawer-1",
+        localPosSessionId: "session-1",
+        staffProfileId: "staff-1",
+        reason: "Cart cleared",
+      }),
+    ).resolves.toBe(true);
+
+    await expect(store.listEventsForUpload()).resolves.toMatchObject({
+      ok: true,
+      value: expect.arrayContaining([
+        expect.objectContaining({
+          type: "cart.cleared",
+          staffProofToken: "proof-token-1",
+          sync: { status: "pending" },
+        }),
+      ]),
     });
   });
 

@@ -37,9 +37,15 @@ export type PosLocalRuntimeSyncStatusSource = {
 };
 
 export type PosLocalRuntimeSyncDebug = {
+  failureCount?: number;
+  lastFailure?: string | null;
   lastTrigger?: PosLocalSyncTrigger;
   lastTriggerAt?: number;
   lastTriggerPriority?: "high" | "normal";
+  pendingUploadEventCount?: number;
+  schedulerBackoffUntil?: number | null;
+  schedulerRunning?: boolean;
+  schedulerScheduled?: boolean;
 };
 
 type PosLocalRuntimeStore = ReturnType<typeof createPosLocalStore>;
@@ -53,6 +59,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
   eventAppendToken?: number;
   onLocalEventsChanged?: (() => void) | null;
   onRetrySync?: (() => void) | null;
+  staffProfileId?: string | null;
   storeFactory?: (() => PosLocalRuntimeStore) | null;
 }): PosLocalRuntimeSyncStatusSource | null {
   const ingestLocalEvents = useMutation(api.pos.public.sync.ingestLocalEvents);
@@ -65,6 +72,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
   const eventAppendToken = input.eventAppendToken ?? 0;
   const onLocalEventsChanged = input.onLocalEventsChanged;
   const onRetrySync = input.onRetrySync;
+  const staffProfileId = input.staffProfileId;
   const isOnline = typeof navigator === "undefined" ? true : navigator.onLine;
 
   useEffect(() => {
@@ -165,21 +173,40 @@ export function usePosLocalSyncRuntimeStatus(input: {
             setReadError(pending.error.message);
             throw new Error(pending.error.message);
           }
-          return pending.value.events
+          const uploadableEvents = pending.value.events
             .filter(
               (event) =>
                 event.sync.status === "pending" ||
                   event.sync.status === "syncing" ||
                   event.sync.status === "failed",
             )
-            .filter((event) => isSyncablePosLocalEvent(event))
-            .map((event) => ({
+            .filter((event) => isSyncablePosLocalEvent(event));
+          if (!shouldStop()) {
+            setDebug((current) => ({
+              ...current,
+              pendingUploadEventCount: uploadableEvents.length,
+            }));
+          }
+          return uploadableEvents.map((event) => ({
               id: event.localEventId,
               terminalId: event.terminalId,
               localRegisterSessionId: event.localRegisterSessionId ?? "",
               createdAt: event.createdAt,
               sequence: event.sequence,
             }));
+        },
+        onStatusChange: (status) => {
+          if (shouldStop()) {
+            return;
+          }
+          setDebug((current) => ({
+            ...current,
+            failureCount: status.failureCount,
+            lastFailure: status.lastFailure,
+            schedulerBackoffUntil: status.backoffUntil,
+            schedulerRunning: status.running,
+            schedulerScheduled: status.scheduled,
+          }));
         },
         markSynced: async (eventIds) => {
           if (eventIds.length === 0) return;
@@ -350,6 +377,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
         setRefreshToken((current) => current + 1);
         onRetrySync?.();
       },
+      staffProfileId,
     });
     if (source) return { ...source, debug };
 
@@ -362,7 +390,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
           },
         }
       : null;
-  }, [debug, events, isOnline, onRetrySync, readError]);
+  }, [debug, events, isOnline, onRetrySync, readError, staffProfileId]);
 }
 
 function toIngestLocalEventsArgs(input: {
@@ -491,7 +519,7 @@ function toLocalCloudMappingEntity(
   return null;
 }
 
-function collectSyncedLocalEventIds(
+export function collectSyncedLocalEventIds(
   events: PosLocalEventRecord[],
   acceptedUploadEventIds: string[],
 ) {
@@ -514,7 +542,9 @@ function collectAcceptedEventIdsWithLocalPrecursors(
 
   for (const event of events) {
     if (!accepted.has(event.localEventId)) continue;
-    if (event.type !== "transaction.completed") continue;
+    if (event.type !== "transaction.completed" && event.type !== "cart.cleared") {
+      continue;
+    }
 
     for (const candidate of events) {
       if (
@@ -539,9 +569,16 @@ export function derivePosLocalRuntimeSyncStatus(
   options: {
     isOnline: boolean;
     onRetrySync?: (() => void) | null;
+    staffProfileId?: string | null;
   },
 ): PosLocalRuntimeSyncStatusSource | null {
-  const relevantEvents = collectRuntimeRelevantEvents(events);
+  const scopedEvents =
+    options.staffProfileId === undefined
+      ? events
+      : options.staffProfileId
+        ? events.filter((event) => event.staffProfileId === options.staffProfileId)
+        : [];
+  const relevantEvents = collectRuntimeRelevantEvents(scopedEvents);
   const status = derivePosLocalSyncStatus({
     events: relevantEvents,
     isOnline: options.isOnline,
@@ -573,7 +610,7 @@ function collectRuntimeRelevantEvents(events: PosLocalEventRecord[]) {
 
   for (const event of events) {
     if (
-      event.type !== "transaction.completed" ||
+      (event.type !== "transaction.completed" && event.type !== "cart.cleared") ||
       event.sync.status === "synced"
     ) {
       continue;

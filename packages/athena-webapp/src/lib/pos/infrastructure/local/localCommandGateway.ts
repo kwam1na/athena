@@ -133,7 +133,17 @@ export function createLocalCommandGateway(
       });
     },
 
-    clearCart(input: ClearLocalCartInput) {
+    async clearCart(input: ClearLocalCartInput) {
+      const model = await readModel({
+        storeId: input.storeId,
+        terminalId: input.terminalId,
+      });
+      if (!model.ok) return false;
+      const hasPriorSaleActivity = hasLocalSaleActivity(
+        model.value.sourceEvents,
+        input,
+      );
+
       return appendBoolean({
         type: "cart.cleared",
         terminalId: input.terminalId,
@@ -142,10 +152,14 @@ export function createLocalCommandGateway(
         localRegisterSessionId: input.localRegisterSessionId,
         localPosSessionId: input.localPosSessionId,
         staffProfileId: input.staffProfileId,
-        staffProofToken: resolveStaffProofToken(
-          options.staffProofToken,
-          input.staffProfileId,
-        ),
+        ...(hasPriorSaleActivity
+          ? {
+              staffProofToken: resolveStaffProofToken(
+                options.staffProofToken,
+                input.staffProfileId,
+              ),
+            }
+          : { initialSyncStatus: "synced" as const }),
         payload: {
           localPosSessionId: input.localPosSessionId,
           reason: input.reason ?? null,
@@ -345,6 +359,26 @@ function resolveStaffProofToken(
   return typeof staffProofToken === "function"
     ? staffProofToken(staffProfileId)
     : staffProofToken;
+}
+
+function hasLocalSaleActivity(
+  events: PosLocalEventRecord[],
+  input: ClearLocalCartInput,
+) {
+  return events.some((event) => {
+    if (
+      event.localRegisterSessionId !== input.localRegisterSessionId ||
+      event.localPosSessionId !== input.localPosSessionId
+    ) {
+      return false;
+    }
+
+    return (
+      event.type === "cart.item_added" ||
+      event.type === "session.payments_updated" ||
+      event.type === "transaction.completed"
+    );
+  });
 }
 
 function toLocalUserError(message: string) {

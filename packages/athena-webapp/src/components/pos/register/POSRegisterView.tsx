@@ -14,11 +14,9 @@ import View from "@/components/View";
 import { cn } from "~/src/lib/utils";
 import {
   ArrowRight,
-  AlertTriangle,
   CheckCircle2,
   Circle,
   Cloud,
-  CloudUpload,
   RefreshCw,
   ScanBarcode,
   Search,
@@ -200,46 +198,24 @@ function RegisterSyncStatusChip({
     return null;
   }
 
-  const Icon =
-    syncStatus.status === "needs_review"
-      ? AlertTriangle
-      : syncStatus.status === "syncing"
-        ? CloudUpload
-        : syncStatus.status === "synced"
-          ? CheckCircle2
-          : Cloud;
   const className =
     syncStatus.tone === "success"
-      ? "border-success/25 bg-success/10 text-success"
+      ? "text-success"
       : syncStatus.tone === "danger"
-        ? "border-danger/25 bg-danger/10 text-danger"
+        ? "text-danger"
         : syncStatus.tone === "warning"
-          ? "border-warning/30 bg-warning/15 text-warning"
-          : "border-border bg-background text-muted-foreground";
+          ? "text-warning"
+          : "text-muted-foreground";
   const canRetry = syncStatus.status !== "synced" && syncStatus.onRetrySync;
-  const content = (
-    <>
-      <Icon aria-hidden className="h-3.5 w-3.5 shrink-0" />
-      <span className="truncate">{syncStatus.label}</span>
-      {syncStatus.pendingEventCount ? (
-        <span className="font-numeric tabular-nums">
-          {syncStatus.pendingEventCount}
-        </span>
-      ) : null}
-      {canRetry ? (
-        <RefreshCw aria-hidden className="ml-1 h-3.5 w-3.5 shrink-0" />
-      ) : null}
-    </>
-  );
+  const label = syncStatus.status === "synced" ? "synced" : "pending sync";
+  const content = <span className="truncate">{label}</span>;
 
   if (canRetry) {
     return (
       <button
-        aria-label={`Retry POS sync: ${syncStatus.label}${
-          syncStatus.pendingEventCount ? ` ${syncStatus.pendingEventCount}` : ""
-        }`}
+        aria-label={`Retry POS sync: ${label}`}
         className={cn(
-          "inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium transition hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          "inline-flex max-w-full items-baseline gap-1 font-mono text-xs leading-none transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           className,
         )}
         onClick={syncStatus.onRetrySync}
@@ -253,7 +229,7 @@ function RegisterSyncStatusChip({
   return (
     <div
       className={cn(
-        "inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium",
+        "inline-flex max-w-full items-baseline gap-1 font-mono text-xs leading-none",
         className,
       )}
     >
@@ -374,6 +350,27 @@ function POSLocalDebugStrip({
     ],
     ["attempted at", formatDebugTimestamp(debug.syncFlow.lastRuntimeTriggerAt)],
     ["waiting to sync", String(debug.syncFlow.pendingEventCount ?? 0)],
+    [
+      "eligible uploads",
+      debug.syncFlow.pendingUploadEventCount === undefined
+        ? "n/a"
+        : String(debug.syncFlow.pendingUploadEventCount),
+    ],
+    [
+      "scheduler",
+      [
+        debug.syncFlow.schedulerRunning ? "running" : "idle",
+        debug.syncFlow.schedulerScheduled ? "scheduled" : null,
+      ]
+        .filter(Boolean)
+        .join(" "),
+    ],
+    [
+      "backoff until",
+      formatDebugTimestamp(debug.syncFlow.schedulerBackoffUntil ?? undefined),
+    ],
+    ["failure count", String(debug.syncFlow.failureCount ?? 0)],
+    ["last failure", debug.syncFlow.lastFailure ?? "none"],
     [
       "activity count",
       [
@@ -904,8 +901,8 @@ export function POSRegisterView({
           onNavigateBack={viewModel.onNavigateBack}
           leadingContent={
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-8">
-              <div className="flex shrink-0 items-center gap-3">
-                <FadeIn className="flex items-center gap-2">
+              <div className="flex shrink-0 items-baseline gap-3">
+                <FadeIn className="flex items-center gap-2 self-center">
                   <div
                     aria-label={
                       isStaffSignedIn ? "Staff signed in" : "No staff signed in"
@@ -919,7 +916,7 @@ export function POSRegisterView({
                   />
                 </FadeIn>
 
-                <p className="text-lg font-semibold text-gray-900">
+                <p className="text-lg font-semibold leading-none text-gray-900">
                   {viewModel.header.title}
                 </p>
                 {isPosWorkflow ? (

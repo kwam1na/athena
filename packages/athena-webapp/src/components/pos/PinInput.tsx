@@ -8,6 +8,7 @@ interface PinInputProps {
   onKeyDown: (e: React.KeyboardEvent) => void;
   maxLength: number;
   size?: "sm" | "md" | "lg";
+  showSeparator?: boolean;
 }
 
 export const PinInput = ({
@@ -17,6 +18,7 @@ export const PinInput = ({
   onKeyDown,
   maxLength,
   size = "md",
+  showSeparator = true,
 }: PinInputProps) => {
   const slotSizeClass = SLOT_SIZE_CLASSES[size];
   return (
@@ -29,21 +31,29 @@ export const PinInput = ({
       pushPasswordManagerStrategy="none"
       containerClassName="group flex items-center has-[:disabled]:opacity-30"
       render={({ slots }) => (
-        <>
+        showSeparator ? (
+          <>
+            <div className="flex">
+              {slots.slice(0, 3).map((slot, idx) => (
+                <Slot key={idx} {...slot} sizeClass={slotSizeClass} />
+              ))}
+            </div>
+
+            <FakeDash />
+
+            <div className="flex">
+              {slots.slice(3).map((slot, idx) => (
+                <Slot key={idx} {...slot} sizeClass={slotSizeClass} />
+              ))}
+            </div>
+          </>
+        ) : (
           <div className="flex">
-            {slots.slice(0, 3).map((slot, idx) => (
+            {slots.map((slot, idx) => (
               <Slot key={idx} {...slot} sizeClass={slotSizeClass} />
             ))}
           </div>
-
-          <FakeDash />
-
-          <div className="flex">
-            {slots.slice(3).map((slot, idx) => (
-              <Slot key={idx} {...slot} sizeClass={slotSizeClass} />
-            ))}
-          </div>
-        </>
+        )
       )}
     />
   );
@@ -71,15 +81,6 @@ function Slot({ sizeClass, ...props }: SlotProps & { sizeClass: string }) {
       )}
     >
       {props.char !== null && <div>•</div>}
-    </div>
-  );
-}
-
-// You can emulate a fake textbox caret!
-function FakeCaret() {
-  return (
-    <div className="absolute pointer-events-none inset-0 flex items-center justify-center animate-caret-blink">
-      <div className="w-px h-8 bg-white" />
     </div>
   );
 }

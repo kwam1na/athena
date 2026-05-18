@@ -145,6 +145,45 @@ describe("syncScheduler", () => {
     expect(scheduler.getStatus().lastFailure).toBeNull();
   });
 
+  it("keeps an event-appended rerun immediate when it arrives during a failed sync", async () => {
+    const timers: Array<{ callback: () => void; delay: number }> = [];
+    let rejectSync: ((error: Error) => void) | undefined;
+    const uploadBatch = vi.fn(
+      () =>
+        new Promise<{ syncedEventIds: string[] }>((_resolve, reject) => {
+          rejectSync = reject;
+        }),
+    );
+    const scheduler = createPosLocalSyncScheduler({
+      loadPendingEvents: vi.fn().mockResolvedValue([baseEvent({})]),
+      uploadBatch,
+      markSynced: vi.fn().mockResolvedValue(undefined),
+      isOnline: () => true,
+      now: () => 0,
+      baseBackoffMs: 30_000,
+      setTimeoutFn: ((callback: () => void, delay: number) => {
+        timers.push({ callback, delay });
+        return timers.length as unknown as ReturnType<typeof setTimeout>;
+      }) as typeof setTimeout,
+      clearTimeoutFn: vi.fn() as unknown as typeof clearTimeout,
+    });
+
+    scheduler.trigger("route-entry");
+    const initialTimer = timers.shift();
+    expect(initialTimer?.delay).toBe(250);
+    initialTimer?.callback();
+    await vi.waitFor(() => {
+      expect(uploadBatch).toHaveBeenCalledTimes(1);
+    });
+    scheduler.trigger("event-appended", { priority: "high" });
+    rejectSync?.(new Error("held history"));
+    await vi.waitFor(() => {
+      expect(scheduler.getStatus().scheduled).toBe(true);
+    });
+
+    expect(timers.at(-1)?.delay).toBe(0);
+  });
+
   it("treats mark-synced failures as sync failures with backoff", async () => {
     const markSynced = vi.fn().mockRejectedValue(new Error("local write failed"));
     const scheduler = createPosLocalSyncScheduler({
@@ -239,18 +278,29 @@ describe("syncScheduler", () => {
     );
   });
 
-  it("clears accepted history before backing off held events in mixed responses", async () => {
+  it("immediately retries held events when the same response made sync progress", async () => {
     const markNeedsReview = vi.fn().mockResolvedValue(undefined);
     const markSynced = vi.fn().mockResolvedValue(undefined);
-    const scheduler = createPosLocalSyncScheduler({
-      loadPendingEvents: vi.fn().mockResolvedValue([
+    const loadPendingEvents = vi
+      .fn()
+      .mockResolvedValueOnce([
         baseEvent({ id: "event-accepted", sequence: 1 }),
         baseEvent({ id: "event-held", sequence: 2 }),
-      ]),
-      uploadBatch: vi.fn().mockResolvedValue({
+      ])
+      .mockResolvedValueOnce([baseEvent({ id: "event-held", sequence: 2 })])
+      .mockResolvedValueOnce([]);
+    const uploadBatch = vi
+      .fn()
+      .mockResolvedValueOnce({
         heldEventIds: ["event-held"],
         syncedEventIds: ["event-accepted"],
-      }),
+      })
+      .mockResolvedValueOnce({
+        syncedEventIds: ["event-held"],
+      });
+    const scheduler = createPosLocalSyncScheduler({
+      loadPendingEvents,
+      uploadBatch,
       markNeedsReview,
       markSynced,
       isOnline: () => true,
@@ -262,11 +312,13 @@ describe("syncScheduler", () => {
     await vi.runAllTimersAsync();
 
     expect(markNeedsReview).not.toHaveBeenCalled();
-    expect(markSynced).toHaveBeenCalledWith(["event-accepted"]);
+    expect(uploadBatch).toHaveBeenCalledTimes(2);
+    expect(markSynced).toHaveBeenNthCalledWith(1, ["event-accepted"]);
+    expect(markSynced).toHaveBeenNthCalledWith(2, ["event-held"]);
     expect(scheduler.getStatus()).toEqual(
       expect.objectContaining({
-        lastFailure: "Earlier POS history must sync before this event.",
-        backoffUntil: 30_000,
+        lastFailure: null,
+        backoffUntil: null,
       }),
     );
   });
