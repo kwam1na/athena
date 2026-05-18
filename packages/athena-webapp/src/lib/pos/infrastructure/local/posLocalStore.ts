@@ -298,6 +298,9 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
         ? { localTransactionId: input.localTransactionId }
         : {}),
       ...(input.staffProfileId ? { staffProfileId: input.staffProfileId } : {}),
+      ...(shouldPersistStaffProofToken(input)
+        ? { staffProofToken: input.staffProofToken }
+        : {}),
       payload: input.payload,
       createdAt: clock(),
       sync: { status: input.initialSyncStatus ?? getInitialSyncStatus(input.type) },
@@ -305,9 +308,6 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
 
     await transaction.put("events", String(nextSequence), event);
     await transaction.put("meta", META_SEQUENCE_KEY, nextSequence);
-    if (input.staffProofToken) {
-      transientStaffProofTokens.set(event.localEventId, input.staffProofToken);
-    }
     return event;
   }
 
@@ -344,7 +344,9 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
     return canUploadPosLocalEventType(type) ? "pending" : "synced";
   }
 
-  const transientStaffProofTokens = new Map<string, string>();
+  function shouldPersistStaffProofToken(input: PosLocalAppendEventInput) {
+    return Boolean(input.staffProofToken && shouldAllocateUploadSequence(input));
+  }
 
   return {
     async writeProvisionedTerminalSeed(
@@ -730,44 +732,47 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
     },
 
     async listEventsForUpload(): Promise<PosLocalStoreResult<PosLocalEventRecord[]>> {
-      const events = await this.listEvents();
-      if (!events.ok) return events;
-
-      return {
-        ok: true,
-        value: events.value.map((event) =>
-          event.staffProofToken || !transientStaffProofTokens.has(event.localEventId)
-            ? event
-            : {
-                ...event,
-                staffProofToken: transientStaffProofTokens.get(event.localEventId),
-              },
-        ),
-      };
+      return this.listEvents();
     },
 
     async attachStaffProofTokenToPendingEvents(input: {
       staffProfileId: string;
       staffProofToken: string;
     }): Promise<PosLocalStoreResult<number>> {
-      const events = await this.listEvents();
-      if (!events.ok) return events;
+      try {
+        const value = await options.adapter.transaction(
+          "readwrite",
+          ["meta", "events"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            const events =
+              await transaction.getAll<PosLocalEventRecord>("events");
+            let attachedCount = 0;
 
-      let attachedCount = 0;
-      for (const event of events.value) {
-        if (
-          event.staffProfileId === input.staffProfileId &&
-          canUploadPosLocalEventType(event.type) &&
-          (event.sync.status === "pending" ||
-            event.sync.status === "syncing" ||
-            event.sync.status === "failed")
-        ) {
-          transientStaffProofTokens.set(event.localEventId, input.staffProofToken);
-          attachedCount += 1;
-        }
+            for (const event of events) {
+              if (
+                event.staffProfileId === input.staffProfileId &&
+                canUploadPosLocalEventType(event.type) &&
+                (event.sync.status === "pending" ||
+                  event.sync.status === "syncing" ||
+                  event.sync.status === "failed")
+              ) {
+                await transaction.put("events", String(event.sequence), {
+                  ...event,
+                  staffProofToken: input.staffProofToken,
+                });
+                attachedCount += 1;
+              }
+            }
+
+            return attachedCount;
+          },
+        );
+
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
       }
-
-      return { ok: true, value: attachedCount };
     },
 
     async writeLocalCloudMapping(

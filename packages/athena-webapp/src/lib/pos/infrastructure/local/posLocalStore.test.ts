@@ -434,9 +434,10 @@ describe("posLocalStore", () => {
     );
   });
 
-  it("keeps staff proof tokens transient for upload without storing them in events", async () => {
+  it("persists upload proof on pending uploadable events so offline sync survives reload", async () => {
+    const adapter = createMemoryPosLocalStorageAdapter();
     const store = createPosLocalStore({
-      adapter: createMemoryPosLocalStorageAdapter(),
+      adapter,
       createLocalId: () => "local-event-1",
     });
 
@@ -452,20 +453,25 @@ describe("posLocalStore", () => {
       }),
     ).resolves.toEqual({
       ok: true,
-      value: expect.not.objectContaining({
-        staffProofToken: expect.any(String),
+      value: expect.objectContaining({
+        staffProofToken: "proof-token-1",
       }),
     });
 
-    await expect(store.listEvents()).resolves.toEqual({
+    const reloadedStore = createPosLocalStore({
+      adapter,
+      createLocalId: () => "unused-local-event",
+    });
+
+    await expect(reloadedStore.listEvents()).resolves.toEqual({
       ok: true,
       value: [
-        expect.not.objectContaining({
-          staffProofToken: expect.any(String),
+        expect.objectContaining({
+          staffProofToken: "proof-token-1",
         }),
       ],
     });
-    await expect(store.listEventsForUpload()).resolves.toEqual({
+    await expect(reloadedStore.listEventsForUpload()).resolves.toEqual({
       ok: true,
       value: [
         expect.objectContaining({
@@ -489,6 +495,7 @@ describe("posLocalStore", () => {
       localRegisterSessionId: "local-register-session-1",
       localPosSessionId: "local-session-1",
       staffProfileId: "staff_cloud_1",
+      staffProofToken: "proof-token-1",
       payload: { localPosSessionId: "local-session-1" },
     });
     await store.appendEvent({
@@ -507,6 +514,18 @@ describe("posLocalStore", () => {
       }),
     ).resolves.toEqual({ ok: true, value: 1 });
     await expect(store.listEventsForUpload()).resolves.toEqual({
+      ok: true,
+      value: [
+        expect.not.objectContaining({
+          staffProofToken: expect.any(String),
+        }),
+        expect.objectContaining({
+          localEventId: "local-event-2",
+          staffProofToken: "proof-token-1",
+        }),
+      ],
+    });
+    await expect(store.listEvents()).resolves.toEqual({
       ok: true,
       value: [
         expect.not.objectContaining({

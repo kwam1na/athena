@@ -913,6 +913,9 @@ describe("usePosLocalSyncRuntimeStatus", () => {
             localOnlyEventCount: 1,
             mode: "status-only",
             oldestPendingEventAt: 1,
+            oldestPendingEventSequence: 1,
+            oldestPendingUploadSequence: 1,
+            nextPendingUploadSequence: 1,
             pendingUploadEventCount: 1,
           }),
           pendingEventCount: 1,
@@ -931,6 +934,107 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     );
     expect(mocks.ingestLocalEvents).not.toHaveBeenCalled();
     expect(store.markEventsSynced).not.toHaveBeenCalled();
+  });
+
+  it("runs one immediate upload from status-only mode after a local event append when enabled", async () => {
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [
+          buildLocalEvent({
+            localEventId: "event-open",
+            payload: {
+              openingFloat: 100,
+              status: "open",
+            },
+            sequence: 1,
+            type: "register.opened",
+            uploadSequence: 1,
+          }),
+        ],
+      })),
+      markEventsSynced: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+      writeLocalCloudMapping: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudId: "register-session-1",
+          entity: "registerSession",
+          localId: "register-1",
+          mappedAt: 10,
+        },
+      })),
+    };
+    mocks.ingestLocalEvents.mockResolvedValue({
+      kind: "ok",
+      data: {
+        accepted: [
+          {
+            localEventId: "event-open",
+            sequence: 1,
+            status: "projected",
+          },
+        ],
+        held: [],
+        mappings: [],
+        conflicts: [],
+        syncCursor: {
+          localRegisterSessionId: "register-1",
+          acceptedThroughSequence: 1,
+        },
+      },
+    });
+    const storeFactory = () => store as never;
+
+    const { rerender } = renderHook(
+      ({ eventAppendToken }: { eventAppendToken: number }) =>
+        usePosLocalSyncRuntimeStatus({
+          drainOnAppend: true,
+          eventAppendToken,
+          mode: "status-only",
+          storeFactory,
+          storeId: "store-1",
+          terminalId: "terminal-cloud-1",
+        }),
+      {
+        initialProps: { eventAppendToken: 0 },
+      },
+    );
+
+    await waitFor(() => expect(store.listEvents).toHaveBeenCalled());
+    expect(mocks.ingestLocalEvents).not.toHaveBeenCalled();
+
+    rerender({ eventAppendToken: 1 });
+
+    await waitFor(() =>
+      expect(mocks.ingestLocalEvents).toHaveBeenCalledWith(
+        expect.objectContaining({
+          events: [
+            expect.objectContaining({
+              localEventId: "event-open",
+              sequence: 1,
+            }),
+          ],
+        }),
+      ),
+    );
+    expect(store.markEventsSynced).toHaveBeenCalledWith(["event-open"], {
+      uploaded: true,
+    });
   });
 
   it("refreshes status-only mode on connectivity changes without uploading", async () => {
@@ -995,7 +1099,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     expect(mocks.ingestLocalEvents).not.toHaveBeenCalled();
   });
 
-  it("drains proofless multi-staff local history from the hub in stored upload order", async () => {
+  it("drains persisted-proof multi-staff local history from the hub in stored upload order", async () => {
     const store = {
       listEvents: vi.fn(async () => ({
         ok: true,
@@ -1004,7 +1108,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
             localEventId: "event-staff-a-open",
             sequence: 1,
             staffProfileId: "staff-a",
-            staffProofToken: undefined,
+            staffProofToken: "proof-token-a",
             type: "register.opened",
             uploadSequence: 1,
           }),
@@ -1097,6 +1201,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
               localEventId: "event-staff-a-open",
               sequence: 1,
               staffProfileId: "staff-a",
+              staffProofToken: "proof-token-a",
             }),
             expect.objectContaining({
               localEventId: "event-staff-b-sale",
@@ -1108,7 +1213,6 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       ),
     );
     const uploadedEvents = mocks.ingestLocalEvents.mock.calls[0]?.[0].events;
-    expect(uploadedEvents[0]).not.toHaveProperty("staffProofToken");
     expect(uploadedEvents.map((event: { sequence: number }) => event.sequence))
       .toEqual([1, 2]);
   });

@@ -1243,6 +1243,7 @@ describe("useRegisterViewModel", () => {
     await waitFor(() =>
       expect(mockUsePosLocalSyncRuntimeStatus).toHaveBeenCalledWith(
         expect.objectContaining({
+          drainOnAppend: true,
           eventAppendToken: 1,
           mode: "status-only",
           onLocalEventsChanged: expect.any(Function),

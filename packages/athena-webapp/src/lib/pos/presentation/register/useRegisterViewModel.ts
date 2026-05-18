@@ -4219,6 +4219,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         }
       : null;
   const localRuntimeSyncSource = usePosLocalSyncRuntimeStatus({
+    drainOnAppend: true,
     eventAppendToken: localSyncEventAppendToken,
     mode: "status-only",
     onLocalEventsChanged: noteLocalRegisterEventChanged,
@@ -4359,6 +4360,10 @@ export function useRegisterViewModel(): RegisterViewModel {
           localRuntimeSyncSource?.debug?.oldestPendingEventId,
         oldestPendingEventSequence:
           localRuntimeSyncSource?.debug?.oldestPendingEventSequence,
+        oldestPendingUploadSequence:
+          localRuntimeSyncSource?.debug?.oldestPendingUploadSequence,
+        nextPendingUploadSequence:
+          localRuntimeSyncSource?.debug?.nextPendingUploadSequence,
         pendingEventCount: syncStatus?.pendingEventCount ?? 0,
         pendingUploadEventCount:
           localRuntimeSyncSource?.debug?.pendingUploadEventCount,
