@@ -1,6 +1,8 @@
 import type { Id, TableNames } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
 import { isRegisterSessionConflictBlockingStatus } from "../../../../shared/registerSessionStatus";
+import { recordRegisterSessionTraceBestEffort } from "../../../operations/registerSessionTracing";
+import { createPosSessionTraceRecorder } from "../../application/commands/posSessionTracing";
 import {
   consumeInventoryHoldsForSession as consumeInventoryHoldsForSessionHelper,
   readActiveInventoryHoldQuantitiesForSession,
@@ -464,6 +466,12 @@ export function createConvexLocalSyncRepository(
     },
     async createOperationalEvent(input) {
       return ctx.db.insert("operationalEvent", input);
+    },
+    recordPosSessionWorkflowTrace(input) {
+      return createPosSessionTraceRecorder(ctx).record(input);
+    },
+    recordRegisterSessionWorkflowTrace(input) {
+      return recordRegisterSessionTraceBestEffort(ctx, input);
     },
   };
 }

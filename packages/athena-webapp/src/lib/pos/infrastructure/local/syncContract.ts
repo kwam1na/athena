@@ -1,4 +1,7 @@
-import type { PosLocalEventRecord } from "./posLocalStore";
+import {
+  canUploadPosLocalEventType,
+  type PosLocalEventRecord,
+} from "./posLocalStore";
 import type {
   PosLocalSyncPaymentPayload,
   PosLocalSyncUploadEvent,
@@ -26,7 +29,8 @@ export function buildPosLocalSyncUploadEvents(
   )) {
     const uploadEvent = toUploadEvent(event, orderedEvents);
     if (!uploadEvent) continue;
-    const sequence = getSyncableUploadSequence(event, orderedEvents);
+    const sequence = event.uploadSequence;
+    if (typeof sequence !== "number") continue;
     uploadEvents.push({ ...uploadEvent, sequence });
   }
 
@@ -38,13 +42,9 @@ export function isSyncablePosLocalEvent(event: PosLocalEventRecord): boolean {
     Boolean(
       event.localRegisterSessionId &&
         event.staffProfileId &&
-        event.staffProofToken,
+        typeof event.uploadSequence === "number",
     ) &&
-    (event.type === "register.opened" ||
-      event.type === "transaction.completed" ||
-      event.type === "cart.cleared" ||
-      event.type === "register.closeout_started" ||
-      event.type === "register.reopened")
+    canUploadPosLocalEventType(event.type)
   );
 }
 
@@ -54,8 +54,8 @@ function toUploadEvent(
 ): PosLocalUploadEventWithoutSequence | null {
   if (
     !event.localRegisterSessionId ||
-    !event.staffProfileId ||
-    !event.staffProofToken
+    typeof event.uploadSequence !== "number" ||
+    !event.staffProfileId
   ) {
     return null;
   }
@@ -68,7 +68,7 @@ function toUploadEvent(
       eventType: "register_opened",
       occurredAt: event.createdAt,
       staffProfileId: event.staffProfileId,
-      staffProofToken: event.staffProofToken,
+      ...(event.staffProofToken ? { staffProofToken: event.staffProofToken } : {}),
       payload: {
         openingFloat: numberOrZero(payload.openingFloat),
         registerNumber: event.registerNumber,
@@ -87,7 +87,7 @@ function toUploadEvent(
       eventType: "sale_completed",
       occurredAt: event.createdAt,
       staffProfileId: event.staffProfileId,
-      staffProofToken: event.staffProofToken,
+      ...(event.staffProofToken ? { staffProofToken: event.staffProofToken } : {}),
       payload: {
         localPosSessionId,
         localTransactionId:
@@ -128,7 +128,7 @@ function toUploadEvent(
       eventType: "sale_cleared",
       occurredAt: event.createdAt,
       staffProfileId: event.staffProfileId,
-      staffProofToken: event.staffProofToken,
+      ...(event.staffProofToken ? { staffProofToken: event.staffProofToken } : {}),
       payload: {
         localPosSessionId,
         reason: nullableStringToOptional(payload.reason),
@@ -144,7 +144,7 @@ function toUploadEvent(
       eventType: "register_closed",
       occurredAt: event.createdAt,
       staffProfileId: event.staffProfileId,
-      staffProofToken: event.staffProofToken,
+      ...(event.staffProofToken ? { staffProofToken: event.staffProofToken } : {}),
       payload: {
         countedCash:
           typeof payload.countedCash === "number" ? payload.countedCash : undefined,
@@ -161,7 +161,7 @@ function toUploadEvent(
       eventType: "register_reopened",
       occurredAt: event.createdAt,
       staffProfileId: event.staffProfileId,
-      staffProofToken: event.staffProofToken,
+      ...(event.staffProofToken ? { staffProofToken: event.staffProofToken } : {}),
       payload: {
         reason: nullableStringToOptional(payload.reason),
       },
@@ -196,60 +196,6 @@ function customerInfoFromPayload(payload: Record<string, unknown>) {
   return customerInfo.name || customerInfo.email || customerInfo.phone
     ? customerInfo
     : undefined;
-}
-
-function getSyncableUploadSequence(
-  event: PosLocalEventRecord,
-  orderedEvents: PosLocalEventRecord[],
-): number {
-  return orderedEvents.filter(
-    (candidate) =>
-      candidate.sequence <= event.sequence &&
-      candidate.localRegisterSessionId === event.localRegisterSessionId &&
-      isPendingSyncUploadEvent(candidate, orderedEvents),
-  ).length;
-}
-
-function isPendingSyncUploadEvent(
-  event: PosLocalEventRecord,
-  orderedEvents: PosLocalEventRecord[],
-): boolean {
-  if (
-    event.sync.uploaded === true &&
-    isUploadSequenceEventType(event) &&
-    !isSkippedSaleClearEvent(event, orderedEvents)
-  ) {
-    return true;
-  }
-
-  return (
-    isSyncablePosLocalEvent(event) &&
-    toUploadEvent(event, orderedEvents) !== null &&
-    (event.sync.status === "pending" ||
-      event.sync.status === "syncing" ||
-      event.sync.status === "failed")
-  );
-}
-
-function isSkippedSaleClearEvent(
-  event: PosLocalEventRecord,
-  orderedEvents: PosLocalEventRecord[],
-) {
-  if (event.type !== "cart.cleared") return false;
-  const payload = asRecord(event.payload);
-  const localPosSessionId =
-    event.localPosSessionId ?? stringOrEmpty(payload.localPosSessionId);
-  return hasLaterCompletedSale(event, orderedEvents, localPosSessionId);
-}
-
-function isUploadSequenceEventType(event: PosLocalEventRecord): boolean {
-  return (
-    event.type === "register.opened" ||
-    event.type === "cart.cleared" ||
-    event.type === "transaction.completed" ||
-    event.type === "register.closeout_started" ||
-    event.type === "register.reopened"
-  );
 }
 
 function getCompletedSaleItems(

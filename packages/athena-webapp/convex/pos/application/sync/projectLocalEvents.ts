@@ -390,6 +390,21 @@ async function projectRegisterOpened(
     actorStaffProfileId: args.event.staffProfileId,
     registerSessionId,
   });
+  await repository.recordRegisterSessionWorkflowTrace?.({
+    stage: "opened",
+    session: {
+      _id: registerSessionId,
+      storeId: args.storeId,
+      organizationId: store?.organizationId,
+      terminalId: args.terminalId,
+      registerNumber: terminalRegisterNumber,
+      status: "active",
+      openedByStaffProfileId: args.event.staffProfileId,
+      openedAt: args.event.occurredAt,
+      openingFloat,
+      expectedCash: openingFloat,
+    },
+  });
 
   return { status: "projected", mappings: [mapping], conflicts: [] };
 }
@@ -457,6 +472,14 @@ async function projectSaleCompleted(
   await recordSaleProjectedEvent(repository, args, {
     payload: validation.payload,
     sale,
+    session: sessionResolution,
+    store: validation.store,
+  });
+  await recordSaleWorkflowEvidence(repository, args, {
+    payments,
+    payload: validation.payload,
+    sale,
+    saleSession,
     session: sessionResolution,
     store: validation.store,
   });
@@ -803,6 +826,17 @@ async function projectSaleCleared(
     cloudTable: "posSession",
     cloudId: existingPosSession._id,
   });
+  await repository.recordPosSessionWorkflowTrace?.({
+    stage: "voided",
+    session: {
+      ...existingPosSession,
+      status: "void",
+      notes: args.event.payload.reason,
+      updatedAt: args.event.occurredAt,
+    } as never,
+    occurredAt: args.event.occurredAt,
+    voidReason: args.event.payload.reason,
+  });
 
   return { status: "projected", mappings: [mapping], conflicts: [] };
 }
@@ -1121,11 +1155,67 @@ function recordSaleProjectedEvent(
     metadata: {
       localEventId: args.event.localEventId,
       localReceiptNumber: input.payload.localReceiptNumber,
+      receiptNumber: input.payload.receiptNumber,
     },
     createdAt: args.event.occurredAt,
     actorStaffProfileId: args.event.staffProfileId,
     registerSessionId: input.session.registerSession._id,
     posTransactionId: input.sale.transactionId,
+  });
+}
+
+async function recordSaleWorkflowEvidence(
+  repository: SyncProjectionRepository,
+  args: SaleCompletedArgs,
+  input: {
+    payments: SalePaymentCalculation;
+    payload: PosLocalSalePayload;
+    sale: PersistedSale;
+    saleSession: PersistedSaleSession;
+    session: SaleSessionResolution;
+    store: StoreRecord;
+  },
+) {
+  await repository.recordPosSessionWorkflowTrace?.({
+    stage: "completed",
+    session: {
+      ...(input.session.existingPosSession ?? {}),
+      _id: input.saleSession.posSessionId,
+      sessionNumber: input.payload.localPosSessionId,
+      storeId: args.storeId,
+      staffProfileId: args.event.staffProfileId,
+      customerProfileId: input.payload.customerProfileId,
+      customerInfo: input.payload.customerInfo,
+      terminalId: args.terminalId,
+      registerNumber: input.session.resolvedRegisterNumber,
+      registerSessionId: input.session.registerSession._id,
+      status: "completed",
+      transactionId: input.sale.transactionId,
+      createdAt:
+        input.session.existingPosSession?.createdAt ?? args.event.occurredAt,
+      updatedAt: args.event.occurredAt,
+      expiresAt:
+        input.session.existingPosSession?.expiresAt ?? args.event.occurredAt,
+      completedAt: args.event.occurredAt,
+      subtotal: input.payload.totals.subtotal,
+      tax: input.payload.totals.tax,
+      total: input.payload.totals.total,
+      payments: input.payments.transactionPayments,
+      inventoryHoldMode: "ledger",
+    } as never,
+    occurredAt: args.event.occurredAt,
+    transactionId: input.sale.transactionId,
+    paymentMethod: input.payments.primaryPaymentMethod,
+    amount: input.payload.totals.total,
+    paymentCount: input.payments.transactionPayments.length,
+  });
+
+  await repository.recordRegisterSessionWorkflowTrace?.({
+    stage: "sale_recorded",
+    session: input.session.registerSession,
+    occurredAt: args.event.occurredAt,
+    amount: input.payments.expectedCashDelta,
+    actorStaffProfileId: args.event.staffProfileId,
   });
 }
 
@@ -1451,6 +1541,22 @@ async function projectRegisterClosed(
     ],
     notes: payload.notes,
   });
+  await repository.recordRegisterSessionWorkflowTrace?.({
+    stage: "closed",
+    session: {
+      ...registerSession,
+      status: "closed",
+      countedCash,
+      variance,
+      closedByStaffProfileId: args.event.staffProfileId,
+      closedAt: args.event.occurredAt,
+      notes: payload.notes,
+    } as never,
+    occurredAt: args.event.occurredAt,
+    actorStaffProfileId: args.event.staffProfileId,
+    countedCash,
+    variance,
+  });
   const mapping = await createMapping(repository, args, {
     localIdKind: "closeout",
     localId: args.event.localEventId,
@@ -1464,84 +1570,20 @@ async function projectRegisterReopened(
   repository: SyncProjectionRepository,
   args: ProjectEventArgsFor<"register_reopened">,
 ): Promise<ProjectionResult> {
-  const registerSession = await repository.getRegisterSessionByLocalId({
-    storeId: args.storeId,
-    terminalId: args.terminalId,
-    localRegisterSessionId: args.event.localRegisterSessionId,
+  const conflict = await createConflict(repository, args, {
+    conflictType: "permission",
+    summary:
+      "Register reopen from synced POS history requires manager review before projection.",
+    details: {
+      localRegisterSessionId: args.event.localRegisterSessionId,
+      reason:
+        typeof args.event.payload.reason === "string"
+          ? args.event.payload.reason
+          : undefined,
+      staffProfileId: args.event.staffProfileId,
+    },
   });
-  if (!registerSession) {
-    const conflict = await createConflict(repository, args, {
-      conflictType: "permission",
-      summary: "Register session mapping is missing for synced POS history.",
-      details: {
-        localRegisterSessionId: args.event.localRegisterSessionId,
-      },
-    });
-    return { status: "conflicted", mappings: [], conflicts: [conflict] };
-  }
-
-  if (registerSession.status !== "closed") {
-    const conflict = await createConflict(repository, args, {
-      conflictType: "permission",
-      summary:
-        "Only closed register sessions can be reopened from synced POS history.",
-      details: {
-        localRegisterSessionId: args.event.localRegisterSessionId,
-        status: registerSession.status,
-      },
-    });
-    return { status: "conflicted", mappings: [], conflicts: [conflict] };
-  }
-
-  const blockingRegisterSession = await repository.findBlockingRegisterSession({
-    storeId: args.storeId,
-    terminalId: args.terminalId,
-    registerNumber: normalizeOptionalString(registerSession.registerNumber),
-  });
-  if (
-    blockingRegisterSession &&
-    blockingRegisterSession._id !== registerSession._id
-  ) {
-    const conflict = await createConflict(repository, args, {
-      conflictType: "permission",
-      summary:
-        "A different register session is already open for this terminal.",
-      details: {
-        blockingRegisterSessionId: blockingRegisterSession._id,
-        localRegisterSessionId: args.event.localRegisterSessionId,
-      },
-    });
-    return { status: "conflicted", mappings: [], conflicts: [conflict] };
-  }
-
-  await repository.patchRegisterSession(registerSession._id, {
-    status: "active",
-    closedAt: undefined,
-    closedByStaffProfileId: undefined,
-    closeoutRecords: [
-      ...(registerSession.closeoutRecords ?? []),
-      {
-        actorStaffProfileId: args.event.staffProfileId,
-        countedCash: registerSession.countedCash,
-        expectedCash: registerSession.expectedCash,
-        notes: registerSession.notes,
-        occurredAt: args.event.occurredAt,
-        previousClosedAt: registerSession.closedAt,
-        previousClosedByStaffProfileId: registerSession.closedByStaffProfileId,
-        reason:
-          typeof args.event.payload.reason === "string" &&
-          args.event.payload.reason.trim()
-            ? args.event.payload.reason.trim()
-            : "Closed register closeout reopened for correction.",
-        type: "reopened",
-        variance: registerSession.variance,
-      },
-    ],
-    countedCash: undefined,
-    notes: undefined,
-    variance: undefined,
-  });
-  return { status: "projected", mappings: [], conflicts: [] };
+  return { status: "conflicted", mappings: [], conflicts: [conflict] };
 }
 
 function roundMoney(value: number) {

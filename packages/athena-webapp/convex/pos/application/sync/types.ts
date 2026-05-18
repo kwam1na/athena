@@ -1,4 +1,6 @@
 import type { Doc, Id, TableNames } from "../../../_generated/dataModel";
+import type { RegisterSessionTraceableSession } from "../../../operations/registerSessionTracing";
+import type { PosSessionTraceableSession } from "../commands/posSessionTracing";
 import type {
   PosLocalSyncEventStatus,
   PosLocalSyncEventType,
@@ -87,7 +89,7 @@ export type PosLocalSyncEventInput = Omit<
   "payload" | "staffProfileId"
 > & {
   staffProfileId: Id<"staffProfile">;
-  staffProofToken: string;
+  staffProofToken?: string;
   payload: Record<string, unknown>;
 };
 
@@ -182,6 +184,11 @@ export type LocalSyncCursorRecord = {
 };
 
 export type PosSyncOperationalRole = "cashier" | "manager";
+
+export type PosSyncWorkflowTraceResult = {
+  traceCreated: boolean;
+  traceId: string;
+};
 
 export type SyncProjectionRepository = {
   getTerminal(terminalId: Id<"posTerminal">): Promise<Doc<"posTerminal"> | null>;
@@ -385,6 +392,27 @@ export type SyncProjectionRepository = {
     paymentAllocationId?: Id<"paymentAllocation">;
     posTransactionId?: Id<"posTransaction">;
   }): Promise<Id<"operationalEvent">>;
+  recordPosSessionWorkflowTrace?(input: {
+    stage: "completed" | "voided";
+    session: PosSessionTraceableSession;
+    occurredAt: number;
+    transactionId?: Id<"posTransaction">;
+    voidReason?: string;
+    paymentMethod?: string;
+    amount?: number;
+    paymentCount?: number;
+  }): Promise<PosSyncWorkflowTraceResult>;
+  recordRegisterSessionWorkflowTrace?(input: {
+    stage: "opened" | "sale_recorded" | "closed" | "closeout_reopened";
+    session: RegisterSessionTraceableSession;
+    occurredAt?: number;
+    amount?: number;
+    actorStaffProfileId?: Id<"staffProfile">;
+    actorUserId?: Id<"athenaUser">;
+    countedCash?: number;
+    reason?: string;
+    variance?: number;
+  }): Promise<PosSyncWorkflowTraceResult>;
 };
 
 export type LocalSyncIngestionRepository = {

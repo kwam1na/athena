@@ -8,6 +8,7 @@ const useGetActiveStoreMock = vi.fn();
 const useLocalPosEntryContextMock = vi.fn();
 const usePermissionsMock = vi.fn();
 const usePrewarmRegisterCatalogOfflineSnapshotsMock = vi.fn();
+const usePosLocalSyncRuntimeStatusMock = vi.fn();
 const useQueryMock = vi.fn();
 
 vi.mock("@tanstack/react-router", () => ({
@@ -59,6 +60,11 @@ vi.mock("~/src/hooks/useGetTerminal", () => ({
 
 vi.mock("@/lib/pos/infrastructure/local/localPosEntryContext", () => ({
   useLocalPosEntryContext: () => useLocalPosEntryContextMock(),
+}));
+
+vi.mock("@/lib/pos/infrastructure/local/usePosLocalSyncRuntime", () => ({
+  usePosLocalSyncRuntimeStatus: (input: Record<string, unknown>) =>
+    usePosLocalSyncRuntimeStatusMock(input),
 }));
 
 vi.mock("@/lib/pos/infrastructure/convex/catalogGateway", () => ({
@@ -121,6 +127,7 @@ describe("PointOfSaleView", () => {
       totalSales: 12_500,
       totalTransactions: 2,
     });
+    usePosLocalSyncRuntimeStatusMock.mockReturnValue(null);
   });
 
   it("renders the POS landing header as the page title", () => {
@@ -205,6 +212,35 @@ describe("PointOfSaleView", () => {
       screen.queryByRole("link", { name: /Active Sessions/i }),
     ).not.toBeInTheDocument();
     expect(screen.getAllByText("--").length).toBeGreaterThan(0);
+  });
+
+  it("owns drain-enabled local sync when a provisioned terminal seed is present on the POS hub", () => {
+    useLocalPosEntryContextMock.mockReturnValue({
+      status: "ready",
+      orgUrlSlug: "acme",
+      storeUrlSlug: "downtown",
+      storeId: "store-1",
+      terminalSeed: {
+        terminalId: "local-terminal-1",
+        cloudTerminalId: "terminal-cloud-1",
+        syncSecretHash: "secret-hash",
+        storeId: "store-1",
+        displayName: "Front register",
+        provisionedAt: 1_700,
+        schemaVersion: 2,
+      },
+      source: "live",
+    });
+
+    render(<PointOfSaleView />);
+
+    expect(usePosLocalSyncRuntimeStatusMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: "drain-enabled",
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
   });
 
   it("shows setup guidance instead of blanking when local POS authority is missing", () => {

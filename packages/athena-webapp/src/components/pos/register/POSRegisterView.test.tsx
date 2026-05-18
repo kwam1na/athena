@@ -366,11 +366,15 @@ describe("POSRegisterView", () => {
           failureCount: 0,
           lastFailure: null,
           lastLocalSequence: 4,
+          localOnlyEventCount: 1,
           lastRuntimeTrigger: "event-appended",
           lastRuntimeTriggerAt: Date.UTC(2026, 4, 15, 12, 34, 56),
           lastRuntimeTriggerPriority: "high",
           lastSyncedSequence: 4,
+          mode: "status-only",
           nextPendingSequence: null,
+          oldestPendingEventAt: Date.UTC(2026, 4, 15, 12, 0, 0),
+          oldestPendingEventSequence: 3,
           pendingEventCount: 0,
           pendingUploadEventCount: 0,
           schedulerBackoffUntil: null,
@@ -432,6 +436,11 @@ describe("POSRegisterView", () => {
     expect(screen.getByText("2026-05-15T12:34:56Z")).toBeInTheDocument();
     expect(screen.getByText("local 4 synced 4 next n/a")).toBeInTheDocument();
     expect(screen.getByText("eligible uploads")).toBeInTheDocument();
+    expect(screen.getByText("runtime mode")).toBeInTheDocument();
+    expect(screen.getByText("Status only")).toBeInTheDocument();
+    expect(screen.getByText("local-only events")).toBeInTheDocument();
+    expect(screen.getByText("oldest pending")).toBeInTheDocument();
+    expect(screen.getByText("2026-05-15T12:00:00Z")).toBeInTheDocument();
     expect(screen.getByText("scheduler")).toBeInTheDocument();
     expect(screen.getByText("last failure")).toBeInTheDocument();
     expect(screen.getByText("none")).toBeInTheDocument();

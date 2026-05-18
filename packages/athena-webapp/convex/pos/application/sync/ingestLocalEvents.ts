@@ -356,7 +356,13 @@ async function buildLocalSyncEventRecordInput(
     eventType: event.eventType,
     occurredAt: event.occurredAt,
     staffProfileId: event.staffProfileId,
-    staffProofTokenHash: await hashPosLocalStaffProofToken(event.staffProofToken),
+    ...(event.staffProofToken
+      ? {
+          staffProofTokenHash: await hashPosLocalStaffProofToken(
+            event.staffProofToken,
+          ),
+        }
+      : {}),
     payload: event.payload,
     submittedAt: batch.submittedAt,
     ...patch,

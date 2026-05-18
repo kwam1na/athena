@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rebuild POS hub offline sync drain</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #111827;
+      --muted: #4b5563;
+      --line: #d7dde5;
+      --panel: #f8fafc;
+      --accent: #0f766e;
+      --warn: #b45309;
+      --danger: #be123c;
+    }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: #ffffff;
+      line-height: 1.55;
+    }
+    main {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 48px 28px 72px;
+    }
+    header {
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 28px;
+      margin-bottom: 32px;
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 40px;
+      line-height: 1.08;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin: 36px 0 12px;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+    h3 {
+      margin: 28px 0 8px;
+      font-size: 17px;
+      letter-spacing: 0;
+    }
+    p {
+      margin: 0 0 14px;
+    }
+    ul, ol {
+      margin: 0 0 18px 22px;
+      padding: 0;
+    }
+    li {
+      margin: 6px 0;
+    }
+    code {
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.92em;
+      background: #eef2f7;
+      padding: 1px 4px;
+      border-radius: 4px;
+    }
+    .lede {
+      color: var(--muted);
+      font-size: 18px;
+      max-width: 840px;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .chip {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 10px;
+      background: #fff;
+    }
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 18px;
+      margin: 18px 0;
+    }
+    .decision {
+      border-left: 4px solid var(--accent);
+      padding-left: 14px;
+      margin: 18px 0;
+    }
+    .risk {
+      border-left: 4px solid var(--warn);
+      padding-left: 14px;
+      margin: 14px 0;
+    }
+    .danger {
+      border-left-color: var(--danger);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      background: #fff;
+    }
+    .card h3 {
+      margin-top: 0;
+    }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 8px;
+      margin: 18px 0;
+    }
+    .step {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #fff;
+      min-height: 84px;
+    }
+    .step strong {
+      display: block;
+      margin-bottom: 6px;
+    }
+    .small {
+      color: var(--muted);
+      font-size: 13px;
+    }
+    a {
+      color: #075985;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Rebuild POS hub offline sync drain</h1>
+      <p class="lede">Plan to make offline POS history drain automatically from the POS hub once connection is available, without requiring the original cashier to sign in again.</p>
+      <div class="meta">
+        <span class="chip">Date: 2026-05-18</span>
+        <span class="chip">Type: fix</span>
+        <span class="chip">Status: active</span>
+        <span class="chip">Origin: docs/brainstorms/2026-05-13-pos-local-first-register-requirements.md</span>
+      </div>
+    </header>
+
+    <section>
+      <h2>Core Problem</h2>
+      <div class="panel">
+        <p>The browser currently computes upload order from events that are syncable at that moment. Since syncability requires a transient original-cashier proof, an earlier cashier's event can disappear from the upload set and a later cashier's event can take its sequence number.</p>
+        <p>The backend then correctly rejects or holds the original earlier event as out of order because the cursor has already advanced. Waiting and retrying cannot fix a shifted sequence.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Decisions</h2>
+      <div class="decision">
+        <h3>Durable sequence at write time</h3>
+        <p>Every uploadable local POS event gets an immutable upload sequence when it is appended to IndexedDB. Upload sequence must never be derived from whichever staff proof is currently available.</p>
+      </div>
+      <div class="decision">
+        <h3>Actor and submitter are separate</h3>
+        <p>The event keeps actor staff attribution for cashier, audit, receipt, cash-control, and trace records. The hub or terminal supplies submission authority for upload.</p>
+      </div>
+      <div class="decision">
+        <h3>Hub owns upload</h3>
+        <p>The POS hub drains pending local history. The register flow appends events and shows status, but it does not run the upload scheduler.</p>
+      </div>
+      <div class="decision">
+        <h3>Permission drift becomes review</h3>
+        <p>When cloud policy no longer validates an offline actor, the event should be accepted into ordered sync history and projected to conflict or review state where needed, not stranded before upload.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Flow</h2>
+      <div class="flow">
+        <div class="step"><strong>Register</strong>Cashier performs a local POS action.</div>
+        <div class="step"><strong>Local store</strong>Append event with actor staff id and durable upload sequence.</div>
+        <div class="step"><strong>POS hub</strong>Read contiguous pending upload rows when online.</div>
+        <div class="step"><strong>Cloud sync</strong>Validate terminal submission authority and preserve actor attribution.</div>
+        <div class="step"><strong>Projection</strong>Mark projected, conflicted, held, or rejected and return mappings.</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Implementation Units</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>U1. Durable local order</h3>
+          <p>Add upload metadata to <code>posLocalStore.ts</code>, bump schema, and assign per-register-session upload sequence transactionally.</p>
+          <p class="small">Tests: <code>posLocalStore.test.ts</code>, <code>syncStatus.test.ts</code></p>
+        </div>
+        <div class="card">
+          <h3>U2. Upload contract</h3>
+          <p>Change the shared contract and sync builder so event eligibility does not depend on original cashier proof.</p>
+          <p class="small">Tests: <code>syncContract.test.ts</code>, <code>localCommandGateway.test.ts</code></p>
+        </div>
+        <div class="card">
+          <h3>U3. Hub drain runtime</h3>
+          <p>Enable scheduler draining in <code>PointOfSaleView.tsx</code>; make register runtime status-only.</p>
+          <p class="small">Tests: <code>PointOfSaleView.test.tsx</code>, <code>usePosLocalSyncRuntime.test.ts</code>, <code>useRegisterViewModel.test.ts</code></p>
+        </div>
+        <div class="card">
+          <h3>U4. Backend ingest</h3>
+          <p>Accept terminal-submitted actor events, keep strict ordering, and project permission drift to review.</p>
+          <p class="small">Tests: <code>ingestLocalEvents.test.ts</code>, <code>projectLocalEvents.test.ts</code>, <code>sync.test.ts</code></p>
+        </div>
+        <div class="card">
+          <h3>U5. Diagnostics</h3>
+          <p>Add debug visibility for drain mode, batch state, next upload sequence, held/review counts, and last successful sync.</p>
+          <p class="small">Tests: <code>POSRegisterView.test.tsx</code>, <code>syncStatusPresentation.test.ts</code></p>
+        </div>
+        <div class="card">
+          <h3>U6. Regression suite</h3>
+          <p>Cover the observed multi-staff offline sequence bug and hub-only upload requirement end to end.</p>
+          <p class="small">Tests: local sync contract, runtime, Convex ingestion, public sync tests</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Non-Goals</h2>
+      <ul>
+        <li>No product-wide offline sync platform.</li>
+        <li>No v1 dependency on service worker Background Sync.</li>
+        <li>No repair for already-stranded development events.</li>
+        <li>No removal of cashier attribution.</li>
+        <li>No offline-only payment confirmation states.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Risk Notes</h2>
+      <div class="risk">
+        <p><strong>Accountability risk:</strong> terminal-level upload authority can look like it weakens staff accountability. Preserve actor staff id in all projected business records.</p>
+      </div>
+      <div class="risk">
+        <p><strong>Permission risk:</strong> manager-only actions need review-safe projection. Accept ordered history, but do not apply privileged side effects when authority cannot be validated.</p>
+      </div>
+      <div class="risk danger">
+        <p><strong>Sequence risk:</strong> any remaining computed sequence path can recreate the original failure. Tests must assert stored sequence is used.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Primary Files</h2>
+      <ul>
+        <li><code>packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.ts</code></li>
+        <li><code>packages/athena-webapp/src/lib/pos/infrastructure/local/syncContract.ts</code></li>
+        <li><code>packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts</code></li>
+        <li><code>packages/athena-webapp/src/components/pos/PointOfSaleView.tsx</code></li>
+        <li><code>packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts</code></li>
+        <li><code>packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts</code></li>
+        <li><code>packages/athena-webapp/shared/posLocalSyncContract.ts</code></li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Sources</h2>
+      <ul>
+        <li><a href="../brainstorms/2026-05-13-pos-local-first-register-requirements.md">docs/brainstorms/2026-05-13-pos-local-first-register-requirements.md</a></li>
+        <li><a href="./2026-05-13-001-feat-pos-local-first-register-plan.md">docs/plans/2026-05-13-001-feat-pos-local-first-register-plan.md</a></li>
+        <li><a href="./2026-05-14-001-feat-pos-always-local-first-flow-plan.md">docs/plans/2026-05-14-001-feat-pos-always-local-first-flow-plan.md</a></li>
+        <li><a href="../solutions/architecture/athena-pos-local-first-sync-2026-05-13.md">docs/solutions/architecture/athena-pos-local-first-sync-2026-05-13.md</a></li>
+        <li><a href="../solutions/architecture/athena-pos-local-staff-authority-2026-05-14.md">docs/solutions/architecture/athena-pos-local-staff-authority-2026-05-14.md</a></li>
+        <li><a href="../solutions/architecture/athena-pos-local-first-runtime-feedback-2026-05-15.md">docs/solutions/architecture/athena-pos-local-first-runtime-feedback-2026-05-15.md</a></li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

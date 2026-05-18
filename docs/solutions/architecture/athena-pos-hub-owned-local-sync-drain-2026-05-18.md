@@ -41,8 +41,14 @@ Make upload sequence and upload ownership terminal-local concepts:
 
 - Assign upload ordering when uploadable local POS events are written, not when
   they are uploaded.
+- Persist that order with the local event row. The upload cursor is per local
+  register session, while local-only precursor events keep normal local event
+  ordering without consuming upload sequence.
 - Keep cashier attribution on the event as actor evidence for receipts,
   transactions, payment allocation, cash controls, and workflow traces.
+- Keep submission authority separate from actor attribution. The POS hub or
+  provisioned terminal submits the batch with terminal-scoped authority, while
+  the event payload preserves the original cashier/manager actor.
 - Treat the POS hub and provisioned terminal as the foreground sync drain owner.
   The register flow appends durable events and can show status, but it should
   not be the surface that decides whether upload runs.
@@ -51,6 +57,34 @@ Make upload sequence and upload ownership terminal-local concepts:
   permanent upload blocker.
 - Keep local-only precursor events, such as no-item `session.started` records,
   out of the upload sequence so they cannot strand sync.
+
+## Regression Targets
+
+The V26-604/V26-605 regression set should prove the bug as a full multi-staff
+offline sequence, not just as isolated helpers:
+
+- `posLocalStore.test.ts` should prove uploadable events receive immutable
+  upload sequence when appended, while `session.started`, cart item updates, and
+  payment edits remain local-only and do not consume upload sequence.
+- `syncContract.test.ts` should prove an event without the original cashier's
+  proof remains uploadable, later staff events do not shift into earlier
+  sequence numbers, and upload uses the stored `uploadSequence`.
+- `usePosLocalSyncRuntime.test.ts` should prove `drainEnabled: false` reads
+  status without calling `ingestLocalEvents`, while hub-owned
+  `drainEnabled: true` uploads pending rows on route entry or reconnect.
+- `PointOfSaleView.test.tsx` should prove opening `/pos` with a provisioned
+  terminal starts a hub drain for pending uploadable events.
+- `useRegisterViewModel.test.ts` and `POSRegisterView.test.tsx` should prove the
+  register can show pending/synced status without owning upload and that compact
+  labels stay limited to `pending sync` and `synced`.
+- `ingestLocalEvents.test.ts` and `public/sync.test.ts` should prove one
+  terminal authority can submit ordered events for multiple actor staff profiles,
+  accepted retries stay idempotent, and true missing earlier upload sequence is
+  still held as out-of-order evidence.
+- `projectLocalEvents.test.ts` should prove sale, payment, receipt,
+  cash-control, and workflow-trace projection retain actor staff attribution,
+  while permission drift becomes review/conflict state without losing the local
+  sale timeline.
 
 For plan HTML review artifacts, use the repo-local HTML validator rather than
 system `tidy`. The local validator accepts semantic HTML5 review artifacts while
@@ -63,6 +97,10 @@ JavaScript, and no remote assets.
   events.
 - Never make original staff proof presence the gate for preserving upload order.
 - Keep actor staff identity separate from terminal or hub submission authority.
+- Keep the validation map pointed at every POS local sync boundary, including
+  the local sync repository, shared sync contract, hub/register runtime, local
+  store, ingestion, projection, and public sync endpoint. Otherwise changed-file
+  validation can miss the exact ordering and actor-vs-submitter regressions.
 - Run `bun run plan-html:check` for plan HTML review artifacts instead of
   falling back to system `tidy`.
 - Update `docs/solutions` whenever POS local sync ownership, ordering, or
@@ -73,3 +111,4 @@ JavaScript, and no remote assets.
 - [Athena POS Local-First Sync Uses Event Logs](./athena-pos-local-first-sync-2026-05-13.md)
 - [Athena POS Local Staff Authority Uses Terminal-Scoped Verifiers](./athena-pos-local-staff-authority-2026-05-14.md)
 - [Athena POS Local-First Runtime Feedback Mirrors The Local Event Log](./athena-pos-local-first-runtime-feedback-2026-05-15.md)
+- Linear: V26-604, V26-605

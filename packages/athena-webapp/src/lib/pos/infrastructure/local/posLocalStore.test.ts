@@ -291,10 +291,75 @@ describe("posLocalStore", () => {
     expect(events.value.map((event) => event.sync.status)).toEqual([
       "pending",
       "synced",
+      "synced",
       "pending",
       "pending",
       "pending",
-      "pending",
+    ]);
+    expect(
+      events.value.map(
+        (event) => (event as { uploadSequence?: number }).uploadSequence,
+      ),
+    ).toEqual([1, undefined, undefined, 2, 3, 4]);
+  });
+
+  it("allocates durable upload sequences per local register session without requiring staff proof", async () => {
+    let nextLocalId = 1;
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      createLocalId: () => `local-event-${nextLocalId++}`,
+    });
+
+    await store.appendEvent({
+      type: "register.opened",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      localRegisterSessionId: "register-session-1",
+      staffProfileId: "staff-1",
+      payload: { openingFloat: 100 },
+    });
+    await store.appendEvent({
+      type: "cart.item_added",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      localRegisterSessionId: "register-session-1",
+      localPosSessionId: "sale-1",
+      staffProfileId: "staff-1",
+      payload: { productSkuId: "sku-1" },
+    });
+    await store.appendEvent({
+      type: "transaction.completed",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      localRegisterSessionId: "register-session-1",
+      localPosSessionId: "sale-1",
+      localTransactionId: "txn-1",
+      staffProfileId: "staff-1",
+      payload: { total: 25 },
+    });
+    await store.appendEvent({
+      type: "register.opened",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      localRegisterSessionId: "register-session-2",
+      staffProfileId: "staff-1",
+      payload: { openingFloat: 50 },
+    });
+
+    const events = await store.listEvents();
+
+    expect(events.ok).toBe(true);
+    if (!events.ok) return;
+    expect(
+      events.value.map((event) => ({
+        localEventId: event.localEventId,
+        uploadSequence: (event as { uploadSequence?: number }).uploadSequence,
+      })),
+    ).toEqual([
+      { localEventId: "local-event-1", uploadSequence: 1 },
+      { localEventId: "local-event-2", uploadSequence: undefined },
+      { localEventId: "local-event-3", uploadSequence: 2 },
+      { localEventId: "local-event-4", uploadSequence: 1 },
     ]);
   });
 

@@ -24,26 +24,28 @@ export function derivePosLocalSyncStatus(input: {
   const orderedEvents = [...input.events].sort(
     (left, right) => left.sequence - right.sequence,
   );
-  const unsyncedEvents = orderedEvents.filter(
-    (event) => event.sync.status !== "synced",
+  const uploadBlockingEvents = orderedEvents.filter(
+    (event) =>
+      typeof event.uploadSequence === "number" &&
+      event.sync.status !== "synced",
   );
-  const pendingCount = orderedEvents.filter((event) =>
+  const pendingCount = uploadBlockingEvents.filter((event) =>
     event.sync.status === "pending" || event.sync.status === "syncing",
   ).length;
-  const needsReviewCount = orderedEvents.filter(
+  const needsReviewCount = uploadBlockingEvents.filter(
     (event) => event.sync.status === "needs_review",
   ).length;
-  const failedCount = orderedEvents.filter(
+  const failedCount = uploadBlockingEvents.filter(
     (event) => event.sync.status === "failed",
   ).length;
   const lastLocalSequence = orderedEvents.at(-1)?.sequence ?? 0;
   const lastSyncedSequence =
     input.lastSyncedSequence ?? getContiguousSyncedSequence(orderedEvents);
-  const nextPendingSequence = unsyncedEvents[0]?.sequence ?? null;
+  const nextPendingSequence = uploadBlockingEvents[0]?.sequence ?? null;
 
   return {
     state: getSyncState({
-      hasUnsyncedEvents: unsyncedEvents.length > 0,
+      hasUnsyncedEvents: uploadBlockingEvents.length > 0,
       failedCount,
       isOnline: input.isOnline,
       needsReviewCount,
@@ -59,6 +61,10 @@ export function derivePosLocalSyncStatus(input: {
 function getContiguousSyncedSequence(events: PosLocalEventRecord[]) {
   let lastSyncedSequence = 0;
   for (const event of events) {
+    if (typeof event.uploadSequence !== "number") {
+      lastSyncedSequence = event.sequence;
+      continue;
+    }
     if (event.sync.status !== "synced") break;
     lastSyncedSequence = event.sequence;
   }

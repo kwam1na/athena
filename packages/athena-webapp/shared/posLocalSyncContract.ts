@@ -97,7 +97,7 @@ export type PosLocalSyncUploadEventBase<
   eventType: EventType;
   occurredAt: number;
   staffProfileId: string;
-  staffProofToken: string;
+  staffProofToken?: string;
   payload: PosLocalSyncPayloadByEventType[EventType];
 };
 

@@ -286,6 +286,17 @@ function formatDebugTrigger(value?: string | null) {
   }
 }
 
+function formatDebugRuntimeMode(value?: string | null) {
+  switch (value) {
+    case "drain-enabled":
+      return "Drain enabled";
+    case "status-only":
+      return "Status only";
+    default:
+      return "Unknown";
+  }
+}
+
 function usePosDebugPanelToggle() {
   const [isVisible, setIsVisible] = useState(false);
 
@@ -339,6 +350,7 @@ function POSLocalDebugStrip({
     ["sign-in panel", debug.authDialogOpen ? "Open" : "Closed"],
     ["sync status", formatDebugStatus(debug.syncFlow.status)],
     ["status source", formatDebugSource(debug.syncFlow.source)],
+    ["runtime mode", formatDebugRuntimeMode(debug.syncFlow.mode)],
     ["activity signal", String(debug.syncFlow.eventAppendToken)],
     [
       "last sync attempt",
@@ -356,6 +368,42 @@ function POSLocalDebugStrip({
         ? "n/a"
         : String(debug.syncFlow.pendingUploadEventCount),
     ],
+    [
+      "local-only events",
+      debug.syncFlow.localOnlyEventCount === undefined
+        ? "n/a"
+        : String(debug.syncFlow.localOnlyEventCount),
+    ],
+    [
+      "oldest pending",
+      formatDebugTimestamp(debug.syncFlow.oldestPendingEventAt),
+    ],
+    [
+      "oldest sequence",
+      debug.syncFlow.oldestPendingEventSequence === undefined
+        ? "n/a"
+        : String(debug.syncFlow.oldestPendingEventSequence),
+    ],
+    [
+      "last batch",
+      debug.syncFlow.lastBatchEventCount === undefined
+        ? "n/a"
+        : String(debug.syncFlow.lastBatchEventCount),
+    ],
+    [
+      "held events",
+      debug.syncFlow.lastHeldEventCount === undefined
+        ? "n/a"
+        : String(debug.syncFlow.lastHeldEventCount),
+    ],
+    [
+      "review events",
+      [
+        `local ${debug.syncFlow.reviewEventCount ?? 0}`,
+        `last ${debug.syncFlow.lastReviewEventCount ?? "n/a"}`,
+      ].join(" "),
+    ],
+    ["failed events", String(debug.syncFlow.failedEventCount ?? 0)],
     [
       "scheduler",
       [

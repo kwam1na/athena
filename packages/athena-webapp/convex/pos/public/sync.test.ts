@@ -102,6 +102,29 @@ describe("POS local sync public mutation", () => {
     );
   });
 
+  it("accepts actor events without staff proof at the public sync boundary", async () => {
+    const ctx = buildCtx();
+    const { staffProofToken: _staffProofToken, ...prooflessEvent } = buildEvent();
+
+    await getHandler(ingestLocalEvents)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      syncSecretHash: "sync-secret-1",
+      events: [prooflessEvent],
+    });
+
+    expect(mocks.ingestLocalEventsWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        events: [
+          expect.not.objectContaining({
+            staffProofToken: expect.any(String),
+          }),
+        ],
+      }),
+    );
+  });
+
   it("returns not_found when the store does not exist", async () => {
     const ctx = buildCtx({ missingStore: true });
 

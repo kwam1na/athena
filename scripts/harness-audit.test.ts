@@ -1036,6 +1036,11 @@ async function createFixtureRepo() {
     rootDir
   );
   await write(
+    "packages/athena-webapp/convex/pos/infrastructure/repositories/localSyncRepository.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
     "packages/athena-webapp/convex/operations/approvalRequests.ts",
     "export {};\n",
     rootDir

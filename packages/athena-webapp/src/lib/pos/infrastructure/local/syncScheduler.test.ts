@@ -278,6 +278,38 @@ describe("syncScheduler", () => {
     );
   });
 
+  it("honors backoff for foreground interval retries", async () => {
+    vi.setSystemTime(0);
+    const uploadBatch = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("network down"))
+      .mockResolvedValueOnce({ syncedEventIds: ["event-1"] });
+    const scheduler = createPosLocalSyncScheduler({
+      loadPendingEvents: vi.fn().mockResolvedValue([baseEvent({})]),
+      uploadBatch,
+      markSynced: vi.fn().mockResolvedValue(undefined),
+      isOnline: () => true,
+      now: () => Date.now(),
+      baseBackoffMs: 30_000,
+    });
+
+    scheduler.trigger("route-entry");
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(uploadBatch).toHaveBeenCalledTimes(1);
+    const backoffUntil = scheduler.getStatus().backoffUntil;
+    expect(backoffUntil).toBeGreaterThan(Date.now());
+
+    scheduler.trigger("foreground-interval");
+    await vi.advanceTimersByTimeAsync(backoffUntil! - Date.now() - 1);
+
+    expect(uploadBatch).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(uploadBatch).toHaveBeenCalledTimes(2);
+  });
+
   it("immediately retries held events when the same response made sync progress", async () => {
     const markNeedsReview = vi.fn().mockResolvedValue(undefined);
     const markSynced = vi.fn().mockResolvedValue(undefined);

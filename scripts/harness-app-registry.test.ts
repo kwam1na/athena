@@ -683,6 +683,7 @@ describe("HARNESS_APP_REGISTRY", () => {
       "convex/pos/public/sync.ts",
       "convex/pos/public/terminals.ts",
       "convex/pos/public/transactions.ts",
+      "convex/pos/infrastructure/repositories/localSyncRepository.ts",
       "convex/inventory/posSessions.ts",
       "convex/operations/registerSessionTracing.ts",
       "convex/operations/registerSessions.ts",
@@ -723,7 +724,7 @@ describe("HARNESS_APP_REGISTRY", () => {
       { kind: "script", script: "build" },
     ]);
     expect(workflowTraceScenario?.note).toBe(
-      "Use this when the shared workflow-trace or POS local sync contract, POS local-first sync/storage/read-model/command-gateway files, terminal seed lookup, POS local entry/readiness files, the POS register bootstrap or drawer gate, the `pos_session` / `register_session` trace writers, the trace route/view, or POS register, transaction, and cash-controls trace entry points change. It exercises the trace schema and presentation contract, the session/register trace writers, local sync ingestion/projection/read-model adjacency, POS entry/readiness gating, the drawer-open bootstrap handoff, the shared trace route, terminal fallback behavior, and the operator-facing POS and cash-controls surfaces before broader package validation."
+      "Use this when the shared workflow-trace or POS local sync contract, POS local sync repository, POS local-first sync/storage/read-model/command-gateway files, terminal seed lookup, POS local entry/readiness files, the POS register bootstrap or drawer gate, the `pos_session` / `register_session` trace writers, the trace route/view, or POS register, transaction, and cash-controls trace entry points change. It exercises the trace schema and presentation contract, the session/register trace writers, local sync ingestion/projection/repository/read-model adjacency, POS entry/readiness gating, the drawer-open bootstrap handoff, the shared trace route, terminal fallback behavior, and the operator-facing POS and cash-controls surfaces before broader package validation."
     );
     expect(workflowTraceScenario?.behaviorScenarios).toEqual([
       "athena-admin-shell-boot",
