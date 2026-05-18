@@ -51,6 +51,8 @@ export type PosLocalRuntimeSyncDebug = {
   oldestPendingEventAt?: number;
   oldestPendingEventId?: string;
   oldestPendingEventSequence?: number;
+  oldestPendingUploadSequence?: number;
+  nextPendingUploadSequence?: number;
   pendingUploadEventCount?: number;
   reviewEventCount?: number;
   schedulerBackoffUntil?: number | null;
@@ -68,6 +70,7 @@ type IngestLocalEventsArgs = FunctionArgs<
 export function usePosLocalSyncRuntimeStatus(input: {
   storeId?: string | null;
   terminalId?: string | null;
+  drainOnAppend?: boolean;
   eventAppendToken?: number;
   mode?: PosLocalSyncRuntimeMode;
   onLocalEventsChanged?: (() => void) | null;
@@ -87,6 +90,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
   const lastEventAppendTokenRef = useRef(0);
   const lastManualRetryTokenRef = useRef(0);
   const { storeFactory, storeId, terminalId } = input;
+  const drainOnAppend = input.drainOnAppend ?? false;
   const eventAppendToken = input.eventAppendToken ?? 0;
   const mode = input.mode ?? "drain-enabled";
   const onLocalEventsChanged = input.onLocalEventsChanged;
@@ -126,7 +130,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
       createPosLocalStore({
         adapter: createIndexedDbPosLocalStorageAdapter(),
       });
-    let stopScheduler: (() => void) | null = null;
+    const stopSchedulers: Array<() => void> = [];
 
     void (async () => {
       const shouldStop = () => cancelled;
@@ -207,23 +211,9 @@ export function usePosLocalSyncRuntimeStatus(input: {
         lastTriggerPriority: triggerPriority,
       }));
 
-      if (mode === "status-only") {
-        stopScheduler = startStatusOnlyRuntimeTriggers(() => {
-          setIsOnline(typeof navigator === "undefined" ? true : navigator.onLine);
-          setRefreshToken((current) => current + 1);
-        });
-        return;
-      }
-
-      if (
-        !provisionedSeed ||
-        !provisionedSeed.syncSecretHash ||
-        provisionedSeed.cloudTerminalId !== cloudTerminalId
-      ) {
-        return;
-      }
-
-      const scheduler = createPosLocalSyncScheduler({
+      const createDrainScheduler = (
+        syncSeed: NonNullable<typeof provisionedSeed>,
+      ) => createPosLocalSyncScheduler({
         isOnline: () =>
           typeof navigator === "undefined" ? true : navigator.onLine,
         loadPendingEvents: async () => {
@@ -254,12 +244,12 @@ export function usePosLocalSyncRuntimeStatus(input: {
             }));
           }
           return uploadableEvents.map((event) => ({
-              id: event.localEventId,
-              terminalId: event.terminalId,
-              localRegisterSessionId: event.localRegisterSessionId ?? "",
-              createdAt: event.createdAt,
-              sequence: event.sequence,
-            }));
+            id: event.localEventId,
+            terminalId: event.terminalId,
+            localRegisterSessionId: event.localRegisterSessionId ?? "",
+            createdAt: event.createdAt,
+            sequence: event.sequence,
+          }));
         },
         onStatusChange: (status) => {
           if (shouldStop()) {
@@ -323,8 +313,8 @@ export function usePosLocalSyncRuntimeStatus(input: {
           const result = await ingestLocalEvents(
             toIngestLocalEventsArgs({
               events: uploadedEvents,
-              storeId: provisionedSeed.storeId,
-              syncSecretHash: provisionedSeed.syncSecretHash,
+              storeId: syncSeed.storeId,
+              syncSecretHash: syncSeed.syncSecretHash,
               terminalId: cloudTerminalId,
             }),
           );
@@ -407,15 +397,52 @@ export function usePosLocalSyncRuntimeStatus(input: {
           onLocalEventsChanged?.();
         },
       });
-      stopScheduler = scheduler.startForegroundTriggers();
+
+      if (mode === "status-only") {
+        stopSchedulers.push(
+          startStatusOnlyRuntimeTriggers(() => {
+            setIsOnline(
+              typeof navigator === "undefined" ? true : navigator.onLine,
+            );
+            setRefreshToken((current) => current + 1);
+          }),
+        );
+
+        if (
+          drainOnAppend &&
+          trigger === "event-appended" &&
+          provisionedSeed &&
+          provisionedSeed.syncSecretHash &&
+          provisionedSeed.cloudTerminalId === cloudTerminalId
+        ) {
+          const scheduler = createDrainScheduler(provisionedSeed);
+          stopSchedulers.push(() => scheduler.stop());
+          scheduler.trigger("event-appended", { priority: "high" });
+        }
+        return;
+      }
+
+      if (
+        !provisionedSeed ||
+        !provisionedSeed.syncSecretHash ||
+        provisionedSeed.cloudTerminalId !== cloudTerminalId
+      ) {
+        return;
+      }
+
+      const scheduler = createDrainScheduler(provisionedSeed);
+      stopSchedulers.push(scheduler.startForegroundTriggers());
       scheduler.trigger(trigger, { priority: "high" });
     })();
 
     return () => {
       cancelled = true;
-      stopScheduler?.();
+      for (const stopScheduler of stopSchedulers) {
+        stopScheduler();
+      }
     };
   }, [
+    drainOnAppend,
     ingestLocalEvents,
     eventAppendToken,
     manualRetryToken,
@@ -547,6 +574,9 @@ function buildRuntimeSyncDebug(
   const pendingUploadableEvents = pendingUploadCandidates.filter(
     isSyncablePosLocalEvent,
   );
+  const nextPendingUploadableEvent = [...pendingUploadableEvents]
+    .sort(compareUploadableEventOrder)
+    .at(0);
   const localOnlyEvents = pendingUploadCandidates.filter(
     (event) => !isSyncablePosLocalEvent(event),
   );
@@ -566,9 +596,24 @@ function buildRuntimeSyncDebug(
     oldestPendingEventAt: oldestPendingEvent?.createdAt,
     oldestPendingEventId: oldestPendingEvent?.localEventId,
     oldestPendingEventSequence: oldestPendingEvent?.sequence,
+    oldestPendingUploadSequence: oldestPendingEvent?.uploadSequence,
+    nextPendingUploadSequence: nextPendingUploadableEvent?.uploadSequence,
     pendingUploadEventCount: pendingUploadableEvents.length,
     reviewEventCount: reviewEvents.length,
   };
+}
+
+function compareUploadableEventOrder(
+  left: PosLocalEventRecord,
+  right: PosLocalEventRecord,
+) {
+  const leftUploadSequence = left.uploadSequence ?? Number.POSITIVE_INFINITY;
+  const rightUploadSequence = right.uploadSequence ?? Number.POSITIVE_INFINITY;
+  if (leftUploadSequence !== rightUploadSequence) {
+    return leftUploadSequence - rightUploadSequence;
+  }
+
+  return left.sequence - right.sequence;
 }
 
 function isPendingUploadCandidate(event: PosLocalEventRecord) {

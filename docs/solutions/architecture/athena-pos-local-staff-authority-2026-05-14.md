@@ -68,6 +68,13 @@ credential, staff profile state, role eligibility, and credential version. A PIN
 reset increments the local verifier version, and older local proofs stop
 validating once that credential version drifts.
 
+When an uploadable local POS event is appended, the already-unwrapped proof is
+copied onto that event row as event-scoped sync evidence. That lets offline
+sales survive reloads and later hub drains without requiring the original
+cashier's in-memory sign-in state. The proof remains separate from the roster
+authority snapshot, and it is scrubbed from the event once the event is synced or
+moved to review.
+
 Manager elevation and command approval proofs remain separate server-side
 approval boundaries. Local cashier authority should not be treated as approval
 for manager-only commands.
@@ -76,6 +83,8 @@ for manager-only commands.
 
 - Do not use online `pinHash` as an offline verifier.
 - Do not persist plaintext `posLocalStaffProof` tokens in local staff authority.
+- Do persist event-scoped proof evidence on pending uploadable events at append
+  time, then scrub it after sync/review terminal state.
 - Keep local staff authority snapshots scoped to store and terminal ids.
 - Include credential-version evidence in local sync proofs.
 - Refresh local staff authority after online cashier authentication and during

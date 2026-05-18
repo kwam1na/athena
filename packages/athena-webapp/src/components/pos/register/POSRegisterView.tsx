@@ -380,9 +380,17 @@ function POSLocalDebugStrip({
     ],
     [
       "oldest sequence",
-      debug.syncFlow.oldestPendingEventSequence === undefined
-        ? "n/a"
-        : String(debug.syncFlow.oldestPendingEventSequence),
+      [
+        `local ${debug.syncFlow.oldestPendingEventSequence ?? "n/a"}`,
+        `upload ${debug.syncFlow.oldestPendingUploadSequence ?? "n/a"}`,
+      ].join(" "),
+    ],
+    [
+      "upload sequence",
+      [
+        `oldest ${debug.syncFlow.oldestPendingUploadSequence ?? "n/a"}`,
+        `next ${debug.syncFlow.nextPendingUploadSequence ?? "n/a"}`,
+      ].join(" "),
     ],
     [
       "last batch",

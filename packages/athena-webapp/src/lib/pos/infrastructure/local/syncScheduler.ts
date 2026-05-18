@@ -32,6 +32,7 @@ export interface PosLocalSyncScheduler {
   ): void;
   startForegroundTriggers(): () => void;
   getStatus(): PosLocalSyncStatus;
+  stop(): void;
 }
 
 export interface CreatePosLocalSyncSchedulerOptions {
@@ -276,6 +277,10 @@ export function createPosLocalSyncScheduler(
     },
 
     getStatus: status,
+
+    stop() {
+      clearScheduledTimer();
+    },
   };
 }
 

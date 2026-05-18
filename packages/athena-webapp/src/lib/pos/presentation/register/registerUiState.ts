@@ -252,6 +252,8 @@ export interface RegisterViewModel {
       oldestPendingEventAt?: number;
       oldestPendingEventId?: string;
       oldestPendingEventSequence?: number;
+      oldestPendingUploadSequence?: number;
+      nextPendingUploadSequence?: number;
       pendingEventCount?: number;
       pendingUploadEventCount?: number;
       reviewEventCount?: number;
