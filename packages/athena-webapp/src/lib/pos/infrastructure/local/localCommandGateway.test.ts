@@ -399,6 +399,11 @@ describe("createLocalCommandGateway", () => {
         }),
       ],
     });
+    const events = await store.listEvents();
+    expect(events.ok).toBe(true);
+    if (events.ok) {
+      expect(events.value[0]).not.toHaveProperty("uploadSequence");
+    }
   });
 
   it("keeps clear events uploadable when the local sale had cart activity", async () => {
@@ -462,6 +467,7 @@ describe("createLocalCommandGateway", () => {
       value: expect.arrayContaining([
         expect.objectContaining({
           type: "cart.cleared",
+          uploadSequence: 2,
           staffProofToken: "proof-token-1",
           sync: { status: "pending" },
         }),

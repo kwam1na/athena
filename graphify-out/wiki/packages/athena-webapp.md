@@ -21,7 +21,7 @@ Landing page for packages/athena-webapp. Use this page to orient around graph ho
 - `dailyClose.ts` (57 edges, Community 1) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../../packages/athena-webapp/convex/operations/dailyClose.ts)
 - `useRegisterViewModel.ts` (40 edges, Community 4) - [`packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts`](../../../packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts)
 - `ProcurementView.tsx` (39 edges, Community 5) - [`packages/athena-webapp/src/components/procurement/ProcurementView.tsx`](../../../packages/athena-webapp/src/components/procurement/ProcurementView.tsx)
-- `DailyOpeningView.tsx` (35 edges, Community 7) - [`packages/athena-webapp/src/components/operations/DailyOpeningView.tsx`](../../../packages/athena-webapp/src/components/operations/DailyOpeningView.tsx)
+- `projectLocalEvents.ts` (36 edges, Community 6) - [`packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts`](../../../packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts)
 
 ## Navigation
 - [wiki index](../index.md) - back to the wiki index

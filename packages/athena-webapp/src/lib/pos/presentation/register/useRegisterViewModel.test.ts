@@ -259,6 +259,12 @@ vi.mock("@/lib/pos/infrastructure/local/usePosLocalSyncRuntime", () => ({
 }));
 
 vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
+  canUploadPosLocalEventType: (type: string) =>
+    type === "register.opened" ||
+    type === "transaction.completed" ||
+    type === "cart.cleared" ||
+    type === "register.closeout_started" ||
+    type === "register.reopened",
   createIndexedDbPosLocalStorageAdapter: vi.fn(() => ({})),
   createPosLocalStore: vi.fn(() => ({
     appendEvent: mockAppendLocalEvent,
@@ -328,6 +334,7 @@ function buildLocalEvent(
     schemaVersion: 1,
     sequence,
     type,
+    uploadSequence: sequence,
     terminalId: "local-terminal-1",
     storeId: "store-1",
     registerNumber: "1",
@@ -941,6 +948,7 @@ describe("useRegisterViewModel", () => {
           sequence: 4,
           staffProofToken: undefined,
           type: "cart.cleared",
+          uploadSequence: undefined,
         }),
       ],
     });
@@ -1236,6 +1244,7 @@ describe("useRegisterViewModel", () => {
       expect(mockUsePosLocalSyncRuntimeStatus).toHaveBeenCalledWith(
         expect.objectContaining({
           eventAppendToken: 1,
+          mode: "status-only",
           onLocalEventsChanged: expect.any(Function),
           storeId: "store-1",
           terminalId: "terminal-1",

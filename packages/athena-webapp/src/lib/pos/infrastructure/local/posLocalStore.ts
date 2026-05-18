@@ -7,7 +7,7 @@ import type {
   PosRegisterCatalogRowDto,
 } from "@/lib/pos/application/dto";
 
-export const POS_LOCAL_STORE_SCHEMA_VERSION = 4;
+export const POS_LOCAL_STORE_SCHEMA_VERSION = 5;
 
 export type PosLocalEntityKind =
   | "registerSession"
@@ -33,7 +33,7 @@ export type PosLocalSyncEventStatus =
   | "needs_review"
   | "failed";
 
-function canUploadPosLocalEventType(type: PosLocalEventType): boolean {
+export function canUploadPosLocalEventType(type: PosLocalEventType): boolean {
   return (
     type === "register.opened" ||
     type === "transaction.completed" ||
@@ -58,6 +58,7 @@ export interface PosLocalEventRecord {
   localEventId: string;
   schemaVersion: number;
   sequence: number;
+  uploadSequence?: number;
   type: PosLocalEventType;
   terminalId: string;
   storeId: string;
@@ -205,6 +206,7 @@ export type PosLocalAppendEventInput = {
 
 const META_SCHEMA_VERSION_KEY = "schemaVersion";
 const META_SEQUENCE_KEY = "sequence";
+const META_UPLOAD_SEQUENCE_PREFIX = "uploadSequence:";
 const TERMINAL_SEED_KEY = "current";
 
 class PosLocalStoreSchemaError extends Error {
@@ -273,10 +275,15 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
     const currentSequence =
       (await transaction.get<number>("meta", META_SEQUENCE_KEY)) ?? 0;
     const nextSequence = currentSequence + 1;
+    const uploadSequence = await allocateUploadSequenceInTransaction(
+      transaction,
+      input,
+    );
     const event: PosLocalEventRecord = {
       localEventId: createLocalId("event"),
       schemaVersion: POS_LOCAL_STORE_SCHEMA_VERSION,
       sequence: nextSequence,
+      ...(uploadSequence ? { uploadSequence } : {}),
       type: input.type,
       terminalId: input.terminalId,
       storeId: input.storeId,
@@ -304,8 +311,37 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
     return event;
   }
 
+  async function allocateUploadSequenceInTransaction(
+    transaction: PosLocalStoreTransaction,
+    input: PosLocalAppendEventInput,
+  ): Promise<number | undefined> {
+    if (!shouldAllocateUploadSequence(input)) {
+      return undefined;
+    }
+
+    const localRegisterSessionId = input.localRegisterSessionId;
+    if (!localRegisterSessionId) {
+      return undefined;
+    }
+
+    const key = uploadSequenceKey(localRegisterSessionId);
+    const currentUploadSequence =
+      (await transaction.get<number>("meta", key)) ?? 0;
+    const nextUploadSequence = currentUploadSequence + 1;
+    await transaction.put("meta", key, nextUploadSequence);
+    return nextUploadSequence;
+  }
+
+  function shouldAllocateUploadSequence(input: PosLocalAppendEventInput): boolean {
+    return Boolean(
+      input.localRegisterSessionId &&
+        input.initialSyncStatus !== "synced" &&
+        canUploadPosLocalEventType(input.type),
+    );
+  }
+
   function getInitialSyncStatus(type: PosLocalEventType): PosLocalSyncEventStatus {
-    return type === "session.started" ? "synced" : "pending";
+    return canUploadPosLocalEventType(type) ? "pending" : "synced";
   }
 
   const transientStaffProofTokens = new Map<string, string>();
@@ -910,6 +946,10 @@ function mappingKey(entity: PosLocalEntityKind, localId: string) {
 
 function readinessKey(storeId: string, operatingDate: string) {
   return `${storeId}:${operatingDate}`;
+}
+
+function uploadSequenceKey(localRegisterSessionId: string) {
+  return `${META_UPLOAD_SEQUENCE_PREFIX}${localRegisterSessionId}`;
 }
 
 function normalizeUsername(username: string) {

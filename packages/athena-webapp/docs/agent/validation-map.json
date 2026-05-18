@@ -310,6 +310,7 @@
         "packages/athena-webapp/convex/pos/public/sync.ts",
         "packages/athena-webapp/convex/pos/public/terminals.ts",
         "packages/athena-webapp/convex/pos/public/transactions.ts",
+        "packages/athena-webapp/convex/pos/infrastructure/repositories/localSyncRepository.ts",
         "packages/athena-webapp/convex/inventory/posSessions.ts",
         "packages/athena-webapp/convex/operations/registerSessionTracing.ts",
         "packages/athena-webapp/convex/operations/registerSessions.ts",

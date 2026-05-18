@@ -29,6 +29,7 @@ import { usePermissions } from "~/src/hooks/usePermissions";
 import { toDisplayAmount } from "~/convex/lib/currency";
 import { PageLevelHeader, PageWorkspace } from "../common/PageLevelHeader";
 import { useLocalPosEntryContext } from "@/lib/pos/infrastructure/local/localPosEntryContext";
+import { usePosLocalSyncRuntimeStatus } from "@/lib/pos/infrastructure/local/usePosLocalSyncRuntime";
 import { usePrewarmRegisterCatalogOfflineSnapshots } from "@/lib/pos/infrastructure/convex/catalogGateway";
 import type { Id } from "~/convex/_generated/dataModel";
 
@@ -67,6 +68,13 @@ export default function PointOfSaleView() {
       ? (localEntryContext.storeId as Id<"store">)
       : undefined);
   usePrewarmRegisterCatalogOfflineSnapshots({ storeId: snapshotStoreId });
+  const hubTerminalSeed =
+    localEntryContext.status === "ready" ? localEntryContext.terminalSeed : null;
+  usePosLocalSyncRuntimeStatus({
+    mode: "drain-enabled",
+    storeId: hubTerminalSeed?.storeId,
+    terminalId: hubTerminalSeed?.cloudTerminalId ?? hubTerminalSeed?.terminalId,
+  });
 
   // Get today's POS transaction summary
   const todaySummary = useQuery(

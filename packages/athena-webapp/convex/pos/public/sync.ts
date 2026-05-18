@@ -79,7 +79,7 @@ const posLocalSyncEventBaseValidator = {
   sequence: v.number(),
   occurredAt: v.number(),
   staffProfileId: v.id("staffProfile"),
-  staffProofToken: v.string(),
+  staffProofToken: v.optional(v.string()),
 };
 
 const posLocalSyncUploadEventValidator = v.union(

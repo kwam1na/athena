@@ -4220,6 +4220,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       : null;
   const localRuntimeSyncSource = usePosLocalSyncRuntimeStatus({
     eventAppendToken: localSyncEventAppendToken,
+    mode: "status-only",
     onLocalEventsChanged: noteLocalRegisterEventChanged,
     storeId: activeStoreId,
     staffProfileId,
@@ -4335,8 +4336,12 @@ export function useRegisterViewModel(): RegisterViewModel {
       syncFlow: {
         eventAppendToken: localSyncEventAppendToken,
         failureCount: localRuntimeSyncSource?.debug?.failureCount,
+        failedEventCount: localRuntimeSyncSource?.debug?.failedEventCount,
+        lastBatchEventCount: localRuntimeSyncSource?.debug?.lastBatchEventCount,
         lastFailure: localRuntimeSyncSource?.debug?.lastFailure,
+        lastHeldEventCount: localRuntimeSyncSource?.debug?.lastHeldEventCount,
         lastLocalSequence: localRegisterReadModel?.syncStatus.lastLocalSequence,
+        lastReviewEventCount: localRuntimeSyncSource?.debug?.lastReviewEventCount,
         lastRuntimeTrigger:
           localRuntimeSyncSource?.debug?.lastTrigger ?? "none",
         lastRuntimeTriggerAt: localRuntimeSyncSource?.debug?.lastTriggerAt,
@@ -4344,11 +4349,20 @@ export function useRegisterViewModel(): RegisterViewModel {
           localRuntimeSyncSource?.debug?.lastTriggerPriority ?? "normal",
         lastSyncedSequence:
           localRegisterReadModel?.syncStatus.lastSyncedSequence,
+        localOnlyEventCount: localRuntimeSyncSource?.debug?.localOnlyEventCount,
+        mode: localRuntimeSyncSource?.debug?.mode,
         nextPendingSequence:
           localRegisterReadModel?.syncStatus.nextPendingSequence,
+        oldestPendingEventAt:
+          localRuntimeSyncSource?.debug?.oldestPendingEventAt,
+        oldestPendingEventId:
+          localRuntimeSyncSource?.debug?.oldestPendingEventId,
+        oldestPendingEventSequence:
+          localRuntimeSyncSource?.debug?.oldestPendingEventSequence,
         pendingEventCount: syncStatus?.pendingEventCount ?? 0,
         pendingUploadEventCount:
           localRuntimeSyncSource?.debug?.pendingUploadEventCount,
+        reviewEventCount: localRuntimeSyncSource?.debug?.reviewEventCount,
         schedulerBackoffUntil:
           localRuntimeSyncSource?.debug?.schedulerBackoffUntil,
         schedulerRunning: localRuntimeSyncSource?.debug?.schedulerRunning,

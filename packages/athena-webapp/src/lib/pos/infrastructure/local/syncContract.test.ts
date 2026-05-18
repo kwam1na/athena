@@ -20,8 +20,8 @@ describe("syncContract", () => {
       buildLocalEvent({ type: "cart.item_added" }),
       buildLocalEvent({ localRegisterSessionId: undefined }),
       buildLocalEvent({ staffProfileId: undefined }),
-      buildLocalEvent({ staffProofToken: undefined }),
     ];
+    const prooflessUploadEvent = buildLocalEvent({ staffProofToken: undefined });
 
     expect(syncableEvents.map(isSyncablePosLocalEvent)).toEqual([
       true,
@@ -35,11 +35,17 @@ describe("syncContract", () => {
       false,
       false,
       false,
-      false,
     ]);
+    expect(isSyncablePosLocalEvent(prooflessUploadEvent)).toBe(true);
     expect(
-      buildPosLocalSyncUploadEvents([localOnlyEvents[4]], localOnlyEvents),
-    ).toEqual([]);
+      buildPosLocalSyncUploadEvents([prooflessUploadEvent], [prooflessUploadEvent]),
+    ).toEqual([
+      expect.objectContaining({
+        localEventId: prooflessUploadEvent.localEventId,
+        sequence: prooflessUploadEvent.uploadSequence,
+        staffProfileId: prooflessUploadEvent.staffProfileId,
+      }),
+    ]);
   });
 
   it("maps register lifecycle events to server upload events with syncable sequence numbers", () => {
@@ -58,12 +64,14 @@ describe("syncContract", () => {
       buildLocalEvent({
         localEventId: "event-closeout",
         sequence: 3,
+        uploadSequence: 2,
         type: "register.closeout_started",
         payload: { countedCash: 125, notes: "Closed" },
       }),
       buildLocalEvent({
         localEventId: "event-reopen",
         sequence: 4,
+        uploadSequence: 3,
         type: "register.reopened",
         payload: { reason: "Corrected count" },
       }),
@@ -167,7 +175,7 @@ describe("syncContract", () => {
     ]);
   });
 
-  it("does not count skipped pending sale clear events when a later completion supersedes them", () => {
+  it("uses the stored sale sequence when a prior sale clear is skipped", () => {
     const events: PosLocalEventRecord[] = [
       buildLocalEvent({
         localEventId: "event-open",
@@ -187,6 +195,7 @@ describe("syncContract", () => {
       buildLocalEvent({
         localEventId: "event-sale",
         sequence: 3,
+        uploadSequence: 3,
         type: "transaction.completed",
         payload: {
           localPosSessionId: "local-session-1",
@@ -203,12 +212,12 @@ describe("syncContract", () => {
     expect(buildPosLocalSyncUploadEvents([events[2]], events)).toEqual([
       expect.objectContaining({
         localEventId: "event-sale",
-        sequence: 2,
+        sequence: 3,
       }),
     ]);
   });
 
-  it("does not count uploaded skipped sale clear events when sequencing later uploads", () => {
+  it("uses the stored closeout sequence when an uploaded sale clear is skipped", () => {
     const events: PosLocalEventRecord[] = [
       buildLocalEvent({
         localEventId: "event-open",
@@ -244,6 +253,7 @@ describe("syncContract", () => {
       buildLocalEvent({
         localEventId: "event-closeout",
         sequence: 4,
+        uploadSequence: 4,
         type: "register.closeout_started",
         payload: {
           countedCash: 0,
@@ -254,7 +264,7 @@ describe("syncContract", () => {
     expect(buildPosLocalSyncUploadEvents([events[3]], events)).toEqual([
       expect.objectContaining({
         localEventId: "event-closeout",
-        sequence: 3,
+        sequence: 4,
       }),
     ]);
   });
@@ -283,6 +293,7 @@ describe("syncContract", () => {
       buildLocalEvent({
         localEventId: "event-sale",
         sequence: 3,
+        uploadSequence: 1,
         type: "transaction.completed",
         payload: {
           localPosSessionId: "local-session-1",
@@ -395,10 +406,12 @@ describe("syncContract", () => {
         sequence: 1,
         type: "register.opened",
         sync: { status: "synced" },
+        uploadSequence: undefined,
       }),
       buildLocalEvent({
         localEventId: "event-sale",
         sequence: 2,
+        uploadSequence: 1,
         type: "transaction.completed",
         payload: {
           localPosSessionId: "local-session-1",
@@ -563,6 +576,75 @@ describe("syncContract", () => {
     ]);
   });
 
+  it("builds upload payloads for actor events whose proof token is unavailable", () => {
+    const prooflessOpen = buildLocalEvent({
+      localEventId: "event-open",
+      sequence: 1,
+      type: "register.opened",
+      uploadSequence: 1,
+    });
+    delete prooflessOpen.staffProofToken;
+
+    expect(buildPosLocalSyncUploadEvents([prooflessOpen], [prooflessOpen])).toEqual([
+      expect.objectContaining({
+        localEventId: "event-open",
+        sequence: 1,
+        staffProfileId: "staff-1",
+      }),
+    ]);
+    expect(buildPosLocalSyncUploadEvents([prooflessOpen], [prooflessOpen])[0])
+      .not.toHaveProperty("staffProofToken");
+  });
+
+  it("uses stored upload sequence instead of recomputing from currently uploadable rows", () => {
+    const events: PosLocalEventRecord[] = [
+      buildLocalEvent({
+        localEventId: "event-local-only",
+        sequence: 10,
+        type: "cart.item_added",
+      }),
+      buildLocalEvent({
+        localEventId: "event-open",
+        sequence: 20,
+        type: "register.opened",
+        uploadSequence: 1,
+      }),
+      buildLocalEvent({
+        localEventId: "event-sale",
+        sequence: 30,
+        type: "transaction.completed",
+        uploadSequence: 2,
+        payload: {
+          localPosSessionId: "local-session-1",
+          localTransactionId: "local-txn-1",
+          receiptNumber: "LOCAL-1-000001",
+          subtotal: 25,
+          tax: 0,
+          total: 25,
+          items: [
+            {
+              localItemId: "local-item-1",
+              productId: "product-1",
+              productSkuId: "sku-1",
+              productName: "Wig Cap",
+              productSku: "CAP-1",
+              quantity: 1,
+              price: 25,
+            },
+          ],
+          payments: [{ method: "cash", amount: 25, timestamp: 4 }],
+        },
+      }),
+    ];
+
+    expect(buildPosLocalSyncUploadEvents([events[2]], events)).toEqual([
+      expect.objectContaining({
+        localEventId: "event-sale",
+        sequence: 2,
+      }),
+    ]);
+  });
+
   it("normalizes local payment payloads before upload", () => {
     const events: PosLocalEventRecord[] = [
       buildLocalEvent({
@@ -650,6 +732,16 @@ describe("syncContract", () => {
 function buildLocalEvent(
   overrides: Partial<PosLocalEventRecord>,
 ): PosLocalEventRecord {
+  const type = overrides.type ?? "register.opened";
+  const sync = overrides.sync ?? { status: "pending" as const };
+  const uploadSequence =
+    Object.prototype.hasOwnProperty.call(overrides, "uploadSequence")
+      ? overrides.uploadSequence
+      : isUploadSequenceEventType(type) &&
+          (sync.status !== "synced" || sync.uploaded === true)
+        ? (overrides.sequence ?? 1)
+        : undefined;
+
   return {
     createdAt: 1,
     localEventId: "event-1",
@@ -662,9 +754,20 @@ function buildLocalEvent(
     staffProfileId: "staff-1",
     staffProofToken: "proof-token-1",
     storeId: "store-1",
-    sync: { status: "pending" },
+    sync,
     terminalId: "terminal-1",
-    type: "register.opened",
+    type,
+    ...(uploadSequence ? { uploadSequence } : {}),
     ...overrides,
   };
+}
+
+function isUploadSequenceEventType(type: PosLocalEventRecord["type"]) {
+  return (
+    type === "register.opened" ||
+    type === "cart.cleared" ||
+    type === "transaction.completed" ||
+    type === "register.closeout_started" ||
+    type === "register.reopened"
+  );
 }

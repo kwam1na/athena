@@ -174,6 +174,96 @@ describe("projectLocalSyncEvent", () => {
     expect(repository.createdPaymentAllocations).toHaveLength(1);
   });
 
+  it("preserves the local actor through sale, cash-control, and workflow trace projection", async () => {
+    const repository = createProjectionRepository({
+      staffProfiles: [
+        {
+          _id: "staff-1",
+          linkedUserId: "manager-user-1",
+          status: "active",
+          storeId: "store-1",
+        },
+        {
+          _id: "staff-2",
+          linkedUserId: "cashier-user-2",
+          status: "active",
+          storeId: "store-1",
+        },
+      ],
+      validateLocalStaffProof: (args) =>
+        args.staffProfileId === "staff-2" && args.token === "proof-token-2",
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        staffProfileId: "staff-2" as never,
+        staffProofToken: "proof-token-2",
+        payload: {
+          ...buildSaleCompletedEvent().payload,
+          localPosSessionId: "local-session-staff-2",
+          localTransactionId: "local-txn-staff-2",
+          localReceiptNumber: "LR-ST2",
+          receiptNumber: "000222",
+          payments: [
+            {
+              localPaymentId: "local-payment-staff-2",
+              method: "cash",
+              amount: 25,
+              timestamp: 21,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-1",
+      submittedByUserId: "hub-user-1" as never,
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(repository.createdTransactions).toEqual([
+      expect.objectContaining({
+        staffProfileId: "staff-2",
+        transactionNumber: "000222",
+      }),
+    ]);
+    expect(repository.createdPaymentAllocations).toEqual([
+      expect.objectContaining({
+        actorStaffProfileId: "staff-2",
+        externalReference: "local-payment-staff-2",
+        registerSessionId: "register-session-1",
+      }),
+    ]);
+    expect(repository.createdOperationalEvents).toEqual([
+      expect.objectContaining({
+        actorStaffProfileId: "staff-2",
+        eventType: "pos_local_sync.sale_projected",
+        metadata: expect.objectContaining({
+          localReceiptNumber: "LR-ST2",
+          receiptNumber: "000222",
+        }),
+        posTransactionId: "transaction-1",
+      }),
+    ]);
+    expect(repository.recordedPosSessionTraces).toEqual([
+      expect.objectContaining({
+        stage: "completed",
+        transactionId: "transaction-1",
+        session: expect.objectContaining({
+          staffProfileId: "staff-2",
+        }),
+      }),
+    ]);
+    expect(repository.recordedRegisterSessionTraces).toEqual([
+      expect.objectContaining({
+        actorStaffProfileId: "staff-2",
+        amount: 25,
+        stage: "sale_recorded",
+      }),
+    ]);
+  });
+
   it("projects PIN-authenticated cashier sales for active POS staff without linked user proof", async () => {
     const repository = createProjectionRepository({
       staffProfile: {
@@ -224,7 +314,6 @@ describe("projectLocalSyncEvent", () => {
   it("conflicts active cashier sales without an offline staff proof token", async () => {
     const repository = createProjectionRepository();
     const event = buildSaleCompletedEvent();
-    // @ts-expect-error This exercises the defensive projection branch for malformed internal events.
     delete event.staffProofToken;
 
     const result = await projectLocalSyncEvent(repository, {
@@ -1172,6 +1261,19 @@ describe("projectLocalSyncEvent", () => {
         cloudId: "session-1",
       }),
     ]);
+    expect(repository.recordedPosSessionTraces).toEqual([
+      expect.objectContaining({
+        stage: "voided",
+        occurredAt: 20,
+        voidReason: "Sale cleared",
+        session: expect.objectContaining({
+          _id: "session-1",
+          notes: "Sale cleared",
+          status: "void",
+          updatedAt: 20,
+        }),
+      }),
+    ]);
   });
 
   it("treats repeated sale clears for an already-voided mapped POS session as idempotent", async () => {
@@ -1694,6 +1796,47 @@ describe("projectLocalSyncEvent", () => {
     ]);
   });
 
+  it("projects register opens into register workflow traces", async () => {
+    const repository = createProjectionRepository();
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-register-opened-new",
+        localRegisterSessionId: "local-register-new",
+        sequence: 1,
+        eventType: "register_opened",
+        occurredAt: 10,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          notes: "Morning drawer",
+          openingFloat: 75,
+          registerNumber: "1",
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(repository.recordedRegisterSessionTraces).toEqual([
+      expect.objectContaining({
+        stage: "opened",
+        session: expect.objectContaining({
+          _id: "register-session-1",
+          expectedCash: 75,
+          openedAt: 10,
+          openedByStaffProfileId: "staff-1",
+          openingFloat: 75,
+          registerNumber: "1",
+          status: "active",
+        }),
+      }),
+    ]);
+  });
+
   it("conflicts a direct cloud register open when staff authorization drifted", async () => {
     const repository = createProjectionRepository({
       hasActivePosRole: false,
@@ -1859,6 +2002,23 @@ describe("projectLocalSyncEvent", () => {
           notes: "Closed drawer",
         },
       },
+    ]);
+    expect(repository.recordedRegisterSessionTraces).toEqual([
+      expect.objectContaining({
+        actorStaffProfileId: "staff-1",
+        countedCash: 100,
+        occurredAt: 30,
+        stage: "closed",
+        variance: 0,
+        session: expect.objectContaining({
+          closedAt: 30,
+          closedByStaffProfileId: "staff-1",
+          countedCash: 100,
+          notes: "Closed drawer",
+          status: "closed",
+          variance: 0,
+        }),
+      }),
     ]);
     expect(reopen.conflicts).toEqual([
       expect.objectContaining({
@@ -2252,8 +2412,19 @@ function createProjectionRepository(
       status: string;
       storeId: string;
     };
+    staffProfiles: Array<{
+      _id: string;
+      linkedUserId?: string;
+      status: string;
+      storeId: string;
+    }>;
     terminalRegisteredByUserId: string;
     validCloudIds: Set<string>;
+    validateLocalStaffProof:
+      | boolean
+      | ((
+          args: Parameters<SyncProjectionRepository["validateLocalStaffProof"]>[0],
+        ) => boolean);
     hasActivePosRole:
       | boolean
       | ((args: Parameters<SyncProjectionRepository["hasActivePosRole"]>[0]) => boolean);
@@ -2271,6 +2442,8 @@ function createProjectionRepository(
   createdTransactions: unknown[];
   posSessionPatches: unknown[];
   productPatches: unknown[];
+  recordedPosSessionTraces: unknown[];
+  recordedRegisterSessionTraces: unknown[];
   registerSessionPatches: unknown[];
 } {
   let nextId = 1;
@@ -2297,6 +2470,8 @@ function createProjectionRepository(
   const createdTransactions: unknown[] = [];
   const posSessionPatches: unknown[] = [];
   const productPatches: unknown[] = [];
+  const recordedPosSessionTraces: unknown[] = [];
+  const recordedRegisterSessionTraces: unknown[] = [];
   const registerSessionPatches: unknown[] = [];
   const consumedHoldRequests: unknown[] = [];
   const releasedHoldRequests: unknown[] = [];
@@ -2338,6 +2513,8 @@ function createProjectionRepository(
     createdTransactions,
     posSessionPatches,
     productPatches,
+    recordedPosSessionTraces,
+    recordedRegisterSessionTraces,
     registerSessionPatches,
     consumedHoldRequests,
     releasedHoldRequests,
@@ -2345,6 +2522,13 @@ function createProjectionRepository(
       return terminalId === "terminal-1" ? (terminal as never) : null;
     },
     async getStaffProfile(staffProfileId) {
+      if (overrides.staffProfiles) {
+        return (
+          (overrides.staffProfiles.find(
+            (staffProfile) => staffProfile._id === staffProfileId,
+          ) as never) ?? null
+        );
+      }
       if (overrides.staffProfile) {
         return staffProfileId === overrides.staffProfile._id
           ? (overrides.staffProfile as never)
@@ -2366,6 +2550,12 @@ function createProjectionRepository(
       return overrides.hasActivePosRole ?? true;
     },
     async validateLocalStaffProof(args) {
+      if (typeof overrides.validateLocalStaffProof === "function") {
+        return overrides.validateLocalStaffProof(args);
+      }
+      if (typeof overrides.validateLocalStaffProof === "boolean") {
+        return overrides.validateLocalStaffProof;
+      }
       if (overrides.validStaffProof !== undefined) {
         return overrides.validStaffProof;
       }
@@ -2558,6 +2748,20 @@ function createProjectionRepository(
       const id = `operational-event-${createdOperationalEvents.length + 1}`;
       createdOperationalEvents.push({ _id: id, ...input });
       return id as never;
+    },
+    async recordPosSessionWorkflowTrace(input) {
+      recordedPosSessionTraces.push(input);
+      return {
+        traceCreated: true,
+        traceId: `pos-trace-${recordedPosSessionTraces.length}`,
+      };
+    },
+    async recordRegisterSessionWorkflowTrace(input) {
+      recordedRegisterSessionTraces.push(input);
+      return {
+        traceCreated: true,
+        traceId: `register-trace-${recordedRegisterSessionTraces.length}`,
+      };
     },
   };
 }

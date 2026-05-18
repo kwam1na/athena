@@ -566,6 +566,96 @@ describe("createLocalSyncIngestionService", () => {
     expect(repository.createdTransactions).toHaveLength(1);
   });
 
+  it("accepts a stable contiguous local sequence with different actor staff profiles", async () => {
+    const repository = createFakeSyncRepository({
+      staffProfiles: [
+        {
+          _id: "staff-1",
+          storeId: "store-1",
+          status: "active",
+          linkedUserId: "manager-user-1",
+        },
+        {
+          _id: "staff-2",
+          storeId: "store-1",
+          status: "active",
+          linkedUserId: "cashier-user-2",
+        },
+      ],
+      validateLocalStaffProof: async (args) =>
+        args.storeId === "store-1" &&
+        args.terminalId === "terminal-1" &&
+        ((args.staffProfileId === "staff-1" &&
+          args.token === "proof-token-1") ||
+          (args.staffProfileId === "staff-2" &&
+            args.token === "proof-token-2")),
+    });
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 100,
+    });
+
+    const result = await service.ingestBatch(
+      buildBatch({
+        events: [
+          buildRegisterOpenedEvent({ sequence: 1 }),
+          buildSaleCompletedEvent({
+            sequence: 2,
+            staffProfileId: "staff-2" as never,
+            staffProofToken: "proof-token-2",
+          }),
+          {
+            localEventId: "event-register-closed-3",
+            localRegisterSessionId: "local-register-1",
+            sequence: 3,
+            eventType: "register_closed",
+            occurredAt: 30,
+            staffProfileId: "staff-1" as never,
+            staffProofToken: "proof-token-1",
+            payload: { countedCash: 125 },
+          },
+        ],
+      }),
+    );
+
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("Expected ok result");
+    expect(result.data.held).toEqual([]);
+    expect(result.data.accepted).toEqual([
+      expect.objectContaining({ sequence: 1, status: "projected" }),
+      expect.objectContaining({ sequence: 2, status: "projected" }),
+      expect.objectContaining({ sequence: 3, status: "projected" }),
+    ]);
+    expect(result.data.syncCursor).toEqual({
+      localRegisterSessionId: "local-register-1",
+      acceptedThroughSequence: 3,
+    });
+    expect(repository.events).toEqual([
+      expect.objectContaining({ sequence: 1, staffProfileId: "staff-1" }),
+      expect.objectContaining({ sequence: 2, staffProfileId: "staff-2" }),
+      expect.objectContaining({ sequence: 3, staffProfileId: "staff-1" }),
+    ]);
+    expect(repository.createdTransactions).toEqual([
+      expect.objectContaining({ staffProfileId: "staff-2" }),
+    ]);
+    expect(repository.createdPaymentAllocations).toEqual([
+      expect.objectContaining({ actorStaffProfileId: "staff-2" }),
+    ]);
+    expect(repository.registerSessionPatches.at(-1)).toEqual(
+      expect.objectContaining({
+        patch: expect.objectContaining({
+          closedByStaffProfileId: "staff-1",
+          closeoutRecords: [
+            expect.objectContaining({
+              actorStaffProfileId: "staff-1",
+            }),
+          ],
+        }),
+      }),
+    );
+  });
+
   it("projects valid local sale items when the submitted display SKU is blank", async () => {
     const repository = createFakeSyncRepository();
     const service = createLocalSyncIngestionService({
@@ -2720,6 +2810,12 @@ function createFakeSyncRepository(
       status: string;
       linkedUserId?: string;
     } | null;
+    staffProfiles: Array<{
+      _id: string;
+      storeId: string;
+      status: string;
+      linkedUserId?: string;
+    }>;
     hasActivePosRole: boolean;
     existingPosSession: {
       _id: string;
@@ -2809,6 +2905,13 @@ function createFakeSyncRepository(
         : null;
     },
     async getStaffProfile(staffProfileId) {
+      if (overrides.staffProfiles) {
+        return (
+          (overrides.staffProfiles.find(
+            (staffProfile) => staffProfile._id === staffProfileId,
+          ) as never) ?? null
+        );
+      }
       return staff && staff._id === staffProfileId ? (staff as never) : null;
     },
     async hasActivePosRole(args) {

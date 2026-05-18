@@ -236,15 +236,25 @@ export interface RegisterViewModel {
     syncFlow: {
       eventAppendToken: number;
       failureCount?: number;
+      failedEventCount?: number;
+      lastBatchEventCount?: number;
       lastFailure?: string | null;
+      lastHeldEventCount?: number;
       lastLocalSequence?: number;
+      lastReviewEventCount?: number;
       lastRuntimeTrigger?: string;
       lastRuntimeTriggerAt?: number;
       lastRuntimeTriggerPriority?: string;
       lastSyncedSequence?: number;
+      localOnlyEventCount?: number;
+      mode?: string;
       nextPendingSequence?: number | null;
+      oldestPendingEventAt?: number;
+      oldestPendingEventId?: string;
+      oldestPendingEventSequence?: number;
       pendingEventCount?: number;
       pendingUploadEventCount?: number;
+      reviewEventCount?: number;
       schedulerBackoffUntil?: number | null;
       schedulerRunning?: boolean;
       schedulerScheduled?: boolean;

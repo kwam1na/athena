@@ -12,6 +12,7 @@ describe("projectLocalRegisterReadModel", () => {
       events: [
         event({
           sequence: 1,
+          uploadSequence: 1,
           type: "register.opened",
           localRegisterSessionId: "local-register-1",
           payload: {
@@ -45,6 +46,7 @@ describe("projectLocalRegisterReadModel", () => {
         }),
         event({
           sequence: 4,
+          uploadSequence: 2,
           type: "transaction.completed",
           localRegisterSessionId: "local-register-1",
           localPosSessionId: "local-sale-1",
@@ -88,7 +90,7 @@ describe("projectLocalRegisterReadModel", () => {
     ]);
     expect(model.syncStatus).toMatchObject({
       state: "pending",
-      pendingCount: 4,
+      pendingCount: 2,
       lastLocalSequence: 4,
     });
     expect(model.errors).toEqual([]);

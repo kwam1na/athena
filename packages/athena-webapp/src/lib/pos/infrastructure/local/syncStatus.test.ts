@@ -6,12 +6,14 @@ import type { PosLocalEventRecord } from "./posLocalStore";
 function event(
   sequence: number,
   status: PosLocalEventRecord["sync"]["status"],
+  overrides: Partial<PosLocalEventRecord> = {},
 ): PosLocalEventRecord {
   return {
     localEventId: `local-event-${sequence}`,
     schemaVersion: 1,
     sequence,
-    type: "cart.item_added",
+    uploadSequence: sequence,
+    type: "register.opened",
     terminalId: "local-terminal-1",
     storeId: "store_cloud_1",
     localRegisterSessionId: "local-register-session-1",
@@ -20,6 +22,7 @@ function event(
     payload: {},
     createdAt: sequence,
     sync: { status },
+    ...overrides,
   };
 }
 
@@ -114,6 +117,34 @@ describe("derivePosLocalSyncStatus", () => {
       pendingCount: 1,
       failedCount: 0,
       nextPendingSequence: 1,
+    });
+  });
+
+  it("ignores pending local-only precursor events without upload sequence metadata", () => {
+    expect(
+      derivePosLocalSyncStatus({
+        events: [
+          event(1, "pending", {
+            type: "session.started",
+            uploadSequence: undefined,
+          }),
+          event(2, "pending", {
+            type: "cart.item_added",
+            uploadSequence: undefined,
+          }),
+          event(3, "pending", {
+            type: "session.payments_updated",
+            uploadSequence: undefined,
+          }),
+        ],
+        isOnline: true,
+      }),
+    ).toMatchObject({
+      state: "synced",
+      pendingCount: 0,
+      failedCount: 0,
+      lastLocalSequence: 3,
+      nextPendingSequence: null,
     });
   });
 });
