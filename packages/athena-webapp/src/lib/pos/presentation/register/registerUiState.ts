@@ -235,6 +235,8 @@ export interface RegisterViewModel {
     storeId?: string;
     syncFlow: {
       eventAppendToken: number;
+      failureCount?: number;
+      lastFailure?: string | null;
       lastLocalSequence?: number;
       lastRuntimeTrigger?: string;
       lastRuntimeTriggerAt?: number;
@@ -242,6 +244,10 @@ export interface RegisterViewModel {
       lastSyncedSequence?: number;
       nextPendingSequence?: number | null;
       pendingEventCount?: number;
+      pendingUploadEventCount?: number;
+      schedulerBackoffUntil?: number | null;
+      schedulerRunning?: boolean;
+      schedulerScheduled?: boolean;
       source: string;
       staffProof: "present" | "missing";
       status: string;

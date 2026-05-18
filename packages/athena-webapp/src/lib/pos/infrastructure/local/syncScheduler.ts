@@ -63,6 +63,7 @@ export interface CreatePosLocalSyncSchedulerOptions {
   clearTimeoutFn?: typeof clearTimeout;
   setIntervalFn?: typeof setInterval;
   clearIntervalFn?: typeof clearInterval;
+  onStatusChange?(status: PosLocalSyncStatus): void;
 }
 
 export function createPosLocalSyncScheduler(
@@ -82,6 +83,7 @@ export function createPosLocalSyncScheduler(
   let running = false;
   let scheduled = false;
   let rerunRequested = false;
+  let rerunPriority: "normal" | "high" = "normal";
   let timer: ReturnType<typeof setTimeout> | null = null;
   let foregroundInterval: ReturnType<typeof setInterval> | null = null;
   let backoffUntil: number | null = null;
@@ -97,6 +99,9 @@ export function createPosLocalSyncScheduler(
     lastFailure,
     lastTrigger,
   });
+  const notifyStatusChange = () => {
+    options.onStatusChange?.(status());
+  };
 
   const clearScheduledTimer = () => {
     if (timer) {
@@ -104,6 +109,7 @@ export function createPosLocalSyncScheduler(
       timer = null;
     }
     scheduled = false;
+    notifyStatusChange();
   };
 
   const schedule = (
@@ -115,6 +121,10 @@ export function createPosLocalSyncScheduler(
 
     if (running) {
       rerunRequested = true;
+      if (forceImmediate) {
+        rerunPriority = "high";
+      }
+      notifyStatusChange();
       return;
     }
 
@@ -125,9 +135,11 @@ export function createPosLocalSyncScheduler(
     }
 
     scheduled = true;
+    notifyStatusChange();
     timer = setTimeoutFn(() => {
       timer = null;
       scheduled = false;
+      notifyStatusChange();
       void run(trigger);
     }, delayMs);
   };
@@ -135,14 +147,17 @@ export function createPosLocalSyncScheduler(
   const run = async (trigger: PosLocalSyncTrigger): Promise<void> => {
     if (running) {
       rerunRequested = true;
+      notifyStatusChange();
       return;
     }
 
     if (!options.isOnline()) {
+      notifyStatusChange();
       return;
     }
 
     running = true;
+    notifyStatusChange();
 
     try {
       const pendingEvents = await options.loadPendingEvents();
@@ -152,6 +167,7 @@ export function createPosLocalSyncScheduler(
         lastFailure = null;
         backoffUntil = null;
         failureCount = 0;
+        notifyStatusChange();
         return;
       }
 
@@ -164,6 +180,13 @@ export function createPosLocalSyncScheduler(
           await options.markSynced(result.syncedEventIds);
         }
         if (result.heldEventIds?.length) {
+          if (
+            result.syncedEventIds.length > 0 ||
+            (result.reviewEventIds?.length ?? 0) > 0
+          ) {
+            rerunRequested = true;
+            return;
+          }
           throw new Error("Earlier POS history must sync before this event.");
         }
       }
@@ -171,6 +194,7 @@ export function createPosLocalSyncScheduler(
       lastFailure = null;
       backoffUntil = null;
       failureCount = 0;
+      notifyStatusChange();
     } catch (error) {
       failureCount += 1;
       lastFailure = getErrorMessage(error);
@@ -178,14 +202,19 @@ export function createPosLocalSyncScheduler(
         now() +
         Math.min(
           maxBackoffMs,
-          baseBackoffMs * Math.max(1, 2 ** (failureCount - 1)),
+            baseBackoffMs * Math.max(1, 2 ** (failureCount - 1)),
         );
+      notifyStatusChange();
     } finally {
       running = false;
+      notifyStatusChange();
 
       if (rerunRequested) {
+        const priority = rerunPriority;
         rerunRequested = false;
-        const delay = getCurrentBackoffDelay(now(), backoffUntil);
+        rerunPriority = "normal";
+        const delay =
+          priority === "high" ? 0 : getCurrentBackoffDelay(now(), backoffUntil);
         schedule(lastTrigger ?? trigger, delay, true);
       }
     }
@@ -200,6 +229,7 @@ export function createPosLocalSyncScheduler(
       }
 
       if (!options.isOnline()) {
+        notifyStatusChange();
         return;
       }
 

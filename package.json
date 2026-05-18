@@ -19,6 +19,7 @@
     "harness:self-review": "bun scripts/harness-self-review.ts",
     "harness:review": "bun scripts/harness-review.ts",
     "harness:test": "bun scripts/harness-test.ts",
+    "plan-html:check": "bun scripts/validate-plan-html.ts",
     "github:pr-merge": "bun scripts/github-pr-merge.ts",
     "workflow:check": "bun scripts/github-workflows-check.ts",
     "pre-commit:generated-artifacts": "bun scripts/pre-commit-generated-artifacts.ts",

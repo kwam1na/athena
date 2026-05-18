@@ -24,6 +24,7 @@ export function StaffPinInput({
       onKeyDown={onKeyDown}
       maxLength={STAFF_PIN_LENGTH}
       size="sm"
+      showSeparator={false}
     />
   );
 }

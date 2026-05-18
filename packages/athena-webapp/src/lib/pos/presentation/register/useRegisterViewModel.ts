@@ -35,6 +35,7 @@ import { useConvexCommandGateway } from "@/lib/pos/infrastructure/convex/command
 import {
   createIndexedDbPosLocalStorageAdapter,
   createPosLocalStore,
+  type PosLocalEventRecord,
 } from "@/lib/pos/infrastructure/local/posLocalStore";
 import { createLocalCommandGateway } from "@/lib/pos/infrastructure/local/localCommandGateway";
 import {
@@ -42,6 +43,7 @@ import {
   type PosLocalRegisterReadModel,
 } from "@/lib/pos/infrastructure/local/registerReadModel";
 import { readProjectedLocalRegisterModel } from "@/lib/pos/infrastructure/local/localRegisterReader";
+import { isSyncablePosLocalEvent } from "@/lib/pos/infrastructure/local/syncContract";
 import { usePosLocalSyncRuntimeStatus } from "@/lib/pos/infrastructure/local/usePosLocalSyncRuntime";
 import { useLocalPosEntryContext } from "@/lib/pos/infrastructure/local/localPosEntryContext";
 import {
@@ -274,6 +276,37 @@ function readLocalSyncStatus(
   }
 
   return null;
+}
+
+function countPendingSyncableLocalEventsForStaff(
+  events: PosLocalEventRecord[],
+  staffProfileId: Id<"staffProfile"> | string | null | undefined,
+) {
+  if (!staffProfileId) {
+    return 0;
+  }
+
+  return events.filter(
+    (event) =>
+      event.staffProfileId === staffProfileId &&
+      isSyncablePosLocalEvent(event) &&
+      (event.sync.status === "pending" ||
+        event.sync.status === "syncing" ||
+        event.sync.status === "failed"),
+  ).length;
+}
+
+function hasUploadedLocalEventsForStaff(
+  events: PosLocalEventRecord[],
+  staffProfileId: Id<"staffProfile"> | string | null | undefined,
+) {
+  if (!staffProfileId) {
+    return false;
+  }
+
+  return events.some(
+    (event) => event.staffProfileId === staffProfileId && event.sync.uploaded,
+  );
 }
 
 function mapProductToOptimisticCartItem(
@@ -953,6 +986,14 @@ export function useRegisterViewModel(): RegisterViewModel {
     isPosUsableRegisterSessionStatus(registerState.activeRegisterSession.status)
       ? registerState.activeRegisterSession
       : null;
+  const localStaffPendingUploadCount = countPendingSyncableLocalEventsForStaff(
+    localRegisterReadModel?.sourceEvents ?? [],
+    staffProfileId,
+  );
+  const localStaffHasUploadedEvents = hasUploadedLocalEventsForStaff(
+    localRegisterReadModel?.sourceEvents ?? [],
+    staffProfileId,
+  );
   const projectedLocalRegisterSession =
     localRegisterReadModel?.activeRegisterSession &&
     activeStoreId &&
@@ -1002,9 +1043,7 @@ export function useRegisterViewModel(): RegisterViewModel {
               localRegisterReadModel.syncStatus.state === "failed"
                 ? "needs_review"
                 : "locally_closed_pending_sync",
-            pendingEventCount:
-              localRegisterReadModel.syncStatus.pendingCount +
-              localRegisterReadModel.syncStatus.failedCount,
+            pendingEventCount: localStaffPendingUploadCount,
           },
         }
       : null;
@@ -1032,6 +1071,18 @@ export function useRegisterViewModel(): RegisterViewModel {
     locallyOperableRegisterSession?.localRegisterSessionId ??
     projectedLocalRegisterSession?.localRegisterSessionId ??
     cloudRegisterSessionId;
+  const projectedLocalActiveSale = localRegisterReadModel?.activeSale ?? null;
+  const projectedLocalActiveSaleStaffProfileId =
+    projectedLocalActiveSale?.staffProfileId ?? null;
+  const isProjectedLocalActiveSaleOwnedByCurrentStaff = Boolean(
+    projectedLocalActiveSale &&
+      staffProfileId &&
+      projectedLocalActiveSaleStaffProfileId === staffProfileId,
+  );
+  const isProjectedLocalActiveSaleLockedToAnotherStaff = Boolean(
+    projectedLocalActiveSale &&
+      (!staffProfileId || projectedLocalActiveSaleStaffProfileId !== staffProfileId),
+  );
   const registerNumber = activeRegisterNumber ?? terminalRegisterNumber ?? "";
   const heldSessions = useConvexHeldSessions({
     storeId: activeStoreId,
@@ -1259,8 +1310,12 @@ export function useRegisterViewModel(): RegisterViewModel {
   }, []);
 
   const localActiveSession = useMemo<LocalOperableActiveSession | null>(() => {
-    if (localRegisterReadModel?.activeSale) {
-      const sale = localRegisterReadModel.activeSale;
+    if (projectedLocalActiveSale) {
+      if (!isProjectedLocalActiveSaleOwnedByCurrentStaff) {
+        return null;
+      }
+
+      const sale = projectedLocalActiveSale;
       if (locallyCompletedSessionIdsRef.current.has(sale.localPosSessionId)) {
         return null;
       }
@@ -1284,7 +1339,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         customer: null,
         localSyncStatus: {
           status: "pending_sync",
-          pendingEventCount: localRegisterReadModel.syncStatus.pendingCount,
+          pendingEventCount: localStaffPendingUploadCount,
         },
       };
     }
@@ -1325,9 +1380,11 @@ export function useRegisterViewModel(): RegisterViewModel {
     };
   }, [
     activeStoreId,
+    isProjectedLocalActiveSaleOwnedByCurrentStaff,
+    localStaffPendingUploadCount,
     localOperablePosSession,
-    localRegisterReadModel,
     locallyOperableRegisterSession,
+    projectedLocalActiveSale,
     staffProfileId,
   ]);
   const visibleActiveSession = asCloudOperableSession(
@@ -1832,6 +1889,10 @@ export function useRegisterViewModel(): RegisterViewModel {
         toast.error("Register sign-in required. Sign in before adding items.");
         return null;
       }
+      if (isProjectedLocalActiveSaleLockedToAnotherStaff) {
+        toast.error("This local sale belongs to another signed-in staff member.");
+        return null;
+      }
       const localSession = await localCommandGateway.startSession({
         storeId: activeStoreId!,
         terminalId: terminal._id as Id<"posTerminal">,
@@ -1859,6 +1920,11 @@ export function useRegisterViewModel(): RegisterViewModel {
 
     if (!activeStoreId || !terminal?._id || !staffProfileId) {
       toast.error("Register sign-in required. Sign in before adding items.");
+      return null;
+    }
+
+    if (isProjectedLocalActiveSaleLockedToAnotherStaff) {
+      toast.error("This local sale belongs to another signed-in staff member.");
       return null;
     }
 
@@ -1903,6 +1969,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     activeStoreId,
     ensureLocalRegisterSessionReady,
     hasProvisionedLocalSyncSeed,
+    isProjectedLocalActiveSaleLockedToAnotherStaff,
     localCommandGateway,
     locallyOperableRegisterSession,
     noteLocalRegisterEventChanged,
@@ -2338,6 +2405,14 @@ export function useRegisterViewModel(): RegisterViewModel {
       return;
     }
 
+    if (
+      projectedLocalActiveSale &&
+      projectedLocalActiveSale.staffProfileId !== actingStaffProfileId
+    ) {
+      toast.error("This local sale belongs to another signed-in staff member.");
+      return;
+    }
+
     const localRegisterSessionId =
       locallyOperableRegisterSession?.localRegisterSessionId ??
       localEventRegisterSessionId;
@@ -2428,6 +2503,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     localCommandGateway,
     locallyOperableRegisterSession?.localRegisterSessionId,
     noteLocalRegisterEventChanged,
+    projectedLocalActiveSale,
     registerNumber,
     resetDraftState,
     terminal?._id,
@@ -3490,6 +3566,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         activeStoreId &&
         terminal?._id &&
         localEventRegisterSessionId &&
+        !projectedLocalActiveSale &&
         !operableActiveSession &&
         !registerState?.activeSession &&
         !activeSessionConflict &&
@@ -3507,6 +3584,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       isTransactionCompleted,
       localEventRegisterSessionId,
       operableActiveSession,
+      projectedLocalActiveSale,
       registerState?.activeSession,
       requestBootstrap,
       terminal?._id,
@@ -4144,6 +4222,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     eventAppendToken: localSyncEventAppendToken,
     onLocalEventsChanged: noteLocalRegisterEventChanged,
     storeId: activeStoreId,
+    staffProfileId,
     terminalId: terminal?._id,
     onRetrySync: requestBootstrap,
     storeFactory: localRuntimeStoreFactory,
@@ -4151,9 +4230,19 @@ export function useRegisterViewModel(): RegisterViewModel {
   const localRuntimeStatusSource = localRuntimeSyncSource?.status
     ? localRuntimeSyncSource
     : null;
+  const localReadModelPendingUploadCount = localStaffPendingUploadCount;
+  const localOperableRegisterPendingCount =
+    localReadModelPendingUploadCount > 0
+      ? localReadModelPendingUploadCount
+      : localRegisterReadModel?.sourceEvents.length
+        ? 0
+        : staffProfileId
+          ? 1
+          : 0;
   const localReadModelSyncSource =
     localRegisterReadModel &&
-    localRegisterReadModel.syncStatus.state !== "synced"
+    localRegisterReadModel.syncStatus.state !== "synced" &&
+    localReadModelPendingUploadCount > 0
       ? {
           localSyncStatus: {
             status:
@@ -4164,14 +4253,13 @@ export function useRegisterViewModel(): RegisterViewModel {
                     "closing"
                   ? "locally_closed_pending_sync"
                   : "pending_sync",
-            pendingEventCount:
-              localRegisterReadModel.syncStatus.pendingCount +
-              localRegisterReadModel.syncStatus.failedCount,
+            pendingEventCount: localReadModelPendingUploadCount,
           },
         }
       : null;
   const localOperableRegisterSyncSource =
     locallyOperableRegisterSession &&
+    localOperableRegisterPendingCount > 0 &&
     !(
       localRegisterReadModel?.activeRegisterSession?.localRegisterSessionId ===
         locallyOperableRegisterSession.localRegisterSessionId &&
@@ -4180,7 +4268,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       ? {
           localSyncStatus: {
             status: "pending_sync",
-            pendingEventCount: 1,
+            pendingEventCount: localOperableRegisterPendingCount,
           },
         }
       : null;
@@ -4195,8 +4283,13 @@ export function useRegisterViewModel(): RegisterViewModel {
     registerState?.activeRegisterSession,
     registerState,
   );
+  const hasSyncedLocalEvents =
+    localStaffHasUploadedEvents &&
+    localReadModelPendingUploadCount === 0 &&
+    !localRuntimeStatusSource;
+  const shouldShowSyncStatus = Boolean(localSyncSource || hasSyncedLocalEvents);
   const syncStatus =
-    activeStoreId && terminal?._id
+    activeStoreId && terminal?._id && shouldShowSyncStatus
       ? {
           ...buildPosSyncStatusPresentation(localSyncSource),
           onRetrySync: () => {
@@ -4241,6 +4334,8 @@ export function useRegisterViewModel(): RegisterViewModel {
       ...(activeStoreId ? { storeId: activeStoreId } : {}),
       syncFlow: {
         eventAppendToken: localSyncEventAppendToken,
+        failureCount: localRuntimeSyncSource?.debug?.failureCount,
+        lastFailure: localRuntimeSyncSource?.debug?.lastFailure,
         lastLocalSequence: localRegisterReadModel?.syncStatus.lastLocalSequence,
         lastRuntimeTrigger:
           localRuntimeSyncSource?.debug?.lastTrigger ?? "none",
@@ -4252,6 +4347,12 @@ export function useRegisterViewModel(): RegisterViewModel {
         nextPendingSequence:
           localRegisterReadModel?.syncStatus.nextPendingSequence,
         pendingEventCount: syncStatus?.pendingEventCount ?? 0,
+        pendingUploadEventCount:
+          localRuntimeSyncSource?.debug?.pendingUploadEventCount,
+        schedulerBackoffUntil:
+          localRuntimeSyncSource?.debug?.schedulerBackoffUntil,
+        schedulerRunning: localRuntimeSyncSource?.debug?.schedulerRunning,
+        schedulerScheduled: localRuntimeSyncSource?.debug?.schedulerScheduled,
         source: localRuntimeStatusSource
           ? "runtime"
           : localReadModelSyncSource
@@ -4283,6 +4384,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       disabled:
         !terminal ||
         !staffProfileId ||
+        isProjectedLocalActiveSaleLockedToAnotherStaff ||
         shouldShowDrawerGate ||
         activeSessionHasBlockedRegisterBinding ||
         isOpeningDrawer,

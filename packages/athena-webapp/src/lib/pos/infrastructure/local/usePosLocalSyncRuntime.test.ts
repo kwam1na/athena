@@ -17,6 +17,7 @@ vi.mock("~/convex/_generated/api", () => ({
 
 import {
   assertPosLocalStoreOk,
+  collectSyncedLocalEventIds,
   collectServerHeldLocalEventIds,
   collectServerReviewLocalEventIds,
   collectServerSyncedLocalEventIds,
@@ -873,6 +874,46 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     ).toEqual(["event-held", "event-held-later"]);
   });
 
+  it("marks cleared-sale local precursors synced when the clear event uploads", () => {
+    expect(
+      collectSyncedLocalEventIds(
+        [
+          buildLocalEvent({
+            localEventId: "event-session",
+            localPosSessionId: "local-session-1",
+            sequence: 1,
+            type: "session.started",
+          }),
+          buildLocalEvent({
+            localEventId: "event-cart",
+            localPosSessionId: "local-session-1",
+            sequence: 2,
+            type: "cart.item_added",
+          }),
+          buildLocalEvent({
+            localEventId: "event-payment",
+            localPosSessionId: "local-session-1",
+            sequence: 3,
+            type: "session.payments_updated",
+          }),
+          buildLocalEvent({
+            localEventId: "event-clear",
+            localPosSessionId: "local-session-1",
+            payload: {
+              localPosSessionId: "local-session-1",
+              reason: "Sale cleared",
+            },
+            sequence: 4,
+            type: "cart.cleared",
+          }),
+        ],
+        ["event-clear"],
+      ),
+    ).toEqual(
+      ["event-clear", "event-session", "event-cart", "event-payment"],
+    );
+  });
+
   it("marks rejected runtime sale responses and embedded local events for review", async () => {
     mocks.ingestLocalEvents.mockResolvedValue({
       kind: "ok",
@@ -1059,6 +1100,39 @@ describe("usePosLocalSyncRuntimeStatus", () => {
         { isOnline: true },
       ),
     ).toBeNull();
+  });
+
+  it("scopes presented pending upload counts to the signed-in staff profile", () => {
+    expect(
+      derivePosLocalRuntimeSyncStatus(
+        [
+          buildLocalEvent({
+            localEventId: "event-other-staff",
+            staffProfileId: "staff-2",
+            type: "register.opened",
+          }),
+        ],
+        { isOnline: true, staffProfileId: "staff-1" },
+      ),
+    ).toBeNull();
+
+    expect(
+      derivePosLocalRuntimeSyncStatus(
+        [
+          buildLocalEvent({
+            localEventId: "event-current-staff",
+            staffProfileId: "staff-1",
+            type: "register.opened",
+          }),
+        ],
+        { isOnline: true, staffProfileId: "staff-1" },
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        pendingEventCount: 1,
+        status: "pending",
+      }),
+    );
   });
 
   it("does not present a reopened local closeout as pending reconciliation", () => {

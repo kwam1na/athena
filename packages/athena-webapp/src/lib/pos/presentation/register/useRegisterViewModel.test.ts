@@ -629,7 +629,7 @@ describe("useRegisterViewModel", () => {
     expect(result.current.cashierCard?.cashierName).toBe("Ama K.");
     expect(result.current.productEntry.canQuickAddProduct).toBe(true);
     expect(result.current.authDialog?.open).toBe(false);
-    expect(result.current.syncStatus?.status).toBe("synced");
+    expect(result.current.syncStatus).toBeNull();
   });
 
   it("maps local pending-sync status into POS presentation state", async () => {
@@ -828,6 +828,7 @@ describe("useRegisterViewModel", () => {
       value: [
         buildLocalEvent({
           sequence: 1,
+          staffProofToken: "staff-proof-token",
           type: "register.opened",
           payload: {
             expectedCash: 5_000,
@@ -841,6 +842,12 @@ describe("useRegisterViewModel", () => {
 
     const { useRegisterViewModel } = await import("./useRegisterViewModel");
     const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult(),
+      );
+    });
 
     await waitFor(() =>
       expect(result.current.debug?.syncFlow.source).toBe("local-read-model"),
@@ -859,6 +866,340 @@ describe("useRegisterViewModel", () => {
         status: "pending_sync",
       }),
     );
+  });
+
+  it("does not show pending sync for local session-start records that cannot upload alone", async () => {
+    mockUsePosLocalSyncRuntimeStatus.mockReturnValue({
+      debug: {
+        lastTrigger: "event-appended",
+        lastTriggerAt: 1_000,
+        lastTriggerPriority: "high",
+      },
+    });
+    mockListLocalEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        buildLocalEvent({
+          localPosSessionId: "local-pos-session-1",
+          payload: {
+            localPosSessionId: "local-pos-session-1",
+            localRegisterSessionId: "drawer-1",
+            status: "active",
+          },
+          sequence: 1,
+          type: "session.started",
+        }),
+      ],
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await waitFor(() =>
+      expect(result.current.debug?.syncFlow.source).toBe("none"),
+    );
+    expect(result.current.syncStatus).toBeNull();
+    expect(result.current.debug?.syncFlow).toEqual(
+      expect.objectContaining({
+        lastRuntimeTrigger: "event-appended",
+        pendingEventCount: 0,
+        status: "synced",
+      }),
+    );
+  });
+
+  it("shows synced after uploaded local history when only local-only records remain", async () => {
+    mockUsePosLocalSyncRuntimeStatus.mockReturnValue({
+      debug: {
+        lastTrigger: "event-appended",
+        lastTriggerAt: 1_000,
+        lastTriggerPriority: "high",
+      },
+    });
+    mockListLocalEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        buildLocalEvent({
+          sequence: 1,
+          sync: { status: "synced", uploaded: true },
+          type: "register.opened",
+        }),
+        buildLocalEvent({
+          localPosSessionId: "local-pos-session-1",
+          sequence: 2,
+          sync: { status: "synced", uploaded: true },
+          type: "session.started",
+        }),
+        buildLocalEvent({
+          localPosSessionId: "local-pos-session-1",
+          sequence: 3,
+          sync: { status: "synced", uploaded: true },
+          type: "transaction.completed",
+        }),
+        buildLocalEvent({
+          localPosSessionId: "local-pos-session-1",
+          sequence: 4,
+          staffProofToken: undefined,
+          type: "cart.cleared",
+        }),
+      ],
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult(),
+      );
+    });
+
+    await waitFor(() =>
+      expect(result.current.syncStatus).toEqual(
+        expect.objectContaining({
+          label: "Synced",
+          status: "synced",
+        }),
+      ),
+    );
+  });
+
+  it("does not show another staff member's pending local upload count", async () => {
+    mockUsePosLocalSyncRuntimeStatus.mockReturnValue({
+      debug: {
+        lastTrigger: "route-entry",
+        lastTriggerAt: 1_000,
+        lastTriggerPriority: "normal",
+      },
+    });
+    mockListLocalEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        buildLocalEvent({
+          sequence: 1,
+          staffProfileId: "staff-2",
+          staffProofToken: "staff-2-proof-token",
+          type: "register.opened",
+          payload: {
+            expectedCash: 5_000,
+            localRegisterSessionId: "drawer-1",
+            openingFloat: 5_000,
+            status: "open",
+          },
+        }),
+      ],
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await waitFor(() =>
+      expect(result.current.debug?.syncFlow.source).toBe("none"),
+    );
+    expect(result.current.syncStatus).toBeNull();
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult({
+          staffProfileId: "staff-1" as Id<"staffProfile">,
+        }),
+      );
+    });
+
+    expect(result.current.syncStatus).toBeNull();
+    expect(result.current.debug?.syncFlow).toEqual(
+      expect.objectContaining({
+        pendingEventCount: 0,
+        status: "synced",
+      }),
+    );
+  });
+
+  it("keeps a reloaded local cart hidden until its staff owner signs back in", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: null,
+      activeRegisterSession: {
+        _id: "drawer-1",
+        status: "open",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        openingFloat: 5_000,
+        expectedCash: 5_000,
+        openedAt: Date.now(),
+      },
+      activeSession: null,
+      activeSessionConflict: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+    mockListLocalEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        buildLocalEvent({
+          sequence: 1,
+          type: "register.opened",
+          payload: {
+            expectedCash: 5_000,
+            localRegisterSessionId: "drawer-1",
+            openingFloat: 5_000,
+            status: "open",
+          },
+        }),
+        buildLocalEvent({
+          localPosSessionId: "local-sale-1",
+          payload: {
+            localPosSessionId: "local-sale-1",
+            localRegisterSessionId: "drawer-1",
+            status: "active",
+          },
+          sequence: 2,
+          staffProfileId: "staff-1",
+          type: "session.started",
+        }),
+        buildLocalEvent({
+          localPosSessionId: "local-sale-1",
+          payload: {
+            localItemId: "local-item-1",
+            localPosSessionId: "local-sale-1",
+            productId: "product-1",
+            productName: "Nicca",
+            productSku: "6N2Y-WMA-EAW",
+            productSkuId: "sku-1",
+            quantity: 2,
+            price: 6_500,
+          },
+          sequence: 3,
+          staffProfileId: "staff-1",
+          type: "cart.item_added",
+        }),
+      ],
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await waitFor(() =>
+      expect(result.current.debug?.syncFlow.lastLocalSequence).toBe(3),
+    );
+
+    expect(result.current.authDialog?.open).toBe(true);
+    expect(result.current.cart.items).toEqual([]);
+    expect(result.current.checkout.total).toBe(0);
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult({
+          staffProfileId: "staff-2" as Id<"staffProfile">,
+        }),
+      );
+    });
+
+    expect(result.current.cart.items).toEqual([]);
+    expect(result.current.checkout.total).toBe(0);
+    expect(result.current.productEntry.disabled).toBe(true);
+    expect(
+      mockAppendLocalEvent.mock.calls.filter(
+        ([event]) => event.type === "session.started",
+      ),
+    ).toHaveLength(0);
+
+    await act(async () => {
+      await result.current.sessionPanel?.onStartNewSession();
+    });
+
+    expect(toast.error).toHaveBeenCalledWith(
+      "This local sale belongs to another signed-in staff member.",
+    );
+    expect(
+      mockAppendLocalEvent.mock.calls.filter(
+        ([event]) => event.type === "session.started",
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("restores a reloaded local cart for the staff member who started it", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: null,
+      activeRegisterSession: {
+        _id: "drawer-1",
+        status: "open",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        openingFloat: 5_000,
+        expectedCash: 5_000,
+        openedAt: Date.now(),
+      },
+      activeSession: null,
+      activeSessionConflict: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+    mockListLocalEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        buildLocalEvent({
+          sequence: 1,
+          type: "register.opened",
+          payload: {
+            expectedCash: 5_000,
+            localRegisterSessionId: "drawer-1",
+            openingFloat: 5_000,
+            status: "open",
+          },
+        }),
+        buildLocalEvent({
+          localPosSessionId: "local-sale-1",
+          payload: {
+            localPosSessionId: "local-sale-1",
+            localRegisterSessionId: "drawer-1",
+            status: "active",
+          },
+          sequence: 2,
+          staffProfileId: "staff-1",
+          type: "session.started",
+        }),
+        buildLocalEvent({
+          localPosSessionId: "local-sale-1",
+          payload: {
+            localItemId: "local-item-1",
+            localPosSessionId: "local-sale-1",
+            productId: "product-1",
+            productName: "Nicca",
+            productSku: "6N2Y-WMA-EAW",
+            productSkuId: "sku-1",
+            quantity: 2,
+            price: 6_500,
+          },
+          sequence: 3,
+          staffProfileId: "staff-1",
+          type: "cart.item_added",
+        }),
+      ],
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await waitFor(() =>
+      expect(result.current.debug?.syncFlow.lastLocalSequence).toBe(3),
+    );
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(buildStaffAuthenticationResult());
+    });
+
+    expect(result.current.cart.items).toHaveLength(1);
+    expect(result.current.cart.items[0]).toEqual(
+      expect.objectContaining({
+        name: "Nicca",
+        quantity: 2,
+      }),
+    );
+    expect(result.current.checkout.total).toBe(13_000);
   });
 
   it("nudges local sync after pending events receive staff proof", async () => {
@@ -2250,6 +2591,7 @@ describe("useRegisterViewModel", () => {
         type: "cart.cleared",
         localRegisterSessionId: "drawer-1",
         localPosSessionId: "local-pos-session-1",
+        initialSyncStatus: "synced",
       }),
     );
 
