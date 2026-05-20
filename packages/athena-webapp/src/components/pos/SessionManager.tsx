@@ -5,11 +5,10 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { PauseCircle, PlayCircle, Clock, Plus, Ban } from "lucide-react";
+import { PlayCircle, Clock, Plus, Ban } from "lucide-react";
 
 import type { RegisterSessionPanelState } from "@/lib/pos/presentation/register/registerUiState";
 
-import { FadeIn } from "../common/FadeIn";
 import { HeldSessionsList } from "./session/HeldSessionsList";
 
 interface SessionManagerProps {
@@ -36,19 +35,6 @@ export function SessionManager({ sessionPanel }: SessionManagerProps) {
           <Clock className="h-3 w-3" />
           Expired
         </Badge>
-      )}
-
-      {sessionPanel.activeSessionNumber && (
-        <Button
-          variant="outline"
-          size="sm"
-          className="flex h-10 items-center gap-2 px-4"
-          onClick={() => void sessionPanel.onHoldCurrentSession()}
-          disabled={!sessionPanel.canHoldSession}
-        >
-          <PauseCircle className="h-4 w-4" />
-          Hold
-        </Button>
       )}
 
       {sessionPanel.activeSessionNumber && (

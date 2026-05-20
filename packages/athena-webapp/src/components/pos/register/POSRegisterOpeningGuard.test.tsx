@@ -323,4 +323,27 @@ describe("POSRegisterOpeningGuard", () => {
       screen.getByText("POS setup required. Connect this terminal before starting sales."),
     ).toBeInTheDocument();
   });
+
+  it("lets the register shell handle local drawer closeout recovery", () => {
+    useLocalPosReadinessMock.mockReturnValue({
+      status: "blocked",
+      reason: "local_closeout",
+      message:
+        "Drawer closeout started. Reopen the drawer before starting sales.",
+    });
+
+    render(
+      <POSRegisterOpeningGuard>
+        <div>Register workspace</div>
+      </POSRegisterOpeningGuard>,
+    );
+
+    expect(screen.getByText("Register workspace")).toBeInTheDocument();
+    expect(screen.queryByText("POS setup required")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Drawer closeout started. Reopen the drawer before starting sales.",
+      ),
+    ).not.toBeInTheDocument();
+  });
 });

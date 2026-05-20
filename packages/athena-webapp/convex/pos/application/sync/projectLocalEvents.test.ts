@@ -72,14 +72,22 @@ describe("projectLocalSyncEvent", () => {
         posTransactionId: "transaction-1",
       }),
     ]);
-    expect(repository.registerSessionPatches).toEqual([
-      {
-        registerSessionId: "register-session-1",
-        patch: {
-          expectedCash: 125,
+    expect(repository.registerSessionPatches).toEqual(
+      expect.arrayContaining([
+        {
+          registerSessionId: "register-session-1",
+          patch: {
+            expectedCash: 125,
+          },
         },
-      },
-    ]);
+        {
+          registerSessionId: "register-session-1",
+          patch: {
+            workflowTraceId: "register-trace-1",
+          },
+        },
+      ]),
+    );
     expect(repository.productPatches).toEqual([
       {
         productSkuId: "sku-1",
@@ -565,14 +573,22 @@ describe("projectLocalSyncEvent", () => {
         targetType: "pos_transaction",
       }),
     ]);
-    expect(repository.registerSessionPatches).toEqual([
-      {
-        registerSessionId: "register-session-1",
-        patch: {
-          expectedCash: 125,
+    expect(repository.registerSessionPatches).toEqual(
+      expect.arrayContaining([
+        {
+          registerSessionId: "register-session-1",
+          patch: {
+            expectedCash: 125,
+          },
         },
-      },
-    ]);
+        {
+          registerSessionId: "register-session-1",
+          patch: {
+            workflowTraceId: "register-trace-1",
+          },
+        },
+      ]),
+    );
   });
 
   it("projects checkout for an existing cloud POS session without duplicating cart items or self-conflicting on holds", async () => {
@@ -1196,14 +1212,22 @@ describe("projectLocalSyncEvent", () => {
         registerSessionId: "register-session-1",
       }),
     ]);
-    expect(repository.registerSessionPatches).toEqual([
-      {
-        registerSessionId: "register-session-1",
-        patch: {
-          expectedCash: 110,
+    expect(repository.registerSessionPatches).toEqual(
+      expect.arrayContaining([
+        {
+          registerSessionId: "register-session-1",
+          patch: {
+            expectedCash: 110,
+          },
         },
-      },
-    ]);
+        {
+          registerSessionId: "register-session-1",
+          patch: {
+            workflowTraceId: "register-trace-1",
+          },
+        },
+      ]),
+    );
   });
 
   it("projects clear-only cloud-backed local sales into voided POS sessions", async () => {
@@ -1835,6 +1859,14 @@ describe("projectLocalSyncEvent", () => {
         }),
       }),
     ]);
+    expect(repository.registerSessionPatches).toEqual([
+      {
+        registerSessionId: "register-session-1",
+        patch: {
+          workflowTraceId: "register-trace-1",
+        },
+      },
+    ]);
   });
 
   it("conflicts a direct cloud register open when staff authorization drifted", async () => {
@@ -1982,27 +2014,35 @@ describe("projectLocalSyncEvent", () => {
       }),
     ]);
     expect(reopen.status).toBe("conflicted");
-    expect(repository.registerSessionPatches).toEqual([
-      {
-        registerSessionId: "register-session-1",
-        patch: {
-          status: "closed",
-          countedCash: 100,
-          variance: 0,
-          closedByStaffProfileId: "staff-1",
-          closedAt: 30,
-          closeoutRecords: [
-            expect.objectContaining({
-              countedCash: 100,
-              expectedCash: 100,
-              type: "closed",
-              variance: 0,
-            }),
-          ],
-          notes: "Closed drawer",
+    expect(repository.registerSessionPatches).toEqual(
+      expect.arrayContaining([
+        {
+          registerSessionId: "register-session-1",
+          patch: expect.objectContaining({
+            status: "closed",
+            countedCash: 100,
+            variance: 0,
+            closedByStaffProfileId: "staff-1",
+            closedAt: 30,
+            closeoutRecords: [
+              expect.objectContaining({
+                countedCash: 100,
+                expectedCash: 100,
+                type: "closed",
+                variance: 0,
+              }),
+            ],
+            notes: "Closed drawer",
+          }),
         },
-      },
-    ]);
+        {
+          registerSessionId: "register-session-1",
+          patch: {
+            workflowTraceId: "register-trace-1",
+          },
+        },
+      ]),
+    );
     expect(repository.recordedRegisterSessionTraces).toEqual([
       expect.objectContaining({
         actorStaffProfileId: "staff-1",

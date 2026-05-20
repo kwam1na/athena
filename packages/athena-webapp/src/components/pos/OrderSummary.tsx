@@ -118,6 +118,7 @@ interface OrderSummaryProps {
   onPaymentEntryStart?: () => void;
   onEditingPaymentChange?: (isEditing: boolean) => void;
   hidePaymentItemCountSummary?: boolean;
+  hideActiveSummaryCards?: boolean;
   paymentsExpanded?: boolean;
   onPaymentsExpandedChange?: (isExpanded: boolean) => void;
 }
@@ -149,6 +150,7 @@ export function OrderSummary({
   onPaymentEntryStart,
   onEditingPaymentChange,
   hidePaymentItemCountSummary = false,
+  hideActiveSummaryCards = false,
   paymentsExpanded,
   onPaymentsExpandedChange,
 }: OrderSummaryProps) {
@@ -181,6 +183,8 @@ export function OrderSummary({
     completedTransactionAmountPaid > total
       ? completedTransactionAmountPaid - total
       : 0;
+  const hasCompletedTransactionChangeGiven =
+    completedTransactionData !== undefined && completedTransactionChangeGiven > 0;
   const completedTransactionPayments = completedTransactionData
     ? (completedTransactionData.payments ?? payments)
     : payments;
@@ -324,10 +328,10 @@ export function OrderSummary({
     ? paymentAmountDraft - remainingDue
     : remainingAfterDraft;
   const balanceDueToneClass = isPaymentAmountOverpaying
-    ? "border-green-200 bg-green-50"
+    ? "border-success/30 bg-success/10"
     : "border-transaction-signal/20 bg-transaction-signal/5";
   const balanceDueLabelClass = isPaymentAmountOverpaying
-    ? "text-green-700"
+    ? "text-success"
     : "text-transaction-signal";
 
   useEffect(() => {
@@ -646,8 +650,15 @@ export function OrderSummary({
               </div>
 
               <div className="mt-auto space-y-5">
-                <div className="grid gap-3 md:grid-cols-3 md:gap-4">
-                  <div className="rounded-[1.35rem] border border-border/70 bg-white/80 p-4 backdrop-blur-sm">
+                <div
+                  className={cn(
+                    "grid gap-3 md:gap-4",
+                    hasCompletedTransactionChangeGiven
+                      ? "md:grid-cols-6"
+                      : "md:grid-cols-4",
+                  )}
+                >
+                  <div className="rounded-lg border border-border/70 bg-surface-raised p-4 backdrop-blur-sm">
                     <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                       Total
                     </p>
@@ -655,7 +666,33 @@ export function OrderSummary({
                       {formatStoredAmount(formatter, total)}
                     </p>
                   </div>
-                  <div className="rounded-[1.35rem] border border-border/70 bg-white/70 p-4">
+                  <div className="rounded-lg border border-border/70 bg-surface-raised p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                      Amount paid
+                    </p>
+                    <p className="mt-3 text-2xl font-semibold text-foreground">
+                      {formatStoredAmount(
+                        formatter,
+                        completedTransactionAmountPaid,
+                      )}
+                    </p>
+                  </div>
+                  {hasCompletedTransactionChangeGiven && (
+                    <div className="rounded-lg border border-success/30 bg-success/10 p-4 shadow-surface md:col-span-2">
+                      <div className="flex h-full min-h-[5.25rem] flex-col justify-between">
+                        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-success">
+                          Change given
+                        </p>
+                        <p className="mt-3 text-3xl font-semibold tracking-tight text-foreground">
+                          {formatStoredAmount(
+                            formatter,
+                            completedTransactionChangeGiven,
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  <div className="rounded-lg border border-border/70 bg-surface-raised p-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                       Customer
                     </p>
@@ -665,7 +702,7 @@ export function OrderSummary({
                         "Walk-in customer"}
                     </p>
                   </div>
-                  <div className="rounded-[1.35rem] border border-border/70 bg-white/70 p-4">
+                  <div className="rounded-lg border border-border/70 bg-surface-raised p-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                       Paid with
                     </p>
@@ -712,7 +749,7 @@ export function OrderSummary({
         </section>
 
         <aside className="grid h-full min-h-0 gap-5">
-          <section className="flex h-full min-h-0 flex-col rounded-[1.5rem] border border-border/80 bg-white p-5 shadow-[var(--shadow-surface)]">
+          <section className="flex h-full min-h-0 flex-col rounded-[1.5rem] border border-border/80 bg-surface p-5 shadow-[var(--shadow-surface)]">
             <div className="border-b border-border/70 pb-4">
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
                 Transaction summary
@@ -828,18 +865,17 @@ export function OrderSummary({
   return (
     <div
       className={cn(
-        "min-h-0",
-        isPaymentFlowActive && "flex flex-1 flex-col",
+        "flex h-full min-h-0 flex-1 flex-col",
         !hasTerminal && !readOnly && "opacity-60 transition-all duration-300",
       )}
     >
       <div
         className={cn(
-          "flex flex-col gap-5 p-0",
-          isPaymentFlowActive && "min-h-0 flex-1 gap-3",
+          "flex min-h-0 flex-1 flex-col gap-5 p-0",
+          isPaymentFlowActive && "gap-3",
         )}
       >
-        {showPaymentEditor && payments.length === 0 && (
+        {showPaymentEditor && payments.length === 0 && !hideActiveSummaryCards && (
           <div
             className={cn(
               "grid gap-3",
@@ -847,11 +883,11 @@ export function OrderSummary({
             )}
           >
             {!hidePaymentItemCountSummary && (
-              <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+              <div className="rounded-xl border border-border bg-surface-raised p-4 shadow-surface">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Items
                 </p>
-                <p className="mt-2 text-2xl font-semibold leading-none text-gray-950">
+                <p className="mt-2 text-2xl font-semibold leading-none text-foreground">
                   {cartItemsCount}
                 </p>
               </div>
@@ -870,7 +906,7 @@ export function OrderSummary({
               >
                 {balanceDueLabel}
               </p>
-              <p className="mt-2 text-2xl font-semibold leading-none text-gray-950">
+              <p className="mt-2 text-2xl font-semibold leading-none text-foreground">
                 {formatStoredAmount(formatter, balanceDueAmount)}
               </p>
             </div>
@@ -911,13 +947,13 @@ export function OrderSummary({
 
         {effectiveCustomerInfo &&
           (effectiveCustomerInfo.name || effectiveCustomerInfo.email) && (
-            <div className="p-3 bg-gray-50 rounded-lg">
+            <div className="rounded-lg bg-muted/30 p-3">
               <h4 className="font-medium text-sm mb-2">Customer</h4>
               {effectiveCustomerInfo.name && (
                 <p className="text-sm">{effectiveCustomerInfo.name}</p>
               )}
               {effectiveCustomerInfo.email && (
-                <p className="text-xs text-gray-600">
+                <p className="text-xs text-muted-foreground">
                   {effectiveCustomerInfo.email}
                 </p>
               )}
@@ -948,7 +984,7 @@ export function OrderSummary({
                 >
                   {balanceDueLabel}
                 </p>
-                <p className="mt-2 text-4xl font-semibold leading-none text-gray-950">
+                <p className="mt-2 text-4xl font-semibold leading-none text-foreground">
                   {formatStoredAmount(formatter, balanceDueAmount)}
                 </p>
               </div>
@@ -980,7 +1016,7 @@ export function OrderSummary({
                 }}
                 disabled={cartItemsCount === 0}
                 variant="outline"
-                className="flex h-28 flex-col items-start justify-between rounded-xl border-gray-200 bg-white p-4 text-left text-gray-950 shadow-sm hover:bg-gray-50"
+                className="flex h-28 flex-col items-start justify-between rounded-xl border-border bg-surface-raised p-4 text-left text-foreground shadow-surface hover:bg-muted/30"
                 size="lg"
               >
                 <CreditCard className="h-5 w-5 text-rose-600" />

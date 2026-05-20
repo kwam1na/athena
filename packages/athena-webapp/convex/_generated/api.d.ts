@@ -33,6 +33,7 @@ import type * as customerMessaging_whatsappConfig from "../customerMessaging/wha
 import type * as devPatchBadTransaction from "../devPatchBadTransaction.js";
 import type * as emails_DiscountCode from "../emails/DiscountCode.js";
 import type * as emails_DiscountReminder from "../emails/DiscountReminder.js";
+import type * as emails_ExpenseReceiptEmail from "../emails/ExpenseReceiptEmail.js";
 import type * as emails_FeedbackRequest from "../emails/FeedbackRequest.js";
 import type * as emails_NewOrderAdmin from "../emails/NewOrderAdmin.js";
 import type * as emails_OrderEmail from "../emails/OrderEmail.js";
@@ -364,6 +365,7 @@ declare const fullApi: ApiFromModules<{
   devPatchBadTransaction: typeof devPatchBadTransaction;
   "emails/DiscountCode": typeof emails_DiscountCode;
   "emails/DiscountReminder": typeof emails_DiscountReminder;
+  "emails/ExpenseReceiptEmail": typeof emails_ExpenseReceiptEmail;
   "emails/FeedbackRequest": typeof emails_FeedbackRequest;
   "emails/NewOrderAdmin": typeof emails_NewOrderAdmin;
   "emails/OrderEmail": typeof emails_OrderEmail;

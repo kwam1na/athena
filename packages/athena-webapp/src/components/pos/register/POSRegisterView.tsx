@@ -9,14 +9,21 @@ import {
   ProductEntryHandle,
   ProductSearchInput,
 } from "@/components/pos/ProductEntry";
+import type { Product } from "@/components/pos/types";
 import { useSidebar } from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
 import View from "@/components/View";
+import {
+  calculatePosRemainingDue,
+  calculatePosTotalPaid,
+} from "@/lib/pos/domain";
 import { cn } from "~/src/lib/utils";
 import {
   ArrowRight,
   CheckCircle2,
   Circle,
   Cloud,
+  PackagePlus,
   RefreshCw,
   ScanBarcode,
   Search,
@@ -32,6 +39,8 @@ import {
   type RegisterWorkflowMode,
 } from "@/lib/pos/presentation/register/registerUiState";
 import { useRegisterViewModel } from "@/lib/pos/presentation/register/useRegisterViewModel";
+import { currencyFormatter } from "~/shared/currencyFormatter";
+import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 
 import { RegisterActionBar } from "./RegisterActionBar";
 import { RegisterCheckoutPanel } from "./RegisterCheckoutPanel";
@@ -73,50 +82,104 @@ function useCollapseSidebarForPosFlow() {
 }
 
 function ProductLookupEmptyState({
+  canQuickAddProduct = false,
   onActivate,
+  onQuickAddProduct,
   workflowMode,
 }: {
+  canQuickAddProduct?: boolean;
   onActivate?: () => void;
+  onQuickAddProduct?: () => void;
   workflowMode: RegisterWorkflowMode;
 }) {
   const isExpenseWorkflow = workflowMode === "expense";
 
   return (
-    <button
-      type="button"
-      onClick={onActivate}
-      className="flex h-full min-h-0 w-full flex-col items-center justify-center rounded-lg border border-gray-200 bg-gradient-to-br from-gray-50/50 to-gray-100/30 p-8 text-center transition hover:border-blue-200 hover:from-blue-50/40 hover:to-gray-100/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-default disabled:hover:border-gray-200 disabled:hover:from-gray-50/50"
-      disabled={!onActivate}
-    >
-      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white text-muted-foreground shadow-sm ">
-        <Search className="h-7 w-7" />
-      </div>
-      <div className="space-y-1">
-        <p className="text-sm font-medium text-gray-900">
-          {isExpenseWorkflow
-            ? "Ready for expense entry"
-            : "Ready for product lookup"}
-        </p>
-        <p className="text-sm text-muted-foreground">
-          {isExpenseWorkflow
-            ? "Search or scan products to add expense items"
-            : "Scan a barcode or search products to add items to this sale"}
-        </p>
-      </div>
-      <div className="mt-5 flex items-center gap-2 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1">
+    <div className="flex h-full min-h-0 w-full flex-col items-center justify-center rounded-lg border border-border bg-surface-raised p-8 text-center transition hover:border-ring hover:bg-muted/30">
+      <button
+        type="button"
+        onClick={onActivate}
+        className="flex flex-col items-center text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 disabled:cursor-default"
+        disabled={!onActivate}
+      >
+        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-surface text-muted-foreground shadow-surface">
+          <Search className="h-7 w-7" />
+        </div>
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-foreground">
+            {isExpenseWorkflow
+              ? "Ready for expense entry"
+              : "Ready for product lookup"}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {isExpenseWorkflow
+              ? "Search or scan products to add expense items"
+              : "Scan a barcode or search products to add items to this sale"}
+          </p>
+        </div>
+      </button>
+      <div className="mt-5 flex flex-wrap items-center justify-center gap-2 text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-3 py-1">
           <ScanBarcode className="h-3.5 w-3.5" />
           Barcode
         </span>
-        <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1">
+        <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-3 py-1">
           <Search className="h-3.5 w-3.5" />
           Product search
-          <kbd className="ml-1 rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-gray-500">
+          <kbd className="ml-1 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-semibold leading-none text-muted-foreground">
             ⌘+K
           </kbd>
         </span>
+        {canQuickAddProduct && onQuickAddProduct ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1.5 rounded-full bg-surface px-3 text-xs"
+            onClick={onQuickAddProduct}
+          >
+            <PackagePlus className="h-3.5 w-3.5" />
+            Quick add product
+          </Button>
+        ) : null}
       </div>
-    </button>
+    </div>
+  );
+}
+
+function RegisterSaleSummaryStrip({
+  checkout,
+  itemCount,
+}: {
+  checkout: RegisterViewModel["checkout"];
+  itemCount: number;
+}) {
+  const formatter = currencyFormatter(checkout.currency ?? "GHS");
+  const totalPaid = calculatePosTotalPaid(checkout.payments ?? []);
+  const balanceDue = calculatePosRemainingDue(totalPaid, checkout.total ?? 0);
+
+  return (
+    <section
+      aria-label="Sale summary"
+      className="grid min-h-[4.5rem] overflow-hidden rounded-lg border border-border/80 bg-surface shadow-surface sm:grid-cols-2"
+    >
+      <div className="flex min-w-0 flex-col justify-center border-b border-border/70 px-4 py-3 sm:border-b-0 sm:border-r">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          Items
+        </p>
+        <p className="mt-1 text-2xl font-semibold leading-none text-foreground">
+          {itemCount}
+        </p>
+      </div>
+      <div className="flex min-w-0 flex-col justify-center px-4 py-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-warning">
+          Balance due
+        </p>
+        <p className="mt-1 text-2xl font-semibold leading-none text-foreground">
+          {formatStoredAmount(formatter, balanceDue)}
+        </p>
+      </div>
+    </section>
   );
 }
 
@@ -144,7 +207,7 @@ function DrawerGateWorkspace({
   drawerGate: NonNullable<RegisterViewModel["drawerGate"]>;
 }) {
   return (
-    <div className="flex h-full min-h-0 items-start justify-center overflow-y-auto rounded-lg border border-gray-200 bg-gradient-to-br from-gray-50/50 to-gray-100/30 px-6 py-10 sm:px-8 sm:pt-20">
+    <div className="flex h-full min-h-0 items-start justify-center overflow-y-auto rounded-lg border border-border bg-surface-raised px-6 py-10 sm:px-8 sm:pt-20">
       <div className="w-[min(100%,40rem)]">
         <RegisterDrawerGate drawerGate={drawerGate} />
       </div>
@@ -304,7 +367,7 @@ function usePosDebugPanelToggle() {
     function isDebugShortcut(event: KeyboardEvent) {
       const isDebugShortcut =
         event.key === "/" || event.code === "Slash";
-      return event.metaKey && isDebugShortcut;
+      return (event.metaKey || event.ctrlKey) && isDebugShortcut;
     }
 
     function handleKeyDown(event: KeyboardEvent) {
@@ -756,7 +819,10 @@ export function POSRegisterView({
   const [isPaymentEntryActive, setIsPaymentEntryActive] = useState(false);
   const [isPaymentEditActive, setIsPaymentEditActive] = useState(false);
   const [isPaymentsListExpanded, setIsPaymentsListExpanded] = useState(false);
+  const [isEmptyStateQuickAddActive, setIsEmptyStateQuickAddActive] =
+    useState(false);
   const productEntryRef = useRef<ProductEntryHandle>(null);
+  const pendingEmptyStateQuickAddRef = useRef(false);
   const headerProductSearchInputRef = useRef<HTMLInputElement>(null);
   const isDebugPanelVisible = usePosDebugPanelToggle();
 
@@ -817,6 +883,18 @@ export function POSRegisterView({
     isPosWorkflow || shouldRenderExpenseCompletionPanel;
   const shouldShowPaymentWorkspace =
     isPosWorkflow && isPaymentEntryActive && !hasProductSearchIntent;
+  const shouldShowIdleLookupCartSplit =
+    isPosWorkflow &&
+    shouldRenderSaleSurface &&
+    cartItemCount > 0 &&
+    !hasProductSearchIntent &&
+    !shouldShowPaymentWorkspace &&
+    !isPaymentEditActive &&
+    !isPaymentsListExpanded &&
+    !shouldShowOnboarding &&
+    !isResolvingRegisterSetup &&
+    !isAwaitingCashierAuth &&
+    !viewModel.drawerGate;
   const shouldShowCartSummarySidebar =
     isPosWorkflow &&
     shouldRenderSaleSurface &&
@@ -828,6 +906,7 @@ export function POSRegisterView({
     !isResolvingRegisterSetup;
   const shouldRenderCartSidebar =
     shouldRenderSaleSurface &&
+    !shouldShowIdleLookupCartSplit &&
     !shouldShowPaymentWorkspace &&
     !shouldShowCartSummarySidebar &&
     !shouldShowOnboarding &&
@@ -916,6 +995,97 @@ export function POSRegisterView({
     headerProductSearchInputRef.current?.select();
   }, [isHeaderProductSearchSupported, viewModel.productEntry]);
 
+  const handleProductLookupEmptyStateQuickAdd = useCallback(() => {
+    if (
+      !isHeaderProductSearchSupported ||
+      !viewModel.productEntry.canQuickAddProduct
+    ) {
+      return;
+    }
+
+    pendingEmptyStateQuickAddRef.current = true;
+    if (
+      isEmptyStateQuickAddActive &&
+      productEntryRef.current?.openQuickAddProduct()
+    ) {
+      pendingEmptyStateQuickAddRef.current = false;
+      return;
+    }
+
+    setIsEmptyStateQuickAddActive(true);
+    viewModel.productEntry?.setShowProductLookup?.(true);
+  }, [
+    isEmptyStateQuickAddActive,
+    isHeaderProductSearchSupported,
+    viewModel.productEntry,
+  ]);
+
+  useEffect(() => {
+    if (!pendingEmptyStateQuickAddRef.current || !isEmptyStateQuickAddActive) {
+      return;
+    }
+
+    if (productEntryRef.current?.openQuickAddProduct()) {
+      pendingEmptyStateQuickAddRef.current = false;
+    }
+  }, [isEmptyStateQuickAddActive]);
+
+  const focusHeaderProductSearch = useCallback(() => {
+    if (!isHeaderProductSearchSupported) {
+      return;
+    }
+
+    window.setTimeout(() => {
+      headerProductSearchInputRef.current?.focus();
+      headerProductSearchInputRef.current?.select();
+    }, 0);
+  }, [isHeaderProductSearchSupported]);
+
+  const handleAddProduct = useCallback(
+    async (product: Product) => {
+      const added = await viewModel.productEntry.onAddProduct(product);
+      if (added !== false) {
+        focusHeaderProductSearch();
+      }
+
+      return added;
+    },
+    [focusHeaderProductSearch, viewModel.productEntry],
+  );
+
+  const renderProductEntry = ({
+    containerClassName = "h-full min-h-0",
+    forceQuickAddHost = false,
+    lookupPanelClassName = "flex h-full min-h-0 flex-col overflow-hidden",
+    resultsClassName = "max-h-none min-h-0 flex-1 pr-1",
+  }: {
+    containerClassName?: string;
+    forceQuickAddHost?: boolean;
+    lookupPanelClassName?: string;
+    resultsClassName?: string;
+  } = {}) => (
+    <ProductEntry
+      ref={productEntryRef}
+      disabled={viewModel.productEntry.disabled}
+      showProductLookup={viewModel.productEntry.showProductLookup}
+      setShowProductLookup={viewModel.productEntry.setShowProductLookup}
+      productSearchQuery={viewModel.productEntry.productSearchQuery}
+      setProductSearchQuery={viewModel.productEntry.setProductSearchQuery}
+      onBarcodeSubmit={viewModel.productEntry.onBarcodeSubmit}
+      onAddProduct={handleAddProduct}
+      searchResults={viewModel.productEntry.searchResults}
+      isSearchLoading={viewModel.productEntry.isSearchLoading}
+      isSearchReady={viewModel.productEntry.isSearchReady}
+      canQuickAddProduct={viewModel.productEntry.canQuickAddProduct}
+      onQuickAddOpenChange={setIsEmptyStateQuickAddActive}
+      forceQuickAddHost={forceQuickAddHost}
+      showSearchInput={false}
+      containerClassName={containerClassName}
+      lookupPanelClassName={lookupPanelClassName}
+      resultsClassName={resultsClassName}
+    />
+  );
+
   if (!viewModel.hasActiveStore) {
     return (
       <View
@@ -924,7 +1094,7 @@ export function POSRegisterView({
             leadingContent={
               <div className="flex items-center gap-3">
                 <div>
-                  <p className="text-lg font-semibold text-gray-900">
+                  <p className="text-lg font-semibold text-foreground">
                     {viewModel.header.title}
                   </p>
                 </div>
@@ -946,7 +1116,7 @@ export function POSRegisterView({
       lockDocumentScroll
       width={registerViewWidth}
       contentClassName={cn(
-        "flex h-full max-h-full flex-col overflow-hidden rounded-2xl border border-border/80 bg-white",
+        "flex h-full max-h-full flex-col overflow-hidden rounded-2xl border border-border/80 bg-surface",
       )}
       headerClassName="shrink-0"
       mainClassName={cn("min-h-0 flex-1")}
@@ -966,13 +1136,13 @@ export function POSRegisterView({
                     className={cn(
                       "h-2 w-2 rounded-full",
                       isStaffSignedIn
-                        ? "animate-pulse bg-green-600"
+                        ? "animate-pulse bg-success"
                         : "bg-background",
                     )}
                   />
                 </FadeIn>
 
-                <p className="text-lg font-semibold leading-none text-gray-900">
+                <p className="text-lg font-semibold leading-none text-foreground">
                   {viewModel.header.title}
                 </p>
                 {isPosWorkflow ? (
@@ -998,6 +1168,7 @@ export function POSRegisterView({
           trailingContent={
             canSearchProducts && isPosWorkflow && !isLocallyClosedPendingSync ? (
               <RegisterActionBar
+                cashierCard={viewModel.cashierCard}
                 closeoutControl={viewModel.closeoutControl}
                 registerInfo={viewModel.registerInfo}
                 sessionPanel={viewModel.sessionPanel}
@@ -1020,10 +1191,16 @@ export function POSRegisterView({
           shouldRenderSaleSurface &&
           !shouldShowOnboarding &&
           !isResolvingRegisterSetup ? (
-            <RegisterCustomerPanel
-              customerPanel={viewModel.customerPanel}
-              disabled={!isSessionActive}
-            />
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.48fr)]">
+              <RegisterCustomerPanel
+                customerPanel={viewModel.customerPanel}
+                disabled={!isSessionActive}
+              />
+              <RegisterSaleSummaryStrip
+                checkout={viewModel.checkout}
+                itemCount={cartItemCount}
+              />
+            </div>
           ) : null}
 
           <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 overflow-hidden lg:grid-cols-[minmax(0,2fr)_minmax(340px,1fr)]">
@@ -1056,40 +1233,71 @@ export function POSRegisterView({
                   />
                 ) : hasProductSearchIntent ? (
                   <div className="min-h-0 flex-1">
-                    <ProductEntry
-                      ref={productEntryRef}
-                      disabled={viewModel.productEntry.disabled}
-                      showProductLookup={viewModel.productEntry.showProductLookup}
-                      setShowProductLookup={
-                        viewModel.productEntry.setShowProductLookup
-                      }
-                      productSearchQuery={viewModel.productEntry.productSearchQuery}
-                      setProductSearchQuery={
-                        viewModel.productEntry.setProductSearchQuery
-                      }
-                      onBarcodeSubmit={viewModel.productEntry.onBarcodeSubmit}
-                      onAddProduct={viewModel.productEntry.onAddProduct}
-                      searchResults={viewModel.productEntry.searchResults}
-                      isSearchLoading={viewModel.productEntry.isSearchLoading}
-                      isSearchReady={viewModel.productEntry.isSearchReady}
+                    {renderProductEntry()}
+                  </div>
+                ) : shouldShowIdleLookupCartSplit ? (
+                  <div className="grid h-full min-h-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,0.72fr)]">
+                    <ProductLookupEmptyState
                       canQuickAddProduct={
                         viewModel.productEntry.canQuickAddProduct
                       }
-                      showSearchInput={false}
-                      containerClassName="h-full min-h-0"
-                      lookupPanelClassName="flex h-full min-h-0 flex-col overflow-hidden"
-                      resultsClassName="max-h-none min-h-0 flex-1 pr-1"
+                      onActivate={
+                        isHeaderProductSearchSupported
+                          ? handleProductLookupEmptyStateActivate
+                          : undefined
+                      }
+                      onQuickAddProduct={
+                        isHeaderProductSearchSupported &&
+                        viewModel.productEntry.canQuickAddProduct
+                          ? handleProductLookupEmptyStateQuickAdd
+                          : undefined
+                      }
+                      workflowMode={effectiveWorkflowMode}
                     />
+                    <CartItems
+                      cartItems={viewModel.cart.items}
+                      onUpdateQuantity={viewModel.cart.onUpdateQuantity}
+                      onRemoveItem={viewModel.cart.onRemoveItem}
+                      clearCart={viewModel.cart.onClearCart}
+                      density="compact"
+                    />
+                    {isEmptyStateQuickAddActive
+                      ? renderProductEntry({
+                          containerClassName: "hidden",
+                          forceQuickAddHost: true,
+                          lookupPanelClassName: "hidden",
+                          resultsClassName: "hidden",
+                        })
+                      : null}
                   </div>
                 ) : (
-                  <ProductLookupEmptyState
-                    onActivate={
-                      isHeaderProductSearchSupported
-                        ? handleProductLookupEmptyStateActivate
-                        : undefined
-                    }
-                    workflowMode={effectiveWorkflowMode}
-                  />
+                  <>
+                    <ProductLookupEmptyState
+                      canQuickAddProduct={
+                        viewModel.productEntry.canQuickAddProduct
+                      }
+                      onActivate={
+                        isHeaderProductSearchSupported
+                          ? handleProductLookupEmptyStateActivate
+                          : undefined
+                      }
+                      onQuickAddProduct={
+                        isHeaderProductSearchSupported &&
+                        viewModel.productEntry.canQuickAddProduct
+                          ? handleProductLookupEmptyStateQuickAdd
+                          : undefined
+                      }
+                      workflowMode={effectiveWorkflowMode}
+                    />
+                    {isEmptyStateQuickAddActive
+                      ? renderProductEntry({
+                          containerClassName: "hidden",
+                          forceQuickAddHost: true,
+                          lookupPanelClassName: "hidden",
+                          resultsClassName: "hidden",
+                        })
+                      : null}
+                  </>
                 )}
               </div>
             ) : null}
@@ -1101,7 +1309,7 @@ export function POSRegisterView({
                   shouldRenderSaleSurface ? "lg:col-span-1" : "lg:col-span-2",
                 )}
               >
-                <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+                <div className="scrollbar-hide flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain pr-1">
                   {shouldRenderCartSidebar ? (
                     <CartItems
                       cartItems={viewModel.cart.items}
@@ -1122,8 +1330,9 @@ export function POSRegisterView({
                   {shouldRenderCheckoutPanel ? (
                     <div
                       className={cn(
-                        "rounded-lg bg-white p-4",
+                        "rounded-lg bg-surface p-4",
                         shouldShowPaymentWorkspace ||
+                          shouldShowIdleLookupCartSplit ||
                           shouldShowCartSummarySidebar ||
                           viewModel.checkout.isTransactionCompleted
                           ? "flex min-h-0 flex-1 flex-col overflow-hidden"
@@ -1133,13 +1342,13 @@ export function POSRegisterView({
                       {isPosWorkflow ? (
                         <RegisterCheckoutPanel
                           checkout={viewModel.checkout}
-                          cashierCard={viewModel.cashierCard}
                           onPaymentFlowChange={handlePaymentFlowChange}
                           onPaymentEntryStart={handlePaymentEntryStart}
                           onEditingPaymentChange={handleEditingPaymentChange}
                           hidePaymentItemCountSummary={
                             shouldShowCartSummarySidebar
                           }
+                          hideActiveSummaryCards
                           paymentsExpanded={isPaymentsListExpanded}
                           onPaymentsExpandedChange={
                             handlePaymentsExpandedChange

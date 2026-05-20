@@ -98,6 +98,7 @@ export interface RegisterCheckoutState {
     phone?: string;
   };
   registerNumber: string;
+  currency?: string;
   subtotal: number;
   tax: number;
   total: number;
@@ -108,12 +109,13 @@ export interface RegisterCheckoutState {
   completedTransactionData?: {
     paymentMethod: string;
     payments?: Payment[];
-    transactionId?: Id<"posTransaction">;
+    transactionId?: Id<"posTransaction"> | Id<"expenseTransaction">;
     completedAt: Date;
     cartItems: CartItem[];
     subtotal: number;
     tax: number;
     total: number;
+    notes?: string | null;
     customerInfo?: {
       name: string;
       email: string;

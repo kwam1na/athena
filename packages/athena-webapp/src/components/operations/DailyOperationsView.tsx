@@ -361,6 +361,13 @@ function shouldShowPrimaryAction(snapshot: DailyOperationsSnapshot) {
   return !isHistoricalOperatingDate(snapshot.operatingDate);
 }
 
+function shouldShowHistoricalEodReviewAction(snapshot: DailyOperationsSnapshot) {
+  return (
+    snapshot.lifecycle.status === "closed" &&
+    isHistoricalOperatingDate(snapshot.operatingDate)
+  );
+}
+
 function getWorkflowSearch(to: string, operatingDate: string) {
   const search = {
     o: getOrigin(),
@@ -913,6 +920,9 @@ export function DailyOperationsViewContent({
   const showPrimaryAction = snapshot
     ? shouldShowPrimaryAction(snapshot)
     : false;
+  const showHistoricalEodReviewAction = snapshot
+    ? shouldShowHistoricalEodReviewAction(snapshot)
+    : false;
   const isHistoricalDate = snapshot
     ? isHistoricalOperatingDate(snapshot.operatingDate)
     : false;
@@ -936,6 +946,33 @@ export function DailyOperationsViewContent({
                       operatingDate={snapshot.operatingDate}
                       onChange={onOperatingDateChange}
                     />
+                    {showHistoricalEodReviewAction ? (
+                      <Button
+                        asChild
+                        className="w-full sm:w-auto"
+                        variant="outline"
+                      >
+                        <Link
+                          aria-label={`Review EOD Review for ${formatOperatingDateWithWeekday(
+                            snapshot.operatingDate,
+                          )}`}
+                          params={buildParams(orgUrlSlug, storeUrlSlug)}
+                          search={
+                            getWorkflowSearch(
+                              "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+                              snapshot.operatingDate,
+                            ) as never
+                          }
+                          to="/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close"
+                        >
+                          Review EOD Review
+                          <ArrowUpRight
+                            aria-hidden="true"
+                            className="ml-2 h-4 w-4"
+                          />
+                        </Link>
+                      </Button>
+                    ) : null}
                     {showPrimaryAction ? (
                       <Button
                         asChild

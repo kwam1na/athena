@@ -14,11 +14,16 @@ vi.mock("@tanstack/react-router", () => ({
     params?: unknown;
     search?: unknown;
     to?: string;
-  }) => (
-    <a href={to ?? "#"} {...props}>
-      {children}
-    </a>
-  ),
+  }) => {
+    void _params;
+    void _search;
+
+    return (
+      <a href={to ?? "#"} {...props}>
+        {children}
+      </a>
+    );
+  },
 }));
 
 vi.mock("../RegisterActions", () => ({
@@ -39,6 +44,7 @@ describe("RegisterActionBar", () => {
   it("shows opening float correction for managers", () => {
     render(
       <RegisterActionBar
+        cashierCard={null}
         closeoutControl={{
           canCloseout: true,
           canShowOpeningFloatCorrection: true,
@@ -57,6 +63,7 @@ describe("RegisterActionBar", () => {
   it("hides opening float correction for non-manager cashiers", () => {
     render(
       <RegisterActionBar
+        cashierCard={null}
         closeoutControl={{
           canCloseout: true,
           canShowOpeningFloatCorrection: false,
@@ -74,6 +81,26 @@ describe("RegisterActionBar", () => {
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /closeout/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the signed-in cashier beside register actions", () => {
+    render(
+      <RegisterActionBar
+        cashierCard={{
+          cashierName: "Ato K.",
+          onSignOut: vi.fn(),
+        }}
+        closeoutControl={null}
+        registerInfo={registerInfo}
+        sessionPanel={null}
+      />,
+    );
+
+    expect(screen.getByText("Cashier")).toBeInTheDocument();
+    expect(screen.getByText("Ato K.")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /sign out/i }),
     ).toBeInTheDocument();
   });
 });

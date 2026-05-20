@@ -191,6 +191,11 @@ export function projectLocalRegisterReadModel(input: {
     }
 
     if (event.type === "register.closeout_started") {
+      if (!registerLifecycleEventMatchesActiveSession(event, activeRegisterSession)) {
+        errors.push(errorFor(event, "missing_register_session"));
+        continue;
+      }
+
       const payload = asRecord(event.payload);
       activeRegisterSession = {
         ...activeRegisterSession,
@@ -209,6 +214,11 @@ export function projectLocalRegisterReadModel(input: {
     }
 
     if (event.type === "register.reopened") {
+      if (!registerLifecycleEventMatchesActiveSession(event, activeRegisterSession)) {
+        errors.push(errorFor(event, "missing_register_session"));
+        continue;
+      }
+
       const payload = asRecord(event.payload);
       activeRegisterSession = {
         ...activeRegisterSession,
@@ -389,6 +399,21 @@ function createMappingIndex(mappings: PosLocalCloudMapping[]) {
   }
 
   return { posSession, posTransaction, registerSession };
+}
+
+function registerLifecycleEventMatchesActiveSession(
+  event: PosLocalEventRecord,
+  activeRegisterSession: PosLocalCashDrawerReadModel,
+) {
+  const localRegisterSessionId =
+    event.localRegisterSessionId ??
+    stringField(event.payload, "localRegisterSessionId");
+  if (!localRegisterSessionId) return false;
+
+  return (
+    localRegisterSessionId === activeRegisterSession.localRegisterSessionId ||
+    localRegisterSessionId === activeRegisterSession.cloudRegisterSessionId
+  );
 }
 
 function toRegisterStateDrawer(

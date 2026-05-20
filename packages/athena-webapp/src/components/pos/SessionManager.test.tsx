@@ -13,11 +13,15 @@ vi.mock("@tanstack/react-router", () => ({
   }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
     params?: unknown;
     to?: string;
-  }) => (
-    <a href={to ?? "#"} {...props}>
-      {children}
-    </a>
-  ),
+  }) => {
+    void _params;
+
+    return (
+      <a href={to ?? "#"} {...props}>
+        {children}
+      </a>
+    );
+  },
 }));
 
 vi.mock("@/components/ui/button", () => ({
@@ -81,7 +85,9 @@ describe("SessionManager", () => {
     expect(
       screen.queryByText("SES-001"),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /hold/i })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /hold/i }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /clear sale/i }),
     ).toBeInTheDocument();
@@ -112,7 +118,7 @@ describe("SessionManager", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("disables hold and new-sale actions from panel state", async () => {
+  it("hides hold and disables new-sale actions from panel state", async () => {
     const onHoldCurrentSession = vi.fn();
     const onStartNewSession = vi.fn();
 
@@ -135,13 +141,13 @@ describe("SessionManager", () => {
       />,
     );
 
-    const holdButton = screen.getByRole("button", { name: /hold/i });
     const newSaleButton = screen.getByRole("button", { name: /new sale/i });
 
-    expect(holdButton).toBeDisabled();
+    expect(
+      screen.queryByRole("button", { name: /hold/i }),
+    ).not.toBeInTheDocument();
     expect(newSaleButton).toBeDisabled();
 
-    await userEvent.click(holdButton);
     await userEvent.click(newSaleButton);
 
     expect(onHoldCurrentSession).not.toHaveBeenCalled();

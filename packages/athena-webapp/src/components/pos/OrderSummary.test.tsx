@@ -144,6 +144,33 @@ describe("OrderSummary completed transaction summary", () => {
     expect(screen.getByText("Total")).toBeInTheDocument();
   });
 
+  it("shows amount paid and change given in the completed sale summary cards", () => {
+    render(
+      <OrderSummary
+        cartItems={[]}
+        completedOrderNumber="404924"
+        completedTransactionData={{
+          paymentMethod: "cash",
+          completedAt: new Date("2026-04-25T18:08:00.000Z"),
+          cartItems: [],
+          customerInfo: undefined,
+          subtotal: 45000,
+          tax: 0,
+          total: 45000,
+          payments: [
+            { id: "payment-1", method: "cash", amount: 50000, timestamp: 2 },
+          ],
+        }}
+        isTransactionCompleted
+      />,
+    );
+
+    expect(screen.getAllByText("Amount paid").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("GH₵500").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Change given").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("GH₵50").length).toBeGreaterThan(0);
+  });
+
   it("shows all payment methods used for a completed transaction", () => {
     render(
       <OrderSummary
@@ -392,6 +419,34 @@ describe("OrderSummary completed transaction summary", () => {
 
     expect(screen.queryByText("Items")).not.toBeInTheDocument();
     expect(screen.getByText("Balance due")).toBeInTheDocument();
+  });
+
+  it("can hide the active payment summary cards when another surface owns them", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <OrderSummary
+        cartItems={[
+          {
+            id: "item-1",
+            name: "Hair",
+            barcode: "123456789012",
+            price: 1700,
+            quantity: 2,
+            productId: "product-1",
+            skuId: "sku-1",
+          } as never,
+        ]}
+        total={1700}
+        onPaymentEntryStart={vi.fn()}
+        hideActiveSummaryCards
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Cash" }));
+
+    expect(screen.queryByText("Items")).not.toBeInTheDocument();
+    expect(screen.queryByText("Balance due")).not.toBeInTheDocument();
   });
 
   it("uses the payments list as the only balance surface after a partial payment", () => {

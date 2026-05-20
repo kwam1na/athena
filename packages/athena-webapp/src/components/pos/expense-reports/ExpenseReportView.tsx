@@ -1,11 +1,12 @@
 import { useMemo } from "react";
 import { useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
-import { Check } from "lucide-react";
+import { Check, Printer } from "lucide-react";
 
 import View from "../../View";
 import { FadeIn } from "../../common/FadeIn";
 import { SimplePageHeader } from "../../common/PageHeader";
+import { Button } from "@/components/ui/button";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
 import { CartItems } from "../CartItems";
@@ -13,6 +14,8 @@ import type { CartItem } from "../types";
 import type { Id } from "~/convex/_generated/dataModel";
 import { currencyFormatter } from "~/convex/utils";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
+import { buildExpenseReceiptHtml } from "~/src/lib/pos/expenseReceipt";
+import { usePrint } from "~/src/hooks/usePrint";
 import { formatStaffDisplayName } from "~/shared/staffDisplayName";
 
 type RouteParams =
@@ -27,6 +30,7 @@ export function ExpenseReportView() {
   }) as RouteParams;
   const reportId = params?.reportId;
   const { activeStore } = useGetActiveStore();
+  const { printReceipt } = usePrint();
 
   const expenseTransaction = useQuery(
     api.inventory.expenseTransactions.getExpenseTransactionById,
@@ -44,7 +48,7 @@ export function ExpenseReportView() {
 
   const cartItems: CartItem[] = useMemo(() => {
     if (!expenseTransaction) return [];
-    return expenseTransaction.items.map((item: any) => ({
+    return expenseTransaction.items.map((item) => ({
       id: item._id,
       name: item.productName,
       barcode: "",
@@ -86,6 +90,30 @@ export function ExpenseReportView() {
         hour12: true,
       })
     : "";
+
+  const handlePrintReceipt = async () => {
+    if (!activeStore || !expenseTransaction) {
+      return;
+    }
+
+    try {
+      const receiptHtml = await buildExpenseReceiptHtml({
+        store: activeStore,
+        formatter,
+        reportNumber: expenseTransaction.transactionNumber,
+        completedAt: expenseTransaction.completedAt,
+        recordedBy: staffProfileName,
+        registerNumber: expenseTransaction.registerNumber,
+        cartItems,
+        totalValue: expenseTransaction.totalValue,
+        notes: expenseTransaction.notes,
+      });
+
+      printReceipt(receiptHtml);
+    } catch (error) {
+      console.error("Error printing expense receipt:", error);
+    }
+  };
 
   if (!reportId) {
     return null;
@@ -177,6 +205,15 @@ export function ExpenseReportView() {
                       )}
                     </span>
                   </div>
+                  <Button
+                    type="button"
+                    onClick={handlePrintReceipt}
+                    className="w-full gap-2"
+                    variant="outline"
+                  >
+                    <Printer className="h-4 w-4" />
+                    Print receipt
+                  </Button>
                 </div>
               </section>
             </div>

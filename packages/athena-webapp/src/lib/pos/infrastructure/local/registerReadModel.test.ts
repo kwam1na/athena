@@ -559,6 +559,44 @@ describe("projectLocalRegisterReadModel", () => {
       localPosSessionId: "local-sale-open",
     });
   });
+
+  it("applies closeout events recorded with the mapped cloud drawer id", () => {
+    const closed = projectLocalRegisterReadModel({
+      mappings: [
+        {
+          entity: "registerSession",
+          localId: "local-register-1",
+          cloudId: "cloud-register-1",
+          mappedAt: 1_001,
+        },
+      ],
+      events: [
+        event({
+          sequence: 1,
+          type: "register.opened",
+          localRegisterSessionId: "local-register-1",
+          payload: { openingFloat: 100 },
+        }),
+        event({
+          sequence: 2,
+          type: "register.closeout_started",
+          localRegisterSessionId: "cloud-register-1",
+          payload: { countedCash: 100 },
+        }),
+      ],
+    });
+
+    expect(closed.canSell).toBe(false);
+    expect(closed.activeRegisterSession).toMatchObject({
+      localRegisterSessionId: "local-register-1",
+      cloudRegisterSessionId: "cloud-register-1",
+      status: "closing",
+    });
+    expect(closed.closeoutState).toMatchObject({
+      localRegisterSessionId: "local-register-1",
+      status: "closed_locally",
+    });
+  });
 });
 
 function errorCodes(errors: PosLocalRegisterReadModelError[]) {

@@ -75,6 +75,42 @@ describe("catalogSearch", () => {
     ]);
   });
 
+  it("does not fuzzy match a barcode-shaped lookup that is not in the catalog", () => {
+    const result = searchRegisterCatalog(
+      buildRegisterCatalogIndex(rows),
+      "555444333223",
+    );
+
+    expect(result.intent).toBe("exact");
+    expect(result.exactMatch).toBeNull();
+    expect(result.results).toEqual([]);
+  });
+
+  it("does not match barcode-shaped lookups against numeric SKU substrings", () => {
+    const result = searchRegisterCatalog(
+      buildRegisterCatalogIndex([
+        ...rows,
+        {
+          productId: "product-wax",
+          productSkuId: "sku-wax",
+          name: "Yizia Wax & Mud 128ml",
+          sku: "KK38-721-WBJ",
+          barcode: "111222333444",
+          category: "Hair care",
+          description: "POS quick add",
+          price: 15,
+          size: null,
+          color: null,
+          length: null,
+        },
+      ]),
+      "6935721830015",
+    );
+
+    expect(result.intent).toBe("exact");
+    expect(result.results).toEqual([]);
+  });
+
   it("returns a SKU exact match case-insensitively", () => {
     const result = searchRegisterCatalog(
       buildRegisterCatalogIndex(rows),
