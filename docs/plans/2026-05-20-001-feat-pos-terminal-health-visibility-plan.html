@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plan: Add POS Terminal Health Visibility</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f5ef;
+      --paper: #fffdf8;
+      --ink: #1f2933;
+      --muted: #667085;
+      --line: #d8d2c4;
+      --accent: #0f766e;
+      --accent-soft: #dff3ef;
+      --warn: #9a5b00;
+      --danger: #b42318;
+      --code: #23313d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 40px 24px 64px;
+    }
+    header {
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 24px;
+      margin-bottom: 24px;
+    }
+    .eyebrow {
+      margin: 0 0 10px;
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(32px, 5vw, 54px);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 3px 10px;
+      background: rgba(255, 255, 255, .5);
+    }
+    nav {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      margin: 24px 0;
+    }
+    nav a {
+      color: var(--accent);
+      text-decoration: none;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper);
+      padding: 10px 12px;
+      font-size: 14px;
+      font-weight: 650;
+    }
+    section {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 24px;
+      margin: 18px 0;
+      box-shadow: 0 10px 30px rgba(31, 41, 51, .04);
+    }
+    h2 {
+      margin: 0 0 14px;
+      font-size: 22px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+    h3 {
+      margin: 20px 0 8px;
+      font-size: 16px;
+      letter-spacing: 0;
+    }
+    p { margin: 0 0 12px; }
+    ul, ol { margin: 0; padding-left: 22px; }
+    li { margin: 7px 0; }
+    code {
+      color: var(--code);
+      background: #eee9dd;
+      border-radius: 4px;
+      padding: 1px 4px;
+      font-size: .92em;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: #f1eadc;
+      color: #344054;
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: var(--accent-soft);
+      padding: 14px 16px;
+      border-radius: 6px;
+    }
+    .warning {
+      border-left-color: var(--warn);
+      background: #fff4d6;
+    }
+    .unit {
+      border-top: 1px solid var(--line);
+      padding-top: 16px;
+      margin-top: 16px;
+    }
+    .unit:first-of-type {
+      border-top: 0;
+      padding-top: 0;
+      margin-top: 0;
+    }
+    .unit-title {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .uid {
+      color: var(--accent);
+      font-weight: 800;
+      font-size: 14px;
+    }
+    .diagram {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .node {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #fbf7ed;
+      font-size: 14px;
+    }
+    .muted { color: var(--muted); }
+    a { color: var(--accent); }
+    @media (max-width: 720px) {
+      main { padding: 24px 14px 48px; }
+      section { padding: 18px; }
+      table { font-size: 13px; }
+      th, td { padding: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <p class="eyebrow">Implementation Plan</p>
+      <h1>Add POS Terminal Health Visibility</h1>
+      <div class="meta">
+        <span class="pill">Type: feat</span>
+        <span class="pill">Status: active</span>
+        <span class="pill">Date: 2026-05-20</span>
+        <span class="pill">Source: <a href="./2026-05-20-001-feat-pos-terminal-health-visibility-plan.md">Markdown plan</a></span>
+      </div>
+    </header>
+
+    <nav aria-label="Plan sections">
+      <a href="#summary">Summary</a>
+      <a href="#scope">Scope</a>
+      <a href="#decisions">Key Decisions</a>
+      <a href="#units">Implementation Units</a>
+      <a href="#impact">System Impact</a>
+      <a href="#risks">Risks</a>
+      <a href="#verification">Verification</a>
+    </nav>
+
+    <section id="summary">
+      <h2>Summary</h2>
+      <p>Add a production support layer around the existing local-first POS runtime. Terminals will publish safe runtime check-ins to Convex, support users will get a terminal health console and detail drill-in, and existing register/cash-controls views will link cloud sync evidence to local browser evidence.</p>
+      <div class="summary-grid">
+        <div class="callout">
+          <strong>Execution boundary</strong>
+          <p>Check-ins are visibility only. Cashier success remains tied to browser-local durable events.</p>
+        </div>
+        <div class="callout">
+          <strong>Support outcome</strong>
+          <p>Support can distinguish local-only, uploaded, projected, conflicted, stale, and unknown terminal states.</p>
+        </div>
+        <div class="callout warning">
+          <strong>Privacy boundary</strong>
+          <p>No PINs, verifier metadata, proof tokens, raw local event payloads, payment details, or customer details enter terminal health snapshots.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="scope">
+      <h2>Scope</h2>
+      <h3>In Scope</h3>
+      <ul>
+        <li>Server-side terminal runtime status record and store-scoped support queries.</li>
+        <li>Browser runtime check-in publisher and redacted copy-diagnostics payload.</li>
+        <li>Dedicated POS terminal health console and terminal detail view.</li>
+        <li>Cash-controls and register links to terminal evidence without changing review ownership.</li>
+        <li>Validation-map, tests, and solution documentation for the new visibility boundary.</li>
+      </ul>
+      <h3>Out of Scope</h3>
+      <ul>
+        <li>No changes to cashier checkout, local event durability, sync ordering, idempotency, inventory reconciliation, payment semantics, or closeout policy.</li>
+        <li>No automatic repair, alerting, or conflict resolution in this first pass.</li>
+        <li>No organization-wide fleet dashboard; this plan stays store-scoped.</li>
+      </ul>
+    </section>
+
+    <section id="decisions">
+      <h2>Key Decisions</h2>
+      <table>
+        <thead>
+          <tr><th>Decision</th><th>Rationale</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Dedicated runtime status record</td><td>Registration identity changes slowly; runtime health changes often and should be replaceable and timestamped.</td></tr>
+          <tr><td>Best-effort check-ins</td><td>A missed check-in must never block offline POS or cloud sync.</td></tr>
+          <tr><td>Summary-only diagnostics</td><td>Support needs counts, timestamps, sequences, local ids, cloud ids, and statuses, not sensitive payloads.</td></tr>
+          <tr><td>Dedicated POS terminal health route</td><td>Terminal troubleshooting is operational support, not current-device setup. Settings can link to health but should not host the command center.</td></tr>
+          <tr><td>Cash Controls remains review owner</td><td>Terminal health explains state; it does not create a parallel reconciliation queue.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>System Shape</h2>
+      <div class="diagram" aria-label="System flow">
+        <div class="node">Provisioned POS terminal</div>
+        <div class="node">IndexedDB local POS store</div>
+        <div class="node">POS sync runtime</div>
+        <div class="node">Terminal check-in mutation</div>
+        <div class="node">Runtime status table</div>
+        <div class="node">Cloud sync tables</div>
+        <div class="node">POS terminal health console</div>
+        <div class="node">Terminal detail drill-in</div>
+        <div class="node">Cash Controls links</div>
+      </div>
+      <p class="muted">The telemetry path explains terminal state. The existing local-sync path remains the reconciliation path.</p>
+    </section>
+
+    <section id="units">
+      <h2>Implementation Units</h2>
+
+      <article class="unit">
+        <div class="unit-title"><span class="uid">U1</span><h3>Cloud terminal runtime status foundation</h3></div>
+        <p>Add the schema, repository helpers, check-in mutation, and list/detail query foundation for redacted terminal health.</p>
+        <p><strong>Primary files:</strong> <code>convex/schemas/pos/posTerminalRuntimeStatus.ts</code>, <code>convex/schema.ts</code>, <code>convex/pos/public/terminals.ts</code>, <code>convex/pos/infrastructure/repositories/terminalRepository.ts</code>.</p>
+      </article>
+
+      <article class="unit">
+        <div class="unit-title"><span class="uid">U2</span><h3>Browser check-in publisher and redacted local diagnostic snapshot</h3></div>
+        <p>Centralize runtime status construction from local events, scheduler state, terminal seed, staff authority, readiness, and snapshots. Publish opportunistic check-ins and support copy-diagnostics payloads.</p>
+        <p><strong>Primary files:</strong> <code>src/lib/pos/infrastructure/local/terminalRuntimeStatus.ts</code>, <code>usePosLocalSyncRuntime.ts</code>, <code>posLocalStore.ts</code>, <code>PointOfSaleView.tsx</code>, <code>useRegisterViewModel.ts</code>.</p>
+      </article>
+
+      <article class="unit">
+        <div class="unit-title"><span class="uid">U3</span><h3>POS terminal health operations console</h3></div>
+        <p>Add a dedicated POS hub destination with a store terminal roster. Preserve current-device setup in POS Settings and link from Settings to Terminal Health.</p>
+        <p><strong>Primary files:</strong> <code>src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals.index.tsx</code>, <code>POSTerminalHealthView.tsx</code>, <code>POSTerminalHealthTable.tsx</code>, <code>terminalHealthPresentation.ts</code>, <code>PointOfSaleView.tsx</code>.</p>
+      </article>
+
+      <article class="unit">
+        <div class="unit-title"><span class="uid">U4</span><h3>Terminal detail drill-in with cloud sync evidence</h3></div>
+        <p>Add a terminal detail view that correlates latest check-in data with sync cursor, events, conflicts, mappings, active register session, recent transactions, and workflow trace links.</p>
+        <p><strong>Primary files:</strong> <code>src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId.tsx</code>, <code>POSTerminalDetailView.tsx</code>, <code>TerminalSyncTimeline.tsx</code>, terminal query files.</p>
+      </article>
+
+      <article class="unit">
+        <div class="unit-title"><span class="uid">U5</span><h3>Cash-controls and register evidence links</h3></div>
+        <p>Expose terminal health links and freshness in cash-controls/register surfaces while keeping manager review tied to actual sync conflicts.</p>
+        <p><strong>Primary files:</strong> <code>convex/cashControls/deposits.ts</code>, <code>CashControlsDashboard.tsx</code>, <code>RegisterSessionView.tsx</code>, <code>POSRegisterView.tsx</code>, <code>syncStatusPresentation.ts</code>.</p>
+      </article>
+
+      <article class="unit">
+        <div class="unit-title"><span class="uid">U6</span><h3>Validation coverage, harness map, and documentation</h3></div>
+        <p>Add validation-map coverage and a solution note so future POS local/sync changes preserve this support contract.</p>
+        <p><strong>Primary files:</strong> <code>scripts/harness-app-registry.ts</code>, <code>packages/athena-webapp/docs/agent/testing.md</code>, <code>docs/solutions/architecture/athena-pos-terminal-health-visibility-2026-05-20.md</code>.</p>
+      </article>
+    </section>
+
+    <section id="impact">
+      <h2>System-Wide Impact</h2>
+      <ul>
+        <li><strong>Interaction graph:</strong> POS hub/register publishes health; the POS Terminal Health console and terminal detail consume health; POS Settings links to health while remaining setup-focused; cash-controls links terminal evidence.</li>
+        <li><strong>Error propagation:</strong> Check-in failures stay diagnostic and do not escape as cashier workflow failures.</li>
+        <li><strong>State lifecycle:</strong> Check-ins may be stale; local events remain authoritative until uploaded.</li>
+        <li><strong>API parity:</strong> Public terminal queries must continue hiding <code>syncSecretHash</code>.</li>
+        <li><strong>Unchanged invariants:</strong> POS commands remain local-first; sync ordering remains per local register session; cash-controls remains review owner.</li>
+      </ul>
+    </section>
+
+    <section id="risks">
+      <h2>Risks</h2>
+      <table>
+        <thead>
+          <tr><th>Risk</th><th>Mitigation</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Check-ins become an execution dependency</td><td>Keep calls best-effort and test failed check-ins during normal register operation.</td></tr>
+          <tr><td>Sensitive local data leaks</td><td>Use strict validators, central redaction, and security-focused tests.</td></tr>
+          <tr><td>Stale cloud data is misread</td><td>Distinguish not reported, local-only, uploaded, projected, conflicted, and stale states.</td></tr>
+          <tr><td>Terminal console becomes a second review queue</td><td>Summarize and link to Cash Controls rather than resolving conflicts there.</td></tr>
+          <tr><td>Validation misses new surfaces</td><td>Add registry and generated validation-map coverage in the delivery unit.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="verification">
+      <h2>Verification Strategy</h2>
+      <ul>
+        <li>Convex tests for runtime status mutation/query authorization, redaction, stale/no-check-in terminals, and sync evidence joins.</li>
+        <li>Browser local runtime tests for non-blocking check-ins, local-store schema failures, staff authority readiness, and redacted diagnostics.</li>
+        <li>POS Terminal Health tests for roster status, stale posture, and no sync-secret exposure; POS Settings tests for setup focus and health handoff link.</li>
+        <li>Terminal detail tests for local-only, uploaded, projected, conflicted, and stale evidence states.</li>
+        <li>Cash-controls/register tests for terminal links, pending sync vs. needs-review separation, and support diagnostics availability.</li>
+        <li>Harness registry tests and generated validation-map review for the new POS terminal health surface.</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

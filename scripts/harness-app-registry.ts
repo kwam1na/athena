@@ -597,6 +597,48 @@ export const HARNESS_APP_REGISTRY = [
         note: "Use this when the shared workflow-trace or POS local sync contract, POS local sync repository, POS local-first sync/storage/read-model/command-gateway files, terminal seed lookup, POS local entry/readiness files, the POS register bootstrap or drawer gate, the `pos_session` / `register_session` trace writers, the trace route/view, or POS register, transaction, and cash-controls trace entry points change. It exercises the trace schema and presentation contract, the session/register trace writers, local sync ingestion/projection/repository/read-model adjacency, POS entry/readiness gating, the drawer-open bootstrap handoff, the shared trace route, terminal fallback behavior, and the operator-facing POS and cash-controls surfaces before broader package validation.",
       },
       {
+        title: "POS terminal health visibility and diagnostics edits",
+        touchedPaths: [
+          "convex/schemas/pos/posTerminal.ts",
+          "convex/schemas/pos/posTerminalRuntimeStatus.ts",
+          "convex/pos/application/commands/terminals.ts",
+          "convex/pos/application/queries/terminals.ts",
+          "convex/pos/infrastructure/repositories/terminalRepository.ts",
+          "convex/pos/public/terminals.ts",
+          "convex/inventory/posTerminal.ts",
+          "src/components/pos/settings/POSSettingsView.tsx",
+          "src/hooks/useGetTerminal.ts",
+          "src/lib/pos/application/registerAndProvisionPosTerminal.ts",
+          "src/lib/pos/infrastructure/terminal",
+          "src/lib/pos/infrastructure/local/terminalRuntimeStatus.ts",
+          "src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts",
+          "src/lib/pos/presentation/syncStatusPresentation.ts",
+          "src/components/pos/register/POSRegisterView.tsx",
+          "src/components/pos/terminals",
+          "src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals",
+          "src/components/cash-controls/CashControlsDashboard.tsx",
+          "src/components/cash-controls/RegisterSessionView.tsx",
+        ],
+        commands: [
+          {
+            kind: "raw",
+            command:
+              "bun run --filter '@athena/webapp' test -- convex/schemas/pos/posTerminal.test.ts convex/pos/application/terminals.test.ts convex/pos/infrastructure/repositories/terminalRepository.test.ts convex/pos/public/terminals.test.ts src/components/pos/settings/POSSettingsView.test.tsx src/hooks/useGetTerminal.test.ts src/lib/pos/infrastructure/local/terminalRuntimeStatus.test.ts src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.test.ts src/lib/pos/presentation/syncStatusPresentation.test.ts src/components/pos/register/POSRegisterView.test.tsx src/components/pos/terminals/terminalHealthPresentation.test.ts src/components/pos/terminals/POSTerminalHealthView.test.tsx src/components/pos/terminals/POSTerminalDetailView.test.tsx 'src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals.route.test.tsx' src/components/cash-controls/CashControlsDashboard.test.tsx src/components/cash-controls/RegisterSessionView.test.tsx",
+          },
+          { kind: "script", script: "audit:convex" },
+          { kind: "script", script: "lint:convex:changed" },
+          { kind: "script", script: "lint:frontend:changed" },
+          {
+            kind: "raw",
+            command:
+              "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+          },
+          { kind: "script", script: "build" },
+        ],
+        behaviorScenarios: ["athena-admin-shell-boot"],
+        note: "Use this when POS terminal registration, terminal runtime status, browser-side health publisher/readout, terminal setup/detail UI, POS support diagnostics, or cash-controls terminal evidence changes. Stale or pending terminal check-ins are telemetry and should stay out of manager-review queues; unresolved local sync conflicts remain the source of needs-review copy.",
+      },
+      {
         title: "Shared-lib or utility edits",
         touchedPaths: [
           "src/lib",

@@ -2,13 +2,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Id } from "../../_generated/dataModel";
 import { userError } from "../../../shared/commandResult";
-import { registerTerminal } from "./commands/terminals";
 import {
+  registerTerminal,
+  submitTerminalRuntimeStatus,
+} from "./commands/terminals";
+import {
+  getTerminalHealthSummary,
+  listTerminalHealthSummaries,
+} from "./queries/terminals";
+import {
+  getLatestRuntimeStatusForTerminal,
   getTerminalByFingerprint,
   getTerminalById,
   getTerminalByStoreIdAndRegisterNumber,
+  getTerminalSyncEvidence,
+  listTerminalsForStore,
   patchTerminalRecord,
   registerTerminalRecord,
+  upsertLatestRuntimeStatus,
 } from "../infrastructure/repositories/terminalRepository";
 
 const browserInfo = {
@@ -47,9 +58,13 @@ vi.mock("../infrastructure/repositories/terminalRepository", () => ({
   getTerminalByFingerprint: vi.fn(),
   getTerminalById: vi.fn(),
   getTerminalByStoreIdAndRegisterNumber: vi.fn(),
+  getLatestRuntimeStatusForTerminal: vi.fn(),
+  getTerminalSyncEvidence: vi.fn(),
+  listTerminalsForStore: vi.fn(),
   mapTerminalRecord: (terminal: typeof existingTerminal) => terminal,
   patchTerminalRecord: vi.fn(),
   registerTerminalRecord: vi.fn(),
+  upsertLatestRuntimeStatus: vi.fn(),
   deleteTerminalRecord: vi.fn(),
 }));
 
@@ -260,3 +275,409 @@ describe("registerTerminal", () => {
     );
   });
 });
+
+describe("submitTerminalRuntimeStatus", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(200);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.clearAllMocks();
+  });
+
+  it("upserts one redacted latest runtime status record per terminal", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(upsertLatestRuntimeStatus).mockResolvedValue(
+      "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    );
+
+    const result = await submitTerminalRuntimeStatus(
+      { db: null as never } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        status: {
+          ...buildRuntimeStatus(),
+          staffProofToken: "proof-token",
+          verifierMetadata: { salt: "never" },
+          rawLocalEvents: [
+            {
+              payload: {
+                payments: [{ amount: 100 }],
+                customerInfo: { phone: "never" },
+              },
+            },
+          ],
+        } as never,
+      },
+    );
+
+    expect(result).toEqual({
+      kind: "ok",
+      data: {
+        terminalId: "terminal-1",
+        reportedAt: 100,
+        receivedAt: 200,
+      },
+    });
+    expect(vi.mocked(upsertLatestRuntimeStatus)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.not.objectContaining({
+        staffProofToken: expect.anything(),
+        verifierMetadata: expect.anything(),
+        rawLocalEvents: expect.anything(),
+        payments: expect.anything(),
+        customerInfo: expect.anything(),
+      }),
+    );
+    expect(vi.mocked(upsertLatestRuntimeStatus)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        reportedAt: 100,
+        receivedAt: 200,
+        source: "sync-runtime",
+        localStore: expect.objectContaining({
+          failureMessage: "IndexedDB failed with [redacted]",
+        }),
+        sync: expect.objectContaining({
+          pendingEventCount: 2,
+          lastFailureMessage: "[redacted] and [redacted]",
+        }),
+      }),
+    );
+  });
+
+  it("does not write for inactive or wrong-store terminals", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue({
+      ...existingTerminal,
+      status: "lost",
+    });
+
+    const result = await submitTerminalRuntimeStatus(
+      { db: null as never } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        status: buildRuntimeStatus(),
+      },
+    );
+
+    expect(result).toEqual(
+      userError({
+        code: "precondition_failed",
+        message: "This terminal is not active for this store.",
+      }),
+    );
+    expect(vi.mocked(upsertLatestRuntimeStatus)).not.toHaveBeenCalled();
+  });
+});
+
+describe("terminal health summaries", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("joins registration metadata and latest runtime status without sampling sync evidence in the roster", async () => {
+    vi.mocked(listTerminalsForStore).mockResolvedValue([existingTerminal]);
+    vi.mocked(getLatestRuntimeStatusForTerminal).mockResolvedValue(
+      buildPersistedRuntimeStatus(),
+    );
+    vi.mocked(getTerminalSyncEvidence).mockResolvedValue({
+      latestEvent: {
+        localEventId: "local-event-1",
+        localRegisterSessionId: "local-register-1",
+        sequence: 7,
+        eventType: "sale_completed",
+        status: "projected",
+        occurredAt: 120,
+        submittedAt: 130,
+        acceptedAt: 140,
+        projectedAt: 150,
+      },
+      sampledEventCount: 3,
+      acceptedCount: 0,
+      projectedCount: 2,
+      conflictedCount: 1,
+      heldCount: 0,
+      rejectedCount: 0,
+      acceptedThroughSequence: 7,
+      cursorUpdatedAt: 160,
+    });
+
+    const result = await listTerminalHealthSummaries(
+      { db: null as never } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        now: 220,
+      },
+    );
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        terminal: expect.objectContaining({
+          _id: "terminal-1",
+          displayName: "Old Terminal",
+          registerNumber: "A1",
+          status: "active",
+        }),
+        health: "needs_attention",
+        runtimeAgeMs: 20,
+        runtimeStatus: expect.objectContaining({
+          source: "sync-runtime",
+        }),
+        syncEvidence: {
+          latestEvent: null,
+          sampledEventCount: 0,
+          acceptedCount: 0,
+          projectedCount: 0,
+          conflictedCount: 0,
+          heldCount: 0,
+          rejectedCount: 0,
+        },
+      }),
+    ]);
+    expect(vi.mocked(getTerminalSyncEvidence)).not.toHaveBeenCalled();
+  });
+
+  it("loads sampled sync evidence only for terminal detail", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(getLatestRuntimeStatusForTerminal).mockResolvedValue(
+      buildPersistedRuntimeStatus(),
+    );
+    vi.mocked(getTerminalSyncEvidence).mockResolvedValue({
+      latestEvent: null,
+      sampledEventCount: 1,
+      acceptedCount: 1,
+      projectedCount: 0,
+      conflictedCount: 0,
+      heldCount: 0,
+      rejectedCount: 0,
+      acceptedThroughSequence: 9,
+      cursorUpdatedAt: 180,
+    });
+
+    const result = await getTerminalHealthSummary(
+      { db: null as never } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        now: 220,
+      },
+    );
+
+    expect(vi.mocked(getTerminalSyncEvidence)).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+    );
+    expect(result?.syncEvidence).toEqual(
+      expect.objectContaining({
+        acceptedThroughSequence: 9,
+        sampledEventCount: 1,
+      }),
+    );
+  });
+
+  it.each([
+    {
+      expectedHealth: "offline",
+      name: "inactive terminal",
+      runtimeStatus: buildPersistedRuntimeStatus(),
+      terminal: { ...existingTerminal, status: "lost" as const },
+    },
+    {
+      expectedHealth: "unknown",
+      name: "missing runtime status",
+      runtimeStatus: null,
+      terminal: existingTerminal,
+    },
+    {
+      expectedHealth: "online",
+      name: "fresh online runtime",
+      runtimeStatus: buildPersistedRuntimeStatus({
+        browserInfo: {
+          language: "en",
+          online: true,
+          platform: "darwin",
+          userAgent: "tests",
+        },
+        receivedAt: 220,
+        sync: {
+          ...buildRuntimeStatus().sync,
+          failedEventCount: 0,
+          pendingEventCount: 0,
+          status: "idle" as never,
+          uploadableEventCount: 0,
+        },
+      }),
+      terminal: existingTerminal,
+    },
+    {
+      expectedHealth: "stale",
+      name: "fresh browser-offline runtime",
+      runtimeStatus: buildPersistedRuntimeStatus({
+        browserInfo: {
+          language: "en",
+          online: false,
+          platform: "darwin",
+          userAgent: "tests",
+        },
+        receivedAt: 220,
+        sync: {
+          ...buildRuntimeStatus().sync,
+          failedEventCount: 0,
+          pendingEventCount: 0,
+          status: "idle" as never,
+          uploadableEventCount: 0,
+        },
+      }),
+      terminal: existingTerminal,
+    },
+    {
+      expectedHealth: "stale",
+      name: "stale runtime",
+      runtimeStatus: buildPersistedRuntimeStatus({
+        receivedAt: 220 - 10 * 60 * 1000,
+        sync: {
+          ...buildRuntimeStatus().sync,
+          failedEventCount: 0,
+          pendingEventCount: 0,
+          status: "idle" as never,
+          uploadableEventCount: 0,
+        },
+      }),
+      terminal: existingTerminal,
+    },
+    {
+      expectedHealth: "offline",
+      name: "offline-age runtime",
+      runtimeStatus: buildPersistedRuntimeStatus({
+        receivedAt: 220 - 20 * 60 * 1000,
+        sync: {
+          ...buildRuntimeStatus().sync,
+          failedEventCount: 0,
+          pendingEventCount: 0,
+          status: "idle" as never,
+          uploadableEventCount: 0,
+        },
+      }),
+      terminal: existingTerminal,
+    },
+  ])("classifies $name as $expectedHealth", async (scenario) => {
+    vi.mocked(listTerminalsForStore).mockResolvedValue([scenario.terminal]);
+    vi.mocked(getLatestRuntimeStatusForTerminal).mockResolvedValue(
+      scenario.runtimeStatus,
+    );
+    vi.mocked(getTerminalSyncEvidence).mockResolvedValue({
+      latestEvent: null,
+      sampledEventCount: 0,
+      acceptedCount: 0,
+      projectedCount: 0,
+      conflictedCount: 0,
+      heldCount: 0,
+      rejectedCount: 0,
+    });
+
+    const result = await listTerminalHealthSummaries(
+      { db: null as never } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        now: 220,
+      },
+    );
+
+    expect(result[0]?.health).toBe(scenario.expectedHealth);
+  });
+
+  it("returns null for detail when the terminal is outside the requested store", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue({
+      ...existingTerminal,
+      storeId: "store-2" as Id<"store">,
+    });
+
+    const result = await getTerminalHealthSummary(
+      { db: null as never } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        now: 220,
+      },
+    );
+
+    expect(result).toBeNull();
+    expect(vi.mocked(getLatestRuntimeStatusForTerminal)).not.toHaveBeenCalled();
+  });
+});
+
+function buildRuntimeStatus() {
+  return {
+    reportedAt: 100,
+    source: "sync-runtime" as const,
+    appVersion: "1.2.3",
+    buildSha: "abc123",
+    browserInfo: {
+      userAgent: "tests",
+      platform: "darwin",
+      language: "en",
+      online: true,
+    },
+    localStore: {
+      available: true,
+      schemaVersion: 3,
+      terminalSeedReady: true,
+      failureMessage:
+        "IndexedDB failed with Authorization: Basic dXNlcjpwYXNz and phone +233 55 123 4567",
+    },
+    sync: {
+      status: "pending" as const,
+      pendingEventCount: 2,
+      uploadableEventCount: 2,
+      failedEventCount: 1,
+      reviewEventCount: 0,
+      localOnlyEventCount: 0,
+      oldestPendingEventAt: 90,
+      nextPendingUploadSequence: 4,
+      lastSyncedSequence: 3,
+      lastTrigger: "event-append",
+      lastFailureMessage:
+        "Bearer raw.token.value and Authorization: ApiKey custom-secret and phone +233 55 987 6543",
+    },
+    staffAuthority: {
+      status: "ready" as const,
+      staffProfileId: "staff-1" as Id<"staffProfile">,
+      expiresAt: 1000,
+    },
+    snapshots: {
+      catalogAgeMs: 10,
+      availabilityAgeMs: 20,
+      registerReadModelAgeMs: 30,
+    },
+  };
+}
+
+function buildPersistedRuntimeStatus(
+  overrides: Partial<ReturnType<typeof buildRuntimeStatus>> & {
+    receivedAt?: number;
+  } = {},
+) {
+  return {
+    _id: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    _creationTime: 190,
+    storeId: "store-1" as Id<"store">,
+    terminalId: "terminal-1" as Id<"posTerminal">,
+    receivedAt: 200,
+    ...buildRuntimeStatus(),
+    ...overrides,
+  };
+}

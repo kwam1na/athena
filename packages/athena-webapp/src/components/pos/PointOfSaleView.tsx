@@ -20,6 +20,7 @@ import {
   Search,
   HandCoins,
   ClipboardList,
+  MonitorCheck,
 } from "lucide-react";
 import { useGetActiveOrganization } from "@/hooks/useGetOrganizations";
 import { getOrigin } from "~/src/lib/navigationUtils";
@@ -85,7 +86,7 @@ export default function PointOfSaleView() {
   // Currency formatter
   const currencyFormatter = useGetCurrencyFormatter();
 
-  const { hasFullAdminAccess } = usePermissions();
+  const { canAccessPOS, hasFullAdminAccess } = usePermissions();
 
   const liveLinkParams =
     activeOrganization?.slug && activeStore?.slug
@@ -165,6 +166,15 @@ export default function PointOfSaleView() {
       params: liveLinkParams,
       color: "bg-cyan-600",
       available: hasFullAdminAccess && Boolean(liveLinkParams),
+    },
+    {
+      title: "Terminal Health",
+      description: "Review checkout station sync, staff authority, and support signals",
+      icon: MonitorCheck,
+      href: "/$orgUrlSlug/store/$storeUrlSlug/pos/terminals" as const,
+      params: liveLinkParams,
+      color: "bg-emerald-600",
+      available: canAccessPOS() && Boolean(liveLinkParams),
     },
     {
       title: "Expense Reports",

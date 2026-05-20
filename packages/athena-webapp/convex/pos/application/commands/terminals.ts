@@ -13,6 +13,7 @@ import {
   mapTerminalRecord,
   patchTerminalRecord,
   registerTerminalRecord,
+  upsertLatestRuntimeStatus,
 } from "../../infrastructure/repositories/terminalRepository";
 import { deleteTerminalRecord } from "../../infrastructure/repositories/terminalRepository";
 
@@ -210,4 +211,224 @@ export async function deleteTerminal(
 ) {
   await deleteTerminalRecord(ctx, args.terminalId);
   return null;
+}
+
+export type TerminalRuntimeStatusInput = {
+  reportedAt: number;
+  source: Doc<"posTerminalRuntimeStatus">["source"];
+  appVersion?: string;
+  buildSha?: string;
+  browserInfo?: {
+    userAgent?: string;
+    platform?: string;
+    language?: string;
+    online?: boolean;
+  };
+  localStore: {
+    available: boolean;
+    schemaVersion?: number;
+    terminalSeedReady: boolean;
+    failureMessage?: string;
+  };
+  sync: {
+    status: Doc<"posTerminalRuntimeStatus">["sync"]["status"];
+    pendingEventCount: number;
+    uploadableEventCount: number;
+    failedEventCount: number;
+    reviewEventCount: number;
+    localOnlyEventCount: number;
+    oldestPendingEventAt?: number;
+    nextPendingUploadSequence?: number;
+    lastSyncedSequence?: number;
+    lastTrigger?: string;
+    lastFailureMessage?: string;
+  };
+  staffAuthority: {
+    status: Doc<"posTerminalRuntimeStatus">["staffAuthority"]["status"];
+    staffProfileId?: Id<"staffProfile">;
+    expiresAt?: number;
+  };
+  snapshots: {
+    catalogAgeMs?: number;
+    availabilityAgeMs?: number;
+    registerReadModelAgeMs?: number;
+  };
+};
+
+const TERMINAL_NOT_ACTIVE_FOR_STORE_MESSAGE =
+  "This terminal is not active for this store.";
+const REDACTED_DIAGNOSTIC_VALUE = "[redacted]";
+const SENSITIVE_DIAGNOSTIC_PATTERNS = [
+  /\bauthorization\s*:\s*[^,;]+/gi,
+  /\b(?:authorization\s*:\s*)?bearer\s+[^,\s;]+/gi,
+  /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g,
+  /(?:\+?\d[\d\s().-]{7,}\d)/g,
+  /\b(?:staffProofToken|proofToken|syncSecret|syncSecretHash|token|secret|password|authorization|bearer|cookie|session)[\w-]*\s*[:=]\s*[^,\s;]+/gi,
+  /\b(?:sk|pk|ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{12,}\b/g,
+];
+
+export async function submitTerminalRuntimeStatus(
+  ctx: MutationCtx,
+  args: {
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+    status: TerminalRuntimeStatusInput;
+  },
+): Promise<
+  CommandResult<{
+    terminalId: Id<"posTerminal">;
+    reportedAt: number;
+    receivedAt: number;
+  }>
+> {
+  const terminal = await getTerminalById(ctx, args.terminalId);
+  if (
+    !terminal ||
+    terminal.storeId !== args.storeId ||
+    terminal.status !== "active"
+  ) {
+    return userError({
+      code: "precondition_failed",
+      message: TERMINAL_NOT_ACTIVE_FOR_STORE_MESSAGE,
+    });
+  }
+
+  const receivedAt = Date.now();
+  const reportedAt = positiveTimestamp(args.status.reportedAt) ?? receivedAt;
+  await upsertLatestRuntimeStatus(ctx, {
+    storeId: args.storeId,
+    terminalId: args.terminalId,
+    reportedAt,
+    receivedAt,
+    source: args.status.source,
+    ...omitUndefined({
+      appVersion: cleanOptionalString(args.status.appVersion, 80),
+      buildSha: cleanOptionalString(args.status.buildSha, 80),
+      browserInfo: cleanBrowserInfo(args.status.browserInfo),
+    }),
+    localStore: omitUndefined({
+      available: args.status.localStore.available,
+      schemaVersion: nonNegativeInteger(args.status.localStore.schemaVersion),
+      terminalSeedReady: args.status.localStore.terminalSeedReady,
+      failureMessage: cleanDiagnosticMessage(
+        args.status.localStore.failureMessage,
+        500,
+      ),
+    }),
+    sync: omitUndefined({
+      status: args.status.sync.status,
+      pendingEventCount: nonNegativeInteger(
+        args.status.sync.pendingEventCount,
+      ),
+      uploadableEventCount: nonNegativeInteger(
+        args.status.sync.uploadableEventCount,
+      ),
+      failedEventCount: nonNegativeInteger(args.status.sync.failedEventCount),
+      reviewEventCount: nonNegativeInteger(args.status.sync.reviewEventCount),
+      localOnlyEventCount: nonNegativeInteger(
+        args.status.sync.localOnlyEventCount,
+      ),
+      oldestPendingEventAt: positiveTimestamp(
+        args.status.sync.oldestPendingEventAt,
+      ),
+      nextPendingUploadSequence: positiveInteger(
+        args.status.sync.nextPendingUploadSequence,
+      ),
+      lastSyncedSequence: nonNegativeInteger(
+        args.status.sync.lastSyncedSequence,
+      ),
+      lastTrigger: cleanOptionalString(args.status.sync.lastTrigger, 80),
+      lastFailureMessage: cleanDiagnosticMessage(
+        args.status.sync.lastFailureMessage,
+        500,
+      ),
+    }),
+    staffAuthority: omitUndefined({
+      status: args.status.staffAuthority.status,
+      staffProfileId: args.status.staffAuthority.staffProfileId,
+      expiresAt: positiveTimestamp(args.status.staffAuthority.expiresAt),
+    }),
+    snapshots: omitUndefined({
+      catalogAgeMs: nonNegativeInteger(args.status.snapshots.catalogAgeMs),
+      availabilityAgeMs: nonNegativeInteger(
+        args.status.snapshots.availabilityAgeMs,
+      ),
+      registerReadModelAgeMs: nonNegativeInteger(
+        args.status.snapshots.registerReadModelAgeMs,
+      ),
+    }),
+  });
+
+  return ok({
+    terminalId: args.terminalId,
+    reportedAt,
+    receivedAt,
+  });
+}
+
+function cleanBrowserInfo(
+  browserInfo: TerminalRuntimeStatusInput["browserInfo"],
+) {
+  if (!browserInfo) {
+    return undefined;
+  }
+
+  const cleaned = omitUndefined({
+    userAgent: cleanOptionalString(browserInfo.userAgent, 500),
+    platform: cleanOptionalString(browserInfo.platform, 120),
+    language: cleanOptionalString(browserInfo.language, 40),
+    online: browserInfo.online,
+  });
+
+  return Object.keys(cleaned).length > 0 ? cleaned : undefined;
+}
+
+function cleanOptionalString(value: string | undefined, maxLength: number) {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  return trimmed.length > maxLength ? trimmed.slice(0, maxLength) : trimmed;
+}
+
+function cleanDiagnosticMessage(value: string | undefined, maxLength: number) {
+  const cleaned = cleanOptionalString(value, maxLength);
+  if (!cleaned) {
+    return undefined;
+  }
+
+  return SENSITIVE_DIAGNOSTIC_PATTERNS.reduce(
+    (message, pattern) => message.replace(pattern, REDACTED_DIAGNOSTIC_VALUE),
+    cleaned,
+  );
+}
+
+function positiveTimestamp(value: number | undefined) {
+  return Number.isFinite(value) && value !== undefined && value > 0
+    ? value
+    : undefined;
+}
+
+function positiveInteger(value: number | undefined) {
+  return Number.isSafeInteger(value) && value !== undefined && value > 0
+    ? value
+    : undefined;
+}
+
+function nonNegativeInteger(value: number | undefined) {
+  return Number.isSafeInteger(value) && value !== undefined && value >= 0
+    ? value
+    : 0;
+}
+
+function omitUndefined<T extends Record<string, unknown>>(input: T) {
+  return Object.fromEntries(
+    Object.entries(input).filter(([, value]) => value !== undefined),
+  ) as {
+    [Key in keyof T as undefined extends T[Key] ? Key : Key]: Exclude<
+      T[Key],
+      undefined
+    >;
+  };
 }

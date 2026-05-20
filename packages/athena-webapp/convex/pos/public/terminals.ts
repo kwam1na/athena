@@ -11,13 +11,25 @@ import { userError } from "../../../shared/commandResult";
 import {
   deleteTerminal as deleteTerminalCommand,
   registerTerminal as registerTerminalCommand,
+  submitTerminalRuntimeStatus as submitTerminalRuntimeStatusCommand,
   updateTerminal as updateTerminalCommand,
+  type TerminalRuntimeStatusInput,
 } from "../application/commands/terminals";
 import {
   getTerminalByFingerprint as getTerminalByFingerprintQuery,
+  getTerminalHealthSummary as getTerminalHealthSummaryQuery,
+  listTerminalHealthSummaries as listTerminalHealthSummariesQuery,
   listTerminals as listTerminalsQuery,
 } from "../application/queries/terminals";
 import { hashPosTerminalSyncSecret } from "../application/sync/terminalSyncSecret";
+import {
+  posTerminalRuntimeBrowserInfoValidator,
+  posTerminalRuntimeLocalStoreValidator,
+  posTerminalRuntimeSnapshotsValidator,
+  posTerminalRuntimeStaffAuthorityValidator,
+  posTerminalRuntimeStatusSourceValidator,
+  posTerminalRuntimeSyncValidator,
+} from "../../schemas/pos/posTerminalRuntimeStatus";
 
 const statusValidator = v.union(
   v.literal("active"),
@@ -61,6 +73,80 @@ const terminalProvisioningReturnValidator = v.object({
   status: statusValidator,
 });
 
+const runtimeStatusInputValidator = v.object({
+  reportedAt: v.number(),
+  source: posTerminalRuntimeStatusSourceValidator,
+  appVersion: v.optional(v.string()),
+  buildSha: v.optional(v.string()),
+  browserInfo: v.optional(posTerminalRuntimeBrowserInfoValidator),
+  localStore: posTerminalRuntimeLocalStoreValidator,
+  sync: posTerminalRuntimeSyncValidator,
+  staffAuthority: posTerminalRuntimeStaffAuthorityValidator,
+  snapshots: posTerminalRuntimeSnapshotsValidator,
+});
+
+const runtimeStatusWriteResultValidator = v.object({
+  terminalId: v.id("posTerminal"),
+  reportedAt: v.number(),
+  receivedAt: v.number(),
+});
+
+const runtimeStatusSnapshotReturnValidator = v.object({
+  ...runtimeStatusInputValidator.fields,
+  receivedAt: v.number(),
+});
+
+const terminalSyncEvidenceReturnValidator = v.object({
+  latestEvent: v.union(
+    v.object({
+      localEventId: v.string(),
+      localRegisterSessionId: v.string(),
+      sequence: v.number(),
+      eventType: v.string(),
+      status: v.string(),
+      occurredAt: v.number(),
+      submittedAt: v.number(),
+      acceptedAt: v.optional(v.number()),
+      projectedAt: v.optional(v.number()),
+    }),
+    v.null(),
+  ),
+  sampledEventCount: v.number(),
+  acceptedCount: v.number(),
+  projectedCount: v.number(),
+  conflictedCount: v.number(),
+  heldCount: v.number(),
+  rejectedCount: v.number(),
+  acceptedThroughSequence: v.optional(v.number()),
+  cursorUpdatedAt: v.optional(v.number()),
+});
+
+const terminalHealthStatusValidator = v.union(
+  v.literal("online"),
+  v.literal("stale"),
+  v.literal("offline"),
+  v.literal("needs_attention"),
+  v.literal("unknown"),
+);
+
+const terminalRegistrationSummaryReturnValidator = v.object({
+  _id: v.id("posTerminal"),
+  displayName: v.string(),
+  registerNumber: v.optional(v.string()),
+  registeredByUserId: v.id("athenaUser"),
+  browserInfo: browserInfoValidator,
+  registeredAt: v.number(),
+  status: statusValidator,
+});
+
+const terminalHealthSummaryReturnValidator = v.object({
+  terminal: terminalRegistrationSummaryReturnValidator,
+  health: terminalHealthStatusValidator,
+  runtimeAgeMs: v.union(v.number(), v.null()),
+  runtimeStatus: v.union(runtimeStatusSnapshotReturnValidator, v.null()),
+  syncEvidence: terminalSyncEvidenceReturnValidator,
+});
+
 type TerminalRecord = {
   syncSecretHash?: string;
 };
@@ -68,6 +154,54 @@ type TerminalRecord = {
 function stripTerminalSyncSecret<T extends TerminalRecord>(terminal: T) {
   const { syncSecretHash: _syncSecretHash, ...publicTerminal } = terminal;
   return publicTerminal;
+}
+
+function stripRuntimeStatusInput(
+  status: TerminalRuntimeStatusInput,
+): TerminalRuntimeStatusInput {
+  return {
+    reportedAt: status.reportedAt,
+    source: status.source,
+    appVersion: status.appVersion,
+    buildSha: status.buildSha,
+    browserInfo: status.browserInfo
+      ? {
+          userAgent: status.browserInfo.userAgent,
+          platform: status.browserInfo.platform,
+          language: status.browserInfo.language,
+          online: status.browserInfo.online,
+        }
+      : undefined,
+    localStore: {
+      available: status.localStore.available,
+      schemaVersion: status.localStore.schemaVersion,
+      terminalSeedReady: status.localStore.terminalSeedReady,
+      failureMessage: status.localStore.failureMessage,
+    },
+    sync: {
+      status: status.sync.status,
+      pendingEventCount: status.sync.pendingEventCount,
+      uploadableEventCount: status.sync.uploadableEventCount,
+      failedEventCount: status.sync.failedEventCount,
+      reviewEventCount: status.sync.reviewEventCount,
+      localOnlyEventCount: status.sync.localOnlyEventCount,
+      oldestPendingEventAt: status.sync.oldestPendingEventAt,
+      nextPendingUploadSequence: status.sync.nextPendingUploadSequence,
+      lastSyncedSequence: status.sync.lastSyncedSequence,
+      lastTrigger: status.sync.lastTrigger,
+      lastFailureMessage: status.sync.lastFailureMessage,
+    },
+    staffAuthority: {
+      status: status.staffAuthority.status,
+      staffProfileId: status.staffAuthority.staffProfileId,
+      expiresAt: status.staffAuthority.expiresAt,
+    },
+    snapshots: {
+      catalogAgeMs: status.snapshots.catalogAgeMs,
+      availabilityAgeMs: status.snapshots.availabilityAgeMs,
+      registerReadModelAgeMs: status.snapshots.registerReadModelAgeMs,
+    },
+  };
 }
 
 async function requireTerminalStoreAccess(
@@ -128,6 +262,97 @@ export const getTerminalByFingerprint = query({
 	    return terminal ? stripTerminalSyncSecret(terminal) : null;
   },
 });
+
+export const listTerminalHealthSummaries = query({
+  args: {
+    storeId: v.id("store"),
+  },
+  returns: v.array(terminalHealthSummaryReturnValidator),
+  handler: async (ctx, args) => {
+    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+    await requireTerminalStoreAccess(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "You do not have access to view POS terminal health.",
+      storeId: args.storeId,
+      userId: athenaUser._id,
+    });
+    return listTerminalHealthSummariesQuery(ctx, args);
+  },
+});
+
+export const getTerminalHealthSummary = query({
+  args: {
+    storeId: v.id("store"),
+    terminalId: v.id("posTerminal"),
+  },
+  returns: v.union(terminalHealthSummaryReturnValidator, v.null()),
+  handler: async (ctx, args) => {
+    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+    await requireTerminalStoreAccess(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "You do not have access to view POS terminal health.",
+      storeId: args.storeId,
+      userId: athenaUser._id,
+    });
+    return getTerminalHealthSummaryQuery(ctx, args);
+  },
+});
+
+export const listTerminalHealth = listTerminalHealthSummaries;
+export const getTerminalHealthDetail = getTerminalHealthSummary;
+
+export const submitTerminalRuntimeStatus = mutation({
+  args: {
+    storeId: v.id("store"),
+    terminalId: v.id("posTerminal"),
+    syncSecretHash: v.string(),
+    status: runtimeStatusInputValidator,
+  },
+  returns: commandResultValidator(runtimeStatusWriteResultValidator),
+  handler: async (ctx, args) => {
+    try {
+      const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      await requireTerminalStoreAccess(ctx, {
+        allowedRoles: ["full_admin", "pos_only"],
+        failureMessage:
+          "You do not have access to update this POS terminal status.",
+        storeId: args.storeId,
+        userId: athenaUser._id,
+      });
+
+      const terminal = await ctx.db.get("posTerminal", args.terminalId);
+      const submittedSyncSecretHash = await hashPosTerminalSyncSecret(
+        args.syncSecretHash,
+      );
+      if (
+        !terminal ||
+        terminal.storeId !== args.storeId ||
+        terminal.status !== "active" ||
+        terminal.registeredByUserId !== athenaUser._id ||
+        !terminal.syncSecretHash ||
+        terminal.syncSecretHash !== submittedSyncSecretHash
+      ) {
+        return userError({
+          code: "authorization_failed",
+          message: "You do not have access to update this POS terminal status.",
+        });
+      }
+
+      return submitTerminalRuntimeStatusCommand(ctx, {
+        storeId: args.storeId,
+        terminalId: args.terminalId,
+        status: stripRuntimeStatusInput(args.status),
+      });
+    } catch {
+      return userError({
+        code: "authorization_failed",
+        message: "You do not have access to update this POS terminal status.",
+      });
+    }
+  },
+});
+
+export const reportTerminalRuntimeStatus = submitTerminalRuntimeStatus;
 
 export const registerTerminal = mutation({
   args: {

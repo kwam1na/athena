@@ -761,6 +761,46 @@ describe("CashControlsDashboardContent", () => {
     ).toBeInTheDocument();
   });
 
+  it("keeps stale terminal health out of manager-review counts", () => {
+    render(
+      <CashControlsDashboardContent
+        currency="GHS"
+        dashboardSnapshot={{
+          ...baseSnapshot,
+          registerSessions: [
+            {
+              _id: "session-terminal-stale",
+              expectedCash: 17600,
+              openedAt: new Date("2026-04-21T07:30:00.000Z").getTime(),
+              openingFloat: 5000,
+              registerNumber: "Register 3",
+              status: "active",
+              terminalName: "Front counter",
+              totalDeposited: 0,
+              variance: 0,
+              localSyncStatus: {
+                description: "Terminal check-in is waiting for a fresh upload.",
+                status: "terminal_stale",
+              },
+            },
+          ],
+        }}
+        isLoading={false}
+        orgUrlSlug="v26"
+        storeUrlSlug="east-legon"
+      />,
+    );
+
+    expect(screen.getAllByText("Front counter").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Pending sync").length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText("Terminal check-in is waiting for a fresh upload.")
+        .length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByText("0 unresolved")).toBeInTheDocument();
+    expect(screen.queryByText("Needs review")).not.toBeInTheDocument();
+  });
+
   it("uses safe fallback copy for unknown reconciliation types", () => {
     render(
       <CashControlsDashboardContent

@@ -733,6 +733,59 @@ describe("HARNESS_APP_REGISTRY", () => {
     ]);
   });
 
+  it("documents POS terminal health visibility validation coverage in Athena harness docs", () => {
+    const athena = HARNESS_APP_REGISTRY.find(
+      (entry) => entry.appName === "athena-webapp"
+    );
+    const terminalHealthScenario = athena?.validationScenarios.find(
+      (scenario) =>
+        scenario.title === "POS terminal health visibility and diagnostics edits"
+    );
+
+    expect(terminalHealthScenario?.touchedPaths).toEqual([
+      "convex/schemas/pos/posTerminal.ts",
+      "convex/schemas/pos/posTerminalRuntimeStatus.ts",
+      "convex/pos/application/commands/terminals.ts",
+      "convex/pos/application/queries/terminals.ts",
+      "convex/pos/infrastructure/repositories/terminalRepository.ts",
+      "convex/pos/public/terminals.ts",
+      "convex/inventory/posTerminal.ts",
+      "src/components/pos/settings/POSSettingsView.tsx",
+      "src/hooks/useGetTerminal.ts",
+      "src/lib/pos/application/registerAndProvisionPosTerminal.ts",
+      "src/lib/pos/infrastructure/terminal",
+      "src/lib/pos/infrastructure/local/terminalRuntimeStatus.ts",
+      "src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts",
+      "src/lib/pos/presentation/syncStatusPresentation.ts",
+      "src/components/pos/register/POSRegisterView.tsx",
+      "src/components/pos/terminals",
+      "src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals",
+      "src/components/cash-controls/CashControlsDashboard.tsx",
+      "src/components/cash-controls/RegisterSessionView.tsx",
+    ]);
+    expect(terminalHealthScenario?.commands).toEqual([
+      {
+        kind: "raw",
+        command:
+          "bun run --filter '@athena/webapp' test -- convex/schemas/pos/posTerminal.test.ts convex/pos/application/terminals.test.ts convex/pos/infrastructure/repositories/terminalRepository.test.ts convex/pos/public/terminals.test.ts src/components/pos/settings/POSSettingsView.test.tsx src/hooks/useGetTerminal.test.ts src/lib/pos/infrastructure/local/terminalRuntimeStatus.test.ts src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.test.ts src/lib/pos/presentation/syncStatusPresentation.test.ts src/components/pos/register/POSRegisterView.test.tsx src/components/pos/terminals/terminalHealthPresentation.test.ts src/components/pos/terminals/POSTerminalHealthView.test.tsx src/components/pos/terminals/POSTerminalDetailView.test.tsx 'src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals.route.test.tsx' src/components/cash-controls/CashControlsDashboard.test.tsx src/components/cash-controls/RegisterSessionView.test.tsx",
+      },
+      { kind: "script", script: "audit:convex" },
+      { kind: "script", script: "lint:convex:changed" },
+      { kind: "script", script: "lint:frontend:changed" },
+      {
+        kind: "raw",
+        command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+      },
+      { kind: "script", script: "build" },
+    ]);
+    expect(terminalHealthScenario?.note).toBe(
+      "Use this when POS terminal registration, terminal runtime status, browser-side health publisher/readout, terminal setup/detail UI, POS support diagnostics, or cash-controls terminal evidence changes. Stale or pending terminal check-ins are telemetry and should stay out of manager-review queues; unresolved local sync conflicts remain the source of needs-review copy."
+    );
+    expect(terminalHealthScenario?.behaviorScenarios).toEqual([
+      "athena-admin-shell-boot",
+    ]);
+  });
+
   it("covers Athena shared type exports in the shared-lib validation scenario", () => {
     const athena = HARNESS_APP_REGISTRY.find(
       (entry) => entry.appName === "athena-webapp"

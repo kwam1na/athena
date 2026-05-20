@@ -112,6 +112,7 @@ describe("PointOfSaleView", () => {
       },
     });
     usePermissionsMock.mockReturnValue({
+      canAccessPOS: () => true,
       hasFullAdminAccess: true,
     });
     useLocalPosEntryContextMock.mockReturnValue({
@@ -174,6 +175,19 @@ describe("PointOfSaleView", () => {
     expect(link).toHaveAttribute("href", "/acme/store/downtown/pos/sessions");
     expect(
       screen.getByText("Review active and held sales reserving inventory"),
+    ).toBeInTheDocument();
+  });
+
+  it("links POS users to terminal health from the POS landing page", () => {
+    render(<PointOfSaleView />);
+
+    const link = screen.getByRole("link", { name: /Terminal Health/i });
+
+    expect(link).toHaveAttribute("href", "/acme/store/downtown/pos/terminals");
+    expect(
+      screen.getByText(
+        "Review checkout station sync, staff authority, and support signals",
+      ),
     ).toBeInTheDocument();
   });
 

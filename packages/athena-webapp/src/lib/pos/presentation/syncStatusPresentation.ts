@@ -78,6 +78,9 @@ function normalizeStatus(status?: string | null): PosSyncStatusKind {
       return status;
     case "pending":
     case "offline":
+    case "stale":
+    case "terminal_stale":
+    case "pending_check_in":
       return "pending_sync";
     case "local_closed":
     case "closed_pending_sync":

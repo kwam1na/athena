@@ -60,6 +60,7 @@ import {
   posLocalSyncEventSchema,
   posLocalSyncMappingSchema,
   posLocalStaffProofSchema,
+  posTerminalRuntimeStatusSchema,
 } from "./schemas/pos";
 import { posSessionSchema } from "./schemas/pos/posSession";
 import {
@@ -314,6 +315,10 @@ const schema = defineSchema({
     .index("by_storeId", ["storeId"])
     .index("by_storeId_and_fingerprintHash", ["storeId", "fingerprintHash"])
     .index("by_storeId_registerNumber", ["storeId", "registerNumber"]),
+  posTerminalRuntimeStatus: defineTable(posTerminalRuntimeStatusSchema)
+    .index("by_store_terminal", ["storeId", "terminalId"])
+    .index("by_store_reportedAt", ["storeId", "reportedAt"])
+    .index("by_terminal_receivedAt", ["terminalId", "receivedAt"]),
   posTransaction: defineTable(posTransactionSchema)
     .index("by_storeId", ["storeId"])
     .index("by_staffProfileId", ["staffProfileId"])

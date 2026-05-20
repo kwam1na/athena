@@ -365,13 +365,13 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
           productId: quickAddSourceProduct?.productId,
         });
 
+        handleClearSearch();
         const added = await onAddProduct(createdProduct);
         if (added === false) {
           return;
         }
         resetQuickAddForm();
         setIsQuickAddOpen(false);
-        handleClearSearch();
         toast.success("Product added to catalog");
       } catch (error) {
         console.error("[POS] Quick add product failed", error);
@@ -404,7 +404,7 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
             {showSearchInput && (
               <ProductSearchInput
                 ref={productSearchInputRef}
-                disabled={disabled}
+                disabled={disabled || isQuickAddOpen}
                 productSearchQuery={productSearchQuery}
                 setProductSearchQuery={setProductSearchQuery}
                 onBarcodeSubmit={onBarcodeSubmit}
