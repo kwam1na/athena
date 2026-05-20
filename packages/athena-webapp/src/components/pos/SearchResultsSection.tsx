@@ -8,7 +8,7 @@ import { useEffect } from "react";
 interface SearchResultsSectionProps {
   isLoading: boolean;
   products: Product[];
-  onAddProduct: (product: Product) => void;
+  onAddProduct: (product: Product) => boolean | Promise<boolean>;
   formatter: Intl.NumberFormat;
   onClearSearch: () => void;
   onQuickAddProduct?: (product?: Product) => void;

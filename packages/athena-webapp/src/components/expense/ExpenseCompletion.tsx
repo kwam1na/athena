@@ -3,6 +3,7 @@ import { CartItem } from "../pos/types";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { currencyFormatter } from "~/convex/utils";
 import { toDisplayAmount } from "~/convex/lib/currency";
+import { Check, Printer } from "lucide-react";
 
 interface ExpenseCompletionProps {
   cartItems: CartItem[];
@@ -16,68 +17,114 @@ interface ExpenseCompletionProps {
     completedAt: Date;
     cartItems: CartItem[];
     totalValue: number;
-    notes?: string;
+    notes?: string | null;
   } | null;
+  reportNumber?: string | null;
+  onPrintReceipt?: () => void | Promise<void>;
   onTransactionStateChange?: (isCompleted: boolean) => void;
 }
 
 export function ExpenseCompletion({
   cartItems,
   totalValue,
-  notes,
-  onNotesChange,
   onComplete,
   isCompleting,
   isCompleted,
   completedTransactionData,
+  reportNumber,
+  onPrintReceipt,
   onTransactionStateChange,
 }: ExpenseCompletionProps) {
   const { activeStore } = useGetActiveStore();
   const formatter = currencyFormatter(activeStore?.currency || "GHS");
 
-  //   if (isCompleted && completedTransactionData) {
-  //     return (
-  //       <div className="space-y-6">
-  //         <div className="flex items-center justify-center p-8 bg-green-50 rounded-lg border-2 border-green-200">
-  //           <div className="text-center space-y-4">
-  //             <div className="flex items-center justify-center">
-  //               <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center">
-  //                 <Check className="w-8 h-8 text-white" />
-  //               </div>
-  //             </div>
-  //             <div>
-  //               <h3 className="text-xl font-semibold text-green-900">
-  //                 Expense Recorded Successfully
-  //               </h3>
-  //               <p className="text-sm text-green-700 mt-2">
-  //                 Total Value:{" "}
-  //                 {formatter.format(completedTransactionData.totalValue)}
-  //               </p>
-  //             </div>
-  //           </div>
-  //         </div>
+  if (isCompleted && completedTransactionData) {
+    const itemCount = completedTransactionData.cartItems.reduce(
+      (sum, item) => sum + item.quantity,
+      0,
+    );
 
-  //         {completedTransactionData.notes && (
-  //           <div className="p-4 bg-gray-50 rounded-lg">
-  //             <Label className="text-sm font-semibold">Notes</Label>
-  //             <p className="text-sm text-gray-700 mt-1">
-  //               {completedTransactionData.notes}
-  //             </p>
-  //           </div>
-  //         )}
+    return (
+      <div className="flex min-h-0 flex-1 flex-col gap-4">
+        <div className="rounded-lg border border-[hsl(var(--success)/0.24)] bg-[hsl(var(--success)/0.08)] p-4">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]">
+              <Check className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[hsl(var(--success))]">
+                Expense recorded
+              </p>
+              <h3 className="mt-1 text-xl font-semibold text-foreground">
+                Receipt ready
+              </h3>
+              {reportNumber ? (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Report #{reportNumber}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </div>
 
-  //         <Button
-  //           onClick={() => {
-  //             onTransactionStateChange?.(false);
-  //           }}
-  //           className="w-full"
-  //           size="lg"
-  //         >
-  //           Start New Expense
-  //         </Button>
-  //       </div>
-  //     );
-  //   }
+        <div className="grid gap-3">
+          <div className="rounded-lg border border-border bg-surface-raised p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+              Total value
+            </p>
+            <p className="mt-2 text-3xl font-bold text-foreground">
+              {formatter.format(
+                toDisplayAmount(completedTransactionData.totalValue),
+              )}
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-lg border border-border bg-surface-raised p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                Items
+              </p>
+              <p className="mt-2 text-lg font-semibold text-foreground">
+                {itemCount}
+              </p>
+            </div>
+            <div className="rounded-lg border border-border bg-surface-raised p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                Printed
+              </p>
+              <p className="mt-2 text-lg font-semibold text-foreground">
+                Ready
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-auto grid gap-3">
+          <Button
+            type="button"
+            onClick={onPrintReceipt}
+            disabled={!onPrintReceipt}
+            className="w-full gap-2"
+            variant="outline"
+            size="lg"
+          >
+            <Printer className="h-4 w-4" />
+            Print receipt
+          </Button>
+          <Button
+            onClick={() => {
+              onTransactionStateChange?.(false);
+              onComplete();
+            }}
+            className="w-full bg-signal p-8 text-signal-foreground hover:bg-signal/90 hover:text-signal-foreground"
+            variant="outline"
+            size="lg"
+          >
+            Start new expense
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

@@ -310,7 +310,10 @@ describe("useExpenseRegisterViewModel", () => {
     );
     mockCompleteExpenseSession.mockResolvedValue(
       ok({
+        sessionId: "expense-session-1" as Id<"expenseSession">,
+        transactionId: "expense-transaction-1" as Id<"expenseTransaction">,
         transactionNumber: "EXP-TXN-1",
+        completedAt: new Date("2026-05-20T10:00:00.000Z").getTime(),
       }),
     );
     vi.mocked(useMutation).mockImplementation((mutation) => {
@@ -1134,7 +1137,7 @@ describe("useExpenseRegisterViewModel", () => {
     expect(toast.error).toHaveBeenCalled();
   });
 
-  it("clears expense totals and transaction state after completing a session", async () => {
+  it("preserves completed expense data after completing a session", async () => {
     mockActiveSessionQuery = {
       _id: "expense-session-1" as Id<"expenseSession">,
       status: "active",
@@ -1180,9 +1183,20 @@ describe("useExpenseRegisterViewModel", () => {
     expect(state.session.currentSessionId).toBeNull();
     expect(state.session.activeSession).toBeNull();
     expect(state.session.expiresAt).toBeNull();
-    expect(state.transaction.isCompleted).toBe(false);
-    expect(state.transaction.completedTransactionData).toBeNull();
-    expect(state.cashier.isAuthenticated).toBe(false);
-    expect(state.ui.notes).toBe("");
+    expect(state.transaction.isCompleted).toBe(true);
+    expect(state.transaction.completedTransactionNumber).toBe("EXP-TXN-1");
+    expect(state.transaction.completedTransactionData).toMatchObject({
+      transactionId: "expense-transaction-1",
+      cartItems: [
+        expect.objectContaining({
+          name: "Repair kit",
+          quantity: 1,
+        }),
+      ],
+      totalValue: 3600,
+      notes: "Damaged item",
+    });
+    expect(state.cashier.isAuthenticated).toBe(true);
+    expect(state.ui.notes).toBe("Damaged item");
   });
 });

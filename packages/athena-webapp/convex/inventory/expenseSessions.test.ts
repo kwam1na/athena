@@ -301,6 +301,7 @@ describe("expense session command results", () => {
       ok({
         transactionId: "expense-transaction-1",
         transactionNumber: "EXP-1001",
+        completedAt: 123456789,
       }),
     );
 
@@ -314,7 +315,9 @@ describe("expense session command results", () => {
       kind: "ok",
       data: {
         sessionId: "expense-session-1",
+        transactionId: "expense-transaction-1",
         transactionNumber: "EXP-1001",
+        completedAt: 123456789,
       },
     });
     expect(

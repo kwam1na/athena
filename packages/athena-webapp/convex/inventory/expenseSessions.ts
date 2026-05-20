@@ -41,7 +41,9 @@ const expenseSessionIdValidator = v.object({
 
 const completedExpenseSessionValidator = v.object({
   sessionId: v.id("expenseSession"),
+  transactionId: v.id("expenseTransaction"),
   transactionNumber: v.string(),
+  completedAt: v.number(),
 });
 
 function expenseSessionError(
@@ -565,7 +567,9 @@ export const completeExpenseSession = mutation({
 
     return ok({
       sessionId: args.sessionId,
+      transactionId: transactionResult.data.transactionId,
       transactionNumber: transactionResult.data.transactionNumber,
+      completedAt: transactionResult.data.completedAt,
     });
   },
 });

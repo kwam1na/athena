@@ -6,7 +6,7 @@ import { toDisplayAmount } from "~/convex/lib/currency";
 
 interface ProductCardProps {
   product: Product;
-  onAddProduct: (product: Product) => void;
+  onAddProduct: (product: Product) => boolean | Promise<boolean>;
   formatter: Intl.NumberFormat;
   onAfterAdd?: () => void;
 }
@@ -18,10 +18,12 @@ export function ProductCard({
   onAfterAdd,
 }: ProductCardProps) {
   const isAvailable = product.inStock;
-  const handleClick = () => {
+  const handleClick = async () => {
     if (isAvailable) {
-      onAddProduct(product);
-      onAfterAdd?.();
+      const added = await onAddProduct(product);
+      if (added !== false) {
+        onAfterAdd?.();
+      }
     }
   };
 

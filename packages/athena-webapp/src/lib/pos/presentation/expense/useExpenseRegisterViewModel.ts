@@ -185,6 +185,10 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
       return;
     }
 
+    if (store.transaction.isCompleted) {
+      return;
+    }
+
     if (activeSessionQuery) {
       if (
         store.session.currentSessionId &&
@@ -279,6 +283,7 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
     store.session.currentSessionId,
     store.session.isCreating,
     store.session.isUpdating,
+    store.transaction.isCompleted,
     createSession,
     handleSessionLoaded,
     store.storeId,
@@ -465,10 +470,12 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
     try {
       store.setTransactionCompleting(true);
       const totalValue = store.cart.total;
+      const completedCartItems = store.cart.items.map((item) => ({ ...item }));
+      const notes = store.ui.notes;
       const result = await runCommand(() =>
         completeExpenseSession({
           sessionId: sessionId as Id<"expenseSession">,
-          notes: store.ui.notes,
+          notes,
           totalValue,
         }),
       );
@@ -479,9 +486,15 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
       }
 
       toast.success("Expense recorded successfully");
-      store.startNewTransaction();
-      resetAutoSessionInitialized();
-      store.clearCashier();
+      store.setTransactionCompleted(true, result.data.transactionNumber, {
+        transactionId: result.data.transactionId,
+        completedAt: new Date(result.data.completedAt),
+        cartItems: completedCartItems,
+        totalValue,
+        notes,
+      });
+      store.clearCart();
+      store.clearSession();
     } catch (error) {
       logger.error("[Expense] Failed to complete expense", error as Error);
     } finally {
@@ -491,7 +504,6 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
     activeSessionQuery?._id,
     completeExpenseSession,
     store,
-    resetAutoSessionInitialized,
   ]);
 
   const handleNavigateBack = useCallback(async () => {
@@ -537,6 +549,7 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
     onClearPayments: async () => false,
     onStartNewTransaction: () => {
       store.startNewTransaction();
+      store.clearCashier();
       resetAutoSessionInitialized();
     },
   };
@@ -612,11 +625,13 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
         ? {
             paymentMethod: "manual",
             payments: [],
+            transactionId: store.transaction.completedTransactionData.transactionId,
             completedAt: store.transaction.completedTransactionData.completedAt,
             cartItems: store.transaction.completedTransactionData.cartItems,
-            subtotal: store.cart.subtotal,
-            tax: store.cart.tax,
+            subtotal: store.transaction.completedTransactionData.totalValue,
+            tax: 0,
             total: store.transaction.completedTransactionData.totalValue,
+            notes: store.transaction.completedTransactionData.notes,
             customerInfo: {
               name: "",
               email: "",

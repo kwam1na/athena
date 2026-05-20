@@ -279,7 +279,7 @@ const closedSnapshot: DailyOperationsSnapshot = {
     status: "closed",
   },
   primaryAction: {
-    label: "Review EOD Review",
+      label: "Review EOD Review",
     to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
   },
   timeline: [
@@ -754,6 +754,14 @@ describe("DailyOperationsViewContent", () => {
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Review EOD Review" }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/operations/daily-close?o=%252Fwigclub%252Fstore%252Fosu%252Foperations&operatingDate=2026-05-08",
+    );
+    expect(
+      screen.getByRole("link", {
+        name: "Review EOD Review for Friday, May 8, 2026",
+      }),
     ).toHaveAttribute(
       "href",
       "/wigclub/store/osu/operations/daily-close?o=%252Fwigclub%252Fstore%252Fosu%252Foperations&operatingDate=2026-05-08",

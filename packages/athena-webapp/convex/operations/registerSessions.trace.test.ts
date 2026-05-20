@@ -13,6 +13,7 @@ import {
   buildReopenedClosedRegisterSessionPatch,
   getOpenRegisterSession,
   getRegisterSessionForRegisterState,
+  linkExistingRegisterSessionWorkflowTrace,
   openRegisterSession,
   recordRegisterSessionTransaction,
 } from "./registerSessions";
@@ -28,6 +29,12 @@ type RegisterSessionRecord = {
   storeId: string;
   terminalId?: string;
   workflowTraceId?: string;
+};
+
+type WorkflowTraceRecord = {
+  _id: string;
+  storeId: string;
+  traceId: string;
 };
 
 function buildRegisterSession(
@@ -47,8 +54,12 @@ function buildRegisterSession(
   };
 }
 
-function createMutationCtx(seed?: { sessions?: RegisterSessionRecord[] }) {
+function createMutationCtx(seed?: {
+  sessions?: RegisterSessionRecord[];
+  workflowTraces?: WorkflowTraceRecord[];
+}) {
   const sessions = [...(seed?.sessions ?? [])];
+  const workflowTraces = [...(seed?.workflowTraces ?? [])];
   const db = {
     get: vi.fn(async (table: string, id: string) => {
       if (table !== "registerSession") {
@@ -85,15 +96,17 @@ function createMutationCtx(seed?: { sessions?: RegisterSessionRecord[] }) {
       withIndex(indexName: string, buildQuery?: (q: {
         eq: (field: string, value: string) => unknown;
       }) => unknown) {
-        if (table !== "registerSession") {
+        if (table !== "registerSession" && table !== "workflowTrace") {
           throw new Error(`Unsupported query table ${table}`);
         }
 
-        if (
-          indexName !== "by_storeId_registerNumber" &&
+        if (table === "registerSession" && indexName !== "by_storeId_registerNumber" &&
           indexName !== "by_terminalId"
         ) {
           throw new Error(`Unsupported registerSession index ${indexName}`);
+        }
+        if (table === "workflowTrace" && indexName !== "by_storeId_traceId") {
+          throw new Error(`Unsupported workflowTrace index ${indexName}`);
         }
 
         const filters = new Map<string, string>();
@@ -106,6 +119,17 @@ function createMutationCtx(seed?: { sessions?: RegisterSessionRecord[] }) {
         buildQuery?.(queryBuilder);
 
         return {
+          first: async () => {
+            const rows = table === "registerSession" ? sessions : workflowTraces;
+            return (
+              rows.find((row) =>
+                [...filters].every(
+                  ([field, value]) =>
+                    row[field as keyof typeof row] === value,
+                ),
+              ) ?? null
+            );
+          },
           order() {
             return {
               first: async () =>
@@ -127,6 +151,7 @@ function createMutationCtx(seed?: { sessions?: RegisterSessionRecord[] }) {
   return {
     db,
     sessions,
+    workflowTraces,
   };
 }
 
@@ -257,6 +282,35 @@ describe("register session workflow trace handlers", () => {
     });
 
     expect(ctx.db.patch).not.toHaveBeenCalledWith("registerSession", "session-1", {
+      workflowTraceId: "register_session:session-1",
+    });
+  });
+
+  it("links an existing deterministic register-session trace", async () => {
+    const ctx = createMutationCtx({
+      sessions: [buildRegisterSession()],
+      workflowTraces: [
+        {
+          _id: "trace-1",
+          storeId: "store-1",
+          traceId: "register_session:session-1",
+        },
+      ],
+    });
+
+    const result = await getHandler(linkExistingRegisterSessionWorkflowTrace)(
+      ctx as never,
+      {
+        registerSessionId: "session-1",
+      },
+    );
+
+    expect(result).toEqual({
+      linked: true,
+      traceId: "register_session:session-1",
+      workflowTraceId: "register_session:session-1",
+    });
+    expect(ctx.db.patch).toHaveBeenCalledWith("registerSession", "session-1", {
       workflowTraceId: "register_session:session-1",
     });
   });

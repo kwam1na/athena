@@ -107,6 +107,14 @@ function createQueryCtx(seed: Record<string, Array<Record<string, unknown>>>) {
                 filters.push([field, value]);
                 return indexQuery;
               },
+              gte(field: string, value: unknown) {
+                predicateFilters.push(
+                  (row) =>
+                    typeof row[field] === "number" &&
+                    row[field] >= (value as number),
+                );
+                return indexQuery;
+              },
             };
             build(indexQuery);
             return query;
@@ -241,6 +249,7 @@ describe("cash control deposits", () => {
           openingFloat: 5000,
           registerNumber: "A1",
           status: "active",
+          storeId: "store_1" as Id<"store">,
           terminalId: "terminal_1" as Id<"posTerminal">,
           variance: undefined,
         },
@@ -253,6 +262,7 @@ describe("cash control deposits", () => {
           openingFloat: 5000,
           registerNumber: "B2",
           status: "closing",
+          storeId: "store_1" as Id<"store">,
           terminalId: "terminal_2" as Id<"posTerminal">,
           variance: -500,
         },
@@ -264,6 +274,7 @@ describe("cash control deposits", () => {
           openingFloat: 5000,
           registerNumber: "C3",
           status: "closed",
+          storeId: "store_1" as Id<"store">,
           variance: 0,
         },
       ],
@@ -725,6 +736,43 @@ describe("cash control deposits", () => {
         storeId: "store_1" as Id<"store">,
       }),
     ).rejects.toThrow("You do not have access to cash controls.");
+  });
+
+  it("exposes the deterministic register trace when the session link is missing", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx({
+      registerSession: [
+        {
+          _id: "session_open",
+          expectedCash: 50000,
+          openedAt: 1,
+          openingFloat: 10000,
+          organizationId: "org_1",
+          registerNumber: "1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+      workflowTrace: [
+        {
+          _id: "trace_1",
+          storeId: "store_1",
+          traceId: "register_session:session_open",
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(getRegisterSessionSnapshot)(ctx as never, {
+        registerSessionId: "session_open" as Id<"registerSession">,
+        storeId: "store_1" as Id<"store">,
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        registerSession: expect.objectContaining({
+          workflowTraceId: "register_session:session_open",
+        }),
+      }),
+    );
   });
 
   it("rejects register-session deposits when the caller is unauthenticated", async () => {

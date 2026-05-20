@@ -93,6 +93,7 @@ type CashControlRegisterSession = Pick<
   | "openingFloat"
   | "registerNumber"
   | "status"
+  | "storeId"
   | "terminalId"
   | "variance"
   | "workflowTraceId"
@@ -291,6 +292,40 @@ function buildRegisterSessionSummary(args: {
         : null,
     totalDeposited: args.totalDeposited,
   };
+}
+
+async function resolveRegisterSessionWorkflowTraceId(
+  ctx: QueryCtx,
+  registerSession: CashControlRegisterSession,
+) {
+  if (registerSession.workflowTraceId) {
+    return registerSession.workflowTraceId;
+  }
+
+  const traceId = `register_session:${registerSession._id}`;
+  const trace = await ctx.db
+    .query("workflowTrace")
+    .withIndex("by_storeId_traceId", (q) =>
+      q.eq("storeId", registerSession.storeId).eq("traceId", traceId)
+    )
+    .first();
+
+  return trace ? traceId : undefined;
+}
+
+async function appendRegisterSessionWorkflowTraceIds(
+  ctx: QueryCtx,
+  registerSessions: CashControlRegisterSession[],
+) {
+  return Promise.all(
+    registerSessions.map(async (registerSession) => ({
+      ...registerSession,
+      workflowTraceId: await resolveRegisterSessionWorkflowTraceId(
+        ctx,
+        registerSession,
+      ),
+    }))
+  );
 }
 
 export function buildCashControlsDashboardSnapshot(args: {
@@ -620,6 +655,8 @@ export const getDashboardSnapshot = query({
         registerSessions,
         syncConflictsBySessionId,
       );
+    const dashboardRegisterSessionsWithTraceIds =
+      await appendRegisterSessionWorkflowTraceIds(ctx, dashboardRegisterSessions);
     const relevantApprovalRequests = pendingApprovalRequests.filter(
       (approvalRequest) =>
         approvalRequest.requestType === "variance_review" &&
@@ -636,13 +673,13 @@ export const getDashboardSnapshot = query({
       collectStaffProfileIds({
         approvalRequests: relevantApprovalRequests,
         deposits,
-        registerSessions: dashboardRegisterSessions,
+        registerSessions: dashboardRegisterSessionsWithTraceIds,
       })
     );
     const terminalNamesById = await listTerminalNames(
       ctx,
       new Set(
-        dashboardRegisterSessions
+        dashboardRegisterSessionsWithTraceIds
           .map((registerSession) => registerSession.terminalId)
           .filter(Boolean) as Id<"posTerminal">[],
       ),
@@ -651,7 +688,7 @@ export const getDashboardSnapshot = query({
     return buildCashControlsDashboardSnapshot({
       approvalRequestsBySessionId,
       deposits,
-      registerSessions: dashboardRegisterSessions,
+      registerSessions: dashboardRegisterSessionsWithTraceIds,
       staffNamesById,
       syncConflictsBySessionId,
       terminalNamesById,
@@ -678,6 +715,7 @@ export const getRegisterSessionSnapshot = query({
       transactions,
       approvalRequest,
       syncConflictsBySessionId,
+      workflowTraceId,
     ] = await Promise.all([
       listSessionDeposits(ctx, args.registerSessionId),
       listRegisterSessionTimeline(ctx, args.registerSessionId),
@@ -689,14 +727,19 @@ export const getRegisterSessionSnapshot = query({
         ? ctx.db.get("approvalRequest", registerSession.managerApprovalRequestId)
         : Promise.resolve(null),
       listOpenLocalSyncConflictsByRegisterSession(ctx, args.storeId),
+      resolveRegisterSessionWorkflowTraceId(ctx, registerSession),
     ]);
+    const registerSessionWithTraceId = {
+      ...registerSession,
+      workflowTraceId,
+    };
     const approvalRequests = approvalRequest ? [approvalRequest] : [];
     const staffNamesById = await listStaffNames(
       ctx,
       collectStaffProfileIds({
         approvalRequests,
         deposits,
-        registerSessions: [registerSession],
+        registerSessions: [registerSessionWithTraceId],
         timeline,
         transactions,
       })
@@ -789,7 +832,7 @@ export const getRegisterSessionSnapshot = query({
       registerSession: {
         ...buildRegisterSessionSummary({
           approvalRequest,
-          registerSession,
+          registerSession: registerSessionWithTraceId,
           staffNamesById,
           syncConflicts:
             syncConflictsBySessionId.get(args.registerSessionId) ?? [],

@@ -50,10 +50,11 @@ interface TransactionState {
   isCompleted: boolean;
   completedTransactionNumber: string | null;
   completedTransactionData: {
+    transactionId?: Id<"expenseTransaction">;
     completedAt: Date;
     cartItems: CartItem[];
     totalValue: number;
-    notes?: string;
+    notes?: string | null;
   } | null;
 }
 
@@ -104,10 +105,11 @@ interface ExpenseState {
     isCompleted: boolean,
     transactionNumber?: string,
     transactionData?: {
+      transactionId?: Id<"expenseTransaction">;
       completedAt: Date;
       cartItems: CartItem[];
       totalValue: number;
-      notes?: string;
+      notes?: string | null;
     }
   ) => void;
   clearTransaction: () => void;

@@ -76,6 +76,7 @@ describe("usePrint Hook", () => {
       expect(htmlContent).toContain("<!DOCTYPE html>");
       expect(htmlContent).toContain("<html>");
       expect(htmlContent).toContain("<head>");
+      expect(htmlContent).toContain('<meta charset="UTF-8">');
       expect(htmlContent).toContain("<body>");
       expect(htmlContent).toContain('<div class="receipt">');
     });

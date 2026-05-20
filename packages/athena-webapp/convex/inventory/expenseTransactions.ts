@@ -14,6 +14,7 @@ import { formatStaffDisplayName } from "../../shared/staffDisplayName";
 const expenseTransactionCreationValidator = v.object({
   transactionId: v.id("expenseTransaction"),
   transactionNumber: v.string(),
+  completedAt: v.number(),
 });
 
 const expenseTransactionIdValidator = v.object({
@@ -126,6 +127,8 @@ export async function createExpenseTransactionFromSessionHandler(
   // Generate transaction number
   const transactionNumber = generateTransactionNumber();
 
+  const completedAt = Date.now();
+
   // Create the expense transaction
   const transactionId = await ctx.db.insert("expenseTransaction", {
     transactionNumber,
@@ -135,7 +138,7 @@ export async function createExpenseTransactionFromSessionHandler(
     registerNumber: session.registerNumber,
     totalValue,
     status: "completed",
-    completedAt: Date.now(),
+    completedAt,
     notes: args.notes,
   });
 
@@ -174,6 +177,7 @@ export async function createExpenseTransactionFromSessionHandler(
   return ok({
     transactionId,
     transactionNumber,
+    completedAt,
   });
 }
 

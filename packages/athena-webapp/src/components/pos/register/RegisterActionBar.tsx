@@ -2,6 +2,7 @@ import { ArrowRightIcon, BanknoteIcon, LockKeyhole } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 
 import type {
+  RegisterCashierCardState,
   RegisterCloseoutControlState,
   RegisterInfoState,
   RegisterSessionPanelState,
@@ -14,24 +15,27 @@ import { RegisterActions } from "../RegisterActions";
 import { RegisterSessionPanel } from "./RegisterSessionPanel";
 
 interface RegisterActionBarProps {
+  cashierCard: RegisterCashierCardState | null;
   closeoutControl: RegisterCloseoutControlState | null;
   registerInfo: RegisterInfoState;
   sessionPanel: RegisterSessionPanelState | null;
 }
 
 export function RegisterActionBar({
+  cashierCard,
   closeoutControl,
   registerInfo,
   sessionPanel,
 }: RegisterActionBarProps) {
   return (
-    <div className="flex items-center gap-4">
+    <div className="flex flex-wrap items-center justify-end gap-4">
+      <RegisterCashierControl cashierCard={cashierCard} />
       <RegisterSessionPanel sessionPanel={sessionPanel} />
 
       <div
         className={cn(
-          "flex items-center gap-3 px-3 py-2 bg-gray-50 rounded-lg border",
-          !registerInfo.hasTerminal && "animate-pulse text-red-500",
+          "flex items-center gap-3 rounded-lg border bg-surface-raised px-3 py-2",
+          !registerInfo.hasTerminal && "animate-pulse text-danger",
         )}
       >
         <RegisterActions
@@ -83,6 +87,36 @@ export function RegisterActionBar({
           </Link>
         )}
       </div>
+    </div>
+  );
+}
+
+function RegisterCashierControl({
+  cashierCard,
+}: {
+  cashierCard: RegisterCashierCardState | null;
+}) {
+  return (
+    <div className="flex h-12 min-w-[15rem] items-center justify-between gap-4 rounded-lg border bg-surface-raised px-4">
+      <div className="min-w-0">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          Cashier
+        </p>
+        <p className="max-w-36 truncate text-sm font-medium capitalize text-foreground">
+          {cashierCard?.cashierName ?? "Unassigned"}
+        </p>
+      </div>
+      {cashierCard ? (
+        <Button
+          className="h-8 shrink-0 px-3 text-xs"
+          onClick={cashierCard.onSignOut}
+          title="Sign out"
+          type="button"
+          variant="ghost"
+        >
+          Sign out
+        </Button>
+      ) : null}
     </div>
   );
 }

@@ -44,7 +44,7 @@ interface ProductSearchInputProps {
 interface ProductEntryProps extends ProductSearchInputProps {
   showProductLookup: boolean;
   setShowProductLookup: (value: boolean) => void;
-  onAddProduct: (product: Product) => void;
+  onAddProduct: (product: Product) => boolean | Promise<boolean>;
   searchResults: Product[];
   isSearchLoading: boolean;
   isSearchReady: boolean;
@@ -53,6 +53,8 @@ interface ProductEntryProps extends ProductSearchInputProps {
   containerClassName?: string;
   lookupPanelClassName?: string;
   resultsClassName?: string;
+  onQuickAddOpenChange?: (open: boolean) => void;
+  forceQuickAddHost?: boolean;
 }
 
 export const ProductSearchInput = forwardRef<
@@ -130,6 +132,7 @@ ProductSearchInput.displayName = "ProductSearchInput";
 
 export interface ProductEntryHandle {
   focusProductSearchInput: () => boolean;
+  openQuickAddProduct: () => boolean;
 }
 
 const QUICK_ADD_LOOKUP_CODE_MAX_LENGTH = 64;
@@ -192,6 +195,8 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
       containerClassName,
       lookupPanelClassName,
       resultsClassName,
+      onQuickAddOpenChange,
+      forceQuickAddHost = false,
     },
     ref,
   ) {
@@ -209,23 +214,6 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
     const [isQuickAddSaving, setIsQuickAddSaving] = useState(false);
     const productSearchInputRef = useRef<HTMLInputElement>(null);
 
-    useImperativeHandle(
-      ref,
-      () => ({
-        focusProductSearchInput: () => {
-          if (!productSearchInputRef.current) {
-            return false;
-          }
-
-          productSearchInputRef.current.focus();
-          productSearchInputRef.current.select();
-
-          return true;
-        },
-      }),
-      [],
-    );
-
     const inputIsUrlOrBarcode = isUrlOrBarcode(productSearchQuery);
 
     const formatter = currencyFormatter(activeStore?.currency || "GHS");
@@ -236,7 +224,7 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
     };
 
     const isAddingVariant = Boolean(quickAddSourceProduct?.productId);
-    const handleOpenQuickAdd = (selectedProduct?: Product) => {
+    const handleOpenQuickAdd = useCallback((selectedProduct?: Product) => {
       if (!canQuickAddProduct) {
         return;
       }
@@ -258,7 +246,38 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
         selectedProduct && selectedProduct.productId ? selectedProduct : null,
       );
       setIsQuickAddOpen(true);
-    };
+      onQuickAddOpenChange?.(true);
+    }, [
+      canQuickAddProduct,
+      inputIsUrlOrBarcode,
+      onQuickAddOpenChange,
+      productSearchQuery,
+    ]);
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        focusProductSearchInput: () => {
+          if (!productSearchInputRef.current) {
+            return false;
+          }
+
+          productSearchInputRef.current.focus();
+          productSearchInputRef.current.select();
+
+          return true;
+        },
+        openQuickAddProduct: () => {
+          if (!canQuickAddProduct) {
+            return false;
+          }
+
+          handleOpenQuickAdd();
+          return true;
+        },
+      }),
+      [canQuickAddProduct, handleOpenQuickAdd],
+    );
 
     const resetQuickAddForm = () => {
       setQuickAddName("");
@@ -346,7 +365,10 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
           productId: quickAddSourceProduct?.productId,
         });
 
-        onAddProduct(createdProduct);
+        const added = await onAddProduct(createdProduct);
+        if (added === false) {
+          return;
+        }
         resetQuickAddForm();
         setIsQuickAddOpen(false);
         handleClearSearch();
@@ -359,7 +381,13 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
       }
     };
 
-    if (!showProductLookup || (!showSearchInput && !productSearchQuery)) {
+    if (
+      !showProductLookup ||
+      (!showSearchInput &&
+        !productSearchQuery &&
+        !isQuickAddOpen &&
+        !forceQuickAddHost)
+    ) {
       return null;
     }
 
@@ -409,6 +437,7 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
             if (!open) {
               resetQuickAddForm();
             }
+            onQuickAddOpenChange?.(open);
             setIsQuickAddOpen(open);
           }}
         >

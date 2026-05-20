@@ -119,6 +119,13 @@ export function POSRegisterOpeningGuard({
     return <StoreDayClosedState />;
   }
 
+  if (
+    localReadiness.status === "blocked" &&
+    localReadiness.reason === "local_closeout"
+  ) {
+    return <>{children}</>;
+  }
+
   if (localReadiness.status === "blocked") {
     return <POSSetupRequiredState message={localReadiness.message} />;
   }

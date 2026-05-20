@@ -49,7 +49,6 @@ export interface RegisterCatalogIndex {
     normalizedFields: {
       name: string;
       sku: string;
-      barcode: string;
       category: string;
       description: string;
       attributes: string;
@@ -79,7 +78,6 @@ export function buildRegisterCatalogIndex(
     const normalizedFields = {
       name: normalizeSearchText(row.name),
       sku: normalizeSearchText(row.sku),
-      barcode: normalizeSearchText(row.barcode),
       category: normalizeSearchText(row.category),
       description: normalizeSearchText(row.description),
       attributes: normalizeSearchText([
@@ -138,6 +136,16 @@ export function searchRegisterCatalog(
     };
   }
 
+  if (parsed.type === "identifier") {
+    return {
+      intent: "exact",
+      query,
+      results: [],
+      exactMatch: null,
+      canAutoAdd: false,
+    };
+  }
+
   const results = searchByText(index, parsed.value, options.limit);
 
   return {
@@ -180,7 +188,15 @@ function parseCatalogSearchInput(input: string): ParsedCatalogSearchInput {
     return { type: "identifier", value: urlIdentifier };
   }
 
+  if (isBarcodeShapedInput(trimmed)) {
+    return { type: "identifier", value: trimmed };
+  }
+
   return { type: "text", value: trimmed };
+}
+
+function isBarcodeShapedInput(input: string): boolean {
+  return /^[\d\s-]+$/.test(input);
 }
 
 function extractIdentifierFromUrl(input: string): string | null {
@@ -258,7 +274,6 @@ function scoreQueryTokenForEntry(
       1 +
       scoreFieldContains(entry.normalizedFields.name, token, 8) +
       scoreFieldContains(entry.normalizedFields.sku, token, 6) +
-      scoreFieldContains(entry.normalizedFields.barcode, token, 6) +
       scoreFieldContains(entry.normalizedFields.category, token, 4) +
       scoreFieldContains(entry.normalizedFields.attributes, token, 3) +
       scoreFieldContains(entry.normalizedFields.description, token, 2)

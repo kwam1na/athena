@@ -90,6 +90,24 @@ type PersistedSale = {
   transactionMapping: LocalSyncMappingRecord;
 };
 
+async function persistRegisterSessionWorkflowTraceId(
+  repository: SyncProjectionRepository,
+  args: {
+    registerSessionId: Id<"registerSession">;
+    traceCreated: boolean;
+    traceId: string;
+    workflowTraceId?: string | null;
+  },
+) {
+  if (!args.traceCreated || args.workflowTraceId) {
+    return;
+  }
+
+  await repository.patchRegisterSession(args.registerSessionId, {
+    workflowTraceId: args.traceId,
+  });
+}
+
 const POS_USABLE_REGISTER_SESSION_STATUSES = new Set(["open", "active"]);
 
 const INVENTORY_CONFLICT_SUMMARY =
@@ -390,7 +408,7 @@ async function projectRegisterOpened(
     actorStaffProfileId: args.event.staffProfileId,
     registerSessionId,
   });
-  await repository.recordRegisterSessionWorkflowTrace?.({
+  const traceResult = await repository.recordRegisterSessionWorkflowTrace?.({
     stage: "opened",
     session: {
       _id: registerSessionId,
@@ -405,6 +423,13 @@ async function projectRegisterOpened(
       expectedCash: openingFloat,
     },
   });
+  if (traceResult) {
+    await persistRegisterSessionWorkflowTraceId(repository, {
+      registerSessionId,
+      traceCreated: traceResult.traceCreated,
+      traceId: traceResult.traceId,
+    });
+  }
 
   return { status: "projected", mappings: [mapping], conflicts: [] };
 }
@@ -1210,13 +1235,22 @@ async function recordSaleWorkflowEvidence(
     paymentCount: input.payments.transactionPayments.length,
   });
 
-  await repository.recordRegisterSessionWorkflowTrace?.({
+  const registerSessionTraceResult =
+    await repository.recordRegisterSessionWorkflowTrace?.({
     stage: "sale_recorded",
     session: input.session.registerSession,
     occurredAt: args.event.occurredAt,
     amount: input.payments.expectedCashDelta,
     actorStaffProfileId: args.event.staffProfileId,
   });
+  if (registerSessionTraceResult) {
+    await persistRegisterSessionWorkflowTraceId(repository, {
+      registerSessionId: input.session.registerSession._id,
+      traceCreated: registerSessionTraceResult.traceCreated,
+      traceId: registerSessionTraceResult.traceId,
+      workflowTraceId: input.session.registerSession.workflowTraceId,
+    });
+  }
 }
 
 function conflictResult(conflict: LocalSyncConflictRecord): ProjectionResult {
@@ -1541,7 +1575,7 @@ async function projectRegisterClosed(
     ],
     notes: payload.notes,
   });
-  await repository.recordRegisterSessionWorkflowTrace?.({
+  const traceResult = await repository.recordRegisterSessionWorkflowTrace?.({
     stage: "closed",
     session: {
       ...registerSession,
@@ -1557,6 +1591,14 @@ async function projectRegisterClosed(
     countedCash,
     variance,
   });
+  if (traceResult) {
+    await persistRegisterSessionWorkflowTraceId(repository, {
+      registerSessionId: registerSession._id,
+      traceCreated: traceResult.traceCreated,
+      traceId: traceResult.traceId,
+      workflowTraceId: registerSession.workflowTraceId,
+    });
+  }
   const mapping = await createMapping(repository, args, {
     localIdKind: "closeout",
     localId: args.event.localEventId,

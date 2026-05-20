@@ -287,6 +287,7 @@ export const usePrint = () => {
         <!DOCTYPE html>
         <html>
           <head>
+            <meta charset="UTF-8">
             <title>Receipt</title>
             <style>
 ${receiptPrintStyles}

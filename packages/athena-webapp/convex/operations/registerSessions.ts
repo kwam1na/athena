@@ -829,3 +829,54 @@ export const closeRegisterSession = internalMutation({
     return ctx.db.get("registerSession", args.registerSessionId);
   },
 });
+
+export const linkExistingRegisterSessionWorkflowTrace = internalMutation({
+  args: {
+    registerSessionId: v.id("registerSession"),
+  },
+  handler: async (ctx, args) => {
+    const registerSession = await ctx.db.get(
+      "registerSession",
+      args.registerSessionId
+    );
+    if (!registerSession) {
+      throw new Error("Register session not found.");
+    }
+
+    const traceId =
+      registerSession.workflowTraceId ??
+      `register_session:${registerSession._id}`;
+    const trace = await ctx.db
+      .query("workflowTrace")
+      .withIndex("by_storeId_traceId", (q) =>
+        q.eq("storeId", registerSession.storeId).eq("traceId", traceId)
+      )
+      .first();
+
+    if (!trace) {
+      return {
+        linked: false,
+        reason: "trace_not_found" as const,
+        traceId,
+        workflowTraceId: registerSession.workflowTraceId ?? null,
+      };
+    }
+
+    if (!registerSession.workflowTraceId) {
+      await ctx.db.patch("registerSession", args.registerSessionId, {
+        workflowTraceId: traceId,
+      });
+    }
+
+    const updatedSession = await ctx.db.get(
+      "registerSession",
+      args.registerSessionId
+    );
+
+    return {
+      linked: true,
+      traceId,
+      workflowTraceId: updatedSession?.workflowTraceId ?? null,
+    };
+  },
+});
