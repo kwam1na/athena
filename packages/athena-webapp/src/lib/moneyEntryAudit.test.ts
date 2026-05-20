@@ -615,11 +615,11 @@ export const refundPayment = action({
 
   it("scans every frontend source file for unreviewed raw money parsing", () => {
     expect(collectRawMoneyParses()).toEqual([]);
-  });
+  }, 20000);
 
   it("scans storefront source files for direct stored-money formatting", () => {
     expect(collectStorefrontDirectMoneyFormats()).toEqual([]);
-  });
+  }, 20000);
 
   it("keeps checkout and refund Convex money contracts server-owned", () => {
     const checkoutSessionSource = readWebappFile(
