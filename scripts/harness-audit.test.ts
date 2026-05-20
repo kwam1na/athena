@@ -673,7 +673,22 @@ async function createFixtureRepo() {
     rootDir
   );
   await write(
+    "packages/athena-webapp/src/components/pos/register/POSRegisterView.test.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
     "packages/athena-webapp/src/components/pos/register/RegisterDrawerGate.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/components/pos/settings/POSSettingsView.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/components/pos/settings/POSSettingsView.test.tsx",
     "export {};\n",
     rootDir
   );
@@ -688,7 +703,17 @@ async function createFixtureRepo() {
     rootDir
   );
   await write(
+    "packages/athena-webapp/src/components/cash-controls/CashControlsDashboard.test.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
     "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.test.tsx",
     "export {};\n",
     rootDir
   );
@@ -891,6 +916,7 @@ async function createFixtureRepo() {
     "packages/athena-webapp/src/lib/pos/infrastructure/local/syncContract.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/syncScheduler.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/syncStatus.ts",
+    "packages/athena-webapp/src/lib/pos/infrastructure/local/terminalRuntimeStatus.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/registerReadModel.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/localCommandGateway.ts",
@@ -901,6 +927,7 @@ async function createFixtureRepo() {
     "packages/athena-webapp/src/lib/pos/infrastructure/local/syncContract.test.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/syncScheduler.test.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/syncStatus.test.ts",
+    "packages/athena-webapp/src/lib/pos/infrastructure/local/terminalRuntimeStatus.test.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.test.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/registerReadModel.test.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/localCommandGateway.test.ts",
@@ -914,6 +941,35 @@ async function createFixtureRepo() {
     "export {};\n",
     rootDir
   );
+  await write(
+    "packages/athena-webapp/src/lib/pos/presentation/syncStatusPresentation.test.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/lib/pos/application/registerAndProvisionPosTerminal.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/lib/pos/infrastructure/terminal/fingerprint.ts",
+    "export {};\n",
+    rootDir
+  );
+  for (const terminalHealthPath of [
+    "packages/athena-webapp/src/components/pos/terminals/POSTerminalDetailView.tsx",
+    "packages/athena-webapp/src/components/pos/terminals/POSTerminalDetailView.test.tsx",
+    "packages/athena-webapp/src/components/pos/terminals/POSTerminalHealthView.tsx",
+    "packages/athena-webapp/src/components/pos/terminals/POSTerminalHealthView.test.tsx",
+    "packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts",
+    "packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.test.ts",
+    "packages/athena-webapp/src/components/pos/terminals/terminalHealthTypes.ts",
+    "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals.index.tsx",
+    "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals.route.test.tsx",
+    "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId.tsx",
+  ]) {
+    await write(terminalHealthPath, "export {};\n", rootDir);
+  }
   await write("packages/athena-webapp/src/stores/expenseStore.ts", "export {};\n", rootDir);
   await write(
     "packages/athena-webapp/shared/commandResult.ts",
@@ -960,11 +1016,31 @@ async function createFixtureRepo() {
   await write("packages/athena-webapp/convex/http/router.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/convex/schema.ts", "export {};\n", rootDir);
   await write(
+    "packages/athena-webapp/convex/schemas/pos/posTerminal.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/schemas/pos/posTerminal.test.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/schemas/pos/posTerminalRuntimeStatus.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
     "packages/athena-webapp/convex/cashControls/closeouts.ts",
     "export {};\n",
     rootDir
   );
   await write("packages/athena-webapp/convex/inventory/item.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/convex/inventory/posTerminal.ts",
+    "export {};\n",
+    rootDir
+  );
   await write(
     "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
     "export {};\n",
@@ -992,6 +1068,11 @@ async function createFixtureRepo() {
   );
   await write(
     "packages/athena-webapp/convex/pos/application/queries/getRegisterState.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/pos/application/queries/terminals.ts",
     "export {};\n",
     rootDir
   );
@@ -1037,6 +1118,11 @@ async function createFixtureRepo() {
   );
   await write(
     "packages/athena-webapp/convex/pos/infrastructure/repositories/localSyncRepository.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRepository.ts",
     "export {};\n",
     rootDir
   );

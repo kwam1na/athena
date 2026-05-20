@@ -9,7 +9,9 @@ import {
   createPosLocalStore,
   type PosLocalCloudMapping,
   type PosLocalEventRecord,
+  type PosLocalStaffAuthorityReadiness,
   type PosLocalStoreResult,
+  type PosProvisionedTerminalSeed,
 } from "./posLocalStore";
 import {
   buildPosLocalSyncUploadEvents,
@@ -26,13 +28,23 @@ import {
   isPosLocalEventInTerminalScope,
   resolvePosLocalTerminalScope,
 } from "./terminalScope";
+import {
+  buildPosTerminalRuntimeCopyDiagnostics,
+  buildPosTerminalRuntimeStatus,
+  type PosTerminalRuntimeCopyDiagnostics,
+  type PosTerminalRuntimeSnapshotReadiness,
+  type PosTerminalRuntimeStatusPayload,
+  type PosTerminalRuntimeStatusSource,
+} from "./terminalRuntimeStatus";
 
 export type PosLocalRuntimeSyncStatusSource = {
+  copyDiagnostics?: PosTerminalRuntimeCopyDiagnostics;
   debug?: PosLocalRuntimeSyncDebug;
   description?: string | null;
   label?: string | null;
   onRetrySync?: (() => void) | null;
   pendingEventCount?: number | null;
+  runtimeStatus?: PosTerminalRuntimeStatusPayload;
   status?: string | null;
 };
 
@@ -75,11 +87,22 @@ export function usePosLocalSyncRuntimeStatus(input: {
   mode?: PosLocalSyncRuntimeMode;
   onLocalEventsChanged?: (() => void) | null;
   onRetrySync?: (() => void) | null;
+  source?: PosTerminalRuntimeStatusSource;
   staffProfileId?: string | null;
+  staffAuthorityStatus?: PosLocalStaffAuthorityReadiness | "unknown";
   storeFactory?: (() => PosLocalRuntimeStore) | null;
 }): PosLocalRuntimeSyncStatusSource | null {
   const ingestLocalEvents = useMutation(api.pos.public.sync.ingestLocalEvents);
+  const reportTerminalRuntimeStatus = useMutation(
+    api.pos.public.terminals.reportTerminalRuntimeStatus,
+  );
   const [events, setEvents] = useState<PosLocalEventRecord[]>([]);
+  const [runtimeReadiness, setRuntimeReadiness] =
+    useState<PosTerminalRuntimeReadiness>({
+      snapshots: {},
+      staffAuthorityStatus: "unknown",
+      terminalSeed: null,
+    });
   const [readError, setReadError] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
   const [manualRetryToken, setManualRetryToken] = useState(0);
@@ -95,7 +118,9 @@ export function usePosLocalSyncRuntimeStatus(input: {
   const mode = input.mode ?? "drain-enabled";
   const onLocalEventsChanged = input.onLocalEventsChanged;
   const onRetrySync = input.onRetrySync;
+  const source = input.source ?? "sync-runtime";
   const staffProfileId = input.staffProfileId;
+  const lastRuntimeStatusSignatureRef = useRef<string | null>(null);
   const requestRetry = useCallback(() => {
     setRefreshToken((current) => current + 1);
     setManualRetryToken((current) => current + 1);
@@ -155,8 +180,26 @@ export function usePosLocalSyncRuntimeStatus(input: {
       if (scope.terminalIds.size === 0 || !cloudTerminalId) {
         setEvents([]);
         setReadError(null);
+        setRuntimeReadiness({
+          snapshots: {},
+          staffAuthorityStatus: "unknown",
+          terminalSeed: null,
+        });
         return;
       }
+      setRuntimeReadiness((current) => ({
+        ...current,
+        terminalSeed: provisionedSeed,
+      }));
+      void refreshTerminalRuntimeReadiness({
+        store,
+        storeId,
+        terminalId: cloudTerminalId,
+        terminalSeed: provisionedSeed,
+      }).then((readiness) => {
+        if (shouldStop()) return;
+        setRuntimeReadiness(readiness);
+      });
       const trigger: PosLocalSyncTrigger =
         manualRetryToken !== lastManualRetryTokenRef.current
           ? "manual-retry"
@@ -454,15 +497,93 @@ export function usePosLocalSyncRuntimeStatus(input: {
     refreshToken,
   ]);
 
+  const runtimeStatusInput = useMemo(
+    () => ({
+      browserInfo: getRuntimeBrowserInfo(isOnline),
+      events,
+      localStoreFailureMessage: readError,
+      snapshots: runtimeReadiness.snapshots,
+      source,
+      staffAuthorityStatus:
+        input.staffAuthorityStatus ?? runtimeReadiness.staffAuthorityStatus,
+      staffProfileId,
+      syncDebug: debug,
+      terminalSeed: runtimeReadiness.terminalSeed,
+    }),
+    [
+      debug,
+      events,
+      input.staffAuthorityStatus,
+      isOnline,
+      readError,
+      runtimeReadiness.snapshots,
+      runtimeReadiness.staffAuthorityStatus,
+      runtimeReadiness.terminalSeed,
+      source,
+      staffProfileId,
+    ],
+  );
+  const runtimeStatus = useMemo(
+    () => buildPosTerminalRuntimeStatus(runtimeStatusInput),
+    [runtimeStatusInput],
+  );
+  const copyDiagnostics = useMemo(
+    () => buildPosTerminalRuntimeCopyDiagnostics(runtimeStatusInput),
+    [runtimeStatusInput],
+  );
+  const runtimeStatusTerminalId =
+    runtimeReadiness.terminalSeed?.cloudTerminalId ?? terminalId ?? null;
+  const runtimeStatusSyncSecretHash =
+    runtimeReadiness.terminalSeed?.syncSecretHash ?? null;
+
+  useEffect(() => {
+    if (!storeId || !runtimeStatusTerminalId || !runtimeStatusSyncSecretHash) {
+      return;
+    }
+    if (
+      !runtimeReadiness.terminalSeed &&
+      !readError &&
+      events.length === 0
+    ) {
+      return;
+    }
+
+    const signature = getRuntimeStatusSignature({
+      runtimeStatus,
+      storeId,
+      terminalId: runtimeStatusTerminalId,
+    });
+    if (signature === lastRuntimeStatusSignatureRef.current) return;
+    lastRuntimeStatusSignatureRef.current = signature;
+
+    void reportTerminalRuntimeStatus({
+      storeId: storeId as Id<"store">,
+      terminalId: runtimeStatusTerminalId as Id<"posTerminal">,
+      syncSecretHash: runtimeStatusSyncSecretHash,
+      status: runtimeStatus,
+    }).catch(() => undefined);
+  }, [
+    reportTerminalRuntimeStatus,
+    events.length,
+    readError,
+    runtimeStatus,
+    runtimeReadiness.terminalSeed,
+    runtimeStatusSyncSecretHash,
+    runtimeStatusTerminalId,
+    storeId,
+  ]);
+
   return useMemo(() => {
     if (readError) {
       return {
+        copyDiagnostics,
         description:
           "Local register activity could not be read. Check this terminal before continuing.",
         debug,
         label: "Local sync unavailable",
         onRetrySync: requestRetry,
         pendingEventCount: 1,
+        runtimeStatus,
         status: "needs_review",
       };
     }
@@ -472,15 +593,97 @@ export function usePosLocalSyncRuntimeStatus(input: {
       onRetrySync: requestRetry,
       staffProfileId,
     });
-    if (source) return { ...source, debug };
+    if (source) {
+      return { ...source, copyDiagnostics, debug, runtimeStatus };
+    }
 
     return debug.lastTrigger
       ? {
+          copyDiagnostics,
           debug,
           onRetrySync: requestRetry,
+          runtimeStatus,
         }
       : null;
-  }, [debug, events, isOnline, readError, requestRetry, staffProfileId]);
+  }, [
+    copyDiagnostics,
+    debug,
+    events,
+    isOnline,
+    readError,
+    requestRetry,
+    runtimeStatus,
+    staffProfileId,
+  ]);
+}
+
+type PosTerminalRuntimeReadiness = {
+  snapshots: PosTerminalRuntimeSnapshotReadiness;
+  staffAuthorityStatus: PosLocalStaffAuthorityReadiness | "unknown";
+  terminalSeed: PosProvisionedTerminalSeed | null;
+};
+
+async function refreshTerminalRuntimeReadiness(input: {
+  store: PosLocalRuntimeStore;
+  storeId: string;
+  terminalId?: string | null;
+  terminalSeed: PosProvisionedTerminalSeed | null;
+}): Promise<PosTerminalRuntimeReadiness> {
+  const store = input.store as PosLocalRuntimeStore &
+    Partial<{
+      getStaffAuthorityReadiness: PosLocalRuntimeStore["getStaffAuthorityReadiness"];
+      readRegisterAvailabilitySnapshot: PosLocalRuntimeStore["readRegisterAvailabilitySnapshot"];
+      readRegisterCatalogSnapshot: PosLocalRuntimeStore["readRegisterCatalogSnapshot"];
+    }>;
+  const [catalog, availability, staffAuthority] = await Promise.all([
+    store.readRegisterCatalogSnapshot
+      ? store.readRegisterCatalogSnapshot({ storeId: input.storeId })
+      : Promise.resolve({ ok: true as const, value: null }),
+    store.readRegisterAvailabilitySnapshot
+      ? store.readRegisterAvailabilitySnapshot({ storeId: input.storeId })
+      : Promise.resolve({ ok: true as const, value: null }),
+    input.terminalId && store.getStaffAuthorityReadiness
+      ? store.getStaffAuthorityReadiness({
+          storeId: input.storeId,
+          terminalId: input.terminalId,
+        })
+      : Promise.resolve({ ok: true as const, value: "unknown" as const }),
+  ]);
+
+  return {
+    snapshots: {
+      ...(catalog.ok && catalog.value
+        ? { catalogRefreshedAt: catalog.value.refreshedAt }
+        : {}),
+      ...(availability.ok && availability.value
+        ? { availabilityRefreshedAt: availability.value.refreshedAt }
+        : {}),
+    },
+    staffAuthorityStatus: staffAuthority.ok ? staffAuthority.value : "unknown",
+    terminalSeed: input.terminalSeed,
+  };
+}
+
+function getRuntimeBrowserInfo(isOnline: boolean) {
+  const navigatorRef = globalThis.navigator;
+  return {
+    language: navigatorRef?.language,
+    online: isOnline,
+    platform: navigatorRef?.platform,
+    userAgent: navigatorRef?.userAgent,
+  };
+}
+
+export function getRuntimeStatusSignature(input: {
+  runtimeStatus: PosTerminalRuntimeStatusPayload;
+  storeId: string;
+  terminalId: string;
+}) {
+  return JSON.stringify({
+    runtimeStatus: input.runtimeStatus,
+    storeId: input.storeId,
+    terminalId: input.terminalId,
+  });
 }
 
 function startStatusOnlyRuntimeTriggers(refresh: () => void) {

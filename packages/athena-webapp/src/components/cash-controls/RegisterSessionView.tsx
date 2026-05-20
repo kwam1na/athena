@@ -493,6 +493,73 @@ function RegisterSessionSyncNotice({
   );
 }
 
+function RegisterSessionSupportEvidence({
+  registerSession,
+  sessionCode,
+  syncStatus,
+}: {
+  registerSession: RegisterSessionDetail;
+  sessionCode?: string;
+  syncStatus: PosSyncStatusPresentation;
+}) {
+  const terminalName = registerSession.terminalName?.trim();
+
+  return (
+    <section className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
+      <div className="flex flex-wrap items-start justify-between gap-layout-md">
+        <div className="space-y-1">
+          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+            Support evidence
+          </p>
+          <p className="text-sm leading-6 text-muted-foreground">
+            Register, terminal, sync, and trace context for this drawer.
+          </p>
+        </div>
+        {registerSession.workflowTraceId ? (
+          <Button
+            asChild
+            className="border-border bg-background text-muted-foreground hover:bg-muted"
+            size="sm"
+            variant="outline"
+          >
+            <WorkflowTraceRouteLink traceId={registerSession.workflowTraceId}>
+              Open support trace
+            </WorkflowTraceRouteLink>
+          </Button>
+        ) : null}
+      </div>
+      <dl className="mt-layout-md grid gap-layout-sm sm:grid-cols-3">
+        <div>
+          <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            Terminal
+          </dt>
+          <dd className="mt-1 truncate text-sm text-foreground">
+            {terminalName || "Terminal not recorded"}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            Session code
+          </dt>
+          <dd className="mt-1 font-mono text-sm text-foreground">
+            {sessionCode ?? "n/a"}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            Sync status
+          </dt>
+          <dd className="mt-1 text-sm text-foreground">
+            {syncStatus.status === "locally_closed_pending_sync"
+              ? "Pending reconciliation"
+              : syncStatus.label}
+          </dd>
+        </div>
+      </dl>
+    </section>
+  );
+}
+
 export function RegisterSessionViewContent({
   actorStaffProfileId,
   actorUserId,
@@ -1566,6 +1633,13 @@ export function RegisterSessionViewContent({
         <div className="container mx-auto space-y-6 p-6">
           {registerSession ? (
             <RegisterSessionSyncNotice syncStatus={syncStatus} />
+          ) : null}
+          {registerSession ? (
+            <RegisterSessionSupportEvidence
+              registerSession={registerSession}
+              sessionCode={sessionCode}
+              syncStatus={syncStatus}
+            />
           ) : null}
           <section className="overflow-hidden rounded-[calc(var(--radius)*1.35)] border border-border bg-surface shadow-surface">
             {isLoading ? null : !registerSession ? (

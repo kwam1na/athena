@@ -365,6 +365,59 @@
       ]
     },
     {
+      "name": "pos-terminal-health-visibility-and-diagnostics-edits",
+      "pathPrefixes": [
+        "packages/athena-webapp/convex/schemas/pos/posTerminal.ts",
+        "packages/athena-webapp/convex/schemas/pos/posTerminalRuntimeStatus.ts",
+        "packages/athena-webapp/convex/pos/application/commands/terminals.ts",
+        "packages/athena-webapp/convex/pos/application/queries/terminals.ts",
+        "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRepository.ts",
+        "packages/athena-webapp/convex/pos/public/terminals.ts",
+        "packages/athena-webapp/convex/inventory/posTerminal.ts",
+        "packages/athena-webapp/src/components/pos/settings/POSSettingsView.tsx",
+        "packages/athena-webapp/src/hooks/useGetTerminal.ts",
+        "packages/athena-webapp/src/lib/pos/application/registerAndProvisionPosTerminal.ts",
+        "packages/athena-webapp/src/lib/pos/infrastructure/terminal",
+        "packages/athena-webapp/src/lib/pos/infrastructure/local/terminalRuntimeStatus.ts",
+        "packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts",
+        "packages/athena-webapp/src/lib/pos/presentation/syncStatusPresentation.ts",
+        "packages/athena-webapp/src/components/pos/register/POSRegisterView.tsx",
+        "packages/athena-webapp/src/components/pos/terminals",
+        "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals",
+        "packages/athena-webapp/src/components/cash-controls/CashControlsDashboard.tsx",
+        "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx"
+      ],
+      "commands": [
+        {
+          "kind": "raw",
+          "command": "bun run --filter '@athena/webapp' test -- convex/schemas/pos/posTerminal.test.ts convex/pos/application/terminals.test.ts convex/pos/infrastructure/repositories/terminalRepository.test.ts convex/pos/public/terminals.test.ts src/components/pos/settings/POSSettingsView.test.tsx src/hooks/useGetTerminal.test.ts src/lib/pos/infrastructure/local/terminalRuntimeStatus.test.ts src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.test.ts src/lib/pos/presentation/syncStatusPresentation.test.ts src/components/pos/register/POSRegisterView.test.tsx src/components/pos/terminals/terminalHealthPresentation.test.ts src/components/pos/terminals/POSTerminalHealthView.test.tsx src/components/pos/terminals/POSTerminalDetailView.test.tsx 'src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals.route.test.tsx' src/components/cash-controls/CashControlsDashboard.test.tsx src/components/cash-controls/RegisterSessionView.test.tsx"
+        },
+        {
+          "kind": "script",
+          "script": "audit:convex"
+        },
+        {
+          "kind": "script",
+          "script": "lint:convex:changed"
+        },
+        {
+          "kind": "script",
+          "script": "lint:frontend:changed"
+        },
+        {
+          "kind": "raw",
+          "command": "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json"
+        },
+        {
+          "kind": "script",
+          "script": "build"
+        }
+      ],
+      "behaviorScenarios": [
+        "athena-admin-shell-boot"
+      ]
+    },
+    {
       "name": "shared-lib-or-utility-edits",
       "pathPrefixes": [
         "packages/athena-webapp/src/lib",

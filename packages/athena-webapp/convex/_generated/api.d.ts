@@ -247,6 +247,7 @@ import type * as schemas_pos_posLocalSyncMapping from "../schemas/pos/posLocalSy
 import type * as schemas_pos_posSession from "../schemas/pos/posSession.js";
 import type * as schemas_pos_posSessionItem from "../schemas/pos/posSessionItem.js";
 import type * as schemas_pos_posTerminal from "../schemas/pos/posTerminal.js";
+import type * as schemas_pos_posTerminalRuntimeStatus from "../schemas/pos/posTerminalRuntimeStatus.js";
 import type * as schemas_pos_posTransaction from "../schemas/pos/posTransaction.js";
 import type * as schemas_pos_posTransactionItem from "../schemas/pos/posTransactionItem.js";
 import type * as schemas_serviceOps_index from "../schemas/serviceOps/index.js";
@@ -579,6 +580,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/pos/posSession": typeof schemas_pos_posSession;
   "schemas/pos/posSessionItem": typeof schemas_pos_posSessionItem;
   "schemas/pos/posTerminal": typeof schemas_pos_posTerminal;
+  "schemas/pos/posTerminalRuntimeStatus": typeof schemas_pos_posTerminalRuntimeStatus;
   "schemas/pos/posTransaction": typeof schemas_pos_posTransaction;
   "schemas/pos/posTransactionItem": typeof schemas_pos_posTransactionItem;
   "schemas/serviceOps/index": typeof schemas_serviceOps_index;

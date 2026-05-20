@@ -318,10 +318,10 @@ describe("RegisterSessionViewContent", () => {
     );
 
     expect(screen.getAllByText("Register 3").length).toBeGreaterThan(0);
-    expect(screen.getByText("Front counter")).toBeInTheDocument();
+    expect(screen.getAllByText("Front counter").length).toBeGreaterThan(0);
     expect(screen.getByText("Session")).toBeInTheDocument();
     expect(screen.getByText("Code")).toBeInTheDocument();
-    expect(screen.getByText("SION-1")).toBeInTheDocument();
+    expect(screen.getAllByText("SION-1").length).toBeGreaterThan(0);
     expect(screen.getByText("Cash position")).toBeInTheDocument();
     expect(screen.getByText("Opened")).toBeInTheDocument();
     expect(
@@ -389,6 +389,35 @@ describe("RegisterSessionViewContent", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("4 pending")).toBeInTheDocument();
+  });
+
+  it("links support evidence without treating stale terminal status as review work", () => {
+    render(
+      <RegisterSessionViewContent
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            localSyncStatus: {
+              description: "Terminal check-in is waiting for a fresh upload.",
+              status: "terminal_stale",
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Support evidence")).toBeInTheDocument();
+    expect(screen.getAllByText("Front counter").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Pending sync")[0]).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Open support trace" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Needs review")).not.toBeInTheDocument();
   });
 
   it("shows reconciliation review with fallback copy for unknown types", () => {

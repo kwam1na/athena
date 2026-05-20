@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
+import type { ComponentType, ReactNode } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/ui/loading-button";
@@ -18,6 +20,18 @@ import {
   registerAndProvisionPosTerminal,
   type ProvisionedTerminalRecord,
 } from "@/lib/pos/application/registerAndProvisionPosTerminal";
+
+type HealthLinkProps = {
+  children: ReactNode;
+  className?: string;
+  params: {
+    orgUrlSlug: string;
+    storeUrlSlug: string;
+  };
+  to: string;
+};
+
+const HealthLink = Link as unknown as ComponentType<HealthLinkProps>;
 
 type FingerprintRegistrationCardProps = {
   displayName: string;
@@ -168,6 +182,12 @@ export function POSSettingsView({
   storeFactory?: Parameters<typeof registerAndProvisionPosTerminal>[0]["storeFactory"];
 } = {}) {
   const { activeStore } = useGetActiveStore();
+  const routeParams = useParams({ strict: false }) as
+    | {
+        orgUrlSlug?: string;
+        storeUrlSlug?: string;
+      }
+    | undefined;
 
   const registerTerminalMutation = useMutation(
     api.inventory.posTerminal.registerTerminal,
@@ -437,6 +457,41 @@ export function POSSettingsView({
                 registrationState.existingTerminalRegisterNumber
               }
             />
+          </section>
+
+          <section className="grid gap-layout-xl border-b border-border py-layout-2xl lg:grid-cols-[17rem_minmax(0,1fr)]">
+            <div className="space-y-layout-sm">
+              <h2 className="text-2xl font-medium text-foreground">
+                Terminal health
+              </h2>
+              <p className="text-sm leading-6 text-muted-foreground">
+                Use the health console when you need the full roster, sync
+                evidence, review work, or support notes for other checkout
+                stations.
+              </p>
+            </div>
+
+            <div className="flex flex-col items-start gap-layout-sm">
+              <p className="text-sm text-muted-foreground">
+                This settings page only changes the current checkout station.
+              </p>
+              {routeParams?.orgUrlSlug && routeParams.storeUrlSlug ? (
+                <HealthLink
+                  className="inline-flex h-control-compact items-center rounded-md bg-signal px-layout-md text-sm font-medium text-signal-foreground"
+                  params={{
+                    orgUrlSlug: routeParams.orgUrlSlug,
+                    storeUrlSlug: routeParams.storeUrlSlug,
+                  }}
+                  to="/$orgUrlSlug/store/$storeUrlSlug/pos/terminals"
+                >
+                  Open terminal health
+                </HealthLink>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Select a store before opening terminal health.
+                </p>
+              )}
+            </div>
           </section>
         </PageWorkspace>
       </FadeIn>

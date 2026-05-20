@@ -3,15 +3,24 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   ingestLocalEvents: vi.fn(),
+  reportTerminalRuntimeStatus: vi.fn(),
 }));
 
 vi.mock("convex/react", () => ({
-  useMutation: () => mocks.ingestLocalEvents,
+  useMutation: (mutation: string) =>
+    mutation === "reportTerminalRuntimeStatus"
+      ? mocks.reportTerminalRuntimeStatus
+      : mocks.ingestLocalEvents,
 }));
 
 vi.mock("~/convex/_generated/api", () => ({
   api: {
-    pos: { public: { sync: { ingestLocalEvents: "ingestLocalEvents" } } },
+    pos: {
+      public: {
+        sync: { ingestLocalEvents: "ingestLocalEvents" },
+        terminals: { reportTerminalRuntimeStatus: "reportTerminalRuntimeStatus" },
+      },
+    },
   },
 }));
 
@@ -22,6 +31,7 @@ import {
   collectServerReviewLocalEventIds,
   collectServerSyncedLocalEventIds,
   derivePosLocalRuntimeSyncStatus,
+  getRuntimeStatusSignature,
   usePosLocalSyncRuntimeStatus,
   writeReturnedLocalCloudMappings,
 } from "./usePosLocalSyncRuntime";
@@ -39,6 +49,10 @@ function deferred<T>() {
 describe("usePosLocalSyncRuntimeStatus", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mocks.reportTerminalRuntimeStatus.mockResolvedValue({
+      kind: "ok",
+      data: {},
+    });
     Object.defineProperty(globalThis.navigator, "onLine", {
       configurable: true,
       value: true,
@@ -459,7 +473,13 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     const newStore = {
       listEvents: vi.fn(async () => ({
         ok: true,
-        value: [],
+        value: [
+          buildLocalEvent({
+            localEventId: "event-open",
+            sequence: 1,
+            type: "register.opened",
+          }),
+        ],
       })),
       markEventsNeedsReview: vi.fn(async () => ({
         ok: true,
@@ -1037,6 +1057,116 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     });
   });
 
+  it("publishes runtime check-ins best-effort without blocking local sync upload", async () => {
+    mocks.reportTerminalRuntimeStatus.mockRejectedValue(
+      new Error("Terminal status endpoint unavailable"),
+    );
+    mocks.ingestLocalEvents.mockResolvedValue({
+      kind: "ok",
+      data: {
+        accepted: [
+          {
+            localEventId: "event-open",
+            sequence: 1,
+            status: "projected",
+          },
+        ],
+        held: [],
+        mappings: [],
+        conflicts: [],
+        syncCursor: {
+          localRegisterSessionId: "register-1",
+          acceptedThroughSequence: 1,
+        },
+      },
+    });
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [
+          buildLocalEvent({
+            localEventId: "event-open",
+            payload: {
+              openingFloat: 100,
+              staffProofToken: "payload-proof-token",
+            },
+            sequence: 1,
+            staffProofToken: "proof-token-a",
+            type: "register.opened",
+            uploadSequence: 1,
+          }),
+        ],
+      })),
+      markEventsSynced: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+      writeLocalCloudMapping: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudId: "register-session-1",
+          entity: "registerSession",
+          localId: "register-1",
+          mappedAt: 10,
+        },
+      })),
+    };
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        eventAppendToken: 1,
+        source: "register",
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: expect.objectContaining({
+            localStore: expect.objectContaining({
+              terminalSeedReady: true,
+            }),
+            source: "register",
+            sync: expect.objectContaining({
+              pendingEventCount: 1,
+            }),
+          }),
+          storeId: "store-1",
+          syncSecretHash: "sync-secret-1",
+          terminalId: "terminal-cloud-1",
+        }),
+      ),
+    );
+    expect(
+      JSON.stringify(mocks.reportTerminalRuntimeStatus.mock.calls[0]?.[0].status),
+    ).not.toContain("proof-token-a");
+    expect(
+      JSON.stringify(mocks.reportTerminalRuntimeStatus.mock.calls[0]?.[0].status),
+    ).not.toContain("payload-proof-token");
+    expect(
+      JSON.stringify(mocks.reportTerminalRuntimeStatus.mock.calls[0]?.[0].status),
+    ).not.toContain("sync-secret-1");
+    await waitFor(() => expect(mocks.ingestLocalEvents).toHaveBeenCalled());
+    expect(store.markEventsSynced).toHaveBeenCalledWith(["event-open"], {
+      uploaded: true,
+    });
+  });
+
   it("refreshes status-only mode on connectivity changes without uploading", async () => {
     const store = {
       listEvents: vi.fn(async () => ({
@@ -1068,7 +1198,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
         mode: "status-only",
         storeFactory: () => store as never,
         storeId: "store-1",
-        terminalId: "terminal-cloud-1",
+        terminalId: "local-terminal-1",
       }),
     );
 
@@ -1097,6 +1227,47 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     );
     expect(store.listEvents.mock.calls.length).toBeGreaterThanOrEqual(2);
     expect(mocks.ingestLocalEvents).not.toHaveBeenCalled();
+  });
+
+  it("keeps reportedAt in runtime status signatures so heartbeat-only freshness publishes", () => {
+    const runtimeStatus = {
+      localStore: {
+        available: true,
+        terminalSeedReady: true,
+      },
+      receivedAt: 100,
+      reportedAt: 100,
+      snapshots: {},
+      source: "sync-runtime",
+      staffAuthority: {
+        status: "unknown",
+      },
+      sync: {
+        failedEventCount: 0,
+        localOnlyEventCount: 0,
+        pendingEventCount: 0,
+        reviewEventCount: 0,
+        status: "idle",
+        uploadableEventCount: 0,
+      },
+    };
+
+    expect(
+      getRuntimeStatusSignature({
+        runtimeStatus: runtimeStatus as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    ).not.toEqual(
+      getRuntimeStatusSignature({
+        runtimeStatus: {
+          ...runtimeStatus,
+          reportedAt: 200,
+        } as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
   });
 
   it("drains persisted-proof multi-staff local history from the hub in stored upload order", async () => {

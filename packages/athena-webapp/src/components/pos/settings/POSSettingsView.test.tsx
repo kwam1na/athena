@@ -24,6 +24,31 @@ vi.mock("@/hooks/useGetActiveStore", () => ({
   default: () => ({ activeStore: { _id: "store-1" } }),
 }));
 
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({
+    children,
+    params,
+    to,
+    ...props
+  }: {
+    children?: ReactNode;
+    params?: { orgUrlSlug: string; storeUrlSlug: string };
+    to?: string;
+  }) => (
+    <a
+      href={
+        to
+          ?.replace("$orgUrlSlug", params?.orgUrlSlug ?? "")
+          .replace("$storeUrlSlug", params?.storeUrlSlug ?? "") ?? "#"
+      }
+      {...props}
+    >
+      {children}
+    </a>
+  ),
+  useParams: () => ({ orgUrlSlug: "acme", storeUrlSlug: "downtown" }),
+}));
+
 vi.mock("~/convex/_generated/api", () => ({
   api: { inventory: { posTerminal: {} } },
 }));
@@ -237,6 +262,20 @@ describe("registerAndProvisionPosTerminal", () => {
         terminalId: "fingerprint-1",
       }),
     );
+  });
+
+  it("hands off roster and support work to terminal health", async () => {
+    render(<POSSettingsView />);
+
+    expect(await screen.findByText("Terminal health")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This settings page only changes the current checkout station.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Open terminal health" }),
+    ).toHaveAttribute("href", "/acme/store/downtown/pos/terminals");
   });
 
   it("sends an independent sync secret and writes it into the local terminal seed", async () => {
