@@ -15,6 +15,33 @@ import { formatStaffDisplayName } from "../../../../shared/staffDisplayName";
 import { listReceiptDeliveriesForTransaction } from "../../../customerMessaging/repository";
 import { statusIsRetryable } from "../../../customerMessaging/domain";
 
+const ITEM_ADJUSTMENT_REQUEST_TYPES = new Set([
+  "pos_item_adjustment",
+  "pos_item_adjustment_review",
+]);
+
+const ITEM_ADJUSTMENT_EVENT_TYPES = new Set([
+  "pos_transaction_item_adjustment_applied",
+  "pos_transaction_item_adjusted",
+]);
+
+type AdjustmentMetadata = {
+  adjustedTotal?: number;
+  correctedTotal?: number;
+  lineItems?: Array<Record<string, unknown>>;
+  lines?: Array<Record<string, unknown>>;
+  originalTotal?: number;
+  payload?: {
+    lines?: Array<Record<string, unknown>>;
+  };
+  settlementAmount?: number;
+  settlementDirection?: string;
+  settlementMethod?: string;
+  deltaTotal?: number;
+  totalDelta?: number;
+  transactionId?: Id<"posTransaction">;
+};
+
 function summarizeCashierName(args: {
   fullName?: string;
   firstName?: string;
@@ -86,6 +113,33 @@ async function loadCorrectionEvents(
     .collect();
 }
 
+async function loadPendingItemAdjustmentApprovals(
+  ctx: QueryCtx,
+  args: {
+    storeId: Id<"store">;
+    transactionId: Id<"posTransaction">;
+  },
+) {
+  // eslint-disable-next-line @convex-dev/no-collect-in-query -- Transaction detail needs all pending approvals for one transaction in the store.
+  const approvalRequests = await ctx.db
+    .query("approvalRequest")
+    .withIndex("by_storeId_status_posTransactionId", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("status", "pending")
+        .eq("posTransactionId", args.transactionId),
+    )
+    .collect();
+
+  return approvalRequests.filter(
+    (request) =>
+      ITEM_ADJUSTMENT_REQUEST_TYPES.has(request.requestType) &&
+      ((request.subjectType === "pos_transaction" &&
+        request.subjectId === String(args.transactionId)) ||
+        request.metadata?.transactionId === args.transactionId),
+  );
+}
+
 async function listStaffNames(
   ctx: QueryCtx,
   staffProfileIds: Set<Id<"staffProfile">>,
@@ -101,6 +155,70 @@ async function listStaffNames(
   return new Map(
     staffEntries.filter(Boolean) as Array<[Id<"staffProfile">, string]>,
   );
+}
+
+function numberFromMetadata(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
+}
+
+function stringFromMetadata(value: unknown) {
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function normalizeAdjustmentLineItem(lineItem: Record<string, unknown>) {
+  return {
+    productName:
+      stringFromMetadata(lineItem.productName) ??
+      stringFromMetadata(lineItem.name) ??
+      "Unnamed item",
+    productSku: stringFromMetadata(lineItem.productSku) ?? stringFromMetadata(lineItem.sku),
+    originalQuantity: numberFromMetadata(lineItem.originalQuantity),
+    adjustedQuantity: numberFromMetadata(lineItem.adjustedQuantity),
+    quantityDelta:
+      numberFromMetadata(lineItem.quantityDelta) ??
+      (typeof lineItem.inventoryDelta === "number"
+        ? -lineItem.inventoryDelta
+        : undefined),
+    unitPrice: numberFromMetadata(lineItem.unitPrice),
+    totalDelta: numberFromMetadata(lineItem.totalDelta),
+  };
+}
+
+function normalizeAdjustmentMetadata(metadata?: Record<string, unknown>) {
+  const adjustment = (metadata?.adjustment &&
+  typeof metadata.adjustment === "object" &&
+  !Array.isArray(metadata.adjustment)
+    ? metadata.adjustment
+    : metadata) as AdjustmentMetadata | undefined;
+
+  const rawLineItems = Array.isArray(adjustment?.lineItems)
+    ? adjustment.lineItems
+    : Array.isArray(adjustment?.lines)
+      ? adjustment.lines
+      : Array.isArray(adjustment?.payload?.lines)
+        ? adjustment.payload.lines
+        : [];
+
+  return {
+    adjustedTotal:
+      numberFromMetadata(adjustment?.adjustedTotal) ??
+      numberFromMetadata(adjustment?.correctedTotal),
+    lineItems: rawLineItems
+      .filter(
+        (lineItem): lineItem is Record<string, unknown> =>
+          typeof lineItem === "object" && lineItem !== null && !Array.isArray(lineItem),
+      )
+      .map(normalizeAdjustmentLineItem),
+    originalTotal: numberFromMetadata(adjustment?.originalTotal),
+    settlementAmount: numberFromMetadata(adjustment?.settlementAmount),
+    settlementDirection: stringFromMetadata(adjustment?.settlementDirection),
+    settlementMethod: stringFromMetadata(adjustment?.settlementMethod),
+    totalDelta:
+      numberFromMetadata(adjustment?.totalDelta) ??
+      numberFromMetadata(adjustment?.deltaTotal),
+  };
 }
 
 export async function getTransaction(
@@ -211,6 +329,11 @@ export async function getTransactionById(
     storeId: transaction.storeId,
     transactionId: transaction._id,
   });
+  const pendingItemAdjustmentApprovals =
+    await loadPendingItemAdjustmentApprovals(ctx, {
+      storeId: transaction.storeId,
+      transactionId: transaction._id,
+    });
   const receiptDeliveries = await listReceiptDeliveriesForTransaction(ctx, {
     storeId: transaction.storeId,
     transactionId: transaction._id,
@@ -225,9 +348,62 @@ export async function getTransactionById(
         ...receiptDeliveries.flatMap((delivery) =>
           delivery.actorStaffProfileId ? [delivery.actorStaffProfileId] : [],
         ),
+        ...pendingItemAdjustmentApprovals.flatMap((approval) =>
+          approval.requestedByStaffProfileId
+            ? [approval.requestedByStaffProfileId]
+            : [],
+        ),
       ],
     ),
   );
+  const appliedAdjustmentSummaries = correctionHistory
+    .filter((event) => ITEM_ADJUSTMENT_EVENT_TYPES.has(event.eventType))
+    .map((event) => {
+      const adjustment = normalizeAdjustmentMetadata(event.metadata);
+      return {
+        _id: event._id,
+        status: "applied" as const,
+        createdAt: event.createdAt,
+        appliedAt: event.createdAt,
+        reason: event.reason ?? undefined,
+        actorStaffName: event.actorStaffProfileId
+          ? actorStaffNamesById.get(event.actorStaffProfileId) ?? null
+          : null,
+        ...adjustment,
+        originalTotal: adjustment.originalTotal ?? transaction.total,
+        adjustedTotal: adjustment.adjustedTotal ?? transaction.total,
+        settlementAmount: adjustment.settlementAmount ?? 0,
+        settlementDirection: adjustment.settlementDirection ?? "none",
+      };
+    });
+  const pendingAdjustmentSummaries = pendingItemAdjustmentApprovals.map(
+    (approval) => {
+      const adjustment = normalizeAdjustmentMetadata(approval.metadata);
+      return {
+        _id: approval._id,
+        status: "pending_approval" as const,
+        approvalRequestId: approval._id,
+        createdAt: approval.createdAt,
+        reason: approval.reason ?? approval.notes ?? undefined,
+        actorStaffName: approval.requestedByStaffProfileId
+          ? actorStaffNamesById.get(approval.requestedByStaffProfileId) ?? null
+          : null,
+        ...adjustment,
+        originalTotal: adjustment.originalTotal ?? transaction.total,
+        adjustedTotal: adjustment.adjustedTotal ?? transaction.total,
+        settlementAmount: adjustment.settlementAmount ?? 0,
+        settlementDirection: adjustment.settlementDirection ?? "none",
+      };
+    },
+  );
+  const totalAppliedAdjustmentDelta = appliedAdjustmentSummaries.reduce(
+    (sum, adjustment) =>
+      sum +
+      (adjustment.totalDelta ??
+        adjustment.adjustedTotal - adjustment.originalTotal),
+    0,
+  );
+  const effectiveNetTotal = transaction.total + totalAppliedAdjustmentDelta;
 
   return {
     _id: transaction._id,
@@ -244,6 +420,23 @@ export async function getTransactionById(
     payments: transaction.payments,
     totalPaid: transaction.totalPaid ?? transaction.total,
     changeGiven: transaction.changeGiven,
+    originalTotal: transaction.total,
+    effectiveNetTotal,
+    totalAppliedAdjustmentDelta,
+    adjustmentSummary: {
+      hasAdjustments:
+        appliedAdjustmentSummaries.length > 0 ||
+        pendingAdjustmentSummaries.length > 0,
+      pendingCount: pendingAdjustmentSummaries.length,
+      appliedCount: appliedAdjustmentSummaries.length,
+      effectiveNetTotal,
+      originalTotal: transaction.total,
+      totalAppliedAdjustmentDelta,
+    },
+    adjustments: [
+      ...pendingAdjustmentSummaries,
+      ...appliedAdjustmentSummaries,
+    ].sort((first, second) => second.createdAt - first.createdAt),
     status: transaction.status,
     completedAt: transaction.completedAt,
     notes: transaction.notes,

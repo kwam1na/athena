@@ -78,6 +78,25 @@ Behavior scenarios:
 
 Use this when register-session, deposit, closeout, dashboard, operations-queue approval, or cash-controls route wiring changes. This is the confirmation slice for drawers opened from POS showing up in the dashboard and register-session detail views. Run `bunx convex dev --once` from `packages/athena-webapp` before validation when generated client refs or new Convex function exports changed.
 
+## POS transaction item-adjustment reporting edits
+
+Touched surfaces: `convex/pos/application/commands`, `convex/pos/application/corrections`, `convex/pos/infrastructure/repositories/transactionRepository.ts`, `convex/schemas/pos`, `convex/operations/dailyClose.ts`, `convex/operations/dailyOperations.ts`, `src/components/cash-controls/RegisterSessionView.tsx`, `src/components/pos/transactions/TransactionView.tsx`, `src/components/operations/OperationsQueueView.tsx`
+
+Run:
+
+- `bun run --filter '@athena/webapp' test -- convex/operations/dailyClose.test.ts convex/operations/dailyOperations.test.ts convex/pos/application/completeTransaction.test.ts convex/pos/application/correctTransactionPaymentMethod.test.ts convex/pos/application/transactionAdjustmentPlanner.test.ts convex/pos/application/adjustTransactionItems.test.ts convex/pos/application/transactionAdjustments.test.ts convex/pos/application/getTransactions.test.ts convex/pos/public/transactions.test.ts src/components/cash-controls/RegisterSessionView.test.tsx src/components/pos/transactions/TransactionView.test.tsx src/components/operations/OperationsQueueView.test.tsx`
+- `bun run --filter '@athena/webapp' audit:convex`
+- `bun run --filter '@athena/webapp' lint:convex:changed`
+- `bun run --filter '@athena/webapp' lint:frontend:changed`
+- `bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json`
+- `bun run --filter '@athena/webapp' build`
+
+Behavior scenarios:
+
+- `athena-admin-shell-boot`
+
+Use this when completed-transaction item adjustments, adjustment approval/application, transaction detail adjustment history, daily close/operations adjusted totals, or cash-control settlement display changes. It keeps original sale totals and explicit adjusted/net settlement fields covered together.
+
 ## Service operations intake, catalog, appointments, and cases
 
 Touched surfaces: `convex/serviceOps`, `convex/operations/serviceIntake.ts`, `src/components/services`, `src/components/operations/OperationsQueueView.tsx`, `src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/services`

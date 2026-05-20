@@ -27,6 +27,7 @@ const MAX_OPERATING_DATE_RANGE_MS = 36 * 60 * 60 * 1000;
 const DAILY_CLOSE_SUBJECT_TYPE = "daily_close";
 const DAILY_CLOSE_CARRY_FORWARD_TYPE = "daily_close_carry_forward";
 const TERMINAL_WORK_ITEM_STATUSES = new Set(["completed", "cancelled"]);
+const OPEN_OPERATIONAL_WORK_ITEM_STATUSES = ["open", "in_progress"] as const;
 const ACTIVE_REGISTER_STATUSES = ["open", "active", "closing"] as const;
 const OPEN_POS_SESSION_STATUSES = ["active", "held"] as const;
 const DAILY_CLOSE_COMPLETION_ACTION = APPROVAL_ACTIONS.dailyCloseCompletion;
@@ -71,6 +72,16 @@ type DailyCloseReadiness = {
 };
 
 type DailyCloseSummary = {
+  adjustedSalesTotal: number;
+  adjustmentCashSettlementTotal: number;
+  adjustmentCollectionTotal: number;
+  adjustmentNetSettlementTotal: number;
+  adjustmentPaymentTotals: Array<{
+    method: string;
+    amount: number;
+    transactionCount: number;
+  }>;
+  adjustmentRefundTotal: number;
   carriedOverCashTotal: number;
   carriedOverRegisterCount: number;
   cashDepositTotal: number;
@@ -87,6 +98,8 @@ type DailyCloseSummary = {
   registerCount: number;
   registerVarianceCount: number;
   salesTotal: number;
+  itemAdjustmentCount: number;
+  netCashMovementTotal: number;
   transactionCount: number;
   voidedTransactionCount: number;
   paymentTotals: Array<{
@@ -196,8 +209,55 @@ function normalizeCompletedDailyCloseSnapshot(args: {
     carryForwardItems: reportSnapshot.carryForwardItems,
     readyItems: reportSnapshot.readyItems,
     readiness: reportSnapshot.readiness,
-    summary: reportSnapshot.summary as DailyCloseSummary,
+    summary: normalizeDailyCloseSummary(reportSnapshot.summary),
     sourceSubjects: reportSnapshot.sourceSubjects,
+  };
+}
+
+function normalizeDailyCloseSummary(
+  summary: Record<string, unknown>,
+): DailyCloseSummary {
+  const salesTotal =
+    typeof summary.salesTotal === "number" ? summary.salesTotal : 0;
+  const currentDayCashTotal =
+    typeof summary.currentDayCashTotal === "number"
+      ? summary.currentDayCashTotal
+      : 0;
+
+  return {
+    ...emptySummary(),
+    ...summary,
+    adjustedSalesTotal:
+      typeof summary.adjustedSalesTotal === "number"
+        ? summary.adjustedSalesTotal
+        : salesTotal,
+    adjustmentCashSettlementTotal:
+      typeof summary.adjustmentCashSettlementTotal === "number"
+        ? summary.adjustmentCashSettlementTotal
+        : 0,
+    adjustmentCollectionTotal:
+      typeof summary.adjustmentCollectionTotal === "number"
+        ? summary.adjustmentCollectionTotal
+        : 0,
+    adjustmentNetSettlementTotal:
+      typeof summary.adjustmentNetSettlementTotal === "number"
+        ? summary.adjustmentNetSettlementTotal
+        : 0,
+    adjustmentPaymentTotals: Array.isArray(summary.adjustmentPaymentTotals)
+      ? (summary.adjustmentPaymentTotals as DailyCloseSummary["adjustmentPaymentTotals"])
+      : [],
+    adjustmentRefundTotal:
+      typeof summary.adjustmentRefundTotal === "number"
+        ? summary.adjustmentRefundTotal
+        : 0,
+    itemAdjustmentCount:
+      typeof summary.itemAdjustmentCount === "number"
+        ? summary.itemAdjustmentCount
+        : 0,
+    netCashMovementTotal:
+      typeof summary.netCashMovementTotal === "number"
+        ? summary.netCashMovementTotal
+        : currentDayCashTotal,
   };
 }
 
@@ -831,14 +891,18 @@ async function listOpenOperationalWorkItems(
   ctx: Pick<QueryCtx, "db">,
   storeId: Id<"store">,
 ) {
-  const workItems = await ctx.db
-    .query("operationalWorkItem")
-    .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
-    .take(DAILY_CLOSE_QUERY_LIMIT);
-
-  return workItems.filter(
-    (workItem) => !TERMINAL_WORK_ITEM_STATUSES.has(workItem.status),
+  const workItems = await Promise.all(
+    OPEN_OPERATIONAL_WORK_ITEM_STATUSES.map((status) =>
+      ctx.db
+        .query("operationalWorkItem")
+        .withIndex("by_storeId_status", (q) =>
+          q.eq("storeId", storeId).eq("status", status),
+        )
+        .take(DAILY_CLOSE_QUERY_LIMIT),
+    ),
   );
+
+  return workItems.flat();
 }
 
 async function listTransactionsForDay(
@@ -931,6 +995,257 @@ function buildPaymentTotals(transactions: Array<Doc<"posTransaction">>) {
     method,
     ...total,
   }));
+}
+
+type PosTransactionAdjustmentReportRow = {
+  _id: string;
+  appliedAt?: number;
+  completedAt?: number;
+  correctedTotal?: number;
+  createdAt?: number;
+  deltaTotal?: number;
+  originalTotal?: number;
+  posTransactionId?: Id<"posTransaction"> | string;
+  registerSessionId?: Id<"registerSession"> | string;
+  settlementAmount?: number;
+  settlementDirection?: string;
+  settlementMethod?: string;
+  status?: string;
+  storeId?: Id<"store"> | string;
+  totalDelta?: number;
+  transactionId?: Id<"posTransaction"> | string;
+  transactionNumber?: string;
+};
+
+type AppliedTransactionAdjustment = PosTransactionAdjustmentReportRow & {
+  appliedAt: number;
+  signedSalesDelta: number;
+  signedSettlementAmount: number;
+  transactionId: string;
+};
+
+type AdjustmentReportTotals = {
+  adjustedSalesTotal: number;
+  adjustmentCashSettlementTotal: number;
+  adjustmentCollectionTotal: number;
+  adjustmentNetSettlementTotal: number;
+  adjustmentPaymentTotals: DailyCloseSummary["adjustmentPaymentTotals"];
+  adjustmentRefundTotal: number;
+  itemAdjustmentCount: number;
+  netCashMovementTotal: number;
+};
+
+const APPLIED_TRANSACTION_ADJUSTMENT_STATUSES = new Set([
+  "applied",
+  "completed",
+  "recorded",
+  "settled",
+]);
+
+function adjustmentAppliedAt(
+  adjustment: PosTransactionAdjustmentReportRow,
+): number | null {
+  const value =
+    adjustment.appliedAt ?? adjustment.completedAt ?? adjustment.createdAt;
+
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function adjustmentTransactionId(
+  adjustment: PosTransactionAdjustmentReportRow,
+) {
+  return String(adjustment.posTransactionId ?? adjustment.transactionId ?? "");
+}
+
+function adjustmentSalesDelta(adjustment: PosTransactionAdjustmentReportRow) {
+  if (
+    typeof adjustment.deltaTotal === "number" &&
+    Number.isFinite(adjustment.deltaTotal)
+  ) {
+    return adjustment.deltaTotal;
+  }
+
+  if (
+    typeof adjustment.totalDelta === "number" &&
+    Number.isFinite(adjustment.totalDelta)
+  ) {
+    return adjustment.totalDelta;
+  }
+
+  if (
+    typeof adjustment.correctedTotal === "number" &&
+    Number.isFinite(adjustment.correctedTotal) &&
+    typeof adjustment.originalTotal === "number" &&
+    Number.isFinite(adjustment.originalTotal)
+  ) {
+    return adjustment.correctedTotal - adjustment.originalTotal;
+  }
+
+  return 0;
+}
+
+function adjustmentSettlementAmount(
+  adjustment: PosTransactionAdjustmentReportRow,
+) {
+  const rawAmount =
+    typeof adjustment.settlementAmount === "number" &&
+    Number.isFinite(adjustment.settlementAmount)
+      ? Math.abs(adjustment.settlementAmount)
+      : Math.abs(adjustmentSalesDelta(adjustment));
+  const direction = adjustment.settlementDirection;
+
+  if (
+    direction === "refund" ||
+    direction === "out" ||
+    direction === "refund_due"
+  ) {
+    return -rawAmount;
+  }
+
+  if (
+    direction === "collect" ||
+    direction === "collection" ||
+    direction === "in" ||
+    direction === "balance_due"
+  ) {
+    return rawAmount;
+  }
+
+  return adjustmentSalesDelta(adjustment);
+}
+
+export async function listAppliedTransactionAdjustmentsForDay(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    endAt: number;
+    startAt: number;
+    storeId: Id<"store">;
+  },
+): Promise<AppliedTransactionAdjustment[]> {
+  const adjustments = (await ctx.db
+    .query("posTransactionAdjustment")
+    .withIndex("by_storeId_status_appliedAt", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("status", "applied")
+        .gte("appliedAt", args.startAt)
+        .lt("appliedAt", args.endAt),
+    )
+    .take(DAILY_CLOSE_QUERY_LIMIT)) as PosTransactionAdjustmentReportRow[];
+
+  return adjustments.flatMap((adjustment) => {
+    const status = adjustment.status ?? "";
+    const appliedAt = adjustmentAppliedAt(adjustment);
+    const transactionId = adjustmentTransactionId(adjustment);
+
+    if (
+      !APPLIED_TRANSACTION_ADJUSTMENT_STATUSES.has(status) ||
+      appliedAt === null ||
+      !transactionId
+    ) {
+      return [];
+    }
+
+    return [
+      {
+        ...adjustment,
+        appliedAt,
+        signedSalesDelta: adjustmentSalesDelta(adjustment),
+        signedSettlementAmount: adjustmentSettlementAmount(adjustment),
+        transactionId,
+      },
+    ];
+  });
+}
+
+function buildAdjustmentPaymentTotals(
+  adjustments: AppliedTransactionAdjustment[],
+) {
+  const totals = new Map<
+    string,
+    {
+      amount: number;
+      transactionCount: number;
+    }
+  >();
+
+  adjustments.forEach((adjustment) => {
+    if (!adjustment.settlementMethod || adjustment.signedSettlementAmount === 0) {
+      return;
+    }
+
+    const existing = totals.get(adjustment.settlementMethod) ?? {
+      amount: 0,
+      transactionCount: 0,
+    };
+
+    totals.set(adjustment.settlementMethod, {
+      amount: existing.amount + adjustment.signedSettlementAmount,
+      transactionCount: existing.transactionCount + 1,
+    });
+  });
+
+  return Array.from(totals.entries()).map(([method, total]) => ({
+    method,
+    ...total,
+  }));
+}
+
+export function buildAdjustmentReportTotals(args: {
+  appliedAdjustments: AppliedTransactionAdjustment[];
+  completedTransactions: Array<Doc<"posTransaction">>;
+  currentDayCashTotal: number;
+  salesTotal: number;
+}): AdjustmentReportTotals {
+  const completedTransactionIds = new Set(
+    args.completedTransactions.map((transaction) => String(transaction._id)),
+  );
+  const salesAdjustments = args.appliedAdjustments.filter((adjustment) =>
+    completedTransactionIds.has(adjustment.transactionId),
+  );
+  const adjustedSalesTotal =
+    args.salesTotal +
+    salesAdjustments.reduce(
+      (sum, adjustment) => sum + adjustment.signedSalesDelta,
+      0,
+    );
+  const adjustmentNetSettlementTotal = args.appliedAdjustments.reduce(
+    (sum, adjustment) => sum + adjustment.signedSettlementAmount,
+    0,
+  );
+  const adjustmentCashSettlementTotal = args.appliedAdjustments.reduce(
+    (sum, adjustment) =>
+      adjustment.settlementMethod === "cash"
+        ? sum + adjustment.signedSettlementAmount
+        : sum,
+    0,
+  );
+
+  return {
+    adjustedSalesTotal,
+    adjustmentCashSettlementTotal,
+    adjustmentCollectionTotal: args.appliedAdjustments.reduce(
+      (sum, adjustment) =>
+        adjustment.signedSettlementAmount > 0
+          ? sum + adjustment.signedSettlementAmount
+          : sum,
+      0,
+    ),
+    adjustmentNetSettlementTotal,
+    adjustmentPaymentTotals: buildAdjustmentPaymentTotals(
+      args.appliedAdjustments,
+    ),
+    adjustmentRefundTotal: args.appliedAdjustments.reduce(
+      (sum, adjustment) =>
+        adjustment.signedSettlementAmount < 0
+          ? sum + Math.abs(adjustment.signedSettlementAmount)
+          : sum,
+      0,
+    ),
+    itemAdjustmentCount: args.appliedAdjustments.length,
+    netCashMovementTotal:
+      args.currentDayCashTotal + adjustmentCashSettlementTotal,
+  };
 }
 
 function transactionCashDelta(
@@ -1102,6 +1417,12 @@ async function getDailyCloseCompletionEventStaffProfileId(
 
 function emptySummary(): DailyCloseSummary {
   return {
+    adjustedSalesTotal: 0,
+    adjustmentCashSettlementTotal: 0,
+    adjustmentCollectionTotal: 0,
+    adjustmentNetSettlementTotal: 0,
+    adjustmentPaymentTotals: [],
+    adjustmentRefundTotal: 0,
     carriedOverCashTotal: 0,
     carriedOverRegisterCount: 0,
     cashDepositTotal: 0,
@@ -1118,6 +1439,8 @@ function emptySummary(): DailyCloseSummary {
     registerCount: 0,
     registerVarianceCount: 0,
     salesTotal: 0,
+    itemAdjustmentCount: 0,
+    netCashMovementTotal: 0,
     transactionCount: 0,
     voidedTransactionCount: 0,
     paymentTotals: [],
@@ -1208,6 +1531,7 @@ export async function buildDailyCloseSnapshotWithCtx(
     openPosSessions,
     openWorkItems,
     completedTransactions,
+    appliedTransactionAdjustments,
     voidedTransactions,
     expenseTransactions,
     cashDeposits,
@@ -1221,6 +1545,10 @@ export async function buildDailyCloseSnapshotWithCtx(
     listTransactionsForDay(ctx, {
       ...range,
       status: "completed",
+      storeId: args.storeId,
+    }),
+    listAppliedTransactionAdjustmentsForDay(ctx, {
+      ...range,
       storeId: args.storeId,
     }),
     listTransactionsForDay(ctx, {
@@ -1633,6 +1961,54 @@ export async function buildDailyCloseSnapshotWithCtx(
     });
   });
 
+  appliedTransactionAdjustments.forEach((adjustment) => {
+    const originalTotal =
+      typeof adjustment.originalTotal === "number"
+        ? adjustment.originalTotal
+        : undefined;
+    const adjustedTotal =
+      typeof adjustment.correctedTotal === "number"
+        ? adjustment.correctedTotal
+        : originalTotal !== undefined
+          ? originalTotal + adjustment.signedSalesDelta
+          : undefined;
+
+    readyItems.push({
+      key: `pos_transaction_adjustment:${adjustment._id}:applied`,
+      severity: "ready",
+      category: "sale_adjustment",
+      title: "Completed item adjustment",
+      message:
+        "Completed transaction item adjustment is included separately from the original sale total.",
+      subject: {
+        type: "pos_transaction_adjustment",
+        id: adjustment._id,
+        label: adjustment.transactionNumber,
+      },
+      link: {
+        label: "View transaction",
+        params: { transactionId: adjustment.transactionId },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId",
+      },
+      metadata: {
+        ...(adjustment.transactionNumber
+          ? { transaction: adjustment.transactionNumber }
+          : {}),
+        appliedAt: adjustment.appliedAt,
+        ...(originalTotal !== undefined ? { originalTotal } : {}),
+        ...(adjustedTotal !== undefined ? { adjustedTotal } : {}),
+        settlementAmount: adjustment.signedSettlementAmount,
+        ...(adjustment.settlementMethod
+          ? {
+              settlementMethod: formatPaymentMethodLabel(
+                adjustment.settlementMethod,
+              ),
+            }
+          : {}),
+      },
+    });
+  });
+
   expenseTransactions.forEach((transaction) => {
     const staffName = staffNamesById.get(transaction.staffProfileId);
     const expenseSession = expenseSessionsById.get(transaction.sessionId);
@@ -1736,7 +2112,22 @@ export async function buildDailyCloseSnapshotWithCtx(
     });
   });
 
+  const currentDayCashTotal = completedTransactions.reduce(
+    (sum, transaction) => sum + transactionCashDelta(transaction),
+    0,
+  );
+  const salesTotal = completedTransactions.reduce(
+    (sum, transaction) => sum + transaction.total,
+    0,
+  );
+  const adjustmentReportTotals = buildAdjustmentReportTotals({
+    appliedAdjustments: appliedTransactionAdjustments,
+    completedTransactions,
+    currentDayCashTotal,
+    salesTotal,
+  });
   const summary: DailyCloseSummary = {
+    ...adjustmentReportTotals,
     carriedOverCashTotal: carriedOverRegisterSessions.reduce(
       (sum, session) =>
         sum +
@@ -1753,10 +2144,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       0,
     ),
     closedRegisterSessionCount: closedRegisterSessions.length,
-    currentDayCashTotal: completedTransactions.reduce(
-      (sum, transaction) => sum + transactionCashDelta(transaction),
-      0,
-    ),
+    currentDayCashTotal,
     currentDayCashTransactionCount: completedTransactions.filter(
       (transaction) => transactionCashDelta(transaction) > 0,
     ).length,
@@ -1782,10 +2170,7 @@ export async function buildDailyCloseSnapshotWithCtx(
     registerVarianceCount: relevantRegisterSessions.filter((session) =>
       Boolean(session.variance),
     ).length,
-    salesTotal: completedTransactions.reduce(
-      (sum, transaction) => sum + transaction.total,
-      0,
-    ),
+    salesTotal,
     transactionCount: completedTransactions.length,
     voidedTransactionCount: voidedTransactions.length,
     paymentTotals: buildPaymentTotals(completedTransactions),

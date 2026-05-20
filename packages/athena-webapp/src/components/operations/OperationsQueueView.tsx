@@ -75,17 +75,27 @@ type QueueApprovalRequest = {
     adjustmentType?: string;
     largestAbsoluteDelta?: number;
     lineItems?: Array<{
+      adjustedQuantity?: number;
       countedQuantity?: number;
+      originalQuantity?: number;
       productName?: string;
       productSkuId?: Id<"productSku">;
       quantityDelta?: number;
       sku?: string;
       systemQuantity?: number;
+      totalDelta?: number;
+      unitPrice?: number;
     }>;
     netQuantityDelta?: number;
     paymentMethod?: string;
     previousPaymentMethod?: string;
     reasonCode?: string;
+    settlementAmount?: number;
+    settlementDirection?: string;
+    settlementMethod?: string;
+    adjustedTotal?: number;
+    originalTotal?: number;
+    totalDelta?: number;
     transactionId?: Id<"posTransaction">;
     countedCash?: number;
     expectedCash?: number;
@@ -151,6 +161,20 @@ function getApprovalRequestCopy(requestType: string) {
     };
   }
 
+  if (
+    requestType === "pos_item_adjustment" ||
+    requestType === "pos_item_adjustment_review"
+  ) {
+    return {
+      approveLabel: "Approve adjustment",
+      approvedToast: "Item adjustment approved",
+      description:
+        "Manager approval applies the queued item adjustment. Reject it to leave the completed transaction unchanged.",
+      rejectedToast: "Item adjustment rejected",
+      rejectLabel: "Reject adjustment",
+    };
+  }
+
   if (requestType === "variance_review") {
     return {
       approveLabel: "Approve variance",
@@ -208,6 +232,26 @@ function getPaymentCorrectionSummary(request: QueueApprovalRequest) {
       request.metadata?.previousPaymentMethod ??
       request.transactionSummary?.paymentMethod ??
       undefined,
+    transaction: request.transactionSummary ?? null,
+  };
+}
+
+function getItemAdjustmentSummary(request: QueueApprovalRequest) {
+  if (
+    request.requestType !== "pos_item_adjustment" &&
+    request.requestType !== "pos_item_adjustment_review"
+  ) {
+    return null;
+  }
+
+  return {
+    adjustedTotal: request.metadata?.adjustedTotal,
+    lineItems: request.metadata?.lineItems ?? [],
+    originalTotal: request.metadata?.originalTotal,
+    settlementAmount: request.metadata?.settlementAmount,
+    settlementDirection: request.metadata?.settlementDirection ?? "none",
+    settlementMethod: request.metadata?.settlementMethod,
+    totalDelta: request.metadata?.totalDelta,
     transaction: request.transactionSummary ?? null,
   };
 }
@@ -616,6 +660,8 @@ export function OperationsQueueViewContent({
                           getInventoryApprovalLineItems(request);
                         const paymentCorrectionSummary =
                           getPaymentCorrectionSummary(request);
+                        const itemAdjustmentSummary =
+                          getItemAdjustmentSummary(request);
                         const varianceReviewSummary =
                           getVarianceReviewSummary(request);
 
@@ -839,6 +885,161 @@ export function OperationsQueueViewContent({
                               </div>
                             ) : null}
 
+                            {itemAdjustmentSummary ? (
+                              <div className="border-t border-border/70 bg-surface px-layout-md py-layout-md">
+                                <div className="flex flex-col gap-layout-xs md:flex-row md:items-center md:justify-between">
+                                  <div>
+                                    <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                                      Review item adjustment
+                                    </p>
+                                    <p className="mt-1 text-sm text-muted-foreground">
+                                      Completed sale queued for item or quantity
+                                      correction
+                                    </p>
+                                  </div>
+                                  {itemAdjustmentSummary.transaction &&
+                                  orgUrlSlug &&
+                                  storeUrlSlug ? (
+                                    <Button asChild size="sm" variant="utility">
+                                      <Link
+                                        params={{
+                                          orgUrlSlug,
+                                          storeUrlSlug,
+                                          transactionId:
+                                            itemAdjustmentSummary.transaction
+                                              .transactionId,
+                                        }}
+                                        search={{ o: getOrigin() }}
+                                        to="/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId"
+                                      >
+                                        <ExternalLink aria-hidden="true" />
+                                        View transaction
+                                      </Link>
+                                    </Button>
+                                  ) : null}
+                                </div>
+
+                                <dl className="mt-layout-sm grid gap-layout-sm rounded-lg border border-border bg-background p-layout-sm text-sm md:grid-cols-4">
+                                  <div>
+                                    <dt className="text-xs text-muted-foreground">
+                                      Transaction
+                                    </dt>
+                                    <dd className="mt-1 font-medium text-foreground">
+                                      {itemAdjustmentSummary.transaction
+                                        ? `#${itemAdjustmentSummary.transaction.transactionNumber}`
+                                        : "Transaction unavailable"}
+                                    </dd>
+                                  </div>
+                                  <div>
+                                    <dt className="text-xs text-muted-foreground">
+                                      Original total
+                                    </dt>
+                                    <dd className="mt-1 font-medium text-foreground">
+                                      {typeof itemAdjustmentSummary.originalTotal ===
+                                      "number"
+                                        ? formatStoredAmount(
+                                            ghsCurrencyFormatter,
+                                            itemAdjustmentSummary.originalTotal,
+                                          )
+                                        : "Unknown"}
+                                    </dd>
+                                  </div>
+                                  <div>
+                                    <dt className="text-xs text-muted-foreground">
+                                      Adjusted total
+                                    </dt>
+                                    <dd className="mt-1 font-medium text-foreground">
+                                      {typeof itemAdjustmentSummary.adjustedTotal ===
+                                      "number"
+                                        ? formatStoredAmount(
+                                            ghsCurrencyFormatter,
+                                            itemAdjustmentSummary.adjustedTotal,
+                                          )
+                                        : "Unknown"}
+                                    </dd>
+                                  </div>
+                                  <div>
+                                    <dt className="text-xs text-muted-foreground">
+                                      {itemAdjustmentSummary.settlementDirection ===
+                                      "refund"
+                                        ? "Refund due"
+                                        : itemAdjustmentSummary.settlementDirection ===
+                                              "collection" ||
+                                            itemAdjustmentSummary.settlementDirection ===
+                                              "collect"
+                                          ? "Balance due"
+                                          : "No payment movement"}
+                                    </dt>
+                                    <dd className="mt-1 font-medium text-foreground">
+                                      {itemAdjustmentSummary.settlementDirection ===
+                                      "none"
+                                        ? "No payment movement"
+                                        : typeof itemAdjustmentSummary.settlementAmount ===
+                                            "number"
+                                          ? formatStoredAmount(
+                                              ghsCurrencyFormatter,
+                                              itemAdjustmentSummary.settlementAmount,
+                                            )
+                                          : "Unknown"}
+                                    </dd>
+                                  </div>
+                                </dl>
+
+                                {itemAdjustmentSummary.lineItems.length > 0 ? (
+                                  <div className="mt-layout-sm divide-y divide-border/70 rounded-lg border border-border bg-background">
+                                    {itemAdjustmentSummary.lineItems.map(
+                                      (lineItem, index) => (
+                                        <div
+                                          className="grid gap-layout-sm px-layout-sm py-layout-sm md:grid-cols-[minmax(0,1fr)_auto]"
+                                          key={`${lineItem.productSkuId ?? "sku"}-${index}`}
+                                        >
+                                          <div className="min-w-0">
+                                            <p className="truncate text-sm font-medium text-foreground">
+                                              {formatSkuProductName(
+                                                lineItem.productName,
+                                              )}
+                                            </p>
+                                            <p className="mt-1 truncate text-xs text-muted-foreground">
+                                              {lineItem.sku ?? "No SKU code"}
+                                            </p>
+                                          </div>
+                                          <div className="flex shrink-0 flex-col items-start gap-2 text-sm md:items-end">
+                                            <p className="text-muted-foreground">
+                                              <span className="font-numeric font-medium tabular-nums text-foreground">
+                                                {lineItem.originalQuantity ??
+                                                  "-"}
+                                              </span>{" "}
+                                              original to{" "}
+                                              <span className="font-numeric font-medium tabular-nums text-foreground">
+                                                {lineItem.adjustedQuantity ??
+                                                  "-"}
+                                              </span>{" "}
+                                              adjusted
+                                            </p>
+                                            <Badge
+                                              className={getQuantityDeltaBadgeClass(
+                                                lineItem.quantityDelta,
+                                              )}
+                                              size="sm"
+                                              variant="outline"
+                                            >
+                                              Qty{" "}
+                                              {typeof lineItem.quantityDelta ===
+                                              "number"
+                                                ? formatQuantityDelta(
+                                                    lineItem.quantityDelta,
+                                                  )
+                                                : "-"}
+                                            </Badge>
+                                          </div>
+                                        </div>
+                                      ),
+                                    )}
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : null}
+
                             {varianceReviewSummary ? (
                               <div className="border-t border-border/70 bg-surface px-layout-md py-layout-md">
                                 <div>
@@ -975,9 +1176,7 @@ export function OperationsQueueViewContent({
                                   <div className="flex shrink-0 flex-wrap gap-2">
                                     <LoadingButton
                                       disabled={Boolean(
-                                        (isDecidingApprovalRequestId &&
-                                          isDecidingApprovalRequestId !==
-                                            request._id) ||
+                                        isDecidingApprovalRequestId ||
                                         (approvalDecisionUnlockRequired &&
                                           !approvalDecisionUnlocked),
                                       )}
@@ -1303,6 +1502,10 @@ export function OperationsQueueView({
     approvalRequestId: Id<"approvalRequest">;
     decision: "approved" | "rejected";
   }) => {
+    if (decisioningApprovalRequestId) {
+      return;
+    }
+
     const activeUnlock =
       approvalDecisionUnlock && approvalDecisionUnlock.expiresAt > Date.now()
         ? approvalDecisionUnlock

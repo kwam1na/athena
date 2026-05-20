@@ -21,6 +21,7 @@ type TableName =
   | "paymentAllocation"
   | "posSession"
   | "posTerminal"
+  | "posTransactionAdjustment"
   | "posTransaction"
   | "registerSession"
   | "staffProfile"
@@ -827,6 +828,12 @@ describe("end-of-day review backend foundation", () => {
       title: "Completed expense",
     });
     expect(snapshot.summary).toMatchObject({
+      adjustedSalesTotal: 12000,
+      adjustmentCashSettlementTotal: 0,
+      adjustmentCollectionTotal: 0,
+      adjustmentNetSettlementTotal: 0,
+      adjustmentPaymentTotals: [],
+      adjustmentRefundTotal: 0,
       carriedOverCashTotal: 10000,
       carriedOverRegisterCount: 1,
       cashDepositTotal: 3000,
@@ -872,6 +879,213 @@ describe("end-of-day review backend foundation", () => {
           type: "expense_transaction",
         },
       ]),
+    );
+  });
+
+  it("adds explicit applied item-adjustment settlement totals without changing original sale totals", async () => {
+    const { db } = createDb({
+      posTransaction: [
+        {
+          _id: "txn-1",
+          changeGiven: 0,
+          completedAt: Date.UTC(2026, 4, 7, 14),
+          payments: [{ amount: 12000, method: "cash", timestamp: 1 }],
+          registerSessionId: "register-1",
+          status: "completed",
+          storeId: "store-1",
+          subtotal: 12000,
+          tax: 0,
+          total: 12000,
+          totalPaid: 12000,
+          transactionNumber: "TXN-1",
+        },
+        {
+          _id: "txn-2",
+          changeGiven: 0,
+          completedAt: Date.UTC(2026, 4, 7, 15),
+          payments: [{ amount: 10000, method: "card", timestamp: 1 }],
+          registerSessionId: "register-1",
+          status: "completed",
+          storeId: "store-1",
+          subtotal: 10000,
+          tax: 0,
+          total: 10000,
+          totalPaid: 10000,
+          transactionNumber: "TXN-2",
+        },
+      ],
+      posTransactionAdjustment: [
+        {
+          _id: "adjustment-applied-refund",
+          appliedAt: Date.UTC(2026, 4, 7, 16),
+          correctedTotal: 9000,
+          deltaTotal: -3000,
+          originalTotal: 12000,
+          transactionId: "txn-1",
+          settlementAmount: 3000,
+          settlementDirection: "refund",
+          settlementMethod: "cash",
+          status: "applied",
+          storeId: "store-1",
+          transactionNumber: "TXN-1",
+        },
+        {
+          _id: "adjustment-applied-collection",
+          appliedAt: Date.UTC(2026, 4, 7, 17),
+          correctedTotal: 12500,
+          deltaTotal: 2500,
+          originalTotal: 10000,
+          transactionId: "txn-2",
+          settlementAmount: 2500,
+          settlementDirection: "collect",
+          settlementMethod: "mobile_money",
+          status: "applied",
+          storeId: "store-1",
+          transactionNumber: "TXN-2",
+        },
+        {
+          _id: "adjustment-pending",
+          appliedAt: Date.UTC(2026, 4, 7, 18),
+          correctedTotal: 15000,
+          deltaTotal: 3000,
+          originalTotal: 12000,
+          transactionId: "txn-1",
+          settlementAmount: 3000,
+          settlementDirection: "collect",
+          settlementMethod: "cash",
+          status: "pending",
+          storeId: "store-1",
+          transactionNumber: "TXN-1",
+        },
+        {
+          _id: "adjustment-rejected",
+          appliedAt: Date.UTC(2026, 4, 7, 19),
+          correctedTotal: 8000,
+          deltaTotal: -2000,
+          originalTotal: 10000,
+          transactionId: "txn-2",
+          settlementAmount: 2000,
+          settlementDirection: "refund",
+          settlementMethod: "card",
+          status: "rejected",
+          storeId: "store-1",
+          transactionNumber: "TXN-2",
+        },
+        {
+          _id: "adjustment-other-store",
+          appliedAt: Date.UTC(2026, 4, 7, 16),
+          correctedTotal: 1000,
+          deltaTotal: -1000,
+          originalTotal: 2000,
+          transactionId: "txn-other-store",
+          settlementAmount: 1000,
+          settlementDirection: "refund",
+          settlementMethod: "cash",
+          status: "applied",
+          storeId: "store-2",
+          transactionNumber: "TXN-OTHER",
+        },
+        {
+          _id: "adjustment-out-of-range",
+          appliedAt: Date.UTC(2026, 4, 8, 2),
+          correctedTotal: 1000,
+          deltaTotal: -1000,
+          originalTotal: 2000,
+          transactionId: "txn-out-of-range",
+          settlementAmount: 1000,
+          settlementDirection: "refund",
+          settlementMethod: "cash",
+          status: "applied",
+          storeId: "store-1",
+          transactionNumber: "TXN-LATE",
+        },
+      ],
+      registerSession: [
+        {
+          _id: "register-1",
+          closedAt: Date.UTC(2026, 4, 7, 20),
+          expectedCash: 19000,
+          openedAt: Date.UTC(2026, 4, 7, 8),
+          openingFloat: 10000,
+          registerNumber: "A1",
+          status: "closed",
+          storeId: "store-1",
+        },
+      ],
+      store: [store],
+    });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-07", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.summary.salesTotal).toBe(22000);
+    expect(snapshot.summary.paymentTotals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ amount: 12000, method: "cash" }),
+        expect.objectContaining({ amount: 10000, method: "card" }),
+      ]),
+    );
+    expect(snapshot.summary).toMatchObject({
+      adjustedSalesTotal: 21500,
+      adjustmentCashSettlementTotal: -3000,
+      adjustmentCollectionTotal: 2500,
+      adjustmentNetSettlementTotal: -500,
+      adjustmentRefundTotal: 3000,
+      itemAdjustmentCount: 2,
+      netCashMovementTotal: 9000,
+    });
+    expect(snapshot.summary.adjustmentPaymentTotals).toEqual(
+      expect.arrayContaining([
+        {
+          amount: -3000,
+          method: "cash",
+          transactionCount: 1,
+        },
+        {
+          amount: 2500,
+          method: "mobile_money",
+          transactionCount: 1,
+        },
+      ]),
+    );
+    expect(snapshot.readyItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "pos_transaction_adjustment:adjustment-applied-refund:applied",
+          metadata: expect.objectContaining({
+            adjustedTotal: 9000,
+            originalTotal: 12000,
+            settlementAmount: -3000,
+            settlementMethod: "Cash",
+            transaction: "TXN-1",
+          }),
+          title: "Completed item adjustment",
+        }),
+        expect.objectContaining({
+          key: "pos_transaction_adjustment:adjustment-applied-collection:applied",
+          metadata: expect.objectContaining({
+            adjustedTotal: 12500,
+            originalTotal: 10000,
+            settlementAmount: 2500,
+            settlementMethod: "Mobile Money",
+            transaction: "TXN-2",
+          }),
+        }),
+      ]),
+    );
+    expect(snapshot.readyItems.map((item) => item.key)).not.toContain(
+      "pos_transaction_adjustment:adjustment-pending:applied",
+    );
+    expect(snapshot.readyItems.map((item) => item.key)).not.toContain(
+      "pos_transaction_adjustment:adjustment-rejected:applied",
+    );
+    expect(snapshot.readyItems.map((item) => item.key)).not.toContain(
+      "pos_transaction_adjustment:adjustment-other-store:applied",
+    );
+    expect(snapshot.readyItems.map((item) => item.key)).not.toContain(
+      "pos_transaction_adjustment:adjustment-out-of-range:applied",
     );
   });
 

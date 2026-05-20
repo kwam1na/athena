@@ -4,6 +4,7 @@ export const SUPPORTED_CORRECTION_INTENTS = [
   "opening_float",
   "customer_attribution",
   "payment_method",
+  "item_quantity_adjustment",
 ] as const;
 
 export const UNSUPPORTED_HIGH_RISK_CORRECTION_INTENTS = [
@@ -78,6 +79,12 @@ const SUPPORTED_POLICIES: Record<
     authorization: "manager_approval",
     directEditAllowed: false,
     severityRank: 3,
+  },
+  item_quantity_adjustment: {
+    riskTier: "ledger_affecting",
+    authorization: "manager_approval",
+    directEditAllowed: false,
+    severityRank: 4,
   },
 };
 

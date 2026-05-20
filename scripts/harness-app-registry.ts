@@ -408,6 +408,38 @@ export const HARNESS_APP_REGISTRY = [
         note: "Use this when register-session, deposit, closeout, dashboard, operations-queue approval, or cash-controls route wiring changes. This is the confirmation slice for drawers opened from POS showing up in the dashboard and register-session detail views. Run `bunx convex dev --once` from `packages/athena-webapp` before validation when generated client refs or new Convex function exports changed.",
       },
       {
+        title: "POS transaction item-adjustment reporting edits",
+        touchedPaths: [
+          "convex/pos/application/commands",
+          "convex/pos/application/corrections",
+          "convex/pos/infrastructure/repositories/transactionRepository.ts",
+          "convex/schemas/pos",
+          "convex/operations/dailyClose.ts",
+          "convex/operations/dailyOperations.ts",
+          "src/components/cash-controls/RegisterSessionView.tsx",
+          "src/components/pos/transactions/TransactionView.tsx",
+          "src/components/operations/OperationsQueueView.tsx",
+        ],
+        commands: [
+          {
+            kind: "raw",
+            command:
+              "bun run --filter '@athena/webapp' test -- convex/operations/dailyClose.test.ts convex/operations/dailyOperations.test.ts convex/pos/application/completeTransaction.test.ts convex/pos/application/correctTransactionPaymentMethod.test.ts convex/pos/application/transactionAdjustmentPlanner.test.ts convex/pos/application/adjustTransactionItems.test.ts convex/pos/application/transactionAdjustments.test.ts convex/pos/application/getTransactions.test.ts convex/pos/public/transactions.test.ts src/components/cash-controls/RegisterSessionView.test.tsx src/components/pos/transactions/TransactionView.test.tsx src/components/operations/OperationsQueueView.test.tsx",
+          },
+          { kind: "script", script: "audit:convex" },
+          { kind: "script", script: "lint:convex:changed" },
+          { kind: "script", script: "lint:frontend:changed" },
+          {
+            kind: "raw",
+            command:
+              "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+          },
+          { kind: "script", script: "build" },
+        ],
+        behaviorScenarios: ["athena-admin-shell-boot"],
+        note: "Use this when completed-transaction item adjustments, adjustment approval/application, transaction detail adjustment history, daily close/operations adjusted totals, or cash-control settlement display changes. It keeps original sale totals and explicit adjusted/net settlement fields covered together.",
+      },
+      {
         title: "Service operations intake, catalog, appointments, and cases",
         touchedPaths: [
           "convex/serviceOps",

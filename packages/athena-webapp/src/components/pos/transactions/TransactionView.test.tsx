@@ -11,6 +11,14 @@ import {
   TransactionView,
 } from "./TransactionView";
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((innerResolve) => {
+    resolve = innerResolve;
+  });
+  return { promise, resolve };
+}
+
 const useQueryMock = vi.fn();
 const useMutationMock = vi.fn();
 const useActionMock = vi.fn();
@@ -88,16 +96,18 @@ vi.mock("../../ui/input", () => ({
 
 vi.mock("../../ui/select", () => ({
   Select: ({
+    "aria-label": ariaLabel,
     children,
     onValueChange,
     value,
   }: {
+    "aria-label"?: string;
     children?: React.ReactNode;
     onValueChange?: (value: string) => void;
     value?: string;
   }) => (
     <select
-      aria-label="Updated payment method"
+      aria-label={ariaLabel ?? "Updated payment method"}
       onChange={(event) => onValueChange?.(event.target.value)}
       value={value}
     >
@@ -148,6 +158,7 @@ vi.mock("../../staff-auth/StaffAuthenticationDialog", () => ({
         approvalProofId?: string;
         approvedByStaffProfileId?: string;
         expiresAt?: number;
+        posLocalStaffProof?: { expiresAt: number; token: string };
         staffProfile: { firstName: string; lastName: string };
         staffProfileId: string;
       },
@@ -390,12 +401,14 @@ describe("TransactionView", () => {
     customerMutation: ReturnType<typeof vi.fn>,
     paymentMutation: ReturnType<typeof vi.fn>,
     approvalMutation: ReturnType<typeof vi.fn> = vi.fn(),
+    itemAdjustmentMutation: ReturnType<typeof vi.fn> = vi.fn(),
   ) {
     const mutations = [
       authMutation,
       approvalMutation,
       paymentMutation,
       customerMutation,
+      itemAdjustmentMutation,
     ];
     let mutationIndex = 0;
     useMutationMock.mockImplementation(
@@ -896,6 +909,10 @@ describe("TransactionView", () => {
       kind: "ok",
       data: {
         activeRoles: ["cashier"],
+        posLocalStaffProof: {
+          expiresAt: Date.now() + 60_000,
+          token: "proof-token-1",
+        },
         staffProfile: { firstName: "Kwamina", lastName: "Mensah" },
         staffProfileId: "staff_1",
       },
@@ -992,6 +1009,10 @@ describe("TransactionView", () => {
       kind: "ok",
       data: {
         activeRoles: ["manager"],
+        posLocalStaffProof: {
+          expiresAt: Date.now() + 60_000,
+          token: "proof-token-1",
+        },
         staffProfile: { firstName: "Kwamina", lastName: "Mensah" },
         staffProfileId: "staff_1",
       },
@@ -1305,6 +1326,496 @@ describe("TransactionView", () => {
     render(<TransactionView />);
 
     expect(screen.queryByText("Update history")).not.toBeInTheDocument();
+  });
+
+  it("keeps no-adjustment transactions on the original sale presentation", () => {
+    useParamsMock.mockReturnValue({ transactionId: "txn_no_adjustment" });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      adjustmentSummary: {
+        appliedCount: 0,
+        effectiveNetTotal: 1000,
+        hasAdjustments: false,
+        originalTotal: 1000,
+        pendingCount: 0,
+        totalAppliedAdjustmentDelta: 0,
+      },
+      adjustments: [],
+    });
+
+    render(<TransactionView />);
+
+    expect(screen.queryByText("Adjustment state")).not.toBeInTheDocument();
+    expect(screen.getByText("Completed")).toBeInTheDocument();
+  });
+
+  it("renders pending and applied item adjustment state separately from the original total", () => {
+    useParamsMock.mockReturnValue({ transactionId: "txn_adjusted" });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      total: 2000,
+      adjustmentSummary: {
+        appliedCount: 1,
+        effectiveNetTotal: 1500,
+        hasAdjustments: true,
+        originalTotal: 2000,
+        pendingCount: 1,
+        totalAppliedAdjustmentDelta: -500,
+      },
+      adjustments: [
+        {
+          _id: "approval-1",
+          actorStaffName: "Ato Kwamina",
+          adjustedTotal: 1000,
+          createdAt: 200,
+          lineItems: [],
+          originalTotal: 1500,
+          settlementAmount: 500,
+          settlementDirection: "refund",
+          status: "pending_approval",
+        },
+        {
+          _id: "event-1",
+          actorStaffName: "Ama Mensah",
+          adjustedTotal: 1500,
+          appliedAt: 150,
+          createdAt: 150,
+          lineItems: [],
+          originalTotal: 2000,
+          settlementAmount: 500,
+          settlementDirection: "refund",
+          status: "applied",
+        },
+      ],
+    });
+
+    render(<TransactionView />);
+
+    expect(screen.getByText("Adjustment state")).toBeInTheDocument();
+    expect(screen.getByText("Adjusted net total")).toBeInTheDocument();
+    expect(screen.getByText("Item adjustment pending approval")).toBeInTheDocument();
+    expect(screen.getByText("Item adjustment applied")).toBeInTheDocument();
+    expect(screen.getAllByText("Refund due").length).toBeGreaterThan(0);
+  });
+
+  it("opens the item adjustment workflow and requires a settlement method for refunds", async () => {
+    const user = userEvent.setup();
+    const authMutation = vi.fn().mockResolvedValue({
+      kind: "ok",
+      data: {
+        activeRoles: ["cashier"],
+        staffProfile: { firstName: "Kwamina", lastName: "Mensah" },
+        staffProfileId: "staff_1",
+      },
+    });
+    const itemAdjustmentMutation = vi.fn();
+    mockTransactionMutations(
+      authMutation,
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      itemAdjustmentMutation,
+    );
+    useParamsMock.mockReturnValue({ transactionId: "txn_items" });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      total: 2000,
+      items: [
+        {
+          _id: "item_1",
+          productId: "product_1",
+          productName: "Closure wig",
+          productSku: "CW-18",
+          productSkuId: "sku_1",
+          quantity: 2,
+          totalPrice: 2000,
+          unitPrice: 1000,
+        },
+      ],
+    });
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Update" }));
+    await user.click(
+      screen.getByRole("button", { name: "Items or quantities" }),
+    );
+    expect(screen.getByText("Review item adjustment")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /decrease closure wig/i }));
+    expect(screen.getByText("Refund due")).toBeInTheDocument();
+    await user.type(
+      screen.getByLabelText("Item adjustment reason"),
+      "Customer received one unit.",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Submit item adjustment" }),
+    );
+
+    expect(
+      screen.getByText("Choose a settlement method before submitting"),
+    ).toBeInTheDocument();
+    expect(itemAdjustmentMutation).not.toHaveBeenCalled();
+  });
+
+  it("submits item adjustments through the shared approval runner", async () => {
+    const user = userEvent.setup();
+    const authMutation = vi.fn().mockResolvedValue({
+      kind: "ok",
+      data: {
+        activeRoles: ["manager"],
+        posLocalStaffProof: {
+          expiresAt: Date.now() + 60_000,
+          token: "proof-token-1",
+        },
+        staffProfile: { firstName: "Kwamina", lastName: "Mensah" },
+        staffProfileId: "staff_1",
+      },
+    });
+    const approvalMutation = vi.fn().mockResolvedValue({
+      kind: "ok",
+      data: {
+        approvalProofId: "proof-1",
+        approvedByStaffProfileId: "staff_1",
+        expiresAt: 2,
+      },
+    });
+    const itemAdjustmentMutation = vi
+      .fn()
+      .mockResolvedValueOnce({
+        kind: "approval_required",
+        approval: {
+          action: { key: "pos.transaction.adjust_items" },
+          copy: {
+            title: "Manager approval required",
+            message:
+              "A manager needs to review this item adjustment before it is applied.",
+            primaryActionLabel: "Approve adjustment",
+          },
+          reason:
+            "Manager approval is required to adjust completed transaction items.",
+          requiredRole: "manager",
+          resolutionModes: [
+            { kind: "inline_manager_proof" },
+            {
+              approvalRequestId: "approval-1",
+              kind: "async_request",
+              requestType: "pos_item_adjustment",
+            },
+          ],
+          subject: {
+            id: "txn_items",
+            label: "Transaction #POS-123456",
+            type: "pos_transaction",
+          },
+        },
+      })
+      .mockResolvedValueOnce({ kind: "ok" });
+    mockTransactionMutations(
+      authMutation,
+      vi.fn(),
+      vi.fn(),
+      approvalMutation,
+      itemAdjustmentMutation,
+    );
+    useParamsMock.mockReturnValue({ transactionId: "txn_items" });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      total: 2000,
+      items: [
+        {
+          _id: "item_1",
+          productId: "product_1",
+          productName: "Closure wig",
+          productSku: "CW-18",
+          productSkuId: "sku_1",
+          quantity: 2,
+          totalPrice: 2000,
+          unitPrice: 1000,
+        },
+      ],
+    });
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Update" }));
+    await user.click(
+      screen.getByRole("button", { name: "Items or quantities" }),
+    );
+    await user.click(screen.getByRole("button", { name: /increase closure wig/i }));
+    expect(screen.getByText("Balance due")).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Settlement method"), "cash");
+    await user.type(
+      screen.getByLabelText("Item adjustment reason"),
+      "One unit was missed at checkout.",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Submit item adjustment" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+
+    await waitFor(() => {
+      expect(approvalMutation).toHaveBeenCalledWith({
+        actionKey: "pos.transaction.adjust_items",
+        pinHash: "hashed:1234",
+        reason:
+          "Manager approval is required to adjust completed transaction items.",
+        requiredRole: "manager",
+        requestedByStaffProfileId: "staff_1",
+        storeId: "store_1",
+        subject: {
+          id: "txn_items",
+          label: "Transaction #POS-123456",
+          type: "pos_transaction",
+        },
+        username: "manager",
+      });
+      expect(itemAdjustmentMutation).toHaveBeenCalledWith({
+        actorStaffProfileId: "staff_1",
+        approvalRequestId: "approval-1",
+        approvalProofId: "proof-1",
+        payload: {
+          correctedTotal: 3000,
+          lines: [
+            {
+              adjustedQuantity: 3,
+              inventoryDelta: -1,
+              originalQuantity: 2,
+              originalTransactionItemId: "item_1",
+              productId: "product_1",
+              productName: "Closure wig",
+              productSku: "CW-18",
+              productSkuId: "sku_1",
+              unitPrice: 1000,
+            },
+          ],
+          originalTotal: 2000,
+          settlementAmount: 1000,
+          settlementDirection: "collect",
+          settlementMethod: "cash",
+        },
+        reason: "One unit was missed at checkout.",
+        staffProofToken: "proof-token-1",
+        transactionId: "txn_items",
+      });
+    });
+  });
+
+  it("keeps item adjustment submit disabled while inline approval proof is minting", async () => {
+    const user = userEvent.setup();
+    const approvalDeferred = deferred<{
+      data: {
+        approvalProofId: string;
+        approvedByStaffProfileId: string;
+        expiresAt: number;
+      };
+      kind: "ok";
+    }>();
+    const authMutation = vi.fn().mockResolvedValue({
+      kind: "ok",
+      data: {
+        activeRoles: ["manager"],
+        posLocalStaffProof: {
+          expiresAt: Date.now() + 60_000,
+          token: "proof-token-1",
+        },
+        staffProfile: { firstName: "Kwamina", lastName: "Mensah" },
+        staffProfileId: "staff_1",
+      },
+    });
+    const approvalMutation = vi.fn(() => approvalDeferred.promise);
+    const itemAdjustmentMutation = vi
+      .fn()
+      .mockResolvedValueOnce({
+        kind: "approval_required",
+        approval: {
+          action: { key: "pos.transaction.adjust_items" },
+          copy: {
+            title: "Manager approval required",
+            message:
+              "A manager needs to review this item adjustment before it is applied.",
+            primaryActionLabel: "Approve adjustment",
+          },
+          reason:
+            "Manager approval is required to adjust completed transaction items.",
+          requiredRole: "manager",
+          resolutionModes: [{ kind: "inline_manager_proof" }],
+          subject: {
+            id: "txn_items",
+            label: "Transaction #POS-123456",
+            type: "pos_transaction",
+          },
+        },
+      })
+      .mockResolvedValueOnce({ kind: "ok" });
+    mockTransactionMutations(
+      authMutation,
+      vi.fn(),
+      vi.fn(),
+      approvalMutation,
+      itemAdjustmentMutation,
+    );
+    useParamsMock.mockReturnValue({ transactionId: "txn_items" });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      total: 2000,
+      items: [
+        {
+          _id: "item_1",
+          productId: "product_1",
+          productName: "Closure wig",
+          productSku: "CW-18",
+          productSkuId: "sku_1",
+          quantity: 2,
+          totalPrice: 2000,
+          unitPrice: 1000,
+        },
+      ],
+    });
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Update" }));
+    await user.click(
+      screen.getByRole("button", { name: "Items or quantities" }),
+    );
+    await user.click(screen.getByRole("button", { name: /increase closure wig/i }));
+    await user.selectOptions(screen.getByLabelText("Settlement method"), "cash");
+    await user.type(
+      screen.getByLabelText("Item adjustment reason"),
+      "One unit was missed at checkout.",
+    );
+    const submitButton = screen.getByRole("button", {
+      name: "Submit item adjustment",
+    });
+    await user.click(submitButton);
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+
+    await waitFor(() => expect(approvalMutation).toHaveBeenCalledTimes(1));
+    expect(submitButton).toBeDisabled();
+    await user.click(submitButton);
+    expect(itemAdjustmentMutation).toHaveBeenCalledTimes(1);
+
+    approvalDeferred.resolve({
+      kind: "ok",
+      data: {
+        approvalProofId: "proof-1",
+        approvedByStaffProfileId: "staff_1",
+        expiresAt: 2,
+      },
+    });
+
+    await waitFor(() => expect(itemAdjustmentMutation).toHaveBeenCalledTimes(2));
+  });
+
+  it("allows equal-total item adjustments without a settlement method", async () => {
+    const user = userEvent.setup();
+    const authMutation = vi.fn().mockResolvedValue({
+      kind: "ok",
+      data: {
+        activeRoles: ["cashier"],
+        posLocalStaffProof: {
+          expiresAt: Date.now() + 60_000,
+          token: "proof-token-1",
+        },
+        staffProfile: { firstName: "Kwamina", lastName: "Mensah" },
+        staffProfileId: "staff_1",
+      },
+    });
+    const itemAdjustmentMutation = vi.fn().mockResolvedValue({ kind: "ok" });
+    mockTransactionMutations(
+      authMutation,
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      itemAdjustmentMutation,
+    );
+    useParamsMock.mockReturnValue({ transactionId: "txn_equal" });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      total: 2000,
+      items: [
+        {
+          _id: "item_1",
+          productId: "product_1",
+          productName: "Closure wig",
+          productSku: "CW-18",
+          productSkuId: "sku_1",
+          quantity: 1,
+          totalPrice: 1000,
+          unitPrice: 1000,
+        },
+        {
+          _id: "item_2",
+          productId: "product_2",
+          productName: "Lace tint",
+          productSku: "LT-01",
+          productSkuId: "sku_2",
+          quantity: 1,
+          totalPrice: 1000,
+          unitPrice: 1000,
+        },
+      ],
+    });
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Update" }));
+    await user.click(
+      screen.getByRole("button", { name: "Items or quantities" }),
+    );
+    await user.click(screen.getByRole("button", { name: /increase closure wig/i }));
+    await user.click(screen.getByRole("button", { name: /decrease lace tint/i }));
+    expect(screen.getAllByText("No payment movement").length).toBeGreaterThan(0);
+    expect(screen.queryByLabelText("Settlement method")).not.toBeInTheDocument();
+    await user.type(
+      screen.getByLabelText("Item adjustment reason"),
+      "Swapped one equal-price item.",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Submit item adjustment" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+
+    await waitFor(() =>
+      expect(itemAdjustmentMutation).toHaveBeenCalledWith({
+        actorStaffProfileId: "staff_1",
+        approvalProofId: undefined,
+        payload: {
+          correctedTotal: 2000,
+          lines: [
+            {
+              adjustedQuantity: 2,
+              inventoryDelta: -1,
+              originalQuantity: 1,
+              originalTransactionItemId: "item_1",
+              productId: "product_1",
+              productName: "Closure wig",
+              productSku: "CW-18",
+              productSkuId: "sku_1",
+              unitPrice: 1000,
+            },
+            {
+              adjustedQuantity: 0,
+              inventoryDelta: 1,
+              originalQuantity: 1,
+              originalTransactionItemId: "item_2",
+              productId: "product_2",
+              productName: "Lace tint",
+              productSku: "LT-01",
+              productSkuId: "sku_2",
+              unitPrice: 1000,
+            },
+          ],
+          originalTotal: 2000,
+          settlementAmount: 0,
+          settlementDirection: "none",
+          settlementMethod: undefined,
+        },
+        reason: "Swapped one equal-price item.",
+        staffProofToken: "proof-token-1",
+        transactionId: "txn_equal",
+      }),
+    );
   });
 
   it("formats correction history labels for fallback and partial payment changes", () => {

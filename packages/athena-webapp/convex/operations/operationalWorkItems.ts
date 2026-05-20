@@ -6,9 +6,88 @@ import {
 } from "../_generated/server";
 import { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
+import {
+  requireAuthenticatedAthenaUserWithCtx,
+  requireOrganizationMemberRoleWithCtx,
+} from "../lib/athenaUserAuth";
 
 const MAX_QUEUE_ITEMS = 100;
 const TERMINAL_WORK_ITEM_STATUSES = new Set(["completed", "cancelled"]);
+const OPEN_WORK_ITEM_STATUSES = ["open", "in_progress"] as const;
+
+function itemAdjustmentTransactionId(request: Doc<"approvalRequest">) {
+  if (
+    request.requestType === "pos_item_adjustment" ||
+    request.requestType === "pos_item_adjustment_review"
+  ) {
+    return request.metadata?.transactionId as Id<"posTransaction"> | undefined;
+  }
+
+  if (
+    request.requestType === "payment_method_correction" &&
+    request.subjectType === "pos_transaction"
+  ) {
+    return request.subjectId as Id<"posTransaction">;
+  }
+
+  return undefined;
+}
+
+function sanitizeApprovalRequestMetadata(
+  metadata: Record<string, unknown> | undefined,
+) {
+  if (!metadata) {
+    return undefined;
+  }
+
+  const payload =
+    metadata.payload && typeof metadata.payload === "object"
+      ? (metadata.payload as Record<string, unknown>)
+      : {};
+
+  const lineItems = Array.isArray(metadata.lineItems)
+    ? metadata.lineItems
+    : Array.isArray(payload.lines)
+      ? payload.lines.map((line) => {
+          const candidate =
+            line && typeof line === "object"
+              ? (line as Record<string, unknown>)
+              : {};
+          return {
+            adjustedQuantity: candidate.adjustedQuantity,
+            inventoryDelta: candidate.inventoryDelta,
+            originalQuantity: candidate.originalQuantity,
+            productName: candidate.productName,
+            productSkuId: candidate.productSkuId,
+            quantityDelta:
+              typeof candidate.quantityDelta === "number"
+                ? candidate.quantityDelta
+                : typeof candidate.inventoryDelta === "number"
+                  ? -candidate.inventoryDelta
+                  : undefined,
+            sku: candidate.sku ?? candidate.productSku,
+            unitPrice: candidate.unitPrice,
+          };
+        })
+      : undefined;
+
+  return {
+    actionKey: metadata.actionKey,
+    adjustedTotal: metadata.adjustedTotal ?? metadata.correctedTotal,
+    correctedTotal: metadata.correctedTotal,
+    deltaTotal: metadata.deltaTotal,
+    lineItems,
+    originalTotal: metadata.originalTotal,
+    payloadFingerprint: metadata.payloadFingerprint,
+    payloadSubject: metadata.payloadSubject,
+    settlementAmount: metadata.settlementAmount,
+    settlementDirection: metadata.settlementDirection,
+    settlementMethod: metadata.settlementMethod,
+    totalDelta: metadata.totalDelta ?? metadata.deltaTotal,
+    transactionId: metadata.transactionId,
+    transactionNumber: metadata.transactionNumber,
+  };
+}
 
 export function buildOperationalWorkItem(args: {
   storeId: Id<"store">;
@@ -107,16 +186,20 @@ export const listOpenOperationalWorkItems = internalQuery({
   args: {
     storeId: v.id("store"),
   },
-  handler: async (ctx, args) =>
-    ctx.db
-      .query("operationalWorkItem")
-      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-      .take(MAX_QUEUE_ITEMS)
-      .then((items) =>
-        items.filter(
-          (item) => !["completed", "cancelled"].includes(item.status),
-        ),
+  handler: async (ctx, args) => {
+    const workItems = await Promise.all(
+      OPEN_WORK_ITEM_STATUSES.map((status) =>
+        ctx.db
+          .query("operationalWorkItem")
+          .withIndex("by_storeId_status", (q) =>
+            q.eq("storeId", args.storeId).eq("status", status),
+          )
+          .take(MAX_QUEUE_ITEMS),
       ),
+    );
+
+    return workItems.flat();
+  },
 });
 
 export const getQueueSnapshot = query({
@@ -124,11 +207,30 @@ export const getQueueSnapshot = query({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
+    const store = await ctx.db.get("store", args.storeId);
+    if (!store) {
+      throw new Error("Store not found.");
+    }
+
+    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+    await requireOrganizationMemberRoleWithCtx(ctx, {
+      allowedRoles: ["full_admin"],
+      failureMessage: "Only full admins can view approval queue.",
+      organizationId: store.organizationId,
+      userId: athenaUser._id,
+    });
+
     const [workItems, approvalRequests] = await Promise.all([
-      ctx.db
-        .query("operationalWorkItem")
-        .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-        .take(MAX_QUEUE_ITEMS),
+      Promise.all(
+        OPEN_WORK_ITEM_STATUSES.map((status) =>
+          ctx.db
+            .query("operationalWorkItem")
+            .withIndex("by_storeId_status", (q) =>
+              q.eq("storeId", args.storeId).eq("status", status),
+            )
+            .take(MAX_QUEUE_ITEMS),
+        ),
+      ).then((items) => items.flat()),
       ctx.db
         .query("approvalRequest")
         .withIndex("by_storeId_status", (q) =>
@@ -137,9 +239,7 @@ export const getQueueSnapshot = query({
         .take(MAX_QUEUE_ITEMS),
     ]);
 
-    const openWorkItems = workItems.filter(
-      (item) => !TERMINAL_WORK_ITEM_STATUSES.has(item.status),
-    );
+    const openWorkItems = workItems;
 
     const customerIds = new Set<string>();
     const posTransactionIds = new Set<string>();
@@ -175,11 +275,9 @@ export const getQueueSnapshot = query({
         workItemIds.add(request.workItemId);
       }
 
-      if (
-        request.requestType === "payment_method_correction" &&
-        request.subjectType === "pos_transaction"
-      ) {
-        posTransactionIds.add(request.subjectId);
+      const transactionId = itemAdjustmentTransactionId(request);
+      if (transactionId) {
+        posTransactionIds.add(transactionId);
       }
 
       if (request.requestType === "variance_review") {
@@ -304,10 +402,10 @@ export const getQueueSnapshot = query({
 
     return {
       approvalRequests: approvalRequests.map((request) => {
-        const linkedTransaction =
-          request.subjectType === "pos_transaction"
-            ? posTransactionMap.get(request.subjectId as Id<"posTransaction">)
-            : null;
+        const linkedTransactionId = itemAdjustmentTransactionId(request);
+        const linkedTransaction = linkedTransactionId
+          ? posTransactionMap.get(linkedTransactionId)
+          : null;
         const linkedRegisterSession =
           request.requestType === "variance_review"
             ? registerSessionMap.get(
@@ -317,7 +415,16 @@ export const getQueueSnapshot = query({
             : null;
 
         return {
-          ...request,
+          _id: request._id,
+          createdAt: request.createdAt,
+          metadata: sanitizeApprovalRequestMetadata(request.metadata),
+          notes: request.notes,
+          reason: request.reason,
+          requestType: request.requestType,
+          status: request.status,
+          storeId: request.storeId,
+          subjectId: request.subjectId,
+          subjectType: request.subjectType,
           requestedByStaffName: request.requestedByStaffProfileId
             ? staffMap.get(request.requestedByStaffProfileId)?.fullName
             : null,

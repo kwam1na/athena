@@ -663,6 +663,11 @@ async function createFixtureRepo() {
     rootDir
   );
   await write(
+    "packages/athena-webapp/src/components/pos/transactions/TransactionView.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
     "packages/athena-webapp/src/components/pos/SessionManager.tsx",
     "export {};\n",
     rootDir
@@ -1062,6 +1067,11 @@ async function createFixtureRepo() {
     rootDir
   );
   await write(
+    "packages/athena-webapp/convex/pos/application/corrections/correctionPolicy.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
     "packages/athena-webapp/convex/pos/application/queries/getTransactions.ts",
     "export {};\n",
     rootDir
@@ -1123,6 +1133,11 @@ async function createFixtureRepo() {
   );
   await write(
     "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRepository.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/pos/infrastructure/repositories/transactionRepository.ts",
     "export {};\n",
     rootDir
   );

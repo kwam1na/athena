@@ -10,6 +10,7 @@ export function buildApprovalRequest(args: {
   requestedByStaffProfileId?: Id<"staffProfile">;
   workItemId?: Id<"operationalWorkItem">;
   registerSessionId?: Id<"registerSession">;
+  posTransactionId?: Id<"posTransaction">;
   reason?: string;
   notes?: string;
   metadata?: Record<string, unknown>;

@@ -13,6 +13,7 @@ type TableName =
   | "paymentAllocation"
   | "posSession"
   | "posTerminal"
+  | "posTransactionAdjustment"
   | "posTransaction"
   | "registerSession"
   | "staffProfile"
@@ -289,12 +290,95 @@ describe("daily operations overview read model", () => {
       status: "ready",
     });
     expect(snapshot.closeSummary).toMatchObject({
+      adjustedSalesTotal: 0,
+      adjustmentCashSettlementTotal: 0,
+      adjustmentCollectionTotal: 0,
+      adjustmentNetSettlementTotal: 0,
+      adjustmentRefundTotal: 0,
       carriedOverCashTotal: 0,
       currentDayCashTotal: 0,
       expenseTotal: 0,
+      itemAdjustmentCount: 0,
       netCashVariance: 0,
+      netCashMovementTotal: 0,
       salesTotal: 0,
       transactionCount: 0,
+    });
+  });
+
+  it("surfaces adjusted/net settlement totals without replacing original close sales", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        posTransaction: [
+          {
+            _id: "txn-current",
+            changeGiven: 0,
+            completedAt: Date.UTC(2026, 4, 8, 16),
+            payments: [{ amount: 50000, method: "cash" }],
+            status: "completed",
+            storeId: "store-1",
+            total: 50000,
+            totalPaid: 50000,
+            transactionNumber: "TXN-CURRENT",
+          },
+        ],
+        posTransactionAdjustment: [
+          {
+            _id: "adjustment-applied",
+            appliedAt: Date.UTC(2026, 4, 8, 17),
+            correctedTotal: 43000,
+            deltaTotal: -7000,
+            originalTotal: 50000,
+            transactionId: "txn-current",
+            settlementAmount: 7000,
+            settlementDirection: "refund",
+            settlementMethod: "cash",
+            status: "applied",
+            storeId: "store-1",
+            transactionNumber: "TXN-CURRENT",
+          },
+          {
+            _id: "adjustment-pending",
+            appliedAt: Date.UTC(2026, 4, 8, 18),
+            correctedTotal: 56000,
+            deltaTotal: 6000,
+            originalTotal: 50000,
+            transactionId: "txn-current",
+            settlementAmount: 6000,
+            settlementDirection: "collect",
+            settlementMethod: "cash",
+            status: "pending",
+            storeId: "store-1",
+            transactionNumber: "TXN-CURRENT",
+          },
+        ],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.closeSummary).toMatchObject({
+      adjustedSalesTotal: 43000,
+      adjustmentCashSettlementTotal: -7000,
+      adjustmentNetSettlementTotal: -7000,
+      adjustmentRefundTotal: 7000,
+      itemAdjustmentCount: 1,
+      netCashMovementTotal: 43000,
+      salesTotal: 50000,
+      transactionCount: 1,
+    });
+    expect(
+      snapshot.weekMetrics.find((metric) => metric.operatingDate === "2026-05-08"),
+    ).toMatchObject({
+      adjustedSalesTotal: 43000,
+      adjustmentCashSettlementTotal: -7000,
+      adjustmentNetSettlementTotal: -7000,
+      itemAdjustmentCount: 1,
+      netCashMovementTotal: 43000,
+      salesTotal: 50000,
+      transactionCount: 1,
     });
   });
 

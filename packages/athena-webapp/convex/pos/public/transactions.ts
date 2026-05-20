@@ -16,6 +16,8 @@ import {
   correctTransactionCustomer as correctTransactionCustomerCommand,
   correctTransactionPaymentMethod as correctTransactionPaymentMethodCommand,
 } from "../application/commands/correctTransaction";
+import { adjustTransactionItems as adjustTransactionItemsCommand } from "../application/commands/adjustTransactionItems";
+import { hashPosLocalStaffProofToken } from "../application/sync/staffProof";
 import {
   completeTransaction as completeTransactionCommand,
   createTransactionFromSessionHandler,
@@ -43,6 +45,33 @@ const customerInfoValidator = v.object({
   phone: v.optional(v.string()),
 });
 
+const adjustmentLineItemValidator = v.object({
+  adjustedQuantity: v.optional(v.number()),
+  originalQuantity: v.optional(v.number()),
+  productName: v.string(),
+  productSku: v.optional(v.string()),
+  quantityDelta: v.optional(v.number()),
+  totalDelta: v.optional(v.number()),
+  unitPrice: v.optional(v.number()),
+});
+
+const transactionAdjustmentSummaryValidator = v.object({
+  _id: v.union(v.id("approvalRequest"), v.id("operationalEvent")),
+  actorStaffName: v.union(v.string(), v.null()),
+  adjustedTotal: v.number(),
+  appliedAt: v.optional(v.number()),
+  approvalRequestId: v.optional(v.id("approvalRequest")),
+  createdAt: v.number(),
+  lineItems: v.array(adjustmentLineItemValidator),
+  originalTotal: v.number(),
+  reason: v.optional(v.string()),
+  settlementAmount: v.number(),
+  settlementDirection: v.string(),
+  settlementMethod: v.optional(v.string()),
+  status: v.string(),
+  totalDelta: v.optional(v.number()),
+});
+
 const correctTransactionPaymentMethodResultValidator = commandResultValidator(
   v.object({
     approvalProofId: v.id("approvalProof"),
@@ -54,6 +83,52 @@ const correctTransactionPaymentMethodResultValidator = commandResultValidator(
     paymentMethod: v.string(),
     paymentAllocationId: v.id("paymentAllocation"),
     operationalEventId: v.optional(v.id("operationalEvent")),
+  }),
+);
+
+const transactionItemAdjustmentPayloadValidator = v.object({
+  originalTotal: v.number(),
+  correctedTotal: v.number(),
+  settlementAmount: v.number(),
+  settlementDirection: v.union(
+    v.literal("collect"),
+    v.literal("refund"),
+    v.literal("none"),
+  ),
+  settlementMethod: v.optional(v.string()),
+  lines: v.array(
+    v.object({
+      originalTransactionItemId: v.optional(v.id("posTransactionItem")),
+      productId: v.id("product"),
+      productSkuId: v.id("productSku"),
+      productName: v.string(),
+      productSku: v.string(),
+      originalQuantity: v.number(),
+      adjustedQuantity: v.number(),
+      unitPrice: v.number(),
+      inventoryDelta: v.number(),
+    }),
+  ),
+});
+
+const adjustTransactionItemsResultValidator = commandResultValidator(
+  v.object({
+    adjustmentId: v.id("posTransactionAdjustment"),
+    approvalProofId: v.optional(v.id("approvalProof")),
+    approvalRequestId: v.optional(v.id("approvalRequest")),
+    approverStaffProfileId: v.optional(v.id("staffProfile")),
+    inventoryMovementIds: v.array(v.id("inventoryMovement")),
+    lineIds: v.array(v.id("posTransactionAdjustmentLine")),
+    operationalEventId: v.optional(v.id("operationalEvent")),
+    paymentAllocationId: v.optional(v.id("paymentAllocation")),
+    payloadFingerprint: v.string(),
+    settlementAmount: v.number(),
+    settlementDirection: v.union(
+      v.literal("collect"),
+      v.literal("refund"),
+      v.literal("none"),
+    ),
+    transactionId: v.id("posTransaction"),
   }),
 );
 
@@ -70,6 +145,7 @@ function mapCorrectionError(error: unknown): CommandResult<never> | null {
 
   if (
     message === "Only completed transactions can be corrected." ||
+    message === "Only completed transactions can be adjusted." ||
     message === "Only single-payment transactions can be corrected." ||
     message === "Only same-amount payment method corrections are supported." ||
     message === "Payment allocation must be a same-amount single payment." ||
@@ -77,10 +153,27 @@ function mapCorrectionError(error: unknown): CommandResult<never> | null {
     message === "Manager approval proof is invalid or expired." ||
     message === "Approval proof validation is not available." ||
     message === "Payment method approval request not found." ||
+    message === "Item adjustment approval request not found." ||
     message === "Payment method approval request has already been decided." ||
     message === "Payment method approval request does not match this store." ||
     message === "Payment method approval request does not match this correction." ||
     message === "Payment method approval request is missing correction details." ||
+    message === "Item adjustment approval request has already been decided." ||
+    message === "Item adjustment approval request does not match this store." ||
+    message === "Item adjustment approval request does not match this payload." ||
+    message === "Item adjustment approval request is missing adjustment details." ||
+    message === "Item adjustment payload is stale for this transaction." ||
+    message === "Item adjustment settlement does not match corrected totals." ||
+    message === "Item adjustment cannot reduce inventory below zero." ||
+    message === "Item adjustment SKU not found for this store." ||
+    message === "Item adjustment staff proof is invalid or expired." ||
+    message === "Item adjustment staff profile is not active for this store." ||
+    message === "Settlement method is required for item adjustments." ||
+    message === "Item adjustment must include at least one changed line." ||
+    message === "Item adjustment quantities must be whole numbers." ||
+    message === "This transaction already has an item adjustment waiting for approval." ||
+    message === "This transaction already has an item adjustment applied." ||
+    message === "Register closeout is under review. Reopen the register before updating adjustment settlement." ||
     message.startsWith("Approval proof ")
   ) {
     return userError({ code: "precondition_failed", message });
@@ -195,6 +288,18 @@ export const getTransactionById = query({
       payments: v.array(paymentValidator),
       totalPaid: v.number(),
       changeGiven: v.optional(v.number()),
+      originalTotal: v.number(),
+      effectiveNetTotal: v.number(),
+      totalAppliedAdjustmentDelta: v.number(),
+      adjustmentSummary: v.object({
+        appliedCount: v.number(),
+        effectiveNetTotal: v.number(),
+        hasAdjustments: v.boolean(),
+        originalTotal: v.number(),
+        pendingCount: v.number(),
+        totalAppliedAdjustmentDelta: v.number(),
+      }),
+      adjustments: v.array(transactionAdjustmentSummaryValidator),
       status: v.string(),
       completedAt: v.number(),
       notes: v.optional(v.string()),
@@ -381,6 +486,141 @@ export const correctTransactionPaymentMethod = mutation({
 
     try {
       const result = await correctTransactionPaymentMethodCommand(ctx, args);
+
+      if ("action" in result && result.action === "approval_required") {
+        return approvalRequired(result.approval);
+      }
+
+      return ok(result);
+    } catch (error) {
+      const mappedError = mapCorrectionError(error);
+      if (mappedError) {
+        return mappedError;
+      }
+      throw error;
+    }
+  },
+});
+
+export const adjustTransactionItems = mutation({
+  args: {
+    approvalRequestId: v.optional(v.id("approvalRequest")),
+    approvalProofId: v.optional(v.id("approvalProof")),
+    transactionId: v.id("posTransaction"),
+    payload: transactionItemAdjustmentPayloadValidator,
+    reason: v.string(),
+    actorStaffProfileId: v.optional(v.id("staffProfile")),
+    staffProofToken: v.string(),
+  },
+  returns: adjustTransactionItemsResultValidator,
+  handler: async (ctx, args) => {
+    if (!args.actorStaffProfileId) {
+      return userError({
+        code: "authentication_failed",
+        message: "Staff sign-in is required before adjusting transaction items.",
+      });
+    }
+
+    if (!args.reason.trim()) {
+      return userError({
+        code: "validation_failed",
+        message: "Reason is required to adjust transaction items.",
+      });
+    }
+
+    try {
+      const transaction = await getTransactionQuery(ctx, {
+        transactionId: args.transactionId,
+      });
+      if (!transaction) {
+        return userError({
+          code: "not_found",
+          message: "Transaction not found.",
+        });
+      }
+
+      const store = await ctx.db.get("store", transaction.storeId);
+      if (!store) {
+        return userError({
+          code: "not_found",
+          message: "Store not found.",
+        });
+      }
+
+      const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      await requireOrganizationMemberRoleWithCtx(ctx, {
+        allowedRoles: ["full_admin", "pos_only"],
+        failureMessage: "You cannot adjust transaction items.",
+        organizationId: store.organizationId,
+        userId: athenaUser._id,
+      });
+
+      const staffProfile = await ctx.db.get(
+        "staffProfile",
+        args.actorStaffProfileId,
+      );
+      if (
+        !staffProfile ||
+        staffProfile.status !== "active" ||
+        staffProfile.storeId !== transaction.storeId
+      ) {
+        return userError({
+          code: "authentication_failed",
+          message: "Item adjustment staff profile is not active for this store.",
+        });
+      }
+
+      const staffProofTokenHash = await hashPosLocalStaffProofToken(
+        args.staffProofToken,
+      );
+      const proof = await ctx.db
+        .query("posLocalStaffProof")
+        .withIndex("by_tokenHash", (q) =>
+          q.eq("tokenHash", staffProofTokenHash),
+        )
+        .unique();
+      if (
+        !proof ||
+        proof.status !== "active" ||
+        proof.staffProfileId !== args.actorStaffProfileId ||
+        proof.storeId !== transaction.storeId ||
+        proof.expiresAt <= Date.now()
+      ) {
+        return userError({
+          code: "authentication_failed",
+          message: "Item adjustment staff proof is invalid or expired.",
+        });
+      }
+
+      const credential = await ctx.db.get(
+        "staffCredential",
+        proof.credentialId,
+      );
+      if (
+        !credential ||
+        credential.status !== "active" ||
+        credential.staffProfileId !== args.actorStaffProfileId ||
+        credential.storeId !== transaction.storeId ||
+        credential.localVerifierVersion !== proof.credentialVersion
+      ) {
+        return userError({
+          code: "authentication_failed",
+          message: "Item adjustment staff proof is invalid or expired.",
+        });
+      }
+
+      await ctx.db.patch("posLocalStaffProof", proof._id, {
+        lastUsedAt: Date.now(),
+      });
+
+      const {
+        staffProofToken: _staffProofToken,
+        ...commandArgs
+      } = args;
+      const result = await adjustTransactionItemsCommand(ctx, {
+        ...commandArgs,
+        actorUserId: athenaUser._id,
+      });
 
       if ("action" in result && result.action === "approval_required") {
         return approvalRequired(result.approval);

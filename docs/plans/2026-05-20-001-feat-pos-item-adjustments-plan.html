@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plan: Add money-settled POS item adjustments</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f5f2;
+      --paper: #ffffff;
+      --ink: #171717;
+      --muted: #5f6368;
+      --line: #d9d6ce;
+      --soft: #f1eee8;
+      --accent: #334155;
+      --good: #166534;
+      --warn: #92400e;
+      --risk: #991b1b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 40px 24px 64px;
+    }
+    header {
+      border: 1px solid var(--line);
+      background: var(--paper);
+      padding: 28px;
+      border-radius: 10px;
+      margin-bottom: 18px;
+    }
+    h1, h2, h3 {
+      line-height: 1.18;
+      margin: 0;
+    }
+    h1 {
+      font-size: 34px;
+      letter-spacing: 0;
+      margin-top: 10px;
+    }
+    h2 {
+      font-size: 22px;
+      margin-bottom: 12px;
+    }
+    h3 {
+      font-size: 16px;
+      margin: 18px 0 8px;
+    }
+    p { margin: 8px 0 0; }
+    a { color: var(--accent); }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .pill {
+      border: 1px solid var(--line);
+      background: var(--soft);
+      border-radius: 999px;
+      padding: 4px 10px;
+    }
+    nav, section {
+      border: 1px solid var(--line);
+      background: var(--paper);
+      border-radius: 10px;
+      padding: 22px;
+      margin-top: 18px;
+    }
+    nav ul {
+      columns: 2;
+      padding-left: 18px;
+      margin: 8px 0 0;
+    }
+    ul { padding-left: 22px; margin: 8px 0 0; }
+    li { margin: 5px 0; }
+    code {
+      background: var(--soft);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 1px 4px;
+      font-size: 0.92em;
+    }
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: var(--soft);
+      padding: 12px 14px;
+      margin-top: 12px;
+      border-radius: 6px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fff;
+    }
+    .card strong { display: block; margin-bottom: 4px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 10px;
+      vertical-align: top;
+      text-align: left;
+    }
+    th { background: var(--soft); }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .step {
+      border: 1px solid var(--line);
+      background: var(--soft);
+      padding: 12px;
+      border-radius: 8px;
+      min-height: 82px;
+    }
+    .unit {
+      border-top: 1px solid var(--line);
+      padding-top: 14px;
+      margin-top: 14px;
+    }
+    .unit:first-of-type {
+      border-top: 0;
+      padding-top: 0;
+    }
+    .risk-high { color: var(--risk); font-weight: 650; }
+    .selected { color: var(--good); font-weight: 650; }
+    .warn { color: var(--warn); font-weight: 650; }
+    @media (max-width: 720px) {
+      main { padding: 22px 14px 40px; }
+      header, nav, section { padding: 18px; }
+      nav ul { columns: 1; }
+      h1 { font-size: 28px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="meta">
+        <span class="pill">type: feat</span>
+        <span class="pill">status: active</span>
+        <span class="pill">date: 2026-05-20</span>
+        <span class="pill">source: <a href="2026-05-20-001-feat-pos-item-adjustments-plan.md">markdown plan</a></span>
+      </div>
+      <h1>Add money-settled POS item adjustments</h1>
+      <p>Build a completed-transaction adjustment workflow for POS item and quantity corrections. The original sale remains immutable, while a linked adjustment records corrected line state, inventory deltas, settlement, one complete-bundle manager approval, and visible transaction history.</p>
+    </header>
+
+    <nav aria-label="Plan sections">
+      <h2>Contents</h2>
+      <ul>
+        <li><a href="#decision">Recommendation</a></li>
+        <li><a href="#scope">Scope</a></li>
+        <li><a href="#requirements">Requirements</a></li>
+        <li><a href="#design">Design Shape</a></li>
+        <li><a href="#units">Implementation Units</a></li>
+        <li><a href="#risks">Risks</a></li>
+        <li><a href="#verification">Verification</a></li>
+      </ul>
+    </nav>
+
+    <section id="decision">
+      <h2>Recommendation</h2>
+      <div class="callout">
+        <p><span class="selected">Selected:</span> adjustment ledger workflow. Keep the original completed transaction immutable and record a linked adjustment that carries item, inventory, payment, approval, and audit effects.</p>
+      </div>
+      <div class="grid">
+        <article class="card">
+          <strong>Why not direct patching?</strong>
+          <p>Direct edits make old reports and receipts shift underneath operators and weaken the ledger-safe correction pattern.</p>
+        </article>
+        <article class="card">
+          <strong>Why not void and recreate?</strong>
+          <p>It is too disruptive for partial line mistakes and creates noisy receipt/history behavior for small quantity corrections.</p>
+        </article>
+        <article class="card">
+          <strong>Approval rule</strong>
+          <p>Operators can revise freely. Manager approval is required once for the complete submitted adjustment bundle.</p>
+        </article>
+        <article class="card">
+          <strong>Repeat adjustment rule</strong>
+          <p>V1 allows one active adjustment at a time. Additional corrections must compute from the latest effective state or be blocked for manager/admin review.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="scope">
+      <h2>Scope</h2>
+      <ul>
+        <li>Support completed POS transaction item and quantity corrections.</li>
+        <li>Require refund when corrected total is lower, collection when corrected total is higher, and no payment movement when totals are equal.</li>
+        <li>Record adjustment records, inventory movement, SKU activity, payment allocation, register expected-cash effect for cash, and operational event history.</li>
+        <li>Defer discount-only corrections, arbitrary total overrides, tax overrides, original receipt rewrites, and POS local-first adjustment projection.</li>
+      </ul>
+    </section>
+
+    <section id="requirements">
+      <h2>Requirements Digest</h2>
+      <ul>
+        <li>Original sale rows remain historical truth.</li>
+        <li>Adjustment preview must show original total, corrected total, refund/balance/no-payment state, and per-SKU inventory deltas.</li>
+        <li>Approval requests must have a concrete resolver path and must not mutate before approval.</li>
+        <li>Read models must distinguish original totals from adjusted/net totals.</li>
+        <li>UI must follow existing command-result and command-approval presentation patterns.</li>
+      </ul>
+    </section>
+
+    <section id="design">
+      <h2>Design Shape</h2>
+      <p>The markdown plan contains the canonical Mermaid diagram. The operational path is:</p>
+      <div class="flow">
+        <div class="step">1. Open completed transaction detail and choose Items or quantities.</div>
+        <div class="step">2. Build adjustment draft and preview corrected totals and deltas.</div>
+        <div class="step">3. Add refund or collection settlement method when money moves.</div>
+        <div class="step">4. Submit complete bundle for manager approval.</div>
+        <div class="step">5. Apply after matching inline proof or async approval resolution.</div>
+        <div class="step">6. Show adjusted summary and update history without rewriting original sale.</div>
+      </div>
+    </section>
+
+    <section id="units">
+      <h2>Implementation Units</h2>
+      <article class="unit">
+        <h3>U1. Add POS adjustment schema and read helpers</h3>
+        <p>Create parent/line adjustment records and transaction-scoped repository helpers.</p>
+      </article>
+      <article class="unit">
+        <h3>U2. Build deterministic item-adjustment planner</h3>
+        <p>Compute corrected lines, totals, inventory deltas, settlement direction, and validation failures.</p>
+      </article>
+      <article class="unit">
+        <h3>U3. Add approval-backed adjustment commands</h3>
+        <p>Preview, request approval, and apply one complete adjustment bundle through existing command approval rails.</p>
+      </article>
+      <article class="unit">
+        <h3>U4. Apply inventory, payment, drawer, and audit effects</h3>
+        <p>Write inventory movements, SKU activity, payment allocations, register cash impact, and operational events idempotently.</p>
+      </article>
+      <article class="unit">
+        <h3>U5. Expose adjustment state in transaction read models</h3>
+        <p>Return adjusted/net fields and adjustment summaries while preserving original totals.</p>
+      </article>
+      <article class="unit">
+        <h3>U6. Build the transaction detail adjustment workflow UI</h3>
+        <p>Replace static guided-route copy with an operator workflow and operations queue approval cards.</p>
+      </article>
+      <article class="unit">
+        <h3>U7. Harden reporting, validation, and browser coverage</h3>
+        <p>Confirm cash-control, daily operations, harness, graphify, and browser validation coverage.</p>
+      </article>
+    </section>
+
+    <section id="risks">
+      <h2>Key Risks</h2>
+      <table>
+        <thead>
+          <tr><th>Risk</th><th>Mitigation</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="risk-high">Partial writes across inventory, payment, and audit effects</td><td>Use one command boundary, validate before writes, idempotent source ids, and mark applied only after required effects are recorded.</td></tr>
+          <tr><td class="risk-high">Approval payload drift</td><td>Bind approval to a payload fingerprint and recompute before apply.</td></tr>
+          <tr><td class="risk-high">Silent report semantic changes</td><td>Preserve original transaction fields and expose explicit adjusted/net fields.</td></tr>
+          <tr><td class="warn">Closing or reconciled drawer cash settlement</td><td>Block immediate cash settlement or route through a separate admin path without partial apply.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="verification">
+      <h2>Verification Strategy</h2>
+      <ul>
+        <li>Focused planner, command, approval, payment-allocation, SKU activity, cash-control, and transaction read-model tests.</li>
+        <li>Transaction detail and operations queue UI tests for preview, settlement requirements, approval states, and history.</li>
+        <li>Convex audit/lint checks, typecheck/build, harness coverage updates, graphify rebuild, and browser validation on the transaction detail route after implementation.</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

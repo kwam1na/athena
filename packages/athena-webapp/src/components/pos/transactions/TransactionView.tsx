@@ -6,7 +6,9 @@ import {
   Banknote,
   CheckCircle2,
   CreditCard,
+  Minus,
   MoveRight,
+  Plus,
   WalletCards,
   Smartphone,
   User,
@@ -53,6 +55,8 @@ import {
 import { useProtectedAdminPageState } from "~/src/hooks/useProtectedAdminPageState";
 import { useApprovedCommand } from "../../operations/useApprovedCommand";
 import type { ApprovalRequirement } from "~/shared/approvalPolicy";
+import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
+import { currencyFormatter } from "~/shared/currencyFormatter";
 
 type RouteParams =
   | {
@@ -75,6 +79,21 @@ type PaymentMethodCorrectionResultData = {
   approverStaffProfileId: Id<"staffProfile">;
 };
 
+type ItemAdjustmentResultData = {
+  adjustmentId?: string;
+  adjustmentStatus?: string;
+  adjustedTotal?: number;
+  approvalProofId?: Id<"approvalProof">;
+  approvalRequestId?: Id<"approvalRequest">;
+  approverStaffProfileId?: Id<"staffProfile">;
+  effectiveNetTotal?: number;
+  originalTotal?: number;
+  settlementAmount?: number;
+  settlementDirection?: string;
+  settlementMethod?: string;
+  transactionId: Id<"posTransaction">;
+};
+
 type TransactionWithReceiptDelivery = {
   receiptDeliveryHistory?: ReceiptDeliveryHistoryEntry[] | null;
 };
@@ -84,6 +103,8 @@ const PAYMENT_METHOD_OPTIONS = [
   { label: "Card", value: "card" },
   { label: "Mobile Money", value: "mobile_money" },
 ] satisfies Array<{ label: string; value: PosPaymentMethod }>;
+
+const ghsCurrencyFormatter = currencyFormatter("GHS");
 
 export function formatCorrectionEventType(eventType: string) {
   return eventType
@@ -213,10 +234,16 @@ export function TransactionView() {
   const [customerProfileIdInput, setCustomerProfileIdInput] = useState("");
   const [paymentCorrectionReason, setPaymentCorrectionReason] = useState("");
   const [paymentMethodInput, setPaymentMethodInput] = useState("");
+  const [itemAdjustmentReason, setItemAdjustmentReason] = useState("");
+  const [itemAdjustmentSettlementMethod, setItemAdjustmentSettlementMethod] =
+    useState("");
+  const [correctedQuantities, setCorrectedQuantities] = useState<
+    Record<string, number>
+  >({});
   const [correctionError, setCorrectionError] = useState<string | null>(null);
   const [correctionSubmitting, setCorrectionSubmitting] = useState(false);
   const [pendingCorrection, setPendingCorrection] = useState<
-    "customer" | "payment_method" | null
+    "customer" | "payment_method" | "line_items" | null
   >(null);
   const [correctionHistoryExpanded, setCorrectionHistoryExpanded] =
     useState(false);
@@ -233,7 +260,45 @@ export function TransactionView() {
   const correctCustomer = useMutation(
     api.inventory.pos.correctTransactionCustomer,
   );
+  const adjustTransactionItems = useMutation(
+    api.inventory.pos.adjustTransactionItems,
+  );
   const paymentApprovalRunner = useApprovedCommand({
+    storeId: activeStore?._id,
+    onAuthenticateForApproval: (args) => {
+      if (!activeStore?._id) {
+        return Promise.resolve({
+          kind: "user_error",
+          error: {
+            code: "authentication_failed",
+            message: "Select a store before approving this command",
+          },
+        });
+      }
+
+      return runCommand(
+        () =>
+          approveCommand({
+            actionKey: args.actionKey,
+            pinHash: args.pinHash,
+            reason: args.reason,
+            requiredRole: args.requiredRole,
+            requestedByStaffProfileId: args.requestedByStaffProfileId,
+            storeId: activeStore._id,
+            subject: args.subject,
+            username: args.username,
+          }) as Promise<
+            CommandResult<{
+              approvalProofId: Id<"approvalProof">;
+              approvedByStaffProfileId: Id<"staffProfile">;
+              expiresAt: number;
+              requestedByStaffProfileId?: Id<"staffProfile">;
+            }>
+          >,
+      );
+    },
+  });
+  const itemAdjustmentApprovalRunner = useApprovedCommand({
     storeId: activeStore?._id,
     onAuthenticateForApproval: (args) => {
       if (!activeStore?._id) {
@@ -329,6 +394,44 @@ export function TransactionView() {
           : undefined),
     };
   }, [transaction, cartItems]);
+
+  const itemAdjustmentDraft = useMemo(() => {
+    if (!transaction) {
+      return null;
+    }
+
+    const lines = transaction.items.map((item: (typeof transaction.items)[number]) => {
+      const correctedQuantity =
+        correctedQuantities[item._id] ?? item.quantity;
+      const adjustedLineTotal = correctedQuantity * item.unitPrice;
+
+      return {
+        adjustedLineTotal,
+        correctedQuantity,
+        item,
+        originalLineTotal: item.totalPrice,
+        quantityDelta: correctedQuantity - item.quantity,
+        totalDelta: adjustedLineTotal - item.totalPrice,
+      };
+    });
+    const adjustedTotal = lines.reduce(
+      (sum, line) => sum + line.adjustedLineTotal,
+      transaction.tax ?? 0,
+    );
+    const totalDelta = adjustedTotal - transaction.total;
+    const settlementAmount = Math.abs(totalDelta);
+    const settlementDirection: "refund" | "collection" | "none" =
+      totalDelta < 0 ? "refund" : totalDelta > 0 ? "collection" : "none";
+
+    return {
+      adjustedTotal,
+      hasChanges: lines.some((line) => line.quantityDelta !== 0),
+      lines,
+      settlementAmount,
+      settlementDirection,
+      totalDelta,
+    };
+  }, [transaction, correctedQuantities]);
 
   if (!transactionId) {
     return null;
@@ -444,6 +547,12 @@ export function TransactionView() {
     setSelectedCorrection(null);
     setPendingCorrection(null);
     setCorrectionError(null);
+  }
+
+  function resetItemAdjustmentWorkflow() {
+    setCorrectedQuantities({});
+    setItemAdjustmentReason("");
+    setItemAdjustmentSettlementMethod("");
   }
 
   async function runCustomerCorrection(staff: StaffAuthenticationResult) {
@@ -575,7 +684,138 @@ export function TransactionView() {
     });
   }
 
-  function requestCorrectionSubmit(kind: "customer" | "payment_method") {
+  async function runItemAdjustment(args?: {
+    approvalRequestId?: Id<"approvalRequest">;
+    approvalProofId?: Id<"approvalProof">;
+    sameSubmissionApproval?: {
+      pinHash: string;
+      username: string;
+    };
+    staff?: StaffAuthenticationResult;
+    staffProfileId?: Id<"staffProfile">;
+  }) {
+    if (!isAuthenticated) {
+      setCorrectionError("Sign in again before updating this transaction");
+      return;
+    }
+
+    if (!transaction) {
+      setCorrectionError("Transaction details are still loading");
+      return;
+    }
+
+    if (!itemAdjustmentDraft?.hasChanges) {
+      setCorrectionError("Change at least one item quantity before submitting");
+      return;
+    }
+
+    const reason = itemAdjustmentReason.trim();
+    if (!reason) {
+      setCorrectionError("Add a reason for this item adjustment");
+      return;
+    }
+
+    const settlementMethod =
+      itemAdjustmentDraft.settlementDirection === "none"
+        ? undefined
+        : itemAdjustmentSettlementMethod.trim();
+    if (
+      itemAdjustmentDraft.settlementDirection !== "none" &&
+      !settlementMethod
+    ) {
+      setCorrectionError("Choose a settlement method before submitting");
+      return;
+    }
+    const staffProofToken = args?.staff?.posLocalStaffProof?.token;
+    if (!args?.staffProfileId || !staffProofToken) {
+      setCorrectionError("Staff sign-in is required before adjusting transaction items");
+      return;
+    }
+    const payloadSettlementDirection: "collect" | "refund" | "none" =
+      itemAdjustmentDraft.settlementDirection === "collection"
+        ? "collect"
+        : itemAdjustmentDraft.settlementDirection;
+
+    setCorrectionError(null);
+    setCorrectionSubmitting(true);
+    try {
+      await itemAdjustmentApprovalRunner.run({
+        requestedByStaffProfileId: args?.staffProfileId,
+        execute: async (approvalArgs) =>
+          runCommand(
+            () =>
+              adjustTransactionItems({
+                actorStaffProfileId: args?.staffProfileId,
+                approvalRequestId:
+                  approvalArgs.approvalRequestId ?? args?.approvalRequestId,
+                approvalProofId:
+                  approvalArgs.approvalProofId ?? args?.approvalProofId,
+                staffProofToken,
+                payload: {
+                  correctedTotal: itemAdjustmentDraft.adjustedTotal,
+                  lines: itemAdjustmentDraft.lines.map((line) => ({
+                    adjustedQuantity: line.correctedQuantity,
+                    inventoryDelta: -line.quantityDelta,
+                    originalQuantity: line.item.quantity,
+                    originalTransactionItemId: line.item._id,
+                    productId: line.item.productId,
+                    productName: line.item.productName,
+                    productSku: line.item.productSku,
+                    productSkuId: line.item.productSkuId,
+                    unitPrice: line.item.unitPrice,
+                  })),
+                  originalTotal: transaction.total,
+                  settlementAmount: itemAdjustmentDraft.settlementAmount,
+                  settlementDirection: payloadSettlementDirection,
+                  settlementMethod,
+                },
+                reason,
+                transactionId: transactionId as Id<"posTransaction">,
+              }) as Promise<ApprovalCommandResult<ItemAdjustmentResultData>>,
+          ),
+        sameSubmissionApproval:
+          args?.sameSubmissionApproval && args.staff
+            ? {
+                canAttemptInlineManagerProof: isManagerStaff(args.staff),
+                pinHash: args.sameSubmissionApproval.pinHash,
+                requestedByStaffProfileId:
+                  args.staffProfileId ?? args.staff.staffProfileId,
+                username: args.sameSubmissionApproval.username,
+              }
+            : undefined,
+        onApprovalRequired: (approval) => {
+          if (!requiresInlineManagerProof(approval)) {
+            resetItemAdjustmentWorkflow();
+            setCorrectionPanelOpen(false);
+            setSelectedCorrection(null);
+            setPendingCorrection(null);
+            setCorrectionError(null);
+            toast.success("Item adjustment queued for manager review");
+          }
+        },
+        onResult: (result) => {
+          if (isApprovalRequiredResult(result)) {
+            return;
+          }
+
+          if (result.kind === "ok") {
+            resetItemAdjustmentWorkflow();
+            exitCorrectionWorkflow();
+            toast.success("Item adjustment applied");
+            return;
+          }
+
+          setCorrectionError(result.error.message);
+        },
+      });
+    } finally {
+      setCorrectionSubmitting(false);
+    }
+  }
+
+  function requestCorrectionSubmit(
+    kind: "customer" | "payment_method" | "line_items",
+  ) {
     setCorrectionError(null);
 
     if (kind === "customer" && !customerCorrectionReason.trim()) {
@@ -595,6 +835,28 @@ export function TransactionView() {
 
       if (!paymentCorrectionReason.trim()) {
         setCorrectionError("Add a reason for this update");
+        return;
+      }
+    }
+
+    if (kind === "line_items") {
+      if (!itemAdjustmentDraft?.hasChanges) {
+        setCorrectionError(
+          "Change at least one item quantity before submitting",
+        );
+        return;
+      }
+
+      if (!itemAdjustmentReason.trim()) {
+        setCorrectionError("Add a reason for this item adjustment");
+        return;
+      }
+
+      if (
+        itemAdjustmentDraft.settlementDirection !== "none" &&
+        !itemAdjustmentSettlementMethod.trim()
+      ) {
+        setCorrectionError("Choose a settlement method before submitting");
         return;
       }
     }
@@ -654,6 +916,15 @@ export function TransactionView() {
             return;
           }
 
+          if (correction === "line_items") {
+            void runItemAdjustment({
+              sameSubmissionApproval: credentials,
+              staff: result,
+              staffProfileId: result.staffProfileId,
+            });
+            return;
+          }
+
           if (correction === "customer") {
             void runCustomerCorrection(result);
           }
@@ -661,10 +932,12 @@ export function TransactionView() {
         onDismiss={() => setPendingCorrection(null)}
         open={
           pendingCorrection === "customer" ||
-          pendingCorrection === "payment_method"
+          pendingCorrection === "payment_method" ||
+          pendingCorrection === "line_items"
         }
       />
       {paymentApprovalRunner.dialog}
+      {itemAdjustmentApprovalRunner.dialog}
       <FadeIn className="h-full">
         <div className="container mx-auto h-full min-h-0 px-6 pb-16 pt-6">
           <div className="grid h-full min-h-0 gap-8 xl:grid-cols-[380px,minmax(0,1fr)]">
@@ -963,7 +1236,10 @@ export function TransactionView() {
                         <Button
                           aria-label="Items or quantities"
                           className="h-auto justify-start whitespace-normal px-3 py-2.5 text-left"
-                          onClick={() => setSelectedCorrection("line_items")}
+                          onClick={() => {
+                            setSelectedCorrection("line_items");
+                            setCorrectionError(null);
+                          }}
                           type="button"
                           variant={
                             selectedCorrection === "line_items"
@@ -1002,15 +1278,285 @@ export function TransactionView() {
                       </div>
                     </div>
 
-                    {selectedCorrection &&
-                    !["customer", "payment_method"].includes(
-                      selectedCorrection,
-                    ) ? (
+                    {selectedCorrection === "line_items" &&
+                    itemAdjustmentDraft ? (
+                      <div className="space-y-4 rounded-lg border border-border bg-muted/20 p-4">
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-foreground">
+                            Review item adjustment
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            Adjust completed-sale quantities, then submit the
+                            complete bundle for manager approval.
+                          </p>
+                        </div>
+
+                        <div className="divide-y divide-border/70 rounded-lg border border-border bg-background">
+                          {itemAdjustmentDraft.lines.map((line) => (
+                            <div
+                              className="grid gap-3 px-3 py-3"
+                              key={line.item._id}
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-foreground">
+                                  {line.item.productName}
+                                </p>
+                                <p className="mt-1 truncate text-xs text-muted-foreground">
+                                  {line.item.productSku}
+                                </p>
+                              </div>
+                              <div className="flex items-center justify-between gap-3">
+                                <p className="text-xs text-muted-foreground">
+                                  Original {line.item.quantity}
+                                </p>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    aria-label={`Decrease ${line.item.productName}`}
+                                    disabled={line.correctedQuantity <= 0}
+                                    onClick={() =>
+                                      setCorrectedQuantities((current) => ({
+                                        ...current,
+                                        [line.item._id]: Math.max(
+                                          0,
+                                          line.correctedQuantity - 1,
+                                        ),
+                                      }))
+                                    }
+                                    size="icon"
+                                    type="button"
+                                    variant="outline"
+                                  >
+                                    <Minus aria-hidden="true" />
+                                  </Button>
+                                  <Input
+                                    aria-label={`Adjusted quantity for ${line.item.productName}`}
+                                    className="h-9 w-20 border-input bg-background text-center font-numeric"
+                                    min={0}
+                                    onChange={(event) => {
+                                      const quantity = Number(
+                                        event.target.value,
+                                      );
+                                      setCorrectedQuantities((current) => ({
+                                        ...current,
+                                        [line.item._id]:
+                                          Number.isFinite(quantity) &&
+                                          quantity >= 0
+                                            ? Math.trunc(quantity)
+                                            : line.correctedQuantity,
+                                      }));
+                                    }}
+                                    type="number"
+                                    value={line.correctedQuantity}
+                                  />
+                                  <Button
+                                    aria-label={`Increase ${line.item.productName}`}
+                                    onClick={() =>
+                                      setCorrectedQuantities((current) => ({
+                                        ...current,
+                                        [line.item._id]:
+                                          line.correctedQuantity + 1,
+                                      }))
+                                    }
+                                    size="icon"
+                                    type="button"
+                                    variant="outline"
+                                  >
+                                    <Plus aria-hidden="true" />
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="grid gap-3 rounded-lg border border-border bg-background p-3 text-sm">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-muted-foreground">
+                              Original total
+                            </span>
+                            <span className="font-numeric font-medium">
+                              {formatStoredAmount(
+                                ghsCurrencyFormatter,
+                                transaction.total,
+                              )}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-muted-foreground">
+                              Adjusted total
+                            </span>
+                            <span className="font-numeric font-medium">
+                              {formatStoredAmount(
+                                ghsCurrencyFormatter,
+                                itemAdjustmentDraft.adjustedTotal,
+                              )}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3 border-t border-border/70 pt-3">
+                            <span className="font-medium text-foreground">
+                              {itemAdjustmentDraft.settlementDirection ===
+                              "refund"
+                                ? "Refund due"
+                                : itemAdjustmentDraft.settlementDirection ===
+                                    "collection"
+                                  ? "Balance due"
+                                  : "No payment movement"}
+                            </span>
+                            <span className="font-numeric font-semibold text-foreground">
+                              {itemAdjustmentDraft.settlementDirection ===
+                              "none"
+                                ? "No payment movement"
+                                : formatStoredAmount(
+                                    ghsCurrencyFormatter,
+                                    itemAdjustmentDraft.settlementAmount,
+                                  )}
+                            </span>
+                          </div>
+                        </div>
+
+                        {itemAdjustmentDraft.settlementDirection !== "none" ? (
+                          <Select
+                            aria-label="Settlement method"
+                            onValueChange={(value) =>
+                              setItemAdjustmentSettlementMethod(value)
+                            }
+                            value={itemAdjustmentSettlementMethod}
+                          >
+                            <SelectTrigger
+                              aria-label="Settlement method"
+                              className="border-input bg-background"
+                            >
+                              <SelectValue placeholder="Choose settlement method" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {PAYMENT_METHOD_OPTIONS.map((option) => (
+                                <SelectItem
+                                  key={option.value}
+                                  value={option.value}
+                                >
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : null}
+                        <Textarea
+                          aria-label="Item adjustment reason"
+                          className="min-h-[80px] border-input bg-background"
+                          onChange={(event) =>
+                            setItemAdjustmentReason(event.target.value)
+                          }
+                          placeholder="Reason for item adjustment."
+                          value={itemAdjustmentReason}
+                        />
+                        {selectedCorrection === "line_items" &&
+                        correctionError ? (
+                          <p className="text-sm text-destructive">
+                            {correctionError}
+                          </p>
+                        ) : null}
+                        <Button
+                          disabled={correctionSubmitting}
+                          onClick={() => requestCorrectionSubmit("line_items")}
+                          type="button"
+                        >
+                          Submit item adjustment
+                        </Button>
+                      </div>
+                    ) : selectedCorrection &&
+                      !["customer", "payment_method"].includes(
+                        selectedCorrection,
+                      ) ? (
                       <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-4 text-sm text-muted-foreground">
                         Use refund, exchange, or manager review for item,
                         amount, total, or discount updates.
                       </div>
                     ) : null}
+                  </div>
+                </section>
+              ) : null}
+
+              {transaction.adjustmentSummary?.hasAdjustments ? (
+                <section className="space-y-4 overflow-hidden rounded-[calc(var(--radius)*1.35)] border border-border/80 bg-surface-raised p-5 shadow-surface">
+                  <div className="space-y-1">
+                    <h2 className="font-display text-xl font-semibold text-foreground">
+                      Adjustment state
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      Original sale totals stay locked. Adjusted totals are
+                      shown separately.
+                    </p>
+                  </div>
+                  <dl className="grid gap-3 rounded-lg border border-border bg-background p-4 text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-muted-foreground">Original total</dt>
+                      <dd className="font-numeric font-medium">
+                        {formatStoredAmount(
+                          ghsCurrencyFormatter,
+                          transaction.adjustmentSummary.originalTotal,
+                        )}
+                      </dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-muted-foreground">
+                        Adjusted net total
+                      </dt>
+                      <dd className="font-numeric font-semibold">
+                        {formatStoredAmount(
+                          ghsCurrencyFormatter,
+                          transaction.adjustmentSummary.effectiveNetTotal,
+                        )}
+                      </dd>
+                    </div>
+                    {transaction.adjustmentSummary.pendingCount > 0 ? (
+                      <div className="flex items-center justify-between gap-3 border-t border-border/70 pt-3">
+                        <dt className="text-muted-foreground">
+                          Pending approval
+                        </dt>
+                        <dd className="font-medium text-foreground">
+                          {transaction.adjustmentSummary.pendingCount}
+                        </dd>
+                      </div>
+                    ) : null}
+                  </dl>
+                  <div className="space-y-3">
+                    {transaction.adjustments?.map((adjustment) => (
+                      <div
+                        className="rounded-lg border border-border bg-muted/20 p-4"
+                        key={adjustment._id}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-medium text-foreground">
+                              {adjustment.status === "pending_approval"
+                                ? "Item adjustment pending approval"
+                                : "Item adjustment applied"}
+                            </p>
+                            {adjustment.actorStaffName ? (
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                Requested by {adjustment.actorStaffName}
+                              </p>
+                            ) : null}
+                          </div>
+                          <Badge variant="outline">
+                            {adjustment.settlementDirection === "refund"
+                              ? "Refund due"
+                              : adjustment.settlementDirection === "collection" ||
+                                  adjustment.settlementDirection === "collect"
+                                ? "Balance due"
+                                : "No payment movement"}
+                          </Badge>
+                        </div>
+                        <p className="mt-3 text-sm text-muted-foreground">
+                          {adjustment.settlementDirection === "none"
+                            ? "No payment movement"
+                            : formatStoredAmount(
+                                ghsCurrencyFormatter,
+                                adjustment.settlementAmount,
+                              )}
+                        </p>
+                      </div>
+                    ))}
                   </div>
                 </section>
               ) : null}

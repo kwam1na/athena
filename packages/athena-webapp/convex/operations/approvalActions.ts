@@ -36,6 +36,10 @@ export const APPROVAL_ACTIONS = {
     key: "pos.transaction.correct_payment_method",
     label: "Correct payment method",
   },
+  transactionItemAdjustment: {
+    key: "pos.transaction.adjust_items",
+    label: "Adjust transaction items",
+  },
 } as const satisfies Record<string, ApprovalActionIdentity>;
 
 export type ConsumeCommandApprovalProofArgs = {
