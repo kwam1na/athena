@@ -48,6 +48,8 @@ import {
 import {
   posTransactionSchema,
   posTransactionItemSchema,
+  posTransactionAdjustmentSchema,
+  posTransactionAdjustmentLineSchema,
   posSessionItemSchema,
   posCustomerSchema,
   posTerminalSchema,
@@ -124,6 +126,11 @@ const schema = defineSchema({
     .index("by_storeId", ["storeId"])
     .index("by_storeId_status", ["storeId", "status"])
     .index("by_storeId_subject", ["storeId", "subjectType", "subjectId"])
+    .index("by_storeId_status_posTransactionId", [
+      "storeId",
+      "status",
+      "posTransactionId",
+    ])
     .index("by_workItemId", ["workItemId"])
     .index("by_registerSessionId", ["registerSessionId"]),
   approvalProof: defineTable(
@@ -337,6 +344,28 @@ const schema = defineSchema({
     "by_transactionId",
     ["transactionId"]
   ),
+  posTransactionAdjustment: defineTable(posTransactionAdjustmentSchema)
+    .index("by_transactionId", ["transactionId"])
+    .index("by_storeId_transactionId", ["storeId", "transactionId"])
+    .index("by_storeId_transactionId_status", [
+      "storeId",
+      "transactionId",
+      "status",
+    ])
+    .index("by_storeId_transactionId_payloadFingerprint", [
+      "storeId",
+      "transactionId",
+      "payloadFingerprint",
+    ])
+    .index("by_storeId_status_appliedAt", ["storeId", "status", "appliedAt"])
+    .index("by_approvalRequestId", ["approvalRequestId"])
+    .index("by_payloadFingerprint", ["payloadFingerprint"]),
+  posTransactionAdjustmentLine: defineTable(
+    posTransactionAdjustmentLineSchema,
+  )
+    .index("by_adjustmentId", ["adjustmentId"])
+    .index("by_transactionId", ["transactionId"])
+    .index("by_productSkuId", ["productSkuId"]),
   posSession: defineTable(posSessionSchema)
     .index("by_storeId", ["storeId"])
     .index("by_status", ["status"])

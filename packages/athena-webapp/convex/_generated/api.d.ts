@@ -147,6 +147,7 @@ import type * as operations_staffProfiles from "../operations/staffProfiles.js";
 import type * as operations_staffRoles from "../operations/staffRoles.js";
 import type * as otp_EmailOTP from "../otp/EmailOTP.js";
 import type * as paystack_index from "../paystack/index.js";
+import type * as pos_application_commands_adjustTransactionItems from "../pos/application/commands/adjustTransactionItems.js";
 import type * as pos_application_commands_assignCustomer from "../pos/application/commands/assignCustomer.js";
 import type * as pos_application_commands_completeTransaction from "../pos/application/commands/completeTransaction.js";
 import type * as pos_application_commands_correctTransaction from "../pos/application/commands/correctTransaction.js";
@@ -157,6 +158,7 @@ import type * as pos_application_commands_quickAddCatalogItem from "../pos/appli
 import type * as pos_application_commands_register from "../pos/application/commands/register.js";
 import type * as pos_application_commands_sessionCommands from "../pos/application/commands/sessionCommands.js";
 import type * as pos_application_commands_terminals from "../pos/application/commands/terminals.js";
+import type * as pos_application_commands_transactionAdjustmentPlanner from "../pos/application/commands/transactionAdjustmentPlanner.js";
 import type * as pos_application_corrections_correctionEvents from "../pos/application/corrections/correctionEvents.js";
 import type * as pos_application_corrections_correctionPolicy from "../pos/application/corrections/correctionPolicy.js";
 import type * as pos_application_dto from "../pos/application/dto.js";
@@ -249,6 +251,8 @@ import type * as schemas_pos_posSessionItem from "../schemas/pos/posSessionItem.
 import type * as schemas_pos_posTerminal from "../schemas/pos/posTerminal.js";
 import type * as schemas_pos_posTerminalRuntimeStatus from "../schemas/pos/posTerminalRuntimeStatus.js";
 import type * as schemas_pos_posTransaction from "../schemas/pos/posTransaction.js";
+import type * as schemas_pos_posTransactionAdjustment from "../schemas/pos/posTransactionAdjustment.js";
+import type * as schemas_pos_posTransactionAdjustmentLine from "../schemas/pos/posTransactionAdjustmentLine.js";
 import type * as schemas_pos_posTransactionItem from "../schemas/pos/posTransactionItem.js";
 import type * as schemas_serviceOps_index from "../schemas/serviceOps/index.js";
 import type * as schemas_serviceOps_serviceAppointment from "../schemas/serviceOps/serviceAppointment.js";
@@ -480,6 +484,7 @@ declare const fullApi: ApiFromModules<{
   "operations/staffRoles": typeof operations_staffRoles;
   "otp/EmailOTP": typeof otp_EmailOTP;
   "paystack/index": typeof paystack_index;
+  "pos/application/commands/adjustTransactionItems": typeof pos_application_commands_adjustTransactionItems;
   "pos/application/commands/assignCustomer": typeof pos_application_commands_assignCustomer;
   "pos/application/commands/completeTransaction": typeof pos_application_commands_completeTransaction;
   "pos/application/commands/correctTransaction": typeof pos_application_commands_correctTransaction;
@@ -490,6 +495,7 @@ declare const fullApi: ApiFromModules<{
   "pos/application/commands/register": typeof pos_application_commands_register;
   "pos/application/commands/sessionCommands": typeof pos_application_commands_sessionCommands;
   "pos/application/commands/terminals": typeof pos_application_commands_terminals;
+  "pos/application/commands/transactionAdjustmentPlanner": typeof pos_application_commands_transactionAdjustmentPlanner;
   "pos/application/corrections/correctionEvents": typeof pos_application_corrections_correctionEvents;
   "pos/application/corrections/correctionPolicy": typeof pos_application_corrections_correctionPolicy;
   "pos/application/dto": typeof pos_application_dto;
@@ -582,6 +588,8 @@ declare const fullApi: ApiFromModules<{
   "schemas/pos/posTerminal": typeof schemas_pos_posTerminal;
   "schemas/pos/posTerminalRuntimeStatus": typeof schemas_pos_posTerminalRuntimeStatus;
   "schemas/pos/posTransaction": typeof schemas_pos_posTransaction;
+  "schemas/pos/posTransactionAdjustment": typeof schemas_pos_posTransactionAdjustment;
+  "schemas/pos/posTransactionAdjustmentLine": typeof schemas_pos_posTransactionAdjustmentLine;
   "schemas/pos/posTransactionItem": typeof schemas_pos_posTransactionItem;
   "schemas/serviceOps/index": typeof schemas_serviceOps_index;
   "schemas/serviceOps/serviceAppointment": typeof schemas_serviceOps_serviceAppointment;

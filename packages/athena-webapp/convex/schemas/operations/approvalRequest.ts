@@ -18,6 +18,7 @@ export const approvalRequestSchema = v.object({
   reviewedByStaffProfileId: v.optional(v.id("staffProfile")),
   workItemId: v.optional(v.id("operationalWorkItem")),
   registerSessionId: v.optional(v.id("registerSession")),
+  posTransactionId: v.optional(v.id("posTransaction")),
   reason: v.optional(v.string()),
   notes: v.optional(v.string()),
   decisionNotes: v.optional(v.string()),

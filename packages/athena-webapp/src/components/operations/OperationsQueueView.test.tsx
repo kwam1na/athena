@@ -492,6 +492,151 @@ describe("OperationsQueueViewContent", () => {
     );
   });
 
+  it("renders item adjustment approval context and routes decisions", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        approvalRequests={[
+          {
+            _id: "approval-item-1" as Id<"approvalRequest">,
+            metadata: {
+              adjustedTotal: 15000,
+              lineItems: [
+                {
+                  adjustedQuantity: 1,
+                  originalQuantity: 2,
+                  productName: "Closure wig",
+                  productSkuId: "sku-1" as Id<"productSku">,
+                  quantityDelta: -1,
+                  sku: "CW-18",
+                },
+              ],
+              originalTotal: 20000,
+              settlementAmount: 5000,
+              settlementDirection: "refund",
+              settlementMethod: "cash",
+              totalDelta: -5000,
+              transactionId: "txn-1" as Id<"posTransaction">,
+            },
+            notes: "Customer only received one unit.",
+            requestedByStaffName: "Ato Kwamina",
+            requestType: "pos_item_adjustment",
+            status: "pending",
+            transactionSummary: {
+              completedAt: 1_714_620_000_000,
+              paymentMethod: "cash",
+              total: 20000,
+              totalPaid: 20000,
+              transactionId: "txn-1" as Id<"posTransaction">,
+              transactionNumber: "434898",
+            },
+            workItemTitle: "Review item adjustment",
+          },
+        ]}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="wigclub"
+      />,
+    );
+
+    expect(screen.getAllByText("Review item adjustment").length).toBeGreaterThan(0);
+    expect(screen.getByText("#434898")).toBeInTheDocument();
+    expect(screen.getByText("Original total")).toBeInTheDocument();
+    expect(screen.getByText("Adjusted total")).toBeInTheDocument();
+    expect(screen.getByText("Refund due")).toBeInTheDocument();
+    expect(screen.getByText("Closure wig")).toBeInTheDocument();
+    expect(screen.getByText("CW-18")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        (_, element) =>
+          element?.textContent?.replace(/\s+/g, " ").trim() ===
+          "2 original to 1 adjusted",
+      ),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: /approve adjustment/i }),
+    );
+
+    expect(baseProps.onDecideApprovalRequest).toHaveBeenCalledWith({
+      approvalRequestId: "approval-item-1",
+      decision: "approved",
+    });
+  });
+
+  it("disables approval actions while any approval decision is in flight", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        isDecidingApprovalRequestId={"approval-item-1" as Id<"approvalRequest">}
+        approvalRequests={[
+          {
+            _id: "approval-item-1" as Id<"approvalRequest">,
+            metadata: {
+              adjustedTotal: 15000,
+              lineItems: [
+                {
+                  adjustedQuantity: 1,
+                  originalQuantity: 2,
+                  productName: "Closure wig",
+                  productSkuId: "sku-1" as Id<"productSku">,
+                  quantityDelta: -1,
+                  sku: "CW-18",
+                },
+              ],
+              originalTotal: 20000,
+              settlementAmount: 5000,
+              settlementDirection: "refund",
+              settlementMethod: "cash",
+              totalDelta: -5000,
+              transactionId: "txn-1" as Id<"posTransaction">,
+            },
+            requestType: "pos_item_adjustment",
+            status: "pending",
+            workItemTitle: "Review item adjustment",
+          },
+          {
+            _id: "approval-payment-1" as Id<"approvalRequest">,
+            metadata: {
+              amount: 19500,
+              paymentMethod: "card",
+              previousPaymentMethod: "cash",
+              transactionId: "txn-2" as Id<"posTransaction">,
+            },
+            requestType: "payment_method_correction",
+            status: "pending",
+            workItemTitle: "Payment Method Correction",
+          },
+        ]}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="wigclub"
+      />,
+    );
+
+    const approveButtons = screen.getAllByRole("button", {
+      name: /approve/i,
+    });
+    for (const button of approveButtons) {
+      expect(button).toBeDisabled();
+      await user.click(button);
+    }
+
+    const rejectButtons = screen.getAllByRole("button", {
+      name: /reject/i,
+    });
+    for (const button of rejectButtons) {
+      expect(button).toBeDisabled();
+      await user.click(button);
+    }
+
+    expect(baseProps.onDecideApprovalRequest).not.toHaveBeenCalled();
+  });
+
   it("renders register closeout detail for variance review approvals", () => {
     render(
       <OperationsQueueViewContent

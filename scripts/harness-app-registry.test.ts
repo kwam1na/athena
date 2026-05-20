@@ -355,6 +355,48 @@ describe("HARNESS_APP_REGISTRY", () => {
     });
   });
 
+  it("documents POS item-adjustment reporting validation coverage in Athena harness docs", () => {
+    const athena = HARNESS_APP_REGISTRY.find(
+      (entry) => entry.appName === "athena-webapp"
+    );
+    const adjustmentScenario = athena?.validationScenarios.find(
+      (scenario) =>
+        scenario.title === "POS transaction item-adjustment reporting edits"
+    );
+
+    expect(adjustmentScenario).toMatchObject({
+      touchedPaths: [
+        "convex/pos/application/commands",
+        "convex/pos/application/corrections",
+        "convex/pos/infrastructure/repositories/transactionRepository.ts",
+        "convex/schemas/pos",
+        "convex/operations/dailyClose.ts",
+        "convex/operations/dailyOperations.ts",
+        "src/components/cash-controls/RegisterSessionView.tsx",
+        "src/components/pos/transactions/TransactionView.tsx",
+        "src/components/operations/OperationsQueueView.tsx",
+      ],
+      commands: [
+        {
+          kind: "raw",
+          command:
+            "bun run --filter '@athena/webapp' test -- convex/operations/dailyClose.test.ts convex/operations/dailyOperations.test.ts convex/pos/application/completeTransaction.test.ts convex/pos/application/correctTransactionPaymentMethod.test.ts convex/pos/application/transactionAdjustmentPlanner.test.ts convex/pos/application/adjustTransactionItems.test.ts convex/pos/application/transactionAdjustments.test.ts convex/pos/application/getTransactions.test.ts convex/pos/public/transactions.test.ts src/components/cash-controls/RegisterSessionView.test.tsx src/components/pos/transactions/TransactionView.test.tsx src/components/operations/OperationsQueueView.test.tsx",
+        },
+        { kind: "script", script: "audit:convex" },
+        { kind: "script", script: "lint:convex:changed" },
+        { kind: "script", script: "lint:frontend:changed" },
+        {
+          kind: "raw",
+          command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+        },
+        { kind: "script", script: "build" },
+      ],
+      note:
+        "Use this when completed-transaction item adjustments, adjustment approval/application, transaction detail adjustment history, daily close/operations adjusted totals, or cash-control settlement display changes. It keeps original sale totals and explicit adjusted/net settlement fields covered together.",
+      behaviorScenarios: ["athena-admin-shell-boot"],
+    });
+  });
+
   it("documents service-operations validation coverage in Athena harness docs", () => {
     const athena = HARNESS_APP_REGISTRY.find(
       (entry) => entry.appName === "athena-webapp"

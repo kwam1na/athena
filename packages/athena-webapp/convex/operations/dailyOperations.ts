@@ -1,7 +1,11 @@
 import { query, type QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
-import { buildDailyCloseSnapshotWithCtx } from "./dailyClose";
+import {
+  buildAdjustmentReportTotals,
+  buildDailyCloseSnapshotWithCtx,
+  listAppliedTransactionAdjustmentsForDay,
+} from "./dailyClose";
 import { buildDailyOpeningSnapshotWithCtx } from "./dailyOpening";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -85,13 +89,20 @@ type DailyOperationsTimelineEvent = {
 };
 
 type DailyOperationsCloseSummary = {
+  adjustedSalesTotal: number;
+  adjustmentCashSettlementTotal: number;
+  adjustmentCollectionTotal: number;
+  adjustmentNetSettlementTotal: number;
+  adjustmentRefundTotal: number;
   carriedOverCashTotal: number;
   carriedOverRegisterCount: number;
   currentDayCashTotal: number;
   currentDayCashTransactionCount: number;
   expenseTotal: number;
   expenseTransactionCount: number;
+  itemAdjustmentCount: number;
   netCashVariance: number;
+  netCashMovementTotal: number;
   registerVarianceCount: number;
   salesTotal: number;
   transactionCount: number;
@@ -178,13 +189,20 @@ function resolveRange(args: {
 
 function emptyCloseSummary(): DailyOperationsCloseSummary {
   return {
+    adjustedSalesTotal: 0,
+    adjustmentCashSettlementTotal: 0,
+    adjustmentCollectionTotal: 0,
+    adjustmentNetSettlementTotal: 0,
+    adjustmentRefundTotal: 0,
     carriedOverCashTotal: 0,
     carriedOverRegisterCount: 0,
     currentDayCashTotal: 0,
     currentDayCashTransactionCount: 0,
     expenseTotal: 0,
     expenseTransactionCount: 0,
+    itemAdjustmentCount: 0,
     netCashVariance: 0,
+    netCashMovementTotal: 0,
     registerVarianceCount: 0,
     salesTotal: 0,
     transactionCount: 0,
@@ -231,7 +249,12 @@ async function buildWeekMetricForDate(
     };
   }
 
-  const [completedTransactions, expenseTransactions, dailyClose] =
+  const [
+    completedTransactions,
+    appliedTransactionAdjustments,
+    expenseTransactions,
+    dailyClose,
+  ] =
     await Promise.all([
       ctx.db
         .query("posTransaction")
@@ -243,6 +266,11 @@ async function buildWeekMetricForDate(
             .lt("completedAt", range.endAt),
         )
         .take(MAX_OPERATIONS_QUERY_LIMIT),
+      listAppliedTransactionAdjustmentsForDay(ctx, {
+        endAt: range.endAt,
+        startAt: range.startAt,
+        storeId: args.storeId,
+      }),
       ctx.db
         .query("expenseTransaction")
         .withIndex("by_storeId_status_completedAt", (q) =>
@@ -262,13 +290,25 @@ async function buildWeekMetricForDate(
     ]);
   const currentDailyClose =
     dailyClose.find((close) => close.isCurrent) ?? dailyClose[0];
+  const currentDayCashTotal = completedTransactions.reduce(
+    (sum, transaction) => sum + transactionCashDelta(transaction),
+    0,
+  );
+  const salesTotal = completedTransactions.reduce(
+    (sum, transaction) => sum + transaction.total,
+    0,
+  );
+  const adjustmentReportTotals = buildAdjustmentReportTotals({
+    appliedAdjustments: appliedTransactionAdjustments,
+    completedTransactions,
+    currentDayCashTotal,
+    salesTotal,
+  });
 
   return {
     ...emptyCloseSummary(),
-    currentDayCashTotal: completedTransactions.reduce(
-      (sum, transaction) => sum + transactionCashDelta(transaction),
-      0,
-    ),
+    ...adjustmentReportTotals,
+    currentDayCashTotal,
     currentDayCashTransactionCount: completedTransactions.filter(
       (transaction) => transactionCashDelta(transaction) > 0,
     ).length,
@@ -283,10 +323,7 @@ async function buildWeekMetricForDate(
     isReopened: currentDailyClose?.lifecycleStatus === "reopened",
     isSelected: args.isSelected,
     operatingDate: args.operatingDate,
-    salesTotal: completedTransactions.reduce(
-      (sum, transaction) => sum + transaction.total,
-      0,
-    ),
+    salesTotal,
     transactionCount: completedTransactions.length,
   };
 }
@@ -841,7 +878,17 @@ export async function buildDailyOperationsSnapshotWithCtx(
         closeSnapshot.summary.currentDayCashTransactionCount,
       expenseTotal: closeSnapshot.summary.expenseTotal,
       expenseTransactionCount: closeSnapshot.summary.expenseTransactionCount,
+      adjustedSalesTotal: closeSnapshot.summary.adjustedSalesTotal,
+      adjustmentCashSettlementTotal:
+        closeSnapshot.summary.adjustmentCashSettlementTotal,
+      adjustmentCollectionTotal:
+        closeSnapshot.summary.adjustmentCollectionTotal,
+      adjustmentNetSettlementTotal:
+        closeSnapshot.summary.adjustmentNetSettlementTotal,
+      adjustmentRefundTotal: closeSnapshot.summary.adjustmentRefundTotal,
+      itemAdjustmentCount: closeSnapshot.summary.itemAdjustmentCount,
       netCashVariance: closeSnapshot.summary.netCashVariance,
+      netCashMovementTotal: closeSnapshot.summary.netCashMovementTotal,
       registerVarianceCount: closeSnapshot.summary.registerVarianceCount,
       salesTotal: closeSnapshot.summary.salesTotal,
       transactionCount: closeSnapshot.summary.transactionCount,

@@ -78,6 +78,19 @@ describe("correction policy", () => {
     }
   });
 
+  it("classifies item-quantity adjustments as ledger-affecting manager-approved workflows", () => {
+    expect(classifyCorrectionIntent({ intent: "item_quantity_adjustment" })).toMatchObject({
+      kind: "ok",
+      data: {
+        intent: "item_quantity_adjustment",
+        riskTier: "ledger_affecting",
+        authorization: "manager_approval",
+        directEditAllowed: false,
+        auditEventType: "pos.correction.item_quantity_adjustment",
+      },
+    });
+  });
+
   it.each([
     "item",
     "quantity",

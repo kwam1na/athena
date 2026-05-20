@@ -2,6 +2,63 @@ import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../../_generated/server";
 
 type PosTransactionReadCtx = QueryCtx | MutationCtx;
+type PosTransactionAdjustmentStatus =
+  | "pending_approval"
+  | "applied"
+  | "rejected"
+  | "cancelled"
+  | "stale";
+
+type PosTransactionAdjustmentInsert = {
+  storeId: Id<"store">;
+  transactionId: Id<"posTransaction">;
+  registerSessionId?: Id<"registerSession">;
+  requestedByUserId?: Id<"athenaUser">;
+  requestedByStaffProfileId?: Id<"staffProfile">;
+  approvalRequestId?: Id<"approvalRequest">;
+  approvalProofId?: Id<"approvalProof">;
+  paymentAllocationId?: Id<"paymentAllocation">;
+  operationalEventId?: Id<"operationalEvent">;
+  status: PosTransactionAdjustmentStatus;
+  originalSubtotal: number;
+  originalTax: number;
+  originalTotal: number;
+  correctedSubtotal: number;
+  correctedTax: number;
+  correctedTotal: number;
+  deltaTotal: number;
+  settlementDirection: "collect" | "refund" | "none";
+  settlementAmount: number;
+  settlementMethod?: string;
+  payloadFingerprint: string;
+  payloadSubject: string;
+  reason?: string;
+  currency?: string;
+  createdAt: number;
+  updatedAt: number;
+  appliedAt?: number;
+  decidedAt?: number;
+};
+
+type PosTransactionAdjustmentLineInsert = {
+  adjustmentId?: string;
+  storeId: Id<"store">;
+  transactionId: Id<"posTransaction">;
+  lineType: "existing" | "added";
+  originalTransactionItemId?: Id<"posTransactionItem">;
+  productId: Id<"product">;
+  productSkuId: Id<"productSku">;
+  productName: string;
+  productSku: string;
+  originalQuantity: number;
+  correctedQuantity: number;
+  quantityDelta: number;
+  unitPrice: number;
+  originalTotal: number;
+  correctedTotal: number;
+  inventoryDelta: number;
+  createdAt: number;
+};
 
 async function readAllQueryResults<T>(query: AsyncIterable<T>) {
   const results: T[] = [];
@@ -71,6 +128,93 @@ export async function listTransactionItems(
       .query("posTransactionItem")
       .withIndex("by_transactionId", (q) => q.eq("transactionId", transactionId)),
   );
+}
+
+export async function listTransactionAdjustments(
+  ctx: PosTransactionReadCtx,
+  transactionId: Id<"posTransaction">,
+) {
+  return (ctx.db as any)
+    .query("posTransactionAdjustment")
+    .withIndex("by_transactionId", (q: any) =>
+      q.eq("transactionId", transactionId),
+    )
+    .order("desc")
+    .collect();
+}
+
+export async function listTransactionAdjustmentLines(
+  ctx: PosTransactionReadCtx,
+  adjustmentId: string,
+) {
+  return (ctx.db as any)
+    .query("posTransactionAdjustmentLine")
+    .withIndex("by_adjustmentId", (q: any) =>
+      q.eq("adjustmentId", adjustmentId),
+    )
+    .collect();
+}
+
+export async function getActiveTransactionAdjustment(
+  ctx: PosTransactionReadCtx,
+  args: {
+    storeId: Id<"store">;
+    transactionId: Id<"posTransaction">;
+  },
+) {
+  return (ctx.db as any)
+    .query("posTransactionAdjustment")
+    .withIndex("by_storeId_transactionId_status", (q: any) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("transactionId", args.transactionId)
+        .eq("status", "pending_approval"),
+    )
+    .first();
+}
+
+export async function createTransactionAdjustmentForTransaction(
+  ctx: MutationCtx,
+  args: {
+    storeId: Id<"store">;
+    transactionId: Id<"posTransaction">;
+    adjustment: PosTransactionAdjustmentInsert;
+    lines: PosTransactionAdjustmentLineInsert[];
+  },
+) {
+  const transaction = await ctx.db.get("posTransaction", args.transactionId);
+
+  if (!transaction) {
+    throw new Error("POS transaction not found.");
+  }
+
+  if (transaction.storeId !== args.storeId) {
+    throw new Error("POS transaction does not belong to this store.");
+  }
+
+  if (transaction.status !== "completed") {
+    throw new Error("Only completed POS transactions can be adjusted.");
+  }
+
+  const adjustmentId = (await (ctx.db as any).insert(
+    "posTransactionAdjustment",
+    args.adjustment,
+  )) as string;
+  const lineIds: string[] = [];
+
+  for (const line of args.lines) {
+    lineIds.push(
+      (await (ctx.db as any).insert("posTransactionAdjustmentLine", {
+        ...line,
+        adjustmentId,
+      })) as string,
+    );
+  }
+
+  return {
+    adjustmentId,
+    lineIds,
+  };
 }
 
 export async function listSessionItems(

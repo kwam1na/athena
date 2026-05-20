@@ -7,6 +7,7 @@ import type { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { resolveStockAdjustmentApprovalDecisionWithCtx } from "../stockOps/adjustments";
 import { resolvePaymentMethodCorrectionApprovalDecisionWithCtx } from "../pos/application/commands/correctTransaction";
+import { resolveTransactionItemAdjustmentApprovalDecisionWithCtx } from "../pos/application/commands/adjustTransactionItems";
 import {
   requireOrganizationMemberRoleWithCtx,
   requireAuthenticatedAthenaUserWithCtx,
@@ -153,6 +154,13 @@ export async function decideApprovalRequestWithCtx(
     await resolvePaymentMethodCorrectionApprovalDecisionWithCtx(ctx, args);
   }
 
+  if (
+    approvalRequest.requestType === "pos_item_adjustment" &&
+    approvalRequest.subjectType === "pos_transaction_item_adjustment"
+  ) {
+    await resolveTransactionItemAdjustmentApprovalDecisionWithCtx(ctx, args);
+  }
+
   await ctx.db.patch("approvalRequest", args.approvalRequestId, {
     status: args.decision,
     reviewedByUserId: args.reviewedByUserId,
@@ -248,6 +256,7 @@ function mapDecideApprovalRequestError(
     message === "Inventory adjustment approval request not found." ||
     message === "Stock adjustment batch not found for this approval request." ||
     message === "Payment method approval request not found." ||
+    message === "Item adjustment approval request not found." ||
     message === "Transaction not found."
   ) {
     return userError({
@@ -267,6 +276,11 @@ function mapDecideApprovalRequestError(
     message ===
       "Payment method approval request is missing correction details." ||
     message === "Payment method approval request does not match this store." ||
+    message === "Item adjustment approval request is missing adjustment details." ||
+    message === "Item adjustment approval request does not match this store." ||
+    message === "Item adjustment approval request does not match this payload." ||
+    message === "Item adjustment payload is stale for this transaction." ||
+    message === "Item adjustment cannot reduce inventory below zero." ||
     message === "Only single-payment transactions can be corrected." ||
     message === "Only same-amount payment method corrections are supported." ||
     message === "Payment allocation must be a same-amount single payment."

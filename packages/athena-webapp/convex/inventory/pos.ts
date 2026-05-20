@@ -13,6 +13,7 @@ export {
   createTransactionFromSession,
   correctTransactionCustomer,
   correctTransactionPaymentMethod,
+  adjustTransactionItems,
   getRecentTransactionsWithCustomers,
   getTodaySummary,
 } from "../pos/public/transactions";

@@ -31,14 +31,21 @@ beforeEach(() => {
 });
 
 function mockCorrectionHistoryDb(overrides?: {
+  approvalRequests?: unknown[];
   get?: ReturnType<typeof vi.fn>;
   correctionHistory?: unknown[];
 }) {
   return {
     get: overrides?.get ?? vi.fn().mockResolvedValue(null),
-    query: vi.fn(() => ({
+    query: vi.fn((tableName: string) => ({
       withIndex: vi.fn(() => ({
-        collect: vi.fn().mockResolvedValue(overrides?.correctionHistory ?? []),
+        collect: vi
+          .fn()
+          .mockResolvedValue(
+            tableName === "approvalRequest"
+              ? (overrides?.approvalRequests ?? [])
+              : (overrides?.correctionHistory ?? []),
+          ),
       })),
     })),
   };
@@ -468,6 +475,165 @@ describe("getTransactionById", () => {
         registerNumber: "2",
         registerSessionId: "register-session-1",
         registerSessionStatus: "closing",
+      }),
+    );
+  });
+
+  it("returns explicit no-adjustment fields for legacy transaction detail", async () => {
+    vi.mocked(getPosTransactionById).mockResolvedValue({
+      _id: "txn-7" as Id<"posTransaction">,
+      storeId: "store-1" as Id<"store">,
+      transactionNumber: "POS-777777",
+      subtotal: 1000,
+      tax: 0,
+      total: 1000,
+      paymentMethod: "cash",
+      payments: [{ method: "cash", amount: 1000, timestamp: 1 }],
+      totalPaid: 1000,
+      status: "completed",
+      completedAt: 100,
+    } as never);
+    vi.mocked(getCashierById).mockResolvedValue(null as never);
+    vi.mocked(getPosSessionById).mockResolvedValue(null as never);
+    vi.mocked(listTransactionItems).mockResolvedValue([] as never);
+
+    const result = await getTransactionById(
+      { db: mockCorrectionHistoryDb() } as never,
+      {
+        transactionId: "txn-7" as Id<"posTransaction">,
+      },
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        originalTotal: 1000,
+        effectiveNetTotal: 1000,
+        totalAppliedAdjustmentDelta: 0,
+        adjustmentSummary: {
+          appliedCount: 0,
+          effectiveNetTotal: 1000,
+          hasAdjustments: false,
+          originalTotal: 1000,
+          pendingCount: 0,
+          totalAppliedAdjustmentDelta: 0,
+        },
+        adjustments: [],
+      }),
+    );
+  });
+
+  it("returns pending and applied adjustment summaries without changing original totals", async () => {
+    vi.mocked(getPosTransactionById).mockResolvedValue({
+      _id: "txn-8" as Id<"posTransaction">,
+      storeId: "store-1" as Id<"store">,
+      transactionNumber: "POS-888888",
+      subtotal: 2000,
+      tax: 0,
+      total: 2000,
+      paymentMethod: "cash",
+      payments: [{ method: "cash", amount: 2000, timestamp: 1 }],
+      totalPaid: 2000,
+      status: "completed",
+      completedAt: 100,
+    } as never);
+    vi.mocked(getCashierById).mockResolvedValue(null as never);
+    vi.mocked(getPosSessionById).mockResolvedValue(null as never);
+    vi.mocked(listTransactionItems).mockResolvedValue([] as never);
+
+    const result = await getTransactionById(
+      {
+        db: mockCorrectionHistoryDb({
+          approvalRequests: [
+            {
+              _id: "approval-1",
+              requestType: "pos_item_adjustment",
+              status: "pending",
+              reason: "Customer received one unit.",
+              createdAt: 300,
+              metadata: {
+                originalTotal: 1500,
+                adjustedTotal: 1000,
+                settlementAmount: 500,
+                settlementDirection: "refund",
+                settlementMethod: "cash",
+                totalDelta: -500,
+                transactionId: "txn-8",
+                lineItems: [
+                  {
+                    productName: "Closure wig",
+                    sku: "CW-18",
+                    originalQuantity: 2,
+                    adjustedQuantity: 1,
+                    quantityDelta: -1,
+                  },
+                ],
+              },
+            },
+          ],
+          correctionHistory: [
+            {
+              _id: "event-1",
+              eventType: "pos_transaction_item_adjustment_applied",
+              message: "Item adjustment applied.",
+              reason: "Wrong quantity recorded.",
+              metadata: {
+                originalTotal: 2000,
+                adjustedTotal: 1500,
+                settlementAmount: 500,
+                settlementDirection: "refund",
+                totalDelta: -500,
+                lineItems: [
+                  {
+                    productName: "Closure wig",
+                    productSku: "CW-18",
+                    originalQuantity: 2,
+                    adjustedQuantity: 1,
+                    quantityDelta: -1,
+                  },
+                ],
+              },
+              createdAt: 200,
+            },
+          ],
+        }),
+      } as never,
+      {
+        transactionId: "txn-8" as Id<"posTransaction">,
+      },
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        total: 2000,
+        originalTotal: 2000,
+        effectiveNetTotal: 1500,
+        totalAppliedAdjustmentDelta: -500,
+        adjustmentSummary: expect.objectContaining({
+          appliedCount: 1,
+          pendingCount: 1,
+          hasAdjustments: true,
+        }),
+        adjustments: [
+          expect.objectContaining({
+            _id: "approval-1",
+            status: "pending_approval",
+            settlementDirection: "refund",
+            settlementMethod: "cash",
+            lineItems: [
+              expect.objectContaining({
+                productName: "Closure wig",
+                productSku: "CW-18",
+                originalQuantity: 2,
+                adjustedQuantity: 1,
+              }),
+            ],
+          }),
+          expect.objectContaining({
+            _id: "event-1",
+            status: "applied",
+            settlementAmount: 500,
+          }),
+        ],
       }),
     );
   });

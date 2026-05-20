@@ -156,6 +156,49 @@
       ]
     },
     {
+      "name": "pos-transaction-item-adjustment-reporting-edits",
+      "pathPrefixes": [
+        "packages/athena-webapp/convex/pos/application/commands",
+        "packages/athena-webapp/convex/pos/application/corrections",
+        "packages/athena-webapp/convex/pos/infrastructure/repositories/transactionRepository.ts",
+        "packages/athena-webapp/convex/schemas/pos",
+        "packages/athena-webapp/convex/operations/dailyClose.ts",
+        "packages/athena-webapp/convex/operations/dailyOperations.ts",
+        "packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx",
+        "packages/athena-webapp/src/components/pos/transactions/TransactionView.tsx",
+        "packages/athena-webapp/src/components/operations/OperationsQueueView.tsx"
+      ],
+      "commands": [
+        {
+          "kind": "raw",
+          "command": "bun run --filter '@athena/webapp' test -- convex/operations/dailyClose.test.ts convex/operations/dailyOperations.test.ts convex/pos/application/completeTransaction.test.ts convex/pos/application/correctTransactionPaymentMethod.test.ts convex/pos/application/transactionAdjustmentPlanner.test.ts convex/pos/application/adjustTransactionItems.test.ts convex/pos/application/transactionAdjustments.test.ts convex/pos/application/getTransactions.test.ts convex/pos/public/transactions.test.ts src/components/cash-controls/RegisterSessionView.test.tsx src/components/pos/transactions/TransactionView.test.tsx src/components/operations/OperationsQueueView.test.tsx"
+        },
+        {
+          "kind": "script",
+          "script": "audit:convex"
+        },
+        {
+          "kind": "script",
+          "script": "lint:convex:changed"
+        },
+        {
+          "kind": "script",
+          "script": "lint:frontend:changed"
+        },
+        {
+          "kind": "raw",
+          "command": "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json"
+        },
+        {
+          "kind": "script",
+          "script": "build"
+        }
+      ],
+      "behaviorScenarios": [
+        "athena-admin-shell-boot"
+      ]
+    },
+    {
       "name": "service-operations-intake-catalog-appointments-and-cases",
       "pathPrefixes": [
         "packages/athena-webapp/convex/serviceOps",

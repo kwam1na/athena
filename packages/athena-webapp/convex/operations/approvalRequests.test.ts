@@ -7,6 +7,7 @@ import {
   decideApprovalRequestAsAuthenticatedUserWithCtx,
   decideApprovalRequestWithCtx,
 } from "./approvalRequests";
+import { resolveTransactionItemAdjustmentApprovalDecisionWithCtx } from "../pos/application/commands/adjustTransactionItems";
 
 const mockedAuthServer = vi.hoisted(() => ({
   getAuthUserId: vi.fn(),
@@ -14,6 +15,10 @@ const mockedAuthServer = vi.hoisted(() => ({
 
 vi.mock("@convex-dev/auth/server", () => ({
   getAuthUserId: mockedAuthServer.getAuthUserId,
+}));
+
+vi.mock("../pos/application/commands/adjustTransactionItems", () => ({
+  resolveTransactionItemAdjustmentApprovalDecisionWithCtx: vi.fn(),
 }));
 
 function createApprovalRequestMutationCtx(args: {
@@ -318,6 +323,70 @@ describe("approval request helpers", () => {
     expect(tables.stockAdjustmentBatch.get("batch-1")).toMatchObject({
       status: "applied",
     });
+  });
+
+  it("routes POS item adjustment approvals through the async resolver", async () => {
+    const { ctx, tables } = createApprovalRequestMutationCtx({
+      authUserId: "auth-user-1",
+      role: "full_admin",
+    });
+    tables.approvalRequest.set("approval-item-1", {
+      _id: "approval-item-1",
+      organizationId: "org-1",
+      requestType: "pos_item_adjustment",
+      status: "pending",
+      storeId: "store-1",
+      subjectId: "pos_transaction_item_adjustment:txn-1:fingerprint",
+      subjectType: "pos_transaction_item_adjustment",
+    });
+
+    await decideApprovalRequestWithCtx(ctx, {
+      approvalRequestId: "approval-item-1" as Id<"approvalRequest">,
+      decision: "approved",
+      reviewedByStaffProfileId: "staff-manager-1" as Id<"staffProfile">,
+      reviewedByUserId: "manager-1" as Id<"athenaUser">,
+    });
+
+    expect(
+      resolveTransactionItemAdjustmentApprovalDecisionWithCtx,
+    ).toHaveBeenCalledWith(ctx, {
+      approvalRequestId: "approval-item-1",
+      decision: "approved",
+      reviewedByStaffProfileId: "staff-manager-1",
+      reviewedByUserId: "manager-1",
+    });
+    expect(tables.approvalRequest.get("approval-item-1")).toMatchObject({
+      status: "approved",
+    });
+  });
+
+  it("does not route already-decided POS item adjustment approvals to the async resolver", async () => {
+    const { ctx, tables } = createApprovalRequestMutationCtx({
+      authUserId: "auth-user-1",
+      role: "full_admin",
+    });
+    tables.approvalRequest.set("approval-item-1", {
+      _id: "approval-item-1",
+      organizationId: "org-1",
+      requestType: "pos_item_adjustment",
+      status: "approved",
+      storeId: "store-1",
+      subjectId: "pos_transaction_item_adjustment:txn-1:fingerprint",
+      subjectType: "pos_transaction_item_adjustment",
+    });
+
+    await expect(
+      decideApprovalRequestWithCtx(ctx, {
+        approvalRequestId: "approval-item-1" as Id<"approvalRequest">,
+        decision: "approved",
+        reviewedByStaffProfileId: "staff-manager-1" as Id<"staffProfile">,
+        reviewedByUserId: "manager-1" as Id<"athenaUser">,
+      }),
+    ).rejects.toThrow("Approval request has already been decided.");
+
+    expect(
+      resolveTransactionItemAdjustmentApprovalDecisionWithCtx,
+    ).not.toHaveBeenCalled();
   });
 
   it("rejects reviewers who are not full admins", async () => {

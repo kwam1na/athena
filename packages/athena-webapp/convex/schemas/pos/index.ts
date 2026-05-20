@@ -1,5 +1,7 @@
 export * from "./posTransaction";
 export * from "./posTransactionItem";
+export * from "./posTransactionAdjustment";
+export * from "./posTransactionAdjustmentLine";
 export * from "./posSessionItem";
 export * from "./customer";
 export * from "./posTerminal";
