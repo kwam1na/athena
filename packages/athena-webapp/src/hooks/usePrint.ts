@@ -1,5 +1,10 @@
 import { useCallback } from "react";
 
+const RECEIPT_PAGE_WIDTH_MM = 80;
+const RECEIPT_MIN_PAGE_HEIGHT_MM = 120;
+const RECEIPT_PAGE_HEIGHT_BUFFER_MM = 8;
+const CSS_PIXELS_PER_MM = 96 / 25.4;
+
 const receiptPrintStyles = `
             * {
               margin: 0;
@@ -140,13 +145,13 @@ const receiptPrintStyles = `
             }
             
             @page {
-              size: 80mm auto;
+              size: ${RECEIPT_PAGE_WIDTH_MM}mm auto;
               margin: 0;
             }
              
             /* Fallback for browsers that don't support custom page sizes */
             @page :first {
-              size: 80mm auto;
+              size: ${RECEIPT_PAGE_WIDTH_MM}mm auto;
               margin: 0;
             }
             
@@ -241,6 +246,51 @@ const receiptPrintStyles = `
             }
 `;
 
+function getReceiptPageHeightMm(receiptElement: HTMLElement) {
+  const measuredHeightPx = Math.max(
+    receiptElement.scrollHeight,
+    receiptElement.getBoundingClientRect().height
+  );
+
+  if (!Number.isFinite(measuredHeightPx) || measuredHeightPx <= 0) {
+    return RECEIPT_MIN_PAGE_HEIGHT_MM;
+  }
+
+  return Math.max(
+    RECEIPT_MIN_PAGE_HEIGHT_MM,
+    Math.ceil(measuredHeightPx / CSS_PIXELS_PER_MM + RECEIPT_PAGE_HEIGHT_BUFFER_MM)
+  );
+}
+
+function setContinuousReceiptPageSize(printWindow: Window) {
+  const receiptElement =
+    printWindow.document.querySelector<HTMLElement>(".receipt");
+
+  if (!receiptElement) return;
+
+  const pageHeightMm = getReceiptPageHeightMm(receiptElement);
+  const existingStyle = printWindow.document.querySelector(
+    "style[data-receipt-page-size]"
+  );
+  existingStyle?.remove();
+
+  const pageSizeStyle = printWindow.document.createElement("style");
+  pageSizeStyle.setAttribute("data-receipt-page-size", "continuous");
+  pageSizeStyle.textContent = `
+@page {
+  size: ${RECEIPT_PAGE_WIDTH_MM}mm ${pageHeightMm}mm;
+  margin: 0;
+}
+
+@page :first {
+  size: ${RECEIPT_PAGE_WIDTH_MM}mm ${pageHeightMm}mm;
+  margin: 0;
+}
+`;
+
+  printWindow.document.head.appendChild(pageSizeStyle);
+}
+
 export const usePrint = () => {
   const printReceipt = useCallback((receiptContent: string) => {
     // Create a new window for printing with specific dimensions for receipt
@@ -306,6 +356,7 @@ ${receiptPrintStyles}
       // Wait for content to load, then print
       printWindow.onload = () => {
         try {
+          setContinuousReceiptPageSize(printWindow);
           printWindow.print();
 
           // Close the window after a brief delay to allow print dialog to process

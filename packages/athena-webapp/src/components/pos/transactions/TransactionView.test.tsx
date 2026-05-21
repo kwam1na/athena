@@ -1426,11 +1426,20 @@ describe("TransactionView", () => {
             {
               adjustedQuantity: 1,
               originalQuantity: 2,
-              productName: "Closure wig",
+              productName: "closure wig",
               productSku: "CW-18",
               quantityDelta: -1,
               totalDelta: -1000,
               unitPrice: 1000,
+            },
+            {
+              adjustedQuantity: 1,
+              originalQuantity: 1,
+              productName: "Unchanged wig",
+              productSku: "UW-18",
+              quantityDelta: 0,
+              totalDelta: 0,
+              unitPrice: 2000,
             },
           ],
           originalTotal: 2000,
@@ -1449,7 +1458,9 @@ describe("TransactionView", () => {
     expect(screen.getByText("Item adjustment")).toBeInTheDocument();
     expect(screen.getByText("Item adjustment pending approval")).toBeInTheDocument();
     expect(screen.getByText("Item adjustment applied")).toBeInTheDocument();
+    expect(screen.getByText("Closure Wig")).toBeInTheDocument();
     expect(screen.getByText(/2 original to 1 adjusted/)).toBeInTheDocument();
+    expect(screen.queryByText("Unchanged wig")).not.toBeInTheDocument();
     expect(screen.getAllByText("Refund due").length).toBeGreaterThan(0);
     expect(screen.getByTestId("cart-items")).toHaveTextContent(
       "Closure wig qty 1 total 1000",

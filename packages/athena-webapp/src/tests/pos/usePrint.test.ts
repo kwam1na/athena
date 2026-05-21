@@ -8,6 +8,11 @@ const mockPrintWindow = {
     write: vi.fn(),
     close: vi.fn(),
     readyState: "complete",
+    querySelector: vi.fn(),
+    createElement: vi.fn(),
+    head: {
+      appendChild: vi.fn(),
+    },
   },
   print: vi.fn(),
   close: vi.fn(),
@@ -29,6 +34,9 @@ describe("usePrint Hook", () => {
     vi.useRealTimers();
     mockPrintWindow.document.write.mockReset();
     mockPrintWindow.document.close.mockReset();
+    mockPrintWindow.document.querySelector.mockReset();
+    mockPrintWindow.document.createElement.mockReset();
+    mockPrintWindow.document.head.appendChild.mockReset();
     mockPrintWindow.print.mockReset();
     mockPrintWindow.close.mockReset();
     mockPrintWindow.addEventListener.mockReset();
@@ -41,6 +49,11 @@ describe("usePrint Hook", () => {
     mockPrintWindow.closed = false;
     mockPrintWindow.onload = null;
     mockPrintWindow.document.readyState = "complete";
+    mockPrintWindow.document.querySelector.mockReturnValue(null);
+    mockPrintWindow.document.createElement.mockImplementation(() => ({
+      setAttribute: vi.fn(),
+      textContent: "",
+    }));
   });
 
   afterEach(() => {
@@ -359,6 +372,47 @@ describe("usePrint Hook", () => {
       expect(htmlContent).toContain("80mm");
       expect(htmlContent).toContain("DejaVu Sans");
       expect(htmlContent).toContain("@page");
+    });
+
+    it("should set a continuous receipt page height before printing", () => {
+      const styleElement = {
+        setAttribute: vi.fn(),
+        textContent: "",
+      };
+      const receiptElement = {
+        scrollHeight: 1800,
+        getBoundingClientRect: () => ({ height: 1600 }),
+      };
+
+      mockPrintWindow.document.querySelector.mockImplementation(
+        (selector: string) => {
+          if (selector === ".receipt") return receiptElement;
+          if (selector === "style[data-receipt-page-size]") return null;
+          return null;
+        }
+      );
+      mockPrintWindow.document.createElement.mockReturnValue(styleElement);
+
+      const { result } = renderHook(() => usePrint());
+
+      act(() => {
+        result.current.printReceipt("<div>Test</div>");
+      });
+
+      act(() => {
+        mockPrintWindow.onload?.();
+      });
+
+      expect(styleElement.setAttribute).toHaveBeenCalledWith(
+        "data-receipt-page-size",
+        "continuous"
+      );
+      expect(styleElement.textContent).toContain("@page");
+      expect(styleElement.textContent).toContain("size: 80mm 485mm");
+      expect(mockPrintWindow.document.head.appendChild).toHaveBeenCalledWith(
+        styleElement
+      );
+      expect(mockPrintWindow.print).toHaveBeenCalled();
     });
 
     it("should force receipt text to print dark and legibly", () => {
