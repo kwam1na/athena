@@ -20,7 +20,7 @@ import { FadeIn } from "../../common/FadeIn";
 import { ComposedPageHeader } from "../../common/PageHeader";
 import { api } from "~/convex/_generated/api";
 import { Badge } from "../../ui/badge";
-import { getRelativeTime } from "~/src/lib/utils";
+import { capitalizeWords, getRelativeTime } from "~/src/lib/utils";
 import { PosPaymentMethod } from "~/src/lib/pos/domain";
 import { OrderSummary } from "../OrderSummary";
 import type { ReceiptDeliveryHistoryEntry } from "../receipt/PosReceiptShareControl";
@@ -105,6 +105,30 @@ const PAYMENT_METHOD_OPTIONS = [
 ] satisfies Array<{ label: string; value: PosPaymentMethod }>;
 
 const ghsCurrencyFormatter = currencyFormatter("GHS");
+
+function isAdjustedLineItem(line: {
+  adjustedQuantity?: number;
+  originalQuantity?: number;
+  quantityDelta?: number;
+  totalDelta?: number;
+}) {
+  if (typeof line.quantityDelta === "number") {
+    return line.quantityDelta !== 0;
+  }
+
+  if (
+    typeof line.originalQuantity === "number" &&
+    typeof line.adjustedQuantity === "number"
+  ) {
+    return line.originalQuantity !== line.adjustedQuantity;
+  }
+
+  if (typeof line.totalDelta === "number") {
+    return line.totalDelta !== 0;
+  }
+
+  return true;
+}
 
 export function formatCorrectionEventType(eventType: string) {
   return eventType
@@ -1666,81 +1690,89 @@ export function TransactionView() {
                     ) : null}
                   </dl>
                   <div className="space-y-3">
-                    {transaction.adjustments?.map((adjustment) => (
-                      <div
-                        className="rounded-lg border border-border bg-muted/20 p-4"
-                        key={adjustment._id}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-medium text-foreground">
-                              {adjustment.status === "pending_approval"
-                                ? "Item adjustment pending approval"
-                                : "Item adjustment applied"}
-                            </p>
-                            {adjustment.actorStaffName ? (
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                Requested by {adjustment.actorStaffName}
+                    {transaction.adjustments?.map((adjustment) => {
+                      const adjustedLineItems =
+                        adjustment.lineItems.filter(isAdjustedLineItem);
+
+                      return (
+                        <div
+                          className="rounded-lg border border-border bg-muted/20 p-4"
+                          key={adjustment._id}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-medium text-foreground">
+                                {adjustment.status === "pending_approval"
+                                  ? "Item adjustment pending approval"
+                                  : "Item adjustment applied"}
                               </p>
-                            ) : null}
-                          </div>
-                          <Badge variant="outline">
-                            {adjustment.settlementDirection === "refund"
-                              ? "Refund due"
-                              : adjustment.settlementDirection === "collection" ||
-                                  adjustment.settlementDirection === "collect"
-                                ? "Balance due"
-                                : "No payment movement"}
-                          </Badge>
-                        </div>
-                        <p className="mt-3 text-sm text-muted-foreground">
-                          {adjustment.settlementDirection === "none"
-                            ? "No payment movement"
-                            : formatStoredAmount(
-                                ghsCurrencyFormatter,
-                                adjustment.settlementAmount,
-                              )}
-                        </p>
-                        {adjustment.lineItems.length > 0 ? (
-                          <div className="mt-4 space-y-2 border-t border-border/70 pt-3">
-                            <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                              Items adjusted
-                            </p>
-                            <div className="space-y-2">
-                              {adjustment.lineItems.map((line) => (
-                                <div
-                                  className="grid gap-1 rounded-md bg-background px-3 py-2 text-sm"
-                                  key={`${adjustment._id}-${line.productName}-${line.productSku ?? "sku"}`}
-                                >
-                                  <div className="flex items-start justify-between gap-3">
-                                    <span className="font-medium text-foreground">
-                                      {line.productName}
-                                    </span>
-                                    {typeof line.totalDelta === "number" ? (
-                                      <span className="font-numeric text-foreground">
-                                        {line.totalDelta > 0 ? "+" : ""}
-                                        {formatStoredAmount(
-                                          ghsCurrencyFormatter,
-                                          line.totalDelta,
-                                        )}
-                                      </span>
-                                    ) : null}
-                                  </div>
-                                  <p className="text-xs text-muted-foreground">
-                                    {line.productSku ? `${line.productSku} · ` : ""}
-                                    {typeof line.originalQuantity ===
-                                      "number" &&
-                                    typeof line.adjustedQuantity === "number"
-                                      ? `${line.originalQuantity} original to ${line.adjustedQuantity} adjusted`
-                                      : "Quantity adjusted"}
-                                  </p>
-                                </div>
-                              ))}
+                              {adjustment.actorStaffName ? (
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  Requested by {adjustment.actorStaffName}
+                                </p>
+                              ) : null}
                             </div>
+                            <Badge variant="outline">
+                              {adjustment.settlementDirection === "refund"
+                                ? "Refund due"
+                                : adjustment.settlementDirection ===
+                                      "collection" ||
+                                    adjustment.settlementDirection === "collect"
+                                  ? "Balance due"
+                                  : "No payment movement"}
+                            </Badge>
                           </div>
-                        ) : null}
-                      </div>
-                    ))}
+                          <p className="mt-3 text-sm text-muted-foreground">
+                            {adjustment.settlementDirection === "none"
+                              ? "No payment movement"
+                              : formatStoredAmount(
+                                  ghsCurrencyFormatter,
+                                  adjustment.settlementAmount,
+                                )}
+                          </p>
+                          {adjustedLineItems.length > 0 ? (
+                            <div className="mt-4 space-y-2 border-t border-border/70 pt-3">
+                              <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                                Items adjusted
+                              </p>
+                              <div className="space-y-2">
+                                {adjustedLineItems.map((line) => (
+                                  <div
+                                    className="grid gap-1 rounded-md bg-background px-3 py-2 text-sm"
+                                    key={`${adjustment._id}-${line.productName}-${line.productSku ?? "sku"}`}
+                                  >
+                                    <div className="flex items-start justify-between gap-3">
+                                      <span className="font-medium text-foreground">
+                                        {capitalizeWords(line.productName)}
+                                      </span>
+                                      {typeof line.totalDelta === "number" ? (
+                                        <span className="font-numeric text-foreground">
+                                          {line.totalDelta > 0 ? "+" : ""}
+                                          {formatStoredAmount(
+                                            ghsCurrencyFormatter,
+                                            line.totalDelta,
+                                          )}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                      {line.productSku
+                                        ? `${line.productSku} · `
+                                        : ""}
+                                      {typeof line.originalQuantity ===
+                                        "number" &&
+                                      typeof line.adjustedQuantity === "number"
+                                        ? `${line.originalQuantity} original to ${line.adjustedQuantity} adjusted`
+                                        : "Quantity adjusted"}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
                   </div>
                 </section>
               ) : null}
