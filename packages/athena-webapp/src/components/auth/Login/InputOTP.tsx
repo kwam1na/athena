@@ -16,7 +16,11 @@ import {
 import { useAuthActions } from "@convex-dev/auth/react";
 import { ATHENA_EMAIL_OTP_PROVIDER_ID } from "../../../../shared/auth";
 import { LoadingButton } from "~/src/components/ui/loading-button";
-import { PENDING_ATHENA_AUTH_SYNC_KEY } from "~/src/lib/constants";
+import {
+  ATHENA_AUTH_SYNC_FAILED_EVENT,
+  ATHENA_PENDING_AUTH_SYNC_EVENT,
+  PENDING_ATHENA_AUTH_SYNC_KEY,
+} from "~/src/lib/constants";
 import { useForm } from "react-hook-form";
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
@@ -67,6 +71,7 @@ export function InputOTPForm({
   });
 
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isAuthHandoffPending, setIsAuthHandoffPending] = useState(false);
   const [isRequestingNewCode, setIsRequestingNewCode] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [requestDelaySeconds, setRequestDelaySeconds] = useState(
@@ -74,6 +79,23 @@ export function InputOTPForm({
   );
   const signInInFlightRef = useRef(false);
   const { signIn } = useAuthActions();
+
+  useEffect(() => {
+    const handleAuthSyncFailed = () => {
+      signInInFlightRef.current = false;
+      setIsSigningIn(false);
+      setIsAuthHandoffPending(false);
+    };
+
+    window.addEventListener(ATHENA_AUTH_SYNC_FAILED_EVENT, handleAuthSyncFailed);
+
+    return () => {
+      window.removeEventListener(
+        ATHENA_AUTH_SYNC_FAILED_EVENT,
+        handleAuthSyncFailed,
+      );
+    };
+  }, []);
 
   useEffect(() => {
     setRequestDelaySeconds(requestNewCodeDelaySeconds);
@@ -121,11 +143,14 @@ export function InputOTPForm({
         setErrorMessage("Invalid code entered");
         signInInFlightRef.current = false;
         setIsSigningIn(false);
+        setIsAuthHandoffPending(false);
         return;
       }
 
       sessionStorage.setItem(PENDING_ATHENA_AUTH_SYNC_KEY, "1");
-      window.dispatchEvent(new Event("athena:pending-auth-sync"));
+      setIsAuthHandoffPending(true);
+      setIsSigningIn(false);
+      window.dispatchEvent(new Event(ATHENA_PENDING_AUTH_SYNC_EVENT));
       return;
     } catch (e) {
       const message = e instanceof Error ? e.message : "Could not verify code";
@@ -137,6 +162,7 @@ export function InputOTPForm({
       );
       signInInFlightRef.current = false;
       setIsSigningIn(false);
+      setIsAuthHandoffPending(false);
     }
   }
 
@@ -223,6 +249,7 @@ export function InputOTPForm({
 
           <LoadingButton
             isLoading={isSigningIn}
+            disabled={isSigningIn || isAuthHandoffPending}
             type="submit"
             className="group relative z-10 h-control-standard w-fit px-layout-lg shadow-[0_16px_34px_-22px_hsl(var(--signal)/0.72)]"
           >

@@ -80,7 +80,7 @@ describe("LoginLayout", () => {
       .mockResolvedValueOnce(
         userError({
           code: "authentication_failed",
-          message: "Sign in again to continue",
+          message: "Sign in again to continue.",
           retryable: true,
         })
       )
