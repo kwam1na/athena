@@ -255,6 +255,38 @@ function getCloseoutCloudRegisterSessionId(
     : (session?._id as Id<"registerSession"> | undefined);
 }
 
+function isKnownCloudRegisterSessionBlockingLocalProjection(
+  cloudRegisterSession:
+    | { _id?: Id<"registerSession"> | string; status?: string }
+    | null
+    | undefined,
+  localRegisterSession:
+    | {
+        cloudRegisterSessionId?: string;
+        localRegisterSessionId?: string;
+      }
+    | null
+    | undefined,
+) {
+  if (
+    !cloudRegisterSession ||
+    !localRegisterSession ||
+    isPosUsableRegisterSessionStatus(cloudRegisterSession.status)
+  ) {
+    return false;
+  }
+
+  const cloudRegisterSessionId = cloudRegisterSession._id?.toString();
+  if (!cloudRegisterSessionId) {
+    return false;
+  }
+
+  return (
+    localRegisterSession.cloudRegisterSessionId === cloudRegisterSessionId ||
+    localRegisterSession.localRegisterSessionId === cloudRegisterSessionId
+  );
+}
+
 function trimOptional(value: string): string | undefined {
   const trimmedValue = value.trim();
   return trimmedValue.length > 0 ? trimmedValue : undefined;
@@ -1050,10 +1082,24 @@ export function useRegisterViewModel(): RegisterViewModel {
   const latestLocalCloseoutIsSynced =
     latestLocalRegisterLifecycleEvent?.type === "register.closeout_started" &&
     latestLocalRegisterLifecycleEvent.sync.status === "synced";
+  const projectedLocalActiveSale = localRegisterReadModel?.activeSale ?? null;
+  const projectedLocalActiveSaleStaffProfileId =
+    projectedLocalActiveSale?.staffProfileId ?? null;
+  const isProjectedLocalActiveSaleOwnedByCurrentStaff = Boolean(
+    projectedLocalActiveSale &&
+      staffProfileId &&
+      projectedLocalActiveSaleStaffProfileId === staffProfileId,
+  );
+  const cloudRegisterSessionBlocksLocalProjection =
+    isKnownCloudRegisterSessionBlockingLocalProjection(
+      registerState?.activeRegisterSession,
+      localRegisterReadModel?.activeRegisterSession,
+    );
   const projectedLocalRegisterSession =
     localRegisterReadModel?.activeRegisterSession &&
     activeStoreId &&
     terminal?._id &&
+    !cloudRegisterSessionBlocksLocalProjection &&
     isPosUsableRegisterSessionStatus(
       localRegisterReadModel.activeRegisterSession.status,
     )
@@ -1128,16 +1174,9 @@ export function useRegisterViewModel(): RegisterViewModel {
   const cloudRegisterSessionId = activeRegisterSessionId?.toString();
   const localEventRegisterSessionId =
     locallyOperableRegisterSession?.localRegisterSessionId ??
+    projectedLocalActiveSale?.localRegisterSessionId ??
     projectedLocalRegisterSession?.localRegisterSessionId ??
     cloudRegisterSessionId;
-  const projectedLocalActiveSale = localRegisterReadModel?.activeSale ?? null;
-  const projectedLocalActiveSaleStaffProfileId =
-    projectedLocalActiveSale?.staffProfileId ?? null;
-  const isProjectedLocalActiveSaleOwnedByCurrentStaff = Boolean(
-    projectedLocalActiveSale &&
-      staffProfileId &&
-      projectedLocalActiveSaleStaffProfileId === staffProfileId,
-  );
   const isProjectedLocalActiveSaleLockedToAnotherStaff = Boolean(
     projectedLocalActiveSale &&
       (!staffProfileId || projectedLocalActiveSaleStaffProfileId !== staffProfileId),
@@ -1692,6 +1731,11 @@ export function useRegisterViewModel(): RegisterViewModel {
     (hasActiveCartDraft || hasActiveCustomerDetails || payments.length > 0),
   );
   const hasActivePosSession = Boolean(operableActiveSession?._id);
+  const hasCloudBlockedRecoverableLocalSale = Boolean(
+    cloudRegisterSessionBlocksLocalProjection &&
+      projectedLocalActiveSale &&
+      isProjectedLocalActiveSaleOwnedByCurrentStaff,
+  );
   const activeSessionNeedsRegisterBinding = Boolean(
     isCloudOperableSession(operableActiveSession) &&
       !operableActiveSession.registerSessionId,
@@ -1734,7 +1778,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       hasCloseoutBlockedDrawerState ||
       hasMissingDrawerRecoveryState ||
       activeSessionHasBlockedRegisterBinding),
-  );
+  ) && !hasCloudBlockedRecoverableLocalSale;
   const closeoutBlockedGateIsRecovery = Boolean(
     hasCloseoutBlockedDrawerState &&
     (hasMissingDrawerRecoveryState || activeSessionHasBlockedRegisterBinding),
@@ -4542,6 +4586,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         !staffProfileId ||
         isProjectedLocalActiveSaleBlockingCurrentStaff ||
         shouldShowDrawerGate ||
+        cloudRegisterSessionBlocksLocalProjection ||
         activeSessionHasBlockedRegisterBinding ||
         isOpeningDrawer,
       showProductLookup: showProductEntry,

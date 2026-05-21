@@ -320,6 +320,8 @@ export async function getTransactionById(
     transaction.registerNumber ??
     session?.registerNumber ??
     registerSession?.registerNumber;
+  const terminalId =
+    transaction.terminalId ?? session?.terminalId ?? registerSession?.terminalId;
   const items = await listTransactionItems(ctx, transaction._id);
   const sessionTraceId = session?.workflowTraceId ?? null;
   const customerProfileId =
@@ -416,6 +418,7 @@ export async function getTransactionById(
     registerNumber,
     registerSessionId,
     registerSessionStatus: registerSession?.status,
+    terminalId,
     paymentMethod: transaction.paymentMethod,
     payments: transaction.payments,
     totalPaid: transaction.totalPaid ?? transaction.total,

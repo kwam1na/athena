@@ -1685,7 +1685,7 @@ describe("staff credential operations", () => {
 
   it("returns a precondition_failed result when the staff member is active on another terminal", async () => {
     const now = Date.now();
-    const { ctx } = createStaffCredentialsMutationCtx({
+    const { ctx, tables } = createStaffCredentialsMutationCtx({
       credentials: [
         {
           _id: "credential-1",
@@ -1773,10 +1773,15 @@ describe("staff credential operations", () => {
     ).resolves.toEqual({
       kind: "ok",
       data: expect.objectContaining({
-        staffProfileId: "staff_profile_1",
         activeRoles: ["cashier"],
+        posLocalStaffProof: {
+          expiresAt: expect.any(Number),
+          token: expect.any(String),
+        },
+        staffProfileId: "staff_profile_1",
       }),
     });
+    expect(tables.posLocalStaffProof.size).toBe(1);
 
     await expect(
       authenticateStaffCredentialForTerminalWithCtx(ctx, {

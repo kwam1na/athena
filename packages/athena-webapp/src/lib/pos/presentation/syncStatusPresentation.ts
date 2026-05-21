@@ -8,7 +8,10 @@ export type PosSyncStatusKind =
 export type PosSyncStatusTone = "success" | "neutral" | "warning" | "danger";
 
 export type PosReconciliationItem = {
+  createdAt?: number | null;
   id?: string;
+  localEventId?: string | null;
+  sequence?: number | null;
   status?: string | null;
   summary?: string | null;
   type?: string | null;

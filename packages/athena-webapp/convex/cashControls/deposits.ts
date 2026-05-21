@@ -11,6 +11,9 @@ import {
   listCompletedTransactions,
   listTransactionItems,
 } from "../pos/infrastructure/repositories/transactionRepository";
+import { createConvexLocalSyncRepository } from "../pos/infrastructure/repositories/localSyncRepository";
+import { parseStoredLocalSyncEvent } from "../pos/application/sync/ingestLocalEvents";
+import { projectLocalSyncEvent } from "../pos/application/sync/projectLocalEvents";
 import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
@@ -23,6 +26,7 @@ const CASH_DEPOSIT_ALLOCATION_TYPE = "cash_deposit";
 const CASH_DEPOSIT_SUBJECT_TYPE = "register_cash_deposit";
 const RECENT_DEPOSIT_LIMIT = 10;
 const SESSION_LIMIT = 100;
+const STAFF_ROLE_LOOKUP_LIMIT = 20;
 const SYNC_CONFLICT_LIMIT = 500;
 const TIMELINE_LIMIT = 200;
 
@@ -52,6 +56,22 @@ const registerSessionDepositResultValidator = v.union(
       action: v.union(v.literal("duplicate"), v.literal("recorded")),
       deposit: v.union(v.null(), v.any()),
       registerSession: v.union(v.null(), v.any()),
+    }),
+  }),
+  v.object({
+    kind: v.literal("user_error"),
+    error: userErrorValidator,
+  }),
+);
+
+const registerSessionSyncReviewResultValidator = v.union(
+  v.object({
+    kind: v.literal("ok"),
+    data: v.object({
+      action: v.union(v.literal("already_resolved"), v.literal("resolved")),
+      projectedCount: v.optional(v.number()),
+      registerSession: v.union(v.null(), v.any()),
+      resolvedCount: v.number(),
     }),
   }),
   v.object({
@@ -101,8 +121,17 @@ type CashControlRegisterSession = Pick<
 
 type CashControlSyncConflict = Pick<
   Doc<"posLocalSyncConflict">,
-  "_id" | "conflictType" | "status" | "summary"
->;
+  | "_id"
+  | "conflictType"
+  | "createdAt"
+  | "localEventId"
+  | "sequence"
+  | "status"
+  | "summary"
+> &
+  Partial<
+    Pick<Doc<"posLocalSyncConflict">, "localRegisterSessionId" | "terminalId">
+  >;
 
 type CashControlTransaction = Pick<
   Doc<"posTransaction">,
@@ -122,6 +151,13 @@ type RecordRegisterSessionDepositResult = {
   action: "duplicate" | "recorded";
   deposit: Doc<"paymentAllocation"> | null;
   registerSession: Doc<"registerSession"> | null;
+};
+
+type ResolveRegisterSessionSyncReviewResult = {
+  action: "already_resolved" | "resolved";
+  projectedCount?: number;
+  registerSession: Doc<"registerSession"> | null;
+  resolvedCount: number;
 };
 
 async function requireCashControlsStoreAccess(
@@ -167,6 +203,40 @@ async function resolveDepositActorStaffProfileId(
   }
 
   return staffProfile._id;
+}
+
+async function staffProfileCanResolveSyncReview(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    organizationId: Id<"organization">;
+    staffProfileId: Id<"staffProfile">;
+    storeId: Id<"store">;
+  },
+) {
+  const staffProfile = await ctx.db.get("staffProfile", args.staffProfileId);
+  if (
+    !staffProfile ||
+    staffProfile.status !== "active" ||
+    staffProfile.organizationId !== args.organizationId ||
+    staffProfile.storeId !== args.storeId
+  ) {
+    return false;
+  }
+
+  const assignments = await ctx.db
+    .query("staffRoleAssignment")
+    .withIndex("by_staffProfileId", (q) =>
+      q.eq("staffProfileId", args.staffProfileId),
+    )
+    .take(STAFF_ROLE_LOOKUP_LIMIT);
+
+  return assignments.some(
+    (assignment) =>
+      assignment.role === "manager" &&
+      assignment.status === "active" &&
+      assignment.organizationId === args.organizationId &&
+      assignment.storeId === args.storeId,
+  );
 }
 
 function trimOptional(value?: string | null) {
@@ -283,7 +353,10 @@ function buildRegisterSessionSummary(args: {
         ? {
             status: "needs_review",
             reconciliationItems: syncConflicts.map((conflict) => ({
+              createdAt: conflict.createdAt,
               id: conflict._id,
+              localEventId: conflict.localEventId,
+              sequence: conflict.sequence,
               status: conflict.status,
               summary: conflict.summary,
               type: conflict.conflictType,
@@ -1029,6 +1102,201 @@ export const recordRegisterSessionDeposit = mutation({
       action: "recorded" as const,
       deposit,
       registerSession: updatedRegisterSession,
+    });
+  },
+});
+
+export const resolveRegisterSessionSyncReview = mutation({
+  args: {
+    actorStaffProfileId: v.id("staffProfile"),
+    registerSessionId: v.id("registerSession"),
+    storeId: v.id("store"),
+  },
+  returns: registerSessionSyncReviewResultValidator,
+  handler: async (
+    ctx,
+    args,
+  ): Promise<CommandResult<ResolveRegisterSessionSyncReviewResult>> => {
+    const { athenaUser, store } = await requireCashControlsStoreAccess(
+      ctx,
+      args.storeId,
+    );
+    const registerSession = await ctx.db.get(
+      "registerSession",
+      args.registerSessionId,
+    );
+    if (!registerSession || registerSession.storeId !== args.storeId) {
+      return userError({
+        code: "not_found",
+        message: "Register session not found for this store.",
+      });
+    }
+
+    const canResolveReview = await staffProfileCanResolveSyncReview(ctx, {
+      organizationId: store.organizationId,
+      staffProfileId: args.actorStaffProfileId,
+      storeId: args.storeId,
+    });
+    if (!canResolveReview) {
+      return userError({
+        code: "authorization_failed",
+        message: "Only managers can resolve synced register reviews.",
+      });
+    }
+
+    const conflictsBySessionId =
+      await listOpenLocalSyncConflictsByRegisterSession(ctx, args.storeId);
+    const conflicts = conflictsBySessionId.get(args.registerSessionId) ?? [];
+    if (conflicts.length === 0) {
+      return ok({
+        action: "already_resolved",
+        registerSession,
+        projectedCount: 0,
+        resolvedCount: 0,
+      });
+    }
+
+    const resolvedAt = Date.now();
+    const localSyncRepository = createConvexLocalSyncRepository(ctx);
+    const projectedTransactionIds: string[] = [];
+
+    for (const conflict of conflicts) {
+      const terminalId = conflict.terminalId ?? registerSession.terminalId;
+      if (!terminalId) {
+        return userError({
+          code: "precondition_failed",
+          message:
+            "This register review can no longer be applied because the terminal link was not found.",
+        });
+      }
+      const syncEvent = await localSyncRepository.findEvent({
+        storeId: args.storeId,
+        terminalId,
+        localEventId: conflict.localEventId,
+      });
+      if (!syncEvent) {
+        return userError({
+          code: "precondition_failed",
+          message:
+            "This register review can no longer be applied because the synced activity was not found.",
+        });
+      }
+
+      const shouldApplyReviewedSale =
+        syncEvent.eventType === "sale_completed" &&
+        (!conflict.localRegisterSessionId ||
+          syncEvent.localRegisterSessionId === conflict.localRegisterSessionId) &&
+        conflict.conflictType === "permission" &&
+        conflict.summary === "Register was not open before this sale synced.";
+
+      if (!shouldApplyReviewedSale) {
+        continue;
+      }
+
+      if (syncEvent.status === "projected") {
+        continue;
+      }
+
+      if (syncEvent.status !== "conflicted") {
+        return userError({
+          code: "precondition_failed",
+          message:
+            "This register review is not ready to apply. Refresh the register session and try again.",
+        });
+      }
+
+      const parsedEvent = parseStoredLocalSyncEvent(
+        localSyncRepository,
+        syncEvent,
+      );
+      if (!parsedEvent.ok || parsedEvent.event.eventType !== "sale_completed") {
+        return userError({
+          code: "precondition_failed",
+          message:
+            "This register review could not be applied because the synced sale details are incomplete.",
+        });
+      }
+
+      const projection = await projectLocalSyncEvent(localSyncRepository, {
+        storeId: args.storeId,
+        terminalId,
+        event: parsedEvent.event,
+        syncEventId: syncEvent._id,
+        submittedByUserId: athenaUser._id,
+        now: resolvedAt,
+        options: {
+          allowClosedRegisterSaleProjection: true,
+          trustStoredStaffProof: true,
+        },
+      });
+      if (projection.status !== "projected") {
+        return userError({
+          code: "precondition_failed",
+          message:
+            "This register review still needs attention before the synced sales can be applied.",
+          metadata: {
+            conflictSummaries: projection.conflicts.map(
+              (projectionConflict) => projectionConflict.summary,
+            ),
+          },
+        });
+      }
+
+      await localSyncRepository.patchEvent(syncEvent._id, {
+        status: "projected",
+        projectedAt: resolvedAt,
+      });
+      projectedTransactionIds.push(
+        ...projection.mappings
+          .filter(
+            (mapping) =>
+              mapping.localIdKind === "transaction" &&
+              mapping.cloudTable === "posTransaction",
+          )
+          .map((mapping) => mapping.cloudId),
+      );
+    }
+
+    await Promise.all(
+      conflicts.map((conflict) =>
+        ctx.db.patch("posLocalSyncConflict", conflict._id, {
+          resolvedAt,
+          resolvedByStaffProfileId: args.actorStaffProfileId,
+          status: "resolved",
+        }),
+      ),
+    );
+
+    await recordOperationalEventWithCtx(ctx, {
+      actorStaffProfileId: args.actorStaffProfileId,
+      actorUserId: athenaUser._id,
+      eventType: "register_session_sync_review_resolved",
+      message:
+        projectedTransactionIds.length === 0
+          ? conflicts.length === 1
+            ? "Resolved synced register review."
+            : `Resolved ${conflicts.length} synced register reviews.`
+          : projectedTransactionIds.length === 1
+            ? "Applied reviewed synced register sale."
+            : `Applied ${projectedTransactionIds.length} reviewed synced register sales.`,
+      metadata: {
+        conflictIds: conflicts.map((conflict) => conflict._id),
+        conflictTypes: conflicts.map((conflict) => conflict.conflictType),
+        projectedTransactionIds,
+      },
+      organizationId: store.organizationId,
+      registerSessionId: args.registerSessionId,
+      storeId: args.storeId,
+      subjectId: args.registerSessionId,
+      subjectLabel: registerSession.registerNumber,
+      subjectType: "register_session",
+    });
+
+    return ok({
+      action: "resolved",
+      registerSession: await ctx.db.get("registerSession", args.registerSessionId),
+      projectedCount: projectedTransactionIds.length,
+      resolvedCount: conflicts.length,
     });
   },
 });

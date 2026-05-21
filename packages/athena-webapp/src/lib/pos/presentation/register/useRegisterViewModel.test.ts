@@ -1985,6 +1985,201 @@ describe("useRegisterViewModel", () => {
     expect(mockStartSession).not.toHaveBeenCalled();
   });
 
+  it("does not operate from a stale local drawer when the cloud register session is closed", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: {
+        _id: "staff-1",
+        firstName: "Ama",
+        lastName: "Kusi",
+        activeRoles: ["manager"],
+      },
+      activeRegisterSession: {
+        _id: "drawer-1",
+        status: "closed",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        openingFloat: 5_000,
+        expectedCash: 5_000,
+        openedAt: Date.now(),
+      },
+      activeSession: null,
+      activeSessionConflict: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+    mockListLocalEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        buildLocalEvent({
+          sequence: 1,
+          type: "register.opened",
+          localRegisterSessionId: "local-register-1",
+          payload: {
+            localRegisterSessionId: "local-register-1",
+            openingFloat: 5_000,
+            expectedCash: 5_000,
+            status: "open",
+          },
+          sync: { status: "synced", uploaded: true },
+        }),
+      ],
+    });
+    mockListLocalCloudMappings.mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          entity: "registerSession",
+          localId: "local-register-1",
+          cloudId: "drawer-1",
+          mappedAt: 1_100,
+        },
+      ],
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult(),
+      );
+    });
+    await waitForLocalRegisterEffects(result);
+
+    expect(result.current.drawerGate).not.toBeNull();
+    expect(result.current.drawerGate?.mode).toBe("initialSetup");
+    expect(result.current.productEntry.disabled).toBe(true);
+    expect(
+      mockAppendLocalEvent.mock.calls.some(
+        ([event]) => event.type === "session.started",
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps an active local sale recoverable when its mapped cloud register session is closed", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: {
+        _id: "staff-1",
+        firstName: "Ama",
+        lastName: "Kusi",
+        activeRoles: ["manager"],
+      },
+      activeRegisterSession: {
+        _id: "drawer-1",
+        status: "closed",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        openingFloat: 5_000,
+        expectedCash: 5_000,
+        openedAt: Date.now(),
+      },
+      activeSession: null,
+      activeSessionConflict: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+    mockListLocalEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        buildLocalEvent({
+          sequence: 1,
+          type: "register.opened",
+          localRegisterSessionId: "local-register-1",
+          payload: {
+            localRegisterSessionId: "local-register-1",
+            openingFloat: 5_000,
+            expectedCash: 5_000,
+            status: "open",
+          },
+          sync: { status: "synced", uploaded: true },
+        }),
+        buildLocalEvent({
+          sequence: 2,
+          type: "session.started",
+          localRegisterSessionId: "local-register-1",
+          localPosSessionId: "local-sale-1",
+          payload: {
+            localPosSessionId: "local-sale-1",
+            status: "active",
+          },
+          sync: { status: "synced", uploaded: true },
+        }),
+        buildLocalEvent({
+          sequence: 3,
+          type: "cart.item_added",
+          localRegisterSessionId: "local-register-1",
+          localPosSessionId: "local-sale-1",
+          payload: {
+            localItemId: "local-item-1",
+            productId: "product-1",
+            productSkuId: "sku-1",
+            productSku: "SKU-1",
+            productName: "Body Wave",
+            price: 7_500,
+            quantity: 2,
+          },
+          sync: { status: "synced", uploaded: true },
+        }),
+        buildLocalEvent({
+          sequence: 4,
+          type: "session.payments_updated",
+          localRegisterSessionId: "local-register-1",
+          localPosSessionId: "local-sale-1",
+          payload: {
+            localPosSessionId: "local-sale-1",
+            payments: [{ method: "cash", amount: 15_000, timestamp: 1_004 }],
+            stage: "paymentAdded",
+          },
+          sync: { status: "synced", uploaded: true },
+        }),
+      ],
+    });
+    mockListLocalCloudMappings.mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          entity: "registerSession",
+          localId: "local-register-1",
+          cloudId: "drawer-1",
+          mappedAt: 1_100,
+        },
+      ],
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult(),
+      );
+    });
+    await waitForLocalRegisterEffects(result);
+
+    expect(result.current.drawerGate).toBeNull();
+    expect(result.current.productEntry.disabled).toBe(true);
+    expect(result.current.checkout.cartItems).toHaveLength(1);
+    expect(result.current.checkout.payments).toEqual([
+      expect.objectContaining({ method: "cash", amount: 15_000 }),
+    ]);
+
+    await act(async () => {
+      await result.current.checkout.onCompleteTransaction();
+    });
+
+    expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "transaction.completed",
+        localRegisterSessionId: "local-register-1",
+        localPosSessionId: "local-sale-1",
+      }),
+    );
+  });
+
   it("uses offline authenticated manager roles for drawer access", async () => {
     mockRegisterState = {
       phase: "readyToStart",

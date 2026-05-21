@@ -570,6 +570,104 @@ describe("adjustTransactionItems", () => {
     expect(tables.approvalRequest.size).toBe(1);
   });
 
+  it("marks pending adjustment rows rejected when an async approval is rejected", async () => {
+    const { ctx, tables } = createFakeCtx();
+    tables.approvalRequest.set("approval-1", {
+      _id: "approval-1",
+      metadata: {
+        payloadFingerprint: "pending-fingerprint",
+        transactionId: "txn-1",
+      },
+      requestType: "pos_item_adjustment",
+      status: "pending",
+      storeId: "store-1",
+      subjectId: "pos_transaction_item_adjustment:txn-1:pending-fingerprint",
+      subjectType: "pos_transaction_item_adjustment",
+    });
+    tables.posTransactionAdjustment.set("adjustment-1", {
+      _id: "adjustment-1",
+      approvalRequestId: "approval-1",
+      payloadFingerprint: "pending-fingerprint",
+      status: "pending_approval",
+      storeId: "store-1",
+      transactionId: "txn-1",
+    });
+
+    await resolveTransactionItemAdjustmentApprovalDecisionWithCtx(ctx as never, {
+      approvalRequestId: "approval-1" as Id<"approvalRequest">,
+      decision: "rejected",
+      decisionNotes: "Not enough evidence",
+      reviewedByStaffProfileId: "manager-1" as Id<"staffProfile">,
+      reviewedByUserId: "manager-user-1" as Id<"athenaUser">,
+    });
+
+    expect(tables.posTransactionAdjustment.get("adjustment-1")).toMatchObject({
+      decidedAt: expect.any(Number),
+      status: "rejected",
+      updatedAt: expect.any(Number),
+    });
+    expect(recordOperationalEventWithCtx).toHaveBeenCalledWith(
+      ctx as never,
+      expect.objectContaining({
+        eventType: "pos_transaction_item_adjustment_approval_rejected",
+      }),
+    );
+
+    tables.approvalRequest.set("approval-1", {
+      ...(tables.approvalRequest.get("approval-1") ?? {}),
+      status: "rejected",
+    });
+
+    const next = await adjustTransactionItems(ctx as never, {
+      actorStaffProfileId: "cashier-1" as Id<"staffProfile">,
+      payload: basePayload(),
+      reason: "Try another adjustment after rejection",
+      transactionId: "txn-1" as Id<"posTransaction">,
+    });
+
+    expect(next).toMatchObject({ action: "approval_required" });
+  });
+
+  it("does not block new submissions on pending adjustment rows whose approval was rejected", async () => {
+    const { ctx, tables } = createFakeCtx();
+    tables.approvalRequest.set("approval-1", {
+      _id: "approval-1",
+      decidedAt: 123,
+      metadata: {
+        payloadFingerprint: "rejected-fingerprint",
+        transactionId: "txn-1",
+      },
+      requestType: "pos_item_adjustment",
+      status: "rejected",
+      storeId: "store-1",
+      subjectId: "pos_transaction_item_adjustment:txn-1:rejected-fingerprint",
+      subjectType: "pos_transaction_item_adjustment",
+    });
+    tables.posTransactionAdjustment.set("adjustment-1", {
+      _id: "adjustment-1",
+      approvalRequestId: "approval-1",
+      payloadFingerprint: "rejected-fingerprint",
+      status: "pending_approval",
+      storeId: "store-1",
+      transactionId: "txn-1",
+    });
+
+    const result = await adjustTransactionItems(ctx as never, {
+      actorStaffProfileId: "cashier-1" as Id<"staffProfile">,
+      payload: basePayload(),
+      reason: "Try another adjustment after rejection",
+      transactionId: "txn-1" as Id<"posTransaction">,
+    });
+
+    expect(result).toMatchObject({ action: "approval_required" });
+    expect(tables.posTransactionAdjustment.get("adjustment-1")).toMatchObject({
+      decidedAt: 123,
+      status: "rejected",
+      updatedAt: expect.any(Number),
+    });
+    expect(tables.approvalRequest.size).toBe(2);
+  });
+
   it("skips payment allocation when corrected total is unchanged", async () => {
     const { ctx } = createFakeCtx();
     vi.mocked(consumeCommandApprovalProofWithCtx).mockResolvedValue({

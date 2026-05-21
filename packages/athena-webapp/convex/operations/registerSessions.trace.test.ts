@@ -415,7 +415,7 @@ describe("register session workflow trace handlers", () => {
     );
   });
 
-  it("does not return a closed register session for POS register-state gate display", async () => {
+  it("returns a closed register session for POS register-state stale-local detection", async () => {
     const ctx = createMutationCtx({
       sessions: [
         buildRegisterSession({
@@ -434,7 +434,9 @@ describe("register session workflow trace handlers", () => {
       },
     );
 
-    expect(session).toBeNull();
+    expect(session).toEqual(
+      expect.objectContaining({ _id: "session-1", status: "closed" }),
+    );
   });
 
   it("does not return POS register-state session without terminal identity", async () => {

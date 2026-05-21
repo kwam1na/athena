@@ -574,10 +574,15 @@ export const getRegisterSessionForRegisterState = internalQuery({
 
       if (
         latestByRegisterNumber &&
-        isPosUsableRegisterSessionStatus(latestByRegisterNumber.status) &&
         latestByRegisterNumber.terminalId === args.terminalId
       ) {
-        return latestByRegisterNumber;
+        if (isPosUsableRegisterSessionStatus(latestByRegisterNumber.status)) {
+          return latestByRegisterNumber;
+        }
+
+        if (latestByRegisterNumber.status === "closed") {
+          return latestByRegisterNumber;
+        }
       }
     }
 
@@ -587,11 +592,19 @@ export const getRegisterSessionForRegisterState = internalQuery({
       .order("desc")
       .first();
 
-    if (!latestByTerminal || !isRegisterSessionConflictBlockingStatus(latestByTerminal.status)) {
+    if (!latestByTerminal) {
       return null;
     }
 
-    return latestByTerminal;
+    if (isRegisterSessionConflictBlockingStatus(latestByTerminal.status)) {
+      return latestByTerminal;
+    }
+
+    if (latestByTerminal.status === "closed" && !registerNumber) {
+      return latestByTerminal;
+    }
+
+    return null;
   },
 });
 

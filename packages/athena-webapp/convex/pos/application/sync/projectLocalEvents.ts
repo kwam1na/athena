@@ -28,6 +28,10 @@ type ProjectEventArgs = {
   syncEventId: string;
   submittedByUserId?: Id<"athenaUser">;
   now: number;
+  options?: {
+    allowClosedRegisterSaleProjection?: boolean;
+    trustStoredStaffProof?: boolean;
+  };
 };
 
 type SaleCompletedArgs = ProjectEventArgsFor<"sale_completed">;
@@ -208,13 +212,20 @@ async function validateProjectionPermission(
         now: args.now,
       })
     : false;
+  const hasTrustedStoredStaffProof =
+    args.options?.trustStoredStaffProof === true &&
+    Boolean(staff) &&
+    staff?.storeId === args.storeId &&
+    staff?.status === "active" &&
+    hasActivePosRole &&
+    hasTerminalAccess;
   const hasTerminalStaffProof =
     Boolean(staff) &&
     staff?.storeId === args.storeId &&
     staff?.status === "active" &&
     hasActivePosRole &&
     hasTerminalAccess &&
-    hasValidStaffProof;
+    (hasValidStaffProof || hasTrustedStoredStaffProof);
   const requiresManagerProof =
     args.event.eventType === "register_reopened" &&
     allowedRoles.length === 1 &&
@@ -233,13 +244,20 @@ async function validateProjectionPermission(
           allowedRoles: ["cashier", "manager"],
         })
       : false;
+  const hasTrustedStoredCashierOrManagerProof =
+    args.options?.trustStoredStaffProof === true &&
+    Boolean(staff) &&
+    staff?.storeId === args.storeId &&
+    staff?.status === "active" &&
+    hasActiveCashierOrManagerRole &&
+    hasTerminalAccess;
   const hasTerminalCashierOrManagerProof =
     Boolean(staff) &&
     staff?.storeId === args.storeId &&
     staff?.status === "active" &&
     hasActiveCashierOrManagerRole &&
     hasTerminalAccess &&
-    hasValidStaffProof;
+    (hasValidStaffProof || hasTrustedStoredCashierOrManagerProof);
   if (
     hasTerminalCashierOrManagerProof &&
     args.event.eventType === "register_opened" &&
@@ -620,6 +638,22 @@ async function resolveSaleRegisterAndSession(
   }
 
   if (!isPosUsableRegisterSession(registerSession)) {
+    if (
+      args.options?.allowClosedRegisterSaleProjection === true &&
+      registerSession.status === "closed"
+    ) {
+      return {
+        registerSession,
+        existingPosSession: null,
+        existingPosSessionMapping: null,
+        resolvedRegisterNumber:
+          payload.registerNumber ??
+          registerSession.registerNumber ??
+          terminal?.registerNumber ??
+          "",
+      };
+    }
+
     const conflict = await createConflict(repository, args, {
       conflictType: "permission",
       summary: "Register was not open before this sale synced.",
@@ -1151,9 +1185,16 @@ async function persistPaymentAllocations(
   }
 
   if (payments.expectedCashDelta > 0) {
+    const expectedCash =
+      session.registerSession.expectedCash + payments.expectedCashDelta;
+    const variance =
+      session.registerSession.status === "closed" &&
+      typeof session.registerSession.countedCash === "number"
+        ? session.registerSession.countedCash - expectedCash
+        : undefined;
     await repository.patchRegisterSession(session.registerSession._id, {
-      expectedCash:
-        session.registerSession.expectedCash + payments.expectedCashDelta,
+      expectedCash,
+      ...(variance === undefined ? {} : { variance }),
     });
   }
 

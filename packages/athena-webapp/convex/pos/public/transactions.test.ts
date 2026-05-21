@@ -90,7 +90,7 @@ describe("POS public transaction query validators", () => {
     });
   });
 
-  it("exposes session trace ids for transaction details", () => {
+  it("exposes session trace and terminal ids for transaction details", () => {
     const validator = parseValidator(exportReturns(getTransactionById));
 
     expect(validator.type).toBe("union");
@@ -99,6 +99,7 @@ describe("POS public transaction query validators", () => {
       type: "object",
       value: {
         sessionTraceId: expect.any(Object),
+        terminalId: expect.any(Object),
       },
     });
   });
