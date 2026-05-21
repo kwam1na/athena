@@ -736,45 +736,44 @@ export async function authenticateStaffCredentialForTerminalWithCtx(
     return authentication;
   }
 
-  if (args.allowActiveSessionsOnOtherTerminals) {
-    return authentication;
-  }
-
-  // A staff member can only have a small number of live sessions, so reading them in full is safe.
-  // eslint-disable-next-line @convex-dev/no-collect-in-query
-  const activeSessions = await ctx.db
-    .query("posSession")
-    .withIndex("by_staffProfileId", (q) =>
-      q.eq("staffProfileId", authentication.data.staffProfileId),
-    )
-    .collect();
-  const activeExpenseSessions = await ctx.db
-    .query("expenseSession")
-    .withIndex("by_staffProfileId_and_status", (q) =>
-      q
-        .eq("staffProfileId", authentication.data.staffProfileId)
-        .eq("status", "active"),
-    )
-    .take(ACTIVE_STAFF_SESSION_LOOKUP_LIMIT);
-  const now = Date.now();
-  const activeSessionsOnOtherTerminals = activeSessions.filter(
-    (session) =>
-      session.status === "active" &&
-      session.expiresAt > now &&
-      session.terminalId !== args.terminalId,
-  );
-  const activeExpenseSessionsOnOtherTerminals = activeExpenseSessions.filter(
-    (session) =>
-      session.expiresAt > now && session.terminalId !== args.terminalId,
-  );
-
-  if (
-    activeSessionsOnOtherTerminals.length > 0 ||
-    activeExpenseSessionsOnOtherTerminals.length > 0
-  ) {
-    return staffPreconditionFailedResult(
-      "This staff member has an active session on another terminal.",
+  if (!args.allowActiveSessionsOnOtherTerminals) {
+    // A staff member can only have a small number of live sessions, so reading them in full is safe.
+    // eslint-disable-next-line @convex-dev/no-collect-in-query
+    const activeSessions = await ctx.db
+      .query("posSession")
+      .withIndex("by_staffProfileId", (q) =>
+        q.eq("staffProfileId", authentication.data.staffProfileId),
+      )
+      .collect();
+    const activeExpenseSessions = await ctx.db
+      .query("expenseSession")
+      .withIndex("by_staffProfileId_and_status", (q) =>
+        q
+          .eq("staffProfileId", authentication.data.staffProfileId)
+          .eq("status", "active"),
+      )
+      .take(ACTIVE_STAFF_SESSION_LOOKUP_LIMIT);
+    const now = Date.now();
+    const activeSessionsOnOtherTerminals = activeSessions.filter(
+      (session) =>
+        session.status === "active" &&
+        session.expiresAt > now &&
+        session.terminalId !== args.terminalId,
     );
+    const activeExpenseSessionsOnOtherTerminals =
+      activeExpenseSessions.filter(
+        (session) =>
+          session.expiresAt > now && session.terminalId !== args.terminalId,
+      );
+
+    if (
+      activeSessionsOnOtherTerminals.length > 0 ||
+      activeExpenseSessionsOnOtherTerminals.length > 0
+    ) {
+      return staffPreconditionFailedResult(
+        "This staff member has an active session on another terminal.",
+      );
+    }
   }
 
   return withPosLocalStaffProof(ctx, authentication, args);

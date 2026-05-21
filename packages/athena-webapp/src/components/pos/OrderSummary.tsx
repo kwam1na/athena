@@ -97,6 +97,13 @@ interface OrderSummaryProps {
       phone?: string;
     };
   } | null;
+  completedAdjustmentSummary?: {
+    originalTotal: number;
+    totalDelta: number;
+    settlementAmount: number;
+    settlementDirection: string;
+    settlementMethod?: string;
+  } | null;
   presentation?: "workspace" | "rail";
   cashierName?: string;
   receiptMessaging?: ReceiptMessagingConfig;
@@ -135,6 +142,7 @@ export function OrderSummary({
   readOnly = false,
   completedOrderNumber,
   completedTransactionData,
+  completedAdjustmentSummary,
   presentation = "workspace",
   cashierName,
   receiptMessaging,
@@ -208,6 +216,16 @@ export function OrderSummary({
   }, []);
   const showCompletedPaymentBreakdown =
     Boolean(completedTransactionData) && completedPaymentBreakdown.length > 1;
+  const hasCompletedAdjustment = Boolean(completedAdjustmentSummary);
+  const completedSummaryTitle = hasCompletedAdjustment
+    ? "Adjusted sale recorded"
+    : "Sale recorded";
+  const completedSummaryEyebrow = hasCompletedAdjustment
+    ? "Adjusted transaction summary"
+    : "Transaction summary";
+  const completedTotalLabel = hasCompletedAdjustment
+    ? "Adjusted total"
+    : "Total";
   const isEditingPaymentAmount = editingPaymentId !== null;
   const cartItemsCount = effectiveCartItems.reduce(
     (sum, item) => sum + item.quantity,
@@ -333,6 +351,32 @@ export function OrderSummary({
   const balanceDueLabelClass = isPaymentAmountOverpaying
     ? "text-success"
     : "text-transaction-signal";
+
+  const completedAdjustmentSettlementLabel =
+    completedAdjustmentSummary?.settlementDirection === "refund"
+      ? "Refund due"
+      : completedAdjustmentSummary?.settlementDirection === "collection" ||
+          completedAdjustmentSummary?.settlementDirection === "collect"
+        ? "Balance due"
+        : "Adjustment settlement";
+  const completedAdjustmentSettlementValue =
+    completedAdjustmentSummary?.settlementDirection === "none"
+      ? "No payment movement"
+      : completedAdjustmentSummary
+        ? [
+            formatStoredAmount(
+              formatter,
+              completedAdjustmentSummary.settlementAmount,
+            ),
+            completedAdjustmentSummary.settlementMethod
+              ? `via ${formatPaymentMethod(
+                  completedAdjustmentSummary.settlementMethod,
+                )}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" ")
+        : null;
 
   useEffect(() => {
     if (selectedPaymentMethod === null) {
@@ -523,10 +567,10 @@ export function OrderSummary({
             </div>
             <div className="min-w-0 flex-1 space-y-1">
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-                Transaction summary
+                {completedSummaryEyebrow}
               </p>
               <h2 className="text-xl font-semibold tracking-tight text-foreground">
-                Sale recorded
+                {completedSummaryTitle}
               </h2>
             </div>
           </div>
@@ -555,10 +599,49 @@ export function OrderSummary({
           </div>
           {completedTransactionData && (
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Amount paid</span>
+              <span className="text-muted-foreground">
+                {hasCompletedAdjustment
+                  ? "Original amount paid"
+                  : "Amount paid"}
+              </span>
               <span className="font-medium text-foreground">
                 {formatStoredAmount(formatter, completedTransactionAmountPaid)}
               </span>
+            </div>
+          )}
+          {completedAdjustmentSummary && (
+            <div className="space-y-4 border-y border-border/70 py-4 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-muted-foreground">
+                  Original sale total
+                </span>
+                <span className="font-medium text-foreground">
+                  {formatStoredAmount(
+                    formatter,
+                    completedAdjustmentSummary.originalTotal,
+                  )}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-muted-foreground">Item adjustment</span>
+                <span className="font-medium text-foreground">
+                  {completedAdjustmentSummary.totalDelta > 0 ? "+" : ""}
+                  {formatStoredAmount(
+                    formatter,
+                    completedAdjustmentSummary.totalDelta,
+                  )}
+                </span>
+              </div>
+              {completedAdjustmentSettlementValue ? (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">
+                    {completedAdjustmentSettlementLabel}
+                  </span>
+                  <span className="max-w-[58%] text-right font-medium text-foreground">
+                    {completedAdjustmentSettlementValue}
+                  </span>
+                </div>
+              ) : null}
             </div>
           )}
           {showCompletedPaymentBreakdown && (
@@ -583,17 +666,22 @@ export function OrderSummary({
               </div>
             </div>
           )}
-          {completedTransactionData && completedTransactionChangeGiven > 0 && (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Change given</span>
-              <span className="font-medium text-foreground">
-                {formatStoredAmount(formatter, completedTransactionChangeGiven)}
-              </span>
-            </div>
-          )}
+          {completedTransactionData &&
+            completedTransactionChangeGiven > 0 &&
+            !hasCompletedAdjustment && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Change given</span>
+                <span className="font-medium text-foreground">
+                  {formatStoredAmount(
+                    formatter,
+                    completedTransactionChangeGiven,
+                  )}
+                </span>
+              </div>
+            )}
           <div className="flex items-baseline justify-between gap-4 pb-4">
             <span className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-              Total
+              {completedTotalLabel}
             </span>
             <span className="text-3xl font-semibold tracking-tight text-foreground">
               {formatStoredAmount(formatter, total)}

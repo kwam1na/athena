@@ -281,6 +281,9 @@ function mapDecideApprovalRequestError(
     message === "Item adjustment approval request does not match this payload." ||
     message === "Item adjustment payload is stale for this transaction." ||
     message === "Item adjustment cannot reduce inventory below zero." ||
+    message ===
+      "This transaction already has an item adjustment waiting for approval." ||
+    message === "Register session expected cash cannot be negative." ||
     message === "Only single-payment transactions can be corrected." ||
     message === "Only same-amount payment method corrections are supported." ||
     message === "Payment allocation must be a same-amount single payment."

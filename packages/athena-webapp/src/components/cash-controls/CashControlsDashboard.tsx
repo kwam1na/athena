@@ -390,7 +390,9 @@ function DrawerSessionCard({
   const showCountedCash = variance !== 0 && session.countedCash !== undefined;
   const showDeposited = session.totalDeposited > 0;
   const syncStatus = getSessionSyncStatus(session);
-  const showSyncBadge = syncStatus.status !== "synced";
+  const showSyncBadge =
+    syncStatus.status !== "synced" && syncStatus.status !== "needs_review";
+  const showSyncDescription = syncStatus.status !== "synced";
   const firstReconciliationItem = syncStatus.reconciliationItems[0];
   const metricColumnCount =
     1 +
@@ -523,7 +525,7 @@ function DrawerSessionCard({
         {getSessionActionLabel(session)}
         <ArrowRight aria-hidden className="h-4 w-4" />
       </span>
-      {showSyncBadge ? (
+      {showSyncDescription ? (
         <p className="mt-layout-xs text-xs leading-5 text-muted-foreground">
           {syncStatus.description}
         </p>

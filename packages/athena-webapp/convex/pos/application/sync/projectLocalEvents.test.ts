@@ -2129,6 +2129,62 @@ describe("projectLocalSyncEvent", () => {
     ]);
   });
 
+  it("projects a manager-reviewed sale against a closed register session", async () => {
+    const repository = createProjectionRepository({
+      registerSession: {
+        _id: "register-session-1",
+        expectedCash: 100,
+        closeoutRecords: [],
+        countedCash: 100,
+        registerNumber: "1",
+        status: "closed",
+        variance: 0,
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        ...buildSaleCompletedEvent(),
+        staffProofToken: undefined,
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+      options: {
+        allowClosedRegisterSaleProjection: true,
+        trustStoredStaffProof: true,
+      },
+    });
+
+    expect(result.status).toBe("projected");
+    expect(repository.createdTransactions).toEqual([
+      expect.objectContaining({
+        registerSessionId: "register-session-1",
+        total: 25,
+      }),
+    ]);
+    expect(repository.registerSessionPatches).toEqual(
+      expect.arrayContaining([
+        {
+          registerSessionId: "register-session-1",
+          patch: expect.objectContaining({
+            expectedCash: 125,
+            variance: -25,
+          }),
+        },
+      ]),
+    );
+    expect(result.mappings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          cloudTable: "posTransaction",
+          localId: "local-txn-1",
+        }),
+      ]),
+    );
+  });
+
   it("conflicts duplicate closeout attempts against an already closed register session", async () => {
     const repository = createProjectionRepository({
       registerSession: {

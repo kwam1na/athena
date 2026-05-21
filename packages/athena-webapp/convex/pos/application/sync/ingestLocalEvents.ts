@@ -469,6 +469,28 @@ function parseLocalSyncEvent(
   };
 }
 
+export function parseStoredLocalSyncEvent(
+  repository: LocalSyncIngestionRepository,
+  event: LocalSyncEventRecord,
+):
+  | { ok: true; event: ParsedPosLocalSyncEventInput }
+  | { ok: false; message: string } {
+  const envelopeMessage = validateLocalSyncEventEnvelope(event);
+  if (envelopeMessage) {
+    return { ok: false, message: envelopeMessage };
+  }
+
+  return parseLocalSyncEvent(repository, {
+    localEventId: event.localEventId,
+    localRegisterSessionId: event.localRegisterSessionId,
+    sequence: event.sequence,
+    eventType: event.eventType,
+    occurredAt: event.occurredAt,
+    staffProfileId: event.staffProfileId,
+    payload: event.payload,
+  });
+}
+
 function validateLocalSyncEventPayload(event: PosLocalSyncEventInput): string | null {
   if (event.eventType === "register_opened") {
     return validateRegisterOpenedPayload(event.payload);

@@ -520,4 +520,85 @@ describe("approval request helpers", () => {
       },
     });
   });
+
+  it("returns item adjustment settlement invariant failures as user errors", async () => {
+    const { ctx, tables } = createApprovalRequestMutationCtx({
+      authUserId: "auth-user-1",
+      role: "full_admin",
+    });
+    tables.approvalRequest.set("approval-item-1", {
+      _id: "approval-item-1",
+      organizationId: "org-1",
+      requestType: "pos_item_adjustment",
+      status: "pending",
+      storeId: "store-1",
+      subjectId: "pos_transaction_item_adjustment:txn-1:fingerprint",
+      subjectType: "pos_transaction_item_adjustment",
+    });
+    tables.approvalProof.set("proof-1", {
+      ...tables.approvalProof.get("proof-1"),
+      subjectId: "approval-item-1",
+      subjectLabel: "pos_item_adjustment",
+    });
+    vi.mocked(resolveTransactionItemAdjustmentApprovalDecisionWithCtx)
+      .mockRejectedValueOnce(
+        new Error("Register session expected cash cannot be negative."),
+      );
+
+    await expect(
+      decideApprovalRequestAsCommandWithCtx(ctx, {
+        approvalRequestId: "approval-item-1" as Id<"approvalRequest">,
+        approvalProofId: "proof-1" as Id<"approvalProof">,
+        decision: "approved",
+      }),
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: "Register session expected cash cannot be negative.",
+      },
+    });
+  });
+
+  it("returns duplicate pending item adjustment failures as user errors", async () => {
+    const { ctx, tables } = createApprovalRequestMutationCtx({
+      authUserId: "auth-user-1",
+      role: "full_admin",
+    });
+    tables.approvalRequest.set("approval-item-1", {
+      _id: "approval-item-1",
+      organizationId: "org-1",
+      requestType: "pos_item_adjustment",
+      status: "pending",
+      storeId: "store-1",
+      subjectId: "pos_transaction_item_adjustment:txn-1:fingerprint",
+      subjectType: "pos_transaction_item_adjustment",
+    });
+    tables.approvalProof.set("proof-1", {
+      ...tables.approvalProof.get("proof-1"),
+      subjectId: "approval-item-1",
+      subjectLabel: "pos_item_adjustment",
+    });
+    vi.mocked(resolveTransactionItemAdjustmentApprovalDecisionWithCtx)
+      .mockRejectedValueOnce(
+        new Error(
+          "This transaction already has an item adjustment waiting for approval.",
+        ),
+      );
+
+    await expect(
+      decideApprovalRequestAsCommandWithCtx(ctx, {
+        approvalRequestId: "approval-item-1" as Id<"approvalRequest">,
+        approvalProofId: "proof-1" as Id<"approvalProof">,
+        decision: "approved",
+      }),
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message:
+          "This transaction already has an item adjustment waiting for approval.",
+      },
+    });
+  });
 });

@@ -206,6 +206,17 @@ type RegisterCloseoutCommandPayload = {
 type RegisterCloseoutCommandResult =
   NormalizedApprovalCommandResult<RegisterCloseoutCommandPayload>;
 
+type ResolveSyncReviewArgs = {
+  actorStaffProfileId: string;
+  registerSessionId: string;
+};
+
+type ResolveSyncReviewResult = NormalizedCommandResult<{
+  action?: "already_resolved" | "resolved";
+  projectedCount?: number;
+  resolvedCount?: number;
+}>;
+
 type StaffAuthenticationCommandResult =
   NormalizedCommandResult<StaffAuthenticationResult>;
 
@@ -244,6 +255,9 @@ type RegisterSessionViewContentProps = {
   onReviewCloseout: (
     args: RegisterCloseoutReviewArgs,
   ) => Promise<RegisterCloseoutCommandResult>;
+  onResolveSyncReview?: (
+    args: ResolveSyncReviewArgs,
+  ) => Promise<ResolveSyncReviewResult>;
   onReopenCloseout?: (args: {
     actorStaffProfileId: string;
     approvalProofId: string;
@@ -283,6 +297,10 @@ type CloseoutStaffAuthIntent =
       decision: "approved" | "rejected";
       decisionNotes?: string;
       kind: "review";
+      registerSessionId: string;
+    }
+  | {
+      kind: "sync_review";
       registerSessionId: string;
     };
 
@@ -438,16 +456,59 @@ function getSyncBadgeClass(tone: PosSyncStatusPresentation["tone"]) {
   }
 }
 
+function formatReviewItemCount(count: number) {
+  return `${count} review ${count === 1 ? "item" : "items"}`;
+}
+
+function formatReviewItemTimestamp(timestamp?: number | null) {
+  return typeof timestamp === "number" && Number.isFinite(timestamp)
+    ? formatTimestamp(timestamp)
+    : null;
+}
+
+function formatReviewItemActivity(item: PosReconciliationItem) {
+  const localEventId = item.localEventId?.toLowerCase() ?? "";
+  const summary = item.summary?.toLowerCase() ?? "";
+
+  if (localEventId.includes("sale-completed")) {
+    if (item.type === "permission" && summary.includes("not open")) {
+      return "Sale completed while Athena did not have this register open.";
+    }
+
+    return "Sale completed from local register activity.";
+  }
+
+  if (localEventId.includes("register-opened")) {
+    return "Register opening came from local register activity.";
+  }
+
+  if (localEventId.includes("register-closed")) {
+    return "Register closeout came from local register activity.";
+  }
+
+  if (localEventId.includes("payment")) {
+    return "Payment update came from local register activity.";
+  }
+
+  return "Local register activity needs review before it is treated as settled.";
+}
+
 function RegisterSessionSyncNotice({
+  errorMessage,
+  isResolving,
+  onResolveReview,
   syncStatus,
 }: {
+  errorMessage?: string;
+  isResolving?: boolean;
+  onResolveReview?: () => void;
   syncStatus: PosSyncStatusPresentation;
 }) {
   if (syncStatus.status === "synced") {
     return null;
   }
 
-  const firstReconciliationItem = syncStatus.reconciliationItems[0];
+  const reconciliationItems = syncStatus.reconciliationItems;
 
   return (
     <section
@@ -458,7 +519,7 @@ function RegisterSessionSyncNotice({
       }`}
     >
       <div className="flex flex-wrap items-start justify-between gap-layout-md">
-        <div className="space-y-1">
+        <div className="max-w-3xl space-y-1">
           <p
             className={`text-[11px] font-medium uppercase tracking-[0.18em] ${
               syncStatus.tone === "danger" ? "text-danger" : "text-warning"
@@ -471,23 +532,102 @@ function RegisterSessionSyncNotice({
           <p className="text-sm leading-6 text-muted-foreground">
             {syncStatus.description}
           </p>
-          {syncStatus.status === "needs_review" && firstReconciliationItem ? (
-            <p className="text-sm leading-6 text-foreground">
-              {formatPosReconciliationType(firstReconciliationItem.type)}:{" "}
-              {firstReconciliationItem.summary?.trim() ||
-                "Review synced register activity before closeout is settled."}
+          {syncStatus.status === "needs_review" &&
+          reconciliationItems.length > 0 ? (
+            <div className="space-y-2 pt-layout-xs">
+              <p className="text-xs font-medium text-foreground">
+                {formatReviewItemCount(reconciliationItems.length)}
+              </p>
+              <div className="grid gap-2">
+                {reconciliationItems.map((item, index) => {
+                  const reportedAt = formatReviewItemTimestamp(item.createdAt);
+
+                  return (
+                    <article
+                      className="rounded-md border border-danger/15 bg-background/70 p-layout-sm"
+                      key={item.id ?? `${item.type ?? "review"}-${index}`}
+                    >
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-foreground">
+                          {formatPosReconciliationType(item.type)}
+                        </p>
+                        <p className="text-sm leading-6 text-muted-foreground">
+                          {item.summary?.trim() ||
+                            "Review synced register activity before closeout is settled."}
+                        </p>
+                      </div>
+                      {item.localEventId ||
+                      typeof item.sequence === "number" ||
+                      reportedAt ? (
+                        <dl className="mt-layout-sm grid gap-layout-sm text-xs text-muted-foreground sm:grid-cols-3">
+                          {item.localEventId ? (
+                            <div className="min-w-0">
+                              <dt className="font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                                Activity
+                              </dt>
+                              <dd className="text-foreground">
+                                {formatReviewItemActivity(item)}
+                              </dd>
+                            </div>
+                          ) : null}
+                          {typeof item.sequence === "number" ? (
+                            <div>
+                              <dt className="font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                                Upload order
+                              </dt>
+                              <dd className="text-foreground">
+                                #{item.sequence} in local queue
+                              </dd>
+                            </div>
+                          ) : null}
+                          {reportedAt ? (
+                            <div>
+                              <dt className="font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                                Reported
+                              </dt>
+                              <dd className="text-foreground">{reportedAt}</dd>
+                            </div>
+                          ) : null}
+                        </dl>
+                      ) : null}
+                    </article>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+          {errorMessage ? (
+            <p className="text-sm leading-6 text-destructive">
+              {errorMessage}
             </p>
           ) : null}
         </div>
-        <Badge
-          className={getSyncBadgeClass(syncStatus.tone)}
-          size="sm"
-          variant="outline"
-        >
-          {syncStatus.pendingEventCount
-            ? `${syncStatus.pendingEventCount} pending`
-            : syncStatus.label}
-        </Badge>
+        <div className="flex flex-wrap items-center justify-end gap-layout-sm">
+          {syncStatus.status === "needs_review" && onResolveReview ? (
+            <LoadingButton
+              className="border-border bg-background text-foreground hover:bg-muted"
+              disabled={isResolving}
+              isLoading={Boolean(isResolving)}
+              onClick={onResolveReview}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              Apply reviewed sales
+            </LoadingButton>
+          ) : null}
+          {syncStatus.status !== "needs_review" ? (
+            <Badge
+              className={getSyncBadgeClass(syncStatus.tone)}
+              size="sm"
+              variant="outline"
+            >
+              {syncStatus.pendingEventCount
+                ? `${syncStatus.pendingEventCount} pending`
+                : syncStatus.label}
+            </Badge>
+          ) : null}
+        </div>
       </div>
     </section>
   );
@@ -572,6 +712,7 @@ export function RegisterSessionViewContent({
   onRecordDeposit,
   onReopenCloseout,
   onReviewCloseout,
+  onResolveSyncReview,
   onSubmitCloseout,
   orgUrlSlug,
   registerSessionSnapshot,
@@ -592,6 +733,8 @@ export function RegisterSessionViewContent({
   const [pendingCloseoutAction, setPendingCloseoutAction] = useState<
     "approved" | "rejected" | "reopen" | "submit" | null
   >(null);
+  const [syncReviewErrorMessage, setSyncReviewErrorMessage] = useState("");
+  const [isResolvingSyncReview, setIsResolvingSyncReview] = useState(false);
   const [closeoutStaffAuthIntent, setCloseoutStaffAuthIntent] =
     useState<CloseoutStaffAuthIntent | null>(null);
   const [reopenedCloseoutSubmitIntent, setReopenedCloseoutSubmitIntent] =
@@ -999,6 +1142,46 @@ export function RegisterSessionViewContent({
     }
 
     const intent = closeoutStaffAuthIntent;
+
+    if (intent.kind === "sync_review") {
+      if (!onResolveSyncReview) {
+        setSyncReviewErrorMessage(
+          "Sync review resolution is not available yet. Try again after the register tools refresh.",
+        );
+        setCloseoutStaffAuthIntent(null);
+        return;
+      }
+
+      setSyncReviewErrorMessage("");
+      setIsResolvingSyncReview(true);
+      setCloseoutStaffAuthIntent(null);
+
+      try {
+        const commandResult = await onResolveSyncReview({
+          actorStaffProfileId: result.staffProfileId,
+          registerSessionId: intent.registerSessionId,
+        });
+
+        if (commandResult.kind !== "ok") {
+          setSyncReviewErrorMessage(commandResult.error.message);
+          return;
+        }
+
+        toast.success(
+          commandResult.data?.action === "already_resolved"
+            ? "Register review already resolved"
+            : commandResult.data?.projectedCount
+              ? commandResult.data.projectedCount === 1
+                ? "Reviewed sale applied"
+                : `${commandResult.data.projectedCount} reviewed sales applied`
+              : "Register review resolved",
+        );
+      } finally {
+        setIsResolvingSyncReview(false);
+      }
+      return;
+    }
+
     const action = intent.kind === "submit" ? "submit" : intent.decision;
 
     setCloseoutErrorMessage("");
@@ -1214,6 +1397,12 @@ export function RegisterSessionViewContent({
               ? "Approve variance"
               : "Reject variance",
         }
+      : closeoutStaffAuthIntent?.kind === "sync_review"
+        ? {
+            title: "Manager sign-in required",
+            description: "Authenticate to apply reviewed synced sales",
+            submitLabel: "Apply reviewed sales",
+          }
       : {
           title: "Closeout sign-in required",
           description: "Authenticate to submit closeout",
@@ -1274,7 +1463,21 @@ export function RegisterSessionViewContent({
       registerSession?.reconciliationItems ??
       [],
   });
+  const canResolveSyncReview =
+    syncStatus.status === "needs_review" && Boolean(onResolveSyncReview);
   const headerTerminalName = registerSession?.terminalName?.trim();
+
+  function requestResolveSyncReview() {
+    if (!registerSession || !canResolveSyncReview) {
+      return;
+    }
+
+    setSyncReviewErrorMessage("");
+    setCloseoutStaffAuthIntent({
+      kind: "sync_review",
+      registerSessionId: registerSession._id,
+    });
+  }
   const sessionCode = registerSession
     ? formatSessionCode(registerSession._id)
     : undefined;
@@ -1541,7 +1744,8 @@ export function RegisterSessionViewContent({
           return Promise.resolve(
             onAuthenticateStaff({
               allowedRoles:
-                closeoutStaffAuthIntent?.kind === "review"
+                closeoutStaffAuthIntent?.kind === "review" ||
+                closeoutStaffAuthIntent?.kind === "sync_review"
                   ? ["manager"]
                   : ["cashier", "manager"],
               pinHash: args.pinHash,
@@ -1632,7 +1836,14 @@ export function RegisterSessionViewContent({
       <FadeIn>
         <div className="container mx-auto space-y-6 p-6">
           {registerSession ? (
-            <RegisterSessionSyncNotice syncStatus={syncStatus} />
+            <RegisterSessionSyncNotice
+              errorMessage={syncReviewErrorMessage}
+              isResolving={isResolvingSyncReview}
+              onResolveReview={
+                canResolveSyncReview ? requestResolveSyncReview : undefined
+              }
+              syncStatus={syncStatus}
+            />
           ) : null}
           {registerSession ? (
             <RegisterSessionSupportEvidence
@@ -2687,6 +2898,9 @@ export function RegisterSessionView() {
   const recordRegisterSessionDeposit = useMutation(
     api.cashControls.deposits.recordRegisterSessionDeposit,
   );
+  const resolveRegisterSessionSyncReview = useMutation(
+    api.cashControls.deposits.resolveRegisterSessionSyncReview,
+  );
   const submitRegisterSessionCloseout = useMutation(
     api.cashControls.closeouts.submitRegisterSessionCloseout,
   );
@@ -2741,6 +2955,25 @@ export function RegisterSessionView() {
     }
 
     return result;
+  }
+
+  async function onResolveSyncReview(args: ResolveSyncReviewArgs) {
+    if (!activeStore?._id) {
+      return userError({
+        code: "authentication_failed",
+        message: "Select a store before resolving this register review",
+      });
+    }
+
+    const result = await runCommand(() =>
+      resolveRegisterSessionSyncReview({
+        actorStaffProfileId: args.actorStaffProfileId as Id<"staffProfile">,
+        registerSessionId: args.registerSessionId as Id<"registerSession">,
+        storeId: activeStore._id,
+      }),
+    );
+
+    return result as ResolveSyncReviewResult;
   }
 
   async function onSubmitCloseout(args: RegisterCloseoutSubmitArgs) {
@@ -3018,6 +3251,7 @@ export function RegisterSessionView() {
       onRecordDeposit={onRecordDeposit}
       onReopenCloseout={onReopenCloseout}
       onReviewCloseout={onReviewCloseout}
+      onResolveSyncReview={onResolveSyncReview}
       onSubmitCloseout={onSubmitCloseout}
       orgUrlSlug={params?.orgUrlSlug}
       registerSessionSnapshot={registerSessionSnapshot ?? null}

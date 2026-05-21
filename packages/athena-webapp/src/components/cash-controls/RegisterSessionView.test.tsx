@@ -446,11 +446,138 @@ describe("RegisterSessionViewContent", () => {
     );
 
     expect(screen.getAllByText("Needs review")[0]).toBeInTheDocument();
+    expect(screen.getByText("1 review item")).toBeInTheDocument();
+    expect(screen.getByText("Reconciliation review")).toBeInTheDocument();
+    expect(
+      screen.getByText("Review synced register activity."),
+    ).toBeInTheDocument();
+  });
+
+  it("lists each synced register review item with safe event evidence", () => {
+    const createdAt = new Date("2026-05-20T14:30:00.000Z").getTime();
+
+    render(
+      <RegisterSessionViewContent
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            localSyncStatus: {
+              status: "needs_review",
+              reconciliationItems: [
+                {
+                  createdAt,
+                  id: "sync_conflict_permission",
+                  localEventId: "event-sale-completed-2",
+                  sequence: 12,
+                  status: "needs_review",
+                  summary: "Register was not open before this sale synced.",
+                  type: "permission",
+                },
+                {
+                  createdAt,
+                  id: "sync_conflict_payment",
+                  localEventId: "event-payment-1",
+                  sequence: 13,
+                  status: "needs_review",
+                  summary: "Payment allocation needs manager review.",
+                  type: "payment",
+                },
+              ],
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByText("2 review items")).toBeInTheDocument();
+    expect(screen.getByText("Permission review")).toBeInTheDocument();
+    expect(screen.getByText("Payment review")).toBeInTheDocument();
+    expect(
+      screen.getByText("Register was not open before this sale synced."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Payment allocation needs manager review."),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(
-        /Reconciliation review: Review synced register activity./i,
+        "Sale completed while Athena did not have this register open.",
       ),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText("Payment update came from local register activity."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("#12 in local queue")).toBeInTheDocument();
+    expect(screen.getByText("#13 in local queue")).toBeInTheDocument();
+  });
+
+  it("resolves synced register review items after manager sign-in", async () => {
+    const user = userEvent.setup();
+    const onAuthenticateStaff = vi.fn().mockResolvedValue(
+      ok({
+        activeRoles: ["manager"],
+        staffProfile: { fullName: "Ato Kofi" },
+        staffProfileId: "manager-1",
+      }),
+    );
+    const onResolveSyncReview = vi
+      .fn()
+      .mockResolvedValue(
+        ok({ action: "resolved", projectedCount: 1, resolvedCount: 1 }),
+      );
+
+    render(
+      <RegisterSessionViewContent
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        onAuthenticateStaff={onAuthenticateStaff}
+        onResolveSyncReview={onResolveSyncReview}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            localSyncStatus: {
+              status: "needs_review",
+              reconciliationItems: [
+                {
+                  id: "sync_conflict_1",
+                  status: "needs_review",
+                  summary: "Register was not open before this sale synced.",
+                  type: "permission",
+                },
+              ],
+            },
+          },
+        }}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Apply reviewed sales" }),
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: "Confirm staff for Apply reviewed sales",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(onAuthenticateStaff).toHaveBeenCalledWith({
+        allowedRoles: ["manager"],
+        pinHash: "hashed-pin",
+        username: "ato",
+      }),
+    );
+    expect(onResolveSyncReview).toHaveBeenCalledWith({
+      actorStaffProfileId: "manager-1",
+      registerSessionId: "session-1",
+    });
   });
 
   it("communicates when a register session has closed", () => {

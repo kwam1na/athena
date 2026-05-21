@@ -295,11 +295,44 @@ vi.mock("sonner", () => ({
 }));
 
 vi.mock("../OrderSummary", () => ({
-  OrderSummary: () => <div data-testid="order-summary" />,
+  OrderSummary: ({
+    completedAdjustmentSummary,
+    completedTransactionData,
+  }: {
+    completedAdjustmentSummary?: {
+      originalTotal: number;
+      settlementAmount: number;
+      settlementDirection: string;
+      totalDelta: number;
+    } | null;
+    completedTransactionData?: { total: number } | null;
+  }) => (
+    <div data-testid="order-summary">
+      {completedAdjustmentSummary ? (
+        <span>
+          adjusted summary {completedTransactionData?.total} original{" "}
+          {completedAdjustmentSummary.originalTotal} delta{" "}
+          {completedAdjustmentSummary.totalDelta}
+        </span>
+      ) : null}
+    </div>
+  ),
 }));
 
 vi.mock("../CartItems", () => ({
-  CartItems: () => <div data-testid="cart-items" />,
+  CartItems: ({
+    cartItems,
+  }: {
+    cartItems: Array<{ name: string; price: number; quantity: number }>;
+  }) => (
+    <div data-testid="cart-items">
+      {cartItems.map((item) => (
+        <span key={item.name}>
+          {item.name} qty {item.quantity} total {item.price * item.quantity}
+        </span>
+      ))}
+    </div>
+  ),
 }));
 
 vi.mock("../../traces/WorkflowTraceRouteLink", () => ({
@@ -344,6 +377,7 @@ describe("TransactionView", () => {
     total: 1000,
     hasTrace: false,
     sessionTraceId: null,
+    terminalId: "terminal_1",
     paymentMethod: "cash",
     payments: [{ method: "cash", amount: 1000, timestamp: 123 }],
     totalPaid: 1000,
@@ -402,9 +436,11 @@ describe("TransactionView", () => {
     paymentMutation: ReturnType<typeof vi.fn>,
     approvalMutation: ReturnType<typeof vi.fn> = vi.fn(),
     itemAdjustmentMutation: ReturnType<typeof vi.fn> = vi.fn(),
+    terminalAuthMutation: ReturnType<typeof vi.fn> = authMutation,
   ) {
     const mutations = [
       authMutation,
+      terminalAuthMutation,
       approvalMutation,
       paymentMutation,
       customerMutation,
@@ -909,10 +945,6 @@ describe("TransactionView", () => {
       kind: "ok",
       data: {
         activeRoles: ["cashier"],
-        posLocalStaffProof: {
-          expiresAt: Date.now() + 60_000,
-          token: "proof-token-1",
-        },
         staffProfile: { firstName: "Kwamina", lastName: "Mensah" },
         staffProfileId: "staff_1",
       },
@@ -1009,10 +1041,6 @@ describe("TransactionView", () => {
       kind: "ok",
       data: {
         activeRoles: ["manager"],
-        posLocalStaffProof: {
-          expiresAt: Date.now() + 60_000,
-          token: "proof-token-1",
-        },
         staffProfile: { firstName: "Kwamina", lastName: "Mensah" },
         staffProfileId: "staff_1",
       },
@@ -1346,6 +1374,7 @@ describe("TransactionView", () => {
     render(<TransactionView />);
 
     expect(screen.queryByText("Adjustment state")).not.toBeInTheDocument();
+    expect(screen.queryByText("Adjusted sale")).not.toBeInTheDocument();
     expect(screen.getByText("Completed")).toBeInTheDocument();
   });
 
@@ -1354,13 +1383,26 @@ describe("TransactionView", () => {
     useQueryMock.mockReturnValue({
       ...baseTransaction,
       total: 2000,
+      subtotal: 2000,
+      items: [
+        {
+          _id: "item_1",
+          productId: "product_1",
+          productName: "Closure wig",
+          productSku: "CW-18",
+          productSkuId: "sku_1",
+          quantity: 2,
+          totalPrice: 2000,
+          unitPrice: 1000,
+        },
+      ],
       adjustmentSummary: {
         appliedCount: 1,
-        effectiveNetTotal: 1500,
+        effectiveNetTotal: 1000,
         hasAdjustments: true,
         originalTotal: 2000,
         pendingCount: 1,
-        totalAppliedAdjustmentDelta: -500,
+        totalAppliedAdjustmentDelta: -1000,
       },
       adjustments: [
         {
@@ -1377,12 +1419,22 @@ describe("TransactionView", () => {
         {
           _id: "event-1",
           actorStaffName: "Ama Mensah",
-          adjustedTotal: 1500,
+          adjustedTotal: 1000,
           appliedAt: 150,
           createdAt: 150,
-          lineItems: [],
+          lineItems: [
+            {
+              adjustedQuantity: 1,
+              originalQuantity: 2,
+              productName: "Closure wig",
+              productSku: "CW-18",
+              quantityDelta: -1,
+              totalDelta: -1000,
+              unitPrice: 1000,
+            },
+          ],
           originalTotal: 2000,
-          settlementAmount: 500,
+          settlementAmount: 1000,
           settlementDirection: "refund",
           status: "applied",
         },
@@ -1391,11 +1443,20 @@ describe("TransactionView", () => {
 
     render(<TransactionView />);
 
-    expect(screen.getByText("Adjustment state")).toBeInTheDocument();
-    expect(screen.getByText("Adjusted net total")).toBeInTheDocument();
+    expect(screen.getByText("Adjusted sale")).toBeInTheDocument();
+    expect(screen.getByText("Adjusted sale total")).toBeInTheDocument();
+    expect(screen.getByText("Original sale total")).toBeInTheDocument();
+    expect(screen.getByText("Item adjustment")).toBeInTheDocument();
     expect(screen.getByText("Item adjustment pending approval")).toBeInTheDocument();
     expect(screen.getByText("Item adjustment applied")).toBeInTheDocument();
+    expect(screen.getByText(/2 original to 1 adjusted/)).toBeInTheDocument();
     expect(screen.getAllByText("Refund due").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("cart-items")).toHaveTextContent(
+      "Closure wig qty 1 total 1000",
+    );
+    expect(screen.getByTestId("order-summary")).toHaveTextContent(
+      "adjusted summary 1000 original 2000 delta -1000",
+    );
   });
 
   it("opens the item adjustment workflow and requires a settlement method for refunds", async () => {
@@ -1457,9 +1518,57 @@ describe("TransactionView", () => {
     expect(itemAdjustmentMutation).not.toHaveBeenCalled();
   });
 
+  it("cancels the item adjustment workflow and clears the draft", async () => {
+    const user = userEvent.setup();
+    mockTransactionMutations(vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn());
+    useParamsMock.mockReturnValue({ transactionId: "txn_items" });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      total: 2000,
+      items: [
+        {
+          _id: "item_1",
+          productId: "product_1",
+          productName: "Closure wig",
+          productSku: "CW-18",
+          productSkuId: "sku_1",
+          quantity: 2,
+          totalPrice: 2000,
+          unitPrice: 1000,
+        },
+      ],
+    });
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Update" }));
+    await user.click(
+      screen.getByRole("button", { name: "Items or quantities" }),
+    );
+    await user.click(screen.getByRole("button", { name: /decrease closure wig/i }));
+    await user.type(
+      screen.getByLabelText("Item adjustment reason"),
+      "Customer received one unit.",
+    );
+    await user.click(screen.getByRole("button", { name: "Cancel item adjustment" }));
+
+    expect(screen.queryByText("Review item adjustment")).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Items or quantities" }),
+    );
+
+    expect(
+      screen.getByLabelText("Adjusted quantity for Closure wig"),
+    ).toHaveValue(2);
+    expect(screen.getByLabelText("Item adjustment reason")).toHaveValue("");
+    expect(screen.queryByText("Refund due")).not.toBeInTheDocument();
+  });
+
   it("submits item adjustments through the shared approval runner", async () => {
     const user = userEvent.setup();
-    const authMutation = vi.fn().mockResolvedValue({
+    const authMutation = vi.fn();
+    const terminalAuthMutation = vi.fn().mockResolvedValue({
       kind: "ok",
       data: {
         activeRoles: ["manager"],
@@ -1516,6 +1625,7 @@ describe("TransactionView", () => {
       vi.fn(),
       approvalMutation,
       itemAdjustmentMutation,
+      terminalAuthMutation,
     );
     useParamsMock.mockReturnValue({ transactionId: "txn_items" });
     useQueryMock.mockReturnValue({
@@ -1554,6 +1664,15 @@ describe("TransactionView", () => {
     await user.click(screen.getByRole("button", { name: "Confirm" }));
 
     await waitFor(() => {
+      expect(authMutation).not.toHaveBeenCalled();
+      expect(terminalAuthMutation).toHaveBeenCalledWith({
+        allowedRoles: ["cashier", "manager"],
+        allowActiveSessionsOnOtherTerminals: true,
+        pinHash: "hashed:1234",
+        storeId: "store_1",
+        terminalId: "terminal_1",
+        username: "manager",
+      });
       expect(approvalMutation).toHaveBeenCalledWith({
         actionKey: "pos.transaction.adjust_items",
         pinHash: "hashed:1234",
@@ -1610,7 +1729,8 @@ describe("TransactionView", () => {
       };
       kind: "ok";
     }>();
-    const authMutation = vi.fn().mockResolvedValue({
+    const authMutation = vi.fn();
+    const terminalAuthMutation = vi.fn().mockResolvedValue({
       kind: "ok",
       data: {
         activeRoles: ["manager"],
@@ -1653,6 +1773,7 @@ describe("TransactionView", () => {
       vi.fn(),
       approvalMutation,
       itemAdjustmentMutation,
+      terminalAuthMutation,
     );
     useParamsMock.mockReturnValue({ transactionId: "txn_items" });
     useQueryMock.mockReturnValue({
@@ -1709,7 +1830,8 @@ describe("TransactionView", () => {
 
   it("allows equal-total item adjustments without a settlement method", async () => {
     const user = userEvent.setup();
-    const authMutation = vi.fn().mockResolvedValue({
+    const authMutation = vi.fn();
+    const terminalAuthMutation = vi.fn().mockResolvedValue({
       kind: "ok",
       data: {
         activeRoles: ["cashier"],
@@ -1728,6 +1850,7 @@ describe("TransactionView", () => {
       vi.fn(),
       vi.fn(),
       itemAdjustmentMutation,
+      terminalAuthMutation,
     );
     useParamsMock.mockReturnValue({ transactionId: "txn_equal" });
     useQueryMock.mockReturnValue({

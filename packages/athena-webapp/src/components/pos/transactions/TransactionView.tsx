@@ -251,6 +251,9 @@ export function TransactionView() {
   const correctAuth = useMutation(
     api.operations.staffCredentials.authenticateStaffCredential,
   );
+  const correctTerminalAuth = useMutation(
+    api.operations.staffCredentials.authenticateStaffCredentialForTerminal,
+  );
   const approveCommand = useMutation(
     api.operations.staffCredentials.authenticateStaffCredentialForApproval,
   );
@@ -360,15 +363,88 @@ export function TransactionView() {
     );
   }, [transaction]);
 
+  const appliedAdjustments = useMemo(() => {
+    if (!transaction) return [];
+    return (transaction.adjustments ?? []).filter(
+      (adjustment: (typeof transaction.adjustments)[number]) =>
+        adjustment.status === "applied",
+    );
+  }, [transaction]);
+  const latestAppliedAdjustment = appliedAdjustments[0] ?? null;
+  const hasAppliedItemAdjustment = appliedAdjustments.length > 0;
+  const adjustedCartItems: CartItem[] = useMemo(() => {
+    if (!transaction) return [];
+
+    const appliedLineItems = [...appliedAdjustments]
+      .sort(
+        (first, second) =>
+          (first.appliedAt ?? first.createdAt) -
+          (second.appliedAt ?? second.createdAt),
+      )
+      .flatMap((adjustment) => adjustment.lineItems ?? []);
+
+    return transaction.items
+      .map((item: (typeof transaction.items)[number]) => {
+        const adjustedLine =
+          appliedLineItems.find(
+            (line) => line.productSku && line.productSku === item.productSku,
+          ) ??
+          appliedLineItems.find(
+            (line) => line.productName === item.productName,
+          );
+        const adjustedQuantity =
+          typeof adjustedLine?.adjustedQuantity === "number"
+            ? adjustedLine.adjustedQuantity
+            : typeof adjustedLine?.quantityDelta === "number"
+              ? item.quantity + adjustedLine.quantityDelta
+              : item.quantity;
+
+        return {
+          id: item._id,
+          name: item.productName,
+          barcode: item.barcode || "",
+          sku: item.productSku,
+          price: item.unitPrice,
+          quantity: Math.max(0, adjustedQuantity),
+          productId: item.productId,
+          skuId: item.productSkuId,
+          image: item.image || undefined,
+        };
+      })
+      .filter((item) => item.quantity > 0);
+  }, [appliedAdjustments, transaction]);
+  const displayCartItems = hasAppliedItemAdjustment
+    ? adjustedCartItems
+    : cartItems;
+  const effectiveSaleTotal =
+    transaction?.adjustmentSummary?.effectiveNetTotal ??
+    transaction?.effectiveNetTotal ??
+    transaction?.total ??
+    0;
+  const originalSaleTotal =
+    transaction?.adjustmentSummary?.originalTotal ??
+    transaction?.originalTotal ??
+    transaction?.total ??
+    0;
+  const totalAppliedAdjustmentDelta =
+    transaction?.adjustmentSummary?.totalAppliedAdjustmentDelta ??
+    transaction?.totalAppliedAdjustmentDelta ??
+    effectiveSaleTotal - originalSaleTotal;
+  const effectiveSubtotal = transaction
+    ? Math.max(0, effectiveSaleTotal - (transaction.tax ?? 0))
+    : 0;
+
   const completedData = useMemo(() => {
     if (!transaction) return undefined;
     return {
       paymentMethod: transaction.paymentMethod || "cash",
       completedAt: transaction.completedAt,
-      cartItems,
-      subtotal: transaction.subtotal,
+      cartItems: displayCartItems,
+      subtotal: hasAppliedItemAdjustment
+        ? effectiveSubtotal
+        : transaction.subtotal,
       tax: transaction.tax,
-      total: transaction.total,
+      total: hasAppliedItemAdjustment ? effectiveSaleTotal : transaction.total,
       payments: transaction.payments.map(
         (
           payment: {
@@ -393,7 +469,13 @@ export function TransactionView() {
             }
           : undefined),
     };
-  }, [transaction, cartItems]);
+  }, [
+    displayCartItems,
+    effectiveSaleTotal,
+    effectiveSubtotal,
+    hasAppliedItemAdjustment,
+    transaction,
+  ]);
 
   const itemAdjustmentDraft = useMemo(() => {
     if (!transaction) {
@@ -532,6 +614,31 @@ export function TransactionView() {
       };
     }
 
+    if (pendingCorrection === "line_items") {
+      if (!transaction?.terminalId) {
+        return {
+          kind: "user_error" as const,
+          error: {
+            code: "authentication_failed" as const,
+            message:
+              "Transaction terminal is unavailable. Refresh the transaction and try again.",
+          },
+        };
+      }
+      const transactionTerminalId = transaction.terminalId;
+
+      return runCommand(() =>
+        correctTerminalAuth({
+          allowedRoles: ["cashier", "manager"],
+          allowActiveSessionsOnOtherTerminals: true,
+          pinHash: args.pinHash,
+          storeId: activeStore._id,
+          terminalId: transactionTerminalId,
+          username: args.username,
+        }),
+      );
+    }
+
     return runCommand(() =>
       correctAuth({
         allowedRoles: ["cashier", "manager"],
@@ -553,6 +660,13 @@ export function TransactionView() {
     setCorrectedQuantities({});
     setItemAdjustmentReason("");
     setItemAdjustmentSettlementMethod("");
+  }
+
+  function cancelItemAdjustmentWorkflow() {
+    resetItemAdjustmentWorkflow();
+    setCorrectionError(null);
+    setPendingCorrection(null);
+    setSelectedCorrection(null);
   }
 
   async function runCustomerCorrection(staff: StaffAuthenticationResult) {
@@ -728,7 +842,9 @@ export function TransactionView() {
     }
     const staffProofToken = args?.staff?.posLocalStaffProof?.token;
     if (!args?.staffProfileId || !staffProofToken) {
-      setCorrectionError("Staff sign-in is required before adjusting transaction items");
+      setCorrectionError(
+        "Staff sign-in is required before adjusting transaction items",
+      );
       return;
     }
     const payloadSettlementDirection: "collect" | "refund" | "none" =
@@ -1455,13 +1571,25 @@ export function TransactionView() {
                             {correctionError}
                           </p>
                         ) : null}
-                        <Button
-                          disabled={correctionSubmitting}
-                          onClick={() => requestCorrectionSubmit("line_items")}
-                          type="button"
-                        >
-                          Submit item adjustment
-                        </Button>
+                        <div className="grid gap-2">
+                          <Button
+                            disabled={correctionSubmitting}
+                            onClick={() =>
+                              requestCorrectionSubmit("line_items")
+                            }
+                            type="button"
+                          >
+                            Submit item adjustment
+                          </Button>
+                          <Button
+                            disabled={correctionSubmitting}
+                            onClick={cancelItemAdjustmentWorkflow}
+                            type="button"
+                            variant="outline"
+                          >
+                            Cancel item adjustment
+                          </Button>
+                        </div>
                       </div>
                     ) : selectedCorrection &&
                       !["customer", "payment_method"].includes(
@@ -1480,34 +1608,52 @@ export function TransactionView() {
                 <section className="space-y-4 overflow-hidden rounded-[calc(var(--radius)*1.35)] border border-border/80 bg-surface-raised p-5 shadow-surface">
                   <div className="space-y-1">
                     <h2 className="font-display text-xl font-semibold text-foreground">
-                      Adjustment state
+                      {hasAppliedItemAdjustment
+                        ? "Adjusted sale"
+                        : "Adjustment state"}
                     </h2>
                     <p className="text-sm text-muted-foreground">
                       Original sale totals stay locked. Adjusted totals are
-                      shown separately.
+                      shown for closeout and reporting.
                     </p>
                   </div>
                   <dl className="grid gap-3 rounded-lg border border-border bg-background p-4 text-sm">
                     <div className="flex items-center justify-between gap-3">
-                      <dt className="text-muted-foreground">Original total</dt>
+                      <dt className="text-muted-foreground">
+                        Original sale total
+                      </dt>
                       <dd className="font-numeric font-medium">
                         {formatStoredAmount(
                           ghsCurrencyFormatter,
-                          transaction.adjustmentSummary.originalTotal,
+                          originalSaleTotal,
                         )}
                       </dd>
                     </div>
                     <div className="flex items-center justify-between gap-3">
                       <dt className="text-muted-foreground">
-                        Adjusted net total
+                        Adjusted sale total
                       </dt>
                       <dd className="font-numeric font-semibold">
                         {formatStoredAmount(
                           ghsCurrencyFormatter,
-                          transaction.adjustmentSummary.effectiveNetTotal,
+                          effectiveSaleTotal,
                         )}
                       </dd>
                     </div>
+                    {hasAppliedItemAdjustment ? (
+                      <div className="flex items-center justify-between gap-3 border-t border-border/70 pt-3">
+                        <dt className="text-muted-foreground">
+                          Item adjustment
+                        </dt>
+                        <dd className="font-numeric font-medium text-foreground">
+                          {totalAppliedAdjustmentDelta > 0 ? "+" : ""}
+                          {formatStoredAmount(
+                            ghsCurrencyFormatter,
+                            totalAppliedAdjustmentDelta,
+                          )}
+                        </dd>
+                      </div>
+                    ) : null}
                     {transaction.adjustmentSummary.pendingCount > 0 ? (
                       <div className="flex items-center justify-between gap-3 border-t border-border/70 pt-3">
                         <dt className="text-muted-foreground">
@@ -1555,6 +1701,44 @@ export function TransactionView() {
                                 adjustment.settlementAmount,
                               )}
                         </p>
+                        {adjustment.lineItems.length > 0 ? (
+                          <div className="mt-4 space-y-2 border-t border-border/70 pt-3">
+                            <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                              Items adjusted
+                            </p>
+                            <div className="space-y-2">
+                              {adjustment.lineItems.map((line) => (
+                                <div
+                                  className="grid gap-1 rounded-md bg-background px-3 py-2 text-sm"
+                                  key={`${adjustment._id}-${line.productName}-${line.productSku ?? "sku"}`}
+                                >
+                                  <div className="flex items-start justify-between gap-3">
+                                    <span className="font-medium text-foreground">
+                                      {line.productName}
+                                    </span>
+                                    {typeof line.totalDelta === "number" ? (
+                                      <span className="font-numeric text-foreground">
+                                        {line.totalDelta > 0 ? "+" : ""}
+                                        {formatStoredAmount(
+                                          ghsCurrencyFormatter,
+                                          line.totalDelta,
+                                        )}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  <p className="text-xs text-muted-foreground">
+                                    {line.productSku ? `${line.productSku} · ` : ""}
+                                    {typeof line.originalQuantity ===
+                                      "number" &&
+                                    typeof line.adjustedQuantity === "number"
+                                      ? `${line.originalQuantity} original to ${line.adjustedQuantity} adjusted`
+                                      : "Quantity adjusted"}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     ))}
                   </div>
@@ -1639,12 +1823,26 @@ export function TransactionView() {
               ) : null}
 
               <OrderSummary
-                cartItems={cartItems}
+                cartItems={displayCartItems}
                 readOnly
                 presentation="rail"
                 registerNumber={transaction.registerNumber}
                 completedOrderNumber={transaction.transactionNumber}
                 completedTransactionData={completedData}
+                completedAdjustmentSummary={
+                  hasAppliedItemAdjustment && latestAppliedAdjustment
+                    ? {
+                        originalTotal: originalSaleTotal,
+                        settlementAmount:
+                          latestAppliedAdjustment.settlementAmount,
+                        settlementDirection:
+                          latestAppliedAdjustment.settlementDirection,
+                        settlementMethod:
+                          latestAppliedAdjustment.settlementMethod,
+                        totalDelta: totalAppliedAdjustmentDelta,
+                      }
+                    : null
+                }
                 cashierName={
                   transaction.cashier
                     ? (formatStaffDisplayName(transaction.cashier) ?? undefined)
@@ -1671,7 +1869,7 @@ export function TransactionView() {
             </div>
 
             <CartItems
-              cartItems={cartItems}
+              cartItems={displayCartItems}
               readOnly
               className="h-full min-h-0"
             />

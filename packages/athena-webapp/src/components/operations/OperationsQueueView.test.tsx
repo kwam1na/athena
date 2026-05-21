@@ -977,4 +977,90 @@ describe("OperationsQueueViewContent", () => {
 
     consoleErrorSpy.mockRestore();
   });
+
+  it("surfaces approval command user errors from sale adjustments", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    const submitStockBatch = vi.fn();
+    const decideApprovalRequest = vi.fn().mockResolvedValue({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message:
+          "This transaction already has an item adjustment waiting for approval.",
+      },
+    });
+    const authenticateStaffCredential = vi.fn().mockResolvedValue(
+      ok({
+        activeRoles: ["manager"],
+        staffProfile: {},
+        staffProfileId: "staff-manager-1",
+      }),
+    );
+    const authenticateStaffCredentialForApproval = vi.fn().mockResolvedValue(
+      ok({
+        approvalProofId: "proof-1",
+        approvedByStaffProfileId: "staff-manager-1",
+        expiresAt: Date.now() + 60_000,
+      }),
+    );
+
+    mockedHooks.useMutation.mockReset();
+    mockedHooks.useQuery.mockReset();
+    const mutationOrder = [
+      submitStockBatch,
+      decideApprovalRequest,
+      authenticateStaffCredential,
+      authenticateStaffCredentialForApproval,
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+    ];
+    let mutationCallIndex = 0;
+    mockedHooks.useMutation.mockImplementation(
+      () => mutationOrder[mutationCallIndex++ % mutationOrder.length],
+    );
+    const queueSnapshot = {
+      approvalRequests: [
+        {
+          _id: "approval-1",
+          requestType: "pos_item_adjustment",
+          status: "pending",
+          workItemTitle: "Item adjustment review",
+        },
+      ],
+      workItems: [],
+    };
+    let queryCallIndex = 0;
+    mockedHooks.useQuery.mockImplementation(() => {
+      queryCallIndex += 1;
+
+      return queryCallIndex % 2 === 1
+        ? queueSnapshot
+        : baseProps.inventoryItems;
+    });
+
+    render(<OperationsQueueView />);
+
+    await user.click(screen.getByRole("button", { name: /unlock approvals/i }));
+    await user.click(
+      within(
+        screen.getByRole("dialog", { name: /unlock approval decisions/i }),
+      ).getByRole("button", { name: /unlock approvals/i }),
+    );
+    await waitFor(() => expect(authenticateStaffCredential).toHaveBeenCalled());
+
+    await user.click(
+      screen.getByRole("button", { name: /approve adjustment/i }),
+    );
+
+    await waitFor(() =>
+      expect(mockedToast.error).toHaveBeenCalledWith(
+        "This transaction already has an item adjustment waiting for approval.",
+      ),
+    );
+    expect(mockedToast.error).not.toHaveBeenCalledWith("Please try again.");
+  });
 });

@@ -111,6 +111,36 @@ function assertPayloadMatchesPlan(args: {
   }
 }
 
+async function reconcileStalePendingAdjustment(
+  ctx: MutationCtx,
+  activeAdjustment: Awaited<ReturnType<typeof getActiveTransactionAdjustment>>,
+) {
+  if (!activeAdjustment?.approvalRequestId) {
+    return activeAdjustment;
+  }
+
+  const approvalRequest = await ctx.db.get(
+    "approvalRequest",
+    activeAdjustment.approvalRequestId,
+  );
+  if (!approvalRequest || approvalRequest.status === "pending") {
+    return activeAdjustment;
+  }
+
+  const status =
+    approvalRequest.status === "rejected" || approvalRequest.status === "cancelled"
+      ? approvalRequest.status
+      : "stale";
+  const now = Date.now();
+  await (ctx.db as any).patch("posTransactionAdjustment", activeAdjustment._id, {
+    decidedAt: activeAdjustment.decidedAt ?? approvalRequest.decidedAt ?? now,
+    status,
+    updatedAt: now,
+  });
+
+  return null;
+}
+
 async function buildServerAdjustmentPlan(
   ctx: MutationCtx,
   args: {
@@ -150,8 +180,12 @@ async function buildServerAdjustmentPlan(
     storeId: args.transaction.storeId,
     transactionId: args.transaction._id,
   });
-  const planned = planTransactionAdjustment({
+  const effectiveActiveAdjustment = await reconcileStalePendingAdjustment(
+    ctx,
     activeAdjustment,
+  );
+  const planned = planTransactionAdjustment({
+    activeAdjustment: effectiveActiveAdjustment,
     draft: {
       existingLines: args.payload.lines.flatMap((line) =>
         line.originalTransactionItemId
@@ -429,6 +463,32 @@ async function findAppliedAdjustmentForTransaction(
         .eq("status", "applied"),
     )
     .first();
+}
+
+async function markPendingAdjustmentDecisionForApprovalRequest(
+  ctx: MutationCtx,
+  args: {
+    approvalRequestId: Id<"approvalRequest">;
+    decision: "rejected" | "cancelled";
+    now: number;
+  },
+) {
+  const pendingAdjustment = await (ctx.db as any)
+    .query("posTransactionAdjustment")
+    .withIndex("by_approvalRequestId", (q: any) =>
+      q.eq("approvalRequestId", args.approvalRequestId),
+    )
+    .first();
+
+  if (!pendingAdjustment || pendingAdjustment.status !== "pending_approval") {
+    return;
+  }
+
+  await (ctx.db as any).patch("posTransactionAdjustment", pendingAdjustment._id, {
+    decidedAt: args.now,
+    status: args.decision,
+    updatedAt: args.now,
+  });
 }
 
 async function requireMatchingPendingItemAdjustmentApprovalRequest(
@@ -1012,6 +1072,13 @@ export async function resolveTransactionItemAdjustmentApprovalDecisionWithCtx(
   }
 
   if (args.decision !== "approved") {
+    const decidedAt = Date.now();
+    await markPendingAdjustmentDecisionForApprovalRequest(ctx, {
+      approvalRequestId: args.approvalRequestId,
+      decision: args.decision,
+      now: decidedAt,
+    });
+
     await recordOperationalEventWithCtx(ctx, {
       actorStaffProfileId: args.reviewedByStaffProfileId,
       actorUserId: args.reviewedByUserId,
