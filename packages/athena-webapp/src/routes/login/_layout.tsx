@@ -8,6 +8,8 @@ import { useConvexAuth, useMutation } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import { useAuthToken } from "@convex-dev/auth/react";
 import {
+  ATHENA_AUTH_SYNC_FAILED_EVENT,
+  ATHENA_PENDING_AUTH_SYNC_EVENT,
   LOGGED_IN_USER_ID_KEY,
   PENDING_ATHENA_AUTH_SYNC_KEY,
 } from "~/src/lib/constants";
@@ -16,9 +18,8 @@ import { runCommand } from "~/src/lib/errors/runCommand";
 
 const HOME_PATH = "/";
 
-const AUTH_SYNC_RETRY_DELAY_MS = 100;
-const AUTH_SYNC_MAX_ATTEMPTS = 20;
-const AUTH_SYNC_RETRYABLE_MESSAGE = "Sign in again to continue";
+const AUTH_SYNC_RETRY_DELAY_MS = 250;
+const AUTH_SYNC_MAX_ATTEMPTS = 60;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -82,11 +83,11 @@ export function LoginLayout() {
       setPendingAuthSyncTick((tick) => tick + 1);
     };
 
-    window.addEventListener("athena:pending-auth-sync", handlePendingAuthSync);
+    window.addEventListener(ATHENA_PENDING_AUTH_SYNC_EVENT, handlePendingAuthSync);
 
     return () => {
       window.removeEventListener(
-        "athena:pending-auth-sync",
+        ATHENA_PENDING_AUTH_SYNC_EVENT,
         handlePendingAuthSync
       );
     };
@@ -140,8 +141,7 @@ export function LoginLayout() {
           finalErrorMessage = result.error.message;
           const shouldRetry =
             result.kind === "user_error" &&
-            result.error.retryable === true &&
-            result.error.message === AUTH_SYNC_RETRYABLE_MESSAGE;
+            result.error.retryable === true;
 
           if (!shouldRetry || attempt === AUTH_SYNC_MAX_ATTEMPTS - 1) {
             break;
@@ -174,6 +174,7 @@ export function LoginLayout() {
             : "Could not finish loading your Athena profile";
 
         setAuthSyncError(message);
+        window.dispatchEvent(new Event(ATHENA_AUTH_SYNC_FAILED_EVENT));
         isSyncingRef.current = false;
       }
     };

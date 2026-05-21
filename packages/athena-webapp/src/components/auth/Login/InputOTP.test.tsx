@@ -1,10 +1,14 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { forwardRef } from "react";
+import type { ReactNode } from "react";
 
 import { InputOTPForm } from "./InputOTP";
-import { PENDING_ATHENA_AUTH_SYNC_KEY } from "~/src/lib/constants";
+import {
+  ATHENA_AUTH_SYNC_FAILED_EVENT,
+  PENDING_ATHENA_AUTH_SYNC_KEY,
+} from "~/src/lib/constants";
 import { ATHENA_EMAIL_OTP_PROVIDER_ID } from "../../../../shared/auth";
 
 const mocked = vi.hoisted(() => ({
@@ -18,7 +22,14 @@ vi.mock("@convex-dev/auth/react", () => ({
 }));
 
 vi.mock("@/components/ui/input-otp", () => ({
-  InputOTP: forwardRef<HTMLInputElement, any>((props, ref) => (
+  InputOTP: forwardRef<
+    HTMLInputElement,
+    {
+      children?: ReactNode;
+      onChange?: (value: string) => void;
+      value?: string;
+    }
+  >((props, ref) => (
     <input
       aria-label="Verification code"
       ref={ref}
@@ -26,7 +37,9 @@ vi.mock("@/components/ui/input-otp", () => ({
       value={props.value ?? ""}
     />
   )),
-  InputOTPGroup: ({ children }: any) => <div>{children}</div>,
+  InputOTPGroup: ({ children }: { children: ReactNode }) => (
+    <div>{children}</div>
+  ),
   InputOTPSlot: () => null,
 }));
 
@@ -125,6 +138,51 @@ describe("InputOTPForm", () => {
         PENDING_ATHENA_AUTH_SYNC_KEY,
         "1"
       )
+    );
+  });
+
+  it("stops the verification spinner while waiting for the Athena auth sync", async () => {
+    const user = userEvent.setup();
+
+    mocked.signIn.mockResolvedValue({ signingIn: true });
+
+    render(
+      <InputOTPForm email="manager@example.com" onBack={vi.fn()} />
+    );
+
+    await user.type(screen.getByLabelText(/verification code/i), "123456");
+
+    await waitFor(() =>
+      expect(window.sessionStorage.setItem).toHaveBeenCalledWith(
+        PENDING_ATHENA_AUTH_SYNC_KEY,
+        "1"
+      )
+    );
+
+    expect(screen.getByRole("button", { name: /continue/i })).toBeDisabled();
+  });
+
+  it("reenables verification when the Athena auth sync fails", async () => {
+    const user = userEvent.setup();
+
+    mocked.signIn.mockResolvedValue({ signingIn: true });
+
+    render(
+      <InputOTPForm email="manager@example.com" onBack={vi.fn()} />
+    );
+
+    await user.type(screen.getByLabelText(/verification code/i), "123456");
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /continue/i })).toBeDisabled()
+    );
+
+    act(() => {
+      window.dispatchEvent(new Event(ATHENA_AUTH_SYNC_FAILED_EVENT));
+    });
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /continue/i })).toBeEnabled()
     );
   });
 

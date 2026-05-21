@@ -10,6 +10,7 @@
 
 import type * as app from "../app.js";
 import type * as auth from "../auth.js";
+import type * as authConfig from "../authConfig.js";
 import type * as cache_index from "../cache/index.js";
 import type * as cashControls_closeouts from "../cashControls/closeouts.js";
 import type * as cashControls_deposits from "../cashControls/deposits.js";
@@ -347,6 +348,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   app: typeof app;
   auth: typeof auth;
+  authConfig: typeof authConfig;
   "cache/index": typeof cache_index;
   "cashControls/closeouts": typeof cashControls_closeouts;
   "cashControls/deposits": typeof cashControls_deposits;
