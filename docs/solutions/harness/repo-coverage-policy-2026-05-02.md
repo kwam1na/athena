@@ -19,7 +19,7 @@ tags:
 
 ## Problem
 
-Athena has app-level Vitest coverage commands, but the repo did not enforce coverage in the PR ladder. The root coverage summary also used a hard-coded checkout path, which let worktrees read stale coverage reports from another local checkout.
+Athena has app-level Vitest coverage commands, but the repo did not enforce coverage in the pr ladder. The root coverage summary also used a hard-coded checkout path, which let worktrees read stale coverage reports from another local checkout.
 
 The repo is not currently at 100 percent coverage. Enforcing strict 100 percent immediately would block all delivery without first adding a large backlog of tests.
 
