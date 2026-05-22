@@ -32,6 +32,22 @@ vi.mock("convex/react", () => ({
 }));
 
 vi.mock("@tanstack/react-router", () => ({
+  Link: ({
+    children,
+    params,
+    to,
+  }: {
+    children?: React.ReactNode;
+    params?: Record<string, string>;
+    to: string;
+  }) => {
+    const href = Object.entries(params ?? {}).reduce(
+      (path, [key, value]) => path.replace(`$${key}`, value),
+      to,
+    );
+
+    return <a href={href}>{children}</a>;
+  },
   useParams: (...args: unknown[]) => useParamsMock(...args),
 }));
 
@@ -1877,7 +1893,8 @@ describe("TransactionView", () => {
     render(<TransactionView />);
 
     expect(screen.getByText("Adjusted sale")).toBeInTheDocument();
-    expect(screen.getByText("Adjusted sale total")).toBeInTheDocument();
+    expect(screen.getByText("Applied sale total")).toBeInTheDocument();
+    expect(screen.getByText("Pending sale total")).toBeInTheDocument();
     expect(screen.getByText("Original sale total")).toBeInTheDocument();
     expect(screen.getByText("Item adjustment")).toBeInTheDocument();
     expect(screen.getByText("Item adjustment pending approval")).toBeInTheDocument();
@@ -1892,6 +1909,56 @@ describe("TransactionView", () => {
     expect(screen.getByTestId("order-summary")).toHaveTextContent(
       "adjusted summary 1000 original 2000 delta -1000",
     );
+  });
+
+  it("shows pending item adjustment totals as projected instead of applied", () => {
+    useParamsMock.mockReturnValue({ transactionId: "txn_pending_adjustment" });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      total: 604396,
+      subtotal: 604396,
+      adjustmentSummary: {
+        appliedCount: 0,
+        effectiveNetTotal: 604396,
+        hasAdjustments: true,
+        originalTotal: 604396,
+        pendingCount: 1,
+        totalAppliedAdjustmentDelta: 0,
+      },
+      adjustments: [
+        {
+          _id: "approval-1",
+          actorStaffName: "Ato Kwamina",
+          adjustedTotal: 504396,
+          createdAt: 200,
+          lineItems: [
+            {
+              adjustedQuantity: 9,
+              originalQuantity: 11,
+              productName: "Vibes",
+              productSku: "6N2Y-YFV-HFQ",
+              quantityDelta: -2,
+              totalDelta: -100000,
+              unitPrice: 50000,
+            },
+          ],
+          originalTotal: 604396,
+          settlementAmount: 100000,
+          settlementDirection: "refund",
+          status: "pending_approval",
+        },
+      ],
+    });
+
+    render(<TransactionView />);
+
+    expect(screen.getByText("Adjustment state")).toBeInTheDocument();
+    expect(screen.getByText("Original sale total")).toBeInTheDocument();
+    expect(screen.getByText("GH₵6,043.96")).toBeInTheDocument();
+    expect(screen.getByText("Pending sale total")).toBeInTheDocument();
+    expect(screen.getByText("GH₵5,043.96")).toBeInTheDocument();
+    expect(screen.queryByText("Applied sale total")).not.toBeInTheDocument();
+    expect(screen.queryByText("Adjusted sale total")).not.toBeInTheDocument();
   });
 
   it("opens the item adjustment workflow and requires a settlement method for refunds", async () => {
@@ -2374,6 +2441,95 @@ describe("TransactionView", () => {
         transactionId: "txn_equal",
       }),
     );
+  });
+
+  it("renders item adjustment command errors returned by the backend", async () => {
+    const user = userEvent.setup();
+    const authMutation = vi.fn();
+    const terminalAuthMutation = vi.fn().mockResolvedValue({
+      kind: "ok",
+      data: {
+        activeRoles: ["cashier"],
+        posLocalStaffProof: {
+          expiresAt: Date.now() + 60_000,
+          token: "proof-token-1",
+        },
+        staffProfile: { firstName: "Kwamina", lastName: "Mensah" },
+        staffProfileId: "staff_1",
+      },
+    });
+    const itemAdjustmentMutation = vi.fn().mockResolvedValue({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: "Register session expected cash cannot be negative.",
+      },
+    });
+    mockTransactionMutations(
+      authMutation,
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      itemAdjustmentMutation,
+      terminalAuthMutation,
+    );
+    useParamsMock.mockReturnValue({
+      orgUrlSlug: "wigclub",
+      storeUrlSlug: "osu",
+      transactionId: "txn_cash_refund",
+    });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      paymentMethod: "mobile_money",
+      payments: [{ method: "mobile_money", amount: 2000, timestamp: 123 }],
+      registerSessionId: "session_1",
+      total: 2000,
+      totalPaid: 2000,
+      items: [
+        {
+          _id: "item_1",
+          productId: "product_1",
+          productName: "Closure wig",
+          productSku: "CW-18",
+          productSkuId: "sku_1",
+          quantity: 2,
+          totalPrice: 2000,
+          unitPrice: 1000,
+        },
+      ],
+    });
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Update" }));
+    await user.click(
+      screen.getByRole("button", { name: "Items or quantities" }),
+    );
+    await user.click(screen.getByRole("button", { name: /decrease closure wig/i }));
+    await user.selectOptions(screen.getByLabelText("Settlement method"), "cash");
+    await user.type(
+      screen.getByLabelText("Item adjustment reason"),
+      "Customer was charged for two instead of one.",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Submit item adjustment" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+
+    expect(
+      await screen.findByText("Drawer expected cash is below this refund."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Correct the register session opening float so expected cash can cover the cash refund, then submit the item adjustment again.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Register session expected cash cannot be negative.")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /review register session/i })).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/cash-controls/registers/session_1",
+    );
+    expect(screen.queryByText("Please try again.")).not.toBeInTheDocument();
   });
 
   it("formats correction history labels for fallback and partial payment changes", () => {

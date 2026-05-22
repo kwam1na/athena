@@ -635,6 +635,15 @@ describe("approval request helpers", () => {
         message: "Register session expected cash cannot be negative.",
       },
     });
+    expect(tables.approvalRequest.get("approval-item-1")).toMatchObject({
+      decisionNotes: "Register session expected cash cannot be negative.",
+      reviewedByStaffProfileId: "staff-manager-1",
+      reviewedByUserId: "manager-1",
+      status: "cancelled",
+    });
+    expect(tables.approvalRequest.get("approval-item-1")?.metadata).toMatchObject({
+      applyFailureMessage: "Register session expected cash cannot be negative.",
+    });
   });
 
   it("returns duplicate pending item adjustment failures as user errors", async () => {

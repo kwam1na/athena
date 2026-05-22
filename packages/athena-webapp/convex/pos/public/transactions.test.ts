@@ -487,6 +487,28 @@ describe("adjustTransactionItems public mutation", () => {
     );
   });
 
+  it("surfaces register-session expected cash failures as item adjustment user errors", async () => {
+    vi.mocked(itemAdjustmentCommands.adjustTransactionItems).mockRejectedValue(
+      new Error("Register session expected cash cannot be negative."),
+    );
+
+    await expect(
+      getHandler(adjustTransactionItems)(createAuthorizedItemAdjustmentCtx() as never, {
+        actorStaffProfileId: "staff-1",
+        payload,
+        reason: "Customer was charged for two instead of one",
+        staffProofToken: "proof-token-1",
+        transactionId: "txn-1",
+      }),
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: "Register session expected cash cannot be negative.",
+      },
+    });
+  });
+
   it("requires a signed-in staff actor before adjusting items", async () => {
     await expect(
       getHandler(adjustTransactionItems)({} as never, {

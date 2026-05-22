@@ -5,7 +5,10 @@ import { Activity, AlertTriangle, MonitorCheck } from "lucide-react";
 
 import View from "@/components/View";
 import { FadeIn } from "@/components/common/FadeIn";
-import { PageLevelHeader, PageWorkspace } from "@/components/common/PageLevelHeader";
+import {
+  PageLevelHeader,
+  PageWorkspace,
+} from "@/components/common/PageLevelHeader";
 import { EmptyState } from "@/components/states/empty/empty-state";
 import { NoPermissionView } from "@/components/states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "@/components/states/signed-out/ProtectedAdminSignInView";
@@ -24,6 +27,7 @@ import {
   getStaffAuthorityLabel,
 } from "./terminalHealthPresentation";
 import type { TerminalHealthSummary } from "./terminalHealthTypes";
+import { getOrigin } from "~/src/lib/navigationUtils";
 
 const posTerminalApi = api.inventory.posTerminal as unknown as {
   listTerminalHealth: FunctionReference<
@@ -114,7 +118,9 @@ export function POSTerminalHealthViewContent({
                 <div className="rounded-lg border border-dashed border-border bg-surface-raised px-layout-lg py-layout-xl">
                   <EmptyState
                     description="Register this checkout station from POS settings before terminal health can report."
-                    icon={<MonitorCheck className="h-16 w-16 text-muted-foreground" />}
+                    icon={
+                      <MonitorCheck className="h-16 w-16 text-muted-foreground" />
+                    }
                     title="No POS terminals registered"
                   />
                 </div>
@@ -138,23 +144,42 @@ export function POSTerminalHealthViewContent({
                                 terminalId: String(summary.terminal._id),
                               }}
                               to="/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId"
+                              search={{ o: getOrigin() }}
                             >
                               {summary.terminal.displayName}
                             </Link>
                             <div className="flex flex-wrap gap-layout-xs text-sm text-muted-foreground">
-                              <span>{formatRegisterNumber(summary.terminal.registerNumber)}</span>
-                              <span>Last check-in {formatTerminalTimestamp(runtimeStatus?.receivedAt)}</span>
-                              <span>{getStaffAuthorityLabel(runtimeStatus?.staffAuthority)}</span>
+                              <span>
+                                {formatRegisterNumber(
+                                  summary.terminal.registerNumber,
+                                )}
+                              </span>
+                              <span>
+                                Last check-in{" "}
+                                {formatTerminalTimestamp(
+                                  runtimeStatus?.receivedAt,
+                                )}
+                              </span>
+                              <span>
+                                {getStaffAuthorityLabel(
+                                  runtimeStatus?.staffAuthority,
+                                )}
+                              </span>
                             </div>
                           </div>
-                          <Badge className={classification.toneClassName} variant="outline">
+                          <Badge
+                            className={classification.toneClassName}
+                            variant="outline"
+                          >
                             {classification.label}
                           </Badge>
                         </div>
 
                         <div className="mt-layout-md grid gap-layout-sm md:grid-cols-2 xl:grid-cols-4">
                           <div>
-                            <p className="text-xs font-medium uppercase text-muted-foreground">Sync</p>
+                            <p className="text-xs font-medium uppercase text-muted-foreground">
+                              Sync
+                            </p>
                             <p className="mt-1 text-sm text-foreground">
                               {runtimeStatus
                                 ? `${runtimeStatus.sync.pendingEventCount} pending / ${runtimeStatus.sync.reviewEventCount + getReviewEvidenceCount(summary.syncEvidence)} review`
@@ -162,21 +187,29 @@ export function POSTerminalHealthViewContent({
                             </p>
                           </div>
                           <div>
-                            <p className="text-xs font-medium uppercase text-muted-foreground">Snapshot age</p>
+                            <p className="text-xs font-medium uppercase text-muted-foreground">
+                              Snapshot age
+                            </p>
                             <p className="mt-1 text-sm text-foreground">
                               {getSnapshotAgeSummary(runtimeStatus?.snapshots)}
                             </p>
                           </div>
                           <div>
-                            <p className="text-xs font-medium uppercase text-muted-foreground">Active session</p>
+                            <p className="text-xs font-medium uppercase text-muted-foreground">
+                              Active session
+                            </p>
                             <p className="mt-1 text-sm text-foreground">
-                              Register session evidence is shown in cash controls
+                              Register session evidence is shown in cash
+                              controls
                             </p>
                           </div>
                           <div>
-                            <p className="text-xs font-medium uppercase text-muted-foreground">Cloud cursor</p>
+                            <p className="text-xs font-medium uppercase text-muted-foreground">
+                              Cloud cursor
+                            </p>
                             <p className="mt-1 text-sm text-foreground">
-                              {summary.syncEvidence.acceptedThroughSequence == null
+                              {summary.syncEvidence.acceptedThroughSequence ==
+                              null
                                 ? "No accepted sequence"
                                 : `Accepted through ${summary.syncEvidence.acceptedThroughSequence}`}
                             </p>
@@ -198,14 +231,12 @@ export function POSTerminalHealthViewContent({
 export function POSTerminalHealthView() {
   const { isLoading: isLoadingUser, user } = useAuth();
   const { activeStore, isLoadingStores } = useGetActiveStore();
-  const {
-    canAccessPOS,
-    isLoading: isLoadingPermissions,
-  } = usePermissions();
+  const { canAccessPOS, isLoading: isLoadingPermissions } = usePermissions();
   const params = useParams({ strict: false }) as
     | { orgUrlSlug?: string; storeUrlSlug?: string }
     | undefined;
-  const isLoadingAccess = isLoadingUser || isLoadingStores || isLoadingPermissions;
+  const isLoadingAccess =
+    isLoadingUser || isLoadingStores || isLoadingPermissions;
   const canViewHealth = canAccessPOS();
   const canQuery = Boolean(activeStore?._id && user && canViewHealth);
   const healthSummaries = useQuery(

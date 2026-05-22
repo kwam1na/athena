@@ -10,6 +10,7 @@ import { consumeCommandApprovalProofWithCtx } from "../../operations/approvalAct
 import { recordInventoryMovementWithCtx } from "../../operations/inventoryMovements";
 import { recordOperationalEventWithCtx } from "../../operations/operationalEvents";
 import { recordPaymentAllocationWithCtx } from "../../operations/paymentAllocations";
+import { recordRegisterSessionTraceBestEffort } from "../../operations/registerSessionTracing";
 import {
   getPosTransactionById,
   getStoreById,
@@ -36,6 +37,10 @@ vi.mock("../../operations/operationalEvents", () => ({
 
 vi.mock("../../operations/paymentAllocations", () => ({
   recordPaymentAllocationWithCtx: vi.fn(),
+}));
+
+vi.mock("../../operations/registerSessionTracing", () => ({
+  recordRegisterSessionTraceBestEffort: vi.fn(),
 }));
 
 vi.mock("../infrastructure/repositories/transactionRepository", () => ({
@@ -165,8 +170,13 @@ function createFakeCtx() {
           _id: "register-session-1",
           countedCash: 1200,
           expectedCash: 1000,
+          openedAt: 1,
+          openingFloat: 1000,
+          organizationId: "org-1",
+          registerNumber: "3",
           storeId: "store-1",
           status: "active",
+          terminalId: "terminal-1",
         },
       ],
     ]),
@@ -299,6 +309,10 @@ beforeEach(() => {
   vi.mocked(recordOperationalEventWithCtx).mockResolvedValue({
     _id: "event-1" as Id<"operationalEvent">,
   } as never);
+  vi.mocked(recordRegisterSessionTraceBestEffort).mockResolvedValue({
+    traceCreated: true,
+    traceId: "register_session:register-session-1",
+  } as never);
 });
 
 describe("adjustTransactionItems", () => {
@@ -352,6 +366,43 @@ describe("adjustTransactionItems", () => {
     expect(recordInventoryMovementWithCtx).not.toHaveBeenCalled();
     expect(recordPaymentAllocationWithCtx).not.toHaveBeenCalled();
     expect(recordOperationalEventWithCtx).not.toHaveBeenCalled();
+    expect(recordRegisterSessionTraceBestEffort).toHaveBeenCalledWith(
+      ctx as never,
+      expect.objectContaining({
+        actorStaffProfileId: "cashier-1",
+        amount: 500,
+        approvalRequestId: "approvalRequest-1",
+        settlementDirection: "refund",
+        settlementMethod: "cash",
+        stage: "item_adjustment_approval_pending",
+        transactionId: "txn-1",
+        transactionNumber: "POS-111111",
+      }),
+    );
+  });
+
+  it("rejects cash refunds that would make expected cash negative before creating approval requests", async () => {
+    const { ctx, tables } = createFakeCtx();
+    tables.registerSession.set("register-session-1", {
+      ...(tables.registerSession.get("register-session-1") ?? {}),
+      expectedCash: 400,
+    });
+
+    await expect(
+      adjustTransactionItems(ctx as never, {
+        actorStaffProfileId: "cashier-1" as Id<"staffProfile">,
+        payload: basePayload(),
+        reason: "Customer was charged for two instead of one",
+        transactionId: "txn-1" as Id<"posTransaction">,
+      }),
+    ).rejects.toThrow("Register session expected cash cannot be negative.");
+
+    expect(tables.approvalRequest.size).toBe(0);
+    expect(tables.posTransactionAdjustment.size).toBe(0);
+    expect(recordInventoryMovementWithCtx).not.toHaveBeenCalled();
+    expect(recordPaymentAllocationWithCtx).not.toHaveBeenCalled();
+    expect(recordOperationalEventWithCtx).not.toHaveBeenCalled();
+    expect(recordRegisterSessionTraceBestEffort).not.toHaveBeenCalled();
   });
 
   it("applies a matching refund adjustment once without mutating original transaction rows", async () => {
@@ -433,6 +484,32 @@ describe("adjustTransactionItems", () => {
             }),
           ],
         }),
+      }),
+    );
+    expect(recordRegisterSessionTraceBestEffort).toHaveBeenCalledWith(
+      ctx as never,
+      expect.objectContaining({
+        amount: 500,
+        approvalRequestId,
+        settlementDirection: "refund",
+        settlementMethod: "cash",
+        stage: "item_adjustment_approval_pending",
+        transactionId: "txn-1",
+        transactionNumber: "POS-111111",
+      }),
+    );
+    expect(recordRegisterSessionTraceBestEffort).toHaveBeenCalledWith(
+      ctx as never,
+      expect.objectContaining({
+        adjustmentId: "posTransactionAdjustment-1",
+        amount: 500,
+        approvalRequestId,
+        registerSessionExpectedCashDelta: -500,
+        settlementDirection: "refund",
+        settlementMethod: "cash",
+        stage: "item_adjustment_applied",
+        transactionId: "txn-1",
+        transactionNumber: "POS-111111",
       }),
     );
     expect(tables.productSku.get("sku-1")).toMatchObject({

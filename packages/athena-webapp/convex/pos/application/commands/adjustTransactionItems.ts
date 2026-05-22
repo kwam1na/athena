@@ -10,6 +10,11 @@ import { recordInventoryMovementWithCtx } from "../../../operations/inventoryMov
 import { recordOperationalEventWithCtx } from "../../../operations/operationalEvents";
 import { recordPaymentAllocationWithCtx } from "../../../operations/paymentAllocations";
 import {
+  recordRegisterSessionTraceBestEffort,
+  type RegisterSessionTraceableSession,
+  type RegisterSessionTraceStage,
+} from "../../../operations/registerSessionTracing";
+import {
   createTransactionAdjustmentForTransaction,
   getActiveTransactionAdjustment,
   getProductSkuById,
@@ -355,6 +360,72 @@ async function findAppliedAdjustmentByFingerprint(
   };
 }
 
+async function getRegisterSessionForTrace(
+  ctx: MutationCtx,
+  args: {
+    registerSessionId?: Id<"registerSession">;
+    storeId: Id<"store">;
+  },
+) {
+  if (!args.registerSessionId) {
+    return null;
+  }
+
+  const session = await ctx.db.get("registerSession", args.registerSessionId);
+
+  if (!session || session.storeId !== args.storeId) {
+    return null;
+  }
+
+  return session as RegisterSessionTraceableSession;
+}
+
+async function recordItemAdjustmentRegisterSessionTrace(
+  ctx: MutationCtx,
+  args: {
+    actorStaffProfileId?: Id<"staffProfile">;
+    actorUserId?: Id<"athenaUser">;
+    adjustmentId?: Id<"posTransactionAdjustment">;
+    approvalRequestId?: Id<"approvalRequest">;
+    plan: AdjustmentPlan;
+    registerSessionExpectedCashDelta?: number;
+    stage: Extract<
+      RegisterSessionTraceStage,
+      "item_adjustment_approval_pending" | "item_adjustment_applied"
+    >;
+    transaction: {
+      _id: Id<"posTransaction">;
+      registerSessionId?: Id<"registerSession">;
+      storeId: Id<"store">;
+      transactionNumber: string;
+    };
+  },
+) {
+  const session = await getRegisterSessionForTrace(ctx, {
+    registerSessionId: args.transaction.registerSessionId,
+    storeId: args.transaction.storeId,
+  });
+
+  if (!session) {
+    return;
+  }
+
+  await recordRegisterSessionTraceBestEffort(ctx, {
+    actorStaffProfileId: args.actorStaffProfileId,
+    actorUserId: args.actorUserId,
+    adjustmentId: args.adjustmentId,
+    amount: args.plan.settlementAmount,
+    approvalRequestId: args.approvalRequestId,
+    registerSessionExpectedCashDelta: args.registerSessionExpectedCashDelta,
+    session,
+    settlementDirection: args.plan.settlementDirection,
+    settlementMethod: args.plan.settlementMethod,
+    stage: args.stage,
+    transactionId: args.transaction._id,
+    transactionNumber: args.transaction.transactionNumber,
+  });
+}
+
 async function createApprovalRequestForAdjustment(
   ctx: MutationCtx,
   args: {
@@ -371,8 +442,7 @@ async function createApprovalRequestForAdjustment(
   },
 ) {
   const store = await getStoreById(ctx, args.transaction.storeId);
-
-  return ctx.db.insert(
+  const approvalRequestId = await ctx.db.insert(
     "approvalRequest",
     buildApprovalRequest({
       metadata: {
@@ -420,6 +490,17 @@ async function createApprovalRequestForAdjustment(
       subjectType: ITEM_ADJUSTMENT_SUBJECT_TYPE,
     }),
   );
+
+  await recordItemAdjustmentRegisterSessionTrace(ctx, {
+    actorStaffProfileId: args.actorStaffProfileId,
+    actorUserId: args.actorUserId,
+    approvalRequestId,
+    plan: args.plan,
+    stage: "item_adjustment_approval_pending",
+    transaction: args.transaction,
+  });
+
+  return approvalRequestId;
 }
 
 async function findPendingItemAdjustmentApprovalRequest(
@@ -708,14 +789,14 @@ async function adjustRegisterSessionExpectedCashForSettlement(
 
   const expectedCashDelta =
     args.direction === "collect" ? args.amount : -args.amount;
-  if (args.validateOnly) {
-    return expectedCashDelta;
-  }
-
   const nextExpectedCash = registerSession.expectedCash + expectedCashDelta;
 
   if (nextExpectedCash < 0) {
     throw new Error("Register session expected cash cannot be negative.");
+  }
+
+  if (args.validateOnly) {
+    return expectedCashDelta;
   }
 
   await ctx.db.patch("registerSession", args.registerSessionId, {
@@ -911,6 +992,17 @@ async function applyApprovedAdjustment(
     updatedAt: now,
   });
 
+  await recordItemAdjustmentRegisterSessionTrace(ctx, {
+    actorStaffProfileId: args.actorStaffProfileId,
+    actorUserId: args.actorUserId,
+    adjustmentId,
+    approvalRequestId: args.approvalRequestId,
+    plan: args.plan,
+    registerSessionExpectedCashDelta,
+    stage: "item_adjustment_applied",
+    transaction: args.transaction,
+  });
+
   return {
     adjustmentId,
     approvalProofId: args.approvalProofId,
@@ -942,14 +1034,6 @@ export async function adjustTransactionItems(
     payload: args.payload,
     transaction,
   });
-  await adjustRegisterSessionExpectedCashForSettlement(ctx, {
-    amount: plan.settlementAmount,
-    direction: plan.settlementDirection,
-    method: plan.settlementMethod,
-    registerSessionId: transaction.registerSessionId,
-    storeId: transaction.storeId,
-    validateOnly: true,
-  });
   const existing = await findAppliedAdjustmentByFingerprint(ctx, {
     fingerprint: plan.fingerprint,
     payloadSubject: plan.payloadSubject,
@@ -959,6 +1043,16 @@ export async function adjustTransactionItems(
 
   if (existing) {
     return existing;
+  }
+
+  const appliedAdjustment = await findAppliedAdjustmentForTransaction(ctx, {
+    storeId: transaction.storeId,
+    transactionId: transaction._id,
+  });
+  if (appliedAdjustment) {
+    throw new Error(
+      "This transaction already has an item adjustment applied.",
+    );
   }
 
   if (!args.approvalProofId) {
@@ -974,6 +1068,17 @@ export async function adjustTransactionItems(
       throw new Error(
         "This transaction already has an item adjustment waiting for approval.",
       );
+    }
+
+    if (!pendingApprovalRequest) {
+      await adjustRegisterSessionExpectedCashForSettlement(ctx, {
+        amount: plan.settlementAmount,
+        direction: plan.settlementDirection,
+        method: plan.settlementMethod,
+        registerSessionId: transaction.registerSessionId,
+        storeId: transaction.storeId,
+        validateOnly: true,
+      });
     }
 
     const approvalRequestId =
@@ -999,6 +1104,15 @@ export async function adjustTransactionItems(
       transactionId: args.transactionId,
     };
   }
+
+  await adjustRegisterSessionExpectedCashForSettlement(ctx, {
+    amount: plan.settlementAmount,
+    direction: plan.settlementDirection,
+    method: plan.settlementMethod,
+    registerSessionId: transaction.registerSessionId,
+    storeId: transaction.storeId,
+    validateOnly: true,
+  });
 
   const approvalRequest =
     await requireMatchingPendingItemAdjustmentApprovalRequest(ctx, {
