@@ -13,12 +13,17 @@ import { ATHENA_EMAIL_OTP_PROVIDER_ID } from "../../../../shared/auth";
 
 const mocked = vi.hoisted(() => ({
   signIn: vi.fn(),
+  navigate: vi.fn(),
 }));
 
 vi.mock("@convex-dev/auth/react", () => ({
   useAuthActions: () => ({
     signIn: mocked.signIn,
   }),
+}));
+
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => mocked.navigate,
 }));
 
 vi.mock("@/components/ui/input-otp", () => ({
@@ -46,6 +51,7 @@ vi.mock("@/components/ui/input-otp", () => ({
 describe("InputOTPForm", () => {
   beforeEach(() => {
     mocked.signIn.mockReset();
+    mocked.navigate.mockReset();
     window.sessionStorage.clear();
   });
 
@@ -70,6 +76,7 @@ describe("InputOTPForm", () => {
       PENDING_ATHENA_AUTH_SYNC_KEY,
       "1"
     );
+    expect(mocked.navigate).toHaveBeenCalledWith({ to: "/" });
   });
 
   it("surfaces invalid verification codes to the operator", async () => {
@@ -86,6 +93,7 @@ describe("InputOTPForm", () => {
     await waitFor(() =>
       expect(screen.getByText("Invalid code entered")).toBeInTheDocument()
     );
+    expect(mocked.navigate).not.toHaveBeenCalled();
   });
 
   it("submits a normalized code when Safari autofill provides formatted text", async () => {
