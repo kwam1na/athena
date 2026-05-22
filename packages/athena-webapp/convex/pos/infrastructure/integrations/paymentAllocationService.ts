@@ -68,9 +68,9 @@ export async function recordRetailVoidPaymentAllocations(
     targetType: "pos_transaction",
   });
 
-  await Promise.all(
+  const recordedAllocations = await Promise.all(
     allocations.map((allocation) => recordPaymentAllocationWithCtx(ctx, allocation)),
   );
 
-  return allocations.length > 0;
+  return recordedAllocations.filter(Boolean);
 }

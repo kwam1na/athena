@@ -96,6 +96,26 @@ describe("transactionColumns", () => {
     expect(screen.queryByTestId("session-trace-link")).not.toBeInTheDocument();
   });
 
+  it("marks voided completed transactions distinctly", () => {
+    renderTransactionCell({
+      _id: "txn_void" as CompletedTransactionRow["_id"],
+      transactionNumber: "POS-VOID",
+      formattedTotal: "GHc 10.00",
+      paymentMethodLabel: "Cash",
+      paymentMethod: "cash",
+      cashierName: "Ada L.",
+      customerName: "Walk-in",
+      itemCount: 1,
+      completedAt: 100,
+      hasTrace: false,
+      sessionTraceId: null,
+      status: "void",
+      voidedAt: 200,
+    });
+
+    expect(screen.getByText("Voided")).toBeInTheDocument();
+  });
+
   it("renders a wallet cards icon for transactions with multiple payment methods", () => {
     const { container } = renderTransactionCell(
       {

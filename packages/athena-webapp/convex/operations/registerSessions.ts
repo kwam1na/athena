@@ -180,7 +180,7 @@ export function buildRegisterSessionTransactionPatch(
     changeGiven: args.changeGiven,
     payments: args.payments,
   });
-  const updates: Record<string, number | RegisterSessionStatus> = {};
+  const updates: Record<string, number | RegisterSessionStatus | string[]> = {};
 
   if (expectedCashDelta > 0) {
     const nextExpectedCash =
@@ -621,6 +621,7 @@ export const recordRegisterSessionTransaction = internalMutation({
       })
     ),
     changeGiven: v.optional(v.number()),
+    idempotencyKey: v.optional(v.string()),
     registerNumber: v.optional(v.string()),
     terminalId: v.id("posTerminal"),
   },
@@ -639,7 +640,21 @@ export const recordRegisterSessionTransaction = internalMutation({
       throw new Error("Register session is not accepting new transactions.");
     }
 
+    if (
+      args.idempotencyKey &&
+      session.recordedTransactionKeys?.includes(args.idempotencyKey)
+    ) {
+      return session;
+    }
+
     const updates = buildRegisterSessionTransactionPatch(session, args);
+
+    if (args.idempotencyKey) {
+      updates.recordedTransactionKeys = [
+        ...(session.recordedTransactionKeys ?? []),
+        args.idempotencyKey,
+      ];
+    }
 
     if (Object.keys(updates).length > 0) {
       await ctx.db.patch("registerSession", args.registerSessionId, updates);

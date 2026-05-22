@@ -4,6 +4,7 @@ import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import {
   Banknote,
+  Ban,
   CheckCircle2,
   CreditCard,
   Minus,
@@ -92,6 +93,17 @@ type ItemAdjustmentResultData = {
   settlementDirection?: string;
   settlementMethod?: string;
   transactionId: Id<"posTransaction">;
+};
+
+type TransactionVoidResultData = {
+  approvalProofId?: Id<"approvalProof">;
+  approverStaffProfileId?: Id<"staffProfile">;
+  inventoryMovementIds: Array<Id<"inventoryMovement">>;
+  operationalEventId?: Id<"operationalEvent">;
+  paymentAllocationIds: Array<Id<"paymentAllocation">>;
+  transactionId: Id<"posTransaction">;
+  transactionNumber: string;
+  voidedAt: number;
 };
 
 type TransactionWithReceiptDelivery = {
@@ -240,6 +252,45 @@ function getTransactionCorrectionHistory(transaction: {
   ].sort((first, second) => second.createdAt - first.createdAt);
 }
 
+function normalizeVoidCommandError(message: string) {
+  const normalizedMessage = message.toLowerCase();
+
+  if (
+    normalizedMessage.includes("daily close") ||
+    normalizedMessage.includes("operating day") ||
+    normalizedMessage.includes("day is closed")
+  ) {
+    return "Daily close completed. Reopen the day before voiding this sale.";
+  }
+
+  if (
+    normalizedMessage.includes("register") ||
+    normalizedMessage.includes("drawer") ||
+    normalizedMessage.includes("closeout")
+  ) {
+    return "Register closed. Reopen the register before voiding this sale.";
+  }
+
+  if (
+    normalizedMessage.includes("already void") ||
+    normalizedMessage.includes("voided") ||
+    normalizedMessage.includes("not completed") ||
+    normalizedMessage.includes("can only void completed")
+  ) {
+    return "Sale already voided or no longer eligible. Refresh the transaction before continuing.";
+  }
+
+  if (
+    normalizedMessage.includes("staff") ||
+    normalizedMessage.includes("sign") ||
+    normalizedMessage.includes("auth")
+  ) {
+    return "Staff sign-in required. Sign in before voiding this sale.";
+  }
+
+  return "Sale could not be voided. Check the transaction state and try again.";
+}
+
 export function TransactionView() {
   const params = useParams({
     strict: false,
@@ -267,10 +318,18 @@ export function TransactionView() {
   const [correctionError, setCorrectionError] = useState<string | null>(null);
   const [correctionSubmitting, setCorrectionSubmitting] = useState(false);
   const [pendingCorrection, setPendingCorrection] = useState<
-    "customer" | "payment_method" | "line_items" | null
+    "customer" | "payment_method" | "line_items" | "void" | null
   >(null);
   const [correctionHistoryExpanded, setCorrectionHistoryExpanded] =
     useState(false);
+  const [voidPanelOpen, setVoidPanelOpen] = useState(false);
+  const [voidReason, setVoidReason] = useState("");
+  const [voidError, setVoidError] = useState<string | null>(null);
+  const [voidSubmitting, setVoidSubmitting] = useState(false);
+  const [localVoidState, setLocalVoidState] = useState<{
+    reason: string;
+    result: TransactionVoidResultData;
+  } | null>(null);
   const { activeStore, isAuthenticated } = useProtectedAdminPageState();
   const correctAuth = useMutation(
     api.operations.staffCredentials.authenticateStaffCredential,
@@ -290,6 +349,7 @@ export function TransactionView() {
   const adjustTransactionItems = useMutation(
     api.inventory.pos.adjustTransactionItems,
   );
+  const voidTransaction = useMutation(api.inventory.pos.voidTransaction);
   const paymentApprovalRunner = useApprovedCommand({
     storeId: activeStore?._id,
     onAuthenticateForApproval: (args) => {
@@ -326,6 +386,41 @@ export function TransactionView() {
     },
   });
   const itemAdjustmentApprovalRunner = useApprovedCommand({
+    storeId: activeStore?._id,
+    onAuthenticateForApproval: (args) => {
+      if (!activeStore?._id) {
+        return Promise.resolve({
+          kind: "user_error",
+          error: {
+            code: "authentication_failed",
+            message: "Select a store before approving this command",
+          },
+        });
+      }
+
+      return runCommand(
+        () =>
+          approveCommand({
+            actionKey: args.actionKey,
+            pinHash: args.pinHash,
+            reason: args.reason,
+            requiredRole: args.requiredRole,
+            requestedByStaffProfileId: args.requestedByStaffProfileId,
+            storeId: activeStore._id,
+            subject: args.subject,
+            username: args.username,
+          }) as Promise<
+            CommandResult<{
+              approvalProofId: Id<"approvalProof">;
+              approvedByStaffProfileId: Id<"staffProfile">;
+              expiresAt: number;
+              requestedByStaffProfileId?: Id<"staffProfile">;
+            }>
+          >,
+      );
+    },
+  });
+  const voidApprovalRunner = useApprovedCommand({
     storeId: activeStore?._id,
     onAuthenticateForApproval: (args) => {
       if (!activeStore?._id) {
@@ -623,6 +718,30 @@ export function TransactionView() {
     selectedCorrection === "customer" && correctionError;
   const showPaymentMethodCorrectionError =
     showPaymentMethodDirectFlow && correctionError;
+  const transactionRecord = transaction as typeof transaction & {
+    canVoid?: boolean;
+    voidEligibility?: { eligible?: boolean } | null;
+    voidReason?: string | null;
+    voidedAt?: number | null;
+  };
+  const transactionVoidedAt =
+    localVoidState?.result.voidedAt ?? transactionRecord.voidedAt ?? null;
+  const transactionVoidReason =
+    localVoidState?.reason ?? transactionRecord.voidReason ?? null;
+  const isVoidedTransaction =
+    Boolean(localVoidState) ||
+    transaction.status === "void" ||
+    transaction.status === "voided" ||
+    typeof transactionVoidedAt === "number";
+  const readModelAllowsVoid =
+    transactionRecord.canVoid !== false &&
+    transactionRecord.voidEligibility?.eligible !== false;
+  const canVoidTransaction =
+    isCompletedTransaction && !isVoidedTransaction && readModelAllowsVoid;
+  const transactionStatusLabel = isVoidedTransaction ? "Voided" : "Completed";
+  const transactionStatusTime = getRelativeTime(
+    transactionVoidedAt ?? transaction.completedAt,
+  );
 
   async function authenticateCorrectionStaff(args: {
     pinHash: string;
@@ -678,6 +797,13 @@ export function TransactionView() {
     setSelectedCorrection(null);
     setPendingCorrection(null);
     setCorrectionError(null);
+  }
+
+  function exitVoidWorkflow() {
+    setVoidPanelOpen(false);
+    setVoidReason("");
+    setVoidError(null);
+    setPendingCorrection(null);
   }
 
   function resetItemAdjustmentWorkflow() {
@@ -953,6 +1079,104 @@ export function TransactionView() {
     }
   }
 
+  async function runTransactionVoid(args?: {
+    approvalRequestId?: Id<"approvalRequest">;
+    approvalProofId?: Id<"approvalProof">;
+    sameSubmissionApproval?: {
+      pinHash: string;
+      username: string;
+    };
+    staff?: StaffAuthenticationResult;
+    staffProfileId?: Id<"staffProfile">;
+  }) {
+    if (!isAuthenticated) {
+      setVoidError("Sign in again before voiding this sale");
+      return;
+    }
+
+    const reason = voidReason.trim();
+    if (!reason) {
+      setVoidError("Add a reason for this void");
+      return;
+    }
+
+    if (!args?.staffProfileId) {
+      setVoidError("Staff sign-in is required before voiding this sale");
+      return;
+    }
+
+    const staffProofToken = args.staff?.posLocalStaffProof?.token;
+    if (!staffProofToken) {
+      setVoidError("Staff sign-in is required before voiding this sale");
+      return;
+    }
+
+    const staffProfileId = args.staffProfileId;
+
+    setVoidError(null);
+    setVoidSubmitting(true);
+    try {
+      await voidApprovalRunner.run({
+        requestedByStaffProfileId: staffProfileId,
+        execute: async (approvalArgs) =>
+          runCommand(
+            () =>
+              (
+                voidTransaction as unknown as (payload: {
+                  actorStaffProfileId: Id<"staffProfile">;
+                  approvalProofId?: Id<"approvalProof">;
+                  approvalRequestId?: Id<"approvalRequest">;
+                  reason: string;
+                  staffProofToken: string;
+                  transactionId: Id<"posTransaction">;
+                }) => Promise<ApprovalCommandResult<TransactionVoidResultData>>
+              )({
+                actorStaffProfileId: staffProfileId,
+                approvalProofId:
+                  approvalArgs.approvalProofId ?? args.approvalProofId,
+                approvalRequestId:
+                  approvalArgs.approvalRequestId ?? args.approvalRequestId,
+                reason,
+                staffProofToken,
+                transactionId: transactionId as Id<"posTransaction">,
+              }),
+          ),
+        sameSubmissionApproval:
+          args.sameSubmissionApproval && args.staff
+            ? {
+                canAttemptInlineManagerProof: isManagerStaff(args.staff),
+                pinHash: args.sameSubmissionApproval.pinHash,
+                requestedByStaffProfileId:
+                  staffProfileId ?? args.staff.staffProfileId,
+                username: args.sameSubmissionApproval.username,
+              }
+            : undefined,
+        onApprovalRequired: (approval) => {
+          if (!requiresInlineManagerProof(approval)) {
+            exitVoidWorkflow();
+            toast.success("Void queued for manager review");
+          }
+        },
+        onResult: (result) => {
+          if (isApprovalRequiredResult(result)) {
+            return;
+          }
+
+          if (result.kind === "ok") {
+            setLocalVoidState({ reason, result: result.data });
+            exitVoidWorkflow();
+            toast.success("Sale voided");
+            return;
+          }
+
+          setVoidError(normalizeVoidCommandError(result.error.message));
+        },
+      });
+    } finally {
+      setVoidSubmitting(false);
+    }
+  }
+
   function requestCorrectionSubmit(
     kind: "customer" | "payment_method" | "line_items",
   ) {
@@ -1007,6 +1231,17 @@ export function TransactionView() {
     }
 
     setPendingCorrection(kind);
+  }
+
+  function requestVoidSubmit() {
+    setVoidError(null);
+
+    if (!voidReason.trim()) {
+      setVoidError("Add a reason for this void");
+      return;
+    }
+
+    setPendingCorrection("void");
   }
 
   return (
@@ -1065,6 +1300,15 @@ export function TransactionView() {
             return;
           }
 
+          if (correction === "void") {
+            void runTransactionVoid({
+              sameSubmissionApproval: credentials,
+              staff: result,
+              staffProfileId: result.staffProfileId,
+            });
+            return;
+          }
+
           if (correction === "customer") {
             void runCustomerCorrection(result);
           }
@@ -1073,11 +1317,13 @@ export function TransactionView() {
         open={
           pendingCorrection === "customer" ||
           pendingCorrection === "payment_method" ||
-          pendingCorrection === "line_items"
+          pendingCorrection === "line_items" ||
+          pendingCorrection === "void"
         }
       />
       {paymentApprovalRunner.dialog}
       {itemAdjustmentApprovalRunner.dialog}
+      {voidApprovalRunner.dialog}
       <FadeIn className="h-full">
         <div className="container mx-auto h-full min-h-0 px-6 pb-16 pt-6">
           <div className="grid h-full min-h-0 gap-8 xl:grid-cols-[380px,minmax(0,1fr)]">
@@ -1087,12 +1333,20 @@ export function TransactionView() {
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <Badge
                       variant="outline"
-                      className="w-fit border-[hsl(var(--success)/0.22)] bg-[hsl(var(--success)/0.08)] text-[hsl(var(--success))] flex items-center gap-2"
+                      className={
+                        isVoidedTransaction
+                          ? "flex w-fit items-center gap-2 border-danger/25 bg-danger/10 text-danger"
+                          : "flex w-fit items-center gap-2 border-[hsl(var(--success)/0.22)] bg-[hsl(var(--success)/0.08)] text-[hsl(var(--success))]"
+                      }
                     >
-                      <CheckCircle2 className="w-4 h-4" />
-                      Completed
+                      {isVoidedTransaction ? (
+                        <Ban className="h-4 w-4" />
+                      ) : (
+                        <CheckCircle2 className="h-4 w-4" />
+                      )}
+                      {transactionStatusLabel}
                       <p className="text-xs text-muted-foreground">
-                        {getRelativeTime(transaction.completedAt)}
+                        {transactionStatusTime}
                       </p>
                     </Badge>
                   </div>
@@ -1162,22 +1416,50 @@ export function TransactionView() {
 
                   <div className="border-t border-border/70 bg-muted/20 p-6">
                     {isCompletedTransaction ? (
-                      <Button
-                        className="w-full"
-                        onClick={() => {
-                          if (correctionPanelOpen) {
-                            exitCorrectionWorkflow();
-                            return;
-                          }
+                      <div className="grid gap-2">
+                        {!isVoidedTransaction ? (
+                          <Button
+                            className="w-full"
+                            onClick={() => {
+                              if (correctionPanelOpen) {
+                                exitCorrectionWorkflow();
+                                return;
+                              }
 
-                          setCorrectionPanelOpen(true);
-                          setCorrectionError(null);
-                        }}
-                        type="button"
-                        variant={correctionPanelOpen ? "workflow" : "outline"}
-                      >
-                        Update
-                      </Button>
+                              setCorrectionPanelOpen(true);
+                              setVoidPanelOpen(false);
+                              setCorrectionError(null);
+                            }}
+                            type="button"
+                            variant={
+                              correctionPanelOpen ? "workflow" : "outline"
+                            }
+                          >
+                            Update
+                          </Button>
+                        ) : null}
+                        {canVoidTransaction ? (
+                          <Button
+                            className="w-full"
+                            onClick={() => {
+                              if (voidPanelOpen) {
+                                exitVoidWorkflow();
+                                return;
+                              }
+
+                              setVoidPanelOpen(true);
+                              setCorrectionPanelOpen(false);
+                              setVoidError(null);
+                            }}
+                            type="button"
+                            variant={
+                              voidPanelOpen ? "destructive" : "outline"
+                            }
+                          >
+                            Void sale
+                          </Button>
+                        ) : null}
+                      </div>
                     ) : null}
                   </div>
 
@@ -1191,6 +1473,106 @@ export function TransactionView() {
                   )} */}
                 </CardContent>
               </section>
+
+              {voidPanelOpen && canVoidTransaction ? (
+                <section className="overflow-hidden rounded-[calc(var(--radius)*1.35)] border border-danger/25 bg-surface-raised shadow-surface">
+                  <div className="border-b border-border/70 px-5 py-4">
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[calc(var(--radius)*0.85)] bg-danger/10 text-danger">
+                        <Ban className="h-4 w-4" />
+                      </div>
+                      <div className="space-y-1">
+                        <h2 className="font-display text-lg font-semibold text-foreground">
+                          Void completed sale
+                        </h2>
+                        <p className="text-sm leading-6 text-muted-foreground">
+                          Staff sign-in and manager approval are required. The
+                          original sale stays visible for audit.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 p-5">
+                    <Textarea
+                      aria-label="Void reason"
+                      className="min-h-[90px] border-input bg-background"
+                      onChange={(event) => setVoidReason(event.target.value)}
+                      placeholder="Reason for voiding this completed sale."
+                      value={voidReason}
+                    />
+                    {voidError ? (
+                      <p className="text-sm text-destructive">{voidError}</p>
+                    ) : null}
+                    <div className="grid gap-2">
+                      <Button
+                        disabled={voidSubmitting}
+                        onClick={requestVoidSubmit}
+                        type="button"
+                        variant="destructive"
+                      >
+                        Submit void
+                      </Button>
+                      <Button
+                        disabled={voidSubmitting}
+                        onClick={exitVoidWorkflow}
+                        type="button"
+                        variant="outline"
+                      >
+                        Cancel void
+                      </Button>
+                    </div>
+                  </div>
+                </section>
+              ) : null}
+
+              {isVoidedTransaction ? (
+                <section className="space-y-4 overflow-hidden rounded-[calc(var(--radius)*1.35)] border border-danger/25 bg-surface-raised p-5 shadow-surface">
+                  <div className="space-y-1">
+                    <h2 className="font-display text-xl font-semibold text-foreground">
+                      Sale voided
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      Original sale details remain visible. Payment and
+                      inventory reversals are recorded separately.
+                    </p>
+                  </div>
+                  <dl className="grid gap-3 rounded-lg border border-border bg-background p-4 text-sm">
+                    {transactionVoidedAt ? (
+                      <div className="flex items-center justify-between gap-3">
+                        <dt className="text-muted-foreground">Voided</dt>
+                        <dd className="font-medium text-foreground">
+                          {getRelativeTime(transactionVoidedAt)}
+                        </dd>
+                      </div>
+                    ) : null}
+                    {transactionVoidReason ? (
+                      <div className="border-t border-border/70 pt-3">
+                        <dt className="text-muted-foreground">Reason</dt>
+                        <dd className="mt-1 text-foreground">
+                          {transactionVoidReason}
+                        </dd>
+                      </div>
+                    ) : null}
+                    {localVoidState ? (
+                      <div className="grid gap-2 border-t border-border/70 pt-3 text-muted-foreground">
+                        <div className="flex items-center justify-between gap-3">
+                          <dt>Payment reversals</dt>
+                          <dd className="font-numeric text-foreground">
+                            {localVoidState.result.paymentAllocationIds.length}
+                          </dd>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <dt>Inventory movements</dt>
+                          <dd className="font-numeric text-foreground">
+                            {localVoidState.result.inventoryMovementIds.length}
+                          </dd>
+                        </div>
+                      </div>
+                    ) : null}
+                  </dl>
+                </section>
+              ) : null}
 
               {correctionPanelOpen ? (
                 <section className="overflow-hidden rounded-[calc(var(--radius)*1.35)] border border-border/80 bg-surface-raised shadow-surface">

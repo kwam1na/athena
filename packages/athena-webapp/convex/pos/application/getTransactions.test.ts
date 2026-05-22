@@ -183,6 +183,42 @@ describe("getCompletedTransactions", () => {
     ]);
   });
 
+  it("keeps voided completed sales visible in the completed history read model", async () => {
+    vi.mocked(listCompletedTransactions).mockResolvedValue([
+      {
+        _id: "txn-void" as Id<"posTransaction">,
+        storeId: "store-1" as Id<"store">,
+        transactionNumber: "POS-VOID",
+        total: 1000,
+        paymentMethod: "cash",
+        payments: [{ amount: 1000, method: "cash", timestamp: 1 }],
+        status: "void",
+        completedAt: 100,
+        voidedAt: 200,
+        voidReason: "Duplicate sale",
+        voidApprovalRequestId: "approval-request-1" as Id<"approvalRequest">,
+        voidApprovalProofId: "approval-proof-1" as Id<"approvalProof">,
+      },
+    ] as never);
+    vi.mocked(getCashierById).mockResolvedValue(null as never);
+    vi.mocked(getPosSessionById).mockResolvedValue(null as never);
+    vi.mocked(listTransactionItems).mockResolvedValue([] as never);
+
+    const result = await getCompletedTransactions({} as never, {
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        status: "void",
+        voidedAt: 200,
+        voidReason: "Duplicate sale",
+        voidApprovalRequestId: "approval-request-1",
+        voidApprovalProofId: "approval-proof-1",
+      }),
+    ]);
+  });
+
   it("passes the completed-from lower bound into the completed transaction repository", async () => {
     vi.mocked(listCompletedTransactions).mockResolvedValue([] as never);
 
@@ -475,6 +511,88 @@ describe("getTransactionById", () => {
         registerNumber: "2",
         registerSessionId: "register-session-1",
         registerSessionStatus: "closing",
+      }),
+    );
+  });
+
+  it("returns void metadata and void audit history for transaction detail", async () => {
+    vi.mocked(getPosTransactionById).mockResolvedValue({
+      _id: "txn-void" as Id<"posTransaction">,
+      storeId: "store-1" as Id<"store">,
+      transactionNumber: "POS-VOID",
+      subtotal: 1000,
+      tax: 0,
+      total: 1000,
+      paymentMethod: "cash",
+      payments: [{ method: "cash", amount: 1000, timestamp: 1 }],
+      totalPaid: 1000,
+      status: "void",
+      completedAt: 100,
+      notes: "Legacy void note",
+      voidedAt: 200,
+      voidReason: "Duplicate sale",
+      voidedByStaffProfileId: "staff-1" as Id<"staffProfile">,
+      voidApprovalRequestId: "approval-request-1" as Id<"approvalRequest">,
+      voidApprovalProofId: "approval-proof-1" as Id<"approvalProof">,
+      voidApprovedByStaffProfileId: "manager-1" as Id<"staffProfile">,
+      voidOperationalEventId: "event-void" as Id<"operationalEvent">,
+    } as never);
+    vi.mocked(getCashierById).mockResolvedValue(null as never);
+    vi.mocked(getPosSessionById).mockResolvedValue(null as never);
+    vi.mocked(listTransactionItems).mockResolvedValue([] as never);
+
+    const result = await getTransactionById(
+      {
+        db: mockCorrectionHistoryDb({
+          correctionHistory: [
+            {
+              _id: "event-void",
+              actorStaffProfileId: "staff-1",
+              createdAt: 200,
+              eventType: "pos_transaction_voided",
+              message: "Voided Transaction #POS-VOID.",
+              metadata: {
+                inventoryMovementIds: ["movement-1"],
+                paymentAllocationIds: ["allocation-1"],
+              },
+              reason: "Duplicate sale",
+            },
+          ],
+          get: vi.fn(async (tableName: string, id: string) => {
+            if (tableName === "staffProfile" && id === "staff-1") {
+              return {
+                _id: "staff-1",
+                firstName: "Ama",
+                lastName: "Mensah",
+              };
+            }
+            return null;
+          }),
+        }),
+      } as never,
+      {
+        transactionId: "txn-void" as Id<"posTransaction">,
+      },
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        status: "void",
+        voidedAt: 200,
+        voidReason: "Duplicate sale",
+        voidedByStaffProfileId: "staff-1",
+        voidApprovalRequestId: "approval-request-1",
+        voidApprovalProofId: "approval-proof-1",
+        voidApprovedByStaffProfileId: "manager-1",
+        voidOperationalEventId: "event-void",
+        correctionHistory: [
+          expect.objectContaining({
+            _id: "event-void",
+            actorStaffName: "Ama M.",
+            eventType: "pos_transaction_voided",
+            reason: "Duplicate sale",
+          }),
+        ],
       }),
     );
   });

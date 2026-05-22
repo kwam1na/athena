@@ -1,7 +1,14 @@
 import { internal } from "../../../_generated/api";
 import type { Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
+import type { ApprovalRequirement } from "../../../../shared/approvalPolicy";
 import { capitalizeWords, generateTransactionNumber } from "../../../utils";
+import { buildApprovalRequest } from "../../../operations/approvalRequestHelpers";
+import {
+  APPROVAL_ACTIONS,
+  consumeCommandApprovalProofWithCtx,
+} from "../../../operations/approvalActions";
+import { recordOperationalEventWithCtx } from "../../../operations/operationalEvents";
 import {
   recordRetailSalePaymentAllocations,
   recordRetailVoidPaymentAllocations,
@@ -14,6 +21,7 @@ import {
   getPosTransactionById,
   getProductSkuById,
   getStoreById,
+  listTransactionAdjustments,
   listSessionItems,
   listTransactionItems,
   patchPosSession,
@@ -22,7 +30,9 @@ import {
 } from "../../infrastructure/repositories/transactionRepository";
 import {
   ok,
+  approvalRequired,
   userError,
+  type ApprovalCommandResult,
   type CommandResult,
 } from "../../../../shared/commandResult";
 import { isPosUsableRegisterSessionStatus } from "../../../../shared/registerSessionStatus";
@@ -32,7 +42,10 @@ import {
   type SkuActivityRecorder,
   validateInventoryAvailability,
 } from "../../../inventory/helpers/inventoryHolds";
-import { recordInventoryMovementWithCtx } from "../../../operations/inventoryMovements";
+import {
+  recordInventoryMovementWithCtx,
+  recordInventoryMovementWithDispositionWithCtx,
+} from "../../../operations/inventoryMovements";
 import { recordSkuActivityEventWithCtx } from "../../../operations/skuActivity";
 
 type PosPaymentInput = {
@@ -253,6 +266,7 @@ async function recordRegisterSessionVoid(
   ctx: MutationCtx,
   args: {
     changeGiven?: number;
+    idempotencyKey: string;
     payments: PosPaymentInput[];
     registerSessionId: Id<"registerSession">;
     registerNumber?: string;
@@ -265,6 +279,7 @@ async function recordRegisterSessionVoid(
     {
       adjustmentKind: "void",
       changeGiven: args.changeGiven,
+      idempotencyKey: args.idempotencyKey,
       payments: args.payments,
       registerSessionId: args.registerSessionId,
       registerNumber: args.registerNumber,
@@ -533,80 +548,758 @@ export async function completeTransaction(
   });
 }
 
+const TRANSACTION_VOID_ACTION = APPROVAL_ACTIONS.transactionVoid;
+const TRANSACTION_VOID_REQUEST_TYPE = "pos_transaction_void";
+type VoidTransactionResult = {
+  transactionId: Id<"posTransaction">;
+  transactionNumber: string;
+  voidedAt: number;
+  paymentAllocationIds: Array<Id<"paymentAllocation">>;
+  inventoryMovementIds: Array<Id<"inventoryMovement">>;
+  operationalEventId?: Id<"operationalEvent">;
+  approvalProofId?: Id<"approvalProof">;
+  approvalRequestId?: Id<"approvalRequest">;
+  approverStaffProfileId?: Id<"staffProfile">;
+};
+
+function completedTransactionLabel(transaction: { transactionNumber: string }) {
+  return `Transaction #${transaction.transactionNumber}`;
+}
+
+function buildVoidApprovalRequirement(args: {
+  approvalRequestId?: Id<"approvalRequest">;
+  reason: string;
+  transaction: {
+    _id: Id<"posTransaction">;
+    total: number;
+    transactionNumber: string;
+  };
+}): ApprovalRequirement {
+  return {
+    action: TRANSACTION_VOID_ACTION,
+    reason: "Manager approval is required to void a completed sale.",
+    requiredRole: "manager",
+    selfApproval: "allowed",
+    subject: {
+      id: args.transaction._id,
+      label: completedTransactionLabel(args.transaction),
+      type: "pos_transaction",
+    },
+    copy: {
+      title: "Manager approval required",
+      message:
+        "A manager needs to review this completed sale void before it is applied.",
+      primaryActionLabel: "Request approval",
+      secondaryActionLabel: "Cancel",
+    },
+    resolutionModes: [
+      { kind: "inline_manager_proof" },
+      {
+        kind: "async_request",
+        requestType: TRANSACTION_VOID_REQUEST_TYPE,
+        approvalRequestId: args.approvalRequestId,
+      },
+    ],
+    metadata: {
+      reason: args.reason,
+      total: args.transaction.total,
+      transactionNumber: args.transaction.transactionNumber,
+    },
+  };
+}
+
+async function findPendingVoidApprovalRequest(
+  ctx: MutationCtx,
+  args: {
+    storeId: Id<"store">;
+    transactionId: Id<"posTransaction">;
+  },
+) {
+  const pendingRequests = await ctx.db
+    .query("approvalRequest")
+    .withIndex("by_storeId_status_posTransactionId", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("status", "pending")
+        .eq("posTransactionId", args.transactionId),
+    )
+    .take(10);
+
+  return (
+    pendingRequests.find(
+      (request) =>
+        request.requestType === TRANSACTION_VOID_REQUEST_TYPE &&
+        request.subjectType === "pos_transaction" &&
+        request.subjectId === args.transactionId,
+    ) ?? null
+  );
+}
+
+async function createVoidApprovalRequest(
+  ctx: MutationCtx,
+  args: {
+    actorStaffProfileId?: Id<"staffProfile">;
+    actorUserId?: Id<"athenaUser">;
+    reason: string;
+    transaction: NonNullable<Awaited<ReturnType<typeof getPosTransactionById>>>;
+  },
+) {
+  const store = await getStoreById(ctx, args.transaction.storeId);
+  const approvalRequestId = await ctx.db.insert(
+    "approvalRequest",
+    buildApprovalRequest({
+      metadata: {
+        actionKey: TRANSACTION_VOID_ACTION.key,
+        transactionId: args.transaction._id,
+        transactionNumber: args.transaction.transactionNumber,
+        total: args.transaction.total,
+      },
+      notes: args.reason,
+      organizationId: store?.organizationId,
+      posTransactionId: args.transaction._id,
+      reason: "Manager approval is required to void a completed sale.",
+      registerSessionId: args.transaction.registerSessionId,
+      requestType: TRANSACTION_VOID_REQUEST_TYPE,
+      requestedByStaffProfileId: args.actorStaffProfileId,
+      requestedByUserId: args.actorUserId,
+      storeId: args.transaction.storeId,
+      subjectId: args.transaction._id,
+      subjectType: "pos_transaction",
+    }),
+  );
+
+  await recordOperationalEventWithCtx(ctx, {
+    actorStaffProfileId: args.actorStaffProfileId,
+    actorUserId: args.actorUserId,
+    approvalRequestId,
+    customerProfileId: args.transaction.customerProfileId,
+    eventType: "pos_transaction_void_approval_requested",
+    message: `Void requested for ${completedTransactionLabel(args.transaction)}.`,
+    metadata: {
+      actionKey: TRANSACTION_VOID_ACTION.key,
+      approvalMode: "async_approval",
+      approvalRequestId,
+      requiredRole: "manager",
+      transactionNumber: args.transaction.transactionNumber,
+      total: args.transaction.total,
+    },
+    posTransactionId: args.transaction._id,
+    reason: args.reason,
+    registerSessionId: args.transaction.registerSessionId,
+    storeId: args.transaction.storeId,
+    subjectId: args.transaction._id,
+    subjectLabel: completedTransactionLabel(args.transaction),
+    subjectType: "pos_transaction",
+  });
+
+  return approvalRequestId;
+}
+
+async function requireMatchingPendingVoidApprovalRequest(
+  ctx: MutationCtx,
+  args: {
+    approvalRequestId?: Id<"approvalRequest">;
+    storeId: Id<"store">;
+    transactionId: Id<"posTransaction">;
+  },
+) {
+  if (!args.approvalRequestId) {
+    return null;
+  }
+
+  const approvalRequest = await ctx.db.get(
+    "approvalRequest",
+    args.approvalRequestId,
+  );
+
+  if (
+    !approvalRequest ||
+    approvalRequest.requestType !== TRANSACTION_VOID_REQUEST_TYPE ||
+    approvalRequest.subjectType !== "pos_transaction"
+  ) {
+    return userError({
+      code: "precondition_failed",
+      message: "Void approval request not found.",
+    });
+  }
+
+  if (approvalRequest.status !== "pending") {
+    return userError({
+      code: "precondition_failed",
+      message: "Void approval request has already been decided.",
+    });
+  }
+
+  if (
+    approvalRequest.storeId !== args.storeId ||
+    approvalRequest.subjectId !== args.transactionId
+  ) {
+    return userError({
+      code: "precondition_failed",
+      message: "Void approval request does not match this sale.",
+    });
+  }
+
+  return ok(approvalRequest);
+}
+
+function completedDailyCloseRange(dailyClose: {
+  operatingDate?: string;
+  reportSnapshot?: {
+    closeMetadata?: {
+      startAt?: number;
+      endAt?: number;
+    };
+  };
+}) {
+  const snapshotRange = dailyClose.reportSnapshot?.closeMetadata;
+  if (
+    typeof snapshotRange?.startAt === "number" &&
+    typeof snapshotRange.endAt === "number"
+  ) {
+    return {
+      startAt: snapshotRange.startAt,
+      endAt: snapshotRange.endAt,
+    };
+  }
+
+  if (
+    typeof dailyClose.operatingDate === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(dailyClose.operatingDate)
+  ) {
+    const startAt = Date.parse(`${dailyClose.operatingDate}T00:00:00.000Z`);
+    if (Number.isFinite(startAt)) {
+      return {
+        startAt,
+        endAt: startAt + 24 * 60 * 60 * 1000,
+      };
+    }
+  }
+
+  return null;
+}
+
+async function transactionFallsInCompletedDailyClose(
+  ctx: MutationCtx,
+  transaction: NonNullable<Awaited<ReturnType<typeof getPosTransactionById>>>,
+) {
+  const operatingDate = new Date(transaction.completedAt)
+    .toISOString()
+    .slice(0, 10);
+  const completedCloses = await ctx.db
+    .query("dailyClose")
+    .withIndex("by_storeId_status_operatingDate", (q) =>
+      q
+        .eq("storeId", transaction.storeId)
+        .eq("status", "completed")
+        .eq("operatingDate", operatingDate),
+    )
+    .take(10);
+
+  return completedCloses.some((dailyClose) => {
+    if (
+      dailyClose.lifecycleStatus !== undefined &&
+      dailyClose.lifecycleStatus !== "active"
+    ) {
+      return false;
+    }
+
+    const range = completedDailyCloseRange(dailyClose);
+    return (
+      range !== null &&
+      transaction.completedAt >= range.startAt &&
+      transaction.completedAt < range.endAt
+    );
+  });
+}
+
+async function validateTransactionVoidPreconditions(
+  ctx: MutationCtx,
+  transaction: NonNullable<Awaited<ReturnType<typeof getPosTransactionById>>>,
+) {
+  if (transaction.status === "void") {
+    return userError({
+      code: "conflict",
+      message: "Sale is already voided.",
+    });
+  }
+
+  if (transaction.status === "refunded") {
+    return userError({
+      code: "conflict",
+      message: "Sale is already refunded.",
+    });
+  }
+
+  if (transaction.status !== "completed") {
+    return userError({
+      code: "precondition_failed",
+      message: "Only completed sales can be voided.",
+    });
+  }
+
+  const adjustments = await listTransactionAdjustments(ctx, transaction._id);
+  const blockingAdjustment = adjustments.find(
+    (adjustment: { status?: string }) =>
+      adjustment.status === "pending_approval" ||
+      adjustment.status === "applied",
+  );
+
+  if (blockingAdjustment) {
+    return userError({
+      code: "precondition_failed",
+      message:
+        "This sale has item adjustments. Resolve the adjustment before voiding it.",
+    });
+  }
+
+  if (await transactionFallsInCompletedDailyClose(ctx, transaction)) {
+    return userError({
+      code: "precondition_failed",
+      message:
+        "EOD Review is completed for this sale. Reopen EOD Review before voiding it.",
+    });
+  }
+
+  if (!transaction.registerSessionId || !transaction.terminalId) {
+    return userError({
+      code: "precondition_failed",
+      message: "Register sale is missing drawer context.",
+    });
+  }
+
+  const registerSession = await getRegisterSessionById(
+    ctx,
+    transaction.registerSessionId,
+  );
+
+  if (
+    !registerSession ||
+    registerSession.storeId !== transaction.storeId ||
+    !isUsableRegisterSession(registerSession) ||
+    !registerSessionMatchesIdentity(registerSession, {
+      terminalId: transaction.terminalId,
+    })
+  ) {
+    return userError({
+      code: "precondition_failed",
+      message: "Drawer closed. Open the drawer before voiding this sale.",
+    });
+  }
+
+  const items = await listTransactionItems(ctx, transaction._id);
+  const skuRows = [];
+
+  for (const item of items) {
+    const sku = await getProductSkuById(ctx, item.productSkuId);
+
+    if (!sku || (sku.storeId && sku.storeId !== transaction.storeId)) {
+      return userError({
+        code: "precondition_failed",
+        message:
+          "Sale item inventory record not found. Review inventory before voiding this sale.",
+      });
+    }
+
+    skuRows.push({ item, sku });
+  }
+
+  return ok({ items: skuRows });
+}
+
+async function applyApprovedTransactionVoid(
+  ctx: MutationCtx,
+  args: {
+    approvalMode: "inline_manager_proof" | "async_approval_request";
+    approvalProofId: Id<"approvalProof">;
+    approvalRequestId?: Id<"approvalRequest">;
+    approverStaffProfileId: Id<"staffProfile">;
+    items: Array<{
+      item: Awaited<ReturnType<typeof listTransactionItems>>[number];
+      sku: NonNullable<Awaited<ReturnType<typeof getProductSkuById>>>;
+    }>;
+    reason: string;
+    requesterStaffProfileId?: Id<"staffProfile">;
+    requesterUserId?: Id<"athenaUser">;
+    reviewerUserId?: Id<"athenaUser">;
+    transaction: NonNullable<Awaited<ReturnType<typeof getPosTransactionById>>>;
+  },
+): Promise<CommandResult<VoidTransactionResult>> {
+  const registerSessionId = args.transaction.registerSessionId;
+  const terminalId = args.transaction.terminalId;
+  if (!registerSessionId || !terminalId) {
+    return userError({
+      code: "precondition_failed",
+      message: "Register sale is missing drawer context.",
+    });
+  }
+
+  const approvalEvent = await recordOperationalEventWithCtx(ctx, {
+    actorStaffProfileId: args.approverStaffProfileId,
+    actorUserId: args.reviewerUserId ?? args.requesterUserId,
+    approvalRequestId: args.approvalRequestId,
+    customerProfileId: args.transaction.customerProfileId,
+    eventType: "pos_transaction_void_approval_proof_consumed",
+    message: `Manager approval proof consumed for ${completedTransactionLabel(args.transaction)} void.`,
+    metadata: {
+      actionKey: TRANSACTION_VOID_ACTION.key,
+      approvalMode: args.approvalMode,
+      approvalProofId: args.approvalProofId,
+      approverStaffProfileId: args.approverStaffProfileId,
+      requesterStaffProfileId: args.requesterStaffProfileId,
+      reviewerUserId: args.reviewerUserId,
+      transactionNumber: args.transaction.transactionNumber,
+    },
+    posTransactionId: args.transaction._id,
+    reason: args.reason,
+    registerSessionId,
+    storeId: args.transaction.storeId,
+    subjectId: args.transaction._id,
+    subjectLabel: completedTransactionLabel(args.transaction),
+    subjectType: "pos_transaction",
+  });
+
+  await recordRegisterSessionVoid(ctx, {
+    changeGiven: args.transaction.changeGiven,
+    idempotencyKey: `posTransaction:${args.transaction._id}:void`,
+    payments: args.transaction.payments,
+    registerSessionId,
+    registerNumber: args.transaction.registerNumber,
+    storeId: args.transaction.storeId,
+    terminalId,
+  });
+
+  const store = await getStoreById(ctx, args.transaction.storeId);
+  const paymentAllocations = await recordRetailVoidPaymentAllocations(ctx, {
+    changeGiven: args.transaction.changeGiven,
+    organizationId: store?.organizationId,
+    payments: args.transaction.payments,
+    posTransactionId: args.transaction._id,
+    registerSessionId,
+    storeId: args.transaction.storeId,
+    transactionNumber: args.transaction.transactionNumber,
+  });
+
+  const inventoryMovementIds: Array<Id<"inventoryMovement">> = [];
+
+  const voidInventoryBySku = new Map<
+    Id<"productSku">,
+    {
+      productId: Id<"product">;
+      productSkuId: Id<"productSku">;
+      quantity: number;
+      sku: (typeof args.items)[number]["sku"];
+    }
+  >();
+
+  for (const { item, sku } of args.items) {
+    const existing = voidInventoryBySku.get(item.productSkuId);
+    if (existing) {
+      existing.quantity += item.quantity;
+      continue;
+    }
+
+    voidInventoryBySku.set(item.productSkuId, {
+      productId: item.productId ?? sku.productId,
+      productSkuId: item.productSkuId,
+      quantity: item.quantity,
+      sku,
+    });
+  }
+
+  for (const entry of voidInventoryBySku.values()) {
+    const movementResult = await recordInventoryMovementWithDispositionWithCtx(ctx, {
+      storeId: args.transaction.storeId,
+      organizationId: store?.organizationId,
+      movementType: "pos_transaction_void",
+      sourceType: "posTransaction",
+      sourceId: args.transaction._id,
+      quantityDelta: entry.quantity,
+      productId: entry.productId,
+      productSkuId: entry.productSkuId,
+      actorUserId: args.requesterUserId,
+      actorStaffProfileId: args.requesterStaffProfileId,
+      customerProfileId: args.transaction.customerProfileId,
+      registerSessionId: args.transaction.registerSessionId,
+      posTransactionId: args.transaction._id,
+      reasonCode: "pos_transaction_void",
+      notes: `Void ${args.transaction.transactionNumber}`,
+    });
+    const movement = movementResult.movement;
+
+    if (movement?._id) {
+      inventoryMovementIds.push(movement._id);
+    }
+
+    if (movementResult.disposition === "inserted") {
+      await patchProductSku(ctx, entry.productSkuId, {
+        quantityAvailable: entry.sku.quantityAvailable + entry.quantity,
+        inventoryCount: entry.sku.inventoryCount + entry.quantity,
+      });
+    }
+  }
+
+  const paymentAllocationIds = paymentAllocations
+    .map((allocation) => allocation?._id)
+    .filter(Boolean) as Array<Id<"paymentAllocation">>;
+
+  const event = await recordOperationalEventWithCtx(ctx, {
+    actorStaffProfileId: args.requesterStaffProfileId,
+    actorUserId: args.requesterUserId,
+    approvalRequestId: args.approvalRequestId,
+    customerProfileId: args.transaction.customerProfileId,
+    eventType: "pos_transaction_voided",
+    message: `Voided ${completedTransactionLabel(args.transaction)}.`,
+    metadata: {
+      actionKey: TRANSACTION_VOID_ACTION.key,
+      approvalMode: args.approvalMode,
+      approvalOperationalEventId: approvalEvent?._id,
+      approvalProofId: args.approvalProofId,
+      approverStaffProfileId: args.approverStaffProfileId,
+      inventoryMovementIds,
+      paymentAllocationIds,
+      requesterStaffProfileId: args.requesterStaffProfileId,
+      reviewerUserId: args.reviewerUserId,
+      representation:
+        "preserve_original_sale_with_payment_register_inventory_reversal",
+      transactionNumber: args.transaction.transactionNumber,
+    },
+    posTransactionId: args.transaction._id,
+    reason: args.reason,
+    registerSessionId: args.transaction.registerSessionId,
+    storeId: args.transaction.storeId,
+    subjectId: args.transaction._id,
+    subjectLabel: completedTransactionLabel(args.transaction),
+    subjectType: "pos_transaction",
+  });
+
+  const voidedAt = Date.now();
+
+  await patchPosTransaction(ctx, args.transaction._id, {
+    status: "void",
+    voidedAt,
+    voidReason: args.reason,
+    voidedByStaffProfileId: args.requesterStaffProfileId,
+    voidApprovalProofId: args.approvalProofId,
+    voidApprovalRequestId: args.approvalRequestId,
+    voidApprovedByStaffProfileId: args.approverStaffProfileId,
+    voidOperationalEventId: event?._id,
+  });
+
+  return ok({
+    transactionId: args.transaction._id,
+    transactionNumber: args.transaction.transactionNumber,
+    voidedAt,
+    paymentAllocationIds,
+    inventoryMovementIds,
+    operationalEventId: event?._id,
+    approvalProofId: args.approvalProofId,
+    approvalRequestId: args.approvalRequestId,
+    approverStaffProfileId: args.approverStaffProfileId,
+  });
+}
+
 export async function voidTransaction(
   ctx: MutationCtx,
   args: {
+    actorStaffProfileId?: Id<"staffProfile">;
+    actorUserId?: Id<"athenaUser">;
+    approvalProofId?: Id<"approvalProof">;
+    approvalRequestId?: Id<"approvalRequest">;
     transactionId: Id<"posTransaction">;
     reason: string;
     staffProfileId?: Id<"staffProfile">;
   },
-) {
+): Promise<ApprovalCommandResult<VoidTransactionResult>> {
+  const actorStaffProfileId = args.actorStaffProfileId ?? args.staffProfileId;
   const transaction = await getPosTransactionById(ctx, args.transactionId);
   if (!transaction) {
-    return {
-      success: false,
-      error: "Transaction not found",
-    };
-  }
-
-  if (transaction.status !== "completed") {
-    return {
-      success: false,
-      error: "Can only void completed transactions",
-    };
-  }
-
-  if (transaction.registerSessionId) {
-    if (!transaction.terminalId) {
-      return {
-        success: false,
-        error: "Register session transactions must include a terminal.",
-      };
-    }
-
-    await recordRegisterSessionVoid(ctx, {
-      changeGiven: transaction.changeGiven,
-      payments: transaction.payments,
-      registerSessionId: transaction.registerSessionId,
-      registerNumber: transaction.registerNumber,
-      storeId: transaction.storeId,
-      terminalId: transaction.terminalId,
+    return userError({
+      code: "not_found",
+      message: "Transaction not found.",
     });
   }
 
-  const store = await getStoreById(ctx, transaction.storeId);
-  await recordRetailVoidPaymentAllocations(ctx, {
-    changeGiven: transaction.changeGiven,
-    organizationId: store?.organizationId,
-    payments: transaction.payments,
-    posTransactionId: transaction._id,
-    registerSessionId: transaction.registerSessionId,
+  const reason = args.reason.trim();
+  if (!reason) {
+    return userError({
+      code: "validation_failed",
+      message: "Reason is required to void a completed sale.",
+    });
+  }
+
+  const preconditions = await validateTransactionVoidPreconditions(
+    ctx,
+    transaction,
+  );
+  if (preconditions.kind !== "ok") {
+    return preconditions;
+  }
+
+  if (!args.approvalProofId) {
+    const existingApprovalRequest = await findPendingVoidApprovalRequest(ctx, {
+      storeId: transaction.storeId,
+      transactionId: transaction._id,
+    });
+    const approvalRequestId =
+      existingApprovalRequest?._id ??
+      (await createVoidApprovalRequest(ctx, {
+        actorStaffProfileId,
+        actorUserId: args.actorUserId,
+        reason,
+        transaction,
+      }));
+
+    return approvalRequired(
+      buildVoidApprovalRequirement({
+        approvalRequestId,
+        reason,
+        transaction,
+      }),
+    );
+  }
+
+  const matchingApprovalRequest =
+    await requireMatchingPendingVoidApprovalRequest(ctx, {
+      approvalRequestId: args.approvalRequestId,
+      storeId: transaction.storeId,
+      transactionId: transaction._id,
+    });
+  if (matchingApprovalRequest?.kind === "user_error") {
+    return matchingApprovalRequest;
+  }
+
+  const approvalProof = await consumeCommandApprovalProofWithCtx(ctx, {
+    action: TRANSACTION_VOID_ACTION,
+    approvalProofId: args.approvalProofId,
+    requestedByStaffProfileId: actorStaffProfileId,
+    requiredRole: "manager",
     storeId: transaction.storeId,
-    transactionNumber: transaction.transactionNumber,
+    subject: {
+      type: "pos_transaction",
+      id: transaction._id,
+    },
   });
 
-  await patchPosTransaction(ctx, args.transactionId, {
-    status: "void",
-    voidedAt: Date.now(),
-    notes: args.reason,
-  });
+  if (approvalProof.kind !== "ok") {
+    return userError({
+      code: "precondition_failed",
+      message: approvalProof.error.message,
+    });
+  }
 
-  const items = await listTransactionItems(ctx, args.transactionId);
-  await Promise.all(
-    items.map(async (item) => {
-      const sku = await getProductSkuById(ctx, item.productSkuId);
-      if (!sku) {
-        return;
-      }
-
-      await patchProductSku(ctx, item.productSkuId, {
-        quantityAvailable: sku.quantityAvailable + item.quantity,
-        inventoryCount: sku.inventoryCount + item.quantity,
+  return applyApprovedTransactionVoid(ctx, {
+    approvalMode: "inline_manager_proof",
+    approvalProofId: approvalProof.data.approvalProofId,
+    approvalRequestId:
+      matchingApprovalRequest?.kind === "ok"
+        ? matchingApprovalRequest.data._id
+        : undefined,
+    approverStaffProfileId: approvalProof.data.approvedByStaffProfileId,
+    items: preconditions.data.items,
+    reason,
+    requesterStaffProfileId: actorStaffProfileId,
+    requesterUserId: args.actorUserId,
+    transaction,
+  }).then(async (result) => {
+    if (result.kind === "ok" && matchingApprovalRequest?.kind === "ok") {
+      await ctx.db.patch("approvalRequest", matchingApprovalRequest.data._id, {
+        status: "approved",
+        reviewedByStaffProfileId: approvalProof.data.approvedByStaffProfileId,
+        decisionNotes: reason,
+        decidedAt: result.data.voidedAt,
       });
-    }),
+    }
+
+    return result;
+  });
+}
+
+export async function resolveTransactionVoidApprovalDecisionWithCtx(
+  ctx: MutationCtx,
+  args: {
+    approvalProofId?: Id<"approvalProof">;
+    approvalRequestId: Id<"approvalRequest">;
+    decision: "approved" | "rejected" | "cancelled";
+    decisionNotes?: string;
+    reviewedByStaffProfileId?: Id<"staffProfile">;
+    reviewedByUserId?: Id<"athenaUser">;
+  },
+) {
+  const approvalRequest = await ctx.db.get(
+    "approvalRequest",
+    args.approvalRequestId,
   );
 
-  return { success: true };
+  if (
+    !approvalRequest ||
+    approvalRequest.requestType !== TRANSACTION_VOID_REQUEST_TYPE ||
+    approvalRequest.subjectType !== "pos_transaction"
+  ) {
+    throw new Error("Void approval request not found.");
+  }
+
+  if (args.decision !== "approved") {
+    return null;
+  }
+
+  if (!args.approvalProofId || !args.reviewedByStaffProfileId) {
+    throw new Error("Manager approval is required to void a completed sale.");
+  }
+
+  const transactionId = approvalRequest.posTransactionId ?? approvalRequest.subjectId;
+  if (!transactionId) {
+    throw new Error("Void approval request is missing transaction details.");
+  }
+
+  const transaction = await getPosTransactionById(
+    ctx,
+    transactionId as Id<"posTransaction">,
+  );
+  if (!transaction) {
+    throw new Error("Transaction not found.");
+  }
+
+  const matchingApprovalRequest =
+    await requireMatchingPendingVoidApprovalRequest(ctx, {
+      approvalRequestId: args.approvalRequestId,
+      storeId: transaction.storeId,
+      transactionId: transaction._id,
+    });
+  if (matchingApprovalRequest?.kind === "user_error") {
+    throw new Error(matchingApprovalRequest.error.message);
+  }
+
+  const preconditions = await validateTransactionVoidPreconditions(
+    ctx,
+    transaction,
+  );
+  if (preconditions.kind !== "ok") {
+    throw new Error(preconditions.error.message);
+  }
+
+  const result = await applyApprovedTransactionVoid(ctx, {
+    approvalMode: "async_approval_request",
+    approvalProofId: args.approvalProofId,
+    approvalRequestId: args.approvalRequestId,
+    approverStaffProfileId: args.reviewedByStaffProfileId,
+    items: preconditions.data.items,
+    reason:
+      args.decisionNotes ??
+      approvalRequest.notes ??
+      approvalRequest.reason ??
+      "Manager approved completed sale void.",
+    requesterStaffProfileId: approvalRequest.requestedByStaffProfileId,
+    requesterUserId: approvalRequest.requestedByUserId,
+    reviewerUserId: args.reviewedByUserId,
+    transaction,
+  });
+
+  if (result.kind !== "ok") {
+    throw new Error(result.error.message);
+  }
+
+  return result.data;
 }
 
 export async function createTransactionFromSessionHandler(

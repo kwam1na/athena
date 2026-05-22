@@ -132,6 +132,20 @@ const adjustTransactionItemsResultValidator = commandResultValidator(
   }),
 );
 
+const voidTransactionResultValidator = commandResultValidator(
+  v.object({
+    transactionId: v.id("posTransaction"),
+    transactionNumber: v.string(),
+    voidedAt: v.number(),
+    paymentAllocationIds: v.array(v.id("paymentAllocation")),
+    inventoryMovementIds: v.array(v.id("inventoryMovement")),
+    operationalEventId: v.optional(v.id("operationalEvent")),
+    approvalProofId: v.optional(v.id("approvalProof")),
+    approvalRequestId: v.optional(v.id("approvalRequest")),
+    approverStaffProfileId: v.optional(v.id("staffProfile")),
+  }),
+);
+
 function mapCorrectionError(error: unknown): CommandResult<never> | null {
   const message = error instanceof Error ? error.message : "";
 
@@ -255,7 +269,12 @@ export const getCompletedTransactions = query({
       paymentMethod: v.union(v.string(), v.null()),
       paymentMethods: v.array(v.string()),
       hasMultiplePaymentMethods: v.boolean(),
+      status: v.string(),
       completedAt: v.number(),
+      voidedAt: v.optional(v.number()),
+      voidReason: v.optional(v.string()),
+      voidApprovalRequestId: v.optional(v.id("approvalRequest")),
+      voidApprovalProofId: v.optional(v.id("approvalProof")),
       hasTrace: v.boolean(),
       sessionTraceId: v.union(v.string(), v.null()),
       cashierName: v.union(v.string(), v.null()),
@@ -304,6 +323,13 @@ export const getTransactionById = query({
       status: v.string(),
       completedAt: v.number(),
       notes: v.optional(v.string()),
+      voidedAt: v.optional(v.number()),
+      voidReason: v.optional(v.string()),
+      voidedByStaffProfileId: v.optional(v.id("staffProfile")),
+      voidApprovalRequestId: v.optional(v.id("approvalRequest")),
+      voidApprovalProofId: v.optional(v.id("approvalProof")),
+      voidApprovedByStaffProfileId: v.optional(v.id("staffProfile")),
+      voidOperationalEventId: v.optional(v.id("operationalEvent")),
       cashier: v.union(
         v.null(),
         v.object({
@@ -398,11 +424,128 @@ export const getTransactionById = query({
 
 export const voidTransaction = mutation({
   args: {
+    approvalRequestId: v.optional(v.id("approvalRequest")),
+    approvalProofId: v.optional(v.id("approvalProof")),
     transactionId: v.id("posTransaction"),
     reason: v.string(),
     staffProfileId: v.optional(v.id("staffProfile")),
+    actorStaffProfileId: v.optional(v.id("staffProfile")),
+    staffProofToken: v.string(),
   },
-  handler: async (ctx, args) => voidTransactionCommand(ctx, args),
+  returns: voidTransactionResultValidator,
+  handler: async (ctx, args) => {
+    const actorStaffProfileId = args.actorStaffProfileId ?? args.staffProfileId;
+
+    if (!actorStaffProfileId) {
+      return userError({
+        code: "authentication_failed",
+        message: "Staff sign-in is required before voiding a completed sale.",
+      });
+    }
+
+    if (!args.reason.trim()) {
+      return userError({
+        code: "validation_failed",
+        message: "Reason is required to void a completed sale.",
+      });
+    }
+
+    const transaction = await getTransactionQuery(ctx, {
+      transactionId: args.transactionId,
+    });
+    if (!transaction) {
+      return userError({
+        code: "not_found",
+        message: "Transaction not found.",
+      });
+    }
+
+    const store = await ctx.db.get("store", transaction.storeId);
+    if (!store) {
+      return userError({
+        code: "not_found",
+        message: "Store not found.",
+      });
+    }
+
+    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+    await requireOrganizationMemberRoleWithCtx(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "You cannot void this transaction.",
+      organizationId: store.organizationId,
+      userId: athenaUser._id,
+    });
+
+    const staffProfile = await ctx.db.get("staffProfile", actorStaffProfileId);
+    if (
+      !staffProfile ||
+      staffProfile.status !== "active" ||
+      staffProfile.storeId !== transaction.storeId
+    ) {
+      return userError({
+        code: "authentication_failed",
+        message: "Void staff profile is not active for this store.",
+      });
+    }
+
+    const staffProofTokenHash = await hashPosLocalStaffProofToken(
+      args.staffProofToken,
+    );
+    const proof = await ctx.db
+      .query("posLocalStaffProof")
+      .withIndex("by_tokenHash", (q) => q.eq("tokenHash", staffProofTokenHash))
+      .unique();
+    if (
+      !proof ||
+      proof.status !== "active" ||
+      proof.staffProfileId !== actorStaffProfileId ||
+      proof.storeId !== transaction.storeId ||
+      proof.expiresAt <= Date.now()
+    ) {
+      return userError({
+        code: "authentication_failed",
+        message: "Void staff proof is invalid or expired.",
+      });
+    }
+
+    if (transaction.terminalId && proof.terminalId !== transaction.terminalId) {
+      return userError({
+        code: "authentication_failed",
+        message: "Void staff proof is invalid for this terminal.",
+      });
+    }
+
+    const credential = await ctx.db.get("staffCredential", proof.credentialId);
+    if (
+      !credential ||
+      credential.status !== "active" ||
+      credential.staffProfileId !== actorStaffProfileId ||
+      credential.storeId !== transaction.storeId ||
+      credential.localVerifierVersion !== proof.credentialVersion
+    ) {
+      return userError({
+        code: "authentication_failed",
+        message: "Void staff proof is invalid or expired.",
+      });
+    }
+
+    await ctx.db.patch("posLocalStaffProof", proof._id, {
+      lastUsedAt: Date.now(),
+    });
+
+    const { staffProofToken: _staffProofToken, ...commandArgs } = args;
+    const result = await voidTransactionCommand(ctx, {
+      ...commandArgs,
+      actorStaffProfileId,
+      actorUserId: athenaUser._id,
+    });
+
+    if (result.kind === "approval_required") {
+      return result;
+    }
+
+    return result;
+  },
 });
 
 export const createTransactionFromSession = mutation({

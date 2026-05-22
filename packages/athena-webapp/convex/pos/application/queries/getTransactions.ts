@@ -279,7 +279,12 @@ export async function getCompletedTransactions(
         paymentMethod: transaction.paymentMethod || null,
         paymentMethods,
         hasMultiplePaymentMethods: paymentMethods.length > 1,
+        status: transaction.status,
         completedAt: transaction.completedAt,
+        voidedAt: transaction.voidedAt,
+        voidReason: transaction.voidReason,
+        voidApprovalRequestId: transaction.voidApprovalRequestId,
+        voidApprovalProofId: transaction.voidApprovalProofId,
         hasTrace: Boolean(sessionTraceId),
         sessionTraceId,
         cashierName: cashier
@@ -443,6 +448,13 @@ export async function getTransactionById(
     status: transaction.status,
     completedAt: transaction.completedAt,
     notes: transaction.notes,
+    voidedAt: transaction.voidedAt,
+    voidReason: transaction.voidReason ?? transaction.notes,
+    voidedByStaffProfileId: transaction.voidedByStaffProfileId,
+    voidApprovalRequestId: transaction.voidApprovalRequestId,
+    voidApprovalProofId: transaction.voidApprovalProofId,
+    voidApprovedByStaffProfileId: transaction.voidApprovedByStaffProfileId,
+    voidOperationalEventId: transaction.voidOperationalEventId,
     cashier: cashier
       ? {
           _id: cashier._id,

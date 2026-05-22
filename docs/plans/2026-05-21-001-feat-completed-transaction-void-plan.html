@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>feat: Add Completed Transaction Void Workflow</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8fb;
+      --paper: #ffffff;
+      --ink: #172033;
+      --muted: #5c677d;
+      --border: #d9deea;
+      --accent: #285e75;
+      --accent-soft: #e8f3f6;
+      --risk: #8a4b12;
+      --risk-soft: #fff3df;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 40px 20px 64px;
+    }
+    header {
+      background: var(--paper);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 28px;
+      box-shadow: 0 10px 32px rgba(23, 32, 51, 0.06);
+    }
+    h1, h2, h3 { line-height: 1.2; margin: 0; }
+    h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); letter-spacing: 0; }
+    h2 { font-size: 1.22rem; margin-bottom: 12px; }
+    h3 { font-size: 1rem; margin: 16px 0 8px; }
+    p { margin: 10px 0 0; }
+    a { color: var(--accent); }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+    .pill {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 4px 10px;
+      background: #fbfcff;
+    }
+    nav {
+      margin: 20px 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 8px;
+    }
+    nav a {
+      display: block;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--paper);
+      padding: 10px 12px;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    section {
+      margin-top: 18px;
+      background: var(--paper);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 22px;
+    }
+    ul, ol { margin: 10px 0 0 20px; padding: 0; }
+    li { margin: 6px 0; }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      background: #eef1f7;
+      border-radius: 5px;
+      padding: 1px 5px;
+      font-size: 0.92em;
+    }
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: var(--accent-soft);
+      padding: 12px 14px;
+      border-radius: 8px;
+      margin-top: 12px;
+    }
+    .risk {
+      border-left-color: var(--risk);
+      background: var(--risk-soft);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+    article {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fbfcff;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 0.95rem;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f1f4f9; }
+    .flow {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .flow div {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: #fbfcff;
+    }
+    footer {
+      margin-top: 24px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>feat: Add Completed Transaction Void Workflow</h1>
+      <p>Add a manager-approved workflow for voiding completed POS transactions from transaction detail. The plan replaces the current legacy direct void path with an audited reversal command that preserves original sale facts and records payment, inventory, cash-control, and operational evidence.</p>
+      <div class="meta">
+        <span class="pill">Type: feat</span>
+        <span class="pill">Status: active</span>
+        <span class="pill">Date: 2026-05-21</span>
+        <span class="pill">Deepened: 2026-05-21</span>
+        <span class="pill">Source: <a href="2026-05-21-001-feat-completed-transaction-void-plan.md">markdown plan</a></span>
+      </div>
+    </header>
+
+    <nav aria-label="Plan sections">
+      <a href="#scope">Scope</a>
+      <a href="#decisions">Key Decisions</a>
+      <a href="#design">Flow</a>
+      <a href="#units">Implementation Units</a>
+      <a href="#risks">Risks</a>
+      <a href="#verification">Verification</a>
+    </nav>
+
+    <section id="scope">
+      <h2>Scope</h2>
+      <p>The workflow covers full void of a completed POS transaction when the current operating-day and register state can safely accept the reversal. Partial refunds, exchanges, external gateway refunds, and post-close historical refunds are deliberately deferred.</p>
+      <div class="callout">
+        <strong>Boundary:</strong> Original sale rows, transaction number, receipt history, cashier attribution, and completed-sale item rows remain audit facts. The void is additive reversal evidence plus terminal status.
+      </div>
+    </section>
+
+    <section id="decisions">
+      <h2>Key Decisions</h2>
+      <ul>
+        <li>Replace the exposed void path with a browser-safe <code>CommandResult</code> workflow.</li>
+        <li>Require manager approval for completed-sale voids through the existing approval proof system.</li>
+        <li>Use existing ledgers: <code>paymentAllocation</code>, <code>inventoryMovement</code>, SKU activity, <code>operationalEvent</code>, and daily close review items.</li>
+        <li>Block direct voids for transactions with pending/applied item adjustments and transactions inside completed store operating-day closes.</li>
+        <li>Expose the action inside the existing transaction update panel, with reason capture and durable inline errors.</li>
+      </ul>
+    </section>
+
+    <section id="design">
+      <h2>Intended Flow</h2>
+      <p>This is directional guidance for review, not an implementation specification.</p>
+      <div class="flow">
+        <div>1. Operator chooses <strong>Void sale</strong>, enters a reason, and authenticates staff identity.</div>
+        <div>2. Transaction detail calls the void command without approval proof and receives <code>approval_required</code>.</div>
+        <div>3. Manager approval mints an action/store/subject/role-bound proof.</div>
+        <div>4. The command validates transaction status, adjustment state, register identity, daily close state, and proof.</div>
+        <div>5. The command records payment allocation reversal, cash drawer reversal, inventory movements, SKU activity, and operational event.</div>
+        <div>6. The transaction is patched to <code>status: "void"</code>; the UI renders void metadata and disables further updates.</div>
+      </div>
+    </section>
+
+    <section id="units">
+      <h2>Implementation Units</h2>
+      <div class="grid">
+        <article>
+          <h3>U1. Command Contract</h3>
+          <p>Add the completed-sale void approval action and public mutation command-result contract. Tests cover approval-required, proof retry, and safe user errors.</p>
+        </article>
+        <article>
+          <h3>U2. Ledger Reversal</h3>
+          <p>Record outbound payment allocations, register cash reversal, inventory movements, SKU activity, and void status with validation-before-write ordering and idempotent retry behavior.</p>
+        </article>
+        <article>
+          <h3>U3. Daily Close Boundaries</h3>
+          <p>Block voids for completed daily closes and item-adjusted transactions; preserve existing daily close void review items.</p>
+        </article>
+        <article>
+          <h3>U4. Operational History</h3>
+          <p>Record void operational events and return void metadata in transaction read models for detail and history surfaces.</p>
+        </article>
+        <article>
+          <h3>U5. Transaction UI</h3>
+          <p>Add the guarded destructive action to <code>TransactionView</code>, reusing staff sign-in, manager approval, and inline command errors.</p>
+        </article>
+        <article>
+          <h3>U6. Validation Docs</h3>
+          <p>Update harness and testing docs so future POS void work maps to command approval, cash-control, daily-close, and UI validation slices.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="risks">
+      <h2>Risks</h2>
+      <table>
+        <thead>
+          <tr><th>Risk</th><th>Mitigation</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Closed operating-day reports are corrupted.</td><td>Block direct voids inside completed daily closes using store operating-day range semantics; use reopen EOD or a future refund workflow.</td></tr>
+          <tr><td>Inventory restoration lacks audit evidence.</td><td>Record committed inventory movements and SKU activity for each restored SKU.</td></tr>
+          <tr><td>Cash drawer and payment allocation diverge.</td><td>Reuse existing retail void payment allocation and register-session void helpers with focused tests.</td></tr>
+          <tr><td>Partial reversal state appears after helper-level writes.</td><td>Validate blockers before writes, patch transaction status last, and require source-scoped idempotency or command-owned consolidation.</td></tr>
+          <tr><td>Adjusted transactions are reversed incorrectly.</td><td>Block pending/applied item-adjusted transactions in v1.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="verification">
+      <h2>Verification Strategy</h2>
+      <ul>
+        <li>Backend command tests for approval, validation, payment allocation, inventory movement, register cash, daily close blocks, and idempotent retry behavior.</li>
+        <li>Read-model tests for void metadata and transaction history.</li>
+        <li>Transaction UI tests for reason capture, approval retry, inline errors, success state, and already-void state.</li>
+        <li>Harness documentation and validation map updates, followed by package validation during implementation.</li>
+      </ul>
+      <div class="callout risk">
+        <strong>Implementation note:</strong> after code changes, rebuild graphify and regenerate any generated harness docs instead of editing generated files by hand.
+      </div>
+    </section>
+
+    <section>
+      <h2>Primary References</h2>
+      <ul>
+        <li><code>packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts</code></li>
+        <li><code>packages/athena-webapp/convex/pos/public/transactions.ts</code></li>
+        <li><code>packages/athena-webapp/convex/pos/application/commands/correctTransaction.ts</code></li>
+        <li><code>packages/athena-webapp/convex/pos/application/commands/adjustTransactionItems.ts</code></li>
+        <li><code>packages/athena-webapp/src/components/pos/transactions/TransactionView.tsx</code></li>
+        <li><a href="https://help.shopify.com/en/manual/sell-in-person/shopify-pos/order-management/complete-refund-orders?locale=en">Shopify POS returns and refunds</a></li>
+        <li><a href="https://docs.stripe.com/refunds?dashboard-or-api=api&amp;locale=en-GB">Stripe refund and cancel payments</a></li>
+      </ul>
+    </section>
+
+    <footer>
+      Canonical source: <a href="2026-05-21-001-feat-completed-transaction-void-plan.md">2026-05-21-001-feat-completed-transaction-void-plan.md</a>
+    </footer>
+  </main>
+</body>
+</html>

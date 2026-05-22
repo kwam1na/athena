@@ -8,6 +8,7 @@ import {
   decideApprovalRequestWithCtx,
 } from "./approvalRequests";
 import { resolveTransactionItemAdjustmentApprovalDecisionWithCtx } from "../pos/application/commands/adjustTransactionItems";
+import { resolveTransactionVoidApprovalDecisionWithCtx } from "../pos/application/commands/completeTransaction";
 
 const mockedAuthServer = vi.hoisted(() => ({
   getAuthUserId: vi.fn(),
@@ -19,6 +20,10 @@ vi.mock("@convex-dev/auth/server", () => ({
 
 vi.mock("../pos/application/commands/adjustTransactionItems", () => ({
   resolveTransactionItemAdjustmentApprovalDecisionWithCtx: vi.fn(),
+}));
+
+vi.mock("../pos/application/commands/completeTransaction", () => ({
+  resolveTransactionVoidApprovalDecisionWithCtx: vi.fn(),
 }));
 
 function createApprovalRequestMutationCtx(args: {
@@ -360,6 +365,78 @@ describe("approval request helpers", () => {
     });
   });
 
+  it("routes completed sale void approvals through the async resolver", async () => {
+    vi.mocked(resolveTransactionVoidApprovalDecisionWithCtx).mockClear();
+    const { ctx, tables } = createApprovalRequestMutationCtx({
+      authUserId: "auth-user-1",
+      role: "full_admin",
+    });
+    tables.approvalRequest.set("approval-void-1", {
+      _id: "approval-void-1",
+      organizationId: "org-1",
+      posTransactionId: "txn-1",
+      requestType: "pos_transaction_void",
+      status: "pending",
+      storeId: "store-1",
+      subjectId: "txn-1",
+      subjectType: "pos_transaction",
+    });
+
+    await decideApprovalRequestWithCtx(ctx, {
+      approvalProofId: "proof-1" as Id<"approvalProof">,
+      approvalRequestId: "approval-void-1" as Id<"approvalRequest">,
+      decision: "approved",
+      reviewedByStaffProfileId: "staff-manager-1" as Id<"staffProfile">,
+      reviewedByUserId: "manager-1" as Id<"athenaUser">,
+    });
+
+    expect(resolveTransactionVoidApprovalDecisionWithCtx).toHaveBeenCalledWith(
+      ctx,
+      {
+        approvalProofId: "proof-1",
+        approvalRequestId: "approval-void-1",
+        decision: "approved",
+        reviewedByStaffProfileId: "staff-manager-1",
+        reviewedByUserId: "manager-1",
+      },
+    );
+    expect(tables.approvalRequest.get("approval-void-1")).toMatchObject({
+      status: "approved",
+    });
+  });
+
+  it("preserves the queued void reason as decision notes when approval has no notes", async () => {
+    vi.mocked(resolveTransactionVoidApprovalDecisionWithCtx).mockClear();
+    const { ctx, tables } = createApprovalRequestMutationCtx({
+      authUserId: "auth-user-1",
+      role: "full_admin",
+    });
+    tables.approvalRequest.set("approval-void-1", {
+      _id: "approval-void-1",
+      notes: "Duplicate sale entered.",
+      organizationId: "org-1",
+      posTransactionId: "txn-1",
+      requestType: "pos_transaction_void",
+      status: "pending",
+      storeId: "store-1",
+      subjectId: "txn-1",
+      subjectType: "pos_transaction",
+    });
+
+    await decideApprovalRequestWithCtx(ctx, {
+      approvalProofId: "proof-1" as Id<"approvalProof">,
+      approvalRequestId: "approval-void-1" as Id<"approvalRequest">,
+      decision: "approved",
+      reviewedByStaffProfileId: "staff-manager-1" as Id<"staffProfile">,
+      reviewedByUserId: "manager-1" as Id<"athenaUser">,
+    });
+
+    expect(tables.approvalRequest.get("approval-void-1")).toMatchObject({
+      decisionNotes: "Duplicate sale entered.",
+      status: "approved",
+    });
+  });
+
   it("does not route already-decided POS item adjustment approvals to the async resolver", async () => {
     const { ctx, tables } = createApprovalRequestMutationCtx({
       authUserId: "auth-user-1",
@@ -598,6 +675,45 @@ describe("approval request helpers", () => {
         code: "precondition_failed",
         message:
           "This transaction already has an item adjustment waiting for approval.",
+      },
+    });
+  });
+
+  it("maps queued void resolver precondition failures to command user errors", async () => {
+    const { ctx, tables } = createApprovalRequestMutationCtx({
+      authUserId: "auth-user-1",
+      role: "full_admin",
+    });
+    tables.approvalRequest.set("approval-void-1", {
+      _id: "approval-void-1",
+      organizationId: "org-1",
+      posTransactionId: "txn-1",
+      requestType: "pos_transaction_void",
+      status: "pending",
+      storeId: "store-1",
+      subjectId: "txn-1",
+      subjectType: "pos_transaction",
+    });
+    tables.approvalProof.set("proof-1", {
+      ...tables.approvalProof.get("proof-1"),
+      subjectId: "approval-void-1",
+      subjectLabel: "pos_transaction_void",
+    });
+    vi.mocked(resolveTransactionVoidApprovalDecisionWithCtx).mockRejectedValueOnce(
+      new Error("Drawer closed. Open the drawer before voiding this sale."),
+    );
+
+    await expect(
+      decideApprovalRequestAsCommandWithCtx(ctx, {
+        approvalProofId: "proof-1" as Id<"approvalProof">,
+        approvalRequestId: "approval-void-1" as Id<"approvalRequest">,
+        decision: "approved",
+      }),
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: "Drawer closed. Open the drawer before voiding this sale.",
       },
     });
   });
