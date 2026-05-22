@@ -4,6 +4,7 @@ import {
   buildInventoryMovement,
   buildSkuActivityForInventoryMovement,
   recordInventoryMovementWithCtx,
+  recordInventoryMovementWithDispositionWithCtx,
   summarizeInventoryMovements,
 } from "./inventoryMovements";
 
@@ -172,5 +173,45 @@ describe("inventory movement helpers", () => {
       inventoryMovementId: first?._id,
       stockQuantityDelta: 4,
     });
+  });
+
+  it("reports whether source-scoped movement recording inserted or reused a row", async () => {
+    const { ctx, tables } = createInventoryMovementCtx({
+      productSku: new Map([
+        [
+          "sku-1",
+          {
+            _id: "sku-1",
+            inventoryCount: 5,
+            productId: "product-1",
+            quantityAvailable: 5,
+            storeId: "store-1",
+          },
+        ],
+      ]),
+    });
+    const args = {
+      movementType: "pos_transaction_void",
+      productId: "product-1" as Id<"product">,
+      productSkuId: "sku-1" as Id<"productSku">,
+      quantityDelta: 1,
+      reasonCode: "pos_transaction_void",
+      sourceId: "txn-1",
+      sourceType: "posTransaction",
+      storeId: "store-1" as Id<"store">,
+    };
+
+    const first = await recordInventoryMovementWithDispositionWithCtx(ctx, args);
+    const second = await recordInventoryMovementWithDispositionWithCtx(ctx, args);
+
+    expect(first).toMatchObject({
+      disposition: "inserted",
+      movement: { _id: expect.any(String) },
+    });
+    expect(second).toMatchObject({
+      disposition: "existing",
+      movement: { _id: first.movement?._id },
+    });
+    expect(tables.inventoryMovement).toHaveLength(1);
   });
 });

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
 import {
   assertRegisterSessionIdentity,
@@ -12,7 +12,19 @@ import {
   buildRegisterSession,
   buildRegisterSessionTransactionPatch,
   calculateRegisterSessionCashDelta,
+  recordRegisterSessionTransaction,
 } from "../operations/registerSessions";
+import { recordRegisterSessionTraceBestEffort } from "../operations/registerSessionTracing";
+
+vi.mock("../operations/registerSessionTracing", () => ({
+  recordRegisterSessionTraceBestEffort: vi.fn(() => ({
+    traceCreated: false,
+  })),
+}));
+
+function getHandler(definition: unknown) {
+  return (definition as { _handler: Function })._handler;
+}
 
 describe("cash controls register sessions", () => {
   it("opens sessions with opening float as the initial expected cash", () => {
@@ -161,6 +173,42 @@ describe("cash controls register sessions", () => {
       expectedCash: 5000,
       variance: 7000,
     });
+  });
+
+  it("skips duplicate register-session transaction writes by idempotency key", async () => {
+    const session = {
+      ...buildRegisterSession({
+        storeId: "store_1" as Id<"store">,
+        openingFloat: 5000,
+        registerNumber: "A1",
+        terminalId: "terminal_1" as Id<"posTerminal">,
+      }),
+      _id: "register_session_1",
+      expectedCash: 13000,
+      recordedTransactionKeys: ["posTransaction:txn-1:void"],
+    };
+    const patch = vi.fn();
+    const ctx = {
+      db: {
+        get: vi.fn(async () => session),
+        patch,
+      },
+    };
+
+    await expect(
+      getHandler(recordRegisterSessionTransaction)(ctx, {
+        adjustmentKind: "void",
+        changeGiven: 1000,
+        idempotencyKey: "posTransaction:txn-1:void",
+        payments: [{ amount: 9000, method: "cash", timestamp: 1 }],
+        registerSessionId: "register_session_1",
+        storeId: "store_1",
+        terminalId: "terminal_1",
+      }),
+    ).resolves.toEqual(session);
+
+    expect(patch).not.toHaveBeenCalled();
+    expect(recordRegisterSessionTraceBestEffort).not.toHaveBeenCalled();
   });
 
   it("computes closeout variance before final signoff", () => {

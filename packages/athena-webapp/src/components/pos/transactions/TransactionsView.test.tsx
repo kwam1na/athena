@@ -54,6 +54,7 @@ vi.mock("../../base/table/data-table", () => ({
     data: Array<{
       transactionNumber: string;
       sessionTraceId: string | null;
+      status?: string;
     }>;
   }) => (
     <div>
@@ -65,6 +66,7 @@ vi.mock("../../base/table/data-table", () => ({
               trace
             </span>
           ) : null}
+          {row.status === "void" ? <span>Voided</span> : null}
         </div>
       ))}
     </div>
@@ -134,6 +136,38 @@ describe("TransactionsView", () => {
     expect(
       screen.queryByTestId("session-trace-POS-654321"),
     ).not.toBeInTheDocument();
+  });
+
+  it("marks voided completed rows in the completed transactions table", () => {
+    getActiveStoreMock.mockReturnValue({
+      activeStore: {
+        _id: "store-1",
+        currency: "GHS",
+      },
+    });
+    useQueryMock.mockReturnValue([
+      {
+        _id: "txn-void",
+        transactionNumber: "POS-VOID",
+        total: 1000,
+        paymentMethod: "cash",
+        paymentMethods: ["cash"],
+        cashierName: "Ada L.",
+        customerName: null,
+        itemCount: 1,
+        completedAt: Date.now(),
+        hasTrace: false,
+        sessionTraceId: null,
+        status: "void",
+        voidedAt: Date.now(),
+        voidReason: "Duplicate sale.",
+      },
+    ]);
+
+    render(<TransactionsView />);
+
+    expect(screen.getByText("POS-VOID")).toBeInTheDocument();
+    expect(screen.getByText("Voided")).toBeInTheDocument();
   });
 
   it("passes the register session filter to the completed transactions query", () => {

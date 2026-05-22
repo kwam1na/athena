@@ -8,6 +8,7 @@ import { v } from "convex/values";
 import { resolveStockAdjustmentApprovalDecisionWithCtx } from "../stockOps/adjustments";
 import { resolvePaymentMethodCorrectionApprovalDecisionWithCtx } from "../pos/application/commands/correctTransaction";
 import { resolveTransactionItemAdjustmentApprovalDecisionWithCtx } from "../pos/application/commands/adjustTransactionItems";
+import { resolveTransactionVoidApprovalDecisionWithCtx } from "../pos/application/commands/completeTransaction";
 import {
   requireOrganizationMemberRoleWithCtx,
   requireAuthenticatedAthenaUserWithCtx,
@@ -26,6 +27,7 @@ import { consumeApprovalProofWithCtx } from "./approvalProofs";
 const APPROVAL_DECISION_ACTION_KEY = "operations.approval_request.decide";
 
 type DecideApprovalRequestArgs = {
+  approvalProofId?: Id<"approvalProof">;
   approvalRequestId: Id<"approvalRequest">;
   decision: "approved" | "rejected" | "cancelled";
   reviewedByUserId?: Id<"athenaUser">;
@@ -39,6 +41,12 @@ type PublicDecideApprovalRequestArgs = {
   decision: "approved" | "rejected" | "cancelled";
   decisionNotes?: string;
 };
+
+function omitUndefined<T extends Record<string, unknown>>(value: T) {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, entryValue]) => entryValue !== undefined),
+  ) as Partial<T>;
+}
 
 function buildApprovalDecisionSubject(approvalRequest: {
   _id: Id<"approvalRequest">;
@@ -161,11 +169,26 @@ export async function decideApprovalRequestWithCtx(
     await resolveTransactionItemAdjustmentApprovalDecisionWithCtx(ctx, args);
   }
 
+  if (
+    approvalRequest.requestType === "pos_transaction_void" &&
+    approvalRequest.subjectType === "pos_transaction"
+  ) {
+    await resolveTransactionVoidApprovalDecisionWithCtx(ctx, args);
+  }
+
+  const decisionNotes =
+    args.decisionNotes ??
+    (approvalRequest.requestType === "pos_transaction_void"
+      ? approvalRequest.notes ?? approvalRequest.reason
+      : undefined);
+
   await ctx.db.patch("approvalRequest", args.approvalRequestId, {
     status: args.decision,
     reviewedByUserId: args.reviewedByUserId,
     reviewedByStaffProfileId: args.reviewedByStaffProfileId,
-    decisionNotes: args.decisionNotes,
+    ...omitUndefined({
+      decisionNotes,
+    }),
     decidedAt: Date.now(),
   });
 
@@ -217,6 +240,7 @@ export async function decideApprovalRequestAsAuthenticatedUserWithCtx(
 
   return decideApprovalRequestWithCtx(ctx, {
     ...args,
+    approvalProofId: args.approvalProofId,
     reviewedByStaffProfileId: approvalProof.approvedByStaffProfileId,
     reviewedByUserId: reviewer._id,
   });
@@ -257,6 +281,7 @@ function mapDecideApprovalRequestError(
     message === "Stock adjustment batch not found for this approval request." ||
     message === "Payment method approval request not found." ||
     message === "Item adjustment approval request not found." ||
+    message === "Void approval request not found." ||
     message === "Transaction not found."
   ) {
     return userError({
@@ -281,6 +306,22 @@ function mapDecideApprovalRequestError(
     message === "Item adjustment approval request does not match this payload." ||
     message === "Item adjustment payload is stale for this transaction." ||
     message === "Item adjustment cannot reduce inventory below zero." ||
+    message === "Void approval request has already been decided." ||
+    message === "Void approval request does not match this sale." ||
+    message === "Void approval request is missing transaction details." ||
+    message === "Manager approval is required to void a completed sale." ||
+    message === "Reason is required to void a completed sale." ||
+    message === "Sale is already voided." ||
+    message === "Sale is already refunded." ||
+    message === "Only completed sales can be voided." ||
+    message ===
+      "This sale has item adjustments. Resolve the adjustment before voiding it." ||
+    message ===
+      "EOD Review is completed for this sale. Reopen EOD Review before voiding it." ||
+    message === "Register sale is missing drawer context." ||
+    message === "Drawer closed. Open the drawer before voiding this sale." ||
+    message ===
+      "Sale item inventory record not found. Review inventory before voiding this sale." ||
     message ===
       "This transaction already has an item adjustment waiting for approval." ||
     message === "Register session expected cash cannot be negative." ||

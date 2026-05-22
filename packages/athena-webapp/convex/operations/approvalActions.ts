@@ -40,6 +40,10 @@ export const APPROVAL_ACTIONS = {
     key: "pos.transaction.adjust_items",
     label: "Adjust transaction items",
   },
+  transactionVoid: {
+    key: "pos.transaction.void",
+    label: "Void completed transaction",
+  },
 } as const satisfies Record<string, ApprovalActionIdentity>;
 
 export type ConsumeCommandApprovalProofArgs = {

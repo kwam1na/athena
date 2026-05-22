@@ -251,30 +251,47 @@ export async function listCompletedTransactions(
     limit?: number;
   },
 ) {
+  const limit = args.limit ?? 50;
   if (args.registerSessionId) {
-    return ctx.db
-      .query("posTransaction")
-      .withIndex("by_storeId_status_registerSessionId_completedAt", (q) =>
-        q
-          .eq("storeId", args.storeId)
-          .eq("status", "completed")
-          .eq("registerSessionId", args.registerSessionId)
-          .gte("completedAt", args.completedFrom ?? 0),
-      )
-      .order("desc")
-      .take(args.limit ?? 50);
+    const [completed, voided] = await Promise.all(
+      (["completed", "void"] as const).map((status) =>
+        ctx.db
+          .query("posTransaction")
+          .withIndex("by_storeId_status_registerSessionId_completedAt", (q) =>
+            q
+              .eq("storeId", args.storeId)
+              .eq("status", status)
+              .eq("registerSessionId", args.registerSessionId)
+              .gte("completedAt", args.completedFrom ?? 0),
+          )
+          .order("desc")
+          .take(limit),
+      ),
+    );
+
+    return [...completed, ...voided]
+      .sort((first, second) => second.completedAt - first.completedAt)
+      .slice(0, limit);
   }
 
-  return ctx.db
-    .query("posTransaction")
-    .withIndex("by_storeId_status_completedAt", (q) =>
-      q
-        .eq("storeId", args.storeId)
-        .eq("status", "completed")
-        .gte("completedAt", args.completedFrom ?? 0),
-    )
-    .order("desc")
-    .take(args.limit ?? 50);
+  const [completed, voided] = await Promise.all(
+    (["completed", "void"] as const).map((status) =>
+      ctx.db
+        .query("posTransaction")
+        .withIndex("by_storeId_status_completedAt", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("status", status)
+            .gte("completedAt", args.completedFrom ?? 0),
+        )
+        .order("desc")
+        .take(limit),
+    ),
+  );
+
+  return [...completed, ...voided]
+    .sort((first, second) => second.completedAt - first.completedAt)
+    .slice(0, limit);
 }
 
 export async function listCompletedTransactionsForDay(

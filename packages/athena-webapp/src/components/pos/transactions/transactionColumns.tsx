@@ -22,6 +22,9 @@ export type CompletedTransactionRow = {
   completedAt: number;
   hasTrace: boolean;
   sessionTraceId: string | null;
+  status?: "completed" | "void";
+  voidedAt?: number | null;
+  voidReason?: string | null;
 };
 
 const getPaymentMethodIcon = ({
@@ -83,6 +86,11 @@ export const transactionColumns: ColumnDef<CompletedTransactionRow>[] = [
               </WorkflowTraceRouteLink>
             </div>
           ) : null}
+          {row.original.status === "void" ? (
+            <span className="w-fit rounded-sm border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 text-xs font-medium text-destructive">
+              Voided
+            </span>
+          ) : null}
         </div>
       );
     },
@@ -105,7 +113,9 @@ export const transactionColumns: ColumnDef<CompletedTransactionRow>[] = [
         search={{ o: getOrigin() }}
         className="flex items-center gap-2"
       >
-        <span>{row.original.formattedTotal}</span>
+        <span className={row.original.status === "void" ? "line-through" : ""}>
+          {row.original.formattedTotal}
+        </span>
         <span className="capitalize text-muted-foreground text-sm">
           {getPaymentMethodIcon({
             paymentMethod: row.original.paymentMethod,

@@ -203,6 +203,7 @@ vi.mock("../../operations/CommandApprovalDialog", () => ({
     approval,
     onAuthenticateForApproval,
     onApproved,
+    onDismiss,
     open,
     requestedByStaffProfileId,
   }: {
@@ -240,6 +241,7 @@ vi.mock("../../operations/CommandApprovalDialog", () => ({
       approvedByStaffProfileId: string;
       expiresAt: number;
     }) => void;
+    onDismiss: () => void;
     open: boolean;
     requestedByStaffProfileId?: string;
   }) =>
@@ -284,6 +286,9 @@ vi.mock("../../operations/CommandApprovalDialog", () => ({
             is pending in the review queue.
           </p>
         )}
+        <button onClick={onDismiss} type="button">
+          Cancel
+        </button>
       </div>
     ) : null,
 }));
@@ -417,6 +422,38 @@ describe("TransactionView", () => {
     };
   }
 
+  function voidApprovalRequirement(
+    transactionId = "txn_void",
+    options: { includeAsyncRequest?: boolean } = {},
+  ) {
+    return {
+      action: { key: "pos.transaction.void" },
+      copy: {
+        title: "Manager approval required",
+        message:
+          "A manager needs to review this completed sale void before it is applied.",
+        primaryActionLabel: "Approve void",
+      },
+      reason: "Manager approval is required to void a completed POS sale.",
+      requiredRole: "manager" as const,
+      resolutionModes: options.includeAsyncRequest
+        ? [
+            { kind: "inline_manager_proof" },
+            {
+              approvalRequestId: "approval-void-1",
+              kind: "async_request",
+              requestType: "pos_transaction_void",
+            },
+          ]
+        : [{ kind: "inline_manager_proof" }],
+      subject: {
+        id: transactionId,
+        label: "Transaction #POS-123456",
+        type: "pos_transaction",
+      },
+    };
+  }
+
   beforeEach(() => {
     useActionMock.mockReset();
     useActionMock.mockReturnValue(vi.fn());
@@ -437,6 +474,7 @@ describe("TransactionView", () => {
     approvalMutation: ReturnType<typeof vi.fn> = vi.fn(),
     itemAdjustmentMutation: ReturnType<typeof vi.fn> = vi.fn(),
     terminalAuthMutation: ReturnType<typeof vi.fn> = authMutation,
+    voidMutation: ReturnType<typeof vi.fn> = vi.fn(),
   ) {
     const mutations = [
       authMutation,
@@ -445,6 +483,7 @@ describe("TransactionView", () => {
       paymentMutation,
       customerMutation,
       itemAdjustmentMutation,
+      voidMutation,
     ];
     let mutationIndex = 0;
     useMutationMock.mockImplementation(
@@ -672,6 +711,391 @@ describe("TransactionView", () => {
     expect(
       screen.getByRole("button", { name: "Items or quantities" }),
     ).toBeInTheDocument();
+  });
+
+  it("opens manager approval for completed sale voids", async () => {
+    const user = userEvent.setup();
+    const authMutation = vi.fn().mockResolvedValue({
+      kind: "ok",
+      data: {
+        activeRoles: ["cashier"],
+        posLocalStaffProof: { expiresAt: 2, token: "proof-token-1" },
+        staffProfile: { firstName: "Kwamina", lastName: "Mensah" },
+        staffProfileId: "staff_1",
+      },
+    });
+    const voidMutation = vi.fn().mockResolvedValue({
+      kind: "approval_required",
+      approval: voidApprovalRequirement("txn_void"),
+    });
+    mockTransactionMutations(
+      authMutation,
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      authMutation,
+      voidMutation,
+    );
+    useParamsMock.mockReturnValue({ transactionId: "txn_void" });
+    useQueryMock.mockReturnValue(baseTransaction);
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Void sale" }));
+    await user.type(
+      screen.getByLabelText("Void reason"),
+      "Duplicate sale recorded.",
+    );
+    await user.click(screen.getByRole("button", { name: "Submit void" }));
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+
+    expect(screen.getByText("Manager approval required")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "A manager needs to review this completed sale void before it is applied.",
+      ),
+    ).toBeInTheDocument();
+    expect(voidMutation).toHaveBeenCalledWith({
+      actorStaffProfileId: "staff_1",
+      approvalProofId: undefined,
+      approvalRequestId: undefined,
+      reason: "Duplicate sale recorded.",
+      staffProofToken: "proof-token-1",
+      transactionId: "txn_void",
+    });
+  });
+
+  it("queues completed sale voids when the approval response includes an async request", async () => {
+    const user = userEvent.setup();
+    const authMutation = vi.fn().mockResolvedValue({
+      kind: "ok",
+      data: {
+        activeRoles: ["cashier"],
+        posLocalStaffProof: { expiresAt: 2, token: "proof-token-1" },
+        staffProfile: { firstName: "Kwamina", lastName: "Mensah" },
+        staffProfileId: "staff_1",
+      },
+    });
+    const voidMutation = vi.fn().mockResolvedValue({
+      kind: "approval_required",
+      approval: voidApprovalRequirement("txn_void_async", {
+        includeAsyncRequest: true,
+      }),
+    });
+    mockTransactionMutations(
+      authMutation,
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      authMutation,
+      voidMutation,
+    );
+    useParamsMock.mockReturnValue({ transactionId: "txn_void_async" });
+    useQueryMock.mockReturnValue(baseTransaction);
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Void sale" }));
+    await user.type(screen.getByLabelText("Void reason"), "Duplicate sale.");
+    await user.click(screen.getByRole("button", { name: "Submit void" }));
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+
+    expect(screen.queryByText("Manager approval required")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Void reason")).not.toBeInTheDocument();
+  });
+
+  it("does not retry the void command when manager approval is cancelled", async () => {
+    const user = userEvent.setup();
+    const authMutation = vi.fn().mockResolvedValue({
+      kind: "ok",
+      data: {
+        activeRoles: ["cashier"],
+        posLocalStaffProof: { expiresAt: 2, token: "proof-token-1" },
+        staffProfile: { firstName: "Kwamina", lastName: "Mensah" },
+        staffProfileId: "staff_1",
+      },
+    });
+    const voidMutation = vi.fn().mockResolvedValue({
+      kind: "approval_required",
+      approval: voidApprovalRequirement("txn_void_cancel"),
+    });
+    mockTransactionMutations(
+      authMutation,
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      authMutation,
+      voidMutation,
+    );
+    useParamsMock.mockReturnValue({ transactionId: "txn_void_cancel" });
+    useQueryMock.mockReturnValue(baseTransaction);
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Void sale" }));
+    await user.type(screen.getByLabelText("Void reason"), "Duplicate sale.");
+    await user.click(screen.getByRole("button", { name: "Submit void" }));
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(voidMutation).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByText("Manager approval required"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows a voided state after a manager-approved void succeeds", async () => {
+    const user = userEvent.setup();
+    const authMutation = vi.fn().mockResolvedValue({
+      kind: "ok",
+      data: {
+        activeRoles: ["manager"],
+        posLocalStaffProof: { expiresAt: 2, token: "proof-token-1" },
+        staffProfile: { firstName: "Kwamina", lastName: "Mensah" },
+        staffProfileId: "staff_1",
+      },
+    });
+    const approvalMutation = vi.fn().mockResolvedValue({
+      kind: "ok",
+      data: {
+        approvalProofId: "proof-void-1",
+        approvedByStaffProfileId: "staff_manager",
+        expiresAt: 2,
+      },
+    });
+    const voidMutation = vi
+      .fn()
+      .mockResolvedValueOnce({
+        kind: "approval_required",
+        approval: voidApprovalRequirement("txn_void_success", {
+          includeAsyncRequest: true,
+        }),
+      })
+      .mockResolvedValueOnce({
+        kind: "ok",
+        data: {
+          transactionId: "txn_void_success",
+          transactionNumber: "POS-123456",
+          voidedAt: 456,
+          paymentAllocationIds: ["allocation_1"],
+          inventoryMovementIds: ["movement_1"],
+          approvalProofId: "proof-void-1",
+          approverStaffProfileId: "staff_manager",
+        },
+      });
+    mockTransactionMutations(
+      authMutation,
+      vi.fn(),
+      vi.fn(),
+      approvalMutation,
+      vi.fn(),
+      authMutation,
+      voidMutation,
+    );
+    useParamsMock.mockReturnValue({ transactionId: "txn_void_success" });
+    useQueryMock.mockReturnValue(baseTransaction);
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Void sale" }));
+    await user.type(
+      screen.getByLabelText("Void reason"),
+      "Duplicate sale recorded.",
+    );
+    await user.click(screen.getByRole("button", { name: "Submit void" }));
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Voided").length).toBeGreaterThan(0);
+      expect(screen.getByText("Sale voided")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Duplicate sale recorded.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Void sale" })).not.toBeInTheDocument();
+    expect(voidMutation).toHaveBeenLastCalledWith({
+      actorStaffProfileId: "staff_1",
+      approvalProofId: "proof-void-1",
+      approvalRequestId: "approval-void-1",
+      reason: "Duplicate sale recorded.",
+      staffProofToken: "proof-token-1",
+      transactionId: "txn_void_success",
+    });
+  });
+
+  it("renders normalized backend blocking copy for void failures", async () => {
+    const user = userEvent.setup();
+    const authMutation = vi.fn().mockResolvedValue({
+      kind: "ok",
+      data: {
+        activeRoles: ["manager"],
+        posLocalStaffProof: { expiresAt: 2, token: "proof-token-1" },
+        staffProfile: { firstName: "Kwamina", lastName: "Mensah" },
+        staffProfileId: "staff_1",
+      },
+    });
+    const voidMutation = vi.fn().mockResolvedValue({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message:
+          "Register session is already closed for this completed transaction.",
+      },
+    });
+    mockTransactionMutations(
+      authMutation,
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      authMutation,
+      voidMutation,
+    );
+    useParamsMock.mockReturnValue({ transactionId: "txn_void_blocked" });
+    useQueryMock.mockReturnValue(baseTransaction);
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Void sale" }));
+    await user.type(screen.getByLabelText("Void reason"), "Duplicate sale.");
+    await user.click(screen.getByRole("button", { name: "Submit void" }));
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+
+    expect(
+      await screen.findByText(
+        "Register closed. Reopen the register before voiding this sale.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Register session is already closed for this completed transaction.",
+      ),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders normalized daily-close copy for void failures", async () => {
+    const user = userEvent.setup();
+    const authMutation = vi.fn().mockResolvedValue({
+      kind: "ok",
+      data: {
+        activeRoles: ["manager"],
+        posLocalStaffProof: { expiresAt: 2, token: "proof-token-1" },
+        staffProfile: { firstName: "Kwamina", lastName: "Mensah" },
+        staffProfileId: "staff_1",
+      },
+    });
+    const voidMutation = vi.fn().mockResolvedValue({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: "Daily close is complete for this operating day.",
+      },
+    });
+    mockTransactionMutations(
+      authMutation,
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      authMutation,
+      voidMutation,
+    );
+    useParamsMock.mockReturnValue({ transactionId: "txn_void_daily_close" });
+    useQueryMock.mockReturnValue(baseTransaction);
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Void sale" }));
+    await user.type(screen.getByLabelText("Void reason"), "Duplicate sale.");
+    await user.click(screen.getByRole("button", { name: "Submit void" }));
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+
+    expect(
+      await screen.findByText(
+        "Daily close completed. Reopen the day before voiding this sale.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Daily close is complete for this operating day."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not render unmapped backend void failure copy", async () => {
+    const user = userEvent.setup();
+    const authMutation = vi.fn().mockResolvedValue({
+      kind: "ok",
+      data: {
+        activeRoles: ["manager"],
+        posLocalStaffProof: { expiresAt: 2, token: "proof-token-1" },
+        staffProfile: { firstName: "Kwamina", lastName: "Mensah" },
+        staffProfileId: "staff_1",
+      },
+    });
+    const voidMutation = vi.fn().mockResolvedValue({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "You cannot void this transaction.",
+      },
+    });
+    mockTransactionMutations(
+      authMutation,
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      authMutation,
+      voidMutation,
+    );
+    useParamsMock.mockReturnValue({ transactionId: "txn_void_auth" });
+    useQueryMock.mockReturnValue(baseTransaction);
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Void sale" }));
+    await user.type(screen.getByLabelText("Void reason"), "Duplicate sale.");
+    await user.click(screen.getByRole("button", { name: "Submit void" }));
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+
+    expect(
+      await screen.findByText(
+        "Sale could not be voided. Check the transaction state and try again.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("You cannot void this transaction."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides the void submission path when the read model marks the sale blocked", () => {
+    useParamsMock.mockReturnValue({ transactionId: "txn_void_blocked_model" });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      voidEligibility: { eligible: false },
+    });
+
+    render(<TransactionView />);
+
+    expect(screen.queryByRole("button", { name: "Void sale" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Submit void" })).not.toBeInTheDocument();
+  });
+
+  it("hides the void submission path for already voided transactions", () => {
+    useParamsMock.mockReturnValue({ transactionId: "txn_voided" });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      status: "void",
+      voidReason: "Duplicate sale.",
+      voidedAt: 456,
+    });
+
+    render(<TransactionView />);
+
+    expect(screen.getAllByText("Voided").length).toBeGreaterThan(0);
+    expect(screen.getByText("Sale voided")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Void sale" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Submit void" })).not.toBeInTheDocument();
   });
 
   it("routes high-risk transaction corrections to safe guidance", async () => {

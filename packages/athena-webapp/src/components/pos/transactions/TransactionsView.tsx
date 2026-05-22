@@ -76,6 +76,9 @@ type CompletedTransaction = {
   completedAt: number;
   hasTrace: boolean;
   sessionTraceId: string | null;
+  status?: string;
+  voidedAt?: number | null;
+  voidReason?: string | null;
 };
 
 export function TransactionsView() {
@@ -167,6 +170,9 @@ export function TransactionsView() {
       completedAt: transaction.completedAt,
       hasTrace: transaction.hasTrace,
       sessionTraceId: null,
+      status: transaction.status === "void" ? "void" : "completed",
+      voidedAt: transaction.voidedAt,
+      voidReason: transaction.voidReason,
     }));
   }, [transactions, formatter]);
 

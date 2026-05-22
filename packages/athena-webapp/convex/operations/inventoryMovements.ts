@@ -187,6 +187,49 @@ export async function recordInventoryMovementWithCtx(
   return movement;
 }
 
+export async function recordInventoryMovementWithDispositionWithCtx(
+  ctx: MutationCtx,
+  args: RecordInventoryMovementArgs,
+) {
+  // eslint-disable-next-line @convex-dev/no-collect-in-query -- Source-scoped dedupe needs the full indexed set for this source, which is bounded by the originating operation's line items.
+  const existingMovements = await ctx.db
+    .query("inventoryMovement")
+    .withIndex("by_storeId_source", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("sourceType", args.sourceType)
+        .eq("sourceId", args.sourceId),
+    )
+    .collect();
+
+  const existingMovement = existingMovements.find((movement) =>
+    matchesExistingMovement(movement, args),
+  );
+
+  if (existingMovement) {
+    await recordSkuActivityForInventoryMovementWithCtx(ctx, {
+      ...args,
+      inventoryMovementId: existingMovement._id,
+    });
+    return { movement: existingMovement, disposition: "existing" as const };
+  }
+
+  const movementId = await ctx.db.insert(
+    "inventoryMovement",
+    buildInventoryMovement(args),
+  );
+  const movement = await ctx.db.get("inventoryMovement", movementId);
+
+  if (movement) {
+    await recordSkuActivityForInventoryMovementWithCtx(ctx, {
+      ...args,
+      inventoryMovementId: movement._id,
+    });
+  }
+
+  return { movement, disposition: "inserted" as const };
+}
+
 export const recordInventoryMovement = internalMutation({
   args: {
     storeId: v.id("store"),

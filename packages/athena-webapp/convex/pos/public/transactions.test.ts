@@ -5,9 +5,12 @@ import {
   correctTransactionPaymentMethod,
   getCompletedTransactions,
   getTransactionById,
+  voidTransaction,
 } from "./transactions";
+import type { Id } from "../../_generated/dataModel";
 import * as athenaUserAuth from "../../lib/athenaUserAuth";
 import * as itemAdjustmentCommands from "../application/commands/adjustTransactionItems";
+import * as completeTransactionCommands from "../application/commands/completeTransaction";
 import * as transactionQueries from "../application/queries/getTransactions";
 
 vi.mock("../../lib/athenaUserAuth", () => ({
@@ -26,6 +29,13 @@ vi.mock("../application/queries/getTransactions", () => ({
 
 vi.mock("../application/commands/adjustTransactionItems", () => ({
   adjustTransactionItems: vi.fn(),
+}));
+
+vi.mock("../application/commands/completeTransaction", () => ({
+  completeTransaction: vi.fn(),
+  createTransactionFromSessionHandler: vi.fn(),
+  updateInventory: vi.fn(),
+  voidTransaction: vi.fn(),
 }));
 
 type SerializedValidator = {
@@ -67,6 +77,20 @@ describe("POS public transaction query validators", () => {
     expect(JSON.stringify(validator)).toContain("posTransactionAdjustment");
   });
 
+  it("allows completed transaction voids to return approval requirements and stable success data", () => {
+    const validator = parseValidator(exportReturns(voidTransaction));
+    const validatorJson = JSON.stringify(validator);
+
+    expect(validator.type).toBe("union");
+    expect(validatorJson).toContain("approval_required");
+    expect(validatorJson).toContain("inline_manager_proof");
+    expect(validatorJson).toContain("paymentAllocation");
+    expect(validatorJson).toContain("inventoryMovement");
+    expect(validatorJson).toContain("operationalEvent");
+    expect(validatorJson).toContain("approvalProof");
+    expect(validatorJson).toContain("voidedAt");
+  });
+
   it("exposes session trace ids for completed transaction lists", () => {
     const validator = parseValidator(exportReturns(getCompletedTransactions));
 
@@ -86,6 +110,8 @@ describe("POS public transaction query validators", () => {
           fieldType: { type: "boolean" },
           optional: false,
         },
+        status: expect.any(Object),
+        voidedAt: expect.any(Object),
       },
     });
   });
@@ -102,6 +128,218 @@ describe("POS public transaction query validators", () => {
         terminalId: expect.any(Object),
       },
     });
+  });
+});
+
+describe("voidTransaction public mutation", () => {
+  function createAuthorizedVoidCtx(overrides?: {
+    credential?: Record<string, unknown> | null;
+    proof?: Record<string, unknown> | null;
+    staffProfile?: Record<string, unknown> | null;
+  }) {
+    const staffProof = {
+      _id: "proof-row-1",
+      credentialId: "credential-1",
+      credentialVersion: 3,
+      expiresAt: Date.now() + 60_000,
+      staffProfileId: "staff-1",
+      status: "active",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      ...overrides?.proof,
+    };
+    const staffProfile = {
+      _id: "staff-1",
+      status: "active",
+      storeId: "store-1",
+      ...overrides?.staffProfile,
+    };
+    const credential = {
+      _id: "credential-1",
+      localVerifierVersion: 3,
+      staffProfileId: "staff-1",
+      status: "active",
+      storeId: "store-1",
+      ...overrides?.credential,
+    };
+
+    vi.mocked(transactionQueries.getTransaction).mockResolvedValue({
+      _id: "txn-1",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    } as never);
+    vi.mocked(athenaUserAuth.requireAuthenticatedAthenaUserWithCtx).mockResolvedValue({
+      _id: "user-1",
+    } as never);
+
+    return {
+      db: {
+        get: vi.fn(async (tableName: string, id: string) => {
+          if (tableName === "store" && id === "store-1") {
+            return { _id: "store-1", organizationId: "org-1" };
+          }
+          if (tableName === "staffProfile" && id === "staff-1") {
+            return overrides?.staffProfile === null ? null : staffProfile;
+          }
+          if (tableName === "staffCredential" && id === "credential-1") {
+            return credential;
+          }
+          return null;
+        }),
+        patch: vi.fn(),
+        query: vi.fn(() => ({
+          withIndex: vi.fn(() => ({
+            unique: vi.fn(async () =>
+              overrides?.proof === null ? null : staffProof,
+            ),
+          })),
+        })),
+      },
+    };
+  }
+
+  it("requires a signed-in staff actor before voiding a completed transaction", async () => {
+    await expect(
+      getHandler(voidTransaction)({} as never, {
+        reason: "Duplicate sale",
+        transactionId: "txn-1" as Id<"posTransaction">,
+      }),
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "authentication_failed",
+      },
+    });
+
+    expect(completeTransactionCommands.voidTransaction).not.toHaveBeenCalled();
+  });
+
+  it("wraps command approval requirements on the shared command-result rail", async () => {
+    vi.mocked(completeTransactionCommands.voidTransaction).mockResolvedValue({
+      approval: {
+        action: {
+          key: "pos.transaction.void",
+        },
+        copy: {
+          title: "Manager approval required",
+          message: "Review completed sale void.",
+        },
+        reason: "Manager approval is required.",
+        requiredRole: "manager",
+        resolutionModes: [{ kind: "inline_manager_proof" }],
+        subject: {
+          id: "txn-1",
+          type: "pos_transaction",
+        },
+      },
+      kind: "approval_required",
+      transactionId: "txn-1",
+    } as never);
+
+    await expect(
+      getHandler(voidTransaction)(createAuthorizedVoidCtx() as never, {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        reason: "Duplicate sale",
+        staffProofToken: "proof-token-1",
+        transactionId: "txn-1" as Id<"posTransaction">,
+      }),
+    ).resolves.toMatchObject({
+      kind: "approval_required",
+      approval: {
+        action: {
+          key: "pos.transaction.void",
+        },
+      },
+    });
+    expect(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).toHaveBeenCalledWith(expect.any(Object), {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "You cannot void this transaction.",
+      organizationId: "org-1",
+      userId: "user-1",
+    });
+    expect(completeTransactionCommands.voidTransaction).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        actorStaffProfileId: "staff-1",
+        actorUserId: "user-1",
+      }),
+    );
+    expect(
+      vi.mocked(completeTransactionCommands.voidTransaction).mock.calls[0]?.[1],
+    ).not.toHaveProperty("staffProofToken");
+  });
+
+  it.each([
+    ["missing staff profile", { staffProfile: null }],
+    ["inactive staff profile", { staffProfile: { status: "inactive" } }],
+    ["cross-store staff profile", { staffProfile: { storeId: "store-other" } }],
+    ["missing staff proof", { proof: null }],
+    ["expired staff proof", { proof: { expiresAt: Date.now() - 1 } }],
+    ["mismatched staff proof", { proof: { staffProfileId: "staff-other" } }],
+    ["cross-terminal staff proof", { proof: { terminalId: "terminal-other" } }],
+    ["inactive staff credential", { credential: { status: "revoked" } }],
+    [
+      "mismatched staff credential",
+      { credential: { staffProfileId: "staff-other" } },
+    ],
+  ])("rejects %s before invoking the void command", async (_label, overrides) => {
+    await expect(
+      getHandler(voidTransaction)(
+        createAuthorizedVoidCtx(overrides as never) as never,
+        {
+          actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+          reason: "Duplicate sale",
+          staffProofToken: "proof-token-1",
+          transactionId: "txn-1" as Id<"posTransaction">,
+        },
+      ),
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "authentication_failed",
+      },
+    });
+    expect(completeTransactionCommands.voidTransaction).not.toHaveBeenCalled();
+  });
+
+  it("does not use staff proof or invoke void command when authentication fails", async () => {
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockRejectedValueOnce(new Error("Sign in again to continue."));
+    const ctx = createAuthorizedVoidCtx();
+
+    await expect(
+      getHandler(voidTransaction)(ctx as never, {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        reason: "Duplicate sale",
+        staffProofToken: "proof-token-1",
+        transactionId: "txn-1" as Id<"posTransaction">,
+      }),
+    ).rejects.toThrow("Sign in again to continue.");
+
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+    expect(completeTransactionCommands.voidTransaction).not.toHaveBeenCalled();
+  });
+
+  it("does not use staff proof or invoke void command when authorization fails", async () => {
+    vi.mocked(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).mockRejectedValueOnce(new Error("You cannot void this transaction."));
+    const ctx = createAuthorizedVoidCtx();
+
+    await expect(
+      getHandler(voidTransaction)(ctx as never, {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        reason: "Duplicate sale",
+        staffProofToken: "proof-token-1",
+        transactionId: "txn-1" as Id<"posTransaction">,
+      }),
+    ).rejects.toThrow("You cannot void this transaction.");
+
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+    expect(completeTransactionCommands.voidTransaction).not.toHaveBeenCalled();
   });
 });
 
