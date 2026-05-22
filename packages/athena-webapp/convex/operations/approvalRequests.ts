@@ -25,6 +25,11 @@ import { commandResultValidator } from "../lib/commandResultValidators";
 import { consumeApprovalProofWithCtx } from "./approvalProofs";
 
 const APPROVAL_DECISION_ACTION_KEY = "operations.approval_request.decide";
+const ITEM_ADJUSTMENT_REQUEST_TYPE = "pos_item_adjustment";
+const ITEM_ADJUSTMENT_SUBJECT_TYPE = "pos_transaction_item_adjustment";
+const ITEM_ADJUSTMENT_RETIRED_PRECONDITION_MESSAGES = new Set([
+  "Register session expected cash cannot be negative.",
+]);
 
 type DecideApprovalRequestArgs = {
   approvalProofId?: Id<"approvalProof">;
@@ -111,6 +116,50 @@ async function consumeApprovalDecisionProofWithCtx(
   return result.data;
 }
 
+function shouldRetireItemAdjustmentApprovalAfterApplyFailure(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+
+  return ITEM_ADJUSTMENT_RETIRED_PRECONDITION_MESSAGES.has(message);
+}
+
+async function retireItemAdjustmentApprovalAfterApplyFailure(
+  ctx: MutationCtx,
+  args: {
+    approvalRequestId: Id<"approvalRequest">;
+    error: unknown;
+    reviewedByStaffProfileId?: Id<"staffProfile">;
+    reviewedByUserId?: Id<"athenaUser">;
+  },
+) {
+  const approvalRequest = await ctx.db.get(
+    "approvalRequest",
+    args.approvalRequestId,
+  );
+
+  if (
+    !approvalRequest ||
+    approvalRequest.status !== "pending" ||
+    approvalRequest.requestType !== ITEM_ADJUSTMENT_REQUEST_TYPE ||
+    approvalRequest.subjectType !== ITEM_ADJUSTMENT_SUBJECT_TYPE
+  ) {
+    return;
+  }
+
+  const message = args.error instanceof Error ? args.error.message : "";
+
+  await ctx.db.patch("approvalRequest", args.approvalRequestId, {
+    decidedAt: Date.now(),
+    decisionNotes: message,
+    metadata: {
+      ...(approvalRequest.metadata ?? {}),
+      applyFailureMessage: message,
+    },
+    reviewedByStaffProfileId: args.reviewedByStaffProfileId,
+    reviewedByUserId: args.reviewedByUserId,
+    status: "cancelled",
+  });
+}
+
 export async function decideApprovalRequestWithCtx(
   ctx: MutationCtx,
   args: DecideApprovalRequestArgs,
@@ -163,10 +212,26 @@ export async function decideApprovalRequestWithCtx(
   }
 
   if (
-    approvalRequest.requestType === "pos_item_adjustment" &&
-    approvalRequest.subjectType === "pos_transaction_item_adjustment"
+    approvalRequest.requestType === ITEM_ADJUSTMENT_REQUEST_TYPE &&
+    approvalRequest.subjectType === ITEM_ADJUSTMENT_SUBJECT_TYPE
   ) {
-    await resolveTransactionItemAdjustmentApprovalDecisionWithCtx(ctx, args);
+    try {
+      await resolveTransactionItemAdjustmentApprovalDecisionWithCtx(ctx, args);
+    } catch (error) {
+      if (
+        args.decision === "approved" &&
+        shouldRetireItemAdjustmentApprovalAfterApplyFailure(error)
+      ) {
+        await retireItemAdjustmentApprovalAfterApplyFailure(ctx, {
+          approvalRequestId: args.approvalRequestId,
+          error,
+          reviewedByStaffProfileId: args.reviewedByStaffProfileId,
+          reviewedByUserId: args.reviewedByUserId,
+        });
+      }
+
+      throw error;
+    }
   }
 
   if (

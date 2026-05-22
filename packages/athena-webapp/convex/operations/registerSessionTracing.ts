@@ -22,6 +22,8 @@ export type RegisterSessionTraceStage =
   | "closeout_submitted"
   | "closeout_reopened"
   | "approval_pending"
+  | "item_adjustment_approval_pending"
+  | "item_adjustment_applied"
   | "closeout_approved"
   | "closeout_rejected"
   | "closed";
@@ -50,13 +52,19 @@ type RegisterSessionTraceArgs = {
   session: RegisterSessionTraceableSession;
   occurredAt?: number;
   amount?: number;
+  adjustmentId?: Id<"posTransactionAdjustment">;
   approvalRequestId?: Id<"approvalRequest">;
   actorStaffProfileId?: Id<"staffProfile">;
   actorUserId?: Id<"athenaUser">;
   countedCash?: number;
   correctedOpeningFloat?: number;
   previousOpeningFloat?: number;
+  registerSessionExpectedCashDelta?: number;
   reason?: string;
+  settlementDirection?: "collect" | "refund" | "none";
+  settlementMethod?: string;
+  transactionId?: Id<"posTransaction">;
+  transactionNumber?: string;
   variance?: number;
 };
 
@@ -114,6 +122,20 @@ function displayTraceAmount(
 
     return currencyFormatter("GHS").format(displayAmount);
   }
+}
+
+function formatTransactionLabel(input: RegisterSessionTraceArgs) {
+  const transactionNumber = input.transactionNumber?.trim();
+
+  if (transactionNumber) {
+    return `transaction #${transactionNumber}`;
+  }
+
+  if (input.transactionId) {
+    return `transaction ${String(input.transactionId)}`;
+  }
+
+  return "the transaction";
 }
 
 async function resolveStoreCurrency(
@@ -177,6 +199,9 @@ function buildTraceEvent(args: {
   const details = Object.fromEntries(
     Object.entries({
       amount: args.input.amount,
+      adjustmentId: args.input.adjustmentId
+        ? String(args.input.adjustmentId)
+        : undefined,
       approvalRequestId: args.input.approvalRequestId
         ? String(args.input.approvalRequestId)
         : undefined,
@@ -184,17 +209,32 @@ function buildTraceEvent(args: {
       correctedOpeningFloat: args.input.correctedOpeningFloat,
       expectedCash: args.input.session.expectedCash,
       previousOpeningFloat: args.input.previousOpeningFloat,
+      registerSessionExpectedCashDelta:
+        args.input.registerSessionExpectedCashDelta,
       reason: args.input.reason,
       registerStatus: args.input.session.status,
+      settlementDirection: args.input.settlementDirection,
+      settlementMethod: args.input.settlementMethod,
+      transactionId: args.input.transactionId
+        ? String(args.input.transactionId)
+        : undefined,
+      transactionNumber: args.input.transactionNumber,
       variance: args.input.variance ?? args.input.session.variance,
     }).filter(([, value]) => value !== undefined),
   );
   const subjectRefs = {
     ...args.traceSeed.subjectRefs,
+    ...(args.input.adjustmentId
+      ? { adjustmentId: String(args.input.adjustmentId) }
+      : {}),
     ...(args.input.approvalRequestId
       ? { approvalRequestId: String(args.input.approvalRequestId) }
       : {}),
+    ...(args.input.transactionId
+      ? { posTransactionId: String(args.input.transactionId) }
+      : {}),
   };
+  const transactionLabel = formatTransactionLabel(args.input);
 
   switch (args.input.stage) {
     case "opened":
@@ -263,6 +303,31 @@ function buildTraceEvent(args: {
         step: "register_session_approval_pending",
         status: "blocked" as const,
         message: "Register closeout is pending manager approval.",
+        occurredAt,
+        details,
+        subjectRefs,
+      };
+    case "item_adjustment_approval_pending":
+      return {
+        kind: "system_action" as const,
+        step: "register_session_item_adjustment_approval_pending",
+        status: "info" as const,
+        message: `Queued item adjustment for ${transactionLabel} for manager approval.`,
+        occurredAt,
+        details,
+        subjectRefs,
+      };
+    case "item_adjustment_applied":
+      return {
+        kind: "system_action" as const,
+        step: "register_session_item_adjustment_applied",
+        status: "info" as const,
+        message:
+          args.input.settlementDirection === "refund" && (args.input.amount ?? 0) > 0
+            ? `Applied item adjustment refund of ${displayTraceAmount(args.input.amount, args.currency)} for ${transactionLabel}.`
+            : args.input.settlementDirection === "collect" && (args.input.amount ?? 0) > 0
+              ? `Applied item adjustment collection of ${displayTraceAmount(args.input.amount, args.currency)} for ${transactionLabel}.`
+              : `Applied item adjustment for ${transactionLabel}.`,
         occurredAt,
         details,
         subjectRefs,

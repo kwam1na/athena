@@ -5,7 +5,6 @@ import {
   ArrowUpRight,
   ClipboardCheck,
   Clock3,
-  ExternalLink,
   Lock,
   LockOpen,
 } from "lucide-react";
@@ -129,6 +128,10 @@ type QueueApprovalRequest = {
 
 export type OperationsWorkflow = "stock" | "queue" | "approvals";
 
+type QueueApprovalLineItem = NonNullable<
+  NonNullable<QueueApprovalRequest["metadata"]>["lineItems"]
+>[number];
+
 function getDefaultWorkflow(args: {
   approvalRequests: QueueApprovalRequest[];
   workItems: QueueWorkItem[];
@@ -212,6 +215,71 @@ function formatSkuProductName(productName?: string) {
   return normalizedName.charAt(0).toUpperCase() + normalizedName.slice(1);
 }
 
+function hasItemAdjustmentChange(lineItem: QueueApprovalLineItem) {
+  const quantityChanged =
+    typeof lineItem.originalQuantity === "number" &&
+    typeof lineItem.adjustedQuantity === "number" &&
+    lineItem.originalQuantity !== lineItem.adjustedQuantity;
+  const deltaChanged =
+    typeof lineItem.quantityDelta === "number" && lineItem.quantityDelta !== 0;
+
+  return quantityChanged || deltaChanged;
+}
+
+function TransactionReferenceLink({
+  orgUrlSlug,
+  storeUrlSlug,
+  transaction,
+}: {
+  orgUrlSlug?: string;
+  storeUrlSlug?: string;
+  transaction: QueueApprovalRequest["transactionSummary"];
+}) {
+  if (!transaction) {
+    return <span>Transaction unavailable</span>;
+  }
+
+  const transactionLabel = `#${transaction.transactionNumber}`;
+
+  if (!orgUrlSlug || !storeUrlSlug) {
+    return <span>{transactionLabel}</span>;
+  }
+
+  return (
+    <Link
+      className="inline-flex items-center gap-1 text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline"
+      params={{
+        orgUrlSlug,
+        storeUrlSlug,
+        transactionId: transaction.transactionId,
+      }}
+      search={{ o: getOrigin() }}
+      to="/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId"
+    >
+      {transactionLabel}
+      <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
+    </Link>
+  );
+}
+
+function formatRegisterSessionLabel(
+  registerSession: NonNullable<QueueApprovalRequest["registerSessionSummary"]>,
+) {
+  if (registerSession.terminalName && registerSession.registerNumber) {
+    return `${registerSession.terminalName} / Register ${registerSession.registerNumber}`;
+  }
+
+  if (registerSession.terminalName) {
+    return registerSession.terminalName;
+  }
+
+  if (registerSession.registerNumber) {
+    return `Register ${registerSession.registerNumber}`;
+  }
+
+  return "Register session";
+}
+
 function getInventoryApprovalLineItems(request: QueueApprovalRequest) {
   if (request.requestType !== "inventory_adjustment_review") {
     return [];
@@ -246,8 +314,9 @@ function getItemAdjustmentSummary(request: QueueApprovalRequest) {
 
   return {
     adjustedTotal: request.metadata?.adjustedTotal,
-    lineItems: request.metadata?.lineItems ?? [],
+    lineItems: request.metadata?.lineItems?.filter(hasItemAdjustmentChange) ?? [],
     originalTotal: request.metadata?.originalTotal,
+    registerSession: request.registerSessionSummary ?? null,
     settlementAmount: request.metadata?.settlementAmount,
     settlementDirection: request.metadata?.settlementDirection ?? "none",
     settlementMethod: request.metadata?.settlementMethod,
@@ -824,7 +893,7 @@ export function OperationsQueueViewContent({
                                           search={{ o: getOrigin() }}
                                           to="/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId"
                                         >
-                                          <ExternalLink aria-hidden="true" />
+                                          <ArrowUpRight aria-hidden="true" />
                                           View transaction
                                         </Link>
                                       </Button>
@@ -832,15 +901,19 @@ export function OperationsQueueViewContent({
                                   </div>
                                 </div>
 
-                                <dl className="mt-layout-sm grid gap-layout-sm rounded-lg border border-border bg-background p-layout-sm text-sm md:grid-cols-4">
+                                <dl className="mt-layout-sm grid gap-layout-sm rounded-lg border border-border bg-background p-layout-sm text-sm md:grid-cols-3 xl:grid-cols-6">
                                   <div>
                                     <dt className="text-xs text-muted-foreground">
                                       Transaction
                                     </dt>
                                     <dd className="mt-1 font-medium text-foreground">
-                                      {paymentCorrectionSummary.transaction
-                                        ? `#${paymentCorrectionSummary.transaction.transactionNumber}`
-                                        : "Transaction unavailable"}
+                                      <TransactionReferenceLink
+                                        orgUrlSlug={orgUrlSlug}
+                                        storeUrlSlug={storeUrlSlug}
+                                        transaction={
+                                          paymentCorrectionSummary.transaction
+                                        }
+                                      />
                                     </dd>
                                   </div>
                                   <div>
@@ -897,26 +970,49 @@ export function OperationsQueueViewContent({
                                       correction
                                     </p>
                                   </div>
-                                  {itemAdjustmentSummary.transaction &&
-                                  orgUrlSlug &&
-                                  storeUrlSlug ? (
-                                    <Button asChild size="sm" variant="utility">
-                                      <Link
-                                        params={{
-                                          orgUrlSlug,
-                                          storeUrlSlug,
-                                          transactionId:
-                                            itemAdjustmentSummary.transaction
-                                              .transactionId,
-                                        }}
-                                        search={{ o: getOrigin() }}
-                                        to="/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId"
-                                      >
-                                        <ExternalLink aria-hidden="true" />
-                                        View transaction
-                                      </Link>
-                                    </Button>
-                                  ) : null}
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    {itemAdjustmentSummary.registerSession &&
+                                    orgUrlSlug &&
+                                    storeUrlSlug ? (
+                                      <Button asChild size="sm" variant="utility">
+                                        <Link
+                                          params={{
+                                            orgUrlSlug,
+                                            sessionId:
+                                              itemAdjustmentSummary
+                                                .registerSession
+                                                .registerSessionId,
+                                            storeUrlSlug,
+                                          }}
+                                          search={{ o: getOrigin() }}
+                                          to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId"
+                                        >
+                                          <ArrowUpRight aria-hidden="true" />
+                                          View register session
+                                        </Link>
+                                      </Button>
+                                    ) : null}
+                                    {itemAdjustmentSummary.transaction &&
+                                    orgUrlSlug &&
+                                    storeUrlSlug ? (
+                                      <Button asChild size="sm" variant="utility">
+                                        <Link
+                                          params={{
+                                            orgUrlSlug,
+                                            storeUrlSlug,
+                                            transactionId:
+                                              itemAdjustmentSummary.transaction
+                                                .transactionId,
+                                          }}
+                                          search={{ o: getOrigin() }}
+                                          to="/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId"
+                                        >
+                                          <ArrowUpRight aria-hidden="true" />
+                                          View transaction
+                                        </Link>
+                                      </Button>
+                                    ) : null}
+                                  </div>
                                 </div>
 
                                 <dl className="mt-layout-sm grid gap-layout-sm rounded-lg border border-border bg-background p-layout-sm text-sm md:grid-cols-4">
@@ -925,9 +1021,13 @@ export function OperationsQueueViewContent({
                                       Transaction
                                     </dt>
                                     <dd className="mt-1 font-medium text-foreground">
-                                      {itemAdjustmentSummary.transaction
-                                        ? `#${itemAdjustmentSummary.transaction.transactionNumber}`
-                                        : "Transaction unavailable"}
+                                      <TransactionReferenceLink
+                                        orgUrlSlug={orgUrlSlug}
+                                        storeUrlSlug={storeUrlSlug}
+                                        transaction={
+                                          itemAdjustmentSummary.transaction
+                                        }
+                                      />
                                     </dd>
                                   </div>
                                   <div>
@@ -955,9 +1055,59 @@ export function OperationsQueueViewContent({
                                             ghsCurrencyFormatter,
                                             itemAdjustmentSummary.adjustedTotal,
                                           )
+                                      : "Unknown"}
+                                    </dd>
+                                  </div>
+                                  <div>
+                                    <dt className="text-xs text-muted-foreground">
+                                      Original payment
+                                    </dt>
+                                    <dd className="mt-1 font-medium text-foreground">
+                                      {itemAdjustmentSummary.transaction
+                                        ?.paymentMethod
+                                        ? formatApprovalRequestType(
+                                            itemAdjustmentSummary.transaction
+                                              .paymentMethod,
+                                          )
                                         : "Unknown"}
                                     </dd>
                                   </div>
+                                  {itemAdjustmentSummary.registerSession ? (
+                                    <div>
+                                      <dt className="text-xs text-muted-foreground">
+                                        Register session
+                                      </dt>
+                                      <dd className="mt-1 font-medium text-foreground">
+                                        {orgUrlSlug && storeUrlSlug ? (
+                                          <Link
+                                            className="inline-flex items-center gap-1 underline-offset-4 hover:underline"
+                                            params={{
+                                              orgUrlSlug,
+                                              sessionId:
+                                                itemAdjustmentSummary
+                                                  .registerSession
+                                                  .registerSessionId,
+                                              storeUrlSlug,
+                                            }}
+                                            search={{ o: getOrigin() }}
+                                            to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId"
+                                          >
+                                            {formatRegisterSessionLabel(
+                                              itemAdjustmentSummary.registerSession,
+                                            )}
+                                            <ArrowUpRight
+                                              aria-hidden="true"
+                                              className="h-3 w-3"
+                                            />
+                                          </Link>
+                                        ) : (
+                                          formatRegisterSessionLabel(
+                                            itemAdjustmentSummary.registerSession,
+                                          )
+                                        )}
+                                      </dd>
+                                    </div>
+                                  ) : null}
                                   <div>
                                     <dt className="text-xs text-muted-foreground">
                                       {itemAdjustmentSummary.settlementDirection ===
@@ -983,6 +1133,24 @@ export function OperationsQueueViewContent({
                                           : "Unknown"}
                                     </dd>
                                   </div>
+                                  {itemAdjustmentSummary.settlementDirection !==
+                                  "none" ? (
+                                    <div>
+                                      <dt className="text-xs text-muted-foreground">
+                                        {itemAdjustmentSummary.settlementDirection ===
+                                        "refund"
+                                          ? "Refund payout"
+                                          : "Collection method"}
+                                      </dt>
+                                      <dd className="mt-1 font-medium text-foreground">
+                                        {itemAdjustmentSummary.settlementMethod
+                                          ? formatApprovalRequestType(
+                                              itemAdjustmentSummary.settlementMethod,
+                                            )
+                                          : "Unknown"}
+                                      </dd>
+                                    </div>
+                                  ) : null}
                                 </dl>
 
                                 {itemAdjustmentSummary.lineItems.length > 0 ? (

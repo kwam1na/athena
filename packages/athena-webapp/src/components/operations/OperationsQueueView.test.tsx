@@ -513,15 +513,32 @@ describe("OperationsQueueViewContent", () => {
                   quantityDelta: -1,
                   sku: "CW-18",
                 },
+                {
+                  adjustedQuantity: 1,
+                  originalQuantity: 1,
+                  productName: "Unchanged bundle",
+                  productSkuId: "sku-2" as Id<"productSku">,
+                  quantityDelta: 0,
+                  sku: "UB-18",
+                },
               ],
               originalTotal: 20000,
               settlementAmount: 5000,
               settlementDirection: "refund",
-              settlementMethod: "cash",
+              settlementMethod: "mobile_money",
               totalDelta: -5000,
               transactionId: "txn-1" as Id<"posTransaction">,
             },
             notes: "Customer only received one unit.",
+            registerSessionSummary: {
+              countedCash: null,
+              expectedCash: 15_000,
+              registerNumber: "3",
+              registerSessionId: "register-3" as Id<"registerSession">,
+              status: "active",
+              terminalName: "Front Counter",
+              variance: null,
+            },
             requestedByStaffName: "Ato Kwamina",
             requestType: "pos_item_adjustment",
             status: "pending",
@@ -543,11 +560,34 @@ describe("OperationsQueueViewContent", () => {
 
     expect(screen.getAllByText("Review item adjustment").length).toBeGreaterThan(0);
     expect(screen.getByText("#434898")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "#434898" })).toHaveAttribute(
+      "href",
+      "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId?o=%252F",
+    );
+    expect(
+      screen.getByRole("link", { name: /view register session/i }),
+    ).toHaveAttribute(
+      "href",
+      "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId?o=%252F",
+    );
+    expect(
+      screen.getByRole("link", { name: /front counter \/ register 3/i }),
+    ).toHaveAttribute(
+      "href",
+      "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId?o=%252F",
+    );
     expect(screen.getByText("Original total")).toBeInTheDocument();
     expect(screen.getByText("Adjusted total")).toBeInTheDocument();
+    expect(screen.getByText("Register session")).toBeInTheDocument();
     expect(screen.getByText("Refund due")).toBeInTheDocument();
+    expect(screen.getByText("Original payment")).toBeInTheDocument();
+    expect(screen.getByText("Cash")).toBeInTheDocument();
+    expect(screen.getByText("Refund payout")).toBeInTheDocument();
+    expect(screen.getByText("Mobile Money")).toBeInTheDocument();
     expect(screen.getByText("Closure wig")).toBeInTheDocument();
     expect(screen.getByText("CW-18")).toBeInTheDocument();
+    expect(screen.queryByText("Unchanged bundle")).not.toBeInTheDocument();
+    expect(screen.queryByText("UB-18")).not.toBeInTheDocument();
     expect(
       screen.getByText(
         (_, element) =>

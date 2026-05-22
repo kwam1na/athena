@@ -276,6 +276,64 @@ describe("recordRegisterSessionTraceBestEffort", () => {
     );
   });
 
+  it("records item adjustment events on the register-session trace without blocking it", async () => {
+    vi.mocked(createWorkflowTraceWithCtx).mockResolvedValue("trace-1" as never);
+    vi.mocked(registerWorkflowTraceLookupWithCtx).mockResolvedValue(
+      "lookup-1" as never,
+    );
+    vi.mocked(appendWorkflowTraceEventWithCtx).mockResolvedValue(
+      "event-1" as never,
+    );
+    const { ctx } = buildCtx();
+
+    await recordRegisterSessionTraceBestEffort(ctx, {
+      stage: "item_adjustment_applied",
+      session: buildSession(),
+      adjustmentId: "adjustment-1" as Id<"posTransactionAdjustment">,
+      amount: 50_000,
+      approvalRequestId: "approval-1" as Id<"approvalRequest">,
+      occurredAt: 222,
+      registerSessionExpectedCashDelta: -50_000,
+      settlementDirection: "refund",
+      settlementMethod: "cash",
+      transactionId: "txn-1" as Id<"posTransaction">,
+      transactionNumber: "POS-111111",
+    });
+
+    expect(createWorkflowTraceWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        status: "started",
+        completedAt: undefined,
+      }),
+    );
+    expect(appendWorkflowTraceEventWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        details: expect.objectContaining({
+          adjustmentId: "adjustment-1",
+          amount: 50_000,
+          approvalRequestId: "approval-1",
+          registerSessionExpectedCashDelta: -50_000,
+          settlementDirection: "refund",
+          settlementMethod: "cash",
+          transactionId: "txn-1",
+          transactionNumber: "POS-111111",
+        }),
+        message: `Applied item adjustment refund of ${formatStoredTraceAmount("GHS", 50_000)} for transaction #POS-111111.`,
+        occurredAt: 222,
+        status: "info",
+        step: "register_session_item_adjustment_applied",
+        subjectRefs: expect.objectContaining({
+          adjustmentId: "adjustment-1",
+          approvalRequestId: "approval-1",
+          posTransactionId: "txn-1",
+          registerSessionId: "session-1",
+        }),
+      }),
+    );
+  });
+
   it("uses the current time for non-open milestones when no occurredAt is provided", async () => {
     vi.spyOn(Date, "now").mockReturnValue(444);
     vi.mocked(createWorkflowTraceWithCtx).mockResolvedValue("trace-1" as never);

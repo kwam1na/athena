@@ -188,6 +188,7 @@ function mapCorrectionError(error: unknown): CommandResult<never> | null {
     message === "This transaction already has an item adjustment waiting for approval." ||
     message === "This transaction already has an item adjustment applied." ||
     message === "Register closeout is under review. Reopen the register before updating adjustment settlement." ||
+    message === "Register session expected cash cannot be negative." ||
     message.startsWith("Approval proof ")
   ) {
     return userError({ code: "precondition_failed", message });

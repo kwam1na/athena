@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
-import { useParams } from "@tanstack/react-router";
+import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import {
+  ArrowUpRight,
   Banknote,
   Ban,
   CheckCircle2,
@@ -10,10 +11,10 @@ import {
   Minus,
   MoveRight,
   Plus,
-  WalletCards,
+  RefreshCw,
   Smartphone,
   User,
-  RefreshCw,
+  WalletCards,
 } from "lucide-react";
 
 import View from "../../View";
@@ -58,9 +59,12 @@ import { useApprovedCommand } from "../../operations/useApprovedCommand";
 import type { ApprovalRequirement } from "~/shared/approvalPolicy";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 import { currencyFormatter } from "~/shared/currencyFormatter";
+import { getOrigin } from "~/src/lib/navigationUtils";
 
 type RouteParams =
   | {
+      orgUrlSlug?: string;
+      storeUrlSlug?: string;
       transactionId: string;
     }
   | undefined;
@@ -117,6 +121,8 @@ const PAYMENT_METHOD_OPTIONS = [
 ] satisfies Array<{ label: string; value: PosPaymentMethod }>;
 
 const ghsCurrencyFormatter = currencyFormatter("GHS");
+const REGISTER_EXPECTED_CASH_ERROR =
+  "Register session expected cash cannot be negative.";
 
 function isAdjustedLineItem(line: {
   adjustedQuantity?: number;
@@ -489,8 +495,22 @@ export function TransactionView() {
         adjustment.status === "applied",
     );
   }, [transaction]);
+  const pendingAdjustments = useMemo(() => {
+    if (!transaction) return [];
+    return (transaction.adjustments ?? []).filter(
+      (adjustment: (typeof transaction.adjustments)[number]) =>
+        adjustment.status === "pending_approval",
+    );
+  }, [transaction]);
   const latestAppliedAdjustment = appliedAdjustments[0] ?? null;
+  const latestPendingAdjustment = [...pendingAdjustments].sort(
+    (first, second) => second.createdAt - first.createdAt,
+  )[0] ?? null;
   const hasAppliedItemAdjustment = appliedAdjustments.length > 0;
+  const pendingSaleTotal =
+    typeof latestPendingAdjustment?.adjustedTotal === "number"
+      ? latestPendingAdjustment.adjustedTotal
+      : null;
   const adjustedCartItems: CartItem[] = useMemo(() => {
     if (!transaction) return [];
 
@@ -552,6 +572,20 @@ export function TransactionView() {
   const effectiveSubtotal = transaction
     ? Math.max(0, effectiveSaleTotal - (transaction.tax ?? 0))
     : 0;
+  const showRegisterExpectedCashRecovery =
+    selectedCorrection === "line_items" &&
+    correctionError === REGISTER_EXPECTED_CASH_ERROR;
+  const registerSessionRecoveryLink =
+    showRegisterExpectedCashRecovery &&
+    transaction?.registerSessionId &&
+    params?.orgUrlSlug &&
+    params?.storeUrlSlug
+      ? {
+          orgUrlSlug: params.orgUrlSlug,
+          sessionId: transaction.registerSessionId,
+          storeUrlSlug: params.storeUrlSlug,
+        }
+      : null;
 
   const completedData = useMemo(() => {
     if (!transaction) return undefined;
@@ -1973,9 +2007,36 @@ export function TransactionView() {
                         />
                         {selectedCorrection === "line_items" &&
                         correctionError ? (
-                          <p className="text-sm text-destructive">
-                            {correctionError}
-                          </p>
+                          showRegisterExpectedCashRecovery ? (
+                            <div className="space-y-3 rounded-md border border-destructive/20 bg-destructive/5 p-4 text-sm">
+                              <p className="font-medium text-destructive">
+                                Drawer expected cash is below this refund.
+                              </p>
+                              <p className="leading-5 text-muted-foreground">
+                                Correct the register session opening float so
+                                expected cash can cover the cash refund, then
+                                submit the item adjustment again.
+                              </p>
+                              {registerSessionRecoveryLink ? (
+                                <Link
+                                  className="inline-flex items-center gap-1 pt-1 font-medium text-destructive underline-offset-4 hover:underline"
+                                  params={registerSessionRecoveryLink}
+                                  search={{ o: getOrigin() }}
+                                  to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId"
+                                >
+                                  Review register session
+                                  <ArrowUpRight
+                                    aria-hidden="true"
+                                    className="h-3 w-3"
+                                  />
+                                </Link>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-destructive">
+                              {correctionError}
+                            </p>
+                          )
                         ) : null}
                         <div className="grid gap-2">
                           <Button
@@ -2019,8 +2080,9 @@ export function TransactionView() {
                         : "Adjustment state"}
                     </h2>
                     <p className="text-sm text-muted-foreground">
-                      Original sale totals stay locked. Adjusted totals are
-                      shown for closeout and reporting.
+                      {hasAppliedItemAdjustment
+                        ? "Original sale totals stay locked. Applied totals are shown for closeout and reporting."
+                        : "Original sale totals stay locked. Pending totals apply after approval."}
                     </p>
                   </div>
                   <dl className="grid gap-3 rounded-lg border border-border bg-background p-4 text-sm">
@@ -2035,17 +2097,32 @@ export function TransactionView() {
                         )}
                       </dd>
                     </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <dt className="text-muted-foreground">
-                        Adjusted sale total
-                      </dt>
-                      <dd className="font-numeric font-semibold">
-                        {formatStoredAmount(
-                          ghsCurrencyFormatter,
-                          effectiveSaleTotal,
-                        )}
-                      </dd>
-                    </div>
+                    {hasAppliedItemAdjustment ? (
+                      <div className="flex items-center justify-between gap-3">
+                        <dt className="text-muted-foreground">
+                          Applied sale total
+                        </dt>
+                        <dd className="font-numeric font-semibold">
+                          {formatStoredAmount(
+                            ghsCurrencyFormatter,
+                            effectiveSaleTotal,
+                          )}
+                        </dd>
+                      </div>
+                    ) : null}
+                    {pendingSaleTotal !== null ? (
+                      <div className="flex items-center justify-between gap-3">
+                        <dt className="text-muted-foreground">
+                          Pending sale total
+                        </dt>
+                        <dd className="font-numeric font-semibold">
+                          {formatStoredAmount(
+                            ghsCurrencyFormatter,
+                            pendingSaleTotal,
+                          )}
+                        </dd>
+                      </div>
+                    ) : null}
                     {hasAppliedItemAdjustment ? (
                       <div className="flex items-center justify-between gap-3 border-t border-border/70 pt-3">
                         <dt className="text-muted-foreground">
