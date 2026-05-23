@@ -515,7 +515,7 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getByText("#13 in local queue")).toBeInTheDocument();
   });
 
-  it("resolves synced register review items after manager sign-in", async () => {
+  it("approves synced register review items after manager sign-in", async () => {
     const user = userEvent.setup();
     const onAuthenticateStaff = vi.fn().mockResolvedValue(
       ok({
@@ -559,11 +559,11 @@ describe("RegisterSessionViewContent", () => {
     );
 
     await user.click(
-      screen.getByRole("button", { name: "Apply reviewed sales" }),
+      screen.getByRole("button", { name: "Approve synced sales" }),
     );
     await user.click(
       screen.getByRole("button", {
-        name: "Confirm staff for Apply reviewed sales",
+        name: "Confirm staff for Approve synced sales",
       }),
     );
 
@@ -576,6 +576,64 @@ describe("RegisterSessionViewContent", () => {
     );
     expect(onResolveSyncReview).toHaveBeenCalledWith({
       actorStaffProfileId: "manager-1",
+      decision: "approved",
+      registerSessionId: "session-1",
+    });
+  });
+
+  it("rejects synced register review items after manager sign-in", async () => {
+    const user = userEvent.setup();
+    const onAuthenticateStaff = vi.fn().mockResolvedValue(
+      ok({
+        activeRoles: ["manager"],
+        staffProfile: { fullName: "Ato Kofi" },
+        staffProfileId: "manager-1",
+      }),
+    );
+    const onResolveSyncReview = vi.fn().mockResolvedValue(
+      ok({ action: "rejected", projectedCount: 0, resolvedCount: 1 }),
+    );
+
+    render(
+      <RegisterSessionViewContent
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        onAuthenticateStaff={onAuthenticateStaff}
+        onResolveSyncReview={onResolveSyncReview}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            localSyncStatus: {
+              status: "needs_review",
+              reconciliationItems: [
+                {
+                  id: "sync_conflict_1",
+                  status: "needs_review",
+                  summary: "Register was not open before this sale synced.",
+                  type: "permission",
+                },
+              ],
+            },
+          },
+        }}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Reject synced activity" }),
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: "Confirm staff for Reject synced activity",
+      }),
+    );
+
+    expect(onResolveSyncReview).toHaveBeenCalledWith({
+      actorStaffProfileId: "manager-1",
+      decision: "rejected",
       registerSessionId: "session-1",
     });
   });

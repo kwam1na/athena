@@ -10,10 +10,13 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
+import { listOpenLocalSyncConflictsByRegisterSession } from "../cashControls/deposits";
 
 const MAX_QUEUE_ITEMS = 100;
 const TERMINAL_WORK_ITEM_STATUSES = new Set(["completed", "cancelled"]);
 const OPEN_WORK_ITEM_STATUSES = ["open", "in_progress"] as const;
+const REGISTER_SYNC_REVIEW_REQUEST_TYPE = "register_sync_review";
+const REGISTER_SYNC_REVIEW_SUBJECT_TYPE = "register_session_sync_review";
 
 function itemAdjustmentTransactionId(request: Doc<"approvalRequest">) {
   if (
@@ -87,6 +90,12 @@ function sanitizeApprovalRequestMetadata(
     transactionId: metadata.transactionId,
     transactionNumber: metadata.transactionNumber,
   };
+}
+
+function formatRegisterSyncReviewTitle(conflictCount: number) {
+  return conflictCount === 1
+    ? "Synced register activity review"
+    : `${conflictCount} synced register activity reviews`;
 }
 
 export function buildOperationalWorkItem(args: {
@@ -220,7 +229,8 @@ export const getQueueSnapshot = query({
       userId: athenaUser._id,
     });
 
-    const [workItems, approvalRequests] = await Promise.all([
+    const [workItems, approvalRequests, syncConflictsBySessionId] =
+      await Promise.all([
       Promise.all(
         OPEN_WORK_ITEM_STATUSES.map((status) =>
           ctx.db
@@ -237,6 +247,7 @@ export const getQueueSnapshot = query({
           q.eq("storeId", args.storeId).eq("status", "pending"),
         )
         .take(MAX_QUEUE_ITEMS),
+      listOpenLocalSyncConflictsByRegisterSession(ctx, args.storeId),
     ]);
 
     const openWorkItems = workItems;
@@ -287,6 +298,10 @@ export const getQueueSnapshot = query({
           registerSessionIds.add(request.subjectId);
         }
       }
+    }
+
+    for (const registerSessionId of syncConflictsBySessionId.keys()) {
+      registerSessionIds.add(registerSessionId);
     }
 
     const [
@@ -400,8 +415,7 @@ export const getQueueSnapshot = query({
       >,
     );
 
-    return {
-      approvalRequests: approvalRequests.map((request) => {
+    const mappedApprovalRequests = approvalRequests.map((request) => {
         const linkedTransactionId = itemAdjustmentTransactionId(request);
         const linkedTransaction = linkedTransactionId
           ? posTransactionMap.get(linkedTransactionId)
@@ -457,7 +471,60 @@ export const getQueueSnapshot = query({
             ? workItemMap.get(request.workItemId)?.title
             : null,
         };
-      }),
+      });
+    const mappedSyncReviewRequests = Array.from(
+      syncConflictsBySessionId.entries(),
+    ).map(([registerSessionId, conflicts]) => {
+      const linkedRegisterSession = registerSessionMap.get(registerSessionId);
+      const firstConflict = conflicts[0];
+
+      return {
+        _id: `register-sync-review:${registerSessionId}`,
+        createdAt: firstConflict?.createdAt,
+        metadata: {
+          conflictCount: conflicts.length,
+          reviewItems: conflicts.map((conflict) => ({
+            id: conflict._id,
+            localEventId: conflict.localEventId,
+            sequence: conflict.sequence,
+            summary: conflict.summary,
+            type: conflict.conflictType,
+          })),
+        },
+        notes: null,
+        reason:
+          firstConflict?.summary ??
+          "Synced register activity needs manager review.",
+        registerSessionSummary: linkedRegisterSession
+          ? {
+              countedCash: linkedRegisterSession.countedCash ?? null,
+              expectedCash: linkedRegisterSession.expectedCash,
+              registerNumber: linkedRegisterSession.registerNumber ?? null,
+              registerSessionId: linkedRegisterSession._id,
+              status: linkedRegisterSession.status,
+              terminalName: linkedRegisterSession.terminalId
+                ? (terminalMap
+                    .get(linkedRegisterSession.terminalId)
+                    ?.displayName?.trim() ?? null)
+                : null,
+              variance: linkedRegisterSession.variance ?? null,
+            }
+          : null,
+        requestedByStaffName: null,
+        requestType: REGISTER_SYNC_REVIEW_REQUEST_TYPE,
+        status: "pending",
+        storeId: args.storeId,
+        subjectId: registerSessionId,
+        subjectType: REGISTER_SYNC_REVIEW_SUBJECT_TYPE,
+        transactionSummary: null,
+        workItemTitle: formatRegisterSyncReviewTitle(conflicts.length),
+      };
+    });
+
+    return {
+      approvalRequests: [...mappedApprovalRequests, ...mappedSyncReviewRequests]
+        .sort((left, right) => (right.createdAt ?? 0) - (left.createdAt ?? 0))
+        .slice(0, MAX_QUEUE_ITEMS),
       workItems: openWorkItems.map((item) => ({
         ...item,
         assignedStaffName: item.assignedToStaffProfileId

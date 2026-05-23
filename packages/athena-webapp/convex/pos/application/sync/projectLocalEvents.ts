@@ -30,6 +30,7 @@ type ProjectEventArgs = {
   now: number;
   options?: {
     allowClosedRegisterSaleProjection?: boolean;
+    allowRegisterCloseoutVarianceProjection?: boolean;
     trustStoredStaffProof?: boolean;
   };
 };
@@ -1582,7 +1583,10 @@ async function projectRegisterClosed(
 
   const countedCash = payload.countedCash ?? registerSession.expectedCash;
   const variance = countedCash - registerSession.expectedCash;
-  if (roundMoney(variance) !== 0) {
+  if (
+    roundMoney(variance) !== 0 &&
+    args.options?.allowRegisterCloseoutVarianceProjection !== true
+  ) {
     const conflict = await createConflict(repository, args, {
       conflictType: "permission",
       summary:

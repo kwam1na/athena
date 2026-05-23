@@ -68,7 +68,11 @@ const registerSessionSyncReviewResultValidator = v.union(
   v.object({
     kind: v.literal("ok"),
     data: v.object({
-      action: v.union(v.literal("already_resolved"), v.literal("resolved")),
+      action: v.union(
+        v.literal("already_resolved"),
+        v.literal("resolved"),
+        v.literal("rejected"),
+      ),
       projectedCount: v.optional(v.number()),
       registerSession: v.union(v.null(), v.any()),
       resolvedCount: v.number(),
@@ -154,7 +158,7 @@ type RecordRegisterSessionDepositResult = {
 };
 
 type ResolveRegisterSessionSyncReviewResult = {
-  action: "already_resolved" | "resolved";
+  action: "already_resolved" | "resolved" | "rejected";
   projectedCount?: number;
   registerSession: Doc<"registerSession"> | null;
   resolvedCount: number;
@@ -473,24 +477,58 @@ export async function listOpenLocalSyncConflictsByRegisterSession(
   ctx: Pick<QueryCtx, "db">,
   storeId: Id<"store">,
 ) {
-  const conflicts = await ctx.db
-    .query("posLocalSyncConflict")
-    .withIndex("by_store_status", (q) =>
-      q.eq("storeId", storeId).eq("status", "needs_review"),
-    )
-    .take(SYNC_CONFLICT_LIMIT);
-  const entries = await Promise.all(
-    conflicts.map(async (conflict) => {
-      const registerSessionMapping = await ctx.db
-        .query("posLocalSyncMapping")
-        .withIndex("by_store_terminal_local", (q) =>
+  const [needsReviewConflicts, resolvedConflicts] = await Promise.all([
+    ctx.db
+      .query("posLocalSyncConflict")
+      .withIndex("by_store_status", (q) =>
+        q.eq("storeId", storeId).eq("status", "needs_review"),
+      )
+      .take(SYNC_CONFLICT_LIMIT),
+    ctx.db
+      .query("posLocalSyncConflict")
+      .withIndex("by_store_status", (q) =>
+        q.eq("storeId", storeId).eq("status", "resolved"),
+      )
+      .take(SYNC_CONFLICT_LIMIT),
+  ]);
+  const staleResolvedConflicts = await Promise.all(
+    resolvedConflicts.map(async (conflict) => {
+      const syncEvent = await ctx.db
+        .query("posLocalSyncEvent")
+        .withIndex("by_store_terminal_localEvent", (q) =>
           q
             .eq("storeId", conflict.storeId)
             .eq("terminalId", conflict.terminalId)
-            .eq("localRegisterSessionId", conflict.localRegisterSessionId)
-            .eq("localIdKind", "registerSession")
-            .eq("localId", conflict.localRegisterSessionId),
+            .eq("localEventId", conflict.localEventId),
         )
+        .unique();
+
+      return syncEvent?.status === "conflicted" ? conflict : null;
+    }),
+  );
+	  const conflicts = [
+	    ...needsReviewConflicts,
+	    ...staleResolvedConflicts.filter(
+	      (conflict): conflict is Doc<"posLocalSyncConflict"> => conflict !== null,
+	    ),
+	  ];
+	  const entries = await Promise.all(
+	    conflicts.map(async (conflict) => {
+	      const { terminalId, localRegisterSessionId } = conflict;
+	      if (!terminalId || !localRegisterSessionId) {
+	        return null;
+	      }
+
+	      const registerSessionMapping = await ctx.db
+	        .query("posLocalSyncMapping")
+        .withIndex("by_store_terminal_local", (q) =>
+	          q
+	            .eq("storeId", conflict.storeId)
+	            .eq("terminalId", terminalId)
+	            .eq("localRegisterSessionId", localRegisterSessionId)
+	            .eq("localIdKind", "registerSession")
+	            .eq("localId", localRegisterSessionId),
+	        )
         .unique();
       if (registerSessionMapping?.cloudTable === "registerSession") {
         return [
@@ -509,22 +547,23 @@ export async function listOpenLocalSyncConflictsByRegisterSession(
       ).normalizeId;
       const cloudRegisterSessionId =
         normalizeId?.call(
-          ctx.db,
-          "registerSession",
-          conflict.localRegisterSessionId,
-        ) ?? null;
-      if (cloudRegisterSessionId) {
-        const registerSession = await ctx.db.get(
-          "registerSession",
-          cloudRegisterSessionId,
-        );
-        if (
-          registerSession?.storeId === conflict.storeId &&
-          registerSession.terminalId === conflict.terminalId
-        ) {
-          return [cloudRegisterSessionId, conflict] as const;
-        }
-      }
+	          ctx.db,
+	          "registerSession",
+	          localRegisterSessionId,
+	        ) ?? null;
+	      if (cloudRegisterSessionId) {
+	        const registerSession = await ctx.db.get(
+	          "registerSession",
+	          cloudRegisterSessionId,
+	        );
+	        if (!registerSession) return null;
+	        if (
+	          registerSession.storeId === conflict.storeId &&
+	          registerSession.terminalId === terminalId
+	        ) {
+	          return [cloudRegisterSessionId, conflict] as const;
+	        }
+	      }
 
       return null;
     }),
@@ -1109,6 +1148,7 @@ export const recordRegisterSessionDeposit = mutation({
 export const resolveRegisterSessionSyncReview = mutation({
   args: {
     actorStaffProfileId: v.id("staffProfile"),
+    decision: v.optional(v.union(v.literal("approved"), v.literal("rejected"))),
     registerSessionId: v.id("registerSession"),
     storeId: v.id("store"),
   },
@@ -1159,6 +1199,8 @@ export const resolveRegisterSessionSyncReview = mutation({
     const resolvedAt = Date.now();
     const localSyncRepository = createConvexLocalSyncRepository(ctx);
     const projectedTransactionIds: string[] = [];
+    let projectedCloseoutCount = 0;
+    const decision = args.decision ?? "approved";
 
     for (const conflict of conflicts) {
       const terminalId = conflict.terminalId ?? registerSession.terminalId;
@@ -1182,15 +1224,38 @@ export const resolveRegisterSessionSyncReview = mutation({
         });
       }
 
+      if (decision === "rejected") {
+        if (syncEvent.status === "conflicted") {
+          await localSyncRepository.patchEvent(syncEvent._id, {
+            rejectionCode: "manager_rejected",
+            rejectionMessage:
+              "Manager rejected synced register activity during cash-controls review.",
+            status: "rejected",
+          });
+        }
+        continue;
+      }
+
       const shouldApplyReviewedSale =
         syncEvent.eventType === "sale_completed" &&
         (!conflict.localRegisterSessionId ||
           syncEvent.localRegisterSessionId === conflict.localRegisterSessionId) &&
         conflict.conflictType === "permission" &&
         conflict.summary === "Register was not open before this sale synced.";
+      const shouldApplyReviewedCloseout =
+        syncEvent.eventType === "register_closed" &&
+        (!conflict.localRegisterSessionId ||
+          syncEvent.localRegisterSessionId === conflict.localRegisterSessionId) &&
+        conflict.conflictType === "permission" &&
+        conflict.summary ===
+          "Register closeout variance requires manager review before synced closeout can be applied.";
 
-      if (!shouldApplyReviewedSale) {
-        continue;
+      if (!shouldApplyReviewedSale && !shouldApplyReviewedCloseout) {
+        return userError({
+          code: "precondition_failed",
+          message:
+            "This register review still needs attention before the synced activity can be applied.",
+        });
       }
 
       if (syncEvent.status === "projected") {
@@ -1209,11 +1274,17 @@ export const resolveRegisterSessionSyncReview = mutation({
         localSyncRepository,
         syncEvent,
       );
-      if (!parsedEvent.ok || parsedEvent.event.eventType !== "sale_completed") {
+      if (
+        !parsedEvent.ok ||
+        (shouldApplyReviewedSale &&
+          parsedEvent.event.eventType !== "sale_completed") ||
+        (shouldApplyReviewedCloseout &&
+          parsedEvent.event.eventType !== "register_closed")
+      ) {
         return userError({
           code: "precondition_failed",
           message:
-            "This register review could not be applied because the synced sale details are incomplete.",
+            "This register review could not be applied because the synced activity details are incomplete.",
         });
       }
 
@@ -1226,6 +1297,7 @@ export const resolveRegisterSessionSyncReview = mutation({
         now: resolvedAt,
         options: {
           allowClosedRegisterSaleProjection: true,
+          allowRegisterCloseoutVarianceProjection: shouldApplyReviewedCloseout,
           trustStoredStaffProof: true,
         },
       });
@@ -1246,6 +1318,9 @@ export const resolveRegisterSessionSyncReview = mutation({
         status: "projected",
         projectedAt: resolvedAt,
       });
+      if (shouldApplyReviewedCloseout) {
+        projectedCloseoutCount += 1;
+      }
       projectedTransactionIds.push(
         ...projection.mappings
           .filter(
@@ -1272,7 +1347,15 @@ export const resolveRegisterSessionSyncReview = mutation({
       actorUserId: athenaUser._id,
       eventType: "register_session_sync_review_resolved",
       message:
-        projectedTransactionIds.length === 0
+        decision === "rejected"
+          ? conflicts.length === 1
+            ? "Rejected synced register review."
+            : `Rejected ${conflicts.length} synced register reviews.`
+          : projectedCloseoutCount > 0
+            ? projectedCloseoutCount === 1
+              ? "Applied reviewed synced register closeout."
+              : `Applied ${projectedCloseoutCount} reviewed synced register closeouts.`
+          : projectedTransactionIds.length === 0
           ? conflicts.length === 1
             ? "Resolved synced register review."
             : `Resolved ${conflicts.length} synced register reviews.`
@@ -1282,6 +1365,8 @@ export const resolveRegisterSessionSyncReview = mutation({
       metadata: {
         conflictIds: conflicts.map((conflict) => conflict._id),
         conflictTypes: conflicts.map((conflict) => conflict.conflictType),
+        decision,
+        projectedCloseoutCount,
         projectedTransactionIds,
       },
       organizationId: store.organizationId,
@@ -1293,7 +1378,7 @@ export const resolveRegisterSessionSyncReview = mutation({
     });
 
     return ok({
-      action: "resolved",
+      action: decision === "rejected" ? "rejected" : "resolved",
       registerSession: await ctx.db.get("registerSession", args.registerSessionId),
       projectedCount: projectedTransactionIds.length,
       resolvedCount: conflicts.length,

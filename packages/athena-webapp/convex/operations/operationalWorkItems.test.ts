@@ -120,4 +120,92 @@ describe("getQueueSnapshot", () => {
       }),
     ]);
   });
+
+  it("surfaces register sync conflicts as pending approval work", async () => {
+    const ctx = {
+      db: {
+        get: vi.fn(async (tableName: string, id: string) => {
+          if (tableName === "store" && id === "store-1") {
+            return { _id: "store-1", organizationId: "org-1" };
+          }
+          if (tableName === "registerSession" && id === "session-1") {
+            return {
+              _id: "session-1",
+              countedCash: null,
+              expectedCash: 50000,
+              registerNumber: "2",
+              status: "active",
+              storeId: "store-1",
+              terminalId: "terminal-1",
+            };
+          }
+          if (tableName === "posTerminal" && id === "terminal-1") {
+            return { _id: "terminal-1", displayName: "Wigshop" };
+          }
+          return null;
+        }),
+        query: vi.fn((tableName: string) => ({
+          withIndex: vi.fn(() => ({
+            take: vi.fn(async () => {
+              if (tableName === "posLocalSyncConflict") {
+                return [
+                  {
+                    _id: "sync-conflict-1",
+                    conflictType: "permission",
+                    createdAt: 20,
+                    localEventId: "event-sale-completed-1",
+                    localRegisterSessionId: "local-session-1",
+                    sequence: 2,
+                    status: "needs_review",
+                    storeId: "store-1",
+                    summary:
+                      "Register was not open before this sale synced.",
+                    terminalId: "terminal-1",
+                  },
+                ];
+              }
+              return [];
+            }),
+            unique: vi.fn(async () => {
+              if (tableName === "posLocalSyncMapping") {
+                return {
+                  cloudId: "session-1",
+                  cloudTable: "registerSession",
+                };
+              }
+              return null;
+            }),
+          })),
+        })),
+      },
+    };
+
+    const result = await getHandler(getQueueSnapshot)(ctx, {
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(result.approvalRequests).toEqual([
+      expect.objectContaining({
+        _id: "register-sync-review:session-1",
+        metadata: expect.objectContaining({
+          conflictCount: 1,
+          reviewItems: [
+            expect.objectContaining({
+              id: "sync-conflict-1",
+              sequence: 2,
+              type: "permission",
+            }),
+          ],
+        }),
+        registerSessionSummary: expect.objectContaining({
+          registerNumber: "2",
+          registerSessionId: "session-1",
+          terminalName: "Wigshop",
+        }),
+        requestType: "register_sync_review",
+        subjectType: "register_session_sync_review",
+        workItemTitle: "Synced register activity review",
+      }),
+    ]);
+  });
 });
