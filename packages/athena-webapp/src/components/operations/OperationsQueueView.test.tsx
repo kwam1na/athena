@@ -143,10 +143,11 @@ vi.mock("@/components/staff-auth/StaffAuthenticationDialog", () => ({
 
 const baseProps = {
   approvalRequests: [] as {
-    _id: Id<"approvalRequest">;
+    _id: string;
     metadata?: {
       amount?: number;
       adjustmentType?: string;
+      conflictCount?: number;
       largestAbsoluteDelta?: number;
       lineItems?: Array<{
         countedQuantity?: number;
@@ -160,6 +161,13 @@ const baseProps = {
       paymentMethod?: string;
       previousPaymentMethod?: string;
       reasonCode?: string;
+      reviewItems?: Array<{
+        id?: string;
+        localEventId?: string;
+        sequence?: number;
+        summary?: string;
+        type?: string;
+      }>;
       transactionId?: Id<"posTransaction">;
       countedCash?: number;
       expectedCash?: number;
@@ -742,6 +750,75 @@ describe("OperationsQueueViewContent", () => {
     ).toBeInTheDocument();
   });
 
+  it("renders synced register activity reviews in approvals", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        approvalRequests={[
+          {
+            _id: "register-sync-review:register-2",
+            createdAt: 1_714_620_000_000,
+            metadata: {
+              conflictCount: 1,
+              reviewItems: [
+                {
+                  id: "sync-conflict-1",
+                  localEventId: "event-sale-completed-1",
+                  sequence: 2,
+                  summary: "Register was not open before this sale synced.",
+                  type: "permission",
+                },
+              ],
+            },
+            reason: "Register was not open before this sale synced.",
+            registerSessionSummary: {
+              countedCash: null,
+              expectedCash: 50_000,
+              registerNumber: "2",
+              registerSessionId: "register-2" as Id<"registerSession">,
+              status: "active",
+              terminalName: "Wigshop",
+              variance: null,
+            },
+            requestType: "register_sync_review",
+            status: "pending",
+            workItemTitle: "Synced register activity review",
+          },
+        ]}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="wigclub"
+      />,
+    );
+
+    expect(screen.getByText("Synced register activity")).toBeInTheDocument();
+    expect(
+      screen.getByText("Review local register activity before it is applied to cash controls."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /wigshop \/ register 2/i }),
+    ).toHaveAttribute(
+      "href",
+      "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId?o=%252F",
+    );
+    expect(
+      screen.getByText("Register was not open before this sale synced."),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: /approve synced sales/i }),
+    );
+
+    expect(baseProps.onDecideApprovalRequest).toHaveBeenCalledWith({
+      approvalRequestId: "register-sync-review:register-2",
+      decision: "approved",
+      registerSessionId: "register-2",
+      requestType: "register_sync_review",
+    });
+  });
+
   it("renders the live operations page without the register closeout surface", () => {
     render(<OperationsQueueView />);
 
@@ -780,6 +857,7 @@ describe("OperationsQueueViewContent", () => {
     const mutationOrder = [
       submitStockBatch,
       decideApprovalRequest,
+      vi.fn(),
       authenticateStaffCredential,
       authenticateStaffCredentialForApproval,
       vi.fn(),
@@ -867,6 +945,7 @@ describe("OperationsQueueViewContent", () => {
     mockedHooks.useQuery.mockReset();
     mockedHooks.useMutation.mockReturnValue(vi.fn());
     mockedHooks.useMutation
+      .mockReturnValueOnce(vi.fn())
       .mockReturnValueOnce(vi.fn())
       .mockReturnValueOnce(vi.fn())
       .mockReturnValueOnce(vi.fn())
@@ -964,6 +1043,7 @@ describe("OperationsQueueViewContent", () => {
     const mutationOrder = [
       submitStockBatch,
       decideApprovalRequest,
+      vi.fn(),
       authenticateStaffCredential,
       authenticateStaffCredentialForApproval,
       vi.fn(),
@@ -1050,6 +1130,7 @@ describe("OperationsQueueViewContent", () => {
     const mutationOrder = [
       submitStockBatch,
       decideApprovalRequest,
+      vi.fn(),
       authenticateStaffCredential,
       authenticateStaffCredentialForApproval,
       vi.fn(),

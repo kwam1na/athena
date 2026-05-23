@@ -208,11 +208,12 @@ type RegisterCloseoutCommandResult =
 
 type ResolveSyncReviewArgs = {
   actorStaffProfileId: string;
+  decision: "approved" | "rejected";
   registerSessionId: string;
 };
 
 type ResolveSyncReviewResult = NormalizedCommandResult<{
-  action?: "already_resolved" | "resolved";
+  action?: "already_resolved" | "resolved" | "rejected";
   projectedCount?: number;
   resolvedCount?: number;
 }>;
@@ -301,6 +302,7 @@ type CloseoutStaffAuthIntent =
     }
   | {
       kind: "sync_review";
+      decision: "approved" | "rejected";
       registerSessionId: string;
     };
 
@@ -496,12 +498,12 @@ function formatReviewItemActivity(item: PosReconciliationItem) {
 function RegisterSessionSyncNotice({
   errorMessage,
   isResolving,
-  onResolveReview,
+  onReviewDecision,
   syncStatus,
 }: {
   errorMessage?: string;
   isResolving?: boolean;
-  onResolveReview?: () => void;
+  onReviewDecision?: (decision: "approved" | "rejected") => void;
   syncStatus: PosSyncStatusPresentation;
 }) {
   if (syncStatus.status === "synced") {
@@ -603,18 +605,29 @@ function RegisterSessionSyncNotice({
           ) : null}
         </div>
         <div className="flex flex-wrap items-center justify-end gap-layout-sm">
-          {syncStatus.status === "needs_review" && onResolveReview ? (
+          {syncStatus.status === "needs_review" && onReviewDecision ? (
+            <>
             <LoadingButton
               className="border-border bg-background text-foreground hover:bg-muted"
               disabled={isResolving}
               isLoading={Boolean(isResolving)}
-              onClick={onResolveReview}
+              onClick={() => onReviewDecision("approved")}
               size="sm"
               type="button"
               variant="outline"
             >
-              Apply reviewed sales
+              Approve synced sales
             </LoadingButton>
+            <Button
+              disabled={isResolving}
+              onClick={() => onReviewDecision("rejected")}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              Reject synced activity
+            </Button>
+            </>
           ) : null}
           {syncStatus.status !== "needs_review" ? (
             <Badge
@@ -1159,6 +1172,7 @@ export function RegisterSessionViewContent({
       try {
         const commandResult = await onResolveSyncReview({
           actorStaffProfileId: result.staffProfileId,
+          decision: intent.decision,
           registerSessionId: intent.registerSessionId,
         });
 
@@ -1170,6 +1184,8 @@ export function RegisterSessionViewContent({
         toast.success(
           commandResult.data?.action === "already_resolved"
             ? "Register review already resolved"
+            : commandResult.data?.action === "rejected"
+              ? "Synced register activity rejected"
             : commandResult.data?.projectedCount
               ? commandResult.data.projectedCount === 1
                 ? "Reviewed sale applied"
@@ -1400,8 +1416,14 @@ export function RegisterSessionViewContent({
       : closeoutStaffAuthIntent?.kind === "sync_review"
         ? {
             title: "Manager sign-in required",
-            description: "Authenticate to apply reviewed synced sales",
-            submitLabel: "Apply reviewed sales",
+            description:
+              closeoutStaffAuthIntent.decision === "approved"
+                ? "Authenticate to approve and apply reviewed synced sales"
+                : "Authenticate to reject reviewed synced activity",
+            submitLabel:
+              closeoutStaffAuthIntent.decision === "approved"
+                ? "Approve synced sales"
+                : "Reject synced activity",
           }
       : {
           title: "Closeout sign-in required",
@@ -1467,7 +1489,7 @@ export function RegisterSessionViewContent({
     syncStatus.status === "needs_review" && Boolean(onResolveSyncReview);
   const headerTerminalName = registerSession?.terminalName?.trim();
 
-  function requestResolveSyncReview() {
+  function requestResolveSyncReview(decision: "approved" | "rejected") {
     if (!registerSession || !canResolveSyncReview) {
       return;
     }
@@ -1475,6 +1497,7 @@ export function RegisterSessionViewContent({
     setSyncReviewErrorMessage("");
     setCloseoutStaffAuthIntent({
       kind: "sync_review",
+      decision,
       registerSessionId: registerSession._id,
     });
   }
@@ -1839,7 +1862,7 @@ export function RegisterSessionViewContent({
             <RegisterSessionSyncNotice
               errorMessage={syncReviewErrorMessage}
               isResolving={isResolvingSyncReview}
-              onResolveReview={
+              onReviewDecision={
                 canResolveSyncReview ? requestResolveSyncReview : undefined
               }
               syncStatus={syncStatus}
@@ -2968,6 +2991,7 @@ export function RegisterSessionView() {
     const result = await runCommand(() =>
       resolveRegisterSessionSyncReview({
         actorStaffProfileId: args.actorStaffProfileId as Id<"staffProfile">,
+        decision: args.decision,
         registerSessionId: args.registerSessionId as Id<"registerSession">,
         storeId: activeStore._id,
       }),

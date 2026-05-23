@@ -32,6 +32,7 @@ import { presentCommandToast } from "@/lib/errors/presentCommandToast";
 import { formatStoredAmount } from "@/lib/pos/displayAmounts";
 import {
   runCommand,
+  type NormalizedApprovalCommandResult,
   type NormalizedCommandResult,
 } from "@/lib/errors/runCommand";
 import { getOrigin } from "@/lib/navigationUtils";
@@ -68,10 +69,11 @@ type QueueWorkItem = {
 };
 
 type QueueApprovalRequest = {
-  _id: Id<"approvalRequest">;
+  _id: string;
   metadata?: {
     amount?: number;
     adjustmentType?: string;
+    conflictCount?: number;
     largestAbsoluteDelta?: number;
     lineItems?: Array<{
       adjustedQuantity?: number;
@@ -94,6 +96,13 @@ type QueueApprovalRequest = {
     settlementMethod?: string;
     adjustedTotal?: number;
     originalTotal?: number;
+    reviewItems?: Array<{
+      id?: string;
+      localEventId?: string;
+      sequence?: number;
+      summary?: string;
+      type?: string;
+    }>;
     totalDelta?: number;
     transactionId?: Id<"posTransaction">;
     countedCash?: number;
@@ -189,10 +198,25 @@ function getApprovalRequestCopy(requestType: string) {
     };
   }
 
+  if (requestType === "register_sync_review") {
+    return {
+      approveLabel: "Approve synced sales",
+      approvedToast: "Synced register activity approved",
+      description:
+        "Manager approval applies reviewed synced sales to the register session. Reject it to leave the synced activity unapplied.",
+      rejectedToast: "Synced register activity rejected",
+      rejectLabel: "Reject synced activity",
+    };
+  }
+
   return null;
 }
 
 function formatApprovalRequestType(requestType: string) {
+  if (requestType === "register_sync_review") {
+    return "Synced register activity";
+  }
+
   return requestType
     .split("_")
     .filter(Boolean)
@@ -358,6 +382,17 @@ function getVarianceReviewSummary(request: QueueApprovalRequest) {
   };
 }
 
+function getRegisterSyncReviewSummary(request: QueueApprovalRequest) {
+  if (request.requestType !== "register_sync_review") {
+    return null;
+  }
+
+  return {
+    registerSession: request.registerSessionSummary ?? null,
+    reviewItems: request.metadata?.reviewItems ?? [],
+  };
+}
+
 function formatApprovalDate(timestamp?: number) {
   if (typeof timestamp !== "number") return "Unknown";
 
@@ -402,13 +437,15 @@ type OperationsQueueViewContentProps = {
   hasFullAdminAccess: boolean;
   inventoryItems: InventorySnapshotItem[];
   isCycleCountDraftSaving?: boolean;
-  isDecidingApprovalRequestId?: Id<"approvalRequest"> | null;
+  isDecidingApprovalRequestId?: string | null;
   isLoadingPermissions: boolean;
   isLoadingQueue: boolean;
   isSubmittingStockBatch: boolean;
   onDecideApprovalRequest: (args: {
-    approvalRequestId: Id<"approvalRequest">;
+    approvalRequestId: string;
     decision: "approved" | "rejected";
+    registerSessionId?: Id<"registerSession">;
+    requestType?: string;
   }) => Promise<void>;
   onLockApprovalDecisions?: () => void;
   onRequestApprovalDecisionUnlock?: () => void;
@@ -733,6 +770,8 @@ export function OperationsQueueViewContent({
                           getItemAdjustmentSummary(request);
                         const varianceReviewSummary =
                           getVarianceReviewSummary(request);
+                        const registerSyncReviewSummary =
+                          getRegisterSyncReviewSummary(request);
 
                         return (
                           <article
@@ -1335,6 +1374,79 @@ export function OperationsQueueViewContent({
                               </div>
                             ) : null}
 
+                            {registerSyncReviewSummary ? (
+                              <div className="border-t border-border/70 bg-surface px-layout-md py-layout-md">
+                                <div>
+                                  <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                                    Synced register activity
+                                  </p>
+                                  <p className="mt-1 text-sm text-muted-foreground">
+                                    Review local register activity before it is
+                                    applied to cash controls.
+                                  </p>
+                                </div>
+
+                                <dl className="mt-layout-sm grid gap-layout-sm rounded-lg border border-border bg-background p-layout-sm text-sm md:grid-cols-3">
+                                  <div>
+                                    <dt className="text-xs text-muted-foreground">
+                                      Register session
+                                    </dt>
+                                    <dd className="mt-1 font-medium text-foreground">
+                                      {registerSyncReviewSummary.registerSession &&
+                                      orgUrlSlug &&
+                                      storeUrlSlug ? (
+                                        <Link
+                                          className="inline-flex items-center gap-1 underline-offset-4 hover:underline"
+                                          params={{
+                                            orgUrlSlug,
+                                            sessionId:
+                                              registerSyncReviewSummary
+                                                .registerSession
+                                                .registerSessionId,
+                                            storeUrlSlug,
+                                          }}
+                                          search={{ o: getOrigin() }}
+                                          to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId"
+                                        >
+                                          {formatRegisterSessionLabel(
+                                            registerSyncReviewSummary.registerSession,
+                                          )}
+                                          <ArrowUpRight
+                                            aria-hidden="true"
+                                            className="h-3 w-3"
+                                          />
+                                        </Link>
+                                      ) : registerSyncReviewSummary.registerSession ? (
+                                        formatRegisterSessionLabel(
+                                          registerSyncReviewSummary.registerSession,
+                                        )
+                                      ) : (
+                                        "Register session"
+                                      )}
+                                    </dd>
+                                  </div>
+                                  <div>
+                                    <dt className="text-xs text-muted-foreground">
+                                      Review items
+                                    </dt>
+                                    <dd className="mt-1 font-medium text-foreground">
+                                      {registerSyncReviewSummary.reviewItems
+                                        .length || 1}
+                                    </dd>
+                                  </div>
+                                  <div>
+                                    <dt className="text-xs text-muted-foreground">
+                                      Latest issue
+                                    </dt>
+                                    <dd className="mt-1 font-medium text-foreground">
+                                      {registerSyncReviewSummary.reviewItems[0]
+                                        ?.summary ?? request.reason}
+                                    </dd>
+                                  </div>
+                                </dl>
+                              </div>
+                            ) : null}
+
                             {approvalCopy ? (
                               <div className="border-t border-border/70 bg-surface px-layout-md py-layout-md">
                                 <div className="flex flex-col gap-layout-md lg:flex-row lg:items-center lg:justify-between">
@@ -1356,6 +1468,15 @@ export function OperationsQueueViewContent({
                                         onDecideApprovalRequest({
                                           approvalRequestId: request._id,
                                           decision: "approved",
+                                          ...(request.requestType ===
+                                          "register_sync_review"
+                                            ? {
+                                                registerSessionId:
+                                                  request.registerSessionSummary
+                                                    ?.registerSessionId,
+                                                requestType: request.requestType,
+                                              }
+                                            : {}),
                                         })
                                       }
                                       size="sm"
@@ -1373,6 +1494,15 @@ export function OperationsQueueViewContent({
                                         onDecideApprovalRequest({
                                           approvalRequestId: request._id,
                                           decision: "rejected",
+                                          ...(request.requestType ===
+                                          "register_sync_review"
+                                            ? {
+                                                registerSessionId:
+                                                  request.registerSessionSummary
+                                                    ?.registerSessionId,
+                                                requestType: request.requestType,
+                                              }
+                                            : {}),
                                         })
                                       }
                                       size="sm"
@@ -1435,7 +1565,7 @@ export function OperationsQueueView({
   const [isSubmittingStockBatch, setIsSubmittingStockBatch] = useState(false);
   const [isSavingCycleCountDraft, setIsSavingCycleCountDraft] = useState(false);
   const [decisioningApprovalRequestId, setDecisioningApprovalRequestId] =
-    useState<Id<"approvalRequest"> | null>(null);
+    useState<string | null>(null);
   const [isApprovalUnlockOpen, setIsApprovalUnlockOpen] = useState(false);
   const [approvalDecisionUnlock, setApprovalDecisionUnlock] =
     useState<ApprovalDecisionUnlock | null>(null);
@@ -1489,6 +1619,9 @@ export function OperationsQueueView({
   );
   const decideApprovalRequest = useMutation(
     operationsApi.approvalRequests.decideApprovalRequest,
+  );
+  const resolveRegisterSessionSyncReview = useMutation(
+    api.cashControls.deposits.resolveRegisterSessionSyncReview,
   );
   const authenticateStaffCredential = useMutation(
     operationsApi.staffCredentials.authenticateStaffCredential,
@@ -1667,8 +1800,10 @@ export function OperationsQueueView({
   };
 
   const handleDecideApprovalRequest = async (args: {
-    approvalRequestId: Id<"approvalRequest">;
+    approvalRequestId: string;
     decision: "approved" | "rejected";
+    registerSessionId?: Id<"registerSession">;
+    requestType?: string;
   }) => {
     if (decisioningApprovalRequestId) {
       return;
@@ -1736,13 +1871,39 @@ export function OperationsQueueView({
         return;
       }
 
-      const result = await runCommand(() =>
-        decideApprovalRequest({
-          approvalRequestId: args.approvalRequestId,
-          approvalProofId: approvalProofResult.data.approvalProofId,
-          decision: args.decision,
-        }),
-      );
+      let result: NormalizedApprovalCommandResult<unknown>;
+
+      if (args.requestType === "register_sync_review") {
+        if (!args.registerSessionId) {
+          result = {
+            kind: "user_error",
+            error: {
+              code: "not_found",
+              message:
+                "Register session was not available for this synced activity review.",
+            },
+          };
+        } else {
+          const registerSessionId = args.registerSessionId;
+          result = await runCommand(() =>
+            resolveRegisterSessionSyncReview({
+              actorStaffProfileId:
+                approvalProofResult.data.approvedByStaffProfileId,
+              decision: args.decision,
+              registerSessionId,
+              storeId: activeStore._id,
+            }),
+          );
+        }
+      } else {
+        result = await runCommand(() =>
+          decideApprovalRequest({
+            approvalRequestId: args.approvalRequestId as Id<"approvalRequest">,
+            approvalProofId: approvalProofResult.data.approvalProofId,
+            decision: args.decision,
+          }),
+        );
+      }
 
       if (result.kind !== "ok") {
         presentCommandToast(result);
