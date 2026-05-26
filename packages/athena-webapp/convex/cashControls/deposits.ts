@@ -1,7 +1,15 @@
-import { mutation, query, type MutationCtx, type QueryCtx } from "../_generated/server";
+import {
+  mutation,
+  query,
+  type MutationCtx,
+  type QueryCtx,
+} from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { v } from "convex/values";
-import { buildRegisterSessionCloseoutReview, getCashControlsConfig } from "./closeouts";
+import {
+  buildRegisterSessionCloseoutReview,
+  getCashControlsConfig,
+} from "./closeouts";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { recordPaymentAllocationWithCtx } from "../operations/paymentAllocations";
 import { recordRegisterSessionDepositWithCtx } from "../operations/registerSessions";
@@ -11,6 +19,11 @@ import {
   listCompletedTransactions,
   listTransactionItems,
 } from "../pos/infrastructure/repositories/transactionRepository";
+import {
+  buildRegisterSessionLocalSyncStatus,
+  listOpenLocalSyncConflictsByRegisterSession as listRegisterSessionSyncReviewConflicts,
+  type RegisterSessionSyncConflict,
+} from "../pos/application/sync/registerSessionSyncReview";
 import { createConvexLocalSyncRepository } from "../pos/infrastructure/repositories/localSyncRepository";
 import { parseStoredLocalSyncEvent } from "../pos/application/sync/ingestLocalEvents";
 import { projectLocalSyncEvent } from "../pos/application/sync/projectLocalEvents";
@@ -22,13 +35,16 @@ import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { isPosUsableRegisterSessionStatus } from "../../shared/registerSessionStatus";
 import { formatStaffDisplayName } from "../../shared/staffDisplayName";
 
+export { listOpenLocalSyncConflictsByRegisterSession } from "../pos/application/sync/registerSessionSyncReview";
+
 const CASH_DEPOSIT_ALLOCATION_TYPE = "cash_deposit";
 const CASH_DEPOSIT_SUBJECT_TYPE = "register_cash_deposit";
 const RECENT_DEPOSIT_LIMIT = 10;
 const SESSION_LIMIT = 100;
 const STAFF_ROLE_LOOKUP_LIMIT = 20;
-const SYNC_CONFLICT_LIMIT = 500;
 const TIMELINE_LIMIT = 200;
+const CLOSED_REGISTER_SYNCED_CLOSEOUT_SUMMARY =
+  "Register session is not open for synced POS closeout.";
 
 const userErrorValidator = v.object({
   code: v.union(
@@ -123,19 +139,7 @@ type CashControlRegisterSession = Pick<
   | "workflowTraceId"
 >;
 
-type CashControlSyncConflict = Pick<
-  Doc<"posLocalSyncConflict">,
-  | "_id"
-  | "conflictType"
-  | "createdAt"
-  | "localEventId"
-  | "sequence"
-  | "status"
-  | "summary"
-> &
-  Partial<
-    Pick<Doc<"posLocalSyncConflict">, "localRegisterSessionId" | "terminalId">
-  >;
+type CashControlSyncConflict = RegisterSessionSyncConflict;
 
 type CashControlTransaction = Pick<
   Doc<"posTransaction">,
@@ -146,8 +150,10 @@ type CashControlTransaction = Pick<
   | "paymentMethod"
   | "payments"
   | "staffProfileId"
+  | "status"
   | "total"
   | "transactionNumber"
+  | "voidedAt"
   | "workflowTraceId"
 >;
 
@@ -255,7 +261,7 @@ async function persistRegisterSessionWorkflowTraceIdBestEffort(
     traceCreated: boolean;
     traceId?: string;
     workflowTraceId?: string;
-  }
+  },
 ) {
   if (!args.traceId || args.workflowTraceId || !args.traceCreated) {
     return;
@@ -271,7 +277,10 @@ async function persistRegisterSessionWorkflowTraceIdBestEffort(
 }
 
 function isCashControlDepositAllocation(
-  allocation: Pick<Doc<"paymentAllocation">, "allocationType" | "direction" | "registerSessionId">
+  allocation: Pick<
+    Doc<"paymentAllocation">,
+    "allocationType" | "direction" | "registerSessionId"
+  >,
 ) {
   return (
     allocation.allocationType === CASH_DEPOSIT_ALLOCATION_TYPE &&
@@ -282,24 +291,22 @@ function isCashControlDepositAllocation(
 
 async function listStaffNames(
   ctx: Pick<QueryCtx, "db">,
-  staffProfileIds: Set<Id<"staffProfile">>
+  staffProfileIds: Set<Id<"staffProfile">>,
 ) {
   const staffEntries = await Promise.all(
     Array.from(staffProfileIds).map(async (staffProfileId) => {
       const staffProfile = await ctx.db.get("staffProfile", staffProfileId);
       const staffName = formatStaffDisplayName(staffProfile);
       return staffName ? [staffProfileId, staffName] : null;
-    })
+    }),
   );
 
   return new Map(
-    staffEntries.filter(Boolean) as Array<[Id<"staffProfile">, string]>
+    staffEntries.filter(Boolean) as Array<[Id<"staffProfile">, string]>,
   );
 }
 
-function sumDepositsBySession(
-  deposits: CashControlDepositAllocation[]
-) {
+function sumDepositsBySession(deposits: CashControlDepositAllocation[]) {
   return deposits.reduce((totals, deposit) => {
     if (!deposit.registerSessionId) {
       return totals;
@@ -307,7 +314,7 @@ function sumDepositsBySession(
 
     totals.set(
       deposit.registerSessionId,
-      (totals.get(deposit.registerSessionId) ?? 0) + deposit.amount
+      (totals.get(deposit.registerSessionId) ?? 0) + deposit.amount,
     );
 
     return totals;
@@ -333,13 +340,15 @@ function buildRegisterSessionSummary(args: {
   return {
     ...args.registerSession,
     closedByStaffName: args.registerSession.closedByStaffProfileId
-      ? args.staffNamesById.get(args.registerSession.closedByStaffProfileId) ?? null
+      ? (args.staffNamesById.get(args.registerSession.closedByStaffProfileId) ??
+        null)
       : null,
     openedByStaffName: args.registerSession.openedByStaffProfileId
-      ? args.staffNamesById.get(args.registerSession.openedByStaffProfileId) ?? null
+      ? (args.staffNamesById.get(args.registerSession.openedByStaffProfileId) ??
+        null)
       : null,
     terminalName: args.registerSession.terminalId
-      ? args.terminalNamesById.get(args.registerSession.terminalId) ?? null
+      ? (args.terminalNamesById.get(args.registerSession.terminalId) ?? null)
       : null,
     pendingApprovalRequest: args.approvalRequest
       ? {
@@ -347,26 +356,14 @@ function buildRegisterSessionSummary(args: {
           notes: args.approvalRequest.notes,
           reason: args.approvalRequest.reason,
           requestedByStaffName: args.approvalRequest.requestedByStaffProfileId
-            ? args.staffNamesById.get(args.approvalRequest.requestedByStaffProfileId) ?? null
+            ? (args.staffNamesById.get(
+                args.approvalRequest.requestedByStaffProfileId,
+              ) ?? null)
             : null,
           status: args.approvalRequest.status,
         }
       : null,
-    localSyncStatus:
-      syncConflicts.length > 0
-        ? {
-            status: "needs_review",
-            reconciliationItems: syncConflicts.map((conflict) => ({
-              createdAt: conflict.createdAt,
-              id: conflict._id,
-              localEventId: conflict.localEventId,
-              sequence: conflict.sequence,
-              status: conflict.status,
-              summary: conflict.summary,
-              type: conflict.conflictType,
-            })),
-          }
-        : null,
+    localSyncStatus: buildRegisterSessionLocalSyncStatus(syncConflicts),
     totalDeposited: args.totalDeposited,
   };
 }
@@ -383,7 +380,7 @@ async function resolveRegisterSessionWorkflowTraceId(
   const trace = await ctx.db
     .query("workflowTrace")
     .withIndex("by_storeId_traceId", (q) =>
-      q.eq("storeId", registerSession.storeId).eq("traceId", traceId)
+      q.eq("storeId", registerSession.storeId).eq("traceId", traceId),
     )
     .first();
 
@@ -401,16 +398,22 @@ async function appendRegisterSessionWorkflowTraceIds(
         ctx,
         registerSession,
       ),
-    }))
+    })),
   );
 }
 
 export function buildCashControlsDashboardSnapshot(args: {
-  approvalRequestsBySessionId: Map<Id<"registerSession">, CashControlApprovalRequest>;
+  approvalRequestsBySessionId: Map<
+    Id<"registerSession">,
+    CashControlApprovalRequest
+  >;
   deposits: CashControlDepositAllocation[];
   registerSessions: CashControlRegisterSession[];
   staffNamesById: StaffNameMap;
-  syncConflictsBySessionId?: Map<Id<"registerSession">, CashControlSyncConflict[]>;
+  syncConflictsBySessionId?: Map<
+    Id<"registerSession">,
+    CashControlSyncConflict[]
+  >;
   terminalNamesById?: Map<Id<"posTerminal">, string>;
 }) {
   const totalDepositedBySessionId = sumDepositsBySession(args.deposits);
@@ -418,30 +421,31 @@ export function buildCashControlsDashboardSnapshot(args: {
     args.registerSessions.map((registerSession) => [
       registerSession._id,
       registerSession.registerNumber?.trim() || "Unnamed register",
-    ])
+    ]),
   );
 
   const sessionSummaries = [...args.registerSessions]
     .sort((left, right) => right.openedAt - left.openedAt)
     .map((registerSession) =>
       buildRegisterSessionSummary({
-        approvalRequest: args.approvalRequestsBySessionId.get(registerSession._id) ?? null,
+        approvalRequest:
+          args.approvalRequestsBySessionId.get(registerSession._id) ?? null,
         registerSession,
         staffNamesById: args.staffNamesById,
         syncConflicts:
           args.syncConflictsBySessionId?.get(registerSession._id) ?? [],
         terminalNamesById: args.terminalNamesById ?? new Map(),
         totalDeposited: totalDepositedBySessionId.get(registerSession._id) ?? 0,
-      })
+      }),
     );
 
   return {
     registerSessions: sessionSummaries,
     openSessions: sessionSummaries.filter((registerSession) =>
-      isPosUsableRegisterSessionStatus(registerSession.status)
+      isPosUsableRegisterSessionStatus(registerSession.status),
     ),
     pendingCloseouts: sessionSummaries.filter(
-      (registerSession) => registerSession.status === "closing"
+      (registerSession) => registerSession.status === "closing",
     ),
     recentDeposits: [...args.deposits]
       .sort((left, right) => right.recordedAt - left.recordedAt)
@@ -452,11 +456,12 @@ export function buildCashControlsDashboardSnapshot(args: {
         notes: deposit.notes,
         recordedAt: deposit.recordedAt,
         recordedByStaffName: deposit.actorStaffProfileId
-          ? args.staffNamesById.get(deposit.actorStaffProfileId) ?? null
+          ? (args.staffNamesById.get(deposit.actorStaffProfileId) ?? null)
           : null,
         reference: deposit.externalReference,
         registerNumber: deposit.registerSessionId
-          ? registerNumberBySessionId.get(deposit.registerSessionId) ?? "Unnamed register"
+          ? (registerNumberBySessionId.get(deposit.registerSessionId) ??
+            "Unnamed register")
           : "Unnamed register",
         registerSessionId: deposit.registerSessionId ?? null,
       })),
@@ -473,119 +478,9 @@ export function buildCashControlsDashboardSnapshot(args: {
   };
 }
 
-export async function listOpenLocalSyncConflictsByRegisterSession(
-  ctx: Pick<QueryCtx, "db">,
-  storeId: Id<"store">,
-) {
-  const [needsReviewConflicts, resolvedConflicts] = await Promise.all([
-    ctx.db
-      .query("posLocalSyncConflict")
-      .withIndex("by_store_status", (q) =>
-        q.eq("storeId", storeId).eq("status", "needs_review"),
-      )
-      .take(SYNC_CONFLICT_LIMIT),
-    ctx.db
-      .query("posLocalSyncConflict")
-      .withIndex("by_store_status", (q) =>
-        q.eq("storeId", storeId).eq("status", "resolved"),
-      )
-      .take(SYNC_CONFLICT_LIMIT),
-  ]);
-  const staleResolvedConflicts = await Promise.all(
-    resolvedConflicts.map(async (conflict) => {
-      const syncEvent = await ctx.db
-        .query("posLocalSyncEvent")
-        .withIndex("by_store_terminal_localEvent", (q) =>
-          q
-            .eq("storeId", conflict.storeId)
-            .eq("terminalId", conflict.terminalId)
-            .eq("localEventId", conflict.localEventId),
-        )
-        .unique();
-
-      return syncEvent?.status === "conflicted" ? conflict : null;
-    }),
-  );
-	  const conflicts = [
-	    ...needsReviewConflicts,
-	    ...staleResolvedConflicts.filter(
-	      (conflict): conflict is Doc<"posLocalSyncConflict"> => conflict !== null,
-	    ),
-	  ];
-	  const entries = await Promise.all(
-	    conflicts.map(async (conflict) => {
-	      const { terminalId, localRegisterSessionId } = conflict;
-	      if (!terminalId || !localRegisterSessionId) {
-	        return null;
-	      }
-
-	      const registerSessionMapping = await ctx.db
-	        .query("posLocalSyncMapping")
-        .withIndex("by_store_terminal_local", (q) =>
-	          q
-	            .eq("storeId", conflict.storeId)
-	            .eq("terminalId", terminalId)
-	            .eq("localRegisterSessionId", localRegisterSessionId)
-	            .eq("localIdKind", "registerSession")
-	            .eq("localId", localRegisterSessionId),
-	        )
-        .unique();
-      if (registerSessionMapping?.cloudTable === "registerSession") {
-        return [
-          registerSessionMapping.cloudId as Id<"registerSession">,
-          conflict,
-        ] as const;
-      }
-
-      const normalizeId = (
-        ctx.db as unknown as {
-          normalizeId?: (
-            tableName: string,
-            value: string,
-          ) => Id<"registerSession"> | null;
-        }
-      ).normalizeId;
-      const cloudRegisterSessionId =
-        normalizeId?.call(
-	          ctx.db,
-	          "registerSession",
-	          localRegisterSessionId,
-	        ) ?? null;
-	      if (cloudRegisterSessionId) {
-	        const registerSession = await ctx.db.get(
-	          "registerSession",
-	          cloudRegisterSessionId,
-	        );
-	        if (!registerSession) return null;
-	        if (
-	          registerSession.storeId === conflict.storeId &&
-	          registerSession.terminalId === terminalId
-	        ) {
-	          return [cloudRegisterSessionId, conflict] as const;
-	        }
-	      }
-
-      return null;
-    }),
-  );
-
-  return entries.reduce(
-    (conflictsBySessionId, entry) => {
-      if (!entry) return conflictsBySessionId;
-      const [registerSessionId, conflict] = entry;
-      conflictsBySessionId.set(registerSessionId, [
-        ...(conflictsBySessionId.get(registerSessionId) ?? []),
-        conflict,
-      ]);
-      return conflictsBySessionId;
-    },
-    new Map<Id<"registerSession">, CashControlSyncConflict[]>(),
-  );
-}
-
 async function listRegisterSessionsForDashboard(
   ctx: Pick<QueryCtx, "db">,
-  storeId: Id<"store">
+  storeId: Id<"store">,
 ) {
   return ctx.db
     .query("registerSession")
@@ -597,7 +492,10 @@ async function listRegisterSessionsForDashboard(
 async function appendRegisterSessionsForSyncConflicts(
   ctx: Pick<QueryCtx, "db">,
   registerSessions: Doc<"registerSession">[],
-  syncConflictsBySessionId: Map<Id<"registerSession">, CashControlSyncConflict[]>,
+  syncConflictsBySessionId: Map<
+    Id<"registerSession">,
+    CashControlSyncConflict[]
+  >,
 ) {
   const knownSessionIds = new Set(
     registerSessions.map((registerSession) => registerSession._id),
@@ -628,17 +526,17 @@ async function listTerminalNames(
       const terminal = await ctx.db.get("posTerminal", terminalId);
       const terminalName = terminal?.displayName?.trim();
       return terminalName ? [terminalId, terminalName] : null;
-    })
+    }),
   );
 
   return new Map(
-    terminalEntries.filter(Boolean) as Array<[Id<"posTerminal">, string]>
+    terminalEntries.filter(Boolean) as Array<[Id<"posTerminal">, string]>,
   );
 }
 
 async function listStoreDeposits(
   ctx: Pick<QueryCtx, "db">,
-  storeId: Id<"store">
+  storeId: Id<"store">,
 ) {
   const allocations =
     // eslint-disable-next-line @convex-dev/no-collect-in-query -- The cash-controls dashboard needs the full store-scoped deposit ledger to compute register totals and recent deposit history.
@@ -652,13 +550,15 @@ async function listStoreDeposits(
 
 async function listSessionDeposits(
   ctx: Pick<QueryCtx, "db">,
-  registerSessionId: Id<"registerSession">
+  registerSessionId: Id<"registerSession">,
 ) {
   const allocations =
     // eslint-disable-next-line @convex-dev/no-collect-in-query -- Session detail should show the complete deposit ledger for one drawer.
     await ctx.db
       .query("paymentAllocation")
-      .withIndex("by_registerSessionId", (q) => q.eq("registerSessionId", registerSessionId))
+      .withIndex("by_registerSessionId", (q) =>
+        q.eq("registerSessionId", registerSessionId),
+      )
       .collect();
 
   return allocations.filter(isCashControlDepositAllocation);
@@ -666,12 +566,14 @@ async function listSessionDeposits(
 
 async function listRegisterSessionTimeline(
   ctx: Pick<QueryCtx, "db">,
-  registerSessionId: Id<"registerSession">
+  registerSessionId: Id<"registerSession">,
 ) {
   return (
     await ctx.db
       .query("operationalEvent")
-      .withIndex("by_registerSessionId", (q) => q.eq("registerSessionId", registerSessionId))
+      .withIndex("by_registerSessionId", (q) =>
+        q.eq("registerSessionId", registerSessionId),
+      )
       .order("desc")
       .take(TIMELINE_LIMIT)
   ).sort((left, right) => right.createdAt - left.createdAt);
@@ -682,7 +584,7 @@ async function listRegisterSessionTransactions(
   args: {
     registerSessionId: Id<"registerSession">;
     storeId: Id<"store">;
-  }
+  },
 ) {
   return listCompletedTransactions(ctx, {
     registerSessionId: args.registerSessionId,
@@ -753,12 +655,12 @@ export const getDashboardSnapshot = query({
       ctx.db
         .query("approvalRequest")
         .withIndex("by_storeId_status", (q) =>
-          q.eq("storeId", args.storeId).eq("status", "pending")
+          q.eq("storeId", args.storeId).eq("status", "pending"),
         )
         .order("desc")
         .take(SESSION_LIMIT),
       listStoreDeposits(ctx, args.storeId),
-      listOpenLocalSyncConflictsByRegisterSession(ctx, args.storeId),
+      listRegisterSessionSyncReviewConflicts(ctx, args.storeId),
     ]);
 
     const dashboardRegisterSessions =
@@ -768,17 +670,20 @@ export const getDashboardSnapshot = query({
         syncConflictsBySessionId,
       );
     const dashboardRegisterSessionsWithTraceIds =
-      await appendRegisterSessionWorkflowTraceIds(ctx, dashboardRegisterSessions);
+      await appendRegisterSessionWorkflowTraceIds(
+        ctx,
+        dashboardRegisterSessions,
+      );
     const relevantApprovalRequests = pendingApprovalRequests.filter(
       (approvalRequest) =>
         approvalRequest.requestType === "variance_review" &&
-        Boolean(approvalRequest.registerSessionId)
+        Boolean(approvalRequest.registerSessionId),
     );
     const approvalRequestsBySessionId = new Map(
       relevantApprovalRequests.map((approvalRequest) => [
         approvalRequest.registerSessionId!,
         approvalRequest,
-      ])
+      ]),
     );
     const staffNamesById = await listStaffNames(
       ctx,
@@ -786,7 +691,7 @@ export const getDashboardSnapshot = query({
         approvalRequests: relevantApprovalRequests,
         deposits,
         registerSessions: dashboardRegisterSessionsWithTraceIds,
-      })
+      }),
     );
     const terminalNamesById = await listTerminalNames(
       ctx,
@@ -815,7 +720,10 @@ export const getRegisterSessionSnapshot = query({
   },
   handler: async (ctx, args) => {
     const { store } = await requireCashControlsStoreAccess(ctx, args.storeId);
-    const registerSession = await ctx.db.get("registerSession", args.registerSessionId);
+    const registerSession = await ctx.db.get(
+      "registerSession",
+      args.registerSessionId,
+    );
 
     if (!registerSession || registerSession.storeId !== args.storeId) {
       throw new Error("Register session not found for this store.");
@@ -836,9 +744,12 @@ export const getRegisterSessionSnapshot = query({
         storeId: args.storeId,
       }),
       registerSession.managerApprovalRequestId
-        ? ctx.db.get("approvalRequest", registerSession.managerApprovalRequestId)
+        ? ctx.db.get(
+            "approvalRequest",
+            registerSession.managerApprovalRequestId,
+          )
         : Promise.resolve(null),
-      listOpenLocalSyncConflictsByRegisterSession(ctx, args.storeId),
+      listRegisterSessionSyncReviewConflicts(ctx, args.storeId),
       resolveRegisterSessionWorkflowTraceId(ctx, registerSession),
     ]);
     const registerSessionWithTraceId = {
@@ -854,15 +765,18 @@ export const getRegisterSessionSnapshot = query({
         registerSessions: [registerSessionWithTraceId],
         timeline,
         transactions,
-      })
+      }),
     );
     const transactionItemsById = new Map(
       await Promise.all(
         transactions.map(async (transaction) => {
-          const transactionItems = await listTransactionItems(ctx, transaction._id);
+          const transactionItems = await listTransactionItems(
+            ctx,
+            transaction._id,
+          );
           return [transaction._id, transactionItems] as const;
-        })
-      )
+        }),
+      ),
     );
     const customerNamesById = new Map(
       (
@@ -874,20 +788,23 @@ export const getRegisterSessionSnapshot = query({
 
             const customerProfile = await ctx.db.get(
               "customerProfile",
-              transaction.customerProfileId
+              transaction.customerProfileId,
             );
 
             return customerProfile
               ? [transaction.customerProfileId, customerProfile.fullName]
               : null;
-          })
+          }),
         )
-      ).filter(Boolean) as Array<[Id<"customerProfile">, string | undefined]>
+      ).filter(Boolean) as Array<[Id<"customerProfile">, string | undefined]>,
     );
-    const totalDeposited = deposits.reduce((sum, deposit) => sum + deposit.amount, 0);
+    const totalDeposited = deposits.reduce(
+      (sum, deposit) => sum + deposit.amount,
+      0,
+    );
     const terminalNamesById = await listTerminalNames(
       ctx,
-      new Set(registerSession.terminalId ? [registerSession.terminalId] : [])
+      new Set(registerSession.terminalId ? [registerSession.terminalId] : []),
     );
     const closeoutReview =
       registerSession.countedCash !== undefined
@@ -908,15 +825,18 @@ export const getRegisterSessionSnapshot = query({
           notes: deposit.notes,
           recordedAt: deposit.recordedAt,
           recordedByStaffName: deposit.actorStaffProfileId
-            ? staffNamesById.get(deposit.actorStaffProfileId) ?? null
+            ? (staffNamesById.get(deposit.actorStaffProfileId) ?? null)
             : null,
           reference: deposit.externalReference,
           registerSessionId: deposit.registerSessionId ?? null,
         })),
       transactions: transactions.map((transaction) => {
-        const transactionItems = transactionItemsById.get(transaction._id) ?? [];
+        const transactionItems =
+          transactionItemsById.get(transaction._id) ?? [];
         const paymentMethods = transaction.payments?.length
-          ? Array.from(new Set(transaction.payments.map((payment) => payment.method)))
+          ? Array.from(
+              new Set(transaction.payments.map((payment) => payment.method)),
+            )
           : transaction.paymentMethod
             ? [transaction.paymentMethod]
             : [];
@@ -924,7 +844,7 @@ export const getRegisterSessionSnapshot = query({
         return {
           _id: transaction._id,
           cashierName: transaction.staffProfileId
-            ? staffNamesById.get(transaction.staffProfileId) ?? null
+            ? (staffNamesById.get(transaction.staffProfileId) ?? null)
             : null,
           completedAt: transaction.completedAt,
           customerName:
@@ -934,10 +854,15 @@ export const getRegisterSessionSnapshot = query({
             transaction.customerInfo?.name ??
             null,
           hasMultiplePaymentMethods: paymentMethods.length > 1,
-          itemCount: transactionItems.reduce((sum, item) => sum + item.quantity, 0),
+          itemCount: transactionItems.reduce(
+            (sum, item) => sum + item.quantity,
+            0,
+          ),
           paymentMethod: transaction.paymentMethod ?? paymentMethods[0] ?? null,
+          status: transaction.status,
           total: transaction.total,
           transactionNumber: transaction.transactionNumber,
+          voidedAt: transaction.voidedAt ?? null,
           workflowTraceId: transaction.workflowTraceId ?? null,
         };
       }),
@@ -956,7 +881,7 @@ export const getRegisterSessionSnapshot = query({
       timeline: timeline.map((event) => ({
         _id: event._id,
         actorStaffName: event.actorStaffProfileId
-          ? staffNamesById.get(event.actorStaffProfileId) ?? null
+          ? (staffNamesById.get(event.actorStaffProfileId) ?? null)
           : null,
         createdAt: event.createdAt,
         eventType: event.eventType,
@@ -982,7 +907,7 @@ export const recordRegisterSessionDeposit = mutation({
   returns: registerSessionDepositResultValidator,
   handler: async (
     ctx,
-    args
+    args,
   ): Promise<CommandResult<RecordRegisterSessionDepositResult>> => {
     let athenaUserId: Id<"athenaUser">;
     try {
@@ -1037,7 +962,10 @@ export const recordRegisterSessionDeposit = mutation({
       });
     }
 
-    const registerSession = await ctx.db.get("registerSession", args.registerSessionId);
+    const registerSession = await ctx.db.get(
+      "registerSession",
+      args.registerSessionId,
+    );
 
     if (!registerSession || registerSession.storeId !== args.storeId) {
       return userError({
@@ -1053,7 +981,10 @@ export const recordRegisterSessionDeposit = mutation({
     const existingDeposit = await ctx.db
       .query("paymentAllocation")
       .withIndex("by_storeId_target", (q) =>
-        q.eq("storeId", args.storeId).eq("targetType", CASH_DEPOSIT_SUBJECT_TYPE).eq("targetId", targetId)
+        q
+          .eq("storeId", args.storeId)
+          .eq("targetType", CASH_DEPOSIT_SUBJECT_TYPE)
+          .eq("targetId", targetId),
       )
       .first();
 
@@ -1088,10 +1019,13 @@ export const recordRegisterSessionDeposit = mutation({
       targetId,
       targetType: CASH_DEPOSIT_SUBJECT_TYPE,
     });
-    const updatedRegisterSession = await recordRegisterSessionDepositWithCtx(ctx, {
-      amount: storedAmount,
-      registerSessionId: args.registerSessionId,
-    });
+    const updatedRegisterSession = await recordRegisterSessionDepositWithCtx(
+      ctx,
+      {
+        amount: storedAmount,
+        registerSessionId: args.registerSessionId,
+      },
+    );
 
     if (!updatedRegisterSession) {
       return userError({
@@ -1184,8 +1118,10 @@ export const resolveRegisterSessionSyncReview = mutation({
       });
     }
 
-    const conflictsBySessionId =
-      await listOpenLocalSyncConflictsByRegisterSession(ctx, args.storeId);
+    const conflictsBySessionId = await listRegisterSessionSyncReviewConflicts(
+      ctx,
+      args.storeId,
+    );
     const conflicts = conflictsBySessionId.get(args.registerSessionId) ?? [];
     if (conflicts.length === 0) {
       return ok({
@@ -1239,18 +1175,31 @@ export const resolveRegisterSessionSyncReview = mutation({
       const shouldApplyReviewedSale =
         syncEvent.eventType === "sale_completed" &&
         (!conflict.localRegisterSessionId ||
-          syncEvent.localRegisterSessionId === conflict.localRegisterSessionId) &&
+          syncEvent.localRegisterSessionId ===
+            conflict.localRegisterSessionId) &&
         conflict.conflictType === "permission" &&
         conflict.summary === "Register was not open before this sale synced.";
       const shouldApplyReviewedCloseout =
         syncEvent.eventType === "register_closed" &&
         (!conflict.localRegisterSessionId ||
-          syncEvent.localRegisterSessionId === conflict.localRegisterSessionId) &&
+          syncEvent.localRegisterSessionId ===
+            conflict.localRegisterSessionId) &&
         conflict.conflictType === "permission" &&
         conflict.summary ===
           "Register closeout variance requires manager review before synced closeout can be applied.";
 
       if (!shouldApplyReviewedSale && !shouldApplyReviewedCloseout) {
+        if (
+          syncEvent.eventType === "register_closed" &&
+          conflict.summary === CLOSED_REGISTER_SYNCED_CLOSEOUT_SUMMARY
+        ) {
+          return userError({
+            code: "precondition_failed",
+            message:
+              "This synced closeout cannot be applied because the register is already closed. Reject the synced activity to discard it.",
+          });
+        }
+
         return userError({
           code: "precondition_failed",
           message:
@@ -1355,13 +1304,13 @@ export const resolveRegisterSessionSyncReview = mutation({
             ? projectedCloseoutCount === 1
               ? "Applied reviewed synced register closeout."
               : `Applied ${projectedCloseoutCount} reviewed synced register closeouts.`
-          : projectedTransactionIds.length === 0
-          ? conflicts.length === 1
-            ? "Resolved synced register review."
-            : `Resolved ${conflicts.length} synced register reviews.`
-          : projectedTransactionIds.length === 1
-            ? "Applied reviewed synced register sale."
-            : `Applied ${projectedTransactionIds.length} reviewed synced register sales.`,
+            : projectedTransactionIds.length === 0
+              ? conflicts.length === 1
+                ? "Resolved synced register review."
+                : `Resolved ${conflicts.length} synced register reviews.`
+              : projectedTransactionIds.length === 1
+                ? "Applied reviewed synced register sale."
+                : `Applied ${projectedTransactionIds.length} reviewed synced register sales.`,
       metadata: {
         conflictIds: conflicts.map((conflict) => conflict._id),
         conflictTypes: conflicts.map((conflict) => conflict.conflictType),
@@ -1379,7 +1328,10 @@ export const resolveRegisterSessionSyncReview = mutation({
 
     return ok({
       action: decision === "rejected" ? "rejected" : "resolved",
-      registerSession: await ctx.db.get("registerSession", args.registerSessionId),
+      registerSession: await ctx.db.get(
+        "registerSession",
+        args.registerSessionId,
+      ),
       projectedCount: projectedTransactionIds.length,
       resolvedCount: conflicts.length,
     });

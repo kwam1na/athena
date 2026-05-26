@@ -26,16 +26,19 @@ import { Label } from "~/src/components/ui/label";
 import View from "~/src/components/View";
 
 const skuActivitySearchSchema = z.object({
+  o: z.string().optional(),
   productSkuId: z.string().optional(),
   sku: z.string().optional(),
 });
 
 function SkuActivityRouteContent({
   productSkuId,
+  showBackButton,
   sku,
   storeId,
 }: {
   productSkuId?: string;
+  showBackButton: boolean;
   sku?: string;
   storeId: Id<"store">;
 }) {
@@ -91,6 +94,7 @@ function SkuActivityRouteContent({
             eyebrow="Store Ops"
             title="SKU activity"
             description="Inspect current stock, active reservations, and source-linked activity for a SKU."
+            showBackButton={showBackButton}
           />
 
           <form
@@ -129,11 +133,13 @@ function SkuActivityRouteContent({
 export function SkuActivityRouteShell({
   orgUrlSlug,
   productSkuId,
+  showBackButton = false,
   sku,
   storeUrlSlug,
 }: {
   orgUrlSlug: string;
   productSkuId?: string;
+  showBackButton?: boolean;
   sku?: string;
   storeUrlSlug: string;
 }) {
@@ -186,6 +192,7 @@ export function SkuActivityRouteShell({
   return (
     <SkuActivityRouteContent
       productSkuId={productSkuId}
+      showBackButton={showBackButton}
       sku={sku}
       storeId={store._id}
     />
@@ -194,12 +201,13 @@ export function SkuActivityRouteShell({
 
 function SkuActivityRoute() {
   const { orgUrlSlug, storeUrlSlug } = Route.useParams();
-  const { productSkuId, sku } = Route.useSearch();
+  const { o, productSkuId, sku } = Route.useSearch();
 
   return (
     <SkuActivityRouteShell
       orgUrlSlug={orgUrlSlug}
       productSkuId={productSkuId}
+      showBackButton={typeof o === "string" && o.length > 0}
       sku={sku}
       storeUrlSlug={storeUrlSlug}
     />

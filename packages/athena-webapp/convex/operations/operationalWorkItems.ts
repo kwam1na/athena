@@ -18,7 +18,7 @@ const OPEN_WORK_ITEM_STATUSES = ["open", "in_progress"] as const;
 const REGISTER_SYNC_REVIEW_REQUEST_TYPE = "register_sync_review";
 const REGISTER_SYNC_REVIEW_SUBJECT_TYPE = "register_session_sync_review";
 
-function itemAdjustmentTransactionId(request: Doc<"approvalRequest">) {
+function approvalRequestTransactionId(request: Doc<"approvalRequest">) {
   if (
     request.requestType === "pos_item_adjustment" ||
     request.requestType === "pos_item_adjustment_review"
@@ -28,6 +28,13 @@ function itemAdjustmentTransactionId(request: Doc<"approvalRequest">) {
 
   if (
     request.requestType === "payment_method_correction" &&
+    request.subjectType === "pos_transaction"
+  ) {
+    return request.subjectId as Id<"posTransaction">;
+  }
+
+  if (
+    request.requestType === "pos_transaction_void" &&
     request.subjectType === "pos_transaction"
   ) {
     return request.subjectId as Id<"posTransaction">;
@@ -286,7 +293,7 @@ export const getQueueSnapshot = query({
         workItemIds.add(request.workItemId);
       }
 
-      const transactionId = itemAdjustmentTransactionId(request);
+      const transactionId = approvalRequestTransactionId(request);
       if (transactionId) {
         posTransactionIds.add(transactionId);
       }
@@ -416,7 +423,7 @@ export const getQueueSnapshot = query({
     );
 
     const mappedApprovalRequests = approvalRequests.map((request) => {
-        const linkedTransactionId = itemAdjustmentTransactionId(request);
+        const linkedTransactionId = approvalRequestTransactionId(request);
         const linkedTransaction = linkedTransactionId
           ? posTransactionMap.get(linkedTransactionId)
           : null;

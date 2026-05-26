@@ -568,7 +568,7 @@ function completedTransactionLabel(transaction: { transactionNumber: string }) {
 
 function buildVoidApprovalRequirement(args: {
   approvalRequestId?: Id<"approvalRequest">;
-  reason: string;
+  reason?: string;
   transaction: {
     _id: Id<"posTransaction">;
     total: number;
@@ -601,7 +601,7 @@ function buildVoidApprovalRequirement(args: {
       },
     ],
     metadata: {
-      reason: args.reason,
+      ...(args.reason ? { reason: args.reason } : {}),
       total: args.transaction.total,
       transactionNumber: args.transaction.transactionNumber,
     },
@@ -640,7 +640,7 @@ async function createVoidApprovalRequest(
   args: {
     actorStaffProfileId?: Id<"staffProfile">;
     actorUserId?: Id<"athenaUser">;
-    reason: string;
+    reason?: string;
     transaction: NonNullable<Awaited<ReturnType<typeof getPosTransactionById>>>;
   },
 ) {
@@ -654,7 +654,7 @@ async function createVoidApprovalRequest(
         transactionNumber: args.transaction.transactionNumber,
         total: args.transaction.total,
       },
-      notes: args.reason,
+      ...(args.reason ? { notes: args.reason } : {}),
       organizationId: store?.organizationId,
       posTransactionId: args.transaction._id,
       reason: "Manager approval is required to void a completed sale.",
@@ -684,7 +684,7 @@ async function createVoidApprovalRequest(
       total: args.transaction.total,
     },
     posTransactionId: args.transaction._id,
-    reason: args.reason,
+    ...(args.reason ? { reason: args.reason } : {}),
     registerSessionId: args.transaction.registerSessionId,
     storeId: args.transaction.storeId,
     subjectId: args.transaction._id,
@@ -918,7 +918,7 @@ async function applyApprovedTransactionVoid(
       item: Awaited<ReturnType<typeof listTransactionItems>>[number];
       sku: NonNullable<Awaited<ReturnType<typeof getProductSkuById>>>;
     }>;
-    reason: string;
+    reason?: string;
     requesterStaffProfileId?: Id<"staffProfile">;
     requesterUserId?: Id<"athenaUser">;
     reviewerUserId?: Id<"athenaUser">;
@@ -951,7 +951,7 @@ async function applyApprovedTransactionVoid(
       transactionNumber: args.transaction.transactionNumber,
     },
     posTransactionId: args.transaction._id,
-    reason: args.reason,
+    ...(args.reason ? { reason: args.reason } : {}),
     registerSessionId,
     storeId: args.transaction.storeId,
     subjectId: args.transaction._id,
@@ -1065,7 +1065,7 @@ async function applyApprovedTransactionVoid(
       transactionNumber: args.transaction.transactionNumber,
     },
     posTransactionId: args.transaction._id,
-    reason: args.reason,
+    ...(args.reason ? { reason: args.reason } : {}),
     registerSessionId: args.transaction.registerSessionId,
     storeId: args.transaction.storeId,
     subjectId: args.transaction._id,
@@ -1107,7 +1107,7 @@ export async function voidTransaction(
     approvalProofId?: Id<"approvalProof">;
     approvalRequestId?: Id<"approvalRequest">;
     transactionId: Id<"posTransaction">;
-    reason: string;
+    reason?: string;
     staffProfileId?: Id<"staffProfile">;
   },
 ): Promise<ApprovalCommandResult<VoidTransactionResult>> {
@@ -1120,13 +1120,7 @@ export async function voidTransaction(
     });
   }
 
-  const reason = args.reason.trim();
-  if (!reason) {
-    return userError({
-      code: "validation_failed",
-      message: "Reason is required to void a completed sale.",
-    });
-  }
+  const reason = args.reason?.trim() || undefined;
 
   const preconditions = await validateTransactionVoidPreconditions(
     ctx,
@@ -1285,10 +1279,9 @@ export async function resolveTransactionVoidApprovalDecisionWithCtx(
     approverStaffProfileId: args.reviewedByStaffProfileId,
     items: preconditions.data.items,
     reason:
-      args.decisionNotes ??
-      approvalRequest.notes ??
-      approvalRequest.reason ??
-      "Manager approved completed sale void.",
+      args.decisionNotes?.trim() ||
+      approvalRequest.notes?.trim() ||
+      undefined,
     requesterStaffProfileId: approvalRequest.requestedByStaffProfileId,
     requesterUserId: approvalRequest.requestedByUserId,
     reviewerUserId: args.reviewedByUserId,

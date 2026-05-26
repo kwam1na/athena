@@ -9,6 +9,7 @@ const stockAdjustmentSearchSchema = z.object({
     .enum(["all", "all_available", "changed", "unavailable"])
     .optional(),
   mode: z.enum(["cycle_count", "manual"]).optional(),
+  o: z.string().optional(),
   page: z.coerce.number().int().positive().optional(),
   query: z.string().optional(),
   scope: z.string().optional(),

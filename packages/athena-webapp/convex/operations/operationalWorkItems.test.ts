@@ -121,6 +121,70 @@ describe("getQueueSnapshot", () => {
     ]);
   });
 
+  it("links completed sale void approvals to the transaction summary", async () => {
+    const approvalRequest = {
+      _id: "approval-void-1" as Id<"approvalRequest">,
+      createdAt: 10,
+      requestType: "pos_transaction_void",
+      requestedByStaffProfileId: "staff-1" as Id<"staffProfile">,
+      status: "pending",
+      storeId: "store-1" as Id<"store">,
+      subjectId: "txn-void-1" as Id<"posTransaction">,
+      subjectType: "pos_transaction",
+    };
+    const ctx = {
+      db: {
+        get: vi.fn(async (tableName: string, id: string) => {
+          if (tableName === "store" && id === "store-1") {
+            return { _id: "store-1", organizationId: "org-1" };
+          }
+          if (tableName === "staffProfile" && id === "staff-1") {
+            return { _id: "staff-1", fullName: "Skank Hunt" };
+          }
+          if (tableName === "posTransaction" && id === "txn-void-1") {
+            return {
+              _id: "txn-void-1",
+              completedAt: 1,
+              paymentMethod: "cash",
+              total: 396000,
+              totalPaid: 396000,
+              transactionNumber: "158503",
+            };
+          }
+          return null;
+        }),
+        query: vi.fn((tableName: string) => ({
+          withIndex: vi.fn(() => ({
+            take: vi.fn(async () => {
+              if (tableName === "approvalRequest") {
+                return [approvalRequest];
+              }
+              return [];
+            }),
+          })),
+        })),
+      },
+    };
+
+    const result = await getHandler(getQueueSnapshot)(ctx, {
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(result.approvalRequests).toEqual([
+      expect.objectContaining({
+        _id: "approval-void-1",
+        requestType: "pos_transaction_void",
+        requestedByStaffName: "Skank Hunt",
+        transactionSummary: expect.objectContaining({
+          paymentMethod: "cash",
+          total: 396000,
+          transactionId: "txn-void-1",
+          transactionNumber: "158503",
+        }),
+      }),
+    ]);
+  });
+
   it("surfaces register sync conflicts as pending approval work", async () => {
     const ctx = {
       db: {

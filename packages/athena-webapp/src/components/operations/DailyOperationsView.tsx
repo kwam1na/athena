@@ -7,7 +7,9 @@ import {
 } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import {
+  Activity,
   ArrowUpRight,
+  Archive,
   Ban,
   Calendar as CalendarIcon,
   Check,
@@ -15,7 +17,9 @@ import {
   ChevronRight,
   CircleAlert,
   Clock3,
+  PackageSearch,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { getOrigin } from "@/lib/navigationUtils";
@@ -56,6 +60,34 @@ const useExpectedDailyOperationsQuery = useQuery as unknown as (
   query: unknown,
   args: unknown,
 ) => unknown;
+
+type OperationsWorkspaceLink = {
+  description: string;
+  icon: LucideIcon;
+  label: string;
+  to: string;
+};
+
+const SUPPORTING_OPERATIONS_WORKSPACE_LINKS: OperationsWorkspaceLink[] = [
+  {
+    description: "Review completed close records for prior store days.",
+    icon: Archive,
+    label: "Close history",
+    to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history",
+  },
+  {
+    description: "Count stock, record adjustments, and reconcile variance.",
+    icon: PackageSearch,
+    label: "Stock adjustments",
+    to: "/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments",
+  },
+  {
+    description: "Trace SKU movements across sales and stock operations.",
+    icon: Activity,
+    label: "SKU activity",
+    to: "/$orgUrlSlug/store/$storeUrlSlug/operations/sku-activity",
+  },
+];
 
 export type DailyOperationsLifecycleStatus =
   | "not_opened"
@@ -361,7 +393,9 @@ function shouldShowPrimaryAction(snapshot: DailyOperationsSnapshot) {
   return !isHistoricalOperatingDate(snapshot.operatingDate);
 }
 
-function shouldShowHistoricalEodReviewAction(snapshot: DailyOperationsSnapshot) {
+function shouldShowHistoricalEodReviewAction(
+  snapshot: DailyOperationsSnapshot,
+) {
   return (
     snapshot.lifecycle.status === "closed" &&
     isHistoricalOperatingDate(snapshot.operatingDate)
@@ -371,7 +405,7 @@ function shouldShowHistoricalEodReviewAction(snapshot: DailyOperationsSnapshot) 
 function getWorkflowSearch(to: string, operatingDate: string) {
   const search = {
     o: getOrigin(),
-    ...(to.includes("/operations/daily-close")
+    ...(to.endsWith("/operations/daily-close")
       ? buildDailyCloseSearch(operatingDate)
       : {}),
   };
@@ -637,6 +671,56 @@ function HistoricalWorkflowPanel({
   );
 }
 
+function SupportingWorkspaceLinks({
+  operatingDate,
+  orgUrlSlug,
+  storeUrlSlug,
+}: {
+  operatingDate: string;
+  orgUrlSlug: string;
+  storeUrlSlug: string;
+}) {
+  return (
+    <div
+      aria-labelledby="supporting-workspaces-heading"
+      className="border-t border-border/70 px-layout-md py-layout-md"
+    >
+      <div className="mt-layout-sm grid gap-layout-xs md:grid-cols-3">
+        {SUPPORTING_OPERATIONS_WORKSPACE_LINKS.map((workspace) => {
+          const Icon = workspace.icon;
+
+          return (
+            <Link
+              aria-label={`Open ${workspace.label} workspace`}
+              className="group flex min-w-0 items-start gap-layout-sm rounded-md border border-border/70 bg-background/60 px-layout-md py-layout-sm text-left transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              key={workspace.label}
+              params={buildParams(orgUrlSlug, storeUrlSlug)}
+              search={getWorkflowSearch(workspace.to, operatingDate) as never}
+              to={workspace.to}
+            >
+              <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted-foreground transition-colors group-hover:text-foreground">
+                <Icon aria-hidden="true" className="h-3.5 w-3.5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium text-foreground">
+                  {workspace.label}
+                </span>
+                <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">
+                  {workspace.description}
+                </span>
+              </span>
+              <ArrowUpRight
+                aria-hidden="true"
+                className="mt-1 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground"
+              />
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function OperatingDatePicker({
   disabled = false,
   latestSelectableDate: latestSelectableDateProp,
@@ -838,7 +922,9 @@ function WeekMetricsStrip({
                   {formatWeekdayDate(metric.operatingDate)}
                 </p>
                 <p className="mt-layout-sm font-numeric text-lg tabular-nums text-foreground">
-                  {isFutureDate ? "-" : formatMoney(currency, metric.salesTotal)}
+                  {isFutureDate
+                    ? "-"
+                    : formatMoney(currency, metric.salesTotal)}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {isFutureDate
@@ -1097,16 +1183,23 @@ export function DailyOperationsViewContent({
                           Workflow status
                         </h3>
                       </div>
-                      <div className="grid gap-layout-xs rounded-lg border border-border bg-surface-raised p-layout-sm shadow-surface md:grid-cols-2 xl:grid-cols-3">
-                        {snapshot.lanes.map((lane) => (
-                          <LaneCard
-                            key={lane.key}
-                            lane={lane}
-                            operatingDate={snapshot.operatingDate}
-                            orgUrlSlug={orgUrlSlug}
-                            storeUrlSlug={storeUrlSlug}
-                          />
-                        ))}
+                      <div className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface">
+                        <div className="grid gap-layout-xs p-layout-sm md:grid-cols-2 xl:grid-cols-3">
+                          {snapshot.lanes.map((lane) => (
+                            <LaneCard
+                              key={lane.key}
+                              lane={lane}
+                              operatingDate={snapshot.operatingDate}
+                              orgUrlSlug={orgUrlSlug}
+                              storeUrlSlug={storeUrlSlug}
+                            />
+                          ))}
+                        </div>
+                        <SupportingWorkspaceLinks
+                          operatingDate={snapshot.operatingDate}
+                          orgUrlSlug={orgUrlSlug}
+                          storeUrlSlug={storeUrlSlug}
+                        />
                       </div>
                     </section>
                   )}
@@ -1147,6 +1240,7 @@ export function DailyOperationsViewContent({
                   </section>
                 </PageWorkspaceRail>
               </PageWorkspaceGrid>
+
               <Sheet
                 open={isTimelineSheetOpen}
                 onOpenChange={setIsTimelineSheetOpen}

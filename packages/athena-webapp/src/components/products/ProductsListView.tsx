@@ -8,14 +8,18 @@ import { useState, useMemo } from "react";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
 import StoreProducts from "./StoreProducts";
-import { slugToWords } from "~/src/lib/utils";
-import { AlertTriangle, ArrowLeftIcon } from "lucide-react";
+import { capitalizeWords, slugToWords } from "~/src/lib/utils";
+import { AlertTriangle } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group";
-import { useNavigateBack } from "~/src/hooks/use-navigate-back";
 import { Button } from "../ui/button";
 import { useAction } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { toast } from "sonner";
+import {
+  PageLevelHeader,
+  PageWorkspace,
+  PageWorkspaceMain,
+} from "../common/PageLevelHeader";
 
 const ProductActionsToggleGroup = ({
   outOfStockProductsCount,
@@ -43,21 +47,17 @@ const ProductActionsToggleGroup = ({
   );
 };
 
-const Navigation = ({
-  categorySlug,
+const CategoryWorkspaceActions = ({
   outOfStockProductsCount,
   selectedProductActions,
   setSelectedProductActions,
   hasProducts,
 }: {
-  categorySlug: string;
   outOfStockProductsCount: number;
   selectedProductActions: string[];
   setSelectedProductActions: (actions: string[]) => void;
   hasProducts: boolean;
 }) => {
-  const navigateBack = useNavigateBack();
-  const { o } = useSearch({ strict: false });
   const clearAllCache = useAction(api.inventory.productUtil.clearAllCache);
   const [isClearCacheMutationPending, setIsClearCacheMutationPending] =
     useState(false);
@@ -67,7 +67,7 @@ const Navigation = ({
     try {
       await clearAllCache();
       toast.success("Cache cleared");
-    } catch (error) {
+    } catch {
       toast.error("Failed to clear cache");
     } finally {
       setIsClearCacheMutationPending(false);
@@ -75,17 +75,8 @@ const Navigation = ({
   };
 
   return (
-    <div className="container mx-auto flex gap-2">
-      <div className="flex items-center gap-8">
-        <div className="flex items-center gap-2">
-          {o && (
-            <Button variant="ghost" onClick={navigateBack}>
-              <ArrowLeftIcon className="w-4 h-4" />
-            </Button>
-          )}
-          <p className="font-medium capitalize">{slugToWords(categorySlug)}</p>
-        </div>
-
+    <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-wrap items-center gap-2">
         {outOfStockProductsCount > 0 && (
           <ProductActionsToggleGroup
             outOfStockProductsCount={outOfStockProductsCount}
@@ -93,7 +84,9 @@ const Navigation = ({
             setSelectedProductActions={setSelectedProductActions}
           />
         )}
+      </div>
 
+      <div className="flex flex-wrap items-center gap-2">
         {hasProducts && (
           <Button
             variant="ghost"
@@ -109,7 +102,7 @@ const Navigation = ({
 };
 
 function Body() {
-  const { categorySlug } = useSearch({ strict: false });
+  const { categorySlug, o } = useSearch({ strict: false });
   const { productsTableState } = useProductsTableState();
   const { subcategorySlug } = productsTableState;
 
@@ -136,23 +129,27 @@ function Body() {
   if (!filteredProducts) return null;
 
   return (
-    <View
-      hideBorder
-      hideHeaderBottomBorder
-      header={
-        categorySlug && (
-          <Navigation
-            categorySlug={categorySlug}
-            outOfStockProductsCount={outOfStockProducts?.length || 0}
-            selectedProductActions={selectedProductActions}
-            setSelectedProductActions={setSelectedProductActions}
-            hasProducts={filteredProducts.length != 0}
+    <View hideBorder hideHeaderBottomBorder scrollMode="page">
+      <FadeIn className="container mx-auto py-layout-xl">
+        <PageWorkspace>
+          <PageLevelHeader
+            eyebrow="Catalog Ops"
+            title={capitalizeWords(slugToWords(categorySlug ?? "Products"))}
+            showBackButton={Boolean(o)}
           />
-        )
-      }
-    >
-      <FadeIn>
-        <StoreProducts products={filteredProducts} />
+
+          <PageWorkspaceMain>
+            {categorySlug ? (
+              <CategoryWorkspaceActions
+                outOfStockProductsCount={outOfStockProducts?.length || 0}
+                selectedProductActions={selectedProductActions}
+                setSelectedProductActions={setSelectedProductActions}
+                hasProducts={filteredProducts.length != 0}
+              />
+            ) : null}
+            <StoreProducts products={filteredProducts} />
+          </PageWorkspaceMain>
+        </PageWorkspace>
       </FadeIn>
     </View>
   );

@@ -69,11 +69,14 @@ import { WorkflowTraceRouteLink } from "../traces/WorkflowTraceRouteLink";
 import {
   buildPosSyncStatusPresentation,
   formatPosReconciliationType,
+  isRegisterCloseoutReviewItem,
   type PosReconciliationItem,
   type PosSyncStatusPresentation,
 } from "@/lib/pos/presentation/syncStatusPresentation";
 
 const LINKED_TRANSACTIONS_PREVIEW_LIMIT = 5;
+const CLOSED_REGISTER_SYNCED_CLOSEOUT_SUMMARY =
+  "register session is not open for synced pos closeout";
 
 type RegisterSessionApprovalRequest = {
   _id: string;
@@ -134,8 +137,10 @@ type RegisterSessionTransaction = {
   hasMultiplePaymentMethods?: boolean;
   itemCount: number;
   paymentMethod?: string | null;
+  status?: "completed" | "void" | string | null;
   total: number;
   transactionNumber: string;
+  voidedAt?: number | null;
   workflowTraceId?: string | null;
 };
 
@@ -472,6 +477,10 @@ function formatReviewItemActivity(item: PosReconciliationItem) {
   const localEventId = item.localEventId?.toLowerCase() ?? "";
   const summary = item.summary?.toLowerCase() ?? "";
 
+  if (isRegisterCloseoutReviewItem(item)) {
+    return "Register closeout with variance came from local register activity.";
+  }
+
   if (localEventId.includes("sale-completed")) {
     if (item.type === "permission" && summary.includes("not open")) {
       return "Sale completed while Athena did not have this register open.";
@@ -484,7 +493,10 @@ function formatReviewItemActivity(item: PosReconciliationItem) {
     return "Register opening came from local register activity.";
   }
 
-  if (localEventId.includes("register-closed")) {
+  if (
+    localEventId.includes("register-closed") ||
+    localEventId.includes("register-closeout")
+  ) {
     return "Register closeout came from local register activity.";
   }
 
@@ -495,12 +507,20 @@ function formatReviewItemActivity(item: PosReconciliationItem) {
   return "Local register activity needs review before it is treated as settled.";
 }
 
+function isClosedRegisterSyncedCloseoutReviewItem(item: PosReconciliationItem) {
+  const summary = item.summary?.trim().toLowerCase() ?? "";
+
+  return summary.includes(CLOSED_REGISTER_SYNCED_CLOSEOUT_SUMMARY);
+}
+
 function RegisterSessionSyncNotice({
+  currency,
   errorMessage,
   isResolving,
   onReviewDecision,
   syncStatus,
 }: {
+  currency: string;
   errorMessage?: string;
   isResolving?: boolean;
   onReviewDecision?: (decision: "approved" | "rejected") => void;
@@ -511,6 +531,42 @@ function RegisterSessionSyncNotice({
   }
 
   const reconciliationItems = syncStatus.reconciliationItems;
+  const hasClosedRegisterSyncedCloseout = reconciliationItems.some(
+    isClosedRegisterSyncedCloseoutReviewItem,
+  );
+  const hasCloseoutReview = reconciliationItems.some(
+    isRegisterCloseoutReviewItem,
+  );
+  const noticeLabel = hasClosedRegisterSyncedCloseout
+    ? "Synced closeout cannot be applied"
+    : syncStatus.status === "locally_closed_pending_sync"
+      ? "Pending reconciliation"
+      : hasCloseoutReview
+        ? "Closeout needs review"
+        : syncStatus.label;
+  const noticeDescription = hasClosedRegisterSyncedCloseout
+    ? "This register is already closed. Reject the duplicate synced activity to clear the review."
+    : syncStatus.description;
+  const approveLabel = hasCloseoutReview
+    ? "Approve synced closeout"
+    : "Approve synced sales";
+  const rejectLabel = hasCloseoutReview
+    ? "Reject synced closeout"
+    : "Reject synced activity";
+  const closeoutReviewItem = hasCloseoutReview
+    ? reconciliationItems.find(isRegisterCloseoutReviewItem)
+    : null;
+  const reviewItems = hasCloseoutReview
+    ? closeoutReviewItem
+      ? [closeoutReviewItem]
+      : []
+    : reconciliationItems;
+  const closeoutVariance = closeoutReviewItem?.variance ?? null;
+  const closeoutSummary =
+    typeof closeoutVariance === "number"
+      ? `Variance: ${formatCurrency(currency, closeoutVariance)}.`
+      : "Variance needs review.";
+  const canApproveSyncReview = !hasClosedRegisterSyncedCloseout;
 
   return (
     <section
@@ -527,22 +583,23 @@ function RegisterSessionSyncNotice({
               syncStatus.tone === "danger" ? "text-danger" : "text-warning"
             }`}
           >
-            {syncStatus.status === "locally_closed_pending_sync"
-              ? "Pending reconciliation"
-              : syncStatus.label}
+            {noticeLabel}
           </p>
           <p className="text-sm leading-6 text-muted-foreground">
-            {syncStatus.description}
+            {noticeDescription}
           </p>
           {syncStatus.status === "needs_review" &&
           reconciliationItems.length > 0 ? (
             <div className="space-y-2 pt-layout-xs">
-              <p className="text-xs font-medium text-foreground">
-                {formatReviewItemCount(reconciliationItems.length)}
-              </p>
+              {!hasCloseoutReview ? (
+                <p className="text-xs font-medium text-foreground">
+                  {formatReviewItemCount(reconciliationItems.length)}
+                </p>
+              ) : null}
               <div className="grid gap-2">
-                {reconciliationItems.map((item, index) => {
+                {reviewItems.map((item, index) => {
                   const reportedAt = formatReviewItemTimestamp(item.createdAt);
+                  const isCloseoutItem = isRegisterCloseoutReviewItem(item);
 
                   return (
                     <article
@@ -551,16 +608,23 @@ function RegisterSessionSyncNotice({
                     >
                       <div className="space-y-1">
                         <p className="text-sm font-medium text-foreground">
-                          {formatPosReconciliationType(item.type)}
+                          {isClosedRegisterSyncedCloseoutReviewItem(item)
+                            ? "Duplicate closeout"
+                            : formatPosReconciliationType(item.type, item)}
                         </p>
                         <p className="text-sm leading-6 text-muted-foreground">
-                          {item.summary?.trim() ||
-                            "Review synced register activity before closeout is settled."}
+                          {isClosedRegisterSyncedCloseoutReviewItem(item)
+                            ? "The synced closeout is from local activity for a register that is already closed."
+                            : isCloseoutItem
+                              ? closeoutSummary
+                              : item.summary?.trim() ||
+                                "Review synced register activity before closeout is settled."}
                         </p>
                       </div>
-                      {item.localEventId ||
-                      typeof item.sequence === "number" ||
-                      reportedAt ? (
+                      {!isCloseoutItem &&
+                      (item.localEventId ||
+                        typeof item.sequence === "number" ||
+                        reportedAt) ? (
                         <dl className="mt-layout-sm grid gap-layout-sm text-xs text-muted-foreground sm:grid-cols-3">
                           {item.localEventId ? (
                             <div className="min-w-0">
@@ -599,34 +663,34 @@ function RegisterSessionSyncNotice({
             </div>
           ) : null}
           {errorMessage ? (
-            <p className="text-sm leading-6 text-destructive">
-              {errorMessage}
-            </p>
+            <p className="text-sm leading-6 text-destructive">{errorMessage}</p>
           ) : null}
         </div>
         <div className="flex flex-wrap items-center justify-end gap-layout-sm">
           {syncStatus.status === "needs_review" && onReviewDecision ? (
             <>
-            <LoadingButton
-              className="border-border bg-background text-foreground hover:bg-muted"
-              disabled={isResolving}
-              isLoading={Boolean(isResolving)}
-              onClick={() => onReviewDecision("approved")}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              Approve synced sales
-            </LoadingButton>
-            <Button
-              disabled={isResolving}
-              onClick={() => onReviewDecision("rejected")}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              Reject synced activity
-            </Button>
+              {canApproveSyncReview ? (
+                <LoadingButton
+                  className="border-border bg-background text-foreground hover:bg-muted"
+                  disabled={isResolving}
+                  isLoading={Boolean(isResolving)}
+                  onClick={() => onReviewDecision("approved")}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  {approveLabel}
+                </LoadingButton>
+              ) : null}
+              <Button
+                disabled={isResolving}
+                onClick={() => onReviewDecision("rejected")}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                {rejectLabel}
+              </Button>
             </>
           ) : null}
           {syncStatus.status !== "needs_review" ? (
@@ -1186,11 +1250,11 @@ export function RegisterSessionViewContent({
             ? "Register review already resolved"
             : commandResult.data?.action === "rejected"
               ? "Synced register activity rejected"
-            : commandResult.data?.projectedCount
-              ? commandResult.data.projectedCount === 1
-                ? "Reviewed sale applied"
-                : `${commandResult.data.projectedCount} reviewed sales applied`
-              : "Register review resolved",
+              : commandResult.data?.projectedCount
+                ? commandResult.data.projectedCount === 1
+                  ? "Reviewed sale applied"
+                  : `${commandResult.data.projectedCount} reviewed sales applied`
+                : "Register review resolved",
         );
       } finally {
         setIsResolvingSyncReview(false);
@@ -1400,36 +1464,6 @@ export function RegisterSessionViewContent({
     }
   }
 
-  const closeoutStaffAuthCopy =
-    closeoutStaffAuthIntent?.kind === "review"
-      ? {
-          title: "Manager sign-in required",
-          description:
-            closeoutStaffAuthIntent.decision === "approved"
-              ? "Authenticate to approve variance"
-              : "Authenticate to reject variance",
-          submitLabel:
-            closeoutStaffAuthIntent.decision === "approved"
-              ? "Approve variance"
-              : "Reject variance",
-        }
-      : closeoutStaffAuthIntent?.kind === "sync_review"
-        ? {
-            title: "Manager sign-in required",
-            description:
-              closeoutStaffAuthIntent.decision === "approved"
-                ? "Authenticate to approve and apply reviewed synced sales"
-                : "Authenticate to reject reviewed synced activity",
-            submitLabel:
-              closeoutStaffAuthIntent.decision === "approved"
-                ? "Approve synced sales"
-                : "Reject synced activity",
-          }
-      : {
-          title: "Closeout sign-in required",
-          description: "Authenticate to submit closeout",
-          submitLabel: "Submit closeout",
-        };
   const transactions = registerSessionSnapshot?.transactions ?? [];
   const previewTransactions = transactions.slice(
     0,
@@ -1485,6 +1519,62 @@ export function RegisterSessionViewContent({
       registerSession?.reconciliationItems ??
       [],
   });
+  const isRegisterCloseoutSyncReview =
+    syncStatus.status === "needs_review" &&
+    syncStatus.reconciliationItems.some(isRegisterCloseoutReviewItem);
+  const pendingCloseoutReviewItem = isRegisterCloseoutSyncReview
+    ? syncStatus.reconciliationItems.find(isRegisterCloseoutReviewItem)
+    : undefined;
+  const displayedExpectedCash =
+    typeof pendingCloseoutReviewItem?.expectedCash === "number"
+      ? pendingCloseoutReviewItem.expectedCash
+      : expectedCash;
+  const displayedCountedCash =
+    typeof pendingCloseoutReviewItem?.countedCash === "number"
+      ? pendingCloseoutReviewItem.countedCash
+      : registerSession?.countedCash;
+  const displayedVariance =
+    typeof pendingCloseoutReviewItem?.variance === "number"
+      ? pendingCloseoutReviewItem.variance
+      : registerSession?.variance;
+  const closeoutStaffAuthCopy =
+    closeoutStaffAuthIntent?.kind === "review"
+      ? {
+          title: "Manager sign-in required",
+          description:
+            closeoutStaffAuthIntent.decision === "approved"
+              ? "Authenticate to approve variance"
+              : "Authenticate to reject variance",
+          submitLabel:
+            closeoutStaffAuthIntent.decision === "approved"
+              ? "Approve variance"
+              : "Reject variance",
+        }
+      : closeoutStaffAuthIntent?.kind === "sync_review"
+        ? {
+            title: "Manager sign-in required",
+            description:
+              closeoutStaffAuthIntent.decision === "approved"
+                ? isRegisterCloseoutSyncReview
+                  ? "Authenticate to approve and apply the synced closeout"
+                  : "Authenticate to approve and apply reviewed synced sales"
+                : isRegisterCloseoutSyncReview
+                  ? "Authenticate to reject the synced closeout"
+                  : "Authenticate to reject reviewed synced activity",
+            submitLabel:
+              closeoutStaffAuthIntent.decision === "approved"
+                ? isRegisterCloseoutSyncReview
+                  ? "Approve synced closeout"
+                  : "Approve synced sales"
+                : isRegisterCloseoutSyncReview
+                  ? "Reject synced closeout"
+                  : "Reject synced activity",
+          }
+        : {
+            title: "Closeout sign-in required",
+            description: "Authenticate to submit closeout",
+            submitLabel: "Submit closeout",
+          };
   const canResolveSyncReview =
     syncStatus.status === "needs_review" && Boolean(onResolveSyncReview);
   const headerTerminalName = registerSession?.terminalName?.trim();
@@ -1511,8 +1601,9 @@ export function RegisterSessionViewContent({
     transactions.length === 1
       ? "1 linked sale"
       : `${transactions.length} linked sales`;
-  const closeoutState =
-    registerSession?.status === "closed"
+  const closeoutState = isRegisterCloseoutSyncReview
+    ? "Closeout review pending"
+    : registerSession?.status === "closed"
       ? "Closed"
       : registerSession?.status === "closing"
         ? needsCloseoutCorrection
@@ -1526,18 +1617,24 @@ export function RegisterSessionViewContent({
     registerSession?.status === "closed" && registerSession.closedAt
       ? formatTimestamp(registerSession.closedAt)
       : undefined;
-  const closeoutActorLine =
-    registerSession?.status === "closed"
+  const closeoutActorLine = isRegisterCloseoutSyncReview
+    ? "Synced closeout not applied yet; manager approval is required."
+    : registerSession?.status === "closed"
       ? registerSession.closedByStaffName
         ? `By ${formatStaffDisplayName({ fullName: registerSession.closedByStaffName })}`
         : "Staff not recorded"
       : undefined;
   const canCorrectOpeningFloat =
-    registerSession?.status === "open" || registerSession?.status === "active";
+    !isRegisterCloseoutSyncReview &&
+    (registerSession?.status === "open" ||
+      registerSession?.status === "active");
   const showOpeningFloatCorrectionUnavailable =
     registerSession &&
     !canCorrectOpeningFloat &&
     registerSession.status !== "closed";
+  const openingFloatCorrectionUnavailableMessage = isRegisterCloseoutSyncReview
+    ? "Opening float corrections are unavailable while synced closeout review is pending."
+    : "Opening float corrections are available before closeout starts.";
   const correctedOpeningFloatAmount = parseDisplayAmountInput(
     correctedOpeningFloat,
   );
@@ -1570,6 +1667,13 @@ export function RegisterSessionViewContent({
   const closeoutFollowUpMessage = needsCloseoutCorrection
     ? "Manager rejected this closeout. Recount or correct the drawer before submitting again."
     : formattedApprovalReason;
+  const registerStatusLabel = isRegisterCloseoutSyncReview
+    ? "Closeout review pending"
+    : registerSession
+      ? formatStatusLabel(registerSession.status)
+      : "";
+  const shouldShowHeaderSyncBadge =
+    syncStatus.status !== "synced" && !isRegisterCloseoutSyncReview;
   const shouldShowProminentCorrectionPanel =
     Boolean(registerSession) &&
     (isOpeningFloatCorrectionOpen ||
@@ -1705,9 +1809,9 @@ export function RegisterSessionViewContent({
                     size="sm"
                     variant="outline"
                   >
-                    {formatStatusLabel(registerSession.status)}
+                    {registerStatusLabel}
                   </Badge>
-                  {syncStatus.status !== "synced" ? (
+                  {shouldShowHeaderSyncBadge ? (
                     <Badge
                       className={getSyncBadgeClass(syncStatus.tone)}
                       size="sm"
@@ -1860,6 +1964,7 @@ export function RegisterSessionViewContent({
         <div className="container mx-auto space-y-6 p-6">
           {registerSession ? (
             <RegisterSessionSyncNotice
+              currency={currency}
               errorMessage={syncReviewErrorMessage}
               isResolving={isResolvingSyncReview}
               onReviewDecision={
@@ -1896,7 +2001,7 @@ export function RegisterSessionViewContent({
                           Expected cash
                         </span>
                         <span className="block font-numeric tabular-nums text-3xl text-foreground">
-                          {formatCurrency(currency, expectedCash)}
+                          {formatCurrency(currency, displayedExpectedCash)}
                         </span>
                       </dd>
                       <div className="mt-layout-md divide-y divide-border/70 rounded-md border border-border/70 bg-muted/10">
@@ -1916,10 +2021,7 @@ export function RegisterSessionViewContent({
                             Counted
                           </dt>
                           <dd className="font-numeric tabular-nums text-sm text-foreground">
-                            {formatCurrency(
-                              currency,
-                              registerSession.countedCash,
-                            )}
+                            {formatCurrency(currency, displayedCountedCash)}
                           </dd>
                         </div>
                         <div className="flex items-center justify-between gap-layout-md px-3 py-2.5">
@@ -1938,12 +2040,9 @@ export function RegisterSessionViewContent({
                             Variance
                           </dt>
                           <dd
-                            className={`font-numeric tabular-nums text-sm ${getVarianceTone(registerSession.variance)}`}
+                            className={`font-numeric tabular-nums text-sm ${getVarianceTone(displayedVariance)}`}
                           >
-                            {formatCurrency(
-                              currency,
-                              registerSession.variance ?? 0,
-                            )}
+                            {formatCurrency(currency, displayedVariance ?? 0)}
                           </dd>
                         </div>
                       </div>
@@ -1969,8 +2068,7 @@ export function RegisterSessionViewContent({
                             </Button>
                           ) : (
                             <p className="text-xs leading-relaxed text-muted-foreground">
-                              Opening float corrections are available before
-                              closeout starts.
+                              {openingFloatCorrectionUnavailableMessage}
                             </p>
                           )}
                         </div>
@@ -2378,6 +2476,9 @@ export function RegisterSessionViewContent({
                               paymentMethod: transaction.paymentMethod,
                             });
                             const transactionLabel = `#${transaction.transactionNumber}`;
+                            const isVoidedTransaction =
+                              transaction.status === "void" ||
+                              typeof transaction.voidedAt === "number";
                             const canOpenTransaction = Boolean(
                               orgUrlSlug && storeUrlSlug,
                             );
@@ -2441,6 +2542,11 @@ export function RegisterSessionViewContent({
                                   <div className="flex flex-col gap-1">
                                     <span className="inline-flex w-fit items-center gap-1 font-medium text-foreground group-hover:text-primary">
                                       {transactionLabel}
+                                      {isVoidedTransaction ? (
+                                        <span className="rounded-sm border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 text-xs font-medium text-destructive">
+                                          Voided
+                                        </span>
+                                      ) : null}
                                       {canOpenTransaction ? (
                                         <ArrowUpRight className="h-3.5 w-3.5" />
                                       ) : null}
@@ -2593,15 +2699,49 @@ export function RegisterSessionViewContent({
                       Closeout workflow
                     </p>
                     <h2 className="font-display text-xl font-semibold text-foreground">
-                      Count and close drawer
+                      {isRegisterCloseoutSyncReview
+                        ? "Closeout review pending"
+                        : "Count and close drawer"}
                     </h2>
                     <p className="text-sm text-muted-foreground">
-                      Submit the cash count, then resolve any variance approval
-                      before closing.
+                      {isRegisterCloseoutSyncReview
+                        ? "Synced count is waiting for review."
+                        : "Submit the cash count, then resolve any variance approval before closing."}
                     </p>
                   </div>
 
-                  {registerSession?.status === "closed" ? (
+                  {isRegisterCloseoutSyncReview ? (
+                    <div className="rounded-lg border border-border bg-muted/20 p-4">
+                      <dl className="grid gap-3 text-sm sm:grid-cols-3">
+                        <div className="space-y-1">
+                          <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                            Expected
+                          </dt>
+                          <dd className="font-numeric tabular-nums text-foreground">
+                            {formatCurrency(currency, displayedExpectedCash)}
+                          </dd>
+                        </div>
+                        <div className="space-y-1">
+                          <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                            Counted
+                          </dt>
+                          <dd className="font-numeric tabular-nums text-foreground">
+                            {formatCurrency(currency, displayedCountedCash)}
+                          </dd>
+                        </div>
+                        <div className="space-y-1">
+                          <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                            Variance
+                          </dt>
+                          <dd
+                            className={`font-numeric tabular-nums ${getVarianceTone(displayedVariance ?? undefined)}`}
+                          >
+                            {formatCurrency(currency, displayedVariance ?? 0)}
+                          </dd>
+                        </div>
+                      </dl>
+                    </div>
+                  ) : registerSession?.status === "closed" ? (
                     <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-sm font-medium text-foreground">

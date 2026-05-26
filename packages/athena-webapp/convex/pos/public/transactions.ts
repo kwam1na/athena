@@ -428,7 +428,7 @@ export const voidTransaction = mutation({
     approvalRequestId: v.optional(v.id("approvalRequest")),
     approvalProofId: v.optional(v.id("approvalProof")),
     transactionId: v.id("posTransaction"),
-    reason: v.string(),
+    reason: v.optional(v.string()),
     staffProfileId: v.optional(v.id("staffProfile")),
     actorStaffProfileId: v.optional(v.id("staffProfile")),
     staffProofToken: v.string(),
@@ -441,13 +441,6 @@ export const voidTransaction = mutation({
       return userError({
         code: "authentication_failed",
         message: "Staff sign-in is required before voiding a completed sale.",
-      });
-    }
-
-    if (!args.reason.trim()) {
-      return userError({
-        code: "validation_failed",
-        message: "Reason is required to void a completed sale.",
       });
     }
 

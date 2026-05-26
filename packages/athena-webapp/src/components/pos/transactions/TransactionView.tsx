@@ -589,6 +589,18 @@ export function TransactionView() {
 
   const completedData = useMemo(() => {
     if (!transaction) return undefined;
+    const transactionRecord = transaction as typeof transaction & {
+      voidedAt?: number | null;
+    };
+    const receiptVoidedAt =
+      localVoidState?.result.voidedAt ?? transactionRecord.voidedAt ?? null;
+    const receiptStatus: "completed" | "voided" =
+      localVoidState ||
+      transaction.status === "void" ||
+      transaction.status === "voided" ||
+      typeof receiptVoidedAt === "number"
+        ? "voided"
+        : "completed";
     return {
       paymentMethod: transaction.paymentMethod || "cash",
       completedAt: transaction.completedAt,
@@ -598,6 +610,7 @@ export function TransactionView() {
         : transaction.subtotal,
       tax: transaction.tax,
       total: hasAppliedItemAdjustment ? effectiveSaleTotal : transaction.total,
+      status: receiptStatus,
       payments: transaction.payments.map(
         (
           payment: {
@@ -627,6 +640,7 @@ export function TransactionView() {
     effectiveSaleTotal,
     effectiveSubtotal,
     hasAppliedItemAdjustment,
+    localVoidState,
     transaction,
   ]);
 
@@ -791,7 +805,7 @@ export function TransactionView() {
       };
     }
 
-    if (pendingCorrection === "line_items") {
+    if (pendingCorrection === "line_items" || pendingCorrection === "void") {
       if (!transaction?.terminalId) {
         return {
           kind: "user_error" as const,
@@ -1129,10 +1143,6 @@ export function TransactionView() {
     }
 
     const reason = voidReason.trim();
-    if (!reason) {
-      setVoidError("Add a reason for this void");
-      return;
-    }
 
     if (!args?.staffProfileId) {
       setVoidError("Staff sign-in is required before voiding this sale");
@@ -1160,7 +1170,7 @@ export function TransactionView() {
                   actorStaffProfileId: Id<"staffProfile">;
                   approvalProofId?: Id<"approvalProof">;
                   approvalRequestId?: Id<"approvalRequest">;
-                  reason: string;
+                  reason?: string;
                   staffProofToken: string;
                   transactionId: Id<"posTransaction">;
                 }) => Promise<ApprovalCommandResult<TransactionVoidResultData>>
@@ -1170,7 +1180,7 @@ export function TransactionView() {
                   approvalArgs.approvalProofId ?? args.approvalProofId,
                 approvalRequestId:
                   approvalArgs.approvalRequestId ?? args.approvalRequestId,
-                reason,
+                ...(reason ? { reason } : {}),
                 staffProofToken,
                 transactionId: transactionId as Id<"posTransaction">,
               }),
@@ -1269,12 +1279,6 @@ export function TransactionView() {
 
   function requestVoidSubmit() {
     setVoidError(null);
-
-    if (!voidReason.trim()) {
-      setVoidError("Add a reason for this void");
-      return;
-    }
-
     setPendingCorrection("void");
   }
 
@@ -1532,7 +1536,7 @@ export function TransactionView() {
                       aria-label="Void reason"
                       className="min-h-[90px] border-input bg-background"
                       onChange={(event) => setVoidReason(event.target.value)}
-                      placeholder="Reason for voiding this completed sale."
+                      placeholder="Optional reason for voiding this completed sale."
                       value={voidReason}
                     />
                     {voidError ? (

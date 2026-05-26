@@ -97,7 +97,7 @@ describe("transactionColumns", () => {
   });
 
   it("marks voided completed transactions distinctly", () => {
-    renderTransactionCell({
+    const { container } = renderTransactionCell({
       _id: "txn_void" as CompletedTransactionRow["_id"],
       transactionNumber: "POS-VOID",
       formattedTotal: "GHc 10.00",
@@ -114,6 +114,9 @@ describe("transactionColumns", () => {
     });
 
     expect(screen.getByText("Voided")).toBeInTheDocument();
+    expect(container.querySelector("a")).toHaveTextContent(
+      "#POS-VOID1 itemVoided",
+    );
   });
 
   it("renders a wallet cards icon for transactions with multiple payment methods", () => {

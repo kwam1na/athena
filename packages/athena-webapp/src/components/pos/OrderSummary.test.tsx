@@ -361,6 +361,77 @@ describe("OrderSummary completed transaction summary", () => {
     expect(receiptElement.props.storeContact.zipCode).toBeUndefined();
   });
 
+  it("marks printed receipts for voided completed sales", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <OrderSummary
+        cartItems={[]}
+        completedOrderNumber="158503"
+        completedTransactionData={{
+          paymentMethod: "cash",
+          completedAt: new Date("2026-05-25T13:30:00.000Z"),
+          cartItems: [],
+          customerInfo: undefined,
+          subtotal: 396000,
+          tax: 0,
+          total: 396000,
+          status: "voided",
+          payments: [
+            { id: "payment-1", method: "cash", amount: 396000, timestamp: 1 },
+          ],
+        }}
+        isTransactionCompleted
+        presentation="rail"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Print receipt/i }));
+
+    await waitFor(() => {
+      expect(renderEmail).toHaveBeenCalled();
+    });
+
+    const receiptElement = vi.mocked(renderEmail).mock.calls[0][0] as {
+      props: {
+        statusLabel?: string;
+      };
+    };
+
+    expect(receiptElement.props.statusLabel).toBe("Voided");
+  });
+
+  it("surfaces a void action on completed register sales", async () => {
+    const user = userEvent.setup();
+    const onVoidTransaction = vi.fn();
+
+    render(
+      <OrderSummary
+        cartItems={[]}
+        completedOrderNumber="192231"
+        completedTransactionData={{
+          paymentMethod: "cash",
+          completedAt: new Date("2026-05-25T14:27:00.000Z"),
+          cartItems: [],
+          customerInfo: undefined,
+          subtotal: 150000,
+          tax: 0,
+          total: 150000,
+          status: "completed",
+          payments: [
+            { id: "payment-1", method: "cash", amount: 150000, timestamp: 1 },
+          ],
+        }}
+        isTransactionCompleted
+        onVoidTransaction={onVoidTransaction}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Void sale" }));
+
+    expect(onVoidTransaction).toHaveBeenCalledTimes(1);
+  });
+
   it("reflects a draft amount equal to balance due as zero remaining", async () => {
     const user = userEvent.setup();
 

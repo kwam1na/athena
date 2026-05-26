@@ -50,6 +50,7 @@ export interface PosReceiptEmailProps {
   payments?: Array<PosReceiptPayment>;
   amountPaid?: string;
   changeGiven?: string;
+  statusLabel?: string;
 }
 
 const sectionBorder = {
@@ -109,6 +110,7 @@ export default function PosReceiptEmail({
   payments,
   amountPaid,
   changeGiven,
+  statusLabel,
 }: PosReceiptEmailProps) {
   return (
     <Html>
@@ -171,6 +173,15 @@ export default function PosReceiptEmail({
                   #{receiptNumber}
                 </Text>
               </LineItem>
+              {statusLabel && (
+                <div style={styles.statusBlock}>
+                  <Text
+                    style={{ ...styles.baseTextStyle, ...styles.statusLabel }}
+                  >
+                    {statusLabel}
+                  </Text>
+                </div>
+              )}
               {cashierName && (
                 <Text
                   style={{ ...styles.baseTextStyle, ...styles.cashierName }}
@@ -441,6 +452,21 @@ const styles: Record<string, CSSProperties> = {
     letterSpacing: "1.5px",
     lineHeight: "18px",
     textAlign: "right" as const,
+  },
+  statusBlock: {
+    borderBottom: "1px dashed #111111",
+    borderTop: "1px dashed #111111",
+    margin: "2px 0 8px",
+    padding: "5px 0",
+  },
+  statusLabel: {
+    fontSize: "14px",
+    fontWeight: 900,
+    letterSpacing: "2px",
+    lineHeight: "20px",
+    marginTop: "0px",
+    textAlign: "center" as const,
+    textTransform: "uppercase" as const,
   },
   cashierName: {
     fontSize: "12px",

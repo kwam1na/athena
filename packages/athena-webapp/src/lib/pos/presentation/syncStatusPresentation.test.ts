@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildPosSyncStatusPresentation,
   formatPosReconciliationType,
+  isRegisterCloseoutReviewItem,
 } from "./syncStatusPresentation";
 
 describe("buildPosSyncStatusPresentation", () => {
@@ -40,6 +41,27 @@ describe("buildPosSyncStatusPresentation", () => {
     });
   });
 
+  it("describes synced closeout variance review distinctly", () => {
+    expect(
+      buildPosSyncStatusPresentation({
+        reconciliationItems: [
+          {
+            localEventId: "event-register-closeout-1",
+            summary:
+              "Register closeout variance requires manager review before synced closeout can be applied.",
+            type: "permission",
+          },
+        ],
+        status: "needs_review",
+      }),
+    ).toMatchObject({
+      description:
+        "Synced register closeout has a variance. Review it before this closeout can be applied.",
+      label: "Closeout review",
+      status: "needs_review",
+    });
+  });
+
   it.each([
     [3, 3],
     [0, undefined],
@@ -64,10 +86,29 @@ describe("formatPosReconciliationType", () => {
     ["payment_conflict", "Payment review"],
     ["permission", "Permission review"],
     ["permission_drift", "Permission review"],
-    ["register_closeout", "Closeout review"],
+    ["register_closeout", "Closeout variance review"],
     ["unknown", "Reconciliation review"],
     [null, "Reconciliation review"],
   ])("formats %s as %s", (type, expected) => {
     expect(formatPosReconciliationType(type)).toBe(expected);
+  });
+
+  it("detects legacy closeout review items from local event evidence", () => {
+    expect(
+      isRegisterCloseoutReviewItem({
+        localEventId: "event-register-closeout-1",
+        summary:
+          "Register closeout variance requires manager review before synced closeout can be applied.",
+        type: "permission",
+      }),
+    ).toBe(true);
+    expect(
+      formatPosReconciliationType("permission", {
+        localEventId: "event-register-closeout-1",
+        summary:
+          "Register closeout variance requires manager review before synced closeout can be applied.",
+        type: "permission",
+      }),
+    ).toBe("Closeout variance review");
   });
 });

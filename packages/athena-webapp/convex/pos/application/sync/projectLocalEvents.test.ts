@@ -2185,6 +2185,57 @@ describe("projectLocalSyncEvent", () => {
     );
   });
 
+  it("projects a synced closeout as idempotent when the register was already closed with the same count", async () => {
+    const repository = createProjectionRepository({
+      registerSession: {
+        _id: "register-session-1",
+        expectedCash: 350,
+        closeoutRecords: [
+          {
+            countedCash: 350,
+            expectedCash: 350,
+            type: "closed",
+            variance: 0,
+          },
+        ],
+        countedCash: 350,
+        registerNumber: "1",
+        status: "closed",
+        variance: 0,
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-register-closed-1",
+        localRegisterSessionId: "local-register-1",
+        sequence: 3,
+        eventType: "register_closed",
+        occurredAt: 30,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: { countedCash: 350 },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(repository.registerSessionPatches).toEqual([]);
+    expect(repository.recordedRegisterSessionTraces).toEqual([]);
+    expect(result.conflicts).toEqual([]);
+    expect(result.mappings).toEqual([
+      expect.objectContaining({
+        cloudId: "register-session-1",
+        cloudTable: "registerSession",
+        localId: "event-register-closed-1",
+        localIdKind: "closeout",
+      }),
+    ]);
+  });
+
   it("conflicts duplicate closeout attempts against an already closed register session", async () => {
     const repository = createProjectionRepository({
       registerSession: {

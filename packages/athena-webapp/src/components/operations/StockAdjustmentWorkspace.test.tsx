@@ -7,8 +7,28 @@ import { ok, userError } from "~/shared/commandResult";
 
 import { StockAdjustmentWorkspaceContent } from "./StockAdjustmentWorkspace";
 
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+globalThis.ResizeObserver = ResizeObserverStub;
+
 const mockedHandlers = vi.hoisted(() => ({
   onSubmitBatch: vi.fn(),
+  quickAddProductSku: vi.fn(),
+}));
+
+const mockedScanner = vi.hoisted(() => ({
+  BrowserMultiFormatReader: vi.fn(),
+  decode: vi.fn(),
+  decodeFromCanvas: vi.fn(),
+  decodeFromConstraints: vi.fn(),
+  decodeFromImageUrl: vi.fn(),
+  scan: vi.fn(),
+  stop: vi.fn(),
+  stopTrack: vi.fn(),
 }));
 
 const mockedToast = vi.hoisted(() => ({
@@ -18,6 +38,24 @@ const mockedToast = vi.hoisted(() => ({
 
 vi.mock("sonner", () => ({
   toast: mockedToast,
+}));
+
+vi.mock("@zxing/browser", () => ({
+  BrowserMultiFormatReader: mockedScanner.BrowserMultiFormatReader,
+}));
+
+vi.mock("~/src/hooks/useAuth", () => ({
+  useAuth: () => ({
+    user: { _id: "user-1" },
+  }),
+}));
+
+vi.mock("~/src/hooks/usePOSProducts", () => ({
+  usePOSQuickAddProductSku: () => mockedHandlers.quickAddProductSku,
+}));
+
+vi.mock("~/src/hooks/use-navigate-back", () => ({
+  useNavigateBack: () => vi.fn(),
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -52,6 +90,10 @@ vi.mock("@tanstack/react-router", () => ({
       </a>
     );
   },
+  useSearch: () => ({
+    o: "/wigclub/store/wigclub/operations",
+  }),
+  useNavigate: () => vi.fn(),
 }));
 
 const baseProps = {
@@ -94,14 +136,42 @@ function renderStockAdjustmentWorkspace(
 describe("StockAdjustmentWorkspaceContent", () => {
   afterEach(() => {
     localStorage.clear();
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: undefined,
+    });
+    Object.defineProperty(window, "ImageCapture", {
+      configurable: true,
+      value: undefined,
+    });
     vi.restoreAllMocks();
     mockedToast.error.mockReset();
     mockedToast.success.mockReset();
     mockedHandlers.onSubmitBatch.mockReset();
+    mockedHandlers.quickAddProductSku.mockReset();
+    mockedScanner.BrowserMultiFormatReader.mockReset();
+    mockedScanner.decode.mockReset();
+    mockedScanner.decodeFromCanvas.mockReset();
+    mockedScanner.decodeFromConstraints.mockReset();
+    mockedScanner.decodeFromImageUrl.mockReset();
+    mockedScanner.scan.mockReset();
+    mockedScanner.stop.mockReset();
+    mockedScanner.stopTrack.mockReset();
   });
 
   beforeEach(() => {
+    mockedScanner.BrowserMultiFormatReader.mockImplementation(() => ({
+      decode: mockedScanner.decode,
+      decodeFromCanvas: mockedScanner.decodeFromCanvas,
+      decodeFromConstraints: mockedScanner.decodeFromConstraints,
+      decodeFromImageUrl: mockedScanner.decodeFromImageUrl,
+      scan: mockedScanner.scan,
+    }));
     mockedHandlers.onSubmitBatch.mockResolvedValue(ok({ _id: "batch-1" }));
+    mockedHandlers.quickAddProductSku.mockResolvedValue({
+      productId: "product-quick",
+      skuId: "sku-quick",
+    });
     window.history.replaceState(
       null,
       "",
@@ -193,6 +263,92 @@ describe("StockAdjustmentWorkspaceContent", () => {
       screen.getByText(
         "Operator count submitted. Inventory movements have been written.",
       ),
+    ).toBeInTheDocument();
+  });
+
+  it("quick adds products from the stock adjustment search workflow", async () => {
+    const user = userEvent.setup();
+    const onSearchStateChange = vi.fn();
+
+    renderStockAdjustmentWorkspace({
+      onSearchStateChange,
+      searchState: { query: "skillz" },
+    });
+
+    await user.click(screen.getByRole("button", { name: /quick add/i }));
+
+    const dialog = within(screen.getByRole("dialog"));
+
+    expect(dialog.getByLabelText(/product name/i)).toHaveValue("skillz");
+
+    await user.type(dialog.getByLabelText(/barcode/i), "123456789012");
+    await user.type(dialog.getByLabelText(/selling price/i), "45");
+    await user.click(dialog.getByRole("button", { name: /^add product$/i }));
+
+    await waitFor(() =>
+      expect(mockedHandlers.quickAddProductSku).toHaveBeenCalledWith({
+        storeId: "store-1",
+        createdByUserId: "user-1",
+        name: "skillz",
+        lookupCode: "123456789012",
+        price: 4500,
+        quantityAvailable: 1,
+      }),
+    );
+    expect(mockedToast.success).toHaveBeenCalledWith("Product added");
+    expect(onSearchStateChange).toHaveBeenCalledWith({
+      availability: undefined,
+      page: 1,
+      query: "skillz",
+      scope: undefined,
+      sku: "sku-quick",
+    });
+  });
+
+  it("attaches a searched barcode to an existing SKU from stock quick add", async () => {
+    const user = userEvent.setup();
+    const onSearchStateChange = vi.fn();
+
+    renderStockAdjustmentWorkspace({
+      onSearchStateChange,
+      searchState: { query: "123212312" },
+    });
+
+    await user.click(screen.getByRole("button", { name: /quick add/i }));
+
+    const dialog = within(screen.getByRole("dialog"));
+    await user.type(dialog.getByLabelText(/search existing sku/i), "body");
+    await user.click(dialog.getByRole("button", { name: /body wave bundle/i }));
+    await user.click(dialog.getByRole("button", { name: /attach barcode/i }));
+
+    await waitFor(() =>
+      expect(mockedHandlers.quickAddProductSku).toHaveBeenCalledWith({
+        storeId: "store-1",
+        createdByUserId: "user-1",
+        name: "",
+        lookupCode: "123212312",
+        price: 0,
+        quantityAvailable: 0,
+        productSkuId: "sku-2",
+      }),
+    );
+    expect(mockedToast.success).toHaveBeenCalledWith("Barcode attached to SKU");
+    expect(onSearchStateChange).toHaveBeenCalledWith({
+      availability: undefined,
+      page: 1,
+      query: "123212312",
+      scope: undefined,
+      sku: "sku-2",
+    });
+  });
+
+  it("shows the back affordance when opened from another operations workspace", () => {
+    renderStockAdjustmentWorkspace({
+      showBackButton: true,
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Go back" }),
     ).toBeInTheDocument();
   });
 
@@ -912,6 +1068,317 @@ describe("StockAdjustmentWorkspaceContent", () => {
       within(table).queryByText("Body Wave Bundle"),
     ).not.toBeInTheDocument();
     expect(screen.getByText("Showing 1 of 2 SKUs.")).toBeInTheDocument();
+  });
+
+  it("fills the stock search field from a camera barcode scan", async () => {
+    const user = userEvent.setup();
+    const videoTrack = {
+      addEventListener: vi.fn(),
+      enabled: true,
+      getSettings: () => ({ height: 480, width: 640 }),
+      kind: "video",
+      readyState: "live",
+      removeEventListener: vi.fn(),
+      stop: mockedScanner.stopTrack,
+    };
+    const getUserMedia = vi.fn().mockResolvedValue({
+      getTracks: () => [videoTrack],
+      getVideoTracks: () => [videoTrack],
+    });
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(function (
+      this: HTMLMediaElement,
+    ) {
+      queueMicrotask(() => this.dispatchEvent(new Event("playing")));
+      return Promise.resolve();
+    });
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(
+      () => undefined,
+    );
+    Object.defineProperty(HTMLMediaElement.prototype, "paused", {
+      configurable: true,
+      get: () => false,
+    });
+    Object.defineProperty(HTMLMediaElement.prototype, "readyState", {
+      configurable: true,
+      get: () => 2,
+    });
+    Object.defineProperty(HTMLVideoElement.prototype, "videoWidth", {
+      configurable: true,
+      get: () => 640,
+    });
+    Object.defineProperty(HTMLVideoElement.prototype, "videoHeight", {
+      configurable: true,
+      get: () => 480,
+    });
+    mockedScanner.decode.mockReturnValue({ getText: () => "1234567890123" });
+
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia },
+    });
+
+    renderStockAdjustmentWorkspace();
+
+    await user.click(
+      screen.getByRole("button", { name: /scan barcode with camera/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /start camera/i }));
+
+    await waitFor(() =>
+      expect(mockedScanner.decode).toHaveBeenCalled(),
+    );
+    await waitFor(() =>
+      expect(mockedToast.success).toHaveBeenCalledWith("Barcode scanned"),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole("textbox", {
+          name: /search products, skus, or barcodes/i,
+        }),
+      ).toHaveValue("1234567890123"),
+    );
+
+    const table = screen.getByRole("table");
+    expect(
+      within(table).getByText('18" Natural Black Closure Wig'),
+    ).toBeInTheDocument();
+    expect(
+      within(table).queryByText("Body Wave Bundle"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(mockedScanner.stopTrack).toHaveBeenCalled());
+  });
+
+  it("lets the scanner library own live camera startup on touch Safari", async () => {
+    const user = userEvent.setup();
+    const getUserMedia = vi.fn();
+    const controls = { stop: mockedScanner.stop };
+
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia },
+    });
+    Object.defineProperty(navigator, "userAgent", {
+      configurable: true,
+      value:
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.14 Safari/605.1.15",
+    });
+    Object.defineProperty(navigator, "vendor", {
+      configurable: true,
+      value: "Apple Computer, Inc.",
+    });
+    Object.defineProperty(navigator, "platform", {
+      configurable: true,
+      value: "MacIntel",
+    });
+    Object.defineProperty(navigator, "maxTouchPoints", {
+      configurable: true,
+      value: 5,
+    });
+    mockedScanner.decodeFromConstraints.mockImplementation(
+      async (
+        _constraints: unknown,
+        _videoElement: unknown,
+        callback: (
+          result: { getText: () => string } | undefined,
+          error: unknown,
+          controls: { stop: () => void },
+        ) => void,
+      ) => {
+        callback({ getText: () => "1234567890123" }, undefined, controls);
+
+        return controls;
+      },
+    );
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(
+      () => undefined,
+    );
+    vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(
+      () => undefined,
+    );
+
+    renderStockAdjustmentWorkspace();
+
+    await user.click(
+      screen.getByRole("button", { name: /scan barcode with camera/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /start camera/i }));
+
+    await waitFor(() =>
+      expect(mockedScanner.decodeFromConstraints).toHaveBeenCalled(),
+    );
+    expect(getUserMedia).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(mockedToast.success).toHaveBeenCalledWith("Barcode scanned"),
+    );
+    expect(
+      screen.getByRole("textbox", {
+        name: /search products, skus, or barcodes/i,
+      }),
+    ).toHaveValue("1234567890123");
+    expect(mockedScanner.stop).toHaveBeenCalled();
+  });
+
+  it("scans touch Safari camera frames without video playback when ImageCapture is available", async () => {
+    const user = userEvent.setup();
+    const videoTrack = {
+      addEventListener: vi.fn(),
+      enabled: true,
+      getSettings: () => ({ height: 480, width: 640 }),
+      kind: "video",
+      readyState: "live",
+      removeEventListener: vi.fn(),
+      stop: mockedScanner.stopTrack,
+    };
+    const getUserMedia = vi.fn().mockResolvedValue({
+      getTracks: () => [videoTrack],
+      getVideoTracks: () => [videoTrack],
+    });
+    const frame = {
+      close: vi.fn(),
+      height: 480,
+      width: 640,
+    } as unknown as ImageBitmap;
+    const grabFrame = vi.fn().mockResolvedValue(frame);
+    const drawImage = vi.fn();
+
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia },
+    });
+    Object.defineProperty(navigator, "userAgent", {
+      configurable: true,
+      value:
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.14 Safari/605.1.15",
+    });
+    Object.defineProperty(navigator, "vendor", {
+      configurable: true,
+      value: "Apple Computer, Inc.",
+    });
+    Object.defineProperty(navigator, "platform", {
+      configurable: true,
+      value: "MacIntel",
+    });
+    Object.defineProperty(navigator, "maxTouchPoints", {
+      configurable: true,
+      value: 5,
+    });
+    Object.defineProperty(window, "ImageCapture", {
+      configurable: true,
+      value: vi.fn().mockImplementation(() => ({ grabFrame })),
+    });
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      drawImage,
+    } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(
+      () => undefined,
+    );
+    vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(
+      () => undefined,
+    );
+    mockedScanner.decodeFromCanvas.mockReturnValue({
+      getText: () => "1234567890123",
+    });
+
+    renderStockAdjustmentWorkspace();
+
+    await user.click(
+      screen.getByRole("button", { name: /scan barcode with camera/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /start camera/i }));
+
+    await waitFor(() =>
+      expect(mockedScanner.decodeFromCanvas).toHaveBeenCalled(),
+    );
+    expect(mockedScanner.decodeFromConstraints).not.toHaveBeenCalled();
+    expect(getUserMedia).toHaveBeenCalled();
+    expect(drawImage).toHaveBeenCalledWith(frame, 0, 0, 640, 480);
+    expect(frame.close).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(mockedToast.success).toHaveBeenCalledWith("Barcode scanned"),
+    );
+    expect(
+      screen.getByRole("textbox", {
+        name: /search products, skus, or barcodes/i,
+      }),
+    ).toHaveValue("1234567890123");
+    expect(mockedScanner.stopTrack).toHaveBeenCalled();
+  });
+
+  it("fills the stock search field from a captured barcode photo", async () => {
+    const user = userEvent.setup();
+    const createObjectURL = vi.fn(() => "blob:barcode-photo");
+    const revokeObjectURL = vi.fn();
+    const originalCreateObjectURL = URL.createObjectURL;
+    const originalRevokeObjectURL = URL.revokeObjectURL;
+
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: createObjectURL,
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: revokeObjectURL,
+    });
+    mockedScanner.decodeFromImageUrl.mockResolvedValue({
+      getText: () => "1234567890123",
+    });
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(
+      () => undefined,
+    );
+
+    try {
+      renderStockAdjustmentWorkspace();
+
+      await user.click(
+        screen.getByRole("button", { name: /scan barcode with camera/i }),
+      );
+      await user.upload(
+        screen.getByLabelText(/capture barcode photo/i),
+        new File(["barcode"], "barcode.jpg", { type: "image/jpeg" }),
+      );
+
+      await waitFor(() =>
+        expect(mockedScanner.decodeFromImageUrl).toHaveBeenCalledWith(
+          "blob:barcode-photo",
+        ),
+      );
+      await waitFor(() =>
+        expect(mockedToast.success).toHaveBeenCalledWith("Barcode scanned"),
+      );
+      expect(
+        screen.getByRole("textbox", {
+          name: /search products, skus, or barcodes/i,
+        }),
+      ).toHaveValue("1234567890123");
+      expect(revokeObjectURL).toHaveBeenCalledWith("blob:barcode-photo");
+    } finally {
+      Object.defineProperty(URL, "createObjectURL", {
+        configurable: true,
+        value: originalCreateObjectURL,
+      });
+      Object.defineProperty(URL, "revokeObjectURL", {
+        configurable: true,
+        value: originalRevokeObjectURL,
+      });
+    }
+  });
+
+  it("shows an unavailable state when camera barcode scanning is unsupported", async () => {
+    const user = userEvent.setup();
+
+    renderStockAdjustmentWorkspace();
+
+    await user.click(
+      screen.getByRole("button", { name: /scan barcode with camera/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /start camera/i }));
+
+    expect(
+      await screen.findByText(
+        "Camera barcode scanning is not available in this browser.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("shows available SKU identifiers in the table and detail rail", () => {

@@ -1,43 +1,48 @@
-import { describe, expect, it, vi } from "vitest";
-import { internal } from "../../../_generated/api";
+import { describe, expect, it } from "vitest";
+
 import type { Id } from "../../../_generated/dataModel";
+import { buildRegisterSessionLocalSyncStatus } from "../../application/sync/registerSessionSyncReview";
 
-import { getActiveRegisterSessionForRegisterState } from "./registerSessionRepository";
-
-describe("getActiveRegisterSessionForRegisterState", () => {
-  it("uses the register-state lookup so closing sessions can drive the POS closeout gate", async () => {
-    const ctx = {
-      runQuery: vi.fn().mockResolvedValue({
-        _id: "drawer-1" as Id<"registerSession">,
-        expectedCash: 5_000,
-        openingFloat: 5_000,
-        openedAt: 1710000000000,
-        registerNumber: "1",
-        status: "closing",
-        terminalId: "terminal-1" as Id<"posTerminal">,
-      }),
-    };
-
-    const session = await getActiveRegisterSessionForRegisterState(ctx as never, {
-      storeId: "store-1" as Id<"store">,
-      terminalId: "terminal-1" as Id<"posTerminal">,
-      registerNumber: "1",
-    });
-
-    expect(ctx.runQuery).toHaveBeenCalledWith(
-      internal.operations.registerSessions.getRegisterSessionForRegisterState,
+describe("register session repository", () => {
+  it("maps closeout sync conflicts into register-session review status", () => {
+    const result = buildRegisterSessionLocalSyncStatus([
       {
-        storeId: "store-1",
-        terminalId: "terminal-1",
-        registerNumber: "1",
+        _id: "sync-conflict-1" as Id<"posLocalSyncConflict">,
+        conflictType: "permission",
+        createdAt: 1710000000000,
+        details: {
+          countedCash: 4_500,
+          expectedCash: 5_000,
+          variance: -500,
+        },
+        localEventId: "event-register-closed-1",
+        localRegisterSessionId: "local-register-1",
+        sequence: 3,
+        status: "needs_review",
+        storeId: "store-1" as Id<"store">,
+        summary:
+          "Register closeout variance requires manager review before synced closeout can be applied.",
+        terminalId: "terminal-1" as Id<"posTerminal">,
       },
-    );
-    expect(session).toEqual(
-      expect.objectContaining({
-        _id: "drawer-1",
-        status: "closing",
-        registerNumber: "1",
-      }),
-    );
+    ]);
+
+    expect(result).toEqual({
+      status: "needs_review",
+      reconciliationItems: [
+        {
+          createdAt: 1710000000000,
+          countedCash: 4_500,
+          expectedCash: 5_000,
+          id: "sync-conflict-1",
+          localEventId: "event-register-closed-1",
+          sequence: 3,
+          status: "needs_review",
+          summary:
+            "Register closeout variance requires manager review before synced closeout can be applied.",
+          type: "register_closeout",
+          variance: -500,
+        },
+      ],
+    });
   });
 });

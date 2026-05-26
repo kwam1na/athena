@@ -179,6 +179,7 @@ export async function quickAddCatalogItem(
     name: string;
     lookupCode?: string;
     productId?: Id<"product">;
+    productSkuId?: Id<"productSku">;
     price: number;
     quantityAvailable: number;
   },
@@ -193,6 +194,49 @@ export async function quickAddCatalogItem(
     storeId: args.storeId,
     lookupCode,
   });
+
+  if (args.productSkuId) {
+    if (!lookupCode || !isBarcodeLike(lookupCode)) {
+      throw new Error("Enter a valid barcode before attaching it to a SKU");
+    }
+
+    if (existingSku && String(existingSku._id) !== String(args.productSkuId)) {
+      throw new Error("Barcode is already attached to another SKU");
+    }
+
+    const skuToAttach = await ctx.db.get("productSku", args.productSkuId);
+    if (!skuToAttach || String(skuToAttach.storeId) !== String(args.storeId)) {
+      throw new Error("SKU not found");
+    }
+
+    const product = await ctx.db.get("product", skuToAttach.productId);
+    if (!product || String(product.storeId) !== String(args.storeId)) {
+      throw new Error("Product not found");
+    }
+
+    if (
+      skuToAttach.barcode &&
+      String(skuToAttach.barcode) !== String(lookupCode)
+    ) {
+      throw new Error("Selected SKU already has a barcode");
+    }
+
+    if (!skuToAttach.barcode) {
+      await ctx.db.patch("productSku", skuToAttach._id, {
+        barcode: lookupCode,
+      });
+    }
+
+    const attachedSku = (await ctx.db.get("productSku", skuToAttach._id)) ?? {
+      ...skuToAttach,
+      barcode: lookupCode,
+    };
+
+    return mapSkuToCatalogResult(ctx, {
+      product,
+      sku: attachedSku,
+    });
+  }
 
   if (existingSku) {
     const existingProduct = await ctx.db.get("product", existingSku.productId);

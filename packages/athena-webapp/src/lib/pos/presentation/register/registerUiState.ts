@@ -110,6 +110,7 @@ export interface RegisterCheckoutState {
     paymentMethod: string;
     payments?: Payment[];
     transactionId?: Id<"posTransaction"> | Id<"expenseTransaction">;
+    localTransactionId?: string;
     completedAt: Date;
     cartItems: CartItem[];
     subtotal: number;
@@ -156,6 +157,7 @@ export interface RegisterDrawerGateState {
   closeoutSubmittedCountedCash?: number;
   closeoutSubmittedVariance?: number;
   closeoutNotes?: string;
+  closeoutSubmittedReason?: "manager_review" | "pending_sync";
   closeoutSecondaryActionLabel?: string;
   expectedCash?: number;
   canOpenCashControls?: boolean;

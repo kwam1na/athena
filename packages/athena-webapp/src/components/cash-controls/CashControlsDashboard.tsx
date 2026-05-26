@@ -31,6 +31,7 @@ import { formatStaffDisplayName } from "~/shared/staffDisplayName";
 import {
   buildPosSyncStatusPresentation,
   formatPosReconciliationType,
+  isRegisterCloseoutReviewItem,
   type PosReconciliationItem,
   type PosSyncStatusPresentation,
 } from "@/lib/pos/presentation/syncStatusPresentation";
@@ -262,6 +263,10 @@ function CashPositionSummary({
 }
 
 function getSessionActionLabel(session: CashControlsDashboardSession) {
+  if (hasRegisterCloseoutSyncReview(session)) {
+    return "Review closeout";
+  }
+
   if (session.pendingApprovalRequest || session.variance) {
     return "Review variance";
   }
@@ -296,6 +301,21 @@ function getSessionSyncStatus(
       session.reconciliationItems ??
       [],
   });
+}
+
+function hasRegisterCloseoutSyncReview(session: CashControlsDashboardSession) {
+  const syncStatus = getSessionSyncStatus(session);
+
+  return (
+    syncStatus.status === "needs_review" &&
+    syncStatus.reconciliationItems.some(isRegisterCloseoutReviewItem)
+  );
+}
+
+function getSessionStatusLabel(session: CashControlsDashboardSession) {
+  return hasRegisterCloseoutSyncReview(session)
+    ? "Closeout review pending"
+    : formatStatusLabel(session.status);
 }
 
 function getSyncBadgeClass(tone: PosSyncStatusPresentation["tone"]) {
@@ -335,6 +355,10 @@ function getSessionTerminalLine(session: CashControlsDashboardSession) {
 }
 
 function getSessionActionTone(session: CashControlsDashboardSession) {
+  if (hasRegisterCloseoutSyncReview(session)) {
+    return "text-danger";
+  }
+
   if (session.pendingApprovalRequest || session.variance) {
     return "text-danger";
   }
@@ -394,6 +418,9 @@ function DrawerSessionCard({
     syncStatus.status !== "synced" && syncStatus.status !== "needs_review";
   const showSyncDescription = syncStatus.status !== "synced";
   const firstReconciliationItem = syncStatus.reconciliationItems[0];
+  const isCloseoutSyncReview =
+    syncStatus.status === "needs_review" &&
+    syncStatus.reconciliationItems.some(isRegisterCloseoutReviewItem);
   const metricColumnCount =
     1 +
     (showDeposited ? 1 : 0) +
@@ -431,7 +458,7 @@ function DrawerSessionCard({
           <p className="text-xs text-muted-foreground">{openedLine}</p>
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
-          {needsVarianceReview(session) ? (
+          {needsVarianceReview(session) && !isCloseoutSyncReview ? (
             <Badge
               className="border-transparent bg-danger/10 text-danger"
               size="sm"
@@ -456,7 +483,7 @@ function DrawerSessionCard({
             size="sm"
             variant="outline"
           >
-            {formatStatusLabel(session.status)}
+            {getSessionStatusLabel(session)}
           </Badge>
         </div>
       </div>
@@ -532,7 +559,11 @@ function DrawerSessionCard({
       ) : null}
       {syncStatus.status === "needs_review" && firstReconciliationItem ? (
         <p className="mt-layout-xs text-xs leading-5 text-danger">
-          {formatPosReconciliationType(firstReconciliationItem.type)}:{" "}
+          {formatPosReconciliationType(
+            firstReconciliationItem.type,
+            firstReconciliationItem,
+          )}
+          :{" "}
           {firstReconciliationItem.summary?.trim() ||
             "Review synced register activity before closeout is settled."}
         </p>

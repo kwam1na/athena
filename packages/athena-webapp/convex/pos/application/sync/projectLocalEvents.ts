@@ -1566,10 +1566,29 @@ async function projectRegisterClosed(
   }
 
   const payload = args.event.payload;
+  const countedCash = payload.countedCash ?? registerSession.expectedCash;
+  const variance = countedCash - registerSession.expectedCash;
   if (
     registerSession.status !== "open" &&
     registerSession.status !== "active"
   ) {
+    const isAlreadyAppliedCloseout =
+      registerSession.status === "closed" &&
+      typeof registerSession.countedCash === "number" &&
+      typeof registerSession.variance === "number" &&
+      roundMoney(registerSession.countedCash) === roundMoney(countedCash) &&
+      roundMoney(registerSession.variance) === roundMoney(variance);
+
+    if (isAlreadyAppliedCloseout) {
+      const mapping = await createMapping(repository, args, {
+        localIdKind: "closeout",
+        localId: args.event.localEventId,
+        cloudTable: "registerSession",
+        cloudId: registerSession._id,
+      });
+      return { status: "projected", mappings: [mapping], conflicts: [] };
+    }
+
     const conflict = await createConflict(repository, args, {
       conflictType: "permission",
       summary: "Register session is not open for synced POS closeout.",
@@ -1581,8 +1600,6 @@ async function projectRegisterClosed(
     return { status: "conflicted", mappings: [], conflicts: [conflict] };
   }
 
-  const countedCash = payload.countedCash ?? registerSession.expectedCash;
-  const variance = countedCash - registerSession.expectedCash;
   if (
     roundMoney(variance) !== 0 &&
     args.options?.allowRegisterCloseoutVarianceProjection !== true

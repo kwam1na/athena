@@ -69,12 +69,17 @@ export const transactionColumns: ColumnDef<CompletedTransactionRow>[] = [
               transactionId: row.original._id,
             })}
             search={{ o: getOrigin() }}
-            className="flex items-center gap-2 text-foreground hover:text-primary"
+            className="flex flex-wrap items-center gap-2 text-foreground hover:text-primary"
           >
             <span className="font-medium">{`#${row.getValue<string>("transactionNumber")}`}</span>
             <span className="text-muted-foreground text-sm">
               {`${count} ${count === 1 ? "item" : "items"}`}
             </span>
+            {row.original.status === "void" ? (
+              <span className="w-fit rounded-sm border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 text-xs font-medium text-destructive">
+                Voided
+              </span>
+            ) : null}
           </Link>
           {row.original.sessionTraceId ? (
             <div className="flex flex-wrap items-center gap-3 text-xs">
@@ -85,11 +90,6 @@ export const transactionColumns: ColumnDef<CompletedTransactionRow>[] = [
                 Session trace
               </WorkflowTraceRouteLink>
             </div>
-          ) : null}
-          {row.original.status === "void" ? (
-            <span className="w-fit rounded-sm border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 text-xs font-medium text-destructive">
-              Voided
-            </span>
           ) : null}
         </div>
       );
