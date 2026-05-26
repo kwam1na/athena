@@ -13,6 +13,12 @@ export function toSlug(str: string) {
 }
 
 export function getAddressString(address: Address) {
+  const joinAddressParts = (...parts: Array<string | undefined | null>) =>
+    parts
+      .map((part) => part?.trim())
+      .filter((part): part is string => Boolean(part))
+      .join(", ");
+
   const country =
     ALL_COUNTRIES.find((c) => c.code == address?.country)?.name ||
     address?.country;
@@ -26,14 +32,28 @@ export function getAddressString(address: Address) {
     address?.neighborhood;
 
   if (address.country == "GH") {
-    return `${address?.houseNumber}, ${address?.street}, ${neighborhood}, ${region}, ${country}`;
+    return joinAddressParts(
+      address?.houseNumber,
+      address?.street,
+      neighborhood,
+      region,
+      country,
+    );
   }
 
   if (address.country == "US") {
-    return `${address?.address}, ${address?.city}, ${address?.state} ${address?.zip}, ${country}`;
+    return joinAddressParts(
+      address?.address,
+      address?.city,
+      [address?.state, address?.zip]
+        .map((part) => part?.trim())
+        .filter(Boolean)
+        .join(" "),
+      country,
+    );
   }
 
-  return `${address?.address}, ${address?.city}, ${country}`;
+  return joinAddressParts(address?.address, address?.city, country);
 }
 
 export function capitalizeWords(str: string): string {

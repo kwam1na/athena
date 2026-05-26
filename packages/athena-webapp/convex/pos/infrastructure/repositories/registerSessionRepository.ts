@@ -3,6 +3,11 @@ import type { QueryCtx } from "../../../_generated/server";
 import { internal } from "../../../_generated/api";
 
 import type { PosCashDrawerSummary } from "../../domain/types";
+import {
+  buildRegisterSessionLocalSyncStatus,
+  listOpenLocalSyncConflictsByRegisterSession,
+  type RegisterSessionSyncConflict,
+} from "../../application/sync/registerSessionSyncReview";
 
 type RegisterStateIdentity = {
   storeId: Id<"store">;
@@ -12,6 +17,7 @@ type RegisterStateIdentity = {
 
 export function mapRegisterSessionToCashDrawerSummary(
   session: Doc<"registerSession"> | null | undefined,
+  syncConflicts: RegisterSessionSyncConflict[] = [],
 ): PosCashDrawerSummary | null {
   if (!session) {
     return null;
@@ -30,6 +36,7 @@ export function mapRegisterSessionToCashDrawerSummary(
     notes: session.notes,
     variance: session.variance,
     workflowTraceId: session.workflowTraceId,
+    localSyncStatus: buildRegisterSessionLocalSyncStatus(syncConflicts),
   };
 }
 
@@ -46,5 +53,13 @@ export async function getActiveRegisterSessionForRegisterState(
     },
   );
 
-  return mapRegisterSessionToCashDrawerSummary(session);
+  const syncConflictsBySessionId = session
+    ? await listOpenLocalSyncConflictsByRegisterSession(ctx, identity.storeId)
+    : null;
+  const syncConflicts =
+    session && syncConflictsBySessionId
+      ? (syncConflictsBySessionId.get(session._id) ?? [])
+      : [];
+
+  return mapRegisterSessionToCashDrawerSummary(session, syncConflicts);
 }

@@ -89,6 +89,7 @@ import {
 import { useRegisterCatalogIndex } from "./useRegisterCatalogIndex";
 import {
   buildPosSyncStatusPresentation,
+  isRegisterCloseoutReviewItem,
   type PosReconciliationItem,
 } from "@/lib/pos/presentation/syncStatusPresentation";
 
@@ -319,6 +320,24 @@ function readLocalSyncStatus(
   }
 
   return null;
+}
+
+function findRegisterCloseoutReviewItem(
+  source: unknown,
+): PosReconciliationItem | null {
+  const localSyncStatus = readLocalSyncStatus(source);
+  if (!localSyncStatus) {
+    return null;
+  }
+
+  const syncStatus = buildPosSyncStatusPresentation(localSyncStatus);
+  if (syncStatus.status !== "needs_review") {
+    return null;
+  }
+
+  return (
+    syncStatus.reconciliationItems.find(isRegisterCloseoutReviewItem) ?? null
+  );
 }
 
 function getLatestLocalRegisterLifecycleEvent(
@@ -976,6 +995,44 @@ export function useRegisterViewModel(): RegisterViewModel {
     useState(0);
   const [localSyncEventAppendToken, setLocalSyncEventAppendToken] = useState(0);
 
+  useEffect(() => {
+    const localTransactionId = completedTransactionData?.localTransactionId;
+    if (
+      !localTransactionId ||
+      completedTransactionData?.transactionId ||
+      !localRegisterReadModel
+    ) {
+      return;
+    }
+
+    const completedSale = localRegisterReadModel.completedSales.find(
+      (sale) => sale.localTransactionId === localTransactionId,
+    );
+    const cloudTransactionId = completedSale?.cloudTransactionId;
+    if (!cloudTransactionId) {
+      return;
+    }
+
+    setCompletedTransactionData((current) => {
+      if (
+        !current ||
+        current.localTransactionId !== localTransactionId ||
+        current.transactionId
+      ) {
+        return current;
+      }
+
+      return {
+        ...current,
+        transactionId: cloudTransactionId as Id<"posTransaction">,
+      };
+    });
+  }, [
+    completedTransactionData?.localTransactionId,
+    completedTransactionData?.transactionId,
+    localRegisterReadModel,
+  ]);
+
   const registerState = useConvexRegisterState({
     storeId: activeStoreId,
     terminalId: terminal?._id ?? null,
@@ -1152,6 +1209,25 @@ export function useRegisterViewModel(): RegisterViewModel {
           },
         }
       : null;
+  const activeRegisterCloseoutReviewItem = findRegisterCloseoutReviewItem(
+    usableActiveRegisterSession,
+  );
+  const syncedCloseoutReviewRegisterSession =
+    usableActiveRegisterSession && activeRegisterCloseoutReviewItem
+      ? {
+          ...usableActiveRegisterSession,
+          status: "closing" as const,
+          countedCash:
+            activeRegisterCloseoutReviewItem.countedCash ??
+            usableActiveRegisterSession.countedCash,
+          expectedCash:
+            activeRegisterCloseoutReviewItem.expectedCash ??
+            usableActiveRegisterSession.expectedCash,
+          variance:
+            activeRegisterCloseoutReviewItem.variance ??
+            usableActiveRegisterSession.variance,
+        }
+      : null;
   const locallyOperableRegisterSession =
     localOperableRegisterSession &&
     activeStoreId === localOperableRegisterSession.storeId &&
@@ -1161,6 +1237,8 @@ export function useRegisterViewModel(): RegisterViewModel {
   const closeoutBlockedRegisterSession =
     registerState?.activeRegisterSession?.status === "closing"
       ? registerState.activeRegisterSession
+      : syncedCloseoutReviewRegisterSession
+        ? syncedCloseoutReviewRegisterSession
       : projectedLocalCloseoutBlockedRegisterSession;
   const activeRegisterNumber =
     activeSession?.registerNumber ??
@@ -1245,6 +1323,9 @@ export function useRegisterViewModel(): RegisterViewModel {
     storeId: activeStoreId,
     onAuthenticateForApproval: authenticateForCloseoutApproval,
   });
+  const submitRegisterSessionCloseout = useMutation(
+    api.cashControls.closeouts.submitRegisterSessionCloseout,
+  );
   const correctRegisterSessionOpeningFloat = useMutation(
     api.cashControls.closeouts.correctRegisterSessionOpeningFloat,
   );
@@ -1752,7 +1833,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   const hasCloseoutBlockedDrawerState = Boolean(
     bootstrapState &&
     closeoutBlockedRegisterSession &&
-    !usableActiveRegisterSession,
+    (!usableActiveRegisterSession || syncedCloseoutReviewRegisterSession),
   );
   const hasMissingDrawerStartupState = Boolean(
     bootstrapState &&
@@ -1807,6 +1888,27 @@ export function useRegisterViewModel(): RegisterViewModel {
     (isCloseoutRequested
       ? (usableActiveRegisterSession ?? localCloseoutRegisterSession)
       : null);
+  const activeCloseoutRegisterSessionHasSyncReview = Boolean(
+    findRegisterCloseoutReviewItem(activeCloseoutRegisterSession),
+  );
+  const activeCloseoutRegisterSessionHasSubmittedCount =
+    activeCloseoutRegisterSession?.countedCash !== undefined;
+  const activeCloseoutRegisterSessionSyncStatus =
+    activeCloseoutRegisterSession?.localSyncStatus?.status;
+  const activeCloseoutSubmittedReason:
+    | "manager_review"
+    | "pending_sync"
+    | undefined =
+    activeCloseoutRegisterSessionHasSyncReview ||
+    Boolean(activeCloseoutRegisterSession?.managerApprovalRequestId)
+      ? "manager_review"
+      : activeCloseoutRegisterSessionHasSubmittedCount &&
+          (activeCloseoutRegisterSession?.status === "closing" ||
+            activeCloseoutRegisterSessionSyncStatus ===
+              "locally_closed_pending_sync" ||
+            activeCloseoutRegisterSessionSyncStatus === "pending_sync")
+        ? "pending_sync"
+        : undefined;
   const activeOpeningFloatCorrectionRegisterSession =
     isOpeningFloatCorrectionRequested && usableActiveRegisterSession
       ? usableActiveRegisterSession
@@ -2818,13 +2920,39 @@ export function useRegisterViewModel(): RegisterViewModel {
       countedCash: parsedCountedCash,
       notes: trimmedCloseoutNotes ?? null,
     });
-    setIsSubmittingCloseout(false);
-
-    if (!savedLocally) {
+    if (savedLocally.kind !== "ok") {
+      setIsSubmittingCloseout(false);
       setDrawerErrorMessage("Unable to close this register. Try again.");
       return;
     }
 
+    const cloudRegisterSessionId = getCloseoutCloudRegisterSessionId(
+      activeCloseoutRegisterSession,
+    );
+    if (!hasCloseoutVariance && cloudRegisterSessionId) {
+      const closeoutResult = await runCommand(() =>
+        submitRegisterSessionCloseout({
+          actorStaffProfileId: staffProfileId,
+          actorUserId: user?._id,
+          countedCash: parsedCountedCash,
+          notes: trimmedCloseoutNotes,
+          registerSessionId: cloudRegisterSessionId,
+          storeId: activeStoreId!,
+        }),
+      );
+
+      if (closeoutResult.kind === "ok") {
+        const markSyncedResult = await localStore.markEventsSynced(
+          [savedLocally.data.localEventId],
+          { uploaded: true },
+        );
+        if (markSyncedResult.ok) {
+          noteLocalRegisterEventChanged();
+        }
+      }
+    }
+
+    setIsSubmittingCloseout(false);
     noteLocalRegisterEventChanged();
     setCloseoutCountedCash("");
     setCloseoutNotes("");
@@ -2845,13 +2973,16 @@ export function useRegisterViewModel(): RegisterViewModel {
     closeoutCountedCash,
     closeoutNotes,
     localCommandGateway,
+    localStore,
     localRegisterReadModel,
     locallyOperableRegisterSession?.localRegisterSessionId,
     noteLocalRegisterEventChanged,
     registerNumber,
     requestBootstrap,
     staffProfileId,
+    submitRegisterSessionCloseout,
     terminal?._id,
+    user?._id,
     waitForCheckoutMutationQueues,
   ]);
 
@@ -3200,16 +3331,26 @@ export function useRegisterViewModel(): RegisterViewModel {
       const queuedReadModel = await readCurrentLocalRegisterModel();
       if (registerCatalogSkuIds.has(productSkuId)) {
         const availability = registerCatalogAvailabilityBySkuId.get(productSkuId);
-        if (!availability) {
-          toast.error(POS_AVAILABILITY_NOT_READY_MESSAGE);
-          return false;
-        }
-
         const localConsumption =
           localAvailabilityConsumptionFromReadModel(queuedReadModel).get(
             productSkuId,
           ) ?? 0;
-        if (Math.trunc(availability.quantityAvailable) - localConsumption <= 0) {
+        const quantityAvailable =
+          availability !== undefined
+            ? Math.trunc(availability.quantityAvailable)
+            : availabilityStatus === "available" &&
+                typeof product.quantityAvailable === "number"
+              ? Math.trunc(product.quantityAvailable)
+              : undefined;
+        const isInStock =
+          availability !== undefined ? availability.inStock : product.inStock;
+
+        if (quantityAvailable === undefined) {
+          toast.error(POS_AVAILABILITY_NOT_READY_MESSAGE);
+          return false;
+        }
+
+        if (!isInStock || quantityAvailable - localConsumption <= 0) {
           toast.error(POS_NO_TRUSTED_AVAILABILITY_REMAINING_MESSAGE);
           return false;
         }
@@ -3889,6 +4030,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         return false;
       }
       const finishCompletedSale = (input: {
+        localTransactionId: string;
         orderNumber: string;
         transactionId?: Id<"posTransaction">;
       }) => {
@@ -3898,6 +4040,7 @@ export function useRegisterViewModel(): RegisterViewModel {
           paymentMethod: currentPayments[0]?.method ?? "cash",
           payments: [...currentPayments],
           transactionId: input.transactionId,
+          localTransactionId: input.localTransactionId,
           completedAt: new Date(),
           cartItems: [...saleCartItems],
           subtotal: saleTotals.subtotal,
@@ -3954,6 +4097,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       noteLocalRegisterEventChanged();
       locallyCompletedSessionIdsRef.current.add(localPosSessionId);
       finishCompletedSale({
+        localTransactionId,
         orderNumber: receiptNumber,
       });
       return true;
@@ -4293,12 +4437,15 @@ export function useRegisterViewModel(): RegisterViewModel {
               closeoutSubmittedVariance:
                 activeCloseoutRegisterSession?.variance,
               closeoutNotes,
+              closeoutSubmittedReason: activeCloseoutSubmittedReason,
               closeoutSecondaryActionLabel: closeoutBlockedRegisterSession
                 ? "Reopen register"
                 : "Return to sale",
               onCloseoutSecondaryAction: closeoutBlockedRegisterSession
                 ? isCashierManager
-                  ? handleReopenRegisterCloseout
+                  ? activeCloseoutRegisterSessionHasSyncReview
+                    ? undefined
+                    : handleReopenRegisterCloseout
                   : undefined
                 : handleCancelRegisterCloseout,
               expectedCash: activeCloseoutRegisterSession?.expectedCash,
@@ -4307,7 +4454,8 @@ export function useRegisterViewModel(): RegisterViewModel {
                 activeCloseoutRegisterSession,
               ),
               hasPendingCloseoutApproval: Boolean(
-                activeCloseoutRegisterSession?.managerApprovalRequestId,
+                activeCloseoutRegisterSession?.managerApprovalRequestId ||
+                  activeCloseoutRegisterSessionHasSyncReview,
               ),
               errorMessage: drawerErrorMessage,
               isCloseoutSubmitting: isSubmittingCloseout,
@@ -4320,10 +4468,13 @@ export function useRegisterViewModel(): RegisterViewModel {
                 setCloseoutNotes(value);
                 setDrawerErrorMessage(null);
               },
-              onSubmitCloseout: handleSubmitRegisterCloseout,
-              onReopenRegister: isCashierManager
-                ? handleReopenRegisterCloseout
-                : undefined,
+              onSubmitCloseout: activeCloseoutSubmittedReason
+                ? undefined
+                : handleSubmitRegisterCloseout,
+              onReopenRegister:
+                isCashierManager && !activeCloseoutRegisterSessionHasSyncReview
+                  ? handleReopenRegisterCloseout
+                  : undefined,
               onSignOut: handleCashierSignOut,
             }
           : {

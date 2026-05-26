@@ -2,8 +2,6 @@ import { ProductVariant } from "../add-product/ProductStock";
 import {
   AlertOctagonIcon,
   AlertTriangle,
-  Check,
-  CheckCircle,
   CheckCircle2,
 } from "lucide-react";
 import { Badge } from "../ui/badge";
@@ -53,18 +51,18 @@ export const ProductStockStatus = ({
 
 export const OutOfStockStatus = () => {
   return (
-    <Badge className="flex items-center w-fit text-red-700 rounded-md px-2 py-1 text-xs">
-      <AlertTriangle className="w-3.5 h-3.5 text-red-600 mr-2" />
-      <p className="text-red-700">Out of stock</p>
-    </Badge>
+    <span className="inline-flex w-fit items-center gap-1.5 text-xs font-medium text-red-700">
+      <AlertTriangle className="h-3.5 w-3.5" />
+      Out of stock
+    </span>
   );
 };
 
 export const LowStockStatus = () => {
   return (
-    <Badge className="flex items-center w-fit text-yellow-700 rounded-md px-2 py-1 text-xs">
-      <AlertOctagonIcon className="w-3.5 h-3.5 text-yellow-600 mr-2" />
-      <p className="text-yellow-700">Low stock</p>
-    </Badge>
+    <span className="inline-flex w-fit items-center gap-1.5 text-xs font-medium text-amber-700">
+      <AlertOctagonIcon className="h-3.5 w-3.5" />
+      Low stock
+    </span>
   );
 };

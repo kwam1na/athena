@@ -15,6 +15,11 @@ const mockedHooks = vi.hoisted(() => ({
   useQuery: vi.fn(),
 }));
 
+const mockedRouter = vi.hoisted(() => ({
+  navigateBack: vi.fn(),
+  search: {} as Record<string, unknown>,
+}));
+
 const mockedApi = vi.hoisted(() => ({
   getSkuActivityForProductSku: "getSkuActivityForProductSku",
   getOrganizations: "getOrganizations",
@@ -29,8 +34,13 @@ vi.mock("@tanstack/react-router", () => ({
       orgUrlSlug: "wigclub",
       storeUrlSlug: "osu",
     }),
-    useSearch: () => ({}),
+    useSearch: () => mockedRouter.search,
   }),
+  useSearch: () => mockedRouter.search,
+}));
+
+vi.mock("~/src/hooks/use-navigate-back", () => ({
+  useNavigateBack: () => mockedRouter.navigateBack,
 }));
 
 vi.mock("convex/react", () => ({
@@ -74,6 +84,7 @@ describe("SkuActivityRouteShell", () => {
   beforeEach(() => {
     window.scrollTo = vi.fn();
     vi.clearAllMocks();
+    mockedRouter.search = {};
     mockedHooks.useAuth.mockReturnValue({
       isLoading: false,
       user: { _id: "user-1" },
@@ -137,6 +148,25 @@ describe("SkuActivityRouteShell", () => {
       { organizationId: "org-1" },
       { productSkuId: undefined, sku: "KK38-X3C-MQE", storeId: "store-1" },
     ]);
+  });
+
+  it("shows the back affordance when opened with an origin search param", () => {
+    mockedRouter.search = {
+      o: "/wigclub/store/osu/operations",
+    };
+
+    render(
+      <SkuActivityRouteShell
+        orgUrlSlug="wigclub"
+        showBackButton
+        sku="KK38-X3C-MQE"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Go back" }),
+    ).toBeInTheDocument();
   });
 });
 

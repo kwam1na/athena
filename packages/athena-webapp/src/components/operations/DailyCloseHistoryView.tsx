@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "@tanstack/react-router";
+import { Link, useParams, useSearch } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { ArrowUpRight, History } from "lucide-react";
 
@@ -220,7 +220,11 @@ function sortNewestFirst(
   return right.operatingDate.localeCompare(left.operatingDate);
 }
 
-function DailyCloseHistoryApiPendingView() {
+function DailyCloseHistoryApiPendingView({
+  showBackButton,
+}: {
+  showBackButton: boolean;
+}) {
   return (
     <View hideBorder hideHeaderBottomBorder scrollMode="page">
       <FadeIn className="container mx-auto py-layout-xl">
@@ -229,6 +233,7 @@ function DailyCloseHistoryApiPendingView() {
             eyebrow="Store Ops"
             title="Daily Close History"
             description="Daily Close history is waiting for the server completed-history list and detail queries."
+            showBackButton={showBackButton}
           />
           <EmptyState
             description="The frontend is wired to api.operations.dailyClose.listCompletedDailyCloseHistory and getCompletedDailyCloseHistoryDetail."
@@ -242,12 +247,14 @@ function DailyCloseHistoryApiPendingView() {
 
 export function DailyCloseHistoryView() {
   const dailyCloseApi = getDailyCloseHistoryApi();
+  const search = useSearch({ strict: false }) as { o?: unknown };
+  const showBackButton = typeof search.o === "string" && search.o.length > 0;
 
   if (
     !dailyCloseApi.listCompletedDailyCloseHistory ||
     !dailyCloseApi.getCompletedDailyCloseHistoryDetail
   ) {
-    return <DailyCloseHistoryApiPendingView />;
+    return <DailyCloseHistoryApiPendingView showBackButton={showBackButton} />;
   }
 
   return (
@@ -256,6 +263,7 @@ export function DailyCloseHistoryView() {
         dailyCloseApi.getCompletedDailyCloseHistoryDetail
       }
       listCompletedDailyCloseHistory={dailyCloseApi.listCompletedDailyCloseHistory}
+      showBackButton={showBackButton}
     />
   );
 }
@@ -263,9 +271,11 @@ export function DailyCloseHistoryView() {
 function DailyCloseHistoryConnectedView({
   getCompletedDailyCloseHistoryDetail,
   listCompletedDailyCloseHistory,
+  showBackButton,
 }: {
   getCompletedDailyCloseHistoryDetail: unknown;
   listCompletedDailyCloseHistory: unknown;
+  showBackButton: boolean;
 }) {
   const {
     activeStore,
@@ -346,6 +356,7 @@ function DailyCloseHistoryConnectedView({
             eyebrow="Store Ops"
             title="Daily Close History"
             description="Review completed EOD Reviews as read-only store-day records."
+            showBackButton={showBackButton}
           />
 
           {completedRecords.length === 0 ? (

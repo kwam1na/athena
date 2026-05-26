@@ -1,11 +1,26 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ChangeEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Link } from "@tanstack/react-router";
 import {
+  BrowserMultiFormatReader,
+  type IScannerControls,
+} from "@zxing/browser";
+import {
+  Camera,
   CheckCircle2,
   ExternalLink,
   Package,
+  PackagePlus,
   RotateCcw,
+  ScanBarcode,
   Search,
   X,
 } from "lucide-react";
@@ -20,6 +35,8 @@ import {
   summarizeStockAdjustmentLineItems,
 } from "~/shared/stockAdjustment";
 import type { Id } from "~/convex/_generated/dataModel";
+import { useAuth } from "~/src/hooks/useAuth";
+import { usePOSQuickAddProductSku } from "~/src/hooks/usePOSProducts";
 import { getProductName } from "~/src/lib/productUtils";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import type { NormalizedCommandResult } from "../../lib/errors/runCommand";
@@ -33,6 +50,12 @@ import {
   PageWorkspaceMain,
   PageWorkspaceRail,
 } from "../common/PageLevelHeader";
+import {
+  QuickAddProductDialog,
+  type QuickAddAttachBarcodePayload,
+  type QuickAddProductSubmitPayload,
+} from "../product/QuickAddProductDialog";
+import { normalizeQuickAddInitialLookupCode } from "../product/quickAddProductDialogUtils";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -94,6 +117,7 @@ export type StockAdjustmentAvailabilityFilter =
 export type StockAdjustmentSearchState = {
   availability?: StockAdjustmentAvailabilityFilter;
   mode?: StockAdjustmentType;
+  o?: string;
   page?: number;
   query?: string;
   scope?: string;
@@ -160,6 +184,7 @@ type StockAdjustmentWorkspaceContentProps = {
     notes?: string;
   }) => Promise<NormalizedCommandResult<unknown>>;
   searchState?: StockAdjustmentSearchState;
+  showBackButton?: boolean;
   storeId?: Id<"store">;
 };
 
@@ -475,6 +500,1160 @@ export function SkuDetailPanel({
   );
 }
 
+type StockScannerDebugSnapshot = {
+  currentTime: string;
+  error: string;
+  event: string;
+  events: string[];
+  mediaDevices: string;
+  readyState: string;
+  secureContext: string;
+  srcObject: string;
+  time: string;
+  tracks: string;
+  userAgent: string;
+  video: string;
+};
+
+type FrameCapture = {
+  grabFrame: () => Promise<ImageBitmap>;
+};
+
+type FrameCaptureConstructor = new (track: MediaStreamTrack) => FrameCapture;
+
+const buildEmptyScannerDebugSnapshot = (): StockScannerDebugSnapshot => ({
+  currentTime: "n/a",
+  error: "none",
+  event: "idle",
+  events: [],
+  mediaDevices: "unknown",
+  readyState: "n/a",
+  secureContext: "unknown",
+  srcObject: "none",
+  time: "",
+  tracks: "none",
+  userAgent: "unknown",
+  video: "none",
+});
+
+function formatScannerError(error: unknown) {
+  if (error instanceof DOMException) {
+    return `${error.name}: ${error.message || "DOMException"}`;
+  }
+
+  if (error instanceof Error) {
+    return `${error.name}: ${error.message}`;
+  }
+
+  return String(error ?? "none");
+}
+
+function isAppleTouchSafari() {
+  const userAgent = navigator.userAgent;
+  const vendor = navigator.vendor;
+  const isSafari =
+    /Safari/i.test(userAgent) &&
+    !/Chrome|CriOS|FxiOS|EdgiOS|Android/i.test(userAgent);
+  const isTouchAppleDevice =
+    /iPad|iPhone|iPod/i.test(userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+  return isSafari && /Apple/i.test(vendor) && isTouchAppleDevice;
+}
+
+function resetScannerVideoSource(node: HTMLVideoElement) {
+  node.pause();
+  node.srcObject = null;
+  node.removeAttribute("src");
+
+  if (!/jsdom/i.test(navigator.userAgent)) {
+    node.load();
+  }
+}
+
+function getFrameCaptureConstructor() {
+  return (window as unknown as { ImageCapture?: FrameCaptureConstructor })
+    .ImageCapture;
+}
+
+function StockAdjustmentBarcodeScannerDialog({
+  onBarcodeDetected,
+  onOpenChange,
+  open,
+}: {
+  onBarcodeDetected: (barcode: string) => void;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+}) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const videoHostRef = useRef<HTMLDivElement | null>(null);
+  const barcodePhotoInputRef = useRef<HTMLInputElement | null>(null);
+  const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(
+    null,
+  );
+  const scannerControlsRef = useRef<IScannerControls | null>(null);
+  const scannerRunIdRef = useRef(0);
+  const activeStreamRef = useRef<MediaStream | null>(null);
+  const hasDetectedBarcodeRef = useRef(false);
+  const [scannerDebug, setScannerDebug] = useState<StockScannerDebugSnapshot>(
+    () => buildEmptyScannerDebugSnapshot(),
+  );
+  const [scannerState, setScannerState] = useState<
+    | "idle"
+    | "requesting"
+    | "starting"
+    | "scanning"
+    | "decoding_photo"
+    | "unsupported"
+    | "blocked"
+    | "error"
+  >("idle");
+
+  const captureScannerDebug = useCallback(
+    (event: string, error?: unknown) => {
+      const video = videoRef.current;
+      const videoStream =
+        typeof MediaStream !== "undefined" &&
+        video?.srcObject instanceof MediaStream
+          ? video.srcObject
+          : null;
+      const stream = activeStreamRef.current ?? videoStream;
+      const tracks =
+        stream
+          ?.getTracks()
+          .map((track) => {
+            const settings =
+              typeof track.getSettings === "function"
+                ? track.getSettings()
+                : {};
+            const size =
+              settings.width && settings.height
+                ? ` ${settings.width}x${settings.height}`
+                : "";
+
+            return `${track.kind}:${track.readyState}:${
+              track.enabled ? "enabled" : "disabled"
+            }${size}`;
+          })
+          .join(", ") || "none";
+
+      setScannerDebug((current) => {
+        const time = new Date().toLocaleTimeString();
+        const isHeartbeat = event === "diagnostic heartbeat";
+        const formattedError = error ? formatScannerError(error) : undefined;
+
+        return {
+          currentTime: video ? video.currentTime.toFixed(2) : "n/a",
+          error: formattedError ?? current.error,
+          event: isHeartbeat ? current.event : event,
+          events: isHeartbeat
+            ? current.events
+            : [`${time} ${event}`, ...current.events].slice(0, 14),
+          mediaDevices: navigator.mediaDevices ? "available" : "missing",
+          readyState: video ? String(video.readyState) : "n/a",
+          secureContext: String(window.isSecureContext),
+          srcObject: video?.srcObject ? "attached" : "none",
+          time,
+          tracks,
+          userAgent: navigator.userAgent,
+          video: video ? `${video.videoWidth}x${video.videoHeight}` : "none",
+        };
+      });
+    },
+    [],
+  );
+
+  const ensureVideoPreviewElement = useCallback(() => {
+    if (videoRef.current) {
+      return videoRef.current;
+    }
+
+    const host = videoHostRef.current;
+
+    if (!host) {
+      return null;
+    }
+
+    canvasRef.current = null;
+
+    const node = document.createElement("video");
+
+    node.setAttribute("aria-label", "Barcode camera preview");
+    node.className = "h-full w-full object-cover";
+    node.autoplay = true;
+    node.defaultMuted = true;
+    node.muted = true;
+    node.playsInline = true;
+    node.controls = false;
+    node.setAttribute("autoplay", "");
+    node.setAttribute("disablepictureinpicture", "");
+    node.setAttribute("muted", "");
+    node.setAttribute("playsinline", "");
+    node.setAttribute("webkit-playsinline", "");
+
+    host.replaceChildren(node);
+    videoRef.current = node;
+    setVideoElement(node);
+    setScannerDebug((current) => ({
+      ...current,
+      event: "video ref attached",
+      events: [
+        `${new Date().toLocaleTimeString()} video ref attached`,
+        ...current.events,
+      ].slice(0, 14),
+    }));
+
+    return node;
+  }, []);
+
+  const ensureCanvasPreviewElement = useCallback(() => {
+    if (canvasRef.current) {
+      return canvasRef.current;
+    }
+
+    const host = videoHostRef.current;
+
+    if (!host) {
+      return null;
+    }
+
+    if (videoRef.current) {
+      resetScannerVideoSource(videoRef.current);
+      videoRef.current = null;
+      setVideoElement(null);
+    }
+
+    const node = document.createElement("canvas");
+
+    node.setAttribute("aria-label", "Barcode camera frame preview");
+    node.className = "h-full w-full object-cover";
+
+    host.replaceChildren(node);
+    canvasRef.current = node;
+    setScannerDebug((current) => ({
+      ...current,
+      event: "canvas ref attached",
+      events: [
+        `${new Date().toLocaleTimeString()} canvas ref attached`,
+        ...current.events,
+      ].slice(0, 14),
+    }));
+
+    return node;
+  }, []);
+
+  const removeVideoPreviewElement = useCallback(() => {
+    const node = videoRef.current;
+
+    if (node) {
+      resetScannerVideoSource(node);
+      node.remove();
+    }
+
+    videoRef.current = null;
+    canvasRef.current?.remove();
+    canvasRef.current = null;
+    setVideoElement(null);
+    setScannerDebug((current) => ({
+      ...current,
+      event: "video ref cleared",
+      events: [
+        `${new Date().toLocaleTimeString()} video ref cleared`,
+        ...current.events,
+      ].slice(0, 14),
+    }));
+  }, []);
+
+  const stopScanner = useCallback(() => {
+    scannerRunIdRef.current += 1;
+    scannerControlsRef.current?.stop();
+    scannerControlsRef.current = null;
+    activeStreamRef.current?.getTracks().forEach((track) => track.stop());
+    activeStreamRef.current = null;
+    hasDetectedBarcodeRef.current = false;
+
+    const video = videoRef.current;
+
+    if (video) {
+      resetScannerVideoSource(video);
+    }
+    canvasRef.current = null;
+    captureScannerDebug("scanner stopped");
+  }, [captureScannerDebug]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const animationFrameId = window.requestAnimationFrame(() => {
+      ensureVideoPreviewElement();
+    });
+
+    return () => window.cancelAnimationFrame(animationFrameId);
+  }, [ensureVideoPreviewElement, open]);
+
+  useEffect(() => {
+    if (!open) {
+      setScannerDebug(buildEmptyScannerDebugSnapshot());
+      return;
+    }
+
+    if (!videoElement) {
+      captureScannerDebug("waiting for video element");
+      return;
+    }
+
+    const videoEvents = [
+      "loadedmetadata",
+      "loadeddata",
+      "canplay",
+      "playing",
+      "pause",
+      "stalled",
+      "suspend",
+      "error",
+    ] as const;
+    const handleVideoEvent = (event: Event) => {
+      captureScannerDebug(
+        `video:${event.type}`,
+        videoElement.error
+          ? `media error ${videoElement.error.code}`
+          : undefined,
+      );
+    };
+    const intervalId = window.setInterval(
+      () => captureScannerDebug("diagnostic heartbeat"),
+      1500,
+    );
+
+    videoEvents.forEach((eventName) =>
+      videoElement.addEventListener(eventName, handleVideoEvent),
+    );
+    captureScannerDebug("diagnostics attached");
+
+    return () => {
+      window.clearInterval(intervalId);
+      videoEvents.forEach((eventName) =>
+        videoElement.removeEventListener(eventName, handleVideoEvent),
+      );
+    };
+  }, [captureScannerDebug, open, videoElement]);
+
+  const startScanner = useCallback(async () => {
+    if (!open) {
+      return;
+    }
+
+    const getUserMedia = navigator.mediaDevices?.getUserMedia?.bind(
+      navigator.mediaDevices,
+    );
+
+    if (!getUserMedia) {
+      setScannerState("unsupported");
+      captureScannerDebug("getUserMedia unavailable");
+      return;
+    }
+
+    stopScanner();
+    const videoElement = ensureVideoPreviewElement();
+
+    if (!videoElement) {
+      setScannerState("idle");
+      captureScannerDebug("no video element");
+      return;
+    }
+
+    const runId = scannerRunIdRef.current + 1;
+    scannerRunIdRef.current = runId;
+    const isCancelled = () => scannerRunIdRef.current !== runId;
+
+    type CameraAttempt = {
+      constraints: MediaStreamConstraints;
+      label: string;
+    };
+
+    const baseCameraAttempts: CameraAttempt[] = [
+      {
+        constraints: {
+          audio: false,
+          video: {
+            facingMode: { ideal: "environment" },
+          },
+        },
+        label: "environment camera",
+      },
+      {
+        constraints: {
+          audio: false,
+          video: true,
+        },
+        label: "default camera",
+      },
+    ];
+    const touchSafariCameraAttempts: CameraAttempt[] = [
+      {
+        constraints: {
+          audio: false,
+          video: true,
+        },
+        label: "touch safari default camera",
+      },
+      {
+        constraints: {
+          audio: false,
+          video: {
+            facingMode: { ideal: "environment" },
+          },
+        },
+        label: "touch safari environment camera",
+      },
+    ];
+
+    const buildCameraAttempts = async () => {
+      const enumerateDevices =
+        navigator.mediaDevices?.enumerateDevices?.bind(navigator.mediaDevices);
+
+      if (!enumerateDevices) {
+        return baseCameraAttempts;
+      }
+
+      try {
+        const devices = await enumerateDevices();
+        const videoDevices = devices.filter(
+          (device) => device.kind === "videoinput" && device.deviceId,
+        );
+
+        captureScannerDebug(`video devices: ${videoDevices.length}`);
+
+        const sortedVideoDevices = [...videoDevices].sort((left, right) => {
+          const leftLabel = left.label.toLowerCase();
+          const rightLabel = right.label.toLowerCase();
+          const leftLooksRear =
+            leftLabel.includes("back") ||
+            leftLabel.includes("rear") ||
+            leftLabel.includes("environment");
+          const rightLooksRear =
+            rightLabel.includes("back") ||
+            rightLabel.includes("rear") ||
+            rightLabel.includes("environment");
+
+          if (leftLooksRear === rightLooksRear) {
+            return 0;
+          }
+
+          return leftLooksRear ? -1 : 1;
+        });
+
+        const deviceAttempts = sortedVideoDevices.map((device, index) => ({
+          constraints: {
+            audio: false,
+            video: {
+              deviceId: { exact: device.deviceId },
+            },
+          },
+          label: `device ${index + 1}${
+            device.label ? ` ${device.label}` : ""
+          }`,
+        }));
+
+        return [...deviceAttempts, ...baseCameraAttempts];
+      } catch (error) {
+        captureScannerDebug("video device enumeration failed", error);
+        return baseCameraAttempts;
+      }
+    };
+
+    const getVideoElementStream = () =>
+      typeof MediaStream !== "undefined" &&
+      videoElement.srcObject instanceof MediaStream
+        ? videoElement.srcObject
+        : null;
+
+    const getVideoTracks = (stream: MediaStream) =>
+      typeof stream.getVideoTracks === "function"
+        ? stream.getVideoTracks()
+        : stream.getTracks().filter((track) => track.kind === "video");
+
+    const stopVideoElementStream = () => {
+      const stream = getVideoElementStream();
+
+      stream?.getTracks().forEach((track) => track.stop());
+      activeStreamRef.current = null;
+
+      if (stream && videoElement.srcObject === stream) {
+        videoElement.srcObject = null;
+      }
+    };
+
+    const waitForVideoSurfacePaint = () =>
+      new Promise<void>((resolve) => {
+        const animationFrame =
+          window.requestAnimationFrame ??
+          ((callback: FrameRequestCallback) =>
+            window.setTimeout(() => callback(performance.now()), 16));
+
+        animationFrame(() => {
+          animationFrame(() => resolve());
+        });
+      });
+
+    const prepareVideoElement = (targetVideoElement: HTMLVideoElement) => {
+      targetVideoElement.autoplay = true;
+      targetVideoElement.defaultMuted = true;
+      targetVideoElement.muted = true;
+      targetVideoElement.playsInline = true;
+      targetVideoElement.controls = false;
+      targetVideoElement.setAttribute("autoplay", "");
+      targetVideoElement.setAttribute("disablepictureinpicture", "");
+      targetVideoElement.setAttribute("muted", "");
+      targetVideoElement.setAttribute("playsinline", "");
+      targetVideoElement.setAttribute("webkit-playsinline", "");
+    };
+
+    const waitForVideoPreview = (
+      stream: MediaStream,
+      label: string,
+      options: { deferInitialPlay?: boolean } = {},
+    ) =>
+      new Promise<void>((resolve, reject) => {
+        let settled = false;
+        const removers: Array<() => void> = [];
+
+        const cleanup = () => {
+          if (intervalId !== undefined) {
+            window.clearInterval(intervalId);
+          }
+          if (timeoutId !== undefined) {
+            window.clearTimeout(timeoutId);
+          }
+          removers.splice(0).forEach((remove) => remove());
+        };
+
+        const settle = (callback: () => void) => {
+          if (settled) {
+            return;
+          }
+
+          settled = true;
+          cleanup();
+          callback();
+        };
+
+        const fail = (error: Error) => {
+          settle(() => {
+            stopVideoElementStream();
+            reject(error);
+          });
+        };
+
+        const isPreviewReady = () =>
+          videoElement.videoWidth > 0 &&
+          videoElement.videoHeight > 0 &&
+          videoElement.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+          !videoElement.paused;
+
+        const completeIfReady = () => {
+          if (isPreviewReady()) {
+            settle(resolve);
+          }
+        };
+
+        const requestPlay = async (source: string) => {
+          try {
+            captureScannerDebug(`video play requested: ${label} ${source}`);
+            await videoElement.play();
+            captureScannerDebug(`video play resolved: ${label} ${source}`);
+          } catch (error) {
+            captureScannerDebug(`video play rejected: ${label}`, error);
+          } finally {
+            completeIfReady();
+          }
+        };
+
+        getVideoTracks(stream).forEach((track) => {
+          const handleTrackEnded = () => {
+            captureScannerDebug(
+              `${label} track:${track.kind}:${track.readyState}`,
+            );
+            window.setTimeout(() => {
+              if (settled) {
+                return;
+              }
+
+              completeIfReady();
+
+              if (!settled) {
+                const hasLiveVideoTrack = getVideoTracks(stream).some(
+                  (streamTrack) => streamTrack.readyState !== "ended",
+                );
+
+                if (!hasLiveVideoTrack) {
+                  fail(
+                    new Error(
+                      `${label} video track ended before preview started`,
+                    ),
+                  );
+                }
+              }
+            }, 1000);
+          };
+
+          track.addEventListener("ended", handleTrackEnded);
+          removers.push(() =>
+            track.removeEventListener("ended", handleTrackEnded),
+          );
+        });
+
+        const previewEvents = [
+          "loadedmetadata",
+          "loadeddata",
+          "canplay",
+          "playing",
+          "resize",
+        ] as const;
+        const handlePreviewEvent = (event: Event) => {
+          captureScannerDebug(`${label} preview:${event.type}`);
+          completeIfReady();
+
+          if (!settled && event.type !== "playing") {
+            void requestPlay(event.type);
+          }
+        };
+
+        previewEvents.forEach((eventName) => {
+          videoElement.addEventListener(eventName, handlePreviewEvent);
+          removers.push(() =>
+            videoElement.removeEventListener(eventName, handlePreviewEvent),
+          );
+        });
+
+        const intervalId = window.setInterval(completeIfReady, 100);
+        const timeoutId = window.setTimeout(() => {
+          fail(new Error(`${label} camera preview did not start`));
+        }, 15000);
+
+        prepareVideoElement(videoElement);
+        activeStreamRef.current = stream;
+        videoElement.srcObject = stream;
+        captureScannerDebug(`media stream attached: ${label}`);
+
+        if (options.deferInitialPlay) {
+          captureScannerDebug(`video play deferred: ${label}`);
+          void waitForVideoSurfacePaint().then(() => {
+            if (!settled) {
+              void requestPlay("after paint");
+            }
+          });
+        } else {
+          void requestPlay("initial");
+        }
+      });
+
+    const startFrameCaptureScanner = async (
+      stream: MediaStream,
+      label: string,
+      reader: BrowserMultiFormatReader,
+    ) => {
+      const FrameCaptureApi = getFrameCaptureConstructor();
+      const canvasElement = ensureCanvasPreviewElement();
+      const videoTrack = getVideoTracks(stream)[0];
+      const context = canvasElement?.getContext("2d");
+
+      if (!FrameCaptureApi || !canvasElement || !videoTrack || !context) {
+        stream.getTracks().forEach((track) => track.stop());
+        throw new Error("Camera frame capture is not available");
+      }
+
+      activeStreamRef.current = stream;
+      const capture = new FrameCaptureApi(videoTrack);
+      let isStopped = false;
+      let scanTimeoutId: number | undefined;
+      let hasStarted = false;
+      let isFramePending = false;
+
+      const controls: IScannerControls = {
+        stop: () => {
+          isStopped = true;
+          if (scanTimeoutId !== undefined) {
+            window.clearTimeout(scanTimeoutId);
+          }
+          stream.getTracks().forEach((track) => track.stop());
+          activeStreamRef.current = null;
+        },
+      };
+
+      const drawFrame = (frame: ImageBitmap) => {
+        if (
+          canvasElement.width !== frame.width ||
+          canvasElement.height !== frame.height
+        ) {
+          canvasElement.width = frame.width;
+          canvasElement.height = frame.height;
+        }
+
+        context.drawImage(frame, 0, 0, frame.width, frame.height);
+        frame.close();
+      };
+
+      const scanNextFrame = async () => {
+        if (isStopped || isCancelled()) {
+          controls.stop();
+          return;
+        }
+
+        if (isFramePending) {
+          return;
+        }
+
+        isFramePending = true;
+
+        try {
+          const frame = await capture.grabFrame();
+
+          drawFrame(frame);
+
+          if (!hasStarted) {
+            hasStarted = true;
+            setScannerState("scanning");
+            captureScannerDebug(`frame scanner scanning: ${label}`);
+          }
+
+          try {
+            const result = reader.decodeFromCanvas(canvasElement);
+            const decodedValue = result.getText().trim();
+
+            if (decodedValue && !hasDetectedBarcodeRef.current) {
+              hasDetectedBarcodeRef.current = true;
+              captureScannerDebug("barcode decoded");
+              controls.stop();
+              onBarcodeDetected(decodedValue);
+              toast.success("Barcode scanned");
+              onOpenChange(false);
+              return;
+            }
+          } catch {
+            // Most frames do not contain a readable barcode. Keep scanning.
+          }
+        } catch (error) {
+          controls.stop();
+          if (!hasStarted) {
+            throw error instanceof Error
+              ? error
+              : new Error("Camera frame capture failed");
+          }
+
+          captureScannerDebug("frame scanner error", error);
+          setScannerState("error");
+          return;
+        } finally {
+          isFramePending = false;
+        }
+
+        scanTimeoutId = window.setTimeout(scanNextFrame, 180);
+      };
+
+      scannerControlsRef.current = controls;
+      captureScannerDebug(`frame scanner opening: ${label}`);
+      await scanNextFrame();
+    };
+
+    setScannerState("requesting");
+
+    let lastStartupError: unknown;
+    const isTouchSafariScanner = isAppleTouchSafari();
+    if (isTouchSafariScanner) {
+      captureScannerDebug("using touch safari camera startup");
+    }
+    const cameraAttempts = isTouchSafariScanner
+      ? touchSafariCameraAttempts
+      : await buildCameraAttempts();
+
+    for (const [attemptIndex, cameraAttempt] of cameraAttempts.entries()) {
+      captureScannerDebug(`requesting media: ${cameraAttempt.label}`);
+
+      try {
+        const reader = new BrowserMultiFormatReader(undefined, {
+          delayBetweenScanAttempts: 180,
+          tryPlayVideoTimeout: 15000,
+        });
+        setScannerState("starting");
+
+        if (isTouchSafariScanner) {
+          const frameCaptureApi = getFrameCaptureConstructor();
+
+          if (frameCaptureApi) {
+            captureScannerDebug(
+              `requesting frame camera stream: ${cameraAttempt.label}`,
+            );
+            const stream = await getUserMedia(cameraAttempt.constraints);
+
+            captureScannerDebug(
+              `frame camera stream granted: ${cameraAttempt.label}`,
+            );
+            await startFrameCaptureScanner(stream, cameraAttempt.label, reader);
+            return;
+          }
+
+          captureScannerDebug("frame capture unavailable");
+          captureScannerDebug(`decoder opening: ${cameraAttempt.label}`);
+
+          const controls = await reader.decodeFromConstraints(
+            cameraAttempt.constraints,
+            videoElement,
+            (result, _error, controls) => {
+              const decodedValue = result?.getText().trim();
+
+              if (decodedValue && !hasDetectedBarcodeRef.current) {
+                hasDetectedBarcodeRef.current = true;
+                captureScannerDebug("barcode decoded");
+                controls.stop();
+                onBarcodeDetected(decodedValue);
+                toast.success("Barcode scanned");
+                onOpenChange(false);
+              }
+            },
+          );
+
+          if (isCancelled()) {
+            controls.stop();
+            return;
+          }
+
+          scannerControlsRef.current = controls;
+          setScannerState("scanning");
+          captureScannerDebug(`decoder scanning: ${cameraAttempt.label}`);
+          return;
+        }
+
+        captureScannerDebug(`requesting camera stream: ${cameraAttempt.label}`);
+
+        const stream = await getUserMedia(cameraAttempt.constraints);
+        captureScannerDebug(`media stream granted: ${cameraAttempt.label}`);
+
+        await waitForVideoPreview(stream, cameraAttempt.label, {
+          deferInitialPlay: isTouchSafariScanner,
+        });
+
+        if (isCancelled()) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+
+        let isScanningStopped = false;
+        let scanTimeoutId: number | undefined;
+        const controls: IScannerControls = {
+          stop: () => {
+            isScanningStopped = true;
+            if (scanTimeoutId !== undefined) {
+              window.clearTimeout(scanTimeoutId);
+            }
+            stream.getTracks().forEach((track) => track.stop());
+            if (videoElement.srcObject === stream) {
+              videoElement.pause();
+              videoElement.srcObject = null;
+            }
+          },
+        };
+        const scanNextFrame = () => {
+          if (isScanningStopped || isCancelled()) {
+            controls.stop();
+            return;
+          }
+
+          if (
+            videoElement.videoWidth > 0 &&
+            videoElement.videoHeight > 0 &&
+            videoElement.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
+          ) {
+            try {
+              const result = reader.decode(videoElement);
+              const decodedValue = result.getText().trim();
+
+              if (decodedValue && !hasDetectedBarcodeRef.current) {
+                hasDetectedBarcodeRef.current = true;
+                captureScannerDebug("barcode decoded");
+                controls.stop();
+                onBarcodeDetected(decodedValue);
+                toast.success("Barcode scanned");
+                onOpenChange(false);
+                return;
+              }
+            } catch {
+              // Most frames do not contain a readable barcode. Keep scanning.
+            }
+          }
+
+          scanTimeoutId = window.setTimeout(scanNextFrame, 180);
+        };
+
+        scannerControlsRef.current = controls;
+        setScannerState("scanning");
+        captureScannerDebug(`decoder scanning: ${cameraAttempt.label}`);
+        scanNextFrame();
+        return;
+      } catch (error) {
+        lastStartupError = error;
+
+        if (isCancelled()) {
+          return;
+        }
+
+        captureScannerDebug(
+          `scanner startup error: ${cameraAttempt.label}`,
+          error,
+        );
+
+        if (
+          error instanceof DOMException &&
+          (error.name === "NotAllowedError" ||
+            error.name === "PermissionDeniedError")
+        ) {
+          setScannerState("blocked");
+          return;
+        }
+
+        if (attemptIndex < cameraAttempts.length - 1) {
+          captureScannerDebug(`retrying camera after ${cameraAttempt.label}`);
+          continue;
+        }
+      }
+    }
+
+    if (!isCancelled()) {
+      captureScannerDebug("scanner startup exhausted", lastStartupError);
+      setScannerState("error");
+    }
+  }, [
+    captureScannerDebug,
+    ensureCanvasPreviewElement,
+    ensureVideoPreviewElement,
+    onBarcodeDetected,
+    onOpenChange,
+    open,
+    stopScanner,
+    videoElement,
+  ]);
+
+  const handleBarcodePhotoSelected = async (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    setScannerState("decoding_photo");
+    captureScannerDebug("barcode photo selected");
+
+    const imageUrl = URL.createObjectURL(file);
+
+    try {
+      const reader = new BrowserMultiFormatReader();
+      const result = await reader.decodeFromImageUrl(imageUrl);
+      const decodedValue = result.getText().trim();
+
+      if (!decodedValue) {
+        throw new Error("Barcode photo did not contain a readable barcode");
+      }
+
+      captureScannerDebug("barcode photo decoded");
+      onBarcodeDetected(decodedValue);
+      toast.success("Barcode scanned");
+      onOpenChange(false);
+    } catch (error) {
+      captureScannerDebug("barcode photo decode failed", error);
+      setScannerState("error");
+    } finally {
+      URL.revokeObjectURL(imageUrl);
+    }
+  };
+
+  useEffect(() => {
+    if (open) {
+      return;
+    }
+
+    stopScanner();
+    removeVideoPreviewElement();
+    setScannerState("idle");
+    setScannerDebug(buildEmptyScannerDebugSnapshot());
+  }, [open, removeVideoPreviewElement, stopScanner]);
+
+  const scannerMessage =
+    scannerState === "requesting"
+      ? "Requesting camera access..."
+      : scannerState === "starting"
+        ? "Starting camera..."
+      : scannerState === "decoding_photo"
+        ? "Reading barcode photo..."
+      : scannerState === "scanning"
+        ? "Scanning barcode..."
+        : scannerState === "unsupported"
+          ? "Camera barcode scanning is not available in this browser."
+          : scannerState === "blocked"
+            ? "Camera access is blocked for this site."
+            : scannerState === "error"
+              ? "Could not read from the camera."
+              : "Camera scanner ready.";
+  const canStartScanner =
+    scannerState === "idle" ||
+    scannerState === "error" ||
+    scannerState === "blocked";
+  const canUsePhotoScanner =
+    scannerState === "idle" ||
+    scannerState === "error" ||
+    scannerState === "blocked" ||
+    scannerState === "unsupported";
+  const shouldShowControlOverlay =
+    scannerState !== "scanning" && scannerState !== "starting";
+
+  if (!open || typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(
+    <div
+      aria-modal="true"
+      className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/60 p-layout-md sm:flex sm:items-center sm:justify-center"
+      role="dialog"
+    >
+      <section className="relative mx-auto grid w-full max-w-md gap-4 rounded-lg border border-border bg-background p-6 shadow-lg">
+        <button
+          aria-label="Close"
+          className="absolute right-4 top-4 rounded-sm text-muted-foreground opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          onClick={() => onOpenChange(false)}
+          type="button"
+        >
+          <X className="h-4 w-4" />
+        </button>
+        <header className="space-y-1.5 pr-8">
+          <h2 className="text-lg font-semibold leading-none tracking-tight">
+            Scan barcode
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Use the device camera to fill the stock search field.
+          </p>
+        </header>
+        <div className="space-y-layout-md">
+          <div className="relative aspect-[4/3] overflow-hidden rounded-md border border-border bg-muted">
+            <div
+              aria-label="Barcode camera preview"
+              className="absolute inset-0"
+              ref={videoHostRef}
+            />
+            <input
+              accept="image/*"
+              aria-label="Capture barcode photo"
+              capture="environment"
+              className="sr-only"
+              onChange={handleBarcodePhotoSelected}
+              ref={barcodePhotoInputRef}
+              type="file"
+            />
+            {shouldShowControlOverlay ? (
+              <div className="absolute inset-0 flex items-center justify-center bg-muted/95 px-layout-md text-center text-sm text-muted-foreground">
+                <div className="space-y-3">
+                  <p>{scannerMessage}</p>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {canStartScanner ? (
+                      <Button
+                        onClick={() => void startScanner()}
+                        size="sm"
+                        type="button"
+                        variant="secondary"
+                      >
+                        <ScanBarcode className="h-4 w-4" />
+                        {scannerState === "idle"
+                          ? "Start camera"
+                          : "Try again"}
+                      </Button>
+                    ) : null}
+                    {canUsePhotoScanner ? (
+                      <Button
+                        onClick={() => barcodePhotoInputRef.current?.click()}
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                      >
+                        <Camera className="h-4 w-4" />
+                        Take photo
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            ) : scannerState === "starting" ? (
+              <div className="pointer-events-none absolute inset-x-layout-md bottom-layout-md rounded-md border border-border bg-background/85 px-3 py-2 text-center text-sm text-muted-foreground shadow-sm">
+                {scannerMessage}
+              </div>
+            ) : (
+              <div className="pointer-events-none absolute inset-x-layout-xl top-1/2 h-px -translate-y-1/2 bg-primary/80 shadow-[0_0_18px_hsl(var(--primary))]" />
+            )}
+          </div>
+          {scannerState === "scanning" ? (
+            <p className="text-sm text-muted-foreground">{scannerMessage}</p>
+          ) : null}
+          <div className="rounded-md border border-dashed border-border bg-muted/30 p-3 text-[11px] text-muted-foreground">
+            <div className="flex items-center justify-between gap-3">
+              <p className="font-medium uppercase tracking-[0.14em] text-foreground">
+                Scanner diagnostics
+              </p>
+              <span className="rounded-sm bg-background px-2 py-0.5 font-mono text-[10px] text-foreground">
+                {scannerState}
+              </span>
+            </div>
+            <dl className="mt-3 grid grid-cols-[96px_minmax(0,1fr)] gap-x-3 gap-y-1 font-mono">
+              {[
+                ["event", scannerDebug.event],
+                ["time", scannerDebug.time || "n/a"],
+                ["secure", scannerDebug.secureContext],
+                ["media", scannerDebug.mediaDevices],
+                ["video", scannerDebug.video],
+                ["ready", scannerDebug.readyState],
+                [
+                  "paused",
+                  videoRef.current ? String(videoRef.current.paused) : "n/a",
+                ],
+                ["current", scannerDebug.currentTime],
+                ["src", scannerDebug.srcObject],
+                ["tracks", scannerDebug.tracks],
+                ["error", scannerDebug.error],
+                ["agent", scannerDebug.userAgent],
+              ].map(([label, value]) => (
+                <div className="contents" key={label}>
+                  <dt className="uppercase tracking-[0.12em]">{label}</dt>
+                  <dd className="min-w-0 break-words text-foreground">
+                    {value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            {scannerDebug.events.length > 0 ? (
+              <div className="mt-3 border-t border-border/70 pt-2">
+                <p className="font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                  Events
+                </p>
+                <ol className="mt-1 space-y-1 font-mono text-[10px] text-foreground">
+                  {scannerDebug.events.map((entry, index) => (
+                    <li className="break-words" key={`${entry}-${index}`}>
+                      {entry}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </section>
+    </div>,
+    document.body,
+  );
+}
+
 export function StockAdjustmentWorkspaceContent({
   cycleCountDraft,
   cycleCountDraftSummary,
@@ -488,11 +1667,16 @@ export function StockAdjustmentWorkspaceContent({
   onSubmitBatch,
   onSubmitCycleCountDraft,
   searchState,
+  showBackButton = false,
   storeId,
 }: StockAdjustmentWorkspaceContentProps) {
+  const { user } = useAuth();
+  const quickAddProductSku = usePOSQuickAddProductSku();
   const [adjustmentType, setAdjustmentType] = useState<StockAdjustmentType>(
     searchState?.mode ?? "cycle_count",
   );
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [isBarcodeScannerOpen, setIsBarcodeScannerOpen] = useState(false);
   const [submissionKey, setSubmissionKey] = useState(() =>
     buildStockAdjustmentSubmissionKey(searchState?.mode ?? "cycle_count"),
   );
@@ -764,6 +1948,25 @@ export function StockAdjustmentWorkspaceContent({
     [rows, selectedCountScopeKeySet, selectedCountScopeKeys],
   );
   const normalizedFilterQuery = normalizeStockAdjustmentSearch(filters.query);
+  const quickAddInitialLookupCode = normalizeQuickAddInitialLookupCode(
+    filters.query,
+  );
+  const quickAddInitialName = quickAddInitialLookupCode
+    ? ""
+    : filters.query.trim();
+  const existingSkuOptions = useMemo(
+    () =>
+      inventoryItems
+        .filter((item) => !item.barcode)
+        .map((item) => ({
+          productSkuId: String(item._id),
+          name: getInventoryItemDisplayName(item),
+          sku: item.sku ?? "",
+          category: item.productCategory ?? undefined,
+          barcode: item.barcode ?? undefined,
+        })),
+    [inventoryItems],
+  );
   const filteredRows = useMemo(
     () =>
       scopedRows.filter(
@@ -1282,6 +2485,102 @@ export function StockAdjustmentWorkspaceContent({
     });
   };
 
+  const handleQuickAddSubmit = async ({
+    name,
+    variants,
+    usesMultipleVariants,
+  }: QuickAddProductSubmitPayload) => {
+    if (!storeId || !user?._id) {
+      throw new Error("Store sign-in is still loading. Try again in a moment.");
+    }
+
+    const [primaryVariant, ...extraVariants] = variants;
+    const createdProduct = await quickAddProductSku({
+      storeId,
+      createdByUserId: user._id,
+      name,
+      lookupCode: primaryVariant.lookupCode,
+      price: primaryVariant.price,
+      quantityAvailable: primaryVariant.quantityAvailable,
+    });
+
+    if (extraVariants.length && !createdProduct.productId) {
+      throw new Error("Quick add product id missing");
+    }
+
+    for (const variant of extraVariants) {
+      await quickAddProductSku({
+        storeId,
+        createdByUserId: user._id,
+        name,
+        lookupCode: variant.lookupCode,
+        price: variant.price,
+        quantityAvailable: variant.quantityAvailable,
+        productId: createdProduct.productId,
+      });
+    }
+
+    toast.success(
+      usesMultipleVariants ? "Product variants added" : "Product added",
+    );
+
+    if (createdProduct.skuId) {
+      const createdSkuId = createdProduct.skuId as Id<"productSku">;
+
+      setSelectedCountScopeKeys([]);
+      setFilters((current) => ({
+        ...current,
+        availability: "all",
+        query: name,
+      }));
+      setActiveInventoryItemId(createdSkuId);
+      onSearchStateChange?.({
+        availability: undefined,
+        page: 1,
+        query: name,
+        scope: undefined,
+        sku: createdSkuId,
+      });
+    }
+  };
+
+  const handleAttachBarcodeSubmit = async ({
+    lookupCode,
+    productSkuId,
+  }: QuickAddAttachBarcodePayload) => {
+    if (!storeId || !user?._id) {
+      throw new Error("Store sign-in is still loading. Try again in a moment.");
+    }
+
+    await quickAddProductSku({
+      storeId,
+      createdByUserId: user._id,
+      name: "",
+      lookupCode,
+      price: 0,
+      quantityAvailable: 0,
+      productSkuId: productSkuId as Id<"productSku">,
+    });
+
+    const attachedSkuId = productSkuId as Id<"productSku">;
+
+    setSelectedCountScopeKeys([]);
+    setFilters((current) => ({
+      ...current,
+      availability: "all",
+      query: lookupCode,
+    }));
+    setActiveInventoryItemId(attachedSkuId);
+    onSearchStateChange?.({
+      availability: undefined,
+      page: 1,
+      query: lookupCode,
+      scope: undefined,
+      sku: attachedSkuId,
+    });
+    toast.success("Barcode attached to SKU");
+  };
+
   const handleUnavailableMetricClick = () => {
     if (inventoryState.unavailableUnits === 0) return;
 
@@ -1437,6 +2736,7 @@ export function StockAdjustmentWorkspaceContent({
       <PageLevelHeader
         eyebrow="Store Ops"
         title={inventoryState.title}
+        showBackButton={showBackButton}
         description={
           <>
             {inventoryState.description}{" "}
@@ -1624,8 +2924,18 @@ export function StockAdjustmentWorkspaceContent({
                     }
                     placeholder="Search product, SKU, or barcode"
                     value={filters.query}
-                    className="pl-9"
+                    className="pl-9 pr-12"
                   />
+                  <Button
+                    aria-label="Scan barcode with camera"
+                    className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    onClick={() => setIsBarcodeScannerOpen(true)}
+                    size="icon"
+                    type="button"
+                    variant="ghost"
+                  >
+                    <ScanBarcode className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -1661,6 +2971,15 @@ export function StockAdjustmentWorkspaceContent({
                     ))}
                   </SelectContent>
                 </Select>
+                <Button
+                  disabled={!storeId || !user?._id}
+                  onClick={() => setIsQuickAddOpen(true)}
+                  type="button"
+                  variant="workflow"
+                >
+                  <PackagePlus className="h-4 w-4" />
+                  Quick add
+                </Button>
                 {filters.query || filters.availability !== "all" ? (
                   <Button
                     className="text-muted-foreground"
@@ -2059,6 +3378,24 @@ export function StockAdjustmentWorkspaceContent({
           </section>
         </PageWorkspaceRail>
       </PageWorkspaceGrid>
+
+      <StockAdjustmentBarcodeScannerDialog
+        onBarcodeDetected={(barcode) => handleFilterChange({ query: barcode })}
+        onOpenChange={setIsBarcodeScannerOpen}
+        open={isBarcodeScannerOpen}
+      />
+
+      <QuickAddProductDialog
+        description="Add sellable stock without leaving stock adjustments."
+        existingSkuOptions={existingSkuOptions}
+        initialLookupCode={quickAddInitialLookupCode}
+        initialName={quickAddInitialName}
+        onAttachBarcode={handleAttachBarcodeSubmit}
+        onOpenChange={setIsQuickAddOpen}
+        onSubmit={handleQuickAddSubmit}
+        open={isQuickAddOpen}
+        submitErrorMessage="Could not quick add this product. Try again."
+      />
     </PageWorkspace>
   );
 }

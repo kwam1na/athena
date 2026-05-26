@@ -7,17 +7,17 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 - [packages/AGENTS.md](../../packages/AGENTS.md) - package router plus the operational guides for each harnessed package
 
 ## Repo Summary
-- Code files discovered: 1774
-- Graph nodes: 5714
-- Graph edges: 6024
-- Communities: 1702
+- Code files discovered: 1783
+- Graph nodes: 5781
+- Graph edges: 6101
+- Communities: 1711
 
 ## Graph Hotspots
 - `DailyCloseView.tsx` (82 edges, Community 0) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)
 - `dailyClose.ts` (65 edges, Community 1) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../packages/athena-webapp/convex/operations/dailyClose.ts)
 - `harness-inferential-review.ts` (46 edges, Community 2) - [`scripts/harness-inferential-review.ts`](../../scripts/harness-inferential-review.ts)
 - `storefrontJourneyEvents.ts` (45 edges, Community 3) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)
-- `useRegisterViewModel.ts` (43 edges, Community 4) - [`packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts`](../../packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts)
+- `useRegisterViewModel.ts` (44 edges, Community 4) - [`packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts`](../../packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts)
 - `createJourneyEvent()` (40 edges, Community 3) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)
 - `ProcurementView.tsx` (39 edges, Community 5) - [`packages/athena-webapp/src/components/procurement/ProcurementView.tsx`](../../packages/athena-webapp/src/components/procurement/ProcurementView.tsx)
 - `projectLocalEvents.ts` (37 edges, Community 6) - [`packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts`](../../packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts)

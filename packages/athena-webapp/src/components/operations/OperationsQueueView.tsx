@@ -209,12 +209,27 @@ function getApprovalRequestCopy(requestType: string) {
     };
   }
 
+  if (requestType === "pos_transaction_void") {
+    return {
+      approveLabel: "Approve void",
+      approvedToast: "Completed sale void approved",
+      description:
+        "Manager approval voids the completed sale and records the payment, drawer, inventory, and audit reversal.",
+      rejectedToast: "Completed sale void rejected",
+      rejectLabel: "Reject void",
+    };
+  }
+
   return null;
 }
 
 function formatApprovalRequestType(requestType: string) {
   if (requestType === "register_sync_review") {
     return "Synced register activity";
+  }
+
+  if (requestType === "pos_transaction_void") {
+    return "Completed sale void";
   }
 
   return requestType
@@ -324,6 +339,17 @@ function getPaymentCorrectionSummary(request: QueueApprovalRequest) {
       request.metadata?.previousPaymentMethod ??
       request.transactionSummary?.paymentMethod ??
       undefined,
+    transaction: request.transactionSummary ?? null,
+  };
+}
+
+function getTransactionVoidSummary(request: QueueApprovalRequest) {
+  if (request.requestType !== "pos_transaction_void") {
+    return null;
+  }
+
+  return {
+    requestedAt: request.createdAt,
     transaction: request.transactionSummary ?? null,
   };
 }
@@ -548,6 +574,7 @@ export function OperationsQueueViewContent({
             onSubmitBatch={onSubmitStockBatch}
             onSubmitCycleCountDraft={onSubmitCycleCountDraft}
             searchState={stockAdjustmentSearch}
+            showBackButton={showBackButton}
             storeId={storeId}
           />
         ) : null}
@@ -766,6 +793,8 @@ export function OperationsQueueViewContent({
                           getInventoryApprovalLineItems(request);
                         const paymentCorrectionSummary =
                           getPaymentCorrectionSummary(request);
+                        const transactionVoidSummary =
+                          getTransactionVoidSummary(request);
                         const itemAdjustmentSummary =
                           getItemAdjustmentSummary(request);
                         const varianceReviewSummary =
@@ -993,6 +1022,102 @@ export function OperationsQueueViewContent({
                                       </dd>
                                     </div>
                                   ) : null}
+                                </dl>
+                              </div>
+                            ) : null}
+
+                            {transactionVoidSummary ? (
+                              <div className="border-t border-border/70 bg-surface px-layout-md py-layout-md">
+                                <div className="flex flex-col gap-layout-xs md:flex-row md:items-center md:justify-between">
+                                  <div>
+                                    <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                                      Completed sale
+                                    </p>
+                                    <p className="mt-1 text-sm text-muted-foreground">
+                                      Sale queued for manager-approved void
+                                    </p>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    {transactionVoidSummary.transaction &&
+                                    orgUrlSlug &&
+                                    storeUrlSlug ? (
+                                      <Button
+                                        asChild
+                                        size="sm"
+                                        variant="utility"
+                                      >
+                                        <Link
+                                          params={{
+                                            orgUrlSlug,
+                                            storeUrlSlug,
+                                            transactionId:
+                                              transactionVoidSummary.transaction
+                                                .transactionId,
+                                          }}
+                                          search={{ o: getOrigin() }}
+                                          to="/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId"
+                                        >
+                                          <ArrowUpRight aria-hidden="true" />
+                                          View transaction
+                                        </Link>
+                                      </Button>
+                                    ) : null}
+                                  </div>
+                                </div>
+
+                                <dl className="mt-layout-sm grid gap-layout-sm rounded-lg border border-border bg-background p-layout-sm text-sm md:grid-cols-3 xl:grid-cols-6">
+                                  <div>
+                                    <dt className="text-xs text-muted-foreground">
+                                      Transaction
+                                    </dt>
+                                    <dd className="mt-1 font-medium text-foreground">
+                                      <TransactionReferenceLink
+                                        orgUrlSlug={orgUrlSlug}
+                                        storeUrlSlug={storeUrlSlug}
+                                        transaction={
+                                          transactionVoidSummary.transaction
+                                        }
+                                      />
+                                    </dd>
+                                  </div>
+                                  <div>
+                                    <dt className="text-xs text-muted-foreground">
+                                      Payment
+                                    </dt>
+                                    <dd className="mt-1 font-medium text-foreground">
+                                      {transactionVoidSummary.transaction
+                                        ?.paymentMethod
+                                        ? formatApprovalRequestType(
+                                            transactionVoidSummary.transaction
+                                              .paymentMethod,
+                                          )
+                                        : "Unknown"}
+                                    </dd>
+                                  </div>
+                                  <div>
+                                    <dt className="text-xs text-muted-foreground">
+                                      Total
+                                    </dt>
+                                    <dd className="mt-1 font-medium text-foreground">
+                                      {transactionVoidSummary.transaction
+                                        ? formatStoredAmount(
+                                            ghsCurrencyFormatter,
+                                            transactionVoidSummary.transaction
+                                              .total,
+                                          )
+                                        : "Unknown"}
+                                    </dd>
+                                  </div>
+                                  <div>
+                                    <dt className="text-xs text-muted-foreground">
+                                      Requested at
+                                    </dt>
+                                    <dd className="mt-1 font-medium text-foreground">
+                                      {formatApprovalDate(
+                                        transactionVoidSummary.requestedAt,
+                                      )}
+                                    </dd>
+                                  </div>
                                 </dl>
                               </div>
                             ) : null}

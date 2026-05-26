@@ -271,6 +271,46 @@ describe("voidTransaction public mutation", () => {
     ).not.toHaveProperty("staffProofToken");
   });
 
+  it("allows completed sale voids without an operator reason", async () => {
+    vi.mocked(completeTransactionCommands.voidTransaction).mockResolvedValue({
+      approval: {
+        action: {
+          key: "pos.transaction.void",
+        },
+        copy: {
+          title: "Manager approval required",
+          message: "Review completed sale void.",
+        },
+        reason: "Manager approval is required.",
+        requiredRole: "manager",
+        resolutionModes: [{ kind: "inline_manager_proof" }],
+        subject: {
+          id: "txn-1",
+          type: "pos_transaction",
+        },
+      },
+      kind: "approval_required",
+      transactionId: "txn-1",
+    } as never);
+
+    await expect(
+      getHandler(voidTransaction)(createAuthorizedVoidCtx() as never, {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        staffProofToken: "proof-token-1",
+        transactionId: "txn-1" as Id<"posTransaction">,
+      }),
+    ).resolves.toMatchObject({
+      kind: "approval_required",
+    });
+
+    expect(completeTransactionCommands.voidTransaction).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.not.objectContaining({
+        reason: expect.anything(),
+      }),
+    );
+  });
+
   it.each([
     ["missing staff profile", { staffProfile: null }],
     ["inactive staff profile", { staffProfile: { status: "inactive" } }],

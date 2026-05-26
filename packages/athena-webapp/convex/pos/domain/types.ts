@@ -64,6 +64,21 @@ export interface PosCashDrawerSummary {
   notes?: string;
   variance?: number;
   workflowTraceId?: string;
+  localSyncStatus?: {
+    status: "needs_review";
+    reconciliationItems: Array<{
+      createdAt?: number | null;
+      countedCash?: number | null;
+      expectedCash?: number | null;
+      id?: string;
+      localEventId?: string | null;
+      sequence?: number | null;
+      status?: string | null;
+      summary?: string | null;
+      type?: string | null;
+      variance?: number | null;
+    }>;
+  } | null;
 }
 
 export interface PosRegisterPhaseInput {

@@ -73,6 +73,26 @@ let mockRegisterState:
         notes?: string;
         variance?: number;
         workflowTraceId?: string;
+        localSyncStatus?: {
+          description?: string;
+          label?: string;
+          onRetrySync?: () => void;
+          pendingEventCount?: number;
+          reconciliationItems?: Array<{
+            countedCash?: number | null;
+            expectedCash?: number | null;
+            localEventId?: string | null;
+            summary?: string | null;
+            type?: string | null;
+            variance?: number | null;
+          }>;
+          status:
+            | "synced"
+            | "syncing"
+            | "pending_sync"
+            | "locally_closed_pending_sync"
+            | "needs_review";
+        };
       } | null;
       activeSession: { _id: string; sessionNumber: string } | null;
       activeSessionConflict?: {
@@ -1693,6 +1713,55 @@ describe("useRegisterViewModel", () => {
     expect(onRetrySync).toHaveBeenCalled();
   });
 
+  it("blocks POS when the active drawer has a synced closeout review", async () => {
+    mockRegisterState = {
+      ...mockRegisterState!,
+      activeRegisterSession: {
+        ...mockRegisterState!.activeRegisterSession!,
+        status: "active",
+        countedCash: undefined,
+        variance: undefined,
+        localSyncStatus: {
+          status: "needs_review",
+          reconciliationItems: [
+            {
+              countedCash: 4_500,
+              expectedCash: 5_000,
+              localEventId: "register-closeout-local-1",
+              summary:
+                "Register closeout variance requires manager review before synced closeout can be applied.",
+              type: "register_closeout",
+              variance: -500,
+            },
+          ],
+        },
+      },
+    };
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult(),
+      );
+    });
+
+    expect(result.current.drawerGate).not.toBeNull();
+    expect(result.current.drawerGate?.mode).toBe("closeoutBlocked");
+    expect(result.current.drawerGate?.hasPendingCloseoutApproval).toBe(true);
+    expect(result.current.drawerGate?.expectedCash).toBe(5_000);
+    expect(result.current.drawerGate?.closeoutSubmittedCountedCash).toBe(4_500);
+    expect(result.current.drawerGate?.closeoutSubmittedVariance).toBe(-500);
+    expect(result.current.drawerGate?.cashControlsRegisterSessionId).toBe(
+      "drawer-1",
+    );
+    expect(result.current.drawerGate?.onReopenRegister).toBeUndefined();
+    expect(result.current.drawerGate?.onCloseoutSecondaryAction).toBeUndefined();
+    expect(result.current.productEntry.disabled).toBe(true);
+    expect(mockStartSession).not.toHaveBeenCalled();
+  });
+
   it("holds the active POS session before signing the cashier out when session data is present", async () => {
     const { useRegisterViewModel } = await import("./useRegisterViewModel");
     const { result } = renderHook(() => useRegisterViewModel());
@@ -2257,8 +2326,9 @@ describe("useRegisterViewModel", () => {
     expect(mockStartSession).not.toHaveBeenCalled();
     expect(mockOpenDrawer).not.toHaveBeenCalled();
     expect(result.current.drawerGate).not.toHaveProperty("onSubmit");
-    expect(result.current.drawerGate?.onSubmitCloseout).toEqual(
-      expect.any(Function),
+    expect(result.current.drawerGate?.onSubmitCloseout).toBeUndefined();
+    expect(result.current.drawerGate?.closeoutSubmittedReason).toBe(
+      "manager_review",
     );
     expect(result.current.drawerGate?.expectedCash).toBe(5_000);
     expect(result.current.drawerGate?.hasPendingCloseoutApproval).toBe(true);
@@ -2494,6 +2564,71 @@ describe("useRegisterViewModel", () => {
         }),
       }),
     );
+  });
+
+  it("syncs zero-variance cloud-backed closeouts immediately after saving the local record", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: {
+        _id: "staff-1",
+        firstName: "Ama",
+        lastName: "Kusi",
+        activeRoles: ["manager"],
+      },
+      activeRegisterSession: {
+        _id: "drawer-1",
+        status: "closing",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        openingFloat: 5_000,
+        expectedCash: 5_000,
+        openedAt: Date.now(),
+      },
+      activeSession: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult(),
+      );
+    });
+
+    act(() => {
+      result.current.drawerGate?.onCloseoutCountedCashChange?.("50.00");
+    });
+
+    await act(async () => {
+      await result.current.drawerGate?.onSubmitCloseout?.();
+    });
+
+    expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "register.closeout_started",
+        localRegisterSessionId: "drawer-1",
+        payload: expect.objectContaining({
+          countedCash: 5_000,
+          notes: null,
+        }),
+      }),
+    );
+    expect(mockSubmitRegisterSessionCloseout).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorStaffProfileId: "staff-1",
+        actorUserId: "user-1",
+        countedCash: 5_000,
+        registerSessionId: "drawer-1",
+        storeId: "store-1",
+      }),
+    );
+    expect(mockMarkLocalEventsSynced).toHaveBeenCalledWith(["local-event-1"], {
+      uploaded: true,
+    });
   });
 
   it("opens the closeout drawer gate from an active empty register", async () => {
@@ -3531,6 +3666,56 @@ describe("useRegisterViewModel", () => {
     );
     expect(toast.error).toHaveBeenCalledWith(
       "Availability not ready. Reconnect or refresh this terminal before selling this item.",
+    );
+  });
+
+  it("uses command-returned availability when attaching a barcode before availability refresh catches up", async () => {
+    mockRegisterCatalogRows = [buildRegisterCatalogRow()];
+    mockRegisterCatalogAvailabilityRows = [];
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    await act(async () => {
+      await result.current.productEntry.onAddProduct({
+        id: "sku-2",
+        name: "Deep Wave",
+        sku: "DW-18",
+        barcode: "26377739293888393",
+        price: 10_000,
+        category: "Hair",
+        description: "Deep wave bundle",
+        image: null,
+        inStock: true,
+        availabilityStatus: "available",
+        quantityAvailable: 5,
+        size: "18",
+        length: 18,
+        color: "natural",
+        productId: "product-2" as Id<"product">,
+        skuId: "sku-2" as Id<"productSku">,
+        areProcessingFeesAbsorbed: false,
+      });
+    });
+
+    expect(toast.error).not.toHaveBeenCalledWith(
+      "Availability not ready. Reconnect or refresh this terminal before selling this item.",
+    );
+    expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "cart.item_added",
+        payload: expect.objectContaining({
+          productId: "product-2",
+          productSkuId: "sku-2",
+          productSku: "DW-18",
+        }),
+      }),
     );
   });
 
@@ -6026,6 +6211,12 @@ describe("useRegisterViewModel", () => {
     await waitFor(() =>
       expect(result.current.drawerGate?.mode).toBe("closeoutBlocked"),
     );
+    expect(result.current.drawerGate?.closeoutSubmittedReason).toBe(
+      "pending_sync",
+    );
+    expect(result.current.drawerGate?.closeoutSubmittedCountedCash).toBe(5_000);
+    expect(result.current.drawerGate?.closeoutSubmittedVariance).toBe(0);
+    expect(result.current.drawerGate?.onSubmitCloseout).toBeUndefined();
     expect(result.current.productEntry.disabled).toBe(true);
     expect(result.current.closeoutControl?.canCloseout).toBe(false);
     expect(result.current.drawerGate?.onReopenRegister).toBeTypeOf("function");
@@ -8223,6 +8414,9 @@ describe("useRegisterViewModel", () => {
         localReceiptNumber: completedEvent?.localTransactionId,
       }),
     );
+    expect(
+      result.current.checkout.completedTransactionData?.localTransactionId,
+    ).toBe(completedEvent?.localTransactionId);
     expect(mockMarkLocalEventsSynced).not.toHaveBeenCalled();
     expect(toast.success).not.toHaveBeenCalled();
   });

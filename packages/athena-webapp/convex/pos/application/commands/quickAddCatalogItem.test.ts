@@ -237,6 +237,112 @@ describe("quickAddCatalogItem", () => {
     });
   });
 
+  it("attaches a scanned barcode to an existing SKU without inserting a duplicate item", async () => {
+    const { ctx, tables } = createQuickAddCtx({
+      ...baseSeed,
+      category: [
+        { _id: "category001", storeId: "storezzzz", slug: "wigs", name: "Wigs" },
+      ],
+      product: [
+        {
+          _id: "product001",
+          categoryId: "category001",
+          storeId: "storezzzz",
+          description: "",
+          name: "Existing wig",
+          areProcessingFeesAbsorbed: false,
+        },
+      ],
+      productSku: [
+        {
+          _id: "productSku001",
+          images: [],
+          netPrice: 0,
+          price: 75000,
+          productId: "product001",
+          quantityAvailable: 3,
+          sku: "EXISTING-SKU",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+    const insertSpy = vi.spyOn(ctx.db, "insert");
+
+    const result = await quickAddCatalogItem(ctx, {
+      storeId: "storezzzz" as Id<"store">,
+      createdByUserId: "user0001" as Id<"athenaUser">,
+      name: "",
+      lookupCode: "111122223333",
+      price: 0,
+      quantityAvailable: 0,
+      productSkuId: "productSku001" as Id<"productSku">,
+    });
+
+    expect(insertSpy).not.toHaveBeenCalled();
+    expect(tables.productSku.get("productSku001")).toMatchObject({
+      barcode: "111122223333",
+    });
+    expect(result).toMatchObject({
+      name: "Existing wig",
+      barcode: "111122223333",
+      sku: "EXISTING-SKU",
+    });
+  });
+
+  it("blocks attaching a barcode that already belongs to another SKU", async () => {
+    const { ctx } = createQuickAddCtx({
+      ...baseSeed,
+      category: [
+        { _id: "category001", storeId: "storezzzz", slug: "wigs", name: "Wigs" },
+      ],
+      product: [
+        {
+          _id: "product001",
+          categoryId: "category001",
+          storeId: "storezzzz",
+          description: "",
+          name: "Existing wig",
+          areProcessingFeesAbsorbed: false,
+        },
+      ],
+      productSku: [
+        {
+          _id: "productSku001",
+          barcode: "111122223333",
+          images: [],
+          netPrice: 0,
+          price: 75000,
+          productId: "product001",
+          quantityAvailable: 3,
+          sku: "FIRST-SKU",
+          storeId: "storezzzz",
+        },
+        {
+          _id: "productSku002",
+          images: [],
+          netPrice: 0,
+          price: 85000,
+          productId: "product001",
+          quantityAvailable: 2,
+          sku: "SECOND-SKU",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    await expect(
+      quickAddCatalogItem(ctx, {
+        storeId: "storezzzz" as Id<"store">,
+        createdByUserId: "user0001" as Id<"athenaUser">,
+        name: "",
+        lookupCode: "111122223333",
+        price: 0,
+        quantityAvailable: 0,
+        productSkuId: "productSku002" as Id<"productSku">,
+      }),
+    ).rejects.toThrow("Barcode is already attached to another SKU");
+  });
+
   it("adds a new SKU variant to an existing product when productId is provided", async () => {
     const { ctx, tables } = createQuickAddCtx({
       ...baseSeed,

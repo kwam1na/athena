@@ -49,6 +49,47 @@ export type PosLocalSyncResult = {
   };
 };
 
+function toSyncResultMapping(
+  mapping: LocalSyncMappingRecord,
+): LocalSyncMappingRecord {
+  return {
+    _id: mapping._id,
+    storeId: mapping.storeId,
+    terminalId: mapping.terminalId,
+    localRegisterSessionId: mapping.localRegisterSessionId,
+    localEventId: mapping.localEventId,
+    localIdKind: mapping.localIdKind,
+    localId: mapping.localId,
+    cloudTable: mapping.cloudTable,
+    cloudId: mapping.cloudId,
+    createdAt: mapping.createdAt,
+  };
+}
+
+function toSyncResultConflict(
+  conflict: LocalSyncConflictRecord,
+): LocalSyncConflictRecord {
+  return {
+    _id: conflict._id,
+    storeId: conflict.storeId,
+    terminalId: conflict.terminalId,
+    localRegisterSessionId: conflict.localRegisterSessionId,
+    localEventId: conflict.localEventId,
+    sequence: conflict.sequence,
+    conflictType: conflict.conflictType,
+    status: conflict.status,
+    summary: conflict.summary,
+    details: conflict.details,
+    createdAt: conflict.createdAt,
+    ...(conflict.resolvedAt === undefined
+      ? {}
+      : { resolvedAt: conflict.resolvedAt }),
+    ...(conflict.resolvedByStaffProfileId === undefined
+      ? {}
+      : { resolvedByStaffProfileId: conflict.resolvedByStaffProfileId }),
+  };
+}
+
 type IngestionDependencies = {
   repository: LocalSyncIngestionRepository;
   projectionRepository: SyncProjectionRepository;
@@ -302,8 +343,8 @@ export function createLocalSyncIngestionService(
       return ok({
         accepted,
         held,
-        mappings,
-        conflicts,
+        mappings: mappings.map(toSyncResultMapping),
+        conflicts: conflicts.map(toSyncResultConflict),
         syncCursor: {
           localRegisterSessionId: cursorRegisterSessionId,
           acceptedThroughSequence,

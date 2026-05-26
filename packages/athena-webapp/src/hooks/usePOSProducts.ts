@@ -3,6 +3,7 @@ import {
   useConvexQuickAddCatalogItem,
   useConvexProductIdLookup,
   useConvexProductSearch,
+  useConvexRegisterCatalog,
 } from "@/lib/pos/infrastructure/convex/catalogGateway";
 import { useConvexDirectTransactionMutation } from "@/lib/pos/infrastructure/convex/commandGateway";
 import type { Id } from "~/convex/_generated/dataModel";
@@ -26,6 +27,10 @@ export function usePOSProductIdSearch(
   productId: string,
 ) {
   return useConvexProductIdLookup({ storeId, productId });
+}
+
+export function usePOSRegisterCatalog(storeId: Id<"store"> | undefined) {
+  return useConvexRegisterCatalog({ storeId });
 }
 
 export const usePOSTransactionComplete = () => useConvexDirectTransactionMutation();

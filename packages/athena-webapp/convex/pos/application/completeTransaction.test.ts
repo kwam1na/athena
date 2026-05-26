@@ -332,6 +332,30 @@ describe("voidTransaction", () => {
     expect(ctx.runMutation).not.toHaveBeenCalled();
   });
 
+  it("returns approval_required without an operator reason", async () => {
+    const ctx = createVoidCtx();
+
+    await expect(
+      voidTransaction(ctx as never, {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        transactionId: "txn-1" as Id<"posTransaction">,
+      }),
+    ).resolves.toMatchObject({
+      kind: "approval_required",
+      approval: {
+        metadata: expect.not.objectContaining({
+          reason: expect.anything(),
+        }),
+      },
+    });
+
+    const approvalRequestPayload = vi.mocked(ctx.db.insert).mock.calls.find(
+      ([tableName]) => tableName === "approvalRequest",
+    )?.[1];
+    expect(approvalRequestPayload).not.toHaveProperty("notes");
+    expectNoVoidBusinessSideEffects();
+  });
+
   it("reuses a pending void approval request on command retries", async () => {
     const ctx = createVoidCtx({
       approvalRequests: [

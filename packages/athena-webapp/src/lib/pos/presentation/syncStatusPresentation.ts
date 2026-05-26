@@ -9,12 +9,15 @@ export type PosSyncStatusTone = "success" | "neutral" | "warning" | "danger";
 
 export type PosReconciliationItem = {
   createdAt?: number | null;
+  expectedCash?: number | null;
   id?: string;
   localEventId?: string | null;
+  countedCash?: number | null;
   sequence?: number | null;
   status?: string | null;
   summary?: string | null;
   type?: string | null;
+  variance?: number | null;
 };
 
 export type PosSyncStatusPresentation = {
@@ -97,11 +100,27 @@ function normalizeStatus(status?: string | null): PosSyncStatusKind {
   }
 }
 
+export function isRegisterCloseoutReviewItem(item: PosReconciliationItem) {
+  const localEventId = item.localEventId?.toLowerCase() ?? "";
+  const summary = item.summary?.toLowerCase() ?? "";
+
+  return (
+    item.type === "register_closeout" ||
+    localEventId.includes("register-closed") ||
+    localEventId.includes("register-closeout") ||
+    summary.includes("register closeout")
+  );
+}
+
 export function buildPosSyncStatusPresentation(
   source?: SyncStatusSource | null,
 ): PosSyncStatusPresentation {
   const status = normalizeStatus(source?.status);
   const base = STATUS_COPY[status];
+  const reconciliationItems = source?.reconciliationItems ?? [];
+  const hasCloseoutReview =
+    status === "needs_review" &&
+    reconciliationItems.some(isRegisterCloseoutReviewItem);
   const pendingEventCount =
     typeof source?.pendingEventCount === "number" &&
     Number.isFinite(source.pendingEventCount) &&
@@ -111,14 +130,27 @@ export function buildPosSyncStatusPresentation(
 
   return {
     ...base,
-    description: source?.description?.trim() || base.description,
-    label: source?.label?.trim() || base.label,
+    description:
+      source?.description?.trim() ||
+      (hasCloseoutReview
+        ? "Synced register closeout has a variance. Review it before this closeout can be applied."
+        : base.description),
+    label:
+      source?.label?.trim() ||
+      (hasCloseoutReview ? "Closeout review" : base.label),
     pendingEventCount,
-    reconciliationItems: source?.reconciliationItems ?? [],
+    reconciliationItems,
   };
 }
 
-export function formatPosReconciliationType(type?: string | null): string {
+export function formatPosReconciliationType(
+  type?: string | null,
+  item?: PosReconciliationItem,
+): string {
+  if (item && isRegisterCloseoutReviewItem(item)) {
+    return "Closeout variance review";
+  }
+
   switch (type) {
     case "inventory":
     case "inventory_conflict":
@@ -131,7 +163,7 @@ export function formatPosReconciliationType(type?: string | null): string {
     case "permission_drift":
       return "Permission review";
     case "register_closeout":
-      return "Closeout review";
+      return "Closeout variance review";
     default:
       return "Reconciliation review";
   }

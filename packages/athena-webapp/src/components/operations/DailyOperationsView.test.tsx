@@ -544,6 +544,33 @@ describe("DailyOperationsViewContent", () => {
       "href",
       "/wigclub/store/osu/operations/open-work?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
     );
+    expect(
+      screen.getByRole("link", { name: "Open Close history workspace" }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/operations/daily-close-history?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
+    );
+    expect(
+      screen.getByRole("link", { name: "Open Stock adjustments workspace" }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/operations/stock-adjustments?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
+    );
+    expect(
+      screen.getByRole("link", { name: "Open SKU activity workspace" }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/operations/sku-activity?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
+    );
+    expect(
+      screen.queryByRole("link", { name: "Open Opening Handoff workspace" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Open EOD Review workspace" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Open Open work workspace" }),
+    ).not.toBeInTheDocument();
   });
 
   it("incorporates workflow lane counts into the description", () => {

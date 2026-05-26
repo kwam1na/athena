@@ -52,7 +52,9 @@ function createQueryCtx(seed: Record<string, Array<Record<string, unknown>>>) {
         getRows(tableName).find((row) => row._id === id) ?? null,
       insert: async (tableName: string, value: Record<string, unknown>) => {
         const rows = getRows(tableName);
-        const id = (value._id as string | undefined) ?? `${tableName}_${rows.length + 1}`;
+        const id =
+          (value._id as string | undefined) ??
+          `${tableName}_${rows.length + 1}`;
         rows.push({ ...value, _id: id });
         return id;
       },
@@ -63,7 +65,9 @@ function createQueryCtx(seed: Record<string, Array<Record<string, unknown>>>) {
         id: string,
         value: Record<string, unknown>,
       ) => {
-        const row = getRows(tableName).find((candidate) => candidate._id === id);
+        const row = getRows(tableName).find(
+          (candidate) => candidate._id === id,
+        );
         if (!row) {
           throw new Error(`Missing ${tableName} row ${id}`);
         }
@@ -71,7 +75,9 @@ function createQueryCtx(seed: Record<string, Array<Record<string, unknown>>>) {
       },
       query: (tableName: string) => {
         const filters: Array<[string, unknown]> = [];
-        const predicateFilters: Array<(row: Record<string, unknown>) => boolean> = [];
+        const predicateFilters: Array<
+          (row: Record<string, unknown>) => boolean
+        > = [];
         const matches = (row: Record<string, unknown>) =>
           filters.every(([field, value]) => row[field] === value) &&
           predicateFilters.every((predicate) => predicate(row));
@@ -98,7 +104,8 @@ function createQueryCtx(seed: Record<string, Array<Record<string, unknown>>>) {
               build({
                 ...filterQuery,
                 eq: (left: unknown, right: unknown) =>
-                  resolveFilterValue(left, row) === resolveFilterValue(right, row),
+                  resolveFilterValue(left, row) ===
+                  resolveFilterValue(right, row),
               }),
             );
             return query;
@@ -131,9 +138,7 @@ function createQueryCtx(seed: Record<string, Array<Record<string, unknown>>>) {
           },
           order: () => query,
           async unique() {
-            return (
-              getRows(tableName).find((row) => matches(row)) ?? null
-            );
+            return getRows(tableName).find((row) => matches(row)) ?? null;
           },
           async first() {
             return getRows(tableName).find((row) => matches(row)) ?? null;
@@ -145,6 +150,13 @@ function createQueryCtx(seed: Record<string, Array<Record<string, unknown>>>) {
           },
           async collect() {
             return getRows(tableName).filter((row) => matches(row));
+          },
+          async *[Symbol.asyncIterator]() {
+            for (const row of getRows(tableName).filter((candidate) =>
+              matches(candidate),
+            )) {
+              yield row;
+            }
           },
         };
         return query;
@@ -203,7 +215,7 @@ describe("cash control deposits", () => {
       buildRegisterSessionDepositTargetId({
         registerSessionId: "session_1" as Id<"registerSession">,
         submissionKey: "submission_1",
-      })
+      }),
     ).toBe("session_1:submission_1");
   });
 
@@ -242,13 +254,22 @@ describe("cash control deposits", () => {
           [
             {
               _id: "sync_conflict_1" as Id<"posLocalSyncConflict">,
+              _creationTime: 20,
               conflictType: "permission",
               createdAt: 20,
               localEventId: "event-register-closeout-1",
+              localRegisterSessionId: "session_open",
               sequence: 7,
               status: "needs_review",
+              storeId: "store_1" as Id<"store">,
               summary:
                 "Register closeout variance requires manager review before synced closeout can be applied.",
+              terminalId: "terminal_1" as Id<"posTerminal">,
+              details: {
+                countedCash: 13100,
+                expectedCash: 13800,
+                variance: -700,
+              },
             },
           ],
         ],
@@ -330,14 +351,17 @@ describe("cash control deposits", () => {
         status: "needs_review",
         reconciliationItems: [
           {
+            countedCash: 13100,
             createdAt: 20,
+            expectedCash: 13800,
             id: "sync_conflict_1",
             localEventId: "event-register-closeout-1",
             sequence: 7,
             status: "needs_review",
             summary:
               "Register closeout variance requires manager review before synced closeout can be applied.",
-            type: "permission",
+            type: "register_closeout",
+            variance: -700,
           },
         ],
       },
@@ -396,7 +420,9 @@ describe("cash control deposits", () => {
         "store_1" as Id<"store">,
       ),
     ).resolves.toEqual(
-      new Map([["session_open", [expect.objectContaining({ _id: "sync_conflict_1" })]]]),
+      new Map([
+        ["session_open", [expect.objectContaining({ _id: "sync_conflict_1" })]],
+      ]),
     );
   });
 
@@ -443,7 +469,9 @@ describe("cash control deposits", () => {
         "store_1" as Id<"store">,
       ),
     ).resolves.toEqual(
-      new Map([["session_open", [expect.objectContaining({ _id: "sync_conflict_1" })]]]),
+      new Map([
+        ["session_open", [expect.objectContaining({ _id: "sync_conflict_1" })]],
+      ]),
     );
   });
 
@@ -936,6 +964,111 @@ describe("cash control deposits", () => {
     );
   });
 
+  it("explains that already-closed synced closeouts must be rejected", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx({
+      posLocalSyncConflict: [
+        {
+          _id: "sync_conflict_closeout",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "session_closed",
+          localEventId: "event_closeout",
+          sequence: 2,
+          conflictType: "permission",
+          status: "needs_review",
+          summary: "Register session is not open for synced POS closeout.",
+          details: {
+            localRegisterSessionId: "session_closed",
+            status: "closed",
+          },
+          createdAt: 1,
+        },
+      ],
+      posLocalSyncEvent: [
+        {
+          _id: "sync_event_closeout",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "session_closed",
+          localEventId: "event_closeout",
+          sequence: 2,
+          eventType: "register_closed",
+          occurredAt: 2,
+          staffProfileId: "staff_1",
+          payload: {
+            countedCash: 50000,
+          },
+          status: "conflicted",
+          submittedAt: 4,
+          acceptedAt: 4,
+        },
+      ],
+      registerSession: [
+        {
+          _id: "session_closed",
+          closeoutRecords: [],
+          countedCash: 50000,
+          expectedCash: 50000,
+          openedAt: 1,
+          openingFloat: 50000,
+          organizationId: "org_1",
+          registerNumber: "1",
+          status: "closed",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          variance: 0,
+        },
+      ],
+      staffProfile: [
+        {
+          _id: "manager_1",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+        {
+          _id: "staff_1",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+      staffRoleAssignment: [
+        {
+          _id: "role_1",
+          organizationId: "org_1",
+          role: "manager",
+          staffProfileId: "manager_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+    });
+
+    const result = await getHandler(resolveRegisterSessionSyncReview)(
+      ctx as never,
+      {
+        actorStaffProfileId: "manager_1" as Id<"staffProfile">,
+        registerSessionId: "session_closed" as Id<"registerSession">,
+        storeId: "store_1" as Id<"store">,
+      },
+    );
+
+    expect(result).toEqual(
+      userError({
+        code: "precondition_failed",
+        message:
+          "This synced closeout cannot be applied because the register is already closed. Reject the synced activity to discard it.",
+      }),
+    );
+    expect(ctx.tables.get("posLocalSyncEvent")).toEqual([
+      expect.objectContaining({
+        _id: "sync_event_closeout",
+        status: "conflicted",
+      }),
+    ]);
+  });
+
   it("ignores unmapped local register ids that are not valid cloud session ids", async () => {
     const conflict = {
       _id: "sync_conflict_1",
@@ -1031,10 +1164,7 @@ describe("cash control deposits", () => {
       ),
     ).resolves.toEqual(
       new Map([
-        [
-          "session_open",
-          [expect.objectContaining({ _id: "sync_conflict_1" })],
-        ],
+        ["session_open", [expect.objectContaining({ _id: "sync_conflict_1" })]],
       ]),
     );
   });
@@ -1304,6 +1434,52 @@ describe("cash control deposits", () => {
         registerSession: expect.objectContaining({
           workflowTraceId: "register_session:session_open",
         }),
+      }),
+    );
+  });
+
+  it("includes void status details on linked register-session transactions", async () => {
+    const voidedAt = new Date("2026-04-21T17:45:00.000Z").getTime();
+    const ctx = createAuthorizedRegisterDepositCtx({
+      posTransaction: [
+        {
+          _id: "transaction_void",
+          completedAt: new Date("2026-04-21T17:30:00.000Z").getTime(),
+          paymentMethod: "cash",
+          registerSessionId: "session_open",
+          staffProfileId: "staff_1",
+          status: "void",
+          storeId: "store_1",
+          total: 15000,
+          transactionNumber: "198508",
+          voidedAt,
+        },
+      ],
+      posTransactionItem: [
+        {
+          _id: "transaction_item_1",
+          quantity: 3,
+          transactionId: "transaction_void",
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(getRegisterSessionSnapshot)(ctx as never, {
+        registerSessionId: "session_open" as Id<"registerSession">,
+        storeId: "store_1" as Id<"store">,
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        transactions: [
+          expect.objectContaining({
+            _id: "transaction_void",
+            itemCount: 3,
+            status: "void",
+            transactionNumber: "198508",
+            voidedAt,
+          }),
+        ],
       }),
     );
   });

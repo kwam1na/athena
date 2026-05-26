@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { render } from "@react-email/components";
 import {
+  Ban,
   Banknote,
   Check,
   CreditCard,
@@ -91,6 +92,7 @@ interface OrderSummaryProps {
     subtotal: number;
     tax: number;
     total: number;
+    status?: "completed" | "voided";
     customerInfo?: {
       name?: string;
       email?: string;
@@ -121,6 +123,7 @@ interface OrderSummaryProps {
   onClearPayments?: () => boolean | Promise<boolean>;
   onCompleteTransaction?: () => Promise<boolean>;
   onStartNewTransaction?: () => void | Promise<void>;
+  onVoidTransaction?: () => void | Promise<void>;
   onPaymentFlowChange?: (isActive: boolean) => void;
   onPaymentEntryStart?: () => void;
   onEditingPaymentChange?: (isEditing: boolean) => void;
@@ -154,6 +157,7 @@ export function OrderSummary({
   onClearPayments,
   onCompleteTransaction,
   onStartNewTransaction,
+  onVoidTransaction,
   onPaymentFlowChange,
   onPaymentEntryStart,
   onEditingPaymentChange,
@@ -217,6 +221,10 @@ export function OrderSummary({
   const showCompletedPaymentBreakdown =
     Boolean(completedTransactionData) && completedPaymentBreakdown.length > 1;
   const hasCompletedAdjustment = Boolean(completedAdjustmentSummary);
+  const canVoidCompletedTransaction =
+    Boolean(onVoidTransaction) &&
+    !readOnly &&
+    completedTransactionData?.status !== "voided";
   const completedSummaryTitle = hasCompletedAdjustment
     ? "Adjusted sale recorded"
     : "Sale recorded";
@@ -548,6 +556,9 @@ export function OrderSummary({
           paymentMethodLabel={paymentMethodLabel}
           payments={formattedPayments}
           changeGiven={changeGiven}
+          statusLabel={
+            completedData.status === "voided" ? "Voided" : undefined
+          }
         />,
       );
 
@@ -806,7 +817,14 @@ export function OrderSummary({
                   </div>
                 </div>
 
-                <div className="grid gap-3 md:grid-cols-2">
+                <div
+                  className={cn(
+                    "grid gap-3",
+                    canVoidCompletedTransaction
+                      ? "md:grid-cols-3"
+                      : "md:grid-cols-2",
+                  )}
+                >
                   <Button
                     onClick={handlePrintReceipt}
                     variant="outline"
@@ -825,6 +843,16 @@ export function OrderSummary({
                       New sale
                     </Button>
                   )}
+                  {canVoidCompletedTransaction ? (
+                    <Button
+                      onClick={onVoidTransaction}
+                      variant="outline"
+                      className="h-14 rounded-2xl border-destructive/30 bg-destructive/5 px-5 text-sm font-semibold text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      <Ban className="h-4 w-4" />
+                      Void sale
+                    </Button>
+                  ) : null}
                 </div>
                 {/* {shouldShowReceiptMessaging && effectiveReceiptMessaging ? (
                   <PosReceiptShareControl

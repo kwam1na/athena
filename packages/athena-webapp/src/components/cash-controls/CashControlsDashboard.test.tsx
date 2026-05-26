@@ -761,6 +761,77 @@ describe("CashControlsDashboardContent", () => {
     ).toBeInTheDocument();
   });
 
+  it("labels synced closeout variance review without showing the drawer as simply active", () => {
+    render(
+      <CashControlsDashboardContent
+        currency="GHS"
+        dashboardSnapshot={{
+          ...baseSnapshot,
+          registerSessions: [
+            {
+              _id: "session-closeout-review",
+              expectedCash: 17600,
+              openedAt: new Date("2026-04-21T08:30:00.000Z").getTime(),
+              openingFloat: 5000,
+              registerNumber: "Register 4",
+              status: "active",
+              terminalName: "Front counter",
+              totalDeposited: 0,
+              variance: 0,
+              localSyncStatus: {
+                status: "needs_review",
+                reconciliationItems: [
+                  {
+                    localEventId: "event-register-closeout-1",
+                    summary:
+                      "Register closeout variance requires manager review before synced closeout can be applied.",
+                    type: "permission",
+                  },
+                ],
+              },
+            },
+          ],
+          unresolvedVariances: [
+            {
+              _id: "session-closeout-review",
+              expectedCash: 17600,
+              openedAt: new Date("2026-04-21T08:30:00.000Z").getTime(),
+              openingFloat: 5000,
+              registerNumber: "Register 4",
+              status: "active",
+              terminalName: "Front counter",
+              totalDeposited: 0,
+              variance: 0,
+              localSyncStatus: {
+                status: "needs_review",
+                reconciliationItems: [
+                  {
+                    localEventId: "event-register-closeout-1",
+                    summary:
+                      "Register closeout variance requires manager review before synced closeout can be applied.",
+                    type: "permission",
+                  },
+                ],
+              },
+            },
+          ],
+        }}
+        isLoading={false}
+        orgUrlSlug="v26"
+        storeUrlSlug="east-legon"
+      />,
+    );
+
+    expect(screen.getAllByText("Closeout review pending").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Closeout review")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Review closeout").length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(
+        /Closeout variance review: Register closeout variance requires manager review before synced closeout can be applied./i,
+      ).length,
+    ).toBeGreaterThan(0);
+  });
+
   it("keeps stale terminal health out of manager-review counts", () => {
     render(
       <CashControlsDashboardContent

@@ -1,19 +1,21 @@
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Loader2, PackagePlus, ScanBarcode, Search } from "lucide-react";
-import { Product } from "./types";
-import { usePOSQuickAddProductSku } from "@/hooks/usePOSProducts";
+import {
+  QuickAddProductDialog,
+  type QuickAddAttachBarcodePayload,
+  type QuickAddExistingSkuOption,
+} from "@/components/product/QuickAddProductDialog";
+import { normalizeQuickAddInitialLookupCode } from "@/components/product/quickAddProductDialogUtils";
+import type { QuickAddProductSubmitPayload } from "@/components/product/QuickAddProductDialog";
+import { ScanBarcode, Search } from "lucide-react";
+import type { Product } from "./types";
+import {
+  usePOSQuickAddProductSku,
+  usePOSRegisterCatalog,
+} from "@/hooks/usePOSProducts";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { currencyFormatter } from "~/convex/utils";
+import type { Id } from "~/convex/_generated/dataModel";
 import {
   extractBarcodeFromInput,
   isUrlOrBarcode,
@@ -24,11 +26,11 @@ import {
   useImperativeHandle,
   useEffect,
   useRef,
+  useMemo,
   useState,
 } from "react";
 import { SearchResultsSection } from "./SearchResultsSection";
 import { cn } from "@/lib/utils";
-import { parseDisplayAmountInput } from "@/lib/pos/displayAmounts";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
@@ -135,49 +137,6 @@ export interface ProductEntryHandle {
   openQuickAddProduct: () => boolean;
 }
 
-const QUICK_ADD_LOOKUP_CODE_MAX_LENGTH = 64;
-const QUICK_ADD_LOOKUP_CODE_BARCODE = /^\d[\d-]*$/;
-
-function normalizeQuickAddLookupCode(lookupCode: string): string {
-  const trimmedLookupCode = lookupCode.trim();
-  if (!trimmedLookupCode) {
-    return "";
-  }
-
-  const lookupCodeWithoutSpaces = trimmedLookupCode.replace(/\s+/g, "");
-  if (QUICK_ADD_LOOKUP_CODE_BARCODE.test(lookupCodeWithoutSpaces)) {
-    return lookupCodeWithoutSpaces;
-  }
-
-  return trimmedLookupCode;
-}
-
-function isLikelyBarcode(lookupCode: string): boolean {
-  return QUICK_ADD_LOOKUP_CODE_BARCODE.test(lookupCode);
-}
-
-function validateQuickAddLookupCode(lookupCode: string) {
-  const trimmedLookupCode = lookupCode.trim();
-  if (!trimmedLookupCode) {
-    return null;
-  }
-
-  if (trimmedLookupCode.length > QUICK_ADD_LOOKUP_CODE_MAX_LENGTH) {
-    return "Lookup code is too long";
-  }
-
-  const lookupCodeWithoutSpaces = trimmedLookupCode.replace(/\s+/g, "");
-  if (isLikelyBarcode(lookupCodeWithoutSpaces)) {
-    return null;
-  }
-
-  if (/\s/.test(trimmedLookupCode)) {
-    return "Lookup code cannot contain spaces";
-  }
-
-  return "Lookup code must be a numeric barcode (digits only)";
-}
-
 export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
   function ProductEntry(
     {
@@ -203,15 +162,13 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
     const { activeStore } = useGetActiveStore();
     const { user } = useAuth();
     const quickAddProductSku = usePOSQuickAddProductSku();
+    const registerCatalog = usePOSRegisterCatalog(activeStore?._id);
     const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
-    const [quickAddName, setQuickAddName] = useState("");
-    const [quickAddLookupCode, setQuickAddLookupCode] = useState("");
-    const [quickAddPrice, setQuickAddPrice] = useState("");
-    const [quickAddQuantity, setQuickAddQuantity] = useState("1");
+    const [quickAddInitialName, setQuickAddInitialName] = useState("");
+    const [quickAddInitialLookupCode, setQuickAddInitialLookupCode] =
+      useState("");
     const [quickAddSourceProduct, setQuickAddSourceProduct] =
       useState<Product | null>(null);
-    const [quickAddError, setQuickAddError] = useState<string | null>(null);
-    const [isQuickAddSaving, setIsQuickAddSaving] = useState(false);
     const productSearchInputRef = useRef<HTMLInputElement>(null);
 
     const inputIsUrlOrBarcode = isUrlOrBarcode(productSearchQuery);
@@ -224,6 +181,20 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
     };
 
     const isAddingVariant = Boolean(quickAddSourceProduct?.productId);
+    const existingSkuOptions = useMemo<QuickAddExistingSkuOption[]>(
+      () =>
+        (registerCatalog ?? [])
+          .filter((item) => !item.barcode)
+          .map((item) => ({
+            productSkuId: String(item.productSkuId),
+            name: item.name,
+            sku: item.sku,
+            category: item.category,
+            barcode: item.barcode,
+          })),
+      [registerCatalog],
+    );
+
     const handleOpenQuickAdd = useCallback((selectedProduct?: Product) => {
       if (!canQuickAddProduct) {
         return;
@@ -231,17 +202,13 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
 
       const rawQuery = productSearchQuery.trim();
       const extractedQuery = extractBarcodeFromInput(rawQuery).value.trim();
-      const lookupCode = isLikelyBarcode(extractedQuery)
-        ? normalizeQuickAddLookupCode(extractedQuery)
-        : "";
 
-      setQuickAddName(
+      setQuickAddInitialName(
         selectedProduct?.name || (inputIsUrlOrBarcode ? "" : rawQuery),
       );
-      setQuickAddLookupCode(lookupCode);
-      setQuickAddPrice("");
-      setQuickAddQuantity("1");
-      setQuickAddError(null);
+      setQuickAddInitialLookupCode(
+        normalizeQuickAddInitialLookupCode(extractedQuery),
+      );
       setQuickAddSourceProduct(
         selectedProduct && selectedProduct.productId ? selectedProduct : null,
       );
@@ -279,106 +246,113 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
       [canQuickAddProduct, handleOpenQuickAdd],
     );
 
-    const resetQuickAddForm = () => {
-      setQuickAddName("");
-      setQuickAddLookupCode("");
-      setQuickAddPrice("");
-      setQuickAddQuantity("1");
-      setQuickAddError(null);
-      setQuickAddSourceProduct(null);
+    const handleQuickAddOpenChange = (open: boolean) => {
+      if (!open) {
+        setQuickAddSourceProduct(null);
+      }
+      onQuickAddOpenChange?.(open);
+      setIsQuickAddOpen(open);
     };
 
-    const handleQuickAddSubmit = async (event: React.FormEvent) => {
-      event.preventDefault();
-
+    const handleQuickAddSubmit = async ({
+      name,
+      variants,
+      usesMultipleVariants,
+    }: QuickAddProductSubmitPayload) => {
       if (!activeStore?._id || !user?._id) {
-        setQuickAddError(
+        throw new Error(
           "Store sign-in is still loading. Try again in a moment.",
         );
-        return;
       }
 
-      const normalizedQuickAddLookupCode =
-        normalizeQuickAddLookupCode(quickAddLookupCode);
-      const lookupCodeValidationError = validateQuickAddLookupCode(
-        normalizedQuickAddLookupCode,
-      );
+      const [primaryVariant, ...extraVariants] = variants;
+      const createdProduct = await quickAddProductSku({
+        storeId: activeStore._id,
+        createdByUserId: user._id,
+        name,
+        lookupCode: primaryVariant.lookupCode,
+        price: primaryVariant.price,
+        quantityAvailable: primaryVariant.quantityAvailable,
+        productId: quickAddSourceProduct?.productId,
+      });
 
-      if (lookupCodeValidationError) {
-        setQuickAddError(lookupCodeValidationError);
-        return;
+      let productId = quickAddSourceProduct?.productId;
+      if (!productId && createdProduct.productId) {
+        productId = createdProduct.productId;
       }
 
-      const parsedName = quickAddName.trim();
-
-      if (!parsedName) {
-        setQuickAddError("Enter a valid product name");
-        return;
+      if (extraVariants.length && !productId) {
+        throw new Error("Quick add product id missing");
       }
 
-      const parsedPrice = parseDisplayAmountInput(quickAddPrice);
-      if (parsedPrice === undefined || parsedPrice <= 0) {
-        setQuickAddError("Enter a selling price greater than 0");
-        return;
-      }
-
-      const parsedQuantity = quickAddQuantity.trim() ? +quickAddQuantity : 0;
-      if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
-        setQuickAddError("Enter a valid quantity greater than 0");
-        return;
-      }
-      const roundedQuantity = Math.trunc(parsedQuantity);
-      const isReferenceVariantAvailable = Boolean(
-        quickAddSourceProduct &&
-        quickAddSourceProduct.quantityAvailable !== undefined,
-      );
-      const isReferencePriceDifferent =
-        quickAddSourceProduct?.price !== undefined &&
-        quickAddSourceProduct.price !== parsedPrice;
-      const isReferenceQuantityDifferent =
-        isReferenceVariantAvailable &&
-        quickAddSourceProduct?.quantityAvailable !== undefined &&
-        Math.trunc(quickAddSourceProduct.quantityAvailable) !== roundedQuantity;
-
-      if (
-        quickAddSourceProduct &&
-        !isReferencePriceDifferent &&
-        !isReferenceQuantityDifferent
-      ) {
-        setQuickAddError(
-          "Add a different price or quantity than the selected variant",
-        );
-        return;
-      }
-
-      setQuickAddError(null);
-      setIsQuickAddSaving(true);
-
-      try {
-        const createdProduct = await quickAddProductSku({
-          storeId: activeStore._id,
-          createdByUserId: user._id,
-          name: parsedName,
-          lookupCode: normalizedQuickAddLookupCode || undefined,
-          price: parsedPrice,
-          quantityAvailable: roundedQuantity,
-          productId: quickAddSourceProduct?.productId,
-        });
-
-        handleClearSearch();
-        const added = await onAddProduct(createdProduct);
-        if (added === false) {
-          return;
+      if (productId) {
+        for (const variant of extraVariants) {
+          await quickAddProductSku({
+            storeId: activeStore._id,
+            createdByUserId: user._id,
+            name,
+            lookupCode: variant.lookupCode,
+            price: variant.price,
+            quantityAvailable: variant.quantityAvailable,
+            productId,
+          });
         }
-        resetQuickAddForm();
-        setIsQuickAddOpen(false);
-        toast.success("Product added to catalog");
-      } catch (error) {
-        console.error("[POS] Quick add product failed", error);
-        setQuickAddError("Could not quick add this product. Try again.");
-      } finally {
-        setIsQuickAddSaving(false);
       }
+
+      handleClearSearch();
+      const added = await onAddProduct(createdProduct);
+      if (added === false) {
+        return false;
+      }
+
+      toast.success(
+        usesMultipleVariants
+          ? "Product variants added to catalog"
+          : "Product added to catalog",
+      );
+    };
+
+    const handleAttachBarcodeSubmit = async ({
+      lookupCode,
+      productSkuId,
+    }: QuickAddAttachBarcodePayload) => {
+      if (!activeStore?._id || !user?._id) {
+        throw new Error(
+          "Store sign-in is still loading. Try again in a moment.",
+        );
+      }
+
+      const attachedProduct = await quickAddProductSku({
+        storeId: activeStore._id,
+        createdByUserId: user._id,
+        name: "",
+        lookupCode,
+        price: 0,
+        quantityAvailable: 0,
+        productSkuId: productSkuId as Id<"productSku">,
+      });
+      const attachedQuantityAvailable =
+        typeof attachedProduct.quantityAvailable === "number"
+          ? Math.trunc(attachedProduct.quantityAvailable)
+          : undefined;
+      const attachedAvailabilityStatus =
+        attachedQuantityAvailable === undefined
+          ? "unknown"
+          : attachedProduct.inStock && attachedQuantityAvailable > 0
+            ? "available"
+            : "out_of_stock";
+
+      handleClearSearch();
+      const added = await onAddProduct({
+        ...attachedProduct,
+        availabilityStatus: attachedAvailabilityStatus,
+        quantityAvailable: attachedQuantityAvailable,
+      });
+      if (added === false) {
+        return false;
+      }
+
+      toast.success("Barcode attached to SKU");
     };
 
     if (
@@ -431,111 +405,20 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
           </div>
         </div>
 
-        <Dialog
+        <QuickAddProductDialog
           open={isQuickAddOpen}
-          onOpenChange={(open) => {
-            if (!open) {
-              resetQuickAddForm();
-            }
-            onQuickAddOpenChange?.(open);
-            setIsQuickAddOpen(open);
-          }}
-        >
-          <DialogContent className="sm:max-w-md">
-            <form onSubmit={handleQuickAddSubmit} className="space-y-5">
-              <DialogHeader>
-                <DialogTitle>
-                  {isAddingVariant ? "Quick add variant" : "Quick add product"}
-                </DialogTitle>
-                <DialogDescription>
-                  {isAddingVariant
-                    ? "Add a different variant for this product"
-                    : "Add the details needed for this sale"}
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="quick-add-product-name">Product name</Label>
-                  <Input
-                    id="quick-add-product-name"
-                    value={quickAddName}
-                    onChange={(event) => setQuickAddName(event.target.value)}
-                    placeholder="Product name"
-                    disabled={isAddingVariant}
-                    autoFocus
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="quick-add-lookup-code">Barcode</Label>
-                  <Input
-                    id="quick-add-lookup-code"
-                    value={quickAddLookupCode}
-                    onChange={(event) =>
-                      setQuickAddLookupCode(event.target.value)
-                    }
-                    placeholder="Optional"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="quick-add-price">Selling price</Label>
-                    <Input
-                      id="quick-add-price"
-                      inputMode="decimal"
-                      value={quickAddPrice}
-                      onChange={(event) => setQuickAddPrice(event.target.value)}
-                      placeholder="0.00"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="quick-add-quantity">Available qty</Label>
-                    <Input
-                      id="quick-add-quantity"
-                      inputMode="numeric"
-                      value={quickAddQuantity}
-                      onChange={(event) =>
-                        setQuickAddQuantity(event.target.value)
-                      }
-                      placeholder="1"
-                    />
-                  </div>
-                </div>
-
-                {quickAddError && (
-                  <div className="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-                    {quickAddError}
-                  </div>
-                )}
-              </div>
-
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    resetQuickAddForm();
-                    setIsQuickAddOpen(false);
-                  }}
-                  disabled={isQuickAddSaving}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={isQuickAddSaving}>
-                  {isQuickAddSaving ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <PackagePlus className="mr-2 h-4 w-4" />
-                  )}
-                  Add product
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+          onOpenChange={handleQuickAddOpenChange}
+          onSubmit={handleQuickAddSubmit}
+          onAttachBarcode={
+            isAddingVariant ? undefined : handleAttachBarcodeSubmit
+          }
+          existingSkuOptions={existingSkuOptions}
+          initialName={quickAddInitialName}
+          initialLookupCode={quickAddInitialLookupCode}
+          lockProductName={isAddingVariant}
+          referenceVariant={quickAddSourceProduct}
+          submitErrorMessage="Could not quick add this product. Try again."
+        />
       </div>
     );
   },

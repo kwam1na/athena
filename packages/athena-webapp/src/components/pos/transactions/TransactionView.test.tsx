@@ -782,6 +782,69 @@ describe("TransactionView", () => {
     });
   });
 
+  it("uses terminal staff proof when submitting completed sale voids without a reason", async () => {
+    const user = userEvent.setup();
+    const authMutation = vi.fn().mockResolvedValue({
+      kind: "ok",
+      data: {
+        activeRoles: ["manager"],
+        staffProfile: { firstName: "Kwamina", lastName: "Mensah" },
+        staffProfileId: "staff_generic",
+      },
+    });
+    const terminalAuthMutation = vi.fn().mockResolvedValue({
+      kind: "ok",
+      data: {
+        activeRoles: ["cashier"],
+        posLocalStaffProof: { expiresAt: 2, token: "proof-token-void" },
+        staffProfile: { firstName: "Kwamina", lastName: "Mensah" },
+        staffProfileId: "staff_terminal",
+      },
+    });
+    const voidMutation = vi.fn().mockResolvedValue({
+      kind: "approval_required",
+      approval: voidApprovalRequirement("txn_void_terminal"),
+    });
+    mockTransactionMutations(
+      authMutation,
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      terminalAuthMutation,
+      voidMutation,
+    );
+    useParamsMock.mockReturnValue({ transactionId: "txn_void_terminal" });
+    useQueryMock.mockReturnValue(baseTransaction);
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: "Void sale" }));
+    await user.click(screen.getByRole("button", { name: "Submit void" }));
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+
+    expect(authMutation).not.toHaveBeenCalled();
+    expect(terminalAuthMutation).toHaveBeenCalledWith({
+      allowedRoles: ["cashier", "manager"],
+      allowActiveSessionsOnOtherTerminals: true,
+      pinHash: "hashed:1234",
+      storeId: "store_1",
+      terminalId: "terminal_1",
+      username: "manager",
+    });
+    expect(voidMutation).toHaveBeenCalledWith({
+      actorStaffProfileId: "staff_terminal",
+      approvalProofId: undefined,
+      approvalRequestId: undefined,
+      staffProofToken: "proof-token-void",
+      transactionId: "txn_void_terminal",
+    });
+    expect(voidMutation.mock.calls[0]?.[0]).not.toHaveProperty("reason");
+    expect(
+      screen.queryByText("Staff sign-in is required before voiding this sale"),
+    ).not.toBeInTheDocument();
+  });
+
   it("queues completed sale voids when the approval response includes an async request", async () => {
     const user = userEvent.setup();
     const authMutation = vi.fn().mockResolvedValue({

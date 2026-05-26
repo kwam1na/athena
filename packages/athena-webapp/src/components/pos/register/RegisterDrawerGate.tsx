@@ -195,16 +195,19 @@ export function RegisterDrawerGate({
 
   if (isCloseoutBlocked) {
     const currency = drawerGate.currency ?? "GHS";
-    const isPendingCloseoutApproval = Boolean(
-      drawerGate.hasPendingCloseoutApproval,
-    );
+    const closeoutSubmittedReason =
+      drawerGate.closeoutSubmittedReason ??
+      (drawerGate.hasPendingCloseoutApproval ? "manager_review" : null);
+    const isSubmittedCloseout = Boolean(closeoutSubmittedReason);
+    const isManagerReviewCloseout =
+      closeoutSubmittedReason === "manager_review";
     const closeoutNotesRequired =
       drawerGate.closeoutDraftVariance !== undefined &&
       drawerGate.closeoutDraftVariance !== 0;
 
     return (
       <div className="mx-auto max-w-2xl rounded-lg border border-stone-200 bg-white p-8 shadow-sm">
-        {isPendingCloseoutApproval ? (
+        {isSubmittedCloseout ? (
           <div className="space-y-8">
             <div className="flex flex-wrap items-start gap-5">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700">
@@ -212,15 +215,18 @@ export function RegisterDrawerGate({
               </div>
               <div className="min-w-0 flex-1 space-y-4">
                 <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-amber-800">
-                  Manager approval required
+                  {isManagerReviewCloseout
+                    ? "Manager approval required"
+                    : "Closeout syncing"}
                 </p>
                 <div className="space-y-2">
                   <h2 className="text-2xl font-semibold text-stone-900">
                     Register {drawerGate.registerNumber} closeout submitted
                   </h2>
                   <p className="max-w-xl text-sm leading-6 text-stone-600">
-                    Waiting for manager review. Selling is paused until the
-                    variance is approved or the register is reopened.
+                    {isManagerReviewCloseout
+                      ? "Waiting for manager review. Selling is paused until the variance is approved or the register is reopened."
+                      : "Closeout is saved on this register. Selling is paused until sync finishes or the register is reopened."}
                   </p>
                 </div>
               </div>
@@ -272,16 +278,18 @@ export function RegisterDrawerGate({
                 />
               ) : null}
 
-              <LoadingButton
-                className="w-full sm:w-auto"
-                disabled={Boolean(drawerGate.isReopeningCloseout)}
-                isLoading={Boolean(drawerGate.isReopeningCloseout)}
-                onClick={() => void drawerGate.onReopenRegister?.()}
-                type="button"
-                variant="outline"
-              >
-                {drawerGate.closeoutSecondaryActionLabel ?? "Reopen register"}
-              </LoadingButton>
+              {drawerGate.onReopenRegister ? (
+                <LoadingButton
+                  className="w-full sm:w-auto"
+                  disabled={Boolean(drawerGate.isReopeningCloseout)}
+                  isLoading={Boolean(drawerGate.isReopeningCloseout)}
+                  onClick={() => void drawerGate.onReopenRegister?.()}
+                  type="button"
+                  variant="outline"
+                >
+                  {drawerGate.closeoutSecondaryActionLabel ?? "Reopen register"}
+                </LoadingButton>
+              ) : null}
 
               <Button
                 className="w-full sm:w-auto"
@@ -397,19 +405,21 @@ export function RegisterDrawerGate({
                   Submit closeout
                 </LoadingButton>
 
-                <LoadingButton
-                  className="w-full sm:w-auto"
-                  disabled={Boolean(
-                    drawerGate.isCloseoutSubmitting ||
-                    drawerGate.isReopeningCloseout,
-                  )}
-                  isLoading={Boolean(drawerGate.isReopeningCloseout)}
-                  onClick={() => void drawerGate.onCloseoutSecondaryAction?.()}
-                  type="button"
-                  variant="outline"
-                >
-                  {drawerGate.closeoutSecondaryActionLabel ?? "Reopen register"}
-                </LoadingButton>
+                {drawerGate.onCloseoutSecondaryAction ? (
+                  <LoadingButton
+                    className="w-full sm:w-auto"
+                    disabled={Boolean(
+                      drawerGate.isCloseoutSubmitting ||
+                      drawerGate.isReopeningCloseout,
+                    )}
+                    isLoading={Boolean(drawerGate.isReopeningCloseout)}
+                    onClick={() => void drawerGate.onCloseoutSecondaryAction?.()}
+                    type="button"
+                    variant="outline"
+                  >
+                    {drawerGate.closeoutSecondaryActionLabel ?? "Reopen register"}
+                  </LoadingButton>
+                ) : null}
 
                 {drawerGate.canOpenCashControls ? (
                   <CashControlsButton

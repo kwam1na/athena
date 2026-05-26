@@ -47,6 +47,10 @@ export type LocalStartSessionResult = CommandResult<{
   expiresAt: number;
 }>;
 
+export type LocalStartCloseoutResult = CommandResult<{
+  localEventId: string;
+}>;
+
 export function createLocalCommandGateway(
   options: CreateLocalCommandGatewayOptions,
 ): {
@@ -58,7 +62,7 @@ export function createLocalCommandGateway(
   reopenRegister(input: ReopenLocalRegisterInput): Promise<boolean>;
   seedRegisterSession(input: SeedLocalRegisterSessionInput): Promise<boolean>;
   startSession(input: LocalStartSessionInput): Promise<LocalStartSessionResult>;
-  startCloseout(input: StartLocalCloseoutInput): Promise<boolean>;
+  startCloseout(input: StartLocalCloseoutInput): Promise<LocalStartCloseoutResult>;
 } {
   const clock = options.clock ?? Date.now;
   const createLocalId =
@@ -91,6 +95,13 @@ export function createLocalCommandGateway(
 
   async function appendBoolean(input: PosLocalAppendEventInput) {
     return !(await append(input));
+  }
+
+  async function appendWithResult(input: PosLocalAppendEventInput) {
+    const result = await options.store.appendEvent(input);
+    if (!result.ok) return toLocalUserError(result.error.message);
+    options.onEventAppended?.();
+    return ok({ event: result.value });
   }
 
   return {
@@ -329,7 +340,7 @@ export function createLocalCommandGateway(
     },
 
     startCloseout(input: StartLocalCloseoutInput) {
-      return appendBoolean({
+      return appendWithResult({
         type: "register.closeout_started",
         terminalId: input.terminalId,
         storeId: input.storeId,
@@ -344,7 +355,13 @@ export function createLocalCommandGateway(
           countedCash: input.countedCash,
           notes: input.notes ?? null,
         },
-      });
+      }).then((result) =>
+        result.kind === "ok"
+          ? ok({
+              localEventId: result.data.event.localEventId,
+            })
+          : result,
+      );
     },
 
   };

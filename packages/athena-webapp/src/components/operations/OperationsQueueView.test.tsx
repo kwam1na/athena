@@ -500,6 +500,63 @@ describe("OperationsQueueViewContent", () => {
     );
   });
 
+  it("renders completed sale void approvals with transaction context and actions", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        approvalRequests={[
+          {
+            _id: "approval-void-1" as Id<"approvalRequest">,
+            createdAt: 1_714_620_000_000,
+            requestedByStaffName: "Skank Hunt",
+            requestType: "pos_transaction_void",
+            status: "pending",
+            transactionSummary: {
+              completedAt: 1_714_610_000_000,
+              paymentMethod: "cash",
+              total: 396000,
+              totalPaid: 396000,
+              transactionId: "txn-void-1" as Id<"posTransaction">,
+              transactionNumber: "158503",
+            },
+          },
+        ]}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="wigclub"
+      />,
+    );
+
+    expect(screen.getByText("Completed sale void")).toBeInTheDocument();
+    expect(screen.queryByText("Pos Transaction Void")).not.toBeInTheDocument();
+    expect(screen.getByText("Completed sale")).toBeInTheDocument();
+    expect(
+      screen.getByText("Sale queued for manager-approved void"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Requested by Skank Hunt")).toBeInTheDocument();
+    expect(screen.getByText("#158503")).toBeInTheDocument();
+    expect(screen.getByText("Cash")).toBeInTheDocument();
+    expect(screen.getByText("GH₵3,960")).toBeInTheDocument();
+    expect(
+      screen.getByText(/manager approval voids the completed sale/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /view transaction/i }),
+    ).toHaveAttribute(
+      "href",
+      "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId?o=%252F",
+    );
+
+    await user.click(screen.getByRole("button", { name: /approve void/i }));
+
+    expect(baseProps.onDecideApprovalRequest).toHaveBeenCalledWith({
+      approvalRequestId: "approval-void-1",
+      decision: "approved",
+    });
+  });
+
   it("renders item adjustment approval context and routes decisions", async () => {
     const { default: userEvent } = await import("@testing-library/user-event");
     const user = userEvent.setup();

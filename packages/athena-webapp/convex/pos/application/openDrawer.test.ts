@@ -164,12 +164,17 @@ describe("openDrawer", () => {
     expect(result).toEqual(
       ok({
         _id: "drawer-1" as Id<"registerSession">,
+        countedCash: undefined,
         expectedCash: 7500,
+        localSyncStatus: null,
+        managerApprovalRequestId: undefined,
+        notes: undefined,
         openedAt: 1710000000000,
         openingFloat: 5000,
         registerNumber: "A1",
         status: "open",
         terminalId: "terminal-1" as Id<"posTerminal">,
+        variance: undefined,
         workflowTraceId: "register_session:a1",
       }),
     );
@@ -220,12 +225,17 @@ describe("openDrawer", () => {
     expect(result).toEqual(
       ok({
         _id: "drawer-2" as Id<"registerSession">,
+        countedCash: undefined,
         expectedCash: 5000,
+        localSyncStatus: null,
+        managerApprovalRequestId: undefined,
+        notes: undefined,
         openedAt: 1710000000000,
         openingFloat: 5000,
         registerNumber: "B2",
         status: "open",
         terminalId: "terminal-1" as Id<"posTerminal">,
+        variance: undefined,
         workflowTraceId: "register_session:b2",
       }),
     );

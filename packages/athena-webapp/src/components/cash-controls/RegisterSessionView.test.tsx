@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -7,7 +7,10 @@ import {
   userError,
 } from "~/shared/commandResult";
 
-import { RegisterSessionView, RegisterSessionViewContent } from "./RegisterSessionView";
+import {
+  RegisterSessionView,
+  RegisterSessionViewContent,
+} from "./RegisterSessionView";
 
 const routerMocks = vi.hoisted(() => ({
   navigate: vi.fn(),
@@ -228,8 +231,10 @@ const baseSnapshot = {
     hasMultiplePaymentMethods?: boolean;
     itemCount: number;
     paymentMethod?: string | null;
+    status?: "completed" | "void" | string | null;
     total: number;
     transactionNumber: string;
+    voidedAt?: number | null;
     workflowTraceId?: string | null;
   }>,
   registerSession: {
@@ -382,7 +387,9 @@ describe("RegisterSessionViewContent", () => {
       />,
     );
 
-    expect(screen.getAllByText("Pending reconciliation")[0]).toBeInTheDocument();
+    expect(
+      screen.getAllByText("Pending reconciliation")[0],
+    ).toBeInTheDocument();
     expect(
       screen.getByText(
         "This register was closed locally. Athena will reconcile the closeout after sync.",
@@ -450,6 +457,155 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getByText("Reconciliation review")).toBeInTheDocument();
     expect(
       screen.getByText("Review synced register activity."),
+    ).toBeInTheDocument();
+  });
+
+  it("communicates synced closeout variance review as closeout work", () => {
+    render(
+      <RegisterSessionViewContent
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        onResolveSyncReview={vi.fn()}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            countedCash: undefined,
+            status: "active",
+            variance: undefined,
+            localSyncStatus: {
+              status: "needs_review",
+              reconciliationItems: [
+                {
+                  countedCash: 16100,
+                  createdAt: new Date("2026-05-20T14:30:00.000Z").getTime(),
+                  expectedCash: 17600,
+                  id: "sync_conflict_closeout",
+                  localEventId: "event-register-closeout-1",
+                  sequence: 7,
+                  status: "needs_review",
+                  summary:
+                    "Register closeout variance requires manager review before synced closeout can be applied.",
+                  type: "permission",
+                  variance: -1500,
+                },
+              ],
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getAllByText("Closeout review pending")).toHaveLength(3);
+    expect(
+      within(screen.getByRole("banner")).queryByText("Closeout review"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Synced closeout not applied yet; manager approval is required.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("GH₵161")).toHaveLength(2);
+    expect(screen.queryByText("Pending review")).not.toBeInTheDocument();
+    expect(screen.getAllByText("GH₵-15")).toHaveLength(2);
+    expect(screen.getByText("Closeout needs review")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Synced register closeout has a variance. Review it before this closeout can be applied.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Closeout variance review")).toBeInTheDocument();
+    expect(screen.getByText("Variance: GH₵-15.")).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Register closeout variance requires manager review before synced closeout can be applied.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("1 review item")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Register closeout with variance came from local register activity.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Opening float corrections are unavailable while synced closeout review is pending.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Synced count is waiting for review."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Closeout counted cash"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Submit closeout" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Approve synced closeout" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Reject synced closeout" }),
+    ).toBeInTheDocument();
+  });
+
+  it("communicates synced closeouts that cannot be applied as reject-only", () => {
+    render(
+      <RegisterSessionViewContent
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        onResolveSyncReview={vi.fn()}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            status: "closed",
+            localSyncStatus: {
+              status: "needs_review",
+              reconciliationItems: [
+                {
+                  createdAt: new Date("2026-05-20T14:30:00.000Z").getTime(),
+                  id: "sync_conflict_closed_closeout",
+                  localEventId: "event-register-closed-1",
+                  sequence: 2,
+                  status: "needs_review",
+                  summary:
+                    "Register session is not open for synced POS closeout.",
+                  type: "permission",
+                },
+              ],
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText("Synced closeout cannot be applied"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This register is already closed. Reject the duplicate synced activity to clear the review.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Duplicate closeout")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "The synced closeout is from local activity for a register that is already closed.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Approve synced sales" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Approve synced closeout" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Reject synced closeout" }),
     ).toBeInTheDocument();
   });
 
@@ -590,9 +746,11 @@ describe("RegisterSessionViewContent", () => {
         staffProfileId: "manager-1",
       }),
     );
-    const onResolveSyncReview = vi.fn().mockResolvedValue(
-      ok({ action: "rejected", projectedCount: 0, resolvedCount: 1 }),
-    );
+    const onResolveSyncReview = vi
+      .fn()
+      .mockResolvedValue(
+        ok({ action: "rejected", projectedCount: 0, resolvedCount: 1 }),
+      );
 
     render(
       <RegisterSessionViewContent
@@ -675,7 +833,9 @@ describe("RegisterSessionViewContent", () => {
         "Opening float corrections are available before closeout starts.",
       ),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Reopen closeout/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Reopen closeout/i }),
+    ).toBeInTheDocument();
   });
 
   it("reopens a closed closeout after manager approval", async () => {
@@ -1806,8 +1966,10 @@ describe("RegisterSessionViewContent", () => {
               hasMultiplePaymentMethods: false,
               itemCount: 1,
               paymentMethod: "cash",
+              status: "void",
               total: 15200,
               transactionNumber: "TXN-0031",
+              voidedAt: new Date("2026-04-21T17:45:00.000Z").getTime(),
             },
           ],
         }}
@@ -1816,6 +1978,8 @@ describe("RegisterSessionViewContent", () => {
         storeUrlSlug="wigclub"
       />,
     );
+
+    expect(screen.getByText("Voided")).toBeInTheDocument();
 
     await user.click(
       screen.getByRole("link", { name: "Open transaction #TXN-0031" }),

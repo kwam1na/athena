@@ -1906,6 +1906,7 @@ describe("POSRegisterView", () => {
         errorMessage: null,
         isCloseoutSubmitting: false,
         isReopeningCloseout: false,
+        onCloseoutSecondaryAction: vi.fn(),
         onCloseoutCountedCashChange: vi.fn(),
         onCloseoutNotesChange: vi.fn(),
         onReopenRegister: vi.fn(),

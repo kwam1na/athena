@@ -76,6 +76,45 @@ describe("RegisterDrawerGate", () => {
     expect(screen.getByText("GH₵0.02")).toHaveClass("text-emerald-700");
   });
 
+  it("does not render a reopen action when no reopen handler is available", () => {
+    renderGate({
+      closeoutSubmittedCountedCash: 12500,
+      closeoutSubmittedVariance: 2500,
+      expectedCash: 10000,
+      hasPendingCloseoutApproval: true,
+      mode: "closeoutBlocked",
+      onReopenRegister: undefined,
+    });
+
+    expect(
+      screen.queryByRole("button", { name: "Reopen register" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows synced zero-variance closeouts as submitted instead of rendering the closeout form", () => {
+    renderGate({
+      closeoutSubmittedCountedCash: 10000,
+      closeoutSubmittedReason: "pending_sync",
+      closeoutSubmittedVariance: 0,
+      expectedCash: 10000,
+      mode: "closeoutBlocked",
+      onReopenRegister: vi.fn(),
+    });
+
+    expect(screen.getByText("Closeout syncing")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Closeout is saved on this register. Selling is paused until sync finishes or the register is reopened.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Submit closeout" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText(/Counted cash/i),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows pesewa-level draft closeout variances while whole cedi expected cash stays compact", () => {
     renderGate({
       closeoutCountedCash: "100.00",

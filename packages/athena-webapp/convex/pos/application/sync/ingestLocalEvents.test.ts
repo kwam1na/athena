@@ -3062,9 +3062,10 @@ function createFakeSyncRepository(
     },
     async createMapping(input) {
       const mapping = {
+        _creationTime: 100,
         _id: `sync-mapping-${nextId++}`,
         ...input,
-      } as LocalSyncMappingRecord;
+      } as LocalSyncMappingRecord & { _creationTime: number };
       mappings.push(mapping);
       return mapping;
     },

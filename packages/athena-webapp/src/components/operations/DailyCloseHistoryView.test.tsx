@@ -15,6 +15,11 @@ const mockedHooks = vi.hoisted(() => ({
   useQuery: vi.fn(),
 }));
 
+const mockedRouter = vi.hoisted(() => ({
+  navigateBack: vi.fn(),
+  search: {} as Record<string, unknown>,
+}));
+
 const mockedApi = vi.hoisted(() => ({
   getCompletedDailyCloseHistoryDetail: "getCompletedDailyCloseHistoryDetail",
   listCompletedDailyCloseHistory: "listCompletedDailyCloseHistory",
@@ -52,6 +57,11 @@ vi.mock("@tanstack/react-router", () => ({
     orgUrlSlug: "wigclub",
     storeUrlSlug: "osu",
   }),
+  useSearch: () => mockedRouter.search,
+}));
+
+vi.mock("~/src/hooks/use-navigate-back", () => ({
+  useNavigateBack: () => mockedRouter.navigateBack,
 }));
 
 vi.mock("convex/react", () => ({
@@ -264,6 +274,7 @@ function mockQueries(records = historyRecords) {
 describe("DailyCloseHistoryView", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockedRouter.search = {};
     window.scrollTo = vi.fn();
     window.history.pushState(
       {},
@@ -286,6 +297,18 @@ describe("DailyCloseHistoryView", () => {
     expect(within(list).getAllByText("Completed")).toHaveLength(2);
     expect(within(list).getAllByText("GH₵1,255")[0]).toBeInTheDocument();
     expect(within(list).queryByText("May 6, 2026")).not.toBeInTheDocument();
+  });
+
+  it("shows the back affordance when opened with an origin search param", () => {
+    mockedRouter.search = {
+      o: "/wigclub/store/osu/operations",
+    };
+
+    render(<DailyCloseHistoryView />);
+
+    expect(
+      screen.getByRole("button", { name: "Go back" }),
+    ).toBeInTheDocument();
   });
 
   it("renders read-only historical detail with close metadata", () => {
