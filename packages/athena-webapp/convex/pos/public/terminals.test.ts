@@ -484,6 +484,32 @@ describe("POS terminal public mutations", () => {
     );
   });
 
+  it("exports validator-safe terminal health attention reasons", () => {
+    const returnValidator = JSON.stringify(
+      (listTerminalHealthSummaries as any).exportReturns(),
+    );
+
+    for (const value of [
+      "attentionReasons",
+      "local_review",
+      "sync_failed",
+      "sync_unavailable",
+      "local_store_unavailable",
+      "terminal_seed_missing",
+      "cloud_conflict",
+      "cloud_held",
+      "cloud_rejected",
+      "cloud_sync",
+      "local_runtime",
+      "terminal_runtime",
+    ]) {
+      expect(returnValidator).toContain(value);
+    }
+    expect(returnValidator).not.toContain("payload");
+    expect(returnValidator).not.toContain("syncSecret");
+    expect(returnValidator).not.toContain("staffProofToken");
+  });
+
   it("requires store membership before loading terminal health detail", async () => {
     const ctx = buildCtx();
 

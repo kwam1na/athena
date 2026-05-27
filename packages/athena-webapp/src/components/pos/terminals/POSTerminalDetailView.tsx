@@ -29,6 +29,7 @@ import {
   getReviewEvidenceCount,
   getSnapshotAgeSummary,
   getStaffAuthorityLabel,
+  getTerminalAttentionReasons,
 } from "./terminalHealthPresentation";
 import type {
   TerminalHealthDetail,
@@ -163,7 +164,7 @@ function ConflictSection({
         <p className="text-sm text-muted-foreground">
           {reviewCount > 0
             ? `${reviewCount} sync item${reviewCount === 1 ? "" : "s"} need review; detailed conflict records were not returned.`
-            : "No unresolved terminal conflicts are currently reported."}
+            : "No unresolved cloud sync conflicts are currently reported. Local runtime review, pending sync, or stale check-ins may still need attention above."}
         </p>
       ) : (
         <div className="space-y-layout-sm">
@@ -182,6 +183,48 @@ function ConflictSection({
           ))}
         </div>
       )}
+    </DetailPanel>
+  );
+}
+
+function AttentionReasonsSection({
+  detail,
+}: {
+  detail: TerminalHealthDetail;
+}) {
+  const reasons = getTerminalAttentionReasons(detail);
+
+  if (reasons.length === 0) {
+    return null;
+  }
+
+  return (
+    <DetailPanel
+      icon={<AlertTriangle className="h-4 w-4 text-warning" />}
+      title="Why this terminal needs attention"
+    >
+      <div className="space-y-layout-sm">
+        {reasons.map((reason, index) => (
+          <div
+            className="rounded-md border border-warning/30 bg-warning/10 px-layout-md py-layout-sm"
+            key={`${reason.type}-${index}`}
+          >
+            <p className="text-sm font-medium text-foreground">
+              {reason.summary}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {reason.source === "cloud_sync"
+                ? "Cloud sync evidence"
+                : reason.source === "local_runtime"
+                  ? "Local runtime review"
+                  : "Terminal check-in"}
+              {reason.nextPendingUploadSequence == null
+                ? ""
+                : ` / next upload #${reason.nextPendingUploadSequence}`}
+            </p>
+          </div>
+        ))}
+      </div>
     </DetailPanel>
   );
 }
@@ -309,6 +352,7 @@ export function POSTerminalDetailViewContent({
             </aside>
 
             <main className="space-y-layout-md">
+              <AttentionReasonsSection detail={detail} />
               <SyncEvidenceSection syncEvidence={detail.syncEvidence} />
               <ConflictSection syncEvidence={detail.syncEvidence} />
               <SupportNotesSection runtimeStatus={runtimeStatus} />

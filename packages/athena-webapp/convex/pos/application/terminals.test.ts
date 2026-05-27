@@ -489,6 +489,229 @@ describe("terminal health summaries", () => {
     );
   });
 
+  it("returns a local runtime review reason when runtime review is the attention source", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(getLatestRuntimeStatusForTerminal).mockResolvedValue(
+      buildPersistedRuntimeStatus({
+        sync: {
+          ...buildRuntimeStatus().sync,
+          failedEventCount: 0,
+          lastFailureMessage:
+            "Bearer raw.token.value and Authorization: ApiKey custom-secret",
+          reviewEventCount: 1,
+          status: "needs_review" as never,
+        },
+      }),
+    );
+    vi.mocked(getTerminalSyncEvidence).mockResolvedValue({
+      latestEvent: null,
+      sampledEventCount: 75,
+      acceptedCount: 0,
+      projectedCount: 75,
+      conflictedCount: 0,
+      heldCount: 0,
+      rejectedCount: 0,
+      acceptedThroughSequence: 22,
+      cursorUpdatedAt: 180,
+    });
+
+    const result = await getTerminalHealthSummary(
+      { db: null as never } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        now: 220,
+      },
+    );
+
+    expect(result?.health).toBe("needs_attention");
+    expect(result?.attentionReasons).toEqual([
+      expect.objectContaining({
+        count: 1,
+        nextPendingUploadSequence: 4,
+        source: "local_runtime",
+        summary: "1 local review item is still on this terminal.",
+        type: "local_review",
+      }),
+    ]);
+    expect(JSON.stringify(result?.attentionReasons)).not.toContain("Bearer");
+    expect(JSON.stringify(result?.attentionReasons)).not.toContain(
+      "custom-secret",
+    );
+  });
+
+  it("returns runtime failure, availability, and setup reasons when terminal check-in reports them", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(getLatestRuntimeStatusForTerminal).mockResolvedValue(
+      buildPersistedRuntimeStatus({
+        localStore: {
+          ...buildRuntimeStatus().localStore,
+          available: false,
+          terminalSeedReady: false,
+        },
+        sync: {
+          ...buildRuntimeStatus().sync,
+          failedEventCount: 2,
+          pendingEventCount: 0,
+          reviewEventCount: 0,
+          status: "unavailable" as never,
+          uploadableEventCount: 0,
+        },
+      }),
+    );
+    vi.mocked(getTerminalSyncEvidence).mockResolvedValue({
+      latestEvent: null,
+      sampledEventCount: 0,
+      acceptedCount: 0,
+      projectedCount: 0,
+      conflictedCount: 0,
+      heldCount: 0,
+      rejectedCount: 0,
+    });
+
+    const result = await getTerminalHealthSummary(
+      { db: null as never } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        now: 220,
+      },
+    );
+
+    expect(result?.health).toBe("needs_attention");
+    expect(result?.attentionReasons).toEqual([
+      expect.objectContaining({
+        count: 2,
+        source: "local_runtime",
+        summary: "2 local sync items have failed on this terminal.",
+        type: "sync_failed",
+      }),
+      expect.objectContaining({
+        source: "local_runtime",
+        summary: "Local sync runtime is unavailable on this terminal.",
+        type: "sync_unavailable",
+      }),
+      expect.objectContaining({
+        source: "terminal_runtime",
+        summary: "Local terminal storage is not available.",
+        type: "local_store_unavailable",
+      }),
+      expect.objectContaining({
+        source: "terminal_runtime",
+        summary: "Terminal setup data is not ready on this checkout station.",
+        type: "terminal_seed_missing",
+      }),
+    ]);
+  });
+
+  it("returns cloud evidence reasons when server sync evidence needs review", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(getLatestRuntimeStatusForTerminal).mockResolvedValue(
+      buildPersistedRuntimeStatus({
+        sync: {
+          ...buildRuntimeStatus().sync,
+          failedEventCount: 0,
+          pendingEventCount: 0,
+          reviewEventCount: 0,
+          status: "idle" as never,
+          uploadableEventCount: 0,
+        },
+      }),
+    );
+    vi.mocked(getTerminalSyncEvidence).mockResolvedValue({
+      latestEvent: {
+        localEventId: "local-event-1",
+        localRegisterSessionId: "local-register-1",
+        sequence: 9,
+        eventType: "register_closed",
+        status: "conflicted",
+        occurredAt: 120,
+        submittedAt: 130,
+      },
+      sampledEventCount: 3,
+      acceptedCount: 0,
+      projectedCount: 2,
+      conflictedCount: 1,
+      heldCount: 1,
+      rejectedCount: 1,
+      acceptedThroughSequence: 8,
+      cursorUpdatedAt: 180,
+    });
+
+    const result = await getTerminalHealthSummary(
+      { db: null as never } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        now: 220,
+      },
+    );
+
+    expect(result?.health).toBe("needs_attention");
+    expect(result?.attentionReasons).toEqual([
+      expect.objectContaining({
+        count: 1,
+        source: "cloud_sync",
+        summary: "1 cloud sync conflict needs review.",
+        type: "cloud_conflict",
+      }),
+      expect.objectContaining({
+        count: 1,
+        source: "cloud_sync",
+        summary: "1 synced item is held before projection.",
+        type: "cloud_held",
+      }),
+      expect.objectContaining({
+        count: 1,
+        source: "cloud_sync",
+        summary: "1 synced item was rejected by the server.",
+        type: "cloud_rejected",
+      }),
+    ]);
+  });
+
+  it("treats cloud review evidence as needing attention even without runtime status", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(getLatestRuntimeStatusForTerminal).mockResolvedValue(null);
+    vi.mocked(getTerminalSyncEvidence).mockResolvedValue({
+      latestEvent: {
+        localEventId: "local-event-1",
+        localRegisterSessionId: "local-register-1",
+        sequence: 9,
+        eventType: "register_closed",
+        status: "conflicted",
+        occurredAt: 120,
+        submittedAt: 130,
+      },
+      sampledEventCount: 1,
+      acceptedCount: 0,
+      projectedCount: 0,
+      conflictedCount: 1,
+      heldCount: 0,
+      rejectedCount: 0,
+    });
+
+    const result = await getTerminalHealthSummary(
+      { db: null as never } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        now: 220,
+      },
+    );
+
+    expect(result?.health).toBe("needs_attention");
+    expect(result?.runtimeStatus).toBeNull();
+    expect(result?.attentionReasons).toEqual([
+      expect.objectContaining({
+        count: 1,
+        source: "cloud_sync",
+        summary: "1 cloud sync conflict needs review.",
+        type: "cloud_conflict",
+      }),
+    ]);
+  });
+
   it.each([
     {
       expectedHealth: "offline",
@@ -598,6 +821,7 @@ describe("terminal health summaries", () => {
     );
 
     expect(result[0]?.health).toBe(scenario.expectedHealth);
+    expect(result[0]?.attentionReasons).toEqual([]);
   });
 
   it("returns null for detail when the terminal is outside the requested store", async () => {

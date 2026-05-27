@@ -821,6 +821,7 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
                 ...eventWithoutProof,
                 sync: {
                   ...event.sync,
+                  error: undefined,
                   status: "synced" as const,
                   ...(markOptions?.uploaded ? { uploaded: true } : {}),
                 },

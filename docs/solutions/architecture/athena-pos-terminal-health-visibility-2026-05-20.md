@@ -65,6 +65,9 @@ presentation boundaries:
 - Render Terminal Health as a POS operations console and terminal detail route.
   Keep POS Settings focused on current-device setup and link from settings to
   the health console for support review.
+- Return explicit attention reasons with terminal health summaries so support
+  pages can explain whether attention comes from local runtime review, failed or
+  unavailable local sync, local store readiness, or cloud sync evidence.
 - Link Cash Controls and register diagnostics to terminal detail/support
   evidence without treating stale telemetry as reconciliation work. Existing
   POS local sync conflict records continue to own needs-review copy.
@@ -103,6 +106,9 @@ and register-detail tests.
   copy, not needs-review copy.
 - Keep explicit conflict statuses such as `conflict`, `conflicted`, and
   `review` mapped to manager-review presentation.
+- Keep local runtime review separate from cloud conflicts. A terminal can need
+  attention because its browser still has an uploaded local review item even
+  after the server-side conflict has been projected or resolved.
 - Link support evidence from Cash Controls detail pages without adding a new
   terminal-management workflow there.
 - Regenerate harness docs from `scripts/harness-app-registry.ts` after changing

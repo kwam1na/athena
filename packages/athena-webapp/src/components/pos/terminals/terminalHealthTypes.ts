@@ -119,7 +119,28 @@ export type TerminalSyncEvidence = {
   unresolvedConflicts?: TerminalSyncConflict[];
 };
 
+export type TerminalHealthAttentionReason = {
+  count?: number;
+  latestEventSequence?: number;
+  latestEventStatus?: string;
+  nextPendingUploadSequence?: number;
+  oldestPendingEventAt?: number;
+  source: "cloud_sync" | "local_runtime" | "terminal_runtime" | string;
+  summary: string;
+  type:
+    | "cloud_conflict"
+    | "cloud_held"
+    | "cloud_rejected"
+    | "local_review"
+    | "local_store_unavailable"
+    | "sync_failed"
+    | "sync_unavailable"
+    | "terminal_seed_missing"
+    | string;
+};
+
 export type TerminalHealthSummary = {
+  attentionReasons?: TerminalHealthAttentionReason[];
   health?: "needs_attention" | "offline" | "online" | "stale" | "unknown" | string;
   runtimeStatus: TerminalRuntimeStatus | null;
   syncEvidence: TerminalSyncEvidence;

@@ -27,6 +27,25 @@ export type TerminalHealth =
   | "needs_attention"
   | "unknown";
 
+export type TerminalHealthAttentionReason = {
+  count?: number;
+  latestEventSequence?: number;
+  latestEventStatus?: string;
+  nextPendingUploadSequence?: number;
+  oldestPendingEventAt?: number;
+  source: "cloud_sync" | "local_runtime" | "terminal_runtime";
+  summary: string;
+  type:
+    | "cloud_conflict"
+    | "cloud_held"
+    | "cloud_rejected"
+    | "local_review"
+    | "local_store_unavailable"
+    | "sync_failed"
+    | "sync_unavailable"
+    | "terminal_seed_missing";
+};
+
 export type TerminalHealthSummary = {
   terminal: {
     _id: Id<"posTerminal">;
@@ -43,6 +62,7 @@ export type TerminalHealthSummary = {
     Doc<"posTerminalRuntimeStatus">,
     "_id" | "_creationTime" | "storeId" | "terminalId"
   > | null;
+  attentionReasons: TerminalHealthAttentionReason[];
   syncEvidence: TerminalSyncEvidence;
 };
 
@@ -130,6 +150,11 @@ async function buildTerminalHealthSummary(
   const runtimeAgeMs = runtimeStatus
     ? Math.max(0, args.now - runtimeStatus.receivedAt)
     : null;
+  const attentionReasons = deriveTerminalHealthAttentionReasons({
+    runtimeStatus,
+    syncEvidence,
+    terminalStatus: args.terminal.status,
+  });
 
   return {
     terminal: {
@@ -142,6 +167,7 @@ async function buildTerminalHealthSummary(
       browserInfo: args.terminal.browserInfo,
     },
     health: deriveTerminalHealth({
+      attentionReasons,
       runtimeAgeMs,
       runtimeStatus,
       syncEvidence,
@@ -149,11 +175,13 @@ async function buildTerminalHealthSummary(
     }),
     runtimeAgeMs,
     runtimeStatus: runtimeStatus ? stripRuntimeStatusIdentity(runtimeStatus) : null,
+    attentionReasons,
     syncEvidence,
   };
 }
 
 function deriveTerminalHealth(input: {
+  attentionReasons: TerminalHealthAttentionReason[];
   runtimeAgeMs: number | null;
   runtimeStatus: Doc<"posTerminalRuntimeStatus"> | null;
   syncEvidence: TerminalSyncEvidence;
@@ -163,21 +191,12 @@ function deriveTerminalHealth(input: {
     return "offline";
   }
 
-  if (!input.runtimeStatus || input.runtimeAgeMs === null) {
-    return "unknown";
+  if (input.attentionReasons.length > 0) {
+    return "needs_attention";
   }
 
-  if (
-    input.runtimeStatus.sync.status === "failed" ||
-    input.runtimeStatus.sync.status === "needs_review" ||
-    input.runtimeStatus.sync.status === "unavailable" ||
-    input.runtimeStatus.sync.failedEventCount > 0 ||
-    input.runtimeStatus.sync.reviewEventCount > 0 ||
-    input.syncEvidence.conflictedCount > 0 ||
-    input.syncEvidence.heldCount > 0 ||
-    input.syncEvidence.rejectedCount > 0
-  ) {
-    return "needs_attention";
+  if (!input.runtimeStatus || input.runtimeAgeMs === null) {
+    return "unknown";
   }
 
   if (
@@ -188,6 +207,103 @@ function deriveTerminalHealth(input: {
   }
 
   return input.runtimeAgeMs <= 15 * 60 * 1000 ? "stale" : "offline";
+}
+
+function deriveTerminalHealthAttentionReasons(input: {
+  runtimeStatus: Doc<"posTerminalRuntimeStatus"> | null;
+  syncEvidence: TerminalSyncEvidence;
+  terminalStatus: Doc<"posTerminal">["status"];
+}): TerminalHealthAttentionReason[] {
+  if (input.terminalStatus !== "active") {
+    return [];
+  }
+
+  const reasons: TerminalHealthAttentionReason[] = [];
+  const sync = input.runtimeStatus?.sync;
+  const latestEvent = input.syncEvidence.latestEvent;
+
+  if (sync && (sync.status === "needs_review" || sync.reviewEventCount > 0)) {
+    const count = Math.max(1, sync.reviewEventCount);
+    reasons.push({
+      count,
+      nextPendingUploadSequence: sync.nextPendingUploadSequence,
+      oldestPendingEventAt: sync.oldestPendingEventAt,
+      source: "local_runtime",
+      summary: `${count} local review item${count === 1 ? " is" : "s are"} still on this terminal.`,
+      type: "local_review",
+    });
+  }
+
+  if (sync && (sync.status === "failed" || sync.failedEventCount > 0)) {
+    const count = Math.max(1, sync.failedEventCount);
+    reasons.push({
+      count,
+      nextPendingUploadSequence: sync.nextPendingUploadSequence,
+      oldestPendingEventAt: sync.oldestPendingEventAt,
+      source: "local_runtime",
+      summary: `${count} local sync item${count === 1 ? " has" : "s have"} failed on this terminal.`,
+      type: "sync_failed",
+    });
+  }
+
+  if (sync?.status === "unavailable") {
+    reasons.push({
+      source: "local_runtime",
+      summary: "Local sync runtime is unavailable on this terminal.",
+      type: "sync_unavailable",
+    });
+  }
+
+  if (input.runtimeStatus?.localStore.available === false) {
+    reasons.push({
+      source: "terminal_runtime",
+      summary: "Local terminal storage is not available.",
+      type: "local_store_unavailable",
+    });
+  }
+
+  if (input.runtimeStatus?.localStore.terminalSeedReady === false) {
+    reasons.push({
+      source: "terminal_runtime",
+      summary: "Terminal setup data is not ready on this checkout station.",
+      type: "terminal_seed_missing",
+    });
+  }
+
+  if (input.syncEvidence.conflictedCount > 0) {
+    reasons.push({
+      count: input.syncEvidence.conflictedCount,
+      latestEventSequence: latestEvent?.sequence,
+      latestEventStatus: latestEvent?.status,
+      source: "cloud_sync",
+      summary: `${input.syncEvidence.conflictedCount} cloud sync conflict${input.syncEvidence.conflictedCount === 1 ? " needs" : "s need"} review.`,
+      type: "cloud_conflict",
+    });
+  }
+
+  if (input.syncEvidence.heldCount > 0) {
+    reasons.push({
+      count: input.syncEvidence.heldCount,
+      latestEventSequence: latestEvent?.sequence,
+      latestEventStatus: latestEvent?.status,
+      source: "cloud_sync",
+      summary: `${input.syncEvidence.heldCount} synced item${input.syncEvidence.heldCount === 1 ? " is" : "s are"} held before projection.`,
+      type: "cloud_held",
+    });
+  }
+
+  if (input.syncEvidence.rejectedCount > 0) {
+    reasons.push({
+      count: input.syncEvidence.rejectedCount,
+      latestEventSequence: latestEvent?.sequence,
+      latestEventStatus: latestEvent?.status,
+      source: "cloud_sync",
+      summary: `${input.syncEvidence.rejectedCount} synced item${input.syncEvidence.rejectedCount === 1 ? " was" : "s were"} rejected by the server.`,
+      type: "cloud_rejected",
+    });
+  }
+
+  return reasons;
 }
 
 function stripRuntimeStatusIdentity(status: Doc<"posTerminalRuntimeStatus">) {

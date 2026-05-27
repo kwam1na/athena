@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>fix: Close POS terminal review evidence gaps</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8fb;
+      --surface: #ffffff;
+      --text: #162033;
+      --muted: #5e6a7d;
+      --border: #d9deea;
+      --accent: #3556b8;
+      --accent-soft: #eef2ff;
+      --warning: #8a5a00;
+      --warning-soft: #fff7df;
+      --danger: #9f2626;
+      --success: #166a4a;
+      --code: #f3f5f9;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 48px 24px 72px;
+    }
+    header {
+      margin-bottom: 28px;
+    }
+    .eyebrow {
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 8px 0 12px;
+      font-size: clamp(34px, 5vw, 56px);
+      line-height: 1;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin: 0 0 14px;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+    h3 {
+      margin: 22px 0 10px;
+      font-size: 16px;
+      letter-spacing: 0;
+    }
+    p { margin: 0 0 12px; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .pill {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--surface);
+      padding: 4px 10px;
+    }
+    nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 24px 0;
+    }
+    nav a {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
+      padding: 8px 10px;
+      font-size: 13px;
+    }
+    section {
+      margin-top: 18px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface);
+      padding: 24px;
+      box-shadow: 0 14px 34px rgba(22, 32, 51, .05);
+    }
+    .callout {
+      border-color: #f0d48c;
+      background: var(--warning-soft);
+      color: #392800;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fbfcff;
+    }
+    .card strong {
+      display: block;
+      margin-bottom: 5px;
+    }
+    ul, ol {
+      margin: 8px 0 0 20px;
+      padding: 0;
+    }
+    li { margin: 6px 0; }
+    code {
+      border-radius: 5px;
+      background: var(--code);
+      padding: 1px 5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: .92em;
+    }
+    pre {
+      overflow-x: auto;
+      border-radius: 8px;
+      background: var(--code);
+      padding: 14px;
+      white-space: pre;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f5f7fb; }
+    .unit {
+      border-left: 4px solid var(--accent);
+    }
+    .unit h3 {
+      margin-top: 0;
+      font-size: 18px;
+    }
+    .tag-warning { color: var(--warning); font-weight: 700; }
+    .tag-danger { color: var(--danger); font-weight: 700; }
+    .tag-success { color: var(--success); font-weight: 700; }
+    @media (max-width: 760px) {
+      main { padding: 28px 14px 48px; }
+      section { padding: 18px; }
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="eyebrow">Plan Review Artifact</div>
+      <h1>fix: Close POS terminal review evidence gaps</h1>
+      <div class="meta">
+        <span class="pill">Type: fix</span>
+        <span class="pill">Status: active</span>
+        <span class="pill">Date: 2026-05-26</span>
+        <span class="pill">Source: <a href="./2026-05-26-001-fix-pos-terminal-review-gap-plan.md">Markdown plan</a></span>
+      </div>
+    </header>
+
+    <nav aria-label="Plan sections">
+      <a href="#summary">Summary</a>
+      <a href="#requirements">Requirements</a>
+      <a href="#design">Design</a>
+      <a href="#units">Implementation Units</a>
+      <a href="#risks">Risks</a>
+      <a href="#verification">Verification</a>
+    </nav>
+
+    <section id="summary">
+      <h2>Summary</h2>
+      <p>Align POS terminal health with the evidence operators can actually see: backend health summaries will return explicit attention reasons, the terminal detail page will explain local runtime review state beside cloud sync evidence, and the local sync runtime will stop leaving already-resolved review events stuck on the terminal.</p>
+    </section>
+
+    <section class="callout">
+      <h2>Production Gap</h2>
+      <p>Terminal <code>M Supplies</code> was labeled <span class="tag-warning">Needs review</span> because its runtime check-in reported <code>sync.status: needs_review</code> and <code>reviewEventCount: 1</code>. The visible detail page emphasized cloud evidence, which showed projected events and a resolved conflict, so the badge looked unsupported.</p>
+    </section>
+
+    <section id="requirements">
+      <h2>Requirements</h2>
+      <ul>
+        <li>Expose explicit backend attention reasons for terminal health classifications.</li>
+        <li>Show local runtime review state when it drives the terminal detail badge.</li>
+        <li>Clear local review counts after server-side projection or intentional settlement.</li>
+        <li>Keep Cash Controls and Operations as the manager-review action surfaces.</li>
+        <li>Keep operator copy clear and avoid exposing raw local payloads or secrets.</li>
+        <li>Cover the production mismatch with regression tests.</li>
+      </ul>
+    </section>
+
+    <section id="design">
+      <h2>High-Level Design</h2>
+      <p>The backend should answer why a terminal needs attention. The frontend should render that explanation alongside cloud evidence, rather than recalculating and implying that cloud conflicts are the only possible cause.</p>
+      <pre><code>Browser local event log
+  -> Runtime status builder
+  -> Terminal runtime check-in
+  -> Terminal health summary + attention reasons
+  -> Terminal list/detail/register diagnostics</code></pre>
+      <div class="grid">
+        <div class="card">
+          <strong>Local runtime evidence</strong>
+          <p>Review count, oldest event age, next upload sequence, last trigger, local store health.</p>
+        </div>
+        <div class="card">
+          <strong>Cloud sync evidence</strong>
+          <p>Accepted cursor, projected/held/rejected/conflicted counts, latest event sample.</p>
+        </div>
+        <div class="card">
+          <strong>Review ownership</strong>
+          <p>Terminal health explains support evidence; Cash Controls and Approvals retain actions.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="units">
+      <h2>Implementation Units</h2>
+      <article class="card unit">
+        <h3>U1. Backend attention reasons</h3>
+        <p>Add validator-safe <code>attentionReasons</code> to terminal health summaries from the same inputs that derive <code>health</code>.</p>
+        <p><strong>Primary files:</strong> <code>convex/pos/application/queries/terminals.ts</code>, <code>convex/pos/public/terminals.ts</code>, <code>src/components/pos/terminals/terminalHealthTypes.ts</code>.</p>
+      </article>
+      <article class="card unit">
+        <h3>U2. Terminal detail explanation</h3>
+        <p>Render a compact "why this needs attention" section and clarify when local runtime review exists even with no unresolved cloud conflicts.</p>
+        <p><strong>Primary files:</strong> <code>POSTerminalDetailView.tsx</code>, <code>terminalHealthPresentation.ts</code>.</p>
+      </article>
+      <article class="card unit">
+        <h3>U3. Local review lifecycle reconciliation</h3>
+        <p>Characterize and fix stale local review events after server-side projection or settlement, especially reviewed <code>register_closed</code> events.</p>
+        <p><strong>Primary files:</strong> <code>usePosLocalSyncRuntime.ts</code>, <code>terminalRuntimeStatus.ts</code>, <code>projectLocalEvents.ts</code>, <code>ingestLocalEvents.ts</code>.</p>
+      </article>
+      <article class="card unit">
+        <h3>U4. Terminal health parity</h3>
+        <p>Keep list rows, detail headers, and register diagnostics aligned around the same reason model.</p>
+        <p><strong>Primary files:</strong> <code>POSTerminalHealthView.tsx</code>, <code>POSRegisterView.tsx</code>.</p>
+      </article>
+      <article class="card unit">
+        <h3>U5. Validation map and operational handoff</h3>
+        <p>Document the production failure mode and update validation coverage for reason generation, UI explanation, and review clearing.</p>
+      </article>
+    </section>
+
+    <section id="risks">
+      <h2>Risks &amp; Mitigations</h2>
+      <table>
+        <thead>
+          <tr><th>Risk</th><th>Mitigation</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Clearing local review state too early hides real work.</td><td>Only clear after server-projected or intentionally settled evidence.</td></tr>
+          <tr><td>Reason logic drifts again between backend and frontend.</td><td>Backend returns reason payloads; frontend renders instead of rediscovering.</td></tr>
+          <tr><td>Copy implies terminal health owns approval actions.</td><td>Route actions back to Cash Controls and Operations approval flows.</td></tr>
+          <tr><td>Older deployments lack the new reason field.</td><td>Make frontend handling optional with fallback rendering.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="verification">
+      <h2>Verification Strategy</h2>
+      <ul>
+        <li>Backend tests prove runtime review + clear cloud conflicts returns a local runtime attention reason.</li>
+        <li>Detail view tests prove the production mismatch is explained without relying on the register debug strip.</li>
+        <li>Local sync runtime tests prove projected reviewed closeout events clear from local review counts.</li>
+        <li>Terminal list/detail/register diagnostics tests prove status wording stays aligned.</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

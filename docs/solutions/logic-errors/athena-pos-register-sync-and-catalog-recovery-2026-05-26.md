@@ -54,6 +54,10 @@ Use shared register sync review state and idempotent projection semantics:
   activity to reject or clear.
 - In POS, block selling from the same closeout review source rather than from a
   separate register-session interpretation.
+- Terminal health should explain local runtime review separately from cloud
+  conflicts. When an uploaded local review event is later projected by Cash
+  Controls review, the terminal runtime can retry that uploaded review event and
+  clear the local review counter from the server's projected source status.
 
 Use compact catalog recovery for unknown scanned identifiers:
 
@@ -102,6 +106,8 @@ Use shared operational workspace patterns for broad store work:
   compare the applied count and variance before deciding.
 - Do not surface raw conflict summaries as final operator copy when the system
   knows the next action.
+- Do not clear terminal-local review counts from resolved conflict metadata
+  alone; use the source `posLocalSyncEvent` settlement status.
 - Do not make barcode recovery create-only. Existing SKU linking is the safer
   first path when the catalog item already exists.
 - Run `bun run pr:athena` for main-bound batches and add or update
@@ -114,3 +120,4 @@ Use shared operational workspace patterns for broad store work:
 - [Athena POS Register Search Uses A Local Catalog Index](./athena-pos-register-local-catalog-search-2026-05-04.md)
 - [Athena POS Register Review And Adjusted Sale Projection](./athena-pos-register-review-and-adjusted-sale-projection-2026-05-21.md)
 - [Athena POS Register Sync Closeout Review Recovery](./athena-pos-register-sync-closeout-review-recovery-2026-05-23.md)
+- [Athena POS Terminal Review Reasons And Local Settlement](./athena-pos-terminal-review-reason-reconciliation-2026-05-26.md)

@@ -564,6 +564,11 @@ describe("posLocalStore", () => {
       staffProofToken: "proof-token-1",
       payload: { total: 25 },
     });
+    await store.markEventsNeedsReview(
+      ["local-event-2"],
+      "Cloud sync needs review before this local event can finish.",
+      { uploaded: true },
+    );
 
     await expect(
       store.markEventsSynced(["local-event-2"], { uploaded: true }),
@@ -602,6 +607,7 @@ describe("posLocalStore", () => {
     });
     if (listed.ok) {
       expect(listed.value[1]).not.toHaveProperty("staffProofToken");
+      expect(listed.value[1]?.sync.error).toBeUndefined();
     }
   });
 

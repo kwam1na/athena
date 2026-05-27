@@ -668,6 +668,190 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     );
   });
 
+  it("retries uploaded review events from status-only manual retry so projected server settlement clears local review", async () => {
+    mocks.ingestLocalEvents.mockResolvedValue({
+      kind: "ok",
+      data: {
+        accepted: [
+          {
+            localEventId: "event-closeout",
+            sequence: 1,
+            status: "projected",
+          },
+        ],
+        held: [],
+        mappings: [
+          {
+            _id: "mapping-closeout",
+            storeId: "store-1",
+            terminalId: "terminal-cloud-1",
+            localRegisterSessionId: "register-1",
+            localEventId: "event-closeout",
+            localIdKind: "closeout",
+            localId: "event-closeout",
+            cloudTable: "registerSession",
+            cloudId: "register-session-1",
+            createdAt: 12,
+          },
+        ],
+        conflicts: [],
+        syncCursor: {
+          localRegisterSessionId: "register-1",
+          acceptedThroughSequence: 1,
+        },
+      },
+    });
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [
+          buildLocalEvent({
+            localEventId: "event-closeout",
+            payload: {
+              countedCash: 100,
+              notes: "End of day",
+            },
+            sequence: 1,
+            sync: { status: "needs_review", uploaded: true },
+            type: "register.closeout_started",
+          }),
+        ],
+      })),
+      markEventsSynced: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      markEventsNeedsReview: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      writeLocalCloudMapping: vi.fn(async () => ({
+        ok: true,
+        value: {},
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+    const storeFactory = () => store as never;
+
+    const { result } = renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "status-only",
+        storeFactory,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(result.current).toEqual(
+        expect.objectContaining({
+          status: "needs_review",
+        }),
+      ),
+    );
+    expect(mocks.ingestLocalEvents).not.toHaveBeenCalled();
+
+    act(() => {
+      result.current?.onRetrySync?.();
+    });
+
+    await waitFor(() =>
+      expect(mocks.ingestLocalEvents).toHaveBeenCalledWith(
+        expect.objectContaining({
+          events: [
+            expect.objectContaining({
+              eventType: "register_closed",
+              localEventId: "event-closeout",
+            }),
+          ],
+        }),
+      ),
+    );
+    await waitFor(() =>
+      expect(store.markEventsSynced).toHaveBeenCalledWith(["event-closeout"], {
+        uploaded: true,
+      }),
+    );
+    expect(store.markEventsNeedsReview).not.toHaveBeenCalled();
+  });
+
+  it("does not manually retry review events that were never uploaded", async () => {
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [
+          buildLocalEvent({
+            localEventId: "event-closeout",
+            payload: {
+              countedCash: 100,
+              notes: "End of day",
+            },
+            sequence: 1,
+            sync: { status: "needs_review" },
+            type: "register.closeout_started",
+          }),
+        ],
+      })),
+      markEventsSynced: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      markEventsNeedsReview: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+    const storeFactory = () => store as never;
+
+    const { result } = renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "status-only",
+        storeFactory,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(result.current).toEqual(
+        expect.objectContaining({
+          status: "needs_review",
+        }),
+      ),
+    );
+    act(() => {
+      result.current?.onRetrySync?.();
+    });
+
+    await waitFor(() => expect(store.listEvents.mock.calls.length).toBeGreaterThan(1));
+    expect(mocks.ingestLocalEvents).not.toHaveBeenCalled();
+    expect(store.markEventsSynced).not.toHaveBeenCalled();
+    expect(store.markEventsNeedsReview).not.toHaveBeenCalled();
+  });
+
   it("marks uploaded events for review when the server rejects the batch", async () => {
     mocks.ingestLocalEvents.mockResolvedValue({
       kind: "user_error",

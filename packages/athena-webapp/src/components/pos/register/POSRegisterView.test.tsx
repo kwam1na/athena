@@ -500,6 +500,7 @@ describe("POSRegisterView", () => {
     expect(screen.getByText("2026-05-15T12:34:56Z")).toBeInTheDocument();
     expect(screen.getByText("local 4 synced 4 next n/a")).toBeInTheDocument();
     expect(screen.getByText("eligible uploads")).toBeInTheDocument();
+    expect(screen.getByText("local review items")).toBeInTheDocument();
     expect(screen.getByText("runtime mode")).toBeInTheDocument();
     expect(screen.getByText("Status only")).toBeInTheDocument();
     expect(screen.getByText("local-only events")).toBeInTheDocument();
