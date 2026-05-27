@@ -252,9 +252,10 @@ export function buildServiceCase(args: {
 }) {
   const totalAmount = args.quotedAmount ?? 0;
   const now = Date.now();
+  const { createdByUserId: _createdByUserId, ...serviceCaseFields } = args;
 
   return {
-    ...args,
+    ...serviceCaseFields,
     balanceDueAmount: totalAmount,
     createdAt: now,
     lastStatusChangedAt: now,

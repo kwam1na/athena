@@ -1,3 +1,9 @@
+import {
+  createFuzzySearchEntry,
+  searchFuzzyEntries,
+  type FuzzySearchEntry,
+} from "@/lib/search/fuzzySearch";
+
 export interface RegisterCatalogSearchRow {
   productId: string;
   productSkuId: string;
@@ -43,17 +49,7 @@ export interface RegisterCatalogIndex {
   bySku: Map<string, RegisterCatalogSearchRow[]>;
   byProductSkuId: Map<string, RegisterCatalogSearchRow[]>;
   byProductId: Map<string, RegisterCatalogSearchRow[]>;
-  searchableRows: Array<{
-    row: RegisterCatalogSearchRow;
-    tokens: Set<string>;
-    normalizedFields: {
-      name: string;
-      sku: string;
-      category: string;
-      description: string;
-      attributes: string;
-    };
-  }>;
+  searchableRows: Array<FuzzySearchEntry<RegisterCatalogSearchRow>>;
 }
 
 type ParsedCatalogSearchInput =
@@ -75,23 +71,17 @@ export function buildRegisterCatalogIndex(
     addKey(byProductSkuId, normalizeIdentifier(row.productSkuId), row);
     addKey(byProductId, normalizeIdentifier(row.productId), row);
 
-    const normalizedFields = {
-      name: normalizeSearchText(row.name),
-      sku: normalizeSearchText(row.sku),
-      category: normalizeSearchText(row.category),
-      description: normalizeSearchText(row.description),
+    return createFuzzySearchEntry(row, {
+      name: row.name,
+      sku: row.sku,
+      category: row.category,
+      description: row.description,
       attributes: normalizeSearchText([
         row.size,
         row.length == null ? "" : String(row.length),
         row.color,
       ]),
-    };
-
-    return {
-      row,
-      tokens: tokenizeSearchText(Object.values(normalizedFields)),
-      normalizedFields,
-    };
+    });
   });
 
   return {
@@ -225,157 +215,16 @@ function searchByText(
   input: string,
   limit = 20,
 ): RegisterCatalogSearchRow[] {
-  const queryTokens = [...tokenizeSearchText([input])];
-
-  if (queryTokens.length === 0) {
-    return [];
-  }
-
-  return index.searchableRows
-    .map((entry, position) => ({
-      row: entry.row,
-      position,
-      score: scoreSearchRow(entry, queryTokens),
-    }))
-    .filter((entry) => entry.score > 0)
-    .sort((left, right) => {
-      if (right.score !== left.score) return right.score - left.score;
-      return left.position - right.position;
-    })
-    .slice(0, limit)
-    .map((entry) => entry.row);
-}
-
-function scoreSearchRow(
-  entry: RegisterCatalogIndex["searchableRows"][number],
-  queryTokens: string[],
-): number {
-  let score = 0;
-
-  for (const token of queryTokens) {
-    const tokenScore = scoreQueryTokenForEntry(entry, token);
-
-    if (tokenScore === 0) {
-      continue;
-    }
-
-    score += tokenScore;
-  }
-
-  return score;
-}
-
-function scoreQueryTokenForEntry(
-  entry: RegisterCatalogIndex["searchableRows"][number],
-  token: string,
-): number {
-  if (entry.tokens.has(token)) {
-    return (
-      1 +
-      scoreFieldContains(entry.normalizedFields.name, token, 8) +
-      scoreFieldContains(entry.normalizedFields.sku, token, 6) +
-      scoreFieldContains(entry.normalizedFields.category, token, 4) +
-      scoreFieldContains(entry.normalizedFields.attributes, token, 3) +
-      scoreFieldContains(entry.normalizedFields.description, token, 2)
-    );
-  }
-
-  return bestFuzzyTokenScore(entry.tokens, token);
-}
-
-function scoreFieldContains(field: string, token: string, score: number): number {
-  return field.includes(token) ? score : 0;
-}
-
-function bestFuzzyTokenScore(tokens: Set<string>, queryToken: string): number {
-  if (queryToken.length < 3) {
-    return 0;
-  }
-
-  let bestScore = 0;
-
-  for (const candidateToken of tokens) {
-    bestScore = Math.max(
-      bestScore,
-      scoreFuzzyTokenMatch(candidateToken, queryToken),
-    );
-  }
-
-  return bestScore;
-}
-
-function scoreFuzzyTokenMatch(candidateToken: string, queryToken: string): number {
-  if (candidateToken.length < 3) {
-    return 0;
-  }
-
-  if (
-    candidateToken.includes(queryToken) ||
-    queryToken.includes(candidateToken)
-  ) {
-    return 5;
-  }
-
-  if (!isProbablySameToken(candidateToken, queryToken)) {
-    return 0;
-  }
-
-  const distance = levenshteinDistance(candidateToken, queryToken);
-  const maxLength = Math.max(candidateToken.length, queryToken.length);
-  const similarity = 1 - distance / maxLength;
-
-  if (similarity >= 0.78) {
-    return 4;
-  }
-
-  if (similarity >= 0.68) {
-    return 2;
-  }
-
-  return 0;
-}
-
-function isProbablySameToken(candidateToken: string, queryToken: string): boolean {
-  return (
-    candidateToken[0] === queryToken[0] ||
-    candidateToken.includes(queryToken.slice(0, 2)) ||
-    queryToken.includes(candidateToken.slice(0, 2))
-  );
-}
-
-function levenshteinDistance(left: string, right: string): number {
-  if (left === right) {
-    return 0;
-  }
-
-  if (left.length === 0) {
-    return right.length;
-  }
-
-  if (right.length === 0) {
-    return left.length;
-  }
-
-  let previousRow = Array.from({ length: right.length + 1 }, (_, index) => index);
-
-  for (let leftIndex = 0; leftIndex < left.length; leftIndex += 1) {
-    const currentRow = [leftIndex + 1];
-
-    for (let rightIndex = 0; rightIndex < right.length; rightIndex += 1) {
-      const insertionCost = currentRow[rightIndex] + 1;
-      const deletionCost = previousRow[rightIndex + 1] + 1;
-      const substitutionCost =
-        previousRow[rightIndex] + (left[leftIndex] === right[rightIndex] ? 0 : 1);
-
-      currentRow.push(
-        Math.min(insertionCost, deletionCost, substitutionCost),
-      );
-    }
-
-    previousRow = currentRow;
-  }
-
-  return previousRow[right.length];
+  return searchFuzzyEntries(index.searchableRows, input, {
+    fieldWeights: {
+      name: 8,
+      sku: 6,
+      category: 4,
+      attributes: 3,
+      description: 2,
+    },
+    limit,
+  });
 }
 
 function normalizeIdentifier(value: unknown): string {
@@ -390,20 +239,6 @@ function normalizeSearchText(value: unknown): string {
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
     .replace(/\s+/g, " ");
-}
-
-function tokenizeSearchText(values: unknown[]): Set<string> {
-  const tokens = new Set<string>();
-
-  for (const value of values) {
-    for (const token of normalizeSearchText(value).split(" ")) {
-      if (token) {
-        tokens.add(token);
-      }
-    }
-  }
-
-  return tokens;
 }
 
 function addKey(

@@ -517,6 +517,7 @@ export const getByIdOrSlug = query({
       v.object({
         isVisible: v.boolean(),
         excludeStorefrontHidden: v.optional(v.boolean()),
+        includeArchived: v.optional(v.boolean()),
       })
     ),
     storeId: v.id("store"),
@@ -590,7 +591,10 @@ export const getByIdOrSlug = query({
       return null;
     }
 
-    if (product.availability === "archived") {
+    if (
+      product.availability === "archived" &&
+      !args.filters?.includeArchived
+    ) {
       return null;
     }
 
@@ -954,6 +958,34 @@ export const archive = mutation({
       {
         storeId: product.storeId,
       }
+    );
+
+    return await ctx.db.get("product", args.id);
+  },
+});
+
+export const unarchive = mutation({
+  args: {
+    id: v.id(entity),
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => {
+    await requireStoreFullAdminAccess(ctx, args.storeId);
+
+    const product = await ctx.db.get("product", args.id);
+
+    if (!product || product.storeId !== args.storeId) {
+      return null;
+    }
+
+    await ctx.db.patch("product", args.id, { availability: "live" });
+
+    await ctx.scheduler.runAfter(
+      0,
+      internal.inventory.productUtil.invalidateProductCache,
+      {
+        storeId: product.storeId,
+      },
     );
 
     return await ctx.db.get("product", args.id);

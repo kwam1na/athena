@@ -549,6 +549,7 @@ export async function listInventorySnapshotWithCtx(
           imageUrl: productSku.images[0] ?? null,
           inventoryCount: productSku.inventoryCount,
           length: productSku.length ?? null,
+          price: productSku.price,
           productCategory: category?.name ?? null,
           productId: productSku.productId,
           productName:
@@ -560,6 +561,7 @@ export async function listInventorySnapshotWithCtx(
           posReservedQuantity,
           quantityAvailable,
           reservedQuantity,
+          size: productSku.size ?? null,
           sku: productSku.sku ?? null,
         };
       })

@@ -1,6 +1,7 @@
 import type { AnchorHTMLAttributes, ReactNode } from "react";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ServicesWorkspaceViewContent } from "./ServicesWorkspaceView";
 
@@ -23,6 +24,21 @@ vi.mock("@tanstack/react-router", () => ({
 vi.mock("~/src/hooks/use-navigate-back", () => ({
   useNavigateBack: () => () => null,
 }));
+
+vi.mock("sonner", () => ({
+  toast: {
+    success: vi.fn(),
+  },
+}));
+
+async function chooseSelectOption(
+  user: ReturnType<typeof userEvent.setup>,
+  label: RegExp,
+  option: RegExp,
+) {
+  await user.click(screen.getByRole("combobox", { name: label }));
+  await user.click(await screen.findByRole("option", { name: option }));
+}
 
 const baseItems = [
   {
@@ -146,5 +162,43 @@ describe("ServicesWorkspaceViewContent", () => {
     expect(within(directory).getByText("Page 2 of 2")).toBeInTheDocument();
     expect(within(directory).queryByText("Service 08")).not.toBeInTheDocument();
     expect(within(directory).getByText("Service 09")).toBeInTheDocument();
+  });
+
+  it("loads the selected service into an edit form and saves catalog changes", async () => {
+    const user = userEvent.setup();
+    const onUpdate = vi.fn().mockResolvedValue({ kind: "ok", data: null });
+
+    render(
+      <ServicesWorkspaceViewContent
+        currency="GHS"
+        items={baseItems}
+        onUpdate={onUpdate}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /edit service/i }));
+
+    expect(screen.getByLabelText(/service name/i)).toHaveValue(
+      "closure repair",
+    );
+    expect(screen.getByLabelText(/base price/i)).toHaveValue("300.5");
+    expect(screen.getByLabelText(/deposit value/i)).toHaveValue("100");
+
+    await user.clear(screen.getByLabelText(/service name/i));
+    await user.type(screen.getByLabelText(/service name/i), "Closure Cleanup");
+    await chooseSelectOption(user, /deposit rule/i, /no deposit/i);
+    expect(screen.getByLabelText(/deposit value/i)).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: /save changes/i }));
+
+    await waitFor(() => expect(onUpdate).toHaveBeenCalledTimes(1));
+    expect(onUpdate.mock.calls[0][0]).toMatchObject({
+      basePrice: 30050,
+      depositType: "none",
+      depositValue: null,
+      name: "Closure Cleanup",
+      serviceCatalogId: "catalog-1",
+    });
+    expect(toast.success).toHaveBeenCalledWith("Service updated");
   });
 });

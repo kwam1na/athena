@@ -13,7 +13,9 @@ import { useNavigationKeyboardShortcuts } from "@/hooks/use-navigation-keyboard-
 
 const procurementModeSchema = z.preprocess(
   (value) => (value === "resolved" ? undefined : value),
-  z.enum(["needs_action", "planned", "inbound", "exceptions", "all"]).optional(),
+  z
+    .enum(["needs_action", "planned", "inbound", "exceptions", "all"])
+    .optional(),
 );
 
 const rootPageSchema = z.object({
@@ -25,6 +27,7 @@ const rootPageSchema = z.object({
   mode: z.enum(["cycle_count", "manual"]).optional(),
   page: z.coerce.number().int().positive().optional(),
   procurementMode: procurementModeSchema,
+  query: z.string().optional(),
   scope: z.string().optional(),
   sku: z.string().optional(),
 });

@@ -18,6 +18,7 @@ import { Id } from "~/convex/_generated/dataModel";
 import { parseDisplayAmountInput } from "~/src/lib/pos/displayAmounts";
 import {
   ServiceIntakeCustomerResult,
+  ServiceIntakeCatalogOption,
   ServiceIntakeForm,
   ServiceIntakeFormState,
   ServiceIntakeStaffOption,
@@ -42,6 +43,7 @@ const initialFormState: ServiceIntakeFormState = {
 };
 
 type ServiceIntakeViewContentProps = {
+  catalogOptions: ServiceIntakeCatalogOption[] | undefined;
   customerResults: ServiceIntakeCustomerResult[];
   hasFullAdminAccess: boolean;
   isLoadingPermissions: boolean;
@@ -82,6 +84,7 @@ type CreateServiceIntakeResult = {
 };
 
 export function ServiceIntakeViewContent({
+  catalogOptions,
   customerResults,
   hasFullAdminAccess,
   isLoadingPermissions,
@@ -104,7 +107,7 @@ export function ServiceIntakeViewContent({
     return <NoPermissionView />;
   }
 
-  if (!staffOptions) {
+  if (!staffOptions || !catalogOptions) {
     return null;
   }
 
@@ -141,6 +144,7 @@ export function ServiceIntakeViewContent({
     const errors = validateServiceIntakeInput({
       assignedStaffProfileId: form.assignedStaffProfileId,
       customerFullName: form.customerFullName,
+      customerPhoneNumber: form.customerPhoneNumber,
       customerProfileId: form.selectedCustomerId,
       depositAmount: hasInvalidDepositAmount ? 0 : parsedDepositAmount,
       depositMethod: form.depositMethod || undefined,
@@ -196,6 +200,7 @@ export function ServiceIntakeViewContent({
             description="Capture walk-in or booked service work with the customer, staff owner, priority, and deposit details ready for operations."
           />
           <ServiceIntakeForm
+            catalogOptions={catalogOptions}
             customerResults={customerResults}
             form={form}
             isSubmitting={isSubmitting}
@@ -237,6 +242,12 @@ export function ServiceIntakeView() {
     operationsApi.serviceIntake.listAssignableStaff,
     canQueryProtectedData ? { storeId: activeStore!._id } : "skip",
   ) as ServiceIntakeStaffOption[] | undefined;
+  const catalogOptions = useQuery(
+    api.serviceOps.catalog.listServiceCatalogItems,
+    canQueryProtectedData
+      ? { status: "active", storeId: activeStore!._id }
+      : "skip",
+  ) as ServiceIntakeCatalogOption[] | undefined;
 
   const createServiceIntake = useMutation(
     operationsApi.serviceIntake.createServiceIntake,
@@ -280,6 +291,7 @@ export function ServiceIntakeView() {
 
   return (
     <ServiceIntakeViewContent
+      catalogOptions={catalogOptions}
       customerResults={customerResults ?? []}
       hasFullAdminAccess={hasFullAdminAccess}
       isLoadingPermissions={false}

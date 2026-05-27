@@ -4,12 +4,15 @@ import { ProcurementView } from "~/src/components/procurement/ProcurementView";
 
 const procurementModeSchema = z.preprocess(
   (value) => (value === "resolved" ? undefined : value),
-  z.enum(["needs_action", "planned", "inbound", "exceptions", "all"]).optional(),
+  z
+    .enum(["needs_action", "planned", "inbound", "exceptions", "all"])
+    .optional(),
 );
 
 export const procurementSearchSchema = z.object({
   procurementMode: procurementModeSchema,
   page: z.coerce.number().int().positive().optional(),
+  query: z.string().optional(),
   sku: z.string().optional(),
 });
 
@@ -39,6 +42,21 @@ export function getNextProcurementPageSearch(
     ...current,
     page,
   };
+}
+
+export function getNextProcurementQuerySearch(
+  current: Record<string, unknown>,
+  query: string | undefined,
+) {
+  const next: Record<string, unknown> = { ...current, query, page: 1 };
+
+  delete next.sku;
+
+  if (!query) {
+    delete next.query;
+  }
+
+  return next;
 }
 
 export function getNextProcurementSelectedSkuSearch(
@@ -88,6 +106,13 @@ function ProcurementRoute() {
             getNextProcurementPageSearch(current, page)) as never,
         });
       }}
+      onQueryChange={(query) => {
+        void navigate({
+          replace: true,
+          search: ((current: Record<string, unknown>) =>
+            getNextProcurementQuerySearch(current, query)) as never,
+        });
+      }}
       onSelectedSkuChange={(sku, page) => {
         void navigate({
           replace: true,
@@ -96,6 +121,7 @@ function ProcurementRoute() {
         });
       }}
       page={search.page}
+      query={search.query}
       selectedSku={search.sku}
     />
   );

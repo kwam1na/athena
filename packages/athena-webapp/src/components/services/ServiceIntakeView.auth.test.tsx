@@ -54,6 +54,11 @@ async function chooseSelectOption(
 describe("ServiceIntakeView auth readiness", () => {
   beforeEach(() => {
     window.scrollTo = vi.fn();
+    globalThis.ResizeObserver = vi.fn().mockImplementation(() => ({
+      disconnect: vi.fn(),
+      observe: vi.fn(),
+      unobserve: vi.fn(),
+    }));
     vi.spyOn(console, "error").mockImplementation(() => {});
     vi.clearAllMocks();
     mockedHooks.useAuth.mockReturnValue({
@@ -83,6 +88,7 @@ describe("ServiceIntakeView auth readiness", () => {
     expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
       "skip",
       "skip",
+      "skip",
     ]);
   });
 
@@ -99,6 +105,7 @@ describe("ServiceIntakeView auth readiness", () => {
     expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
       "skip",
       "skip",
+      "skip",
     ]);
   });
 
@@ -112,6 +119,7 @@ describe("ServiceIntakeView auth readiness", () => {
     expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
       "skip",
       { storeId: "store-1" },
+      { status: "active", storeId: "store-1" },
     ]);
   });
 
@@ -124,6 +132,17 @@ describe("ServiceIntakeView auth readiness", () => {
     mockedHooks.useQuery.mockImplementation((_, args) => {
       if (args === "skip") {
         return undefined;
+      }
+
+      if ("status" in args) {
+        return [
+          {
+            _id: "catalog-1",
+            durationMinutes: 60,
+            name: "Wash and restyle closure wig",
+            serviceMode: "same_day",
+          },
+        ];
       }
 
       return [
@@ -139,10 +158,8 @@ describe("ServiceIntakeView auth readiness", () => {
     render(<ServiceIntakeView />);
 
     await user.type(screen.getByLabelText(/customer name/i), "Ama Mensah");
-    await user.type(
-      screen.getByLabelText(/service title/i),
-      "Wash and restyle closure wig",
-    );
+    await user.type(screen.getByLabelText(/phone/i), "+233200000001");
+    await chooseSelectOption(user, /service title/i, /wash and restyle closure wig/i);
     await chooseSelectOption(user, /assigned staff/i, /adjoa tetteh/i);
 
     await user.click(screen.getByRole("button", { name: /create intake/i }));

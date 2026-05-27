@@ -25,15 +25,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
-import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
 import {
   SkuDetailPanel,
   type InventorySnapshotItem,
 } from "../operations/StockAdjustmentWorkspace";
+import { SkuSearchFilterBar } from "../stock-ops/SkuSearchFilterBar";
 import { ReceivingView } from "./ReceivingView";
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { presentCommandToast } from "@/lib/errors/presentCommandToast";
 import { runCommand } from "@/lib/errors/runCommand";
+import {
+  matchesSkuSearchTerms,
+  normalizeSkuSearchQuery,
+} from "@/lib/stockOps/skuSearch";
 import { cn } from "@/lib/utils";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
@@ -135,9 +139,11 @@ type ProcurementViewContentProps = {
   mode?: ProcurementMode;
   onModeChange?: (mode: ProcurementMode) => void;
   onPageChange?: (page: number) => void;
+  onQueryChange?: (query: string | undefined) => void;
   onSelectedSkuChange?: (sku: string | null, page?: number) => void;
   page?: number;
   purchaseOrders: ProcurementOrderSummary[];
+  query?: string;
   recommendations: ReplenishmentRecommendation[];
   selectedSku?: string;
   storeId?: Id<"store">;
@@ -153,6 +159,11 @@ const MODE_OPTIONS = [
 ] as const;
 
 type ProcurementMode = (typeof MODE_OPTIONS)[number]["value"];
+
+const PROCUREMENT_MODE_FILTER_OPTIONS = MODE_OPTIONS.map((option) => ({
+  label: option.label,
+  value: option.value,
+}));
 
 const RECOMMENDATIONS_PER_PAGE = 10;
 
@@ -547,15 +558,18 @@ export function ProcurementViewContent({
   mode: controlledMode,
   onModeChange,
   onPageChange,
+  onQueryChange,
   onSelectedSkuChange,
   page: controlledPage,
   purchaseOrders,
+  query: controlledQuery,
   recommendations,
   selectedSku,
   storeId,
   vendors,
 }: ProcurementViewContentProps) {
   const [localMode, setLocalMode] = useState<ProcurementMode>("needs_action");
+  const [localQuery, setLocalQuery] = useState("");
   const [draftLines, setDraftLines] = useState<ReorderDraftLine[]>([]);
   const [quickAddVendorName, setQuickAddVendorName] = useState("");
   const [createdVendors, setCreatedVendors] = useState<VendorSummary[]>([]);
@@ -604,6 +618,7 @@ export function ProcurementViewContent({
     [inventoryItems],
   );
   const mode = controlledMode ?? localMode;
+  const query = controlledQuery ?? localQuery;
   const controlledSelectedProductSkuId = selectedSku
     ? (recommendations.find((recommendation) =>
         matchesRecommendationSku(recommendation, selectedSku),
@@ -637,6 +652,33 @@ export function ProcurementViewContent({
 
     onModeChange?.(nextMode);
   };
+  const handleQueryChange = (nextQuery: string) => {
+    setActiveRecommendationPage(1);
+    setSelectedProductSkuId(null);
+
+    if (controlledQuery === undefined) {
+      setLocalQuery(nextQuery);
+    }
+
+    onQueryChange?.(nextQuery.trim() ? nextQuery : undefined);
+    onSelectedSkuChange?.(null);
+  };
+  const handleClearRecommendationFilters = () => {
+    setActiveRecommendationPage(1);
+    setSelectedProductSkuId(null);
+
+    if (!controlledMode) {
+      setLocalMode("needs_action");
+    }
+
+    if (controlledQuery === undefined) {
+      setLocalQuery("");
+    }
+
+    onModeChange?.("needs_action");
+    onQueryChange?.(undefined);
+    onSelectedSkuChange?.(null);
+  };
   const handleRecommendationPageChange = (nextPage: number) => {
     const boundedPage = Math.min(
       Math.max(nextPage, 1),
@@ -646,12 +688,37 @@ export function ProcurementViewContent({
     setActiveRecommendationPage(boundedPage);
   };
 
-  const visibleRecommendations = useMemo(
+  const modeRecommendations = useMemo(
     () =>
       recommendations.filter((recommendation) =>
         isRecommendationVisible(recommendation, mode),
       ),
     [mode, recommendations],
+  );
+  const normalizedRecommendationQuery = normalizeSkuSearchQuery(query);
+  const visibleRecommendations = useMemo(
+    () =>
+      modeRecommendations.filter((recommendation) => {
+        const inventoryItem = inventoryItemsById.get(recommendation._id);
+
+        return matchesSkuSearchTerms(
+          [
+            recommendation.productName,
+            recommendation.sku,
+            recommendation.guidance,
+            inventoryItem?.barcode,
+            inventoryItem?.productCategory,
+            inventoryItem?.colorName,
+            inventoryItem?.size,
+            inventoryItem?.length === null ||
+            inventoryItem?.length === undefined
+              ? undefined
+              : String(inventoryItem.length),
+          ],
+          normalizedRecommendationQuery,
+        );
+      }),
+    [inventoryItemsById, modeRecommendations, normalizedRecommendationQuery],
   );
   const recommendationPageCount = Math.max(
     Math.ceil(visibleRecommendations.length / RECOMMENDATIONS_PER_PAGE),
@@ -1075,59 +1142,57 @@ export function ProcurementViewContent({
                 description="Review stock pressure, create vendor-backed orders, and track receiving in one workspace."
               />
 
-              <div className="flex flex-wrap items-start justify-between gap-layout-xl">
-                <div className="max-w-2xl space-y-6">
-                  <div className="grid max-w-2xl grid-cols-2 gap-2 sm:grid-cols-4">
-                    <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
-                      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                        Needs action
-                      </p>
-                      <p className="mt-1 text-sm font-medium tabular-nums text-foreground">
-                        {summary.needsAction}
-                      </p>
-                    </div>
-                    <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
-                      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                        Planned
-                      </p>
-                      <p className="mt-1 text-sm font-medium tabular-nums text-foreground">
-                        {summary.planned}
-                      </p>
-                    </div>
-                    <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
-                      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                        Inbound
-                      </p>
-                      <p className="mt-1 text-sm font-medium tabular-nums text-foreground">
-                        {summary.inbound}
-                      </p>
-                    </div>
-                    <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
-                      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                        Exceptions
-                      </p>
-                      <p className="mt-1 text-sm font-medium tabular-nums text-foreground">
-                        {summary.exceptions}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <Tabs
-                  onValueChange={(value) =>
-                    handleModeChange(value as ProcurementMode)
+              <section
+                aria-label="Procurement workspace controls"
+                className="space-y-layout-sm"
+              >
+                <SkuSearchFilterBar
+                  ariaLabel="Procurement SKU search and filters"
+                  className="min-w-0"
+                  clearLabel="Clear"
+                  filterId="procurement-mode-filter"
+                  filterLabel="Filter procurement mode"
+                  filterOptions={PROCUREMENT_MODE_FILTER_OPTIONS}
+                  filterValue={mode}
+                  filterTriggerClassName="w-[210px]"
+                  hasActiveFilters={Boolean(query || mode !== "needs_action")}
+                  onClearFilters={handleClearRecommendationFilters}
+                  onFilterChange={handleModeChange}
+                  onQueryChange={handleQueryChange}
+                  query={query}
+                  searchId="procurement-sku-search"
+                  searchLabel="Search products, SKUs, or barcodes"
+                  searchPlaceholder="Search product, SKU, or barcode"
+                  summary={
+                    <>
+                      Showing {visibleRecommendations.length} of{" "}
+                      {modeRecommendations.length} stock{" "}
+                      {modeRecommendations.length === 1 ? "item" : "items"}.
+                    </>
                   }
-                  value={mode}
-                >
-                  <TabsList>
-                    {MODE_OPTIONS.map((option) => (
-                      <TabsTrigger key={option.value} value={option.value}>
-                        {option.label}
-                      </TabsTrigger>
-                    ))}
-                  </TabsList>
-                </Tabs>
-              </div>
+                />
+
+                <div className="grid overflow-hidden rounded-md border border-border bg-muted/20 sm:grid-cols-4">
+                  {[
+                    ["Needs action", summary.needsAction],
+                    ["Planned", summary.planned],
+                    ["Inbound", summary.inbound],
+                    ["Exceptions", summary.exceptions],
+                  ].map(([label, value]) => (
+                    <div
+                      className="border-border px-layout-md py-layout-sm sm:border-l sm:first:border-l-0"
+                      key={label}
+                    >
+                      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                        {label}
+                      </p>
+                      <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">
+                        {value}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </section>
 
               <section
                 className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface"
@@ -1847,15 +1912,19 @@ export function ProcurementView({
   mode,
   onModeChange,
   onPageChange,
+  onQueryChange,
   onSelectedSkuChange,
   page,
+  query,
   selectedSku,
 }: {
   mode?: ProcurementMode;
   onModeChange?: (mode: ProcurementMode) => void;
   onPageChange?: (page: number) => void;
+  onQueryChange?: (query: string | undefined) => void;
   onSelectedSkuChange?: (sku: string | null, page?: number) => void;
   page?: number;
+  query?: string;
   selectedSku?: string;
 } = {}) {
   const {
@@ -1913,9 +1982,11 @@ export function ProcurementView({
       mode={mode}
       onModeChange={onModeChange}
       onPageChange={onPageChange}
+      onQueryChange={onQueryChange}
       onSelectedSkuChange={onSelectedSkuChange}
       page={page}
       purchaseOrders={purchaseOrders ?? []}
+      query={query}
       recommendations={recommendations ?? []}
       selectedSku={selectedSku}
       storeId={activeStore?._id}

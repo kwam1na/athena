@@ -1,14 +1,12 @@
 import { useRef } from "react";
 import { useProduct } from "~/src/contexts/ProductContext";
-import useGetActiveProduct from "~/src/hooks/useGetActiveProduct";
 import View from "../View";
 import QRCode from "react-qr-code";
 import config from "~/src/config";
 import { FadeIn } from "../common/FadeIn";
 
 export function BarcodeView() {
-  const { activeProductVariant } = useProduct();
-  const { activeProduct } = useGetActiveProduct();
+  const { activeProductVariant, activeProduct } = useProduct();
   const qrCodeRef = useRef<HTMLDivElement>(null);
 
   if (!activeProductVariant.barcode) {

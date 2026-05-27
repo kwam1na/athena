@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   getNextProcurementModeSearch,
   getNextProcurementPageSearch,
+  getNextProcurementQuerySearch,
   getNextProcurementSelectedSkuSearch,
   procurementSearchSchema,
 } from "./procurement.index";
@@ -46,8 +47,32 @@ describe("procurement route search state", () => {
       procurementSearchSchema.parse({
         page: "2",
         procurementMode: "resolved",
+        query: "cw",
       }),
-    ).toEqual({ page: 2, procurementMode: undefined });
+    ).toEqual({ page: 2, procurementMode: undefined, query: "cw" });
+  });
+
+  it("encodes SKU search query state and clears the selected SKU", () => {
+    expect(
+      getNextProcurementQuerySearch(
+        {
+          page: 3,
+          procurementMode: "planned",
+          query: "old",
+          sku: "6N2Y-XEH-P6B",
+        },
+        "CW",
+      ),
+    ).toEqual({ page: 1, procurementMode: "planned", query: "CW" });
+  });
+
+  it("clears empty procurement SKU search state", () => {
+    expect(
+      getNextProcurementQuerySearch(
+        { page: 3, procurementMode: "planned", query: "CW", sku: "CW-18" },
+        undefined,
+      ),
+    ).toEqual({ page: 1, procurementMode: "planned" });
   });
 
   it("encodes the visible recommendation page in the URL search state", () => {

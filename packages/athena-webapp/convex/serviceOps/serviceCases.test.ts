@@ -93,6 +93,7 @@ describe("service ops schema foundations", () => {
   it("shapes service cases and line items with persistence-safe defaults", () => {
     const serviceCase = buildServiceCase({
       assignedStaffProfileId: "staff_1" as Id<"staffProfile">,
+      createdByUserId: "user_1" as Id<"athenaUser">,
       customerProfileId: "customer_1" as Id<"customerProfile">,
       operationalWorkItemId: "work_item_1" as Id<"operationalWorkItem">,
       quotedAmount: 450,
@@ -107,6 +108,7 @@ describe("service ops schema foundations", () => {
       serviceMode: "same_day",
       status: "intake",
     });
+    expect(serviceCase).not.toHaveProperty("createdByUserId");
 
     expect(
       buildServiceCaseLineItem({

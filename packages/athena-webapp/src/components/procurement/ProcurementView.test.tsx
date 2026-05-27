@@ -276,9 +276,7 @@ const baseProps: React.ComponentProps<typeof ProcurementViewContent> = {
   ],
 };
 
-function makeRecommendation(
-  index: number,
-): typeof exposedRecommendation {
+function makeRecommendation(index: number): typeof exposedRecommendation {
   return {
     ...exposedRecommendation,
     _id: `sku-page-${index}` as Id<"productSku">,
@@ -319,6 +317,16 @@ function installMutationMocks() {
 
     return mutation;
   });
+}
+
+async function chooseProcurementMode(
+  user: { click: (target: Element) => Promise<void> },
+  name: string | RegExp,
+) {
+  await user.click(
+    screen.getByRole("combobox", { name: /filter procurement mode/i }),
+  );
+  await user.click(await screen.findByRole("option", { name }));
 }
 
 async function chooseDraftVendor(
@@ -402,7 +410,7 @@ describe("ProcurementViewContent", () => {
     expect(screen.queryByText("Frontal Wig")).not.toBeInTheDocument();
     expect(screen.queryByText("Silk Press Kit")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: /planned/i }));
+    await chooseProcurementMode(user, /planned/i);
 
     expect(screen.getByText("Frontal Wig")).toBeInTheDocument();
     expect(screen.getByText("1 planned stock item")).toBeInTheDocument();
@@ -456,7 +464,7 @@ describe("ProcurementViewContent", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText("Closure Wig")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: /inbound/i }));
+    await chooseProcurementMode(user, /inbound/i);
 
     expect(screen.getByText("Silk Press Kit")).toBeInTheDocument();
     expect(screen.getByText("Lace Adhesive")).toBeInTheDocument();
@@ -466,10 +474,70 @@ describe("ProcurementViewContent", () => {
       ),
     ).toHaveClass("text-success");
 
-    await user.click(screen.getByRole("tab", { name: /exceptions/i }));
+    await chooseProcurementMode(user, /exceptions/i);
 
     expect(screen.getByText("Lace Adhesive")).toBeInTheDocument();
     expect(screen.queryByText("Silk Press Kit")).not.toBeInTheDocument();
+  });
+
+  it("filters procurement stock pressure by product, SKU, and barcode search", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+
+    render(<ProcurementViewContent {...baseProps} />);
+
+    const searchInput = screen.getByRole("textbox", {
+      name: /search products, skus, or barcodes/i,
+    });
+
+    await user.type(searchInput, "LA-01");
+
+    expect(screen.queryByText("Closure Wig")).not.toBeInTheDocument();
+    expect(screen.getByText("Lace Adhesive")).toBeInTheDocument();
+    expect(screen.getByText("Showing 1 of 2 stock items.")).toBeInTheDocument();
+
+    await user.clear(searchInput);
+    await user.type(searchInput, "Lce Adhsive");
+
+    expect(screen.queryByText("Closure Wig")).not.toBeInTheDocument();
+    expect(screen.getByText("Lace Adhesive")).toBeInTheDocument();
+    expect(screen.getByText("Showing 1 of 2 stock items.")).toBeInTheDocument();
+
+    await user.clear(searchInput);
+    await user.type(searchInput, "BAR-CW-18");
+
+    expect(screen.getByText("Closure Wig")).toBeInTheDocument();
+    expect(screen.queryByText("Lace Adhesive")).not.toBeInTheDocument();
+  });
+
+  it("reports procurement search changes for route state", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    const onQueryChange = vi.fn();
+    const onSelectedSkuChange = vi.fn();
+
+    render(
+      <ProcurementViewContent
+        {...baseProps}
+        onQueryChange={onQueryChange}
+        onSelectedSkuChange={onSelectedSkuChange}
+      />,
+    );
+
+    await user.type(
+      screen.getByRole("textbox", {
+        name: /search products, skus, or barcodes/i,
+      }),
+      "CW",
+    );
+
+    expect(onQueryChange).toHaveBeenLastCalledWith("CW");
+    expect(onSelectedSkuChange).toHaveBeenLastCalledWith(null);
+
+    await user.click(screen.getByRole("button", { name: /clear/i }));
+
+    expect(onQueryChange).toHaveBeenLastCalledWith(undefined);
+    expect(onSelectedSkuChange).toHaveBeenLastCalledWith(null);
   });
 
   it("marks planned purchase orders ordered through the streamlined command", async () => {
@@ -478,7 +546,7 @@ describe("ProcurementViewContent", () => {
 
     render(<ProcurementViewContent {...baseProps} />);
 
-    await user.click(screen.getByRole("tab", { name: /planned/i }));
+    await chooseProcurementMode(user, /planned/i);
     await user.click(
       within(screen.getByText("Frontal Wig").closest("article")!).getAllByRole(
         "button",
@@ -606,7 +674,7 @@ describe("ProcurementViewContent", () => {
       />,
     );
 
-    await user.click(screen.getByRole("tab", { name: /planned/i }));
+    await chooseProcurementMode(user, /planned/i);
 
     const plannedRow = screen.getByText("Camera").closest("article")!;
     expect(within(plannedRow).getByText("Planned + inbound")).toHaveClass(
@@ -627,7 +695,7 @@ describe("ProcurementViewContent", () => {
       purchaseOrderId: "po-draft-2",
     });
 
-    await user.click(screen.getByRole("tab", { name: /inbound/i }));
+    await chooseProcurementMode(user, /inbound/i);
 
     expect(screen.getByText("Camera")).toBeInTheDocument();
   });
@@ -643,12 +711,12 @@ describe("ProcurementViewContent", () => {
       />,
     );
 
-    await user.click(screen.getByRole("tab", { name: /inbound/i }));
+    await chooseProcurementMode(user, /inbound/i);
 
     expect(screen.getByText("Logitech Mouse")).toBeInTheDocument();
     expect(
-      screen.queryByRole("tab", { name: /handled/i }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("combobox", { name: /filter procurement mode/i }),
+    ).not.toHaveTextContent(/handled/i);
 
     const resolvedRow = screen.getByText("Logitech Mouse").closest("article")!;
     expect(within(resolvedRow).getByText("Handled")).toBeInTheDocument();
@@ -1020,7 +1088,7 @@ describe("ProcurementViewContent", () => {
         .querySelector("button"),
     ).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: /planned/i }));
+    await chooseProcurementMode(user, /planned/i);
     await user.click(
       within(screen.getByText("Frontal Wig").closest("article")!).getAllByRole(
         "button",
@@ -1045,10 +1113,9 @@ describe("ProcurementViewContent", () => {
     await user.click(screen.getByRole("button", { name: /po-draft/i }));
 
     const plannedRow = screen.getByText("Frontal Wig").closest("article")!;
-    expect(screen.getByRole("tab", { name: /planned/i })).toHaveAttribute(
-      "data-state",
-      "active",
-    );
+    expect(
+      screen.getByRole("combobox", { name: /filter procurement mode/i }),
+    ).toHaveTextContent(/planned/i);
     expect(plannedRow).toHaveClass("bg-muted/30");
     await waitFor(() =>
       expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({
@@ -1078,7 +1145,10 @@ describe("ProcurementViewContent", () => {
     render(
       <ProcurementViewContent
         {...baseProps}
-        recommendations={[...fillerRecommendations, singlePlannedRecommendation]}
+        recommendations={[
+          ...fillerRecommendations,
+          singlePlannedRecommendation,
+        ]}
       />,
     );
 
@@ -1101,16 +1171,14 @@ describe("ProcurementViewContent", () => {
 
     render(<ProcurementViewContent {...baseProps} />);
 
-    await user.click(screen.getByRole("tab", { name: /inbound/i }));
+    await chooseProcurementMode(user, /inbound/i);
     const silkPressRow = screen.getByText("Silk Press Kit").closest("article")!;
     const receiveButton = within(silkPressRow).getByRole("button", {
       name: /receive/i,
     });
 
     expect(receiveButton).toHaveClass("w-[92px]");
-    await user.click(
-      receiveButton,
-    );
+    await user.click(receiveButton);
 
     expect(screen.getByText("Receiving form for po-1")).toBeInTheDocument();
     expect(

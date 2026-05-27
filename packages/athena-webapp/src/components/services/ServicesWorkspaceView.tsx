@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
-import { useQuery } from "convex/react";
-import { ArrowUpRight } from "lucide-react";
+import { useMutation, useQuery } from "convex/react";
+import { ArrowUpRight, Pencil } from "lucide-react";
+import { toast } from "sonner";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
 import { ListPagination } from "../common/ListPagination";
@@ -17,49 +18,42 @@ import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { Label } from "../ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
+import { Textarea } from "../ui/textarea";
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
+import {
+  type NormalizedCommandResult,
+  runCommand,
+} from "@/lib/errors/runCommand";
 import { cn } from "@/lib/utils";
 import { api } from "~/convex/_generated/api";
+import type { Id } from "~/convex/_generated/dataModel";
 import { toDisplayAmount } from "~/convex/lib/currency";
-import { currencyFormatter } from "~/shared/currencyFormatter";
-
-type ServiceCatalogItem = {
-  _id: string;
-  basePrice?: number;
-  depositType: "none" | "flat" | "percentage";
-  depositValue?: number;
-  description?: string;
-  durationMinutes: number;
-  name: string;
-  pricingModel: "fixed" | "starting_at" | "quote_after_consultation";
-  requiresManagerApproval: boolean;
-  serviceMode: "same_day" | "consultation" | "repair" | "revamp";
-  status: "active" | "archived";
-};
-
-const serviceModeLabels: Record<ServiceCatalogItem["serviceMode"], string> = {
-  consultation: "Consultation",
-  repair: "Repair",
-  revamp: "Revamp",
-  same_day: "Same-day",
-};
-
-const pricingModelLabels: Record<ServiceCatalogItem["pricingModel"], string> = {
-  fixed: "Fixed price",
-  quote_after_consultation: "Quote after consultation",
-  starting_at: "Starting at",
-};
-
-const depositTypeLabels: Record<ServiceCatalogItem["depositType"], string> = {
-  flat: "Flat deposit",
-  none: "No deposit",
-  percentage: "Percentage deposit",
-};
-
-const serviceStatusLabels: Record<ServiceCatalogItem["status"], string> = {
-  active: "Active",
-  archived: "Archived",
-};
+import {
+  currencyDisplaySymbol,
+  currencyFormatter,
+} from "~/shared/currencyFormatter";
+import {
+  type ServiceCatalogFormState,
+  type ServiceCatalogItem,
+  type UpdateServiceCatalogArgs,
+  depositTypeLabels,
+  formatServiceCatalogName,
+  initialServiceCatalogFormState,
+  itemToServiceCatalogFormState,
+  parseServiceCatalogUpdateForm,
+  pricingModelLabels,
+  serviceModeLabels,
+  serviceStatusLabels,
+  validateServiceCatalogForm,
+} from "./serviceCatalogForm";
 
 const serviceStatusClasses: Record<ServiceCatalogItem["status"], string> = {
   active: "border-success/30 bg-success/10 text-success",
@@ -67,16 +61,6 @@ const serviceStatusClasses: Record<ServiceCatalogItem["status"], string> = {
 };
 
 const SERVICES_PAGE_SIZE = 8;
-
-function formatServiceCatalogName(name: string) {
-  const trimmedName = name.trim();
-
-  if (!trimmedName) {
-    return trimmedName;
-  }
-
-  return `${trimmedName[0].toUpperCase()}${trimmedName.slice(1)}`;
-}
 
 function formatMoney(currency: string, value?: number) {
   if (value === undefined) {
@@ -128,22 +112,246 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function ServiceEditForm({
+  currency,
+  form,
+  isSaving,
+  onCancel,
+  onChange,
+  onSave,
+  validationErrors,
+}: {
+  currency: string;
+  form: ServiceCatalogFormState;
+  isSaving: boolean;
+  onCancel: () => void;
+  onChange: <K extends keyof ServiceCatalogFormState>(
+    field: K,
+    value: ServiceCatalogFormState[K],
+  ) => void;
+  onSave: () => void;
+  validationErrors: string[];
+}) {
+  const currencySymbol = currencyDisplaySymbol(currency);
+  const isDepositValueDisabled = form.depositType === "none";
+  const depositValueLabel =
+    form.depositType === "percentage"
+      ? "Deposit value (%)"
+      : form.depositType === "flat"
+        ? `Deposit value (${currencySymbol})`
+        : "Deposit value";
+  const depositValuePlaceholder =
+    form.depositType === "percentage"
+      ? "20"
+      : form.depositType === "flat"
+        ? `${currencySymbol}0.00`
+        : "";
+
+  return (
+    <div className="space-y-layout-lg">
+      {validationErrors.length > 0 ? (
+        <div className="rounded-lg border border-danger/30 bg-danger/10 px-layout-md py-layout-sm text-sm text-danger">
+          <ul className="list-disc pl-5">
+            {validationErrors.map((error) => (
+              <li key={error}>{error}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      <div className="space-y-layout-md">
+        <div className="space-y-2">
+          <Label htmlFor="service-edit-name">Service name</Label>
+          <Input
+            id="service-edit-name"
+            onChange={(event) => onChange("name", event.target.value)}
+            value={form.name}
+          />
+        </div>
+
+        <div className="grid gap-layout-md sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="service-edit-duration">Duration (minutes)</Label>
+            <Input
+              id="service-edit-duration"
+              inputMode="numeric"
+              onChange={(event) =>
+                onChange("durationMinutes", event.target.value)
+              }
+              value={form.durationMinutes}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="service-edit-mode">Service mode</Label>
+            <Select
+              onValueChange={(value) =>
+                onChange(
+                  "serviceMode",
+                  value as ServiceCatalogFormState["serviceMode"],
+                )
+              }
+              value={form.serviceMode}
+            >
+              <SelectTrigger aria-label="Service mode" id="service-edit-mode">
+                <SelectValue placeholder="Select service mode" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="same_day">Same-day</SelectItem>
+                <SelectItem value="consultation">Consultation</SelectItem>
+                <SelectItem value="repair">Repair</SelectItem>
+                <SelectItem value="revamp">Revamp</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="service-edit-pricing">Pricing model</Label>
+            <Select
+              onValueChange={(value) =>
+                onChange(
+                  "pricingModel",
+                  value as ServiceCatalogFormState["pricingModel"],
+                )
+              }
+              value={form.pricingModel}
+            >
+              <SelectTrigger
+                aria-label="Pricing model"
+                id="service-edit-pricing"
+              >
+                <SelectValue placeholder="Select pricing model" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="fixed">Fixed</SelectItem>
+                <SelectItem value="starting_at">Starting at</SelectItem>
+                <SelectItem value="quote_after_consultation">
+                  Quote after consultation
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="service-edit-base-price">
+              Base price ({currencySymbol})
+            </Label>
+            <Input
+              id="service-edit-base-price"
+              inputMode="numeric"
+              onChange={(event) => onChange("basePrice", event.target.value)}
+              placeholder={`${currencySymbol}0.00`}
+              value={form.basePrice}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="service-edit-deposit-rule">Deposit rule</Label>
+            <Select
+              onValueChange={(value) =>
+                onChange(
+                  "depositType",
+                  value as ServiceCatalogFormState["depositType"],
+                )
+              }
+              value={form.depositType}
+            >
+              <SelectTrigger
+                aria-label="Deposit rule"
+                id="service-edit-deposit-rule"
+              >
+                <SelectValue placeholder="Select deposit rule" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No deposit</SelectItem>
+                <SelectItem value="flat">Flat deposit</SelectItem>
+                <SelectItem value="percentage">Percentage deposit</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="service-edit-deposit-value">
+              {depositValueLabel}
+            </Label>
+            <Input
+              disabled={isDepositValueDisabled}
+              id="service-edit-deposit-value"
+              inputMode={
+                form.depositType === "percentage" ? "decimal" : "numeric"
+              }
+              onChange={(event) => onChange("depositValue", event.target.value)}
+              placeholder={depositValuePlaceholder}
+              value={form.depositValue}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="service-edit-description">Description</Label>
+          <Textarea
+            id="service-edit-description"
+            onChange={(event) => onChange("description", event.target.value)}
+            value={form.description}
+          />
+        </div>
+
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            checked={form.requiresManagerApproval}
+            onChange={(event) =>
+              onChange("requiresManagerApproval", event.target.checked)
+            }
+            type="checkbox"
+          />
+          Require manager approval
+        </label>
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <Button
+          disabled={isSaving}
+          onClick={onSave}
+          type="button"
+          variant="workflow"
+        >
+          Save changes
+        </Button>
+        <Button onClick={onCancel} type="button" variant="outline">
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 type ServicesWorkspaceViewContentProps = {
   catalogManagementHref?: string;
   currency: string;
+  isSaving?: boolean;
   items: ServiceCatalogItem[];
+  onUpdate?: (
+    args: UpdateServiceCatalogArgs,
+  ) => Promise<NormalizedCommandResult<ServiceCatalogItem | null>>;
 };
 
 export function ServicesWorkspaceViewContent({
   catalogManagementHref = "#catalog-management",
   currency,
+  isSaving = false,
   items,
+  onUpdate,
 }: ServicesWorkspaceViewContentProps) {
   const [query, setQuery] = useState("");
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(
     null,
   );
   const [page, setPage] = useState(1);
+  const [isEditing, setIsEditing] = useState(false);
+  const [form, setForm] = useState<ServiceCatalogFormState>(
+    initialServiceCatalogFormState,
+  );
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const sortedItems = useMemo(() => sortServices(items), [items]);
   const activeServices = useMemo(
     () => sortedItems.filter((item) => item.status === "active"),
@@ -208,6 +416,75 @@ export function ServicesWorkspaceViewContent({
 
     setSelectedServiceId(paginatedItems[0]?._id ?? null);
   }, [paginatedItems, selectedServiceId]);
+
+  useEffect(() => {
+    setIsEditing(false);
+    setForm(initialServiceCatalogFormState);
+    setValidationErrors([]);
+  }, [selectedServiceId]);
+
+  const handleSelectService = (serviceCatalogId: string) => {
+    setSelectedServiceId(serviceCatalogId);
+  };
+
+  const handleChange = <K extends keyof ServiceCatalogFormState>(
+    field: K,
+    value: ServiceCatalogFormState[K],
+  ) => {
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+      ...(field === "depositType" && value === "none"
+        ? { depositValue: "" }
+        : null),
+    }));
+  };
+
+  const handleEdit = () => {
+    if (!selectedService) {
+      return;
+    }
+
+    setForm(itemToServiceCatalogFormState(selectedService));
+    setValidationErrors([]);
+    setIsEditing(true);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setForm(initialServiceCatalogFormState);
+    setValidationErrors([]);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!selectedService || !onUpdate) {
+      return;
+    }
+
+    const errors = validateServiceCatalogForm({
+      editingId: selectedService._id,
+      form,
+      items,
+    });
+
+    if (errors.length > 0) {
+      setValidationErrors(errors);
+      return;
+    }
+
+    setValidationErrors([]);
+    const result = await onUpdate(
+      parseServiceCatalogUpdateForm(form, selectedService._id),
+    );
+
+    if (result.kind !== "ok") {
+      setValidationErrors([result.error.message]);
+      return;
+    }
+
+    toast.success("Service updated");
+    handleCancelEdit();
+  };
 
   return (
     <View hideBorder hideHeaderBottomBorder scrollMode="page">
@@ -288,7 +565,7 @@ export function ServicesWorkspaceViewContent({
                                 : null,
                             )}
                             key={item._id}
-                            onClick={() => setSelectedServiceId(item._id)}
+                            onClick={() => handleSelectService(item._id)}
                             type="button"
                           >
                             <div className="flex items-start justify-between gap-layout-md">
@@ -344,6 +621,16 @@ export function ServicesWorkspaceViewContent({
                     description="Choose a service to review its details."
                     title="No service selected"
                   />
+                ) : isEditing ? (
+                  <ServiceEditForm
+                    currency={currency}
+                    form={form}
+                    isSaving={isSaving}
+                    onCancel={handleCancelEdit}
+                    onChange={handleChange}
+                    onSave={handleSaveEdit}
+                    validationErrors={validationErrors}
+                  />
                 ) : (
                   <div className="space-y-layout-md">
                     <div className="space-y-2">
@@ -393,6 +680,18 @@ export function ServicesWorkspaceViewContent({
                         }
                       />
                     </div>
+
+                    {onUpdate ? (
+                      <Button
+                        className="w-full justify-center"
+                        onClick={handleEdit}
+                        type="button"
+                        variant="workflow"
+                      >
+                        <Pencil aria-hidden="true" />
+                        Edit service
+                      </Button>
+                    ) : null}
                   </div>
                 )}
               </section>
@@ -412,6 +711,7 @@ export function ServicesWorkspaceView() {
     isAuthenticated,
     isLoadingAccess,
   } = useProtectedAdminPageState();
+  const [isSaving, setIsSaving] = useState(false);
   const { orgUrlSlug, storeUrlSlug } = useParams({ strict: false }) as {
     orgUrlSlug?: string;
     storeUrlSlug?: string;
@@ -422,10 +722,21 @@ export function ServicesWorkspaceView() {
       ? { storeId: activeStore._id }
       : "skip",
   ) as ServiceCatalogItem[] | undefined;
+  const updateServiceCatalogItem = useMutation(
+    api.serviceOps.catalog.updateServiceCatalogItem,
+  );
   const catalogManagementHref =
     orgUrlSlug && storeUrlSlug
       ? `/${orgUrlSlug}/store/${storeUrlSlug}/services/catalog-management`
       : "#catalog-management";
+  const withSaveState = async <T,>(action: () => Promise<T>) => {
+    setIsSaving(true);
+    try {
+      return await action();
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   if (isLoadingAccess) {
     return null;
@@ -458,7 +769,18 @@ export function ServicesWorkspaceView() {
     <ServicesWorkspaceViewContent
       catalogManagementHref={catalogManagementHref}
       currency={activeStore.currency}
+      isSaving={isSaving}
       items={items ?? []}
+      onUpdate={(args) =>
+        withSaveState(() =>
+          runCommand(() =>
+            updateServiceCatalogItem({
+              ...args,
+              serviceCatalogId: args.serviceCatalogId as Id<"serviceCatalog">,
+            }),
+          ),
+        )
+      }
     />
   );
 }

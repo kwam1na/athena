@@ -214,6 +214,7 @@ export const createServiceIntake = mutation({
     const validationErrors = validateServiceIntakeInput({
       assignedStaffProfileId: args.assignedStaffProfileId,
       customerFullName: args.customerFullName,
+      customerPhoneNumber: args.customerPhoneNumber,
       customerProfileId: args.customerProfileId,
       depositAmount: args.depositAmount,
       depositMethod: args.depositMethod,
