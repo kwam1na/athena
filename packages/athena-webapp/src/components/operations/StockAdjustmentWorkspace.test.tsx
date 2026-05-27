@@ -105,10 +105,12 @@ const baseProps = {
       imageUrl: "https://cdn.example.com/closure-wig.jpg",
       inventoryCount: 8,
       length: 18,
+      price: 4500,
       productCategory: "Hair",
       productId: "product-1" as Id<"product">,
       productName: "closure wig",
       quantityAvailable: 6,
+      size: "Large",
       sku: "CW-18",
     },
     {
@@ -310,6 +312,15 @@ describe("StockAdjustmentWorkspaceContent", () => {
     const onSearchStateChange = vi.fn();
 
     renderStockAdjustmentWorkspace({
+      inventoryItems: [
+        baseProps.inventoryItems[0],
+        {
+          ...baseProps.inventoryItems[1],
+          colorName: "dark brown",
+          length: 24,
+          size: "Medium",
+        },
+      ],
       onSearchStateChange,
       searchState: { query: "123212312" },
     });
@@ -319,6 +330,9 @@ describe("StockAdjustmentWorkspaceContent", () => {
     const dialog = within(screen.getByRole("dialog"));
     await user.type(dialog.getByLabelText(/search existing sku/i), "body");
     await user.click(dialog.getByRole("button", { name: /body wave bundle/i }));
+    expect(
+      dialog.getByText('BW-24 - Hair - dark brown - Medium - 24"'),
+    ).toBeInTheDocument();
     await user.click(dialog.getByRole("button", { name: /attach barcode/i }));
 
     await waitFor(() =>
@@ -347,9 +361,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
       showBackButton: true,
     });
 
-    expect(
-      screen.getByRole("button", { name: "Go back" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Go back" })).toBeInTheDocument();
   });
 
   it("hydrates cycle count inputs from saved draft lines", () => {
@@ -1047,6 +1059,29 @@ describe("StockAdjustmentWorkspaceContent", () => {
     expect(screen.getByText("Showing 1 of 2 SKUs.")).toBeInTheDocument();
   });
 
+  it("fuzzy matches stock rows by product and variant terms", async () => {
+    const user = userEvent.setup();
+
+    renderStockAdjustmentWorkspace();
+
+    const table = screen.getByRole("table");
+
+    await user.type(
+      screen.getByRole("textbox", {
+        name: /search products, skus, or barcodes/i,
+      }),
+      "natrual blak",
+    );
+
+    expect(
+      within(table).getByText('18" Natural Black Closure Wig'),
+    ).toBeInTheDocument();
+    expect(
+      within(table).queryByText("Body Wave Bundle"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Showing 1 of 2 SKUs.")).toBeInTheDocument();
+  });
+
   it("filters stock rows by barcode", async () => {
     const user = userEvent.setup();
 
@@ -1122,14 +1157,13 @@ describe("StockAdjustmentWorkspaceContent", () => {
     await user.click(
       screen.getByRole("button", { name: /scan barcode with camera/i }),
     );
-    await user.click(screen.getByRole("button", { name: /start camera/i }));
 
-    await waitFor(() =>
-      expect(mockedScanner.decode).toHaveBeenCalled(),
-    );
-    await waitFor(() =>
-      expect(mockedToast.success).toHaveBeenCalledWith("Barcode scanned"),
-    );
+    expect(
+      screen.queryByRole("button", { name: /start camera/i }),
+    ).not.toBeInTheDocument();
+
+    await waitFor(() => expect(mockedScanner.decode).toHaveBeenCalled());
+
     await waitFor(() =>
       expect(
         screen.getByRole("textbox", {
@@ -1202,15 +1236,22 @@ describe("StockAdjustmentWorkspaceContent", () => {
     await user.click(
       screen.getByRole("button", { name: /scan barcode with camera/i }),
     );
-    await user.click(screen.getByRole("button", { name: /start camera/i }));
 
     await waitFor(() =>
       expect(mockedScanner.decodeFromConstraints).toHaveBeenCalled(),
     );
-    expect(getUserMedia).not.toHaveBeenCalled();
-    await waitFor(() =>
-      expect(mockedToast.success).toHaveBeenCalledWith("Barcode scanned"),
+    expect(mockedScanner.decodeFromConstraints).toHaveBeenCalledWith(
+      {
+        audio: false,
+        video: {
+          facingMode: { exact: "environment" },
+        },
+      },
+      expect.any(HTMLVideoElement),
+      expect.any(Function),
     );
+    expect(getUserMedia).not.toHaveBeenCalled();
+
     expect(
       screen.getByRole("textbox", {
         name: /search products, skus, or barcodes/i,
@@ -1285,18 +1326,20 @@ describe("StockAdjustmentWorkspaceContent", () => {
     await user.click(
       screen.getByRole("button", { name: /scan barcode with camera/i }),
     );
-    await user.click(screen.getByRole("button", { name: /start camera/i }));
 
     await waitFor(() =>
       expect(mockedScanner.decodeFromCanvas).toHaveBeenCalled(),
     );
     expect(mockedScanner.decodeFromConstraints).not.toHaveBeenCalled();
-    expect(getUserMedia).toHaveBeenCalled();
+    expect(getUserMedia).toHaveBeenCalledWith({
+      audio: false,
+      video: {
+        facingMode: { exact: "environment" },
+      },
+    });
     expect(drawImage).toHaveBeenCalledWith(frame, 0, 0, 640, 480);
     expect(frame.close).toHaveBeenCalled();
-    await waitFor(() =>
-      expect(mockedToast.success).toHaveBeenCalledWith("Barcode scanned"),
-    );
+
     expect(
       screen.getByRole("textbox", {
         name: /search products, skus, or barcodes/i,
@@ -1343,9 +1386,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
           "blob:barcode-photo",
         ),
       );
-      await waitFor(() =>
-        expect(mockedToast.success).toHaveBeenCalledWith("Barcode scanned"),
-      );
+
       expect(
         screen.getByRole("textbox", {
           name: /search products, skus, or barcodes/i,
@@ -1372,7 +1413,6 @@ describe("StockAdjustmentWorkspaceContent", () => {
     await user.click(
       screen.getByRole("button", { name: /scan barcode with camera/i }),
     );
-    await user.click(screen.getByRole("button", { name: /start camera/i }));
 
     expect(
       await screen.findByText(
@@ -1393,11 +1433,15 @@ describe("StockAdjustmentWorkspaceContent", () => {
     expect(within(row!).getByText("CW-18")).toBeInTheDocument();
     expect(within(row!).getByText("1234567890123")).toBeInTheDocument();
     expect(within(row!).getByText("Hair")).toBeInTheDocument();
+    expect(within(row!).getByText("Large")).toBeInTheDocument();
     expect(within(row!).getByText('18"')).toBeInTheDocument();
     expect(within(row!).getByText("natural black")).toBeInTheDocument();
     expect(screen.getAllByText("SKU").length).toBeGreaterThan(1);
     expect(screen.getByText("Barcode")).toBeInTheDocument();
+    expect(screen.getByText("Price")).toBeInTheDocument();
+    expect(screen.getAllByText("GH₵45").length).toBeGreaterThan(0);
     expect(screen.getByText("Category")).toBeInTheDocument();
+    expect(screen.getByText("Size")).toBeInTheDocument();
     expect(screen.getByText("Length")).toBeInTheDocument();
     expect(screen.getByText("Color")).toBeInTheDocument();
   });

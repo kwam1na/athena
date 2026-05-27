@@ -169,12 +169,12 @@ export const createServiceCatalogItem = mutation({
 
 export const updateServiceCatalogItem = mutation({
   args: {
-    basePrice: v.optional(v.number()),
+    basePrice: v.optional(v.union(v.number(), v.null())),
     depositType: v.optional(
       v.union(v.literal("none"), v.literal("flat"), v.literal("percentage"))
     ),
-    depositValue: v.optional(v.number()),
-    description: v.optional(v.string()),
+    depositValue: v.optional(v.union(v.number(), v.null())),
+    description: v.optional(v.union(v.string(), v.null())),
     durationMinutes: v.optional(v.number()),
     name: v.optional(v.string()),
     pricingModel: v.optional(
@@ -208,18 +208,30 @@ export const updateServiceCatalogItem = mutation({
       });
     }
 
-    const nextCatalogItemResult = buildServiceCatalogItem({
-      basePrice:
-        args.basePrice === undefined ? existingCatalogItem.basePrice : args.basePrice,
-      depositType: args.depositType ?? existingCatalogItem.depositType,
-      depositValue:
-        args.depositValue === undefined
+    const nextBasePrice =
+      args.basePrice === null
+        ? undefined
+        : args.basePrice === undefined
+          ? existingCatalogItem.basePrice
+          : args.basePrice;
+    const nextDepositValue =
+      args.depositValue === null
+        ? undefined
+        : args.depositValue === undefined
           ? existingCatalogItem.depositValue
-          : args.depositValue,
-      description:
-        args.description === undefined
+          : args.depositValue;
+    const nextDescription =
+      args.description === null
+        ? undefined
+        : args.description === undefined
           ? existingCatalogItem.description
-          : args.description,
+          : args.description;
+
+    const nextCatalogItemResult = buildServiceCatalogItem({
+      basePrice: nextBasePrice,
+      depositType: args.depositType ?? existingCatalogItem.depositType,
+      depositValue: nextDepositValue,
+      description: nextDescription,
       durationMinutes:
         args.durationMinutes ?? existingCatalogItem.durationMinutes,
       name: args.name ?? existingCatalogItem.name,

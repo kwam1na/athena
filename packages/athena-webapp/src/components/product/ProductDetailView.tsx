@@ -1,49 +1,91 @@
-import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { CheckCircledIcon, TrashIcon } from "@radix-ui/react-icons";
+import { ArchiveRestore } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+import { useMutation } from "convex/react";
+
 import View from "../View";
-import { Button } from "../ui/button";
-import { ArrowLeftIcon, TrashIcon } from "@radix-ui/react-icons";
-import { Badge } from "../ui/badge";
+import { LoadingButton } from "../ui/loading-button";
 import { SKUSelector } from "./SKUSelector";
-import { ProductProvider, useProduct } from "~/src/contexts/ProductContext";
+import { ProductProvider } from "~/src/contexts/ProductContext";
 import { DetailsView } from "./DetailsView";
 import { AttributesView } from "./AttributesView";
-import { CategorizationView } from "./CategorizationView";
 import useGetActiveProduct from "~/src/hooks/useGetActiveProduct";
 import { ImagesView } from "./ImagesView";
-import { PackageX, PenIcon, Trash } from "lucide-react";
 import { ProductStatus } from "./ProductStatus";
-import { ProductStockStatus } from "./ProductStock";
 import { ComposedPageHeader } from "../common/PageHeader";
 import { capitalizeWords } from "~/src/lib/utils";
-import { getOrigin } from "~/src/lib/navigationUtils";
 import { AnalyticsInsights } from "./AnalyticsInsights";
 import { BarcodeView } from "./BarcodeView";
-import { FadeIn } from "../common/FadeIn";
 import { EmptyState } from "../states/empty/empty-state";
+import useGetActiveStore from "~/src/hooks/useGetActiveStore";
+import { api } from "~/convex/_generated/api";
+import { presentUnexpectedErrorToast } from "~/src/lib/errors/presentUnexpectedErrorToast";
 
 const ProductDetailViewHeader = () => {
-  const { activeProduct } = useGetActiveProduct();
+  const [isUnarchiving, setIsUnarchiving] = useState(false);
+  const { activeProduct } = useGetActiveProduct({ includeArchived: true });
+  const { activeStore } = useGetActiveStore();
+  const unarchiveProduct = useMutation(api.inventory.products.unarchive);
 
   if (activeProduct === undefined) return null;
+
+  const isArchived = activeProduct?.availability === "archived";
+
+  const handleUnarchiveProduct = async () => {
+    if (!activeProduct || !activeStore) {
+      return;
+    }
+
+    try {
+      setIsUnarchiving(true);
+      await unarchiveProduct({
+        id: activeProduct._id,
+        storeId: activeStore._id,
+      });
+
+      toast(`Product '${activeProduct.name}' unarchived`, {
+        icon: <CheckCircledIcon className="w-4 h-4" />,
+      });
+    } catch {
+      presentUnexpectedErrorToast("Something went wrong");
+    } finally {
+      setIsUnarchiving(false);
+    }
+  };
 
   return (
     <ComposedPageHeader
       leadingContent={
-        <>
+        <div className="flex items-center gap-3">
           <p className="text-sm">
             {capitalizeWords(activeProduct?.name || "")}
           </p>
-        </>
+          {activeProduct && <ProductStatus product={activeProduct} />}
+        </div>
+      }
+      trailingContent={
+        isArchived ? (
+          <LoadingButton
+            isLoading={isUnarchiving}
+            variant="outline"
+            onClick={handleUnarchiveProduct}
+            className="flex items-center gap-2"
+          >
+            <ArchiveRestore className="w-3.5 h-3.5" />
+            <span>Unarchive</span>
+          </LoadingButton>
+        ) : null
       }
     />
   );
 };
 
 export const ProductDetailView = () => {
-  const { activeProduct } = useGetActiveProduct();
+  const { activeProduct } = useGetActiveProduct({ includeArchived: true });
 
   return (
-    <ProductProvider>
+    <ProductProvider includeArchived>
       <View header={<ProductDetailViewHeader />}>
         <div className="container mx-auto h-full w-full p-8 space-y-12">
           {activeProduct !== null && (

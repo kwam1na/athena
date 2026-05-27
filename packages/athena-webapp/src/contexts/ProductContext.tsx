@@ -51,7 +51,13 @@ interface AppState {
 
 const ProductContext = createContext<ProductContextType | undefined>(undefined);
 
-export function ProductProvider({ children }: { children: ReactNode }) {
+export function ProductProvider({
+  children,
+  includeArchived = false,
+}: {
+  children: ReactNode;
+  includeArchived?: boolean;
+}) {
   const [productData, setProductData] = useState<Partial<Product>>({
     availability: "live" as const,
   });
@@ -85,7 +91,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
 
   const { productSlug } = useParams({ strict: false });
 
-  const { activeProduct } = useGetActiveProduct();
+  const { activeProduct } = useGetActiveProduct({ includeArchived });
 
   const updateAppState = (newState: Partial<AppState>) => {
     setAppState((prevState) => ({ ...prevState, ...newState }));
@@ -98,7 +104,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
           // If there's an active product, mark the variant for deletion
           // Check if the variant exists in the active product
           const variantExistsInActiveProduct = activeProduct.skus.some(
-            (v: any) => v._id === id
+            (variant: ProductSku) => variant._id === id,
           );
 
           if (variantExistsInActiveProduct) {
@@ -119,7 +125,9 @@ export function ProductProvider({ children }: { children: ReactNode }) {
 
             if (index == prevVariants.length - 1) {
               const lastVariant = updated.at(-1);
-              lastVariant && setActiveProductVariant(lastVariant);
+              if (lastVariant) {
+                setActiveProductVariant(lastVariant);
+              }
             }
 
             return updated;
@@ -166,7 +174,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
         images: images.map((file) => file.file?.path || file.preview),
       });
       return true;
-    } catch (e) {
+    } catch {
       return false;
     }
   };
@@ -225,7 +233,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
         skus: undefined, // Exclude skus from productData
       });
 
-      const variants = activeProduct.skus.map((sku: any) =>
+      const variants = activeProduct.skus.map((sku: ProductSku) =>
         convertSkuToVariant(sku)
       );
       updateProductVariants(variants);

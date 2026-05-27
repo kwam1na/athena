@@ -96,8 +96,10 @@ function createInventorySnapshotQueryCtx() {
           color: "color-1",
           images: [],
           inventoryCount: 10,
+          price: 4500,
           productId: "product-1",
           quantityAvailable: 8,
+          size: "Large",
           sku: "CW-18",
           storeId: "store-1",
         },
@@ -562,8 +564,10 @@ describe("stock ops adjustments", () => {
         _id: "sku-1",
         durableQuantityAvailable: 8,
         inventoryCount: 10,
+        price: 4500,
         quantityAvailable: 6,
         reservedQuantity: 2,
+        size: "Large",
       }),
     ]);
   });

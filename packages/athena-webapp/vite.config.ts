@@ -47,6 +47,9 @@ export default defineConfig(({ mode }) => ({
             if (id.includes("date-fns")) return "date-vendor";
             if (id.includes("framer-motion")) return "motion-vendor";
             if (id.includes("hls.js")) return "hls-js-vendor";
+            if (normalizedId.includes("/node_modules/@zxing/")) {
+              return "barcode-scanner-vendor";
+            }
             if (id.includes("@aws-sdk") || id.includes("@smithy")) {
               return "aws-vendor";
             }

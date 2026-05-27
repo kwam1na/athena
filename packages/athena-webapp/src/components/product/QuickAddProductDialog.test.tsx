@@ -39,6 +39,7 @@ function renderQuickAddDialog(input?: {
           name: "gelato cookies",
           sku: "6N2Y-D3-4RC",
           category: "POS quick add",
+          variantAttributes: ["Green", "2 oz"],
         },
       ]}
       initialName={input?.initialName ?? "Quick item"}
@@ -133,5 +134,8 @@ describe("QuickAddProductDialog", () => {
     await user.type(screen.getByLabelText(/search existing sku/i), "gelato");
 
     expect(screen.getByText("Gelato Cookies")).toBeInTheDocument();
+    expect(
+      screen.getByText("6N2Y-D3-4RC - POS quick add - Green - 2 oz"),
+    ).toBeInTheDocument();
   });
 });

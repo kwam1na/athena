@@ -1,6 +1,17 @@
+import { useState } from "react";
+import { Check, ChevronsUpDown } from "lucide-react";
 import { Button } from "../ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "../ui/command";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import {
   Select,
   SelectContent,
@@ -9,6 +20,12 @@ import {
   SelectValue,
 } from "../ui/select";
 import { Textarea } from "../ui/textarea";
+import { cn } from "@/lib/utils";
+import {
+  formatServiceCatalogName,
+  serviceModeLabels,
+  type ServiceCatalogItem,
+} from "./serviceCatalogForm";
 
 export type ServiceIntakeCustomerResult = {
   _id: string;
@@ -23,6 +40,11 @@ export type ServiceIntakeStaffOption = {
   phoneNumber?: string;
   roles: string[];
 };
+
+export type ServiceIntakeCatalogOption = Pick<
+  ServiceCatalogItem,
+  "_id" | "durationMinutes" | "name" | "serviceMode"
+>;
 
 export type ServiceIntakeFormState = {
   assignedStaffProfileId: string;
@@ -41,6 +63,7 @@ export type ServiceIntakeFormState = {
 };
 
 type ServiceIntakeFormProps = {
+  catalogOptions: ServiceIntakeCatalogOption[];
   customerResults: ServiceIntakeCustomerResult[];
   form: ServiceIntakeFormState;
   isSubmitting: boolean;
@@ -56,7 +79,96 @@ type ServiceIntakeFormProps = {
   validationErrors: string[];
 };
 
+function ServiceCatalogSelect({
+  catalogOptions,
+  onChange,
+  value,
+}: {
+  catalogOptions: ServiceIntakeCatalogOption[];
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const selectedCatalogItem = catalogOptions.find(
+    (item) => item.name === value,
+  );
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          aria-expanded={open}
+          aria-label="Service title"
+          className="h-10 w-full justify-between px-3 py-2 text-left font-normal"
+          id="service-title"
+          role="combobox"
+          type="button"
+          variant="outline"
+        >
+          <span
+            className={cn(
+              "truncate",
+              selectedCatalogItem ? "text-foreground" : "text-muted-foreground",
+            )}
+          >
+            {selectedCatalogItem
+              ? formatServiceCatalogName(selectedCatalogItem.name)
+              : "Select service"}
+          </span>
+          <ChevronsUpDown
+            aria-hidden="true"
+            className="ml-2 h-4 w-4 shrink-0 opacity-50"
+          />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[--radix-popover-trigger-width] p-0">
+        <Command>
+          <CommandInput placeholder="Search services..." />
+          <CommandList>
+            <CommandEmpty>No service found</CommandEmpty>
+            <CommandGroup heading="Services">
+              {catalogOptions.map((item) => (
+                <CommandItem
+                  key={item._id}
+                  onSelect={() => {
+                    onChange(item.name);
+                    setOpen(false);
+                  }}
+                  value={[
+                    item.name,
+                    serviceModeLabels[item.serviceMode],
+                    `${item.durationMinutes} minutes`,
+                  ].join(" ")}
+                >
+                  <Check
+                    aria-hidden="true"
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      selectedCatalogItem?._id === item._id
+                        ? "opacity-100"
+                        : "opacity-0",
+                    )}
+                  />
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate font-medium">
+                      {formatServiceCatalogName(item.name)}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {`${item.durationMinutes} min · ${serviceModeLabels[item.serviceMode]}`}
+                    </span>
+                  </span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export function ServiceIntakeForm({
+  catalogOptions,
   customerResults,
   form,
   isSubmitting,
@@ -158,6 +270,7 @@ export function ServiceIntakeForm({
                   onChange("customerPhoneNumber", event.target.value)
                 }
                 placeholder="+233 20 000 0000"
+                required
                 value={form.customerPhoneNumber}
               />
             </div>
@@ -189,12 +302,9 @@ export function ServiceIntakeForm({
           <div className="grid gap-layout-md sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="service-title">Service title</Label>
-              <Input
-                id="service-title"
-                onChange={(event) =>
-                  onChange("serviceTitle", event.target.value)
-                }
-                placeholder="Wash and restyle closure wig"
+              <ServiceCatalogSelect
+                catalogOptions={catalogOptions}
+                onChange={(value) => onChange("serviceTitle", value)}
                 value={form.serviceTitle}
               />
             </div>
@@ -214,9 +324,6 @@ export function ServiceIntakeForm({
                   {staffOptions.map((staff) => (
                     <SelectItem key={staff._id} value={staff._id}>
                       {staff.fullName}
-                      {staff.roles.length > 0
-                        ? ` · ${staff.roles.join(", ")}`
-                        : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>

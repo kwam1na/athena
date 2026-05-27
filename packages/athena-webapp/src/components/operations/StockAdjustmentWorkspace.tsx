@@ -21,7 +21,6 @@ import {
   PackagePlus,
   RotateCcw,
   ScanBarcode,
-  Search,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -39,6 +38,11 @@ import { useAuth } from "~/src/hooks/useAuth";
 import { usePOSQuickAddProductSku } from "~/src/hooks/usePOSProducts";
 import { getProductName } from "~/src/lib/productUtils";
 import { getOrigin } from "~/src/lib/navigationUtils";
+import { formatStoredCurrencyAmount } from "@/lib/pos/displayAmounts";
+import {
+  matchesSkuSearchTerms,
+  normalizeSkuSearchQuery,
+} from "@/lib/stockOps/skuSearch";
 import type { NormalizedCommandResult } from "../../lib/errors/runCommand";
 import { presentCommandToast } from "../../lib/errors/presentCommandToast";
 import { DataTableColumnHeader } from "../base/table/data-table-column-header";
@@ -56,6 +60,7 @@ import {
   type QuickAddProductSubmitPayload,
 } from "../product/QuickAddProductDialog";
 import { normalizeQuickAddInitialLookupCode } from "../product/quickAddProductDialogUtils";
+import { SkuSearchFilterBar } from "../stock-ops/SkuSearchFilterBar";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -81,11 +86,13 @@ export type InventorySnapshotItem = {
   inventoryCount: number;
   length?: number | null;
   posReservedQuantity?: number;
+  price?: number | null;
   productCategory?: string | null;
   productId?: Id<"product"> | null;
   productName: string;
   quantityAvailable: number;
   reservedQuantity?: number;
+  size?: string | null;
   sku?: string | null;
 };
 
@@ -289,8 +296,7 @@ function getInventoryItemDisplayName(item: InventorySnapshotItem) {
 function getReservationLabels(item: InventorySnapshotItem) {
   const checkoutReservedQuantity = item.checkoutReservedQuantity ?? 0;
   const posReservedQuantity = item.posReservedQuantity ?? 0;
-  const knownReservedQuantity =
-    checkoutReservedQuantity + posReservedQuantity;
+  const knownReservedQuantity = checkoutReservedQuantity + posReservedQuantity;
   const fallbackReservedQuantity = Math.max(
     0,
     (item.reservedQuantity ?? 0) - knownReservedQuantity,
@@ -348,9 +354,18 @@ function getSkuDetailEntries(item: InventorySnapshotItem) {
   return [
     item.sku ? { label: "SKU", value: item.sku } : null,
     item.barcode ? { label: "Barcode", value: item.barcode } : null,
+    typeof item.price === "number"
+      ? {
+          label: "Price",
+          value: formatStoredCurrencyAmount("GHS", item.price, {
+            revealMinorUnits: true,
+          }),
+        }
+      : null,
     item.productCategory
       ? { label: "Category", value: item.productCategory }
       : null,
+    item.size ? { label: "Size", value: item.size } : null,
     item.length !== null && item.length !== undefined
       ? { label: "Length", value: `${item.length}"` }
       : null,
@@ -365,10 +380,6 @@ function getSkuDetailEntries(item: InventorySnapshotItem) {
     (entry): entry is { label: string; value: string } =>
       entry !== null && entry.value.trim().length > 0,
   );
-}
-
-function normalizeStockAdjustmentSearch(value?: string | null) {
-  return value?.trim().toLowerCase() ?? "";
 }
 
 function parseCountScopeKeys(value?: string | null) {
@@ -391,22 +402,35 @@ function rowMatchesStockAdjustmentSearch(
   if (!query) return true;
 
   const item = row.inventoryItem;
-  const searchableText = [
-    getInventoryItemDisplayName(item),
-    item.sku,
-    item.barcode,
-    item.colorName,
-    item.productCategory,
-    item.length === null || item.length === undefined
-      ? undefined
-      : String(item.length),
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-
-  return searchableText.includes(query);
+  return matchesSkuSearchTerms(
+    [
+      getInventoryItemDisplayName(item),
+      item.sku,
+      item.barcode,
+      item.colorName,
+      item.productCategory,
+      item.size,
+      item.length === null || item.length === undefined
+        ? undefined
+        : String(item.length),
+    ],
+    query,
+  );
 }
+
+function getStockAdjustmentAvailabilityFilterOptions() {
+  return (
+    Object.keys(
+      STOCK_ADJUSTMENT_AVAILABILITY_FILTER_LABELS,
+    ) as StockAdjustmentAvailabilityFilter[]
+  ).map((value) => ({
+    label: STOCK_ADJUSTMENT_AVAILABILITY_FILTER_LABELS[value],
+    value,
+  }));
+}
+
+const STOCK_ADJUSTMENT_AVAILABILITY_FILTER_OPTIONS =
+  getStockAdjustmentAvailabilityFilterOptions();
 
 function rowMatchesAvailabilityFilter(
   row: StockAdjustmentRow,
@@ -596,8 +620,9 @@ function StockAdjustmentBarcodeScannerDialog({
   const scannerRunIdRef = useRef(0);
   const activeStreamRef = useRef<MediaStream | null>(null);
   const hasDetectedBarcodeRef = useRef(false);
-  const [scannerDebug, setScannerDebug] = useState<StockScannerDebugSnapshot>(
-    () => buildEmptyScannerDebugSnapshot(),
+  const hasAutoStartedScannerRef = useRef(false);
+  const [, setScannerDebug] = useState<StockScannerDebugSnapshot>(() =>
+    buildEmptyScannerDebugSnapshot(),
   );
   const [scannerState, setScannerState] = useState<
     | "idle"
@@ -610,59 +635,54 @@ function StockAdjustmentBarcodeScannerDialog({
     | "error"
   >("idle");
 
-  const captureScannerDebug = useCallback(
-    (event: string, error?: unknown) => {
-      const video = videoRef.current;
-      const videoStream =
-        typeof MediaStream !== "undefined" &&
-        video?.srcObject instanceof MediaStream
-          ? video.srcObject
-          : null;
-      const stream = activeStreamRef.current ?? videoStream;
-      const tracks =
-        stream
-          ?.getTracks()
-          .map((track) => {
-            const settings =
-              typeof track.getSettings === "function"
-                ? track.getSettings()
-                : {};
-            const size =
-              settings.width && settings.height
-                ? ` ${settings.width}x${settings.height}`
-                : "";
+  const captureScannerDebug = useCallback((event: string, error?: unknown) => {
+    const video = videoRef.current;
+    const videoStream =
+      typeof MediaStream !== "undefined" &&
+      video?.srcObject instanceof MediaStream
+        ? video.srcObject
+        : null;
+    const stream = activeStreamRef.current ?? videoStream;
+    const tracks =
+      stream
+        ?.getTracks()
+        .map((track) => {
+          const settings =
+            typeof track.getSettings === "function" ? track.getSettings() : {};
+          const size =
+            settings.width && settings.height
+              ? ` ${settings.width}x${settings.height}`
+              : "";
 
-            return `${track.kind}:${track.readyState}:${
-              track.enabled ? "enabled" : "disabled"
-            }${size}`;
-          })
-          .join(", ") || "none";
+          return `${track.kind}:${track.readyState}:${
+            track.enabled ? "enabled" : "disabled"
+          }${size}`;
+        })
+        .join(", ") || "none";
 
-      setScannerDebug((current) => {
-        const time = new Date().toLocaleTimeString();
-        const isHeartbeat = event === "diagnostic heartbeat";
-        const formattedError = error ? formatScannerError(error) : undefined;
+    setScannerDebug((current) => {
+      const time = new Date().toLocaleTimeString();
+      const isHeartbeat = event === "diagnostic heartbeat";
+      const formattedError = error ? formatScannerError(error) : undefined;
 
-        return {
-          currentTime: video ? video.currentTime.toFixed(2) : "n/a",
-          error: formattedError ?? current.error,
-          event: isHeartbeat ? current.event : event,
-          events: isHeartbeat
-            ? current.events
-            : [`${time} ${event}`, ...current.events].slice(0, 14),
-          mediaDevices: navigator.mediaDevices ? "available" : "missing",
-          readyState: video ? String(video.readyState) : "n/a",
-          secureContext: String(window.isSecureContext),
-          srcObject: video?.srcObject ? "attached" : "none",
-          time,
-          tracks,
-          userAgent: navigator.userAgent,
-          video: video ? `${video.videoWidth}x${video.videoHeight}` : "none",
-        };
-      });
-    },
-    [],
-  );
+      return {
+        currentTime: video ? video.currentTime.toFixed(2) : "n/a",
+        error: formattedError ?? current.error,
+        event: isHeartbeat ? current.event : event,
+        events: isHeartbeat
+          ? current.events
+          : [`${time} ${event}`, ...current.events].slice(0, 14),
+        mediaDevices: navigator.mediaDevices ? "available" : "missing",
+        readyState: video ? String(video.readyState) : "n/a",
+        secureContext: String(window.isSecureContext),
+        srcObject: video?.srcObject ? "attached" : "none",
+        time,
+        tracks,
+        userAgent: navigator.userAgent,
+        video: video ? `${video.videoWidth}x${video.videoHeight}` : "none",
+      };
+    });
+  }, []);
 
   const ensureVideoPreviewElement = useCallback(() => {
     if (videoRef.current) {
@@ -896,9 +916,11 @@ function StockAdjustmentBarcodeScannerDialog({
       {
         constraints: {
           audio: false,
-          video: true,
+          video: {
+            facingMode: { exact: "environment" },
+          },
         },
-        label: "touch safari default camera",
+        label: "touch safari rear camera",
       },
       {
         constraints: {
@@ -909,11 +931,19 @@ function StockAdjustmentBarcodeScannerDialog({
         },
         label: "touch safari environment camera",
       },
+      {
+        constraints: {
+          audio: false,
+          video: true,
+        },
+        label: "touch safari default camera",
+      },
     ];
 
     const buildCameraAttempts = async () => {
-      const enumerateDevices =
-        navigator.mediaDevices?.enumerateDevices?.bind(navigator.mediaDevices);
+      const enumerateDevices = navigator.mediaDevices?.enumerateDevices?.bind(
+        navigator.mediaDevices,
+      );
 
       if (!enumerateDevices) {
         return baseCameraAttempts;
@@ -953,9 +983,7 @@ function StockAdjustmentBarcodeScannerDialog({
               deviceId: { exact: device.deviceId },
             },
           },
-          label: `device ${index + 1}${
-            device.label ? ` ${device.label}` : ""
-          }`,
+          label: `device ${index + 1}${device.label ? ` ${device.label}` : ""}`,
         }));
 
         return [...deviceAttempts, ...baseCameraAttempts];
@@ -1229,7 +1257,6 @@ function StockAdjustmentBarcodeScannerDialog({
               captureScannerDebug("barcode decoded");
               controls.stop();
               onBarcodeDetected(decodedValue);
-              toast.success("Barcode scanned");
               onOpenChange(false);
               return;
             }
@@ -1310,7 +1337,6 @@ function StockAdjustmentBarcodeScannerDialog({
                 captureScannerDebug("barcode decoded");
                 controls.stop();
                 onBarcodeDetected(decodedValue);
-                toast.success("Barcode scanned");
                 onOpenChange(false);
               }
             },
@@ -1376,7 +1402,6 @@ function StockAdjustmentBarcodeScannerDialog({
                 captureScannerDebug("barcode decoded");
                 controls.stop();
                 onBarcodeDetected(decodedValue);
-                toast.success("Barcode scanned");
                 onOpenChange(false);
                 return;
               }
@@ -1436,6 +1461,15 @@ function StockAdjustmentBarcodeScannerDialog({
     videoElement,
   ]);
 
+  useEffect(() => {
+    if (!open || hasAutoStartedScannerRef.current) {
+      return;
+    }
+
+    hasAutoStartedScannerRef.current = true;
+    void startScanner();
+  }, [open, startScanner]);
+
   const handleBarcodePhotoSelected = async (
     event: ChangeEvent<HTMLInputElement>,
   ) => {
@@ -1462,7 +1496,6 @@ function StockAdjustmentBarcodeScannerDialog({
 
       captureScannerDebug("barcode photo decoded");
       onBarcodeDetected(decodedValue);
-      toast.success("Barcode scanned");
       onOpenChange(false);
     } catch (error) {
       captureScannerDebug("barcode photo decode failed", error);
@@ -1479,6 +1512,7 @@ function StockAdjustmentBarcodeScannerDialog({
 
     stopScanner();
     removeVideoPreviewElement();
+    hasAutoStartedScannerRef.current = false;
     setScannerState("idle");
     setScannerDebug(buildEmptyScannerDebugSnapshot());
   }, [open, removeVideoPreviewElement, stopScanner]);
@@ -1486,23 +1520,23 @@ function StockAdjustmentBarcodeScannerDialog({
   const scannerMessage =
     scannerState === "requesting"
       ? "Requesting camera access..."
-      : scannerState === "starting"
+      : scannerState === "idle"
         ? "Starting camera..."
-      : scannerState === "decoding_photo"
-        ? "Reading barcode photo..."
-      : scannerState === "scanning"
-        ? "Scanning barcode..."
-        : scannerState === "unsupported"
-          ? "Camera barcode scanning is not available in this browser."
-          : scannerState === "blocked"
-            ? "Camera access is blocked for this site."
-            : scannerState === "error"
-              ? "Could not read from the camera."
-              : "Camera scanner ready.";
+        : scannerState === "starting"
+          ? "Starting camera..."
+          : scannerState === "decoding_photo"
+            ? "Reading barcode photo..."
+            : scannerState === "scanning"
+              ? "Scanning barcode..."
+              : scannerState === "unsupported"
+                ? "Camera barcode scanning is not available in this browser."
+                : scannerState === "blocked"
+                  ? "Camera access is blocked for this site."
+                  : scannerState === "error"
+                    ? "Could not read from the camera."
+                    : "Camera scanner ready.";
   const canStartScanner =
-    scannerState === "idle" ||
-    scannerState === "error" ||
-    scannerState === "blocked";
+    scannerState === "error" || scannerState === "blocked";
   const canUsePhotoScanner =
     scannerState === "idle" ||
     scannerState === "error" ||
@@ -1567,9 +1601,7 @@ function StockAdjustmentBarcodeScannerDialog({
                         variant="secondary"
                       >
                         <ScanBarcode className="h-4 w-4" />
-                        {scannerState === "idle"
-                          ? "Start camera"
-                          : "Try again"}
+                        Try again
                       </Button>
                     ) : null}
                     {canUsePhotoScanner ? (
@@ -1597,56 +1629,6 @@ function StockAdjustmentBarcodeScannerDialog({
           {scannerState === "scanning" ? (
             <p className="text-sm text-muted-foreground">{scannerMessage}</p>
           ) : null}
-          <div className="rounded-md border border-dashed border-border bg-muted/30 p-3 text-[11px] text-muted-foreground">
-            <div className="flex items-center justify-between gap-3">
-              <p className="font-medium uppercase tracking-[0.14em] text-foreground">
-                Scanner diagnostics
-              </p>
-              <span className="rounded-sm bg-background px-2 py-0.5 font-mono text-[10px] text-foreground">
-                {scannerState}
-              </span>
-            </div>
-            <dl className="mt-3 grid grid-cols-[96px_minmax(0,1fr)] gap-x-3 gap-y-1 font-mono">
-              {[
-                ["event", scannerDebug.event],
-                ["time", scannerDebug.time || "n/a"],
-                ["secure", scannerDebug.secureContext],
-                ["media", scannerDebug.mediaDevices],
-                ["video", scannerDebug.video],
-                ["ready", scannerDebug.readyState],
-                [
-                  "paused",
-                  videoRef.current ? String(videoRef.current.paused) : "n/a",
-                ],
-                ["current", scannerDebug.currentTime],
-                ["src", scannerDebug.srcObject],
-                ["tracks", scannerDebug.tracks],
-                ["error", scannerDebug.error],
-                ["agent", scannerDebug.userAgent],
-              ].map(([label, value]) => (
-                <div className="contents" key={label}>
-                  <dt className="uppercase tracking-[0.12em]">{label}</dt>
-                  <dd className="min-w-0 break-words text-foreground">
-                    {value}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-            {scannerDebug.events.length > 0 ? (
-              <div className="mt-3 border-t border-border/70 pt-2">
-                <p className="font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                  Events
-                </p>
-                <ol className="mt-1 space-y-1 font-mono text-[10px] text-foreground">
-                  {scannerDebug.events.map((entry, index) => (
-                    <li className="break-words" key={`${entry}-${index}`}>
-                      {entry}
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            ) : null}
-          </div>
         </div>
       </section>
     </div>,
@@ -1947,7 +1929,7 @@ export function StockAdjustmentWorkspaceContent({
         : rows,
     [rows, selectedCountScopeKeySet, selectedCountScopeKeys],
   );
-  const normalizedFilterQuery = normalizeStockAdjustmentSearch(filters.query);
+  const normalizedFilterQuery = normalizeSkuSearchQuery(filters.query);
   const quickAddInitialLookupCode = normalizeQuickAddInitialLookupCode(
     filters.query,
   );
@@ -1964,6 +1946,13 @@ export function StockAdjustmentWorkspaceContent({
           sku: item.sku ?? "",
           category: item.productCategory ?? undefined,
           barcode: item.barcode ?? undefined,
+          variantAttributes: [
+            item.colorName,
+            item.size,
+            item.length === null || item.length === undefined
+              ? undefined
+              : `${item.length}"`,
+          ].filter((value): value is string => Boolean(value?.trim())),
         })),
     [inventoryItems],
   );
@@ -2088,9 +2077,7 @@ export function StockAdjustmentWorkspaceContent({
               totals.onHandUnits,
               "unit",
             )} are available to sell.${
-              totals.reservedUnits > 0
-                ? ` ${reservationSummary}`
-                : ""
+              totals.reservedUnits > 0 ? ` ${reservationSummary}` : ""
             }`,
       title:
         itemCount === 0
@@ -2903,102 +2890,55 @@ export function StockAdjustmentWorkspaceContent({
             </div>
           </section>
 
-          <section
-            aria-label="SKU search and filters"
-            className="rounded-md border border-border bg-surface-raised px-layout-md py-layout-md"
-          >
-            <div className="flex flex-col gap-layout-md lg:flex-row lg:items-end lg:justify-between">
-              <div className="min-w-0 flex-1">
-                <Label
-                  className="sr-only"
-                  htmlFor="stock-adjustment-sku-search"
-                >
-                  Search products, SKUs, or barcodes
-                </Label>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    id="stock-adjustment-sku-search"
-                    onChange={(event) =>
-                      handleFilterChange({ query: event.target.value })
-                    }
-                    placeholder="Search product, SKU, or barcode"
-                    value={filters.query}
-                    className="pl-9 pr-12"
-                  />
-                  <Button
-                    aria-label="Scan barcode with camera"
-                    className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    onClick={() => setIsBarcodeScannerOpen(true)}
-                    size="icon"
-                    type="button"
-                    variant="ghost"
-                  >
-                    <ScanBarcode className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Label
-                  className="sr-only"
-                  htmlFor="stock-adjustment-availability-filter"
-                >
-                  Filter by availability
-                </Label>
-                <Select
-                  onValueChange={(value) =>
-                    handleFilterChange({
-                      availability: value as StockAdjustmentAvailabilityFilter,
-                    })
-                  }
-                  value={filters.availability}
-                >
-                  <SelectTrigger
-                    className="w-[180px]"
-                    id="stock-adjustment-availability-filter"
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(
-                      Object.keys(
-                        STOCK_ADJUSTMENT_AVAILABILITY_FILTER_LABELS,
-                      ) as StockAdjustmentAvailabilityFilter[]
-                    ).map((option) => (
-                      <SelectItem key={option} value={option}>
-                        {STOCK_ADJUSTMENT_AVAILABILITY_FILTER_LABELS[option]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button
-                  disabled={!storeId || !user?._id}
-                  onClick={() => setIsQuickAddOpen(true)}
-                  type="button"
-                  variant="workflow"
-                >
-                  <PackagePlus className="h-4 w-4" />
-                  Quick add
-                </Button>
-                {filters.query || filters.availability !== "all" ? (
-                  <Button
-                    className="text-muted-foreground"
-                    onClick={handleClearFilters}
-                    type="button"
-                    variant="outline"
-                  >
-                    <X className="h-4 w-4" />
-                    Clear
-                  </Button>
-                ) : null}
-              </div>
-            </div>
-            <p className="mt-layout-sm text-xs text-muted-foreground">
-              Showing {formatInventoryNumber(filteredRows.length)} of{" "}
-              {formatInventoryNumber(scopedRows.length)}{" "}
-              {pluralize(scopedRows.length, "SKU")}.
-            </p>
-          </section>
+          <SkuSearchFilterBar
+            action={
+              <Button
+                disabled={!storeId || !user?._id}
+                onClick={() => setIsQuickAddOpen(true)}
+                type="button"
+                variant="workflow"
+              >
+                <PackagePlus className="h-4 w-4" />
+                Quick add
+              </Button>
+            }
+            ariaLabel="SKU search and filters"
+            filterId="stock-adjustment-availability-filter"
+            filterLabel="Filter by availability"
+            filterOptions={STOCK_ADJUSTMENT_AVAILABILITY_FILTER_OPTIONS}
+            filterValue={filters.availability}
+            hasActiveFilters={Boolean(
+              filters.query || filters.availability !== "all",
+            )}
+            onClearFilters={handleClearFilters}
+            onFilterChange={(availability) =>
+              handleFilterChange({ availability })
+            }
+            onQueryChange={(query) => handleFilterChange({ query })}
+            query={filters.query}
+            scanAction={
+              <Button
+                aria-label="Scan barcode with camera"
+                className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                onClick={() => setIsBarcodeScannerOpen(true)}
+                size="icon"
+                type="button"
+                variant="ghost"
+              >
+                <ScanBarcode className="h-4 w-4" />
+              </Button>
+            }
+            searchId="stock-adjustment-sku-search"
+            searchLabel="Search products, SKUs, or barcodes"
+            searchPlaceholder="Search product, SKU, or barcode"
+            summary={
+              <>
+                Showing {formatInventoryNumber(filteredRows.length)} of{" "}
+                {formatInventoryNumber(scopedRows.length)}{" "}
+                {pluralize(scopedRows.length, "SKU")}.
+              </>
+            }
+          />
 
           <div className="flex min-h-0 flex-col">
             <GenericDataTable

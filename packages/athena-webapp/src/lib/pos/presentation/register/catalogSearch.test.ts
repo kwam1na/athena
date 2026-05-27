@@ -158,7 +158,7 @@ describe("catalogSearch", () => {
   it("ranks text token matches by stronger product fields first", () => {
     const result = searchRegisterCatalog(
       buildRegisterCatalogIndex(rows),
-      "shirt accessories",
+      "red shirt",
     );
 
     expect(result.intent).toBe("text");
@@ -166,6 +166,49 @@ describe("catalogSearch", () => {
       "sku-red-small",
       "sku-red-large",
     ]);
+  });
+
+  it("requires every text query token to match somewhere in the row", () => {
+    const result = searchRegisterCatalog(
+      buildRegisterCatalogIndex([
+        ...rows,
+        {
+          productId: "product-hair-bands",
+          productSkuId: "sku-hair-bands",
+          name: "Hair Bands",
+          sku: "KK38-6C-VHT",
+          barcode: "111222333555",
+          category: "POS quick add",
+          description: "Assorted hair bands",
+          price: 25,
+          size: null,
+          color: null,
+          length: null,
+        },
+        {
+          productId: "product-clamps",
+          productSkuId: "sku-clamps",
+          name: "12 Pieces Butterfly Plastic Clamps",
+          sku: "KK38-64H-WTB",
+          barcode: "111222333556",
+          category: "Hair Accessories",
+          description: null,
+          price: 20,
+          size: null,
+          color: null,
+          length: null,
+        },
+      ]),
+      "hair bands",
+    );
+
+    expect(result.intent).toBe("text");
+    expect(result.results.map((row) => row.productSkuId)).toContain(
+      "sku-hair-bands",
+    );
+    expect(result.results.map((row) => row.productSkuId)).not.toContain(
+      "sku-clamps",
+    );
   });
 
   it("normalizes case and punctuation for text search", () => {

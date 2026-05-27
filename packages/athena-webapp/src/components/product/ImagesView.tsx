@@ -7,7 +7,6 @@ import View from "../View";
 import { useProduct } from "~/src/contexts/ProductContext";
 import { Button } from "../ui/button";
 import config from "~/src/config";
-import useGetActiveProduct from "~/src/hooks/useGetActiveProduct";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import { usePermissions } from "~/src/hooks/usePermissions";
@@ -16,8 +15,8 @@ import { useEffect } from "react";
 import { ProductStatus } from "./ProductStatus";
 
 export function ImagesView() {
-  const { activeProductVariant } = useProduct();
-  const { activeProduct } = useGetActiveProduct();
+  const { activeProductVariant, activeProduct } = useProduct();
+  const isArchived = activeProduct?.availability === "archived";
 
   const { hasFullAdminAccess } = usePermissions();
 
@@ -25,7 +24,12 @@ export function ImagesView() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "e" && hasFullAdminAccess && activeProduct) {
+      if (
+        event.key === "e" &&
+        hasFullAdminAccess &&
+        activeProduct &&
+        !isArchived
+      ) {
         navigate({
           to: "/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit",
           params: (prev) => ({
@@ -41,7 +45,7 @@ export function ImagesView() {
         });
       }
 
-      if (event.key === "v" && activeProduct) {
+      if (event.key === "v" && activeProduct && !isArchived) {
         window.open(
           `${config.storeFrontUrl}/shop/product/${activeProduct._id}?variant=${activeProductVariant?.sku}`,
           "_blank",
@@ -52,7 +56,13 @@ export function ImagesView() {
     window.addEventListener("keydown", handleKeyDown);
 
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [navigate, activeProduct, activeProductVariant?.sku, hasFullAdminAccess]);
+  }, [
+    navigate,
+    activeProduct,
+    activeProductVariant?.sku,
+    hasFullAdminAccess,
+    isArchived,
+  ]);
 
   if (activeProduct === undefined) return null;
   if (activeProduct === null) return null;
@@ -99,7 +109,7 @@ export function ImagesView() {
           )}
         </div>
 
-        {hasFullAdminAccess && activeProduct && (
+        {hasFullAdminAccess && activeProduct && !isArchived && (
           <div className="flex items-center gap-4">
             <Link
               to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit"

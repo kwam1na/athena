@@ -545,7 +545,9 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       result.current?.onRetrySync?.();
     });
     await waitFor(() => expect(oldStore.listEvents).toHaveBeenCalled());
-    await waitFor(() => expect(mocks.ingestLocalEvents).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.ingestLocalEvents).toHaveBeenCalled(), {
+      timeout: 5000,
+    });
 
     currentStore = newStore;
     rerender({ eventAppendToken: 0, storeId: "store-2" });

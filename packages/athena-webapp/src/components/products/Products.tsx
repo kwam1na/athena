@@ -21,6 +21,7 @@ import { EmptyState } from "../states/empty/empty-state";
 import { usePermissions } from "~/src/hooks/usePermissions";
 import { QuickAddProductDialog } from "../product/QuickAddProductDialog";
 import type { QuickAddProductSubmitPayload } from "../product/QuickAddProductDialog";
+import { normalizeQuickAddInitialLookupCode } from "../product/quickAddProductDialogUtils";
 import { usePOSQuickAddProductSku } from "~/src/hooks/usePOSProducts";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { useAuth } from "~/src/hooks/useAuth";
@@ -34,6 +35,11 @@ import {
 } from "../common/PageLevelHeader";
 import { Badge } from "../ui/badge";
 import { cn } from "~/src/lib/utils";
+import {
+  matchesSkuSearchTerms,
+  normalizeSkuSearchQuery,
+} from "~/src/lib/stockOps/skuSearch";
+import type { Product } from "~/types";
 
 export default function Products() {
   const categories = useGetCategories();
@@ -41,6 +47,9 @@ export default function Products() {
   const allProducts = useGetProducts();
   const [searchValue, setSearchValue] = useState("");
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [quickAddInitialName, setQuickAddInitialName] = useState("");
+  const [quickAddInitialLookupCode, setQuickAddInitialLookupCode] =
+    useState("");
   const { hasFullAdminAccess } = usePermissions();
   const { activeStore } = useGetActiveStore();
   const { user } = useAuth();
@@ -51,19 +60,11 @@ export default function Products() {
     if (!allProducts) return null;
     if (!searchValue.trim()) return null;
 
-    const searchLower = searchValue.toLowerCase();
-    return allProducts.filter((product) => {
-      // Check if product name matches
-      const productName = product.name.toLowerCase();
-      if (productName.includes(searchLower)) {
-        return true;
-      }
+    const normalizedQuery = normalizeSkuSearchQuery(searchValue);
 
-      // Check if any SKU matches
-      return product.skus.some((sku) =>
-        sku.sku?.toLowerCase().includes(searchLower),
-      );
-    });
+    return allProducts.filter((product) =>
+      productMatchesCatalogSearch(product, normalizedQuery),
+    );
   }, [allProducts, searchValue]);
 
   const hasSearchInput = searchValue.trim().length > 0;
@@ -114,6 +115,16 @@ export default function Products() {
     );
   };
 
+  const handleOpenQuickAdd = () => {
+    const trimmedSearchValue = searchValue.trim();
+    const initialLookupCode =
+      normalizeQuickAddInitialLookupCode(trimmedSearchValue);
+
+    setQuickAddInitialName(initialLookupCode ? "" : trimmedSearchValue);
+    setQuickAddInitialLookupCode(initialLookupCode);
+    setIsQuickAddOpen(true);
+  };
+
   return (
     <PageWorkspace>
       <PageLevelHeader
@@ -123,12 +134,12 @@ export default function Products() {
         showBackButton={Boolean(o)}
       />
 
-      <PageWorkspaceGrid className="xl:grid-cols-[minmax(0,1fr)_360px]">
+      <PageWorkspaceGrid className="xl:grid-cols-[minmax(0,1fr)_300px] 2xl:grid-cols-[minmax(0,1fr)_280px]">
         <PageWorkspaceMain>
-          <section className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface">
-            <div className="space-y-layout-lg px-layout-md py-layout-md">
+          <section className="min-w-0 overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface">
+            <div className="min-w-0 space-y-layout-lg px-layout-md py-layout-md">
               <div className="flex flex-col gap-layout-sm lg:flex-row lg:items-center lg:justify-between">
-                <div className="relative max-w-xl flex-1">
+                <div className="relative max-w-2xl flex-1">
                   <Search
                     aria-hidden
                     className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
@@ -142,10 +153,7 @@ export default function Products() {
                 </div>
                 {hasFullAdminAccess ? (
                   <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      onClick={() => setIsQuickAddOpen(true)}
-                    >
+                    <Button variant="ghost" onClick={handleOpenQuickAdd}>
                       <PlusIcon className="h-4 w-4" />
                       Quick add
                     </Button>
@@ -168,7 +176,7 @@ export default function Products() {
               </div>
 
               {showSearchResults ? (
-                <div className="overflow-hidden rounded-lg border border-border bg-background">
+                <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-background">
                   <div className="flex items-center justify-between border-b border-border/70 px-layout-md py-layout-sm">
                     <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
                       Search results
@@ -241,9 +249,6 @@ export default function Products() {
 
         <PageWorkspaceRail>
           <section className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
-            <h2 className="text-sm font-medium text-foreground">
-              Product metrics
-            </h2>
             <div className="mt-layout-md grid grid-cols-2 gap-2">
               <div className="rounded-md border border-border bg-background px-3 py-2">
                 <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
@@ -323,9 +328,35 @@ export default function Products() {
         open={isQuickAddOpen}
         onOpenChange={setIsQuickAddOpen}
         onSubmit={handleQuickAddSubmit}
+        initialName={quickAddInitialName}
+        initialLookupCode={quickAddInitialLookupCode}
         description="Add a sellable product without opening the full product editor."
         submitErrorMessage="Could not quick add this product. Try again."
       />
     </PageWorkspace>
+  );
+}
+
+function productMatchesCatalogSearch(product: Product, query: string) {
+  return matchesSkuSearchTerms(
+    [
+      product.name,
+      product.categoryName,
+      product.subcategoryName,
+      product.categorySlug,
+      product.subcategorySlug,
+      ...product.skus.flatMap((sku) => [
+        sku.sku,
+        sku.barcode,
+        sku.productCategory,
+        sku.productName,
+        sku.colorName,
+        sku.size,
+        sku.length === null || sku.length === undefined
+          ? undefined
+          : String(sku.length),
+      ]),
+    ],
+    query,
   );
 }

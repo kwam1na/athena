@@ -33,62 +33,25 @@ import {
 } from "@/lib/errors/runCommand";
 import { presentCommandToast } from "@/lib/errors/presentCommandToast";
 import { getOrigin } from "@/lib/navigationUtils";
-import { cn, toSlug } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
-import { toDisplayAmount } from "~/convex/lib/currency";
-import { parseDisplayAmountInput } from "~/src/lib/pos/displayAmounts";
 import { currencyDisplaySymbol } from "~/shared/currencyFormatter";
-
-type ServiceCatalogItem = {
-  _id: string;
-  basePrice?: number;
-  depositType: "none" | "flat" | "percentage";
-  depositValue?: number;
-  description?: string;
-  durationMinutes: number;
-  name: string;
-  pricingModel: "fixed" | "starting_at" | "quote_after_consultation";
-  requiresManagerApproval: boolean;
-  serviceMode: "same_day" | "consultation" | "repair" | "revamp";
-  status: "active" | "archived";
-};
-
-type ServiceCatalogFormState = {
-  basePrice: string;
-  depositType: "none" | "flat" | "percentage";
-  depositValue: string;
-  description: string;
-  durationMinutes: string;
-  name: string;
-  pricingModel: "fixed" | "starting_at" | "quote_after_consultation";
-  requiresManagerApproval: boolean;
-  serviceMode: "same_day" | "consultation" | "repair" | "revamp";
-};
-
-type CreateServiceCatalogArgs = Omit<ServiceCatalogItem, "_id" | "status">;
-
-type UpdateServiceCatalogArgs = Partial<CreateServiceCatalogArgs> & {
-  serviceCatalogId: string;
-};
-
-const serviceModeLabels: Record<ServiceCatalogItem["serviceMode"], string> = {
-  consultation: "Consultation",
-  repair: "Repair",
-  revamp: "Revamp",
-  same_day: "Same-day",
-};
-
-const depositTypeLabels: Record<ServiceCatalogItem["depositType"], string> = {
-  flat: "Flat deposit",
-  none: "No deposit",
-  percentage: "Percentage deposit",
-};
-
-const serviceStatusLabels: Record<ServiceCatalogItem["status"], string> = {
-  active: "Active",
-  archived: "Archived",
-};
+import {
+  type CreateServiceCatalogArgs,
+  type ServiceCatalogFormState,
+  type ServiceCatalogItem,
+  type UpdateServiceCatalogArgs,
+  depositTypeLabels,
+  formatServiceCatalogName,
+  initialServiceCatalogFormState,
+  itemToServiceCatalogFormState,
+  parseServiceCatalogCreateForm,
+  parseServiceCatalogUpdateForm,
+  serviceModeLabels,
+  serviceStatusLabels,
+  validateServiceCatalogForm,
+} from "./serviceCatalogForm";
 
 const serviceStatusBadgeClasses: Record<ServiceCatalogItem["status"], string> =
   {
@@ -100,127 +63,6 @@ const serviceStatusDotClasses: Record<ServiceCatalogItem["status"], string> = {
   active: "bg-success",
   archived: "bg-muted-foreground",
 };
-
-function formatServiceCatalogName(name: string) {
-  const trimmedName = name.trim();
-
-  if (!trimmedName) {
-    return trimmedName;
-  }
-
-  return `${trimmedName[0].toUpperCase()}${trimmedName.slice(1)}`;
-}
-
-const initialFormState: ServiceCatalogFormState = {
-  basePrice: "",
-  depositType: "none",
-  depositValue: "",
-  description: "",
-  durationMinutes: "",
-  name: "",
-  pricingModel: "fixed",
-  requiresManagerApproval: false,
-  serviceMode: "same_day",
-};
-
-function validateServiceCatalogForm({
-  editingId,
-  form,
-  items,
-}: {
-  editingId: string | null;
-  form: ServiceCatalogFormState;
-  items: ServiceCatalogItem[];
-}) {
-  const errors: string[] = [];
-  const parsedDuration = Number(form.durationMinutes);
-  const serviceNameKey = toSlug(form.name);
-
-  if (!form.name.trim()) {
-    errors.push("Service name is required");
-  }
-
-  if (
-    serviceNameKey &&
-    items.some(
-      (item) => item._id !== editingId && toSlug(item.name) === serviceNameKey,
-    )
-  ) {
-    errors.push("A service catalog item with this name already exists.");
-  }
-
-  if (
-    !form.durationMinutes.trim() ||
-    Number.isNaN(parsedDuration) ||
-    parsedDuration <= 0
-  ) {
-    errors.push("Duration must be greater than zero");
-  }
-
-  if (
-    form.basePrice.trim() &&
-    parseDisplayAmountInput(form.basePrice) === undefined
-  ) {
-    errors.push("Base price must be a valid amount");
-  }
-
-  if (
-    form.depositValue.trim() &&
-    form.depositType === "flat" &&
-    parseDisplayAmountInput(form.depositValue) === undefined
-  ) {
-    errors.push("Deposit value must be a valid amount");
-  }
-
-  return errors;
-}
-
-function itemToFormState(item: ServiceCatalogItem): ServiceCatalogFormState {
-  return {
-    basePrice:
-      item.basePrice === undefined
-        ? ""
-        : toDisplayAmount(item.basePrice).toString(),
-    depositType: item.depositType,
-    depositValue:
-      item.depositValue === undefined
-        ? ""
-        : item.depositType === "flat"
-          ? toDisplayAmount(item.depositValue).toString()
-          : item.depositValue.toString(),
-    description: item.description ?? "",
-    durationMinutes: item.durationMinutes.toString(),
-    name: item.name,
-    pricingModel: item.pricingModel,
-    requiresManagerApproval: item.requiresManagerApproval,
-    serviceMode: item.serviceMode,
-  };
-}
-
-function parseServiceCatalogForm(
-  form: ServiceCatalogFormState,
-): CreateServiceCatalogArgs {
-  const basePrice = form.basePrice.trim()
-    ? parseDisplayAmountInput(form.basePrice)
-    : undefined;
-  const depositValue = form.depositValue.trim()
-    ? form.depositType === "percentage"
-      ? Number(form.depositValue)
-      : parseDisplayAmountInput(form.depositValue)
-    : undefined;
-
-  return {
-    basePrice,
-    depositType: form.depositType,
-    depositValue,
-    description: form.description.trim() || undefined,
-    durationMinutes: Number(form.durationMinutes),
-    name: form.name.trim(),
-    pricingModel: form.pricingModel,
-    requiresManagerApproval: form.requiresManagerApproval,
-    serviceMode: form.serviceMode,
-  };
-}
 
 type ServiceCatalogViewContentProps = {
   currency: string;
@@ -249,7 +91,9 @@ export function ServiceCatalogViewContent({
   servicesWorkspaceHref = "#services-workspace",
   onUpdate,
 }: ServiceCatalogViewContentProps) {
-  const [form, setForm] = useState<ServiceCatalogFormState>(initialFormState);
+  const [form, setForm] = useState<ServiceCatalogFormState>(
+    initialServiceCatalogFormState,
+  );
   const [editingId, setEditingId] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const currencySymbol = currencyDisplaySymbol(currency);
@@ -301,13 +145,13 @@ export function ServiceCatalogViewContent({
 
   const handleEdit = (item: ServiceCatalogItem) => {
     setEditingId(item._id);
-    setForm(itemToFormState(item));
+    setForm(itemToServiceCatalogFormState(item));
     setValidationErrors([]);
   };
 
   const handleReset = () => {
     setEditingId(null);
-    setForm(initialFormState);
+    setForm(initialServiceCatalogFormState);
     setValidationErrors([]);
   };
 
@@ -319,15 +163,11 @@ export function ServiceCatalogViewContent({
       return;
     }
 
-    const parsedForm = parseServiceCatalogForm(form);
     setValidationErrors([]);
 
     const result = editingId
-      ? await onUpdate({
-          ...parsedForm,
-          serviceCatalogId: editingId,
-        })
-      : await onCreate(parsedForm);
+      ? await onUpdate(parseServiceCatalogUpdateForm(form, editingId))
+      : await onCreate(parseServiceCatalogCreateForm(form));
 
     if (result.kind !== "ok") {
       setValidationErrors([result.error.message]);

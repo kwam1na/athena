@@ -8,14 +8,12 @@ import {
   Eye,
   Users,
 } from "lucide-react";
-import useGetActiveProduct from "~/src/hooks/useGetActiveProduct";
 import { getRelativeTime } from "~/src/lib/utils";
 import { FadeIn } from "../common/FadeIn";
 
 export const AnalyticsInsights = () => {
   const { activeStore } = useGetActiveStore();
-  const { activeProductVariant } = useProduct();
-  const { activeProduct } = useGetActiveProduct();
+  const { activeProductVariant, activeProduct } = useProduct();
 
   const analytics = useQuery(
     api.storeFront.analytics.getAll,

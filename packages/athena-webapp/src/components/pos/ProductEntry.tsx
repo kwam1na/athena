@@ -191,6 +191,13 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
             sku: item.sku,
             category: item.category,
             barcode: item.barcode,
+            variantAttributes: [
+              item.color,
+              item.size,
+              item.length === null || item.length === undefined
+                ? undefined
+                : `${item.length}"`,
+            ].filter((value): value is string => Boolean(value?.trim())),
           })),
       [registerCatalog],
     );

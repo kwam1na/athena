@@ -8,6 +8,7 @@ import {
   createSku,
   getAll,
   getByIdOrSlug,
+  unarchive,
   updateSku,
 } from "./products";
 
@@ -304,6 +305,37 @@ describe("product archiving", () => {
     });
     expect(deleteSpy).not.toHaveBeenCalled();
   });
+
+  it("unarchives a product with store admin access", async () => {
+    mocks.requireStoreFullAdminAccess.mockResolvedValue({});
+
+    const { ctx, tables } = createSkuMutationCtx({
+      product: [
+        {
+          _id: "product001",
+          availability: "archived",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    const result = await getHandler(unarchive)(ctx, {
+      id: "product001" as Id<"product">,
+      storeId: "storezzzz" as Id<"store">,
+    });
+
+    expect(mocks.requireStoreFullAdminAccess).toHaveBeenCalledWith(
+      ctx,
+      "storezzzz",
+    );
+    expect(result).toMatchObject({
+      _id: "product001",
+      availability: "live",
+    });
+    expect(tables.product.get("product001")).toMatchObject({
+      availability: "live",
+    });
+  });
 });
 
 describe("product catalog visibility", () => {
@@ -457,6 +489,67 @@ describe("product detail availability", () => {
       inventoryCount: 10,
       quantityAvailable: 5,
       reservedQuantity: 3,
+    });
+  });
+
+  it("returns archived product details only when explicitly requested", async () => {
+    const seed = {
+      product: [
+        {
+          _id: "product-archived",
+          availability: "archived",
+          categoryId: "category-1",
+          inventoryCount: 4,
+          name: "Archived product",
+          storeId: "storezzzz",
+          subcategoryId: "subcategory-1",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku-archived",
+          images: [],
+          inventoryCount: 4,
+          price: 1000,
+          productId: "product-archived",
+          quantityAvailable: 4,
+          sku: "ARCH-01",
+          storeId: "storezzzz",
+        },
+      ],
+    };
+
+    const defaultCtx = createProductsQueryCtx(seed).ctx;
+    await expect(
+      getHandler(getByIdOrSlug)(defaultCtx, {
+        identifier: "product-archived" as Id<"product">,
+        storeId: "storezzzz" as Id<"store">,
+      }),
+    ).resolves.toBeNull();
+
+    const includeArchivedCtx = createProductsQueryCtx(seed).ctx;
+    const archivedProduct = await getHandler(getByIdOrSlug)(
+      includeArchivedCtx,
+      {
+        identifier: "product-archived" as Id<"product">,
+        storeId: "storezzzz" as Id<"store">,
+        filters: {
+          includeArchived: true,
+          isVisible: false,
+        },
+      },
+    );
+
+    expect(archivedProduct).toMatchObject({
+      _id: "product-archived",
+      availability: "archived",
+      name: "Archived product",
+      skus: [
+        {
+          _id: "sku-archived",
+          sku: "ARCH-01",
+        },
+      ],
     });
   });
 });

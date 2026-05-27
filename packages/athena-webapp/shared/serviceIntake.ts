@@ -2,6 +2,7 @@ export function validateServiceIntakeInput(args: {
   assignedStaffProfileId?: string | null;
   customerFullName?: string | null;
   customerProfileId?: string | null;
+  customerPhoneNumber?: string | null;
   depositAmount?: number | null;
   depositMethod?: string | null;
   serviceTitle?: string | null;
@@ -18,6 +19,10 @@ export function validateServiceIntakeInput(args: {
 
   if (!args.customerProfileId && !args.customerFullName?.trim()) {
     errors.push("A customer name is required when no customer is linked.");
+  }
+
+  if (!args.customerPhoneNumber?.trim()) {
+    errors.push("Customer phone number is required.");
   }
 
   if (args.depositAmount !== undefined && args.depositAmount !== null) {

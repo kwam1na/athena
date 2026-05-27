@@ -37,6 +37,7 @@ export type QuickAddExistingSkuOption = {
   sku: string;
   category?: string;
   barcode?: string;
+  variantAttributes?: string[];
 };
 
 export type QuickAddAttachBarcodePayload = {
@@ -106,6 +107,16 @@ function validateQuickAddLookupCode(lookupCode: string) {
   }
 
   return "Lookup code must be a numeric barcode (digits only)";
+}
+
+function getExistingSkuMetadata(option: QuickAddExistingSkuOption) {
+  return [
+    option.sku || "No SKU",
+    option.category,
+    ...(option.variantAttributes ?? []),
+  ]
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value));
 }
 
 export function QuickAddProductDialog({
@@ -375,7 +386,12 @@ export function QuickAddProductDialog({
 
     return unbarcodedOptions
       .filter((option) =>
-        [option.name, option.sku, option.category]
+        [
+          option.name,
+          option.sku,
+          option.category,
+          ...(option.variantAttributes ?? []),
+        ]
           .filter(Boolean)
           .some((value) => value!.toLowerCase().includes(normalizedQuery)),
       )
@@ -509,6 +525,7 @@ export function QuickAddProductDialog({
                       matchingExistingSkus.map((option) => {
                         const isSelected =
                           selectedExistingSkuId === option.productSkuId;
+                        const metadata = getExistingSkuMetadata(option);
 
                         return (
                           <button
@@ -531,8 +548,7 @@ export function QuickAddProductDialog({
                                 {capitalizeWords(option.name)}
                               </span>
                               <span className="block truncate text-xs text-muted-foreground">
-                                {option.sku || "No SKU"}
-                                {option.category ? ` - ${option.category}` : ""}
+                                {metadata.join(" - ")}
                               </span>
                             </span>
                             {isSelected && (

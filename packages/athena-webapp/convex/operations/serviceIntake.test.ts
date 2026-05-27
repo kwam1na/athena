@@ -19,6 +19,7 @@ function buildCreateServiceIntakeArgs(
   return {
     assignedStaffProfileId: "staff-1",
     customerFullName: "Ama Mensah",
+    customerPhoneNumber: "+233200000000",
     intakeChannel: "walk_in",
     serviceTitle: "Wash and restyle",
     storeId: "store-1",
@@ -80,6 +81,7 @@ describe("service intake validation", () => {
       })
     ).toEqual([
       "An assignee is required.",
+      "Customer phone number is required.",
       "Deposit amount must be greater than zero.",
       "Select how the deposit was collected.",
     ]);
@@ -90,6 +92,7 @@ describe("service intake validation", () => {
       validateServiceIntakeInput({
         assignedStaffProfileId: "staff_1",
         customerProfileId: "customer_1",
+        customerPhoneNumber: "+233200000000",
         serviceTitle: "Install closure wig",
       })
     ).toEqual([]);
