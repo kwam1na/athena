@@ -3,6 +3,7 @@ import type {
   TerminalSyncEvent,
   TerminalSyncEvidence,
   TerminalRuntimeStatus,
+  TerminalHealthAttentionReason,
 } from "./terminalHealthTypes";
 
 export type TerminalHealthClassification = {
@@ -12,6 +13,7 @@ export type TerminalHealthClassification = {
 };
 
 type TerminalHealthClassificationInput = {
+  attentionReasons?: TerminalHealthAttentionReason[];
   health?: "needs_attention" | "offline" | "online" | "stale" | "unknown" | string;
   runtimeStatus:
     | (Omit<Partial<TerminalRuntimeStatus>, "localStore" | "sync"> & {
@@ -143,6 +145,18 @@ export function getRecentSyncEvents(
   return syncEvidence.latestEvent ? [syncEvidence.latestEvent] : [];
 }
 
+export function getTerminalAttentionReasons(
+  summary: TerminalHealthClassificationInput,
+): TerminalHealthAttentionReason[] {
+  return summary.attentionReasons ?? [];
+}
+
+export function getPrimaryTerminalAttentionReason(
+  summary: TerminalHealthClassificationInput,
+) {
+  return getTerminalAttentionReasons(summary)[0] ?? null;
+}
+
 export function classifyTerminalHealth(
   summary: TerminalHealthClassificationInput,
 ): TerminalHealthClassification {
@@ -155,6 +169,45 @@ export function classifyTerminalHealth(
   }
 
   const runtimeStatus = summary.runtimeStatus;
+  const primaryReason = getPrimaryTerminalAttentionReason(summary);
+  if (summary.health === "needs_attention" && primaryReason) {
+    switch (primaryReason.type) {
+      case "local_review":
+      case "cloud_conflict":
+      case "cloud_held":
+      case "cloud_rejected":
+        return {
+          description: primaryReason.summary,
+          label: "Needs review",
+          toneClassName: "border-warning/30 bg-warning/15 text-warning",
+        };
+      case "sync_failed":
+        return {
+          description: primaryReason.summary,
+          label: "Sync failed",
+          toneClassName: "border-danger/30 bg-danger/10 text-danger",
+        };
+      case "sync_unavailable":
+        return {
+          description: primaryReason.summary,
+          label: "Sync unavailable",
+          toneClassName: "border-danger/30 bg-danger/10 text-danger",
+        };
+      case "local_store_unavailable":
+        return {
+          description: primaryReason.summary,
+          label: "Local store issue",
+          toneClassName: "border-danger/30 bg-danger/10 text-danger",
+        };
+      case "terminal_seed_missing":
+        return {
+          description: primaryReason.summary,
+          label: "Setup needed",
+          toneClassName: "border-warning/30 bg-warning/15 text-warning",
+        };
+    }
+  }
+
   if (!runtimeStatus) {
     return {
       description: "This terminal has not reported runtime health yet.",
@@ -170,7 +223,8 @@ export function classifyTerminalHealth(
     getReviewEvidenceCount(summary.syncEvidence) > 0
   ) {
     return {
-      description: "Local activity needs manager or support review.",
+      description:
+        primaryReason?.summary ?? "Local activity needs manager or support review.",
       label: "Needs review",
       toneClassName: "border-warning/30 bg-warning/15 text-warning",
     };
@@ -178,7 +232,7 @@ export function classifyTerminalHealth(
 
   if (sync?.status === "failed" || (sync?.failedEventCount ?? 0) > 0) {
     return {
-      description: "The last sync attempt failed.",
+      description: primaryReason?.summary ?? "The last sync attempt failed.",
       label: "Sync failed",
       toneClassName: "border-danger/30 bg-danger/10 text-danger",
     };
@@ -186,7 +240,8 @@ export function classifyTerminalHealth(
 
   if (runtimeStatus.localStore?.available === false) {
     return {
-      description: "Local terminal storage is not available.",
+      description:
+        primaryReason?.summary ?? "Local terminal storage is not available.",
       label: "Local store issue",
       toneClassName: "border-danger/30 bg-danger/10 text-danger",
     };
@@ -227,7 +282,7 @@ export function classifyTerminalHealth(
   ) {
     return {
       description: "Local events are waiting for cloud sync.",
-    label: sync?.status === "syncing" ? "Syncing" : "Pending sync",
+      label: sync?.status === "syncing" ? "Syncing" : "Pending sync",
       toneClassName: "border-warning/30 bg-warning/15 text-warning",
     };
   }

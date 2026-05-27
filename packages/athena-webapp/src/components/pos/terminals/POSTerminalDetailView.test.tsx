@@ -99,6 +99,23 @@ vi.mock("@/components/states/signed-out/ProtectedAdminSignInView", () => ({
 }));
 
 const detail: TerminalHealthDetail = {
+  attentionReasons: [
+    {
+      count: 1,
+      nextPendingUploadSequence: 14,
+      source: "local_runtime",
+      summary: "1 local review item is still on this terminal.",
+      type: "local_review",
+    },
+    {
+      count: 1,
+      latestEventSequence: 14,
+      latestEventStatus: "held",
+      source: "cloud_sync",
+      summary: "1 synced item is held before projection.",
+      type: "cloud_held",
+    },
+  ],
   health: "needs_attention",
   runtimeStatus: {
     _id: "status-1",
@@ -197,10 +214,66 @@ describe("POSTerminalDetailViewContent", () => {
     expect(screen.getByRole("heading", { name: "Front counter" })).toBeInTheDocument();
     expect(screen.getAllByText("Register 1").length).toBeGreaterThan(0);
     expect(screen.getByText("Latest check-in")).toBeInTheDocument();
-    expect(screen.getByText("Cloud sync evidence")).toBeInTheDocument();
+    expect(
+      screen.getByText("Why this terminal needs attention"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("1 local review item is still on this terminal."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("1 synced item is held before projection."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Local runtime review / next upload #14")).toBeInTheDocument();
+    expect(screen.getAllByText("Cloud sync evidence").length).toBeGreaterThan(0);
     expect(screen.getByText("Staff authority changed before sync.")).toBeInTheDocument();
     expect(screen.getByText("IndexedDB blocked")).toBeInTheDocument();
     expect(screen.getByText("Upload failed")).toBeInTheDocument();
+  });
+
+  it("does not render attention reasons for a healthy terminal", () => {
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          attentionReasons: [],
+          health: "online",
+          runtimeStatus: {
+            ...detail.runtimeStatus!,
+            localStore: { available: true, terminalSeedReady: true },
+            sync: {
+              ...detail.runtimeStatus!.sync,
+              failedEventCount: 0,
+              pendingEventCount: 0,
+              reviewEventCount: 0,
+              status: "idle",
+              uploadableEventCount: 0,
+            },
+          },
+          syncEvidence: {
+            acceptedCount: 4,
+            acceptedThroughSequence: 9,
+            conflictedCount: 0,
+            heldCount: 0,
+            latestEvent: null,
+            projectedCount: 3,
+            rejectedCount: 0,
+            sampledEventCount: 5,
+            unresolvedConflictCount: 0,
+            unresolvedConflicts: [],
+          },
+        }}
+        isLoading={false}
+      />,
+    );
+
+    expect(
+      screen.queryByText("Why this terminal needs attention"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "No unresolved cloud sync conflicts are currently reported. Local runtime review, pending sync, or stale check-ins may still need attention above.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("renders no-data and query unavailable states", () => {

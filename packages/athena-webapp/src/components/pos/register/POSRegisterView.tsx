@@ -468,7 +468,7 @@ function POSLocalDebugStrip({
         : String(debug.syncFlow.lastHeldEventCount),
     ],
     [
-      "review events",
+      "local review items",
       [
         `local ${debug.syncFlow.reviewEventCount ?? 0}`,
         `last ${debug.syncFlow.lastReviewEventCount ?? "n/a"}`,
@@ -524,7 +524,9 @@ function POSLocalDebugStrip({
           ? "Uploading"
           : debug.syncFlow.status === "synced"
             ? "Uploaded"
-            : "Upload",
+            : debug.syncFlow.status === "needs_review"
+              ? "Local review"
+              : "Upload",
       state:
         debug.syncFlow.status === "needs_review"
           ? "blocked"
@@ -539,7 +541,7 @@ function POSLocalDebugStrip({
         debug.syncFlow.status === "synced"
           ? "Server current"
           : debug.syncFlow.status === "needs_review"
-            ? "Needs review"
+            ? "Local review item"
             : "Server update",
       state:
         debug.syncFlow.status === "synced"

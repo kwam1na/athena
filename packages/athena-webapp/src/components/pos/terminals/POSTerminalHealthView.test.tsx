@@ -179,12 +179,54 @@ describe("POSTerminalHealthViewContent", () => {
           },
           {
             ...baseSummary,
+            attentionReasons: [
+              {
+                count: 1,
+                source: "local_runtime",
+                summary: "1 local review item is still on this terminal.",
+                type: "local_review",
+              },
+            ],
             runtimeStatus: null,
+            health: "needs_attention",
             terminal: {
               ...baseSummary.terminal,
               _id: "terminal-3",
               displayName: "Spare laptop",
               registerNumber: null,
+            },
+          },
+          {
+            ...baseSummary,
+            attentionReasons: [
+              {
+                count: 1,
+                latestEventSequence: 8,
+                latestEventStatus: "held",
+                source: "cloud_sync",
+                summary: "1 synced item is held before projection.",
+                type: "cloud_held",
+              },
+              {
+                source: "terminal_runtime",
+                summary:
+                  "Terminal setup data is not ready on this checkout station.",
+                type: "terminal_seed_missing",
+              },
+            ],
+            health: "needs_attention",
+            runtimeStatus: {
+              ...baseSummary.runtimeStatus!,
+              localStore: {
+                ...baseSummary.runtimeStatus!.localStore,
+                terminalSeedReady: false,
+              },
+            },
+            terminal: {
+              ...baseSummary.terminal,
+              _id: "terminal-4",
+              displayName: "Review kiosk",
+              registerNumber: "4",
             },
           },
         ]}
@@ -199,7 +241,15 @@ describe("POSTerminalHealthViewContent", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Healthy")).toBeInTheDocument();
     expect(screen.getAllByText("Pending sync").length).toBeGreaterThan(0);
-    expect(screen.getByText("No check-in")).toBeInTheDocument();
+    expect(screen.queryByText("No check-in")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Needs review").length).toBeGreaterThan(0);
+    expect(
+      screen.getByText("1 local review item is still on this terminal."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("1 synced item is held before projection."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Review kiosk")).toBeInTheDocument();
     expect(screen.getAllByText("Staff authority ready").length).toBeGreaterThan(0);
     expect(
       screen.getAllByText("Register session evidence is shown in cash controls").length,

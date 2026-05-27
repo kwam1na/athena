@@ -25,6 +25,7 @@ import {
   getReviewEvidenceCount,
   getSnapshotAgeSummary,
   getStaffAuthorityLabel,
+  getPrimaryTerminalAttentionReason,
 } from "./terminalHealthPresentation";
 import type { TerminalHealthSummary } from "./terminalHealthTypes";
 import { getOrigin } from "~/src/lib/navigationUtils";
@@ -128,6 +129,8 @@ export function POSTerminalHealthViewContent({
                 <section className="space-y-layout-sm">
                   {healthRows.map(({ classification, summary }) => {
                     const runtimeStatus = summary.runtimeStatus;
+                    const primaryReason =
+                      getPrimaryTerminalAttentionReason(summary);
 
                     return (
                       <article
@@ -184,6 +187,9 @@ export function POSTerminalHealthViewContent({
                               {runtimeStatus
                                 ? `${runtimeStatus.sync.pendingEventCount} pending / ${runtimeStatus.sync.reviewEventCount + getReviewEvidenceCount(summary.syncEvidence)} review`
                                 : "No runtime sync check-in"}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {primaryReason?.summary ?? classification.description}
                             </p>
                           </div>
                           <div>

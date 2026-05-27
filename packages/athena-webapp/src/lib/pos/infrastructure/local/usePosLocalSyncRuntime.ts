@@ -256,6 +256,10 @@ export function usePosLocalSyncRuntimeStatus(input: {
 
       const createDrainScheduler = (
         syncSeed: NonNullable<typeof provisionedSeed>,
+        options: {
+          includeUploadedReviewEvents?: boolean;
+          onlyUploadedReviewEvents?: boolean;
+        } = {},
       ) => createPosLocalSyncScheduler({
         isOnline: () =>
           typeof navigator === "undefined" ? true : navigator.onLine,
@@ -273,12 +277,22 @@ export function usePosLocalSyncRuntimeStatus(input: {
             throw new Error(pending.error.message);
           }
           const uploadableEvents = pending.value.events
-            .filter(
-              (event) =>
+            .filter((event) => {
+              const isUploadedReviewEvent =
+                options.includeUploadedReviewEvents === true &&
+                event.sync.status === "needs_review" &&
+                event.sync.uploaded;
+              if (options.onlyUploadedReviewEvents === true) {
+                return isUploadedReviewEvent;
+              }
+
+              return (
                 event.sync.status === "pending" ||
-                  event.sync.status === "syncing" ||
-                  event.sync.status === "failed",
-            )
+                event.sync.status === "syncing" ||
+                event.sync.status === "failed" ||
+                isUploadedReviewEvent
+              );
+            })
             .filter((event) => isSyncablePosLocalEvent(event));
           if (!shouldStop()) {
             setDebug((current) => ({
@@ -452,15 +466,24 @@ export function usePosLocalSyncRuntimeStatus(input: {
         );
 
         if (
-          drainOnAppend &&
-          trigger === "event-appended" &&
           provisionedSeed &&
           provisionedSeed.syncSecretHash &&
           provisionedSeed.cloudTerminalId === cloudTerminalId
         ) {
-          const scheduler = createDrainScheduler(provisionedSeed);
-          stopSchedulers.push(() => scheduler.stop());
-          scheduler.trigger("event-appended", { priority: "high" });
+          if (drainOnAppend && trigger === "event-appended") {
+            const scheduler = createDrainScheduler(provisionedSeed);
+            stopSchedulers.push(() => scheduler.stop());
+            scheduler.trigger("event-appended", { priority: "high" });
+          }
+
+          if (trigger === "manual-retry") {
+            const scheduler = createDrainScheduler(provisionedSeed, {
+              includeUploadedReviewEvents: true,
+              onlyUploadedReviewEvents: true,
+            });
+            stopSchedulers.push(() => scheduler.stop());
+            scheduler.trigger("manual-retry", { priority: "high" });
+          }
         }
         return;
       }
@@ -473,9 +496,19 @@ export function usePosLocalSyncRuntimeStatus(input: {
         return;
       }
 
-      const scheduler = createDrainScheduler(provisionedSeed);
-      stopSchedulers.push(scheduler.startForegroundTriggers());
-      scheduler.trigger(trigger, { priority: "high" });
+      const foregroundScheduler = createDrainScheduler(provisionedSeed);
+      stopSchedulers.push(foregroundScheduler.startForegroundTriggers());
+
+      if (trigger === "manual-retry") {
+        const manualRetryScheduler = createDrainScheduler(provisionedSeed, {
+          includeUploadedReviewEvents: true,
+        });
+        stopSchedulers.push(() => manualRetryScheduler.stop());
+        manualRetryScheduler.trigger("manual-retry", { priority: "high" });
+        return;
+      }
+
+      foregroundScheduler.trigger(trigger, { priority: "high" });
     })();
 
     return () => {
@@ -823,7 +856,8 @@ function isPendingUploadCandidate(event: PosLocalEventRecord) {
   return (
     event.sync.status === "pending" ||
     event.sync.status === "syncing" ||
-    event.sync.status === "failed"
+    event.sync.status === "failed" ||
+    (event.sync.status === "needs_review" && event.sync.uploaded)
   );
 }
 

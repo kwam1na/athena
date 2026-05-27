@@ -129,6 +129,30 @@ const terminalHealthStatusValidator = v.union(
   v.literal("unknown"),
 );
 
+const terminalHealthAttentionReasonReturnValidator = v.object({
+  count: v.optional(v.number()),
+  latestEventSequence: v.optional(v.number()),
+  latestEventStatus: v.optional(v.string()),
+  nextPendingUploadSequence: v.optional(v.number()),
+  oldestPendingEventAt: v.optional(v.number()),
+  source: v.union(
+    v.literal("cloud_sync"),
+    v.literal("local_runtime"),
+    v.literal("terminal_runtime"),
+  ),
+  summary: v.string(),
+  type: v.union(
+    v.literal("cloud_conflict"),
+    v.literal("cloud_held"),
+    v.literal("cloud_rejected"),
+    v.literal("local_review"),
+    v.literal("local_store_unavailable"),
+    v.literal("sync_failed"),
+    v.literal("sync_unavailable"),
+    v.literal("terminal_seed_missing"),
+  ),
+});
+
 const terminalRegistrationSummaryReturnValidator = v.object({
   _id: v.id("posTerminal"),
   displayName: v.string(),
@@ -144,6 +168,7 @@ const terminalHealthSummaryReturnValidator = v.object({
   health: terminalHealthStatusValidator,
   runtimeAgeMs: v.union(v.number(), v.null()),
   runtimeStatus: v.union(runtimeStatusSnapshotReturnValidator, v.null()),
+  attentionReasons: v.array(terminalHealthAttentionReasonReturnValidator),
   syncEvidence: terminalSyncEvidenceReturnValidator,
 });
 
