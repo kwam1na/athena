@@ -226,6 +226,7 @@ describe("POS local sync public mutation", () => {
       error: {
         code: "authorization_failed",
         message: "You do not have access to sync this POS terminal.",
+        metadata: { terminalAuthorizationFailure: true },
       },
     });
     expect(mocks.ingestLocalEventsWithCtx).not.toHaveBeenCalled();
@@ -246,6 +247,7 @@ describe("POS local sync public mutation", () => {
       error: {
         code: "authorization_failed",
         message: "You do not have access to sync this POS terminal.",
+        metadata: { terminalAuthorizationFailure: true },
       },
     });
     expect(mocks.ingestLocalEventsWithCtx).not.toHaveBeenCalled();
@@ -266,6 +268,7 @@ describe("POS local sync public mutation", () => {
       error: {
         code: "authorization_failed",
         message: "You do not have access to sync this POS terminal.",
+        metadata: { terminalAuthorizationFailure: true },
       },
     });
     expect(mocks.ingestLocalEventsWithCtx).not.toHaveBeenCalled();
@@ -290,6 +293,7 @@ describe("POS local sync public mutation", () => {
       error: {
         code: "authorization_failed",
         message: "You do not have access to sync this POS terminal.",
+        metadata: { terminalAuthorizationFailure: true },
       },
     });
     expect(mocks.ingestLocalEventsWithCtx).not.toHaveBeenCalled();

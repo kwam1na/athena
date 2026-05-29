@@ -200,9 +200,16 @@ export function classifyTerminalHealth(
           toneClassName: "border-danger/30 bg-danger/10 text-danger",
         };
       case "terminal_seed_missing":
+      case "terminal_authorization_failed":
         return {
           description: primaryReason.summary,
           label: "Setup needed",
+          toneClassName: "border-warning/30 bg-warning/15 text-warning",
+        };
+      case "drawer_authority_blocked":
+        return {
+          description: primaryReason.summary,
+          label: "Drawer repair needed",
           toneClassName: "border-warning/30 bg-warning/15 text-warning",
         };
     }

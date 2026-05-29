@@ -5,8 +5,10 @@ import type { Id } from "~/convex/_generated/dataModel";
 
 import {
   POS_LOCAL_STORE_SCHEMA_VERSION,
+  type PosDrawerAuthorityState,
   type PosLocalEventRecord,
   type PosLocalStaffAuthorityReadiness,
+  type PosTerminalIntegrityState,
   type PosProvisionedTerminalSeed,
 } from "./posLocalStore";
 import { derivePosLocalSyncStatus } from "./syncStatus";
@@ -56,12 +58,14 @@ export type PosTerminalRuntimeStatusInput = {
   clock?: () => number;
   events: PosLocalEventRecord[];
   localStoreFailureMessage?: string | null;
+  drawerAuthority?: PosDrawerAuthorityState | null;
   snapshots?: PosTerminalRuntimeSnapshotReadiness;
   source: PosTerminalRuntimeStatusSource;
   staffAuthorityExpiresAt?: number;
   staffAuthorityStatus?: PosLocalStaffAuthorityReadiness | "unknown";
   staffProfileId?: string | null;
   syncDebug?: PosTerminalRuntimeSyncDebugInput;
+  terminalIntegrity?: PosTerminalIntegrityState | null;
   terminalSeed?: PosProvisionedTerminalSeed | null;
 };
 
@@ -80,9 +84,11 @@ export type PosTerminalRuntimeCopyDiagnostics = {
     sync?: string;
   };
   labels: {
+    drawerAuthority: "blocked" | "healthy" | "unknown";
     localStore: "available" | "unavailable";
     staffAuthority: PosTerminalRuntimeStaffAuthorityStatus;
     sync: PosTerminalRuntimeStatusSyncStatus;
+    terminalIntegrity: "blocked" | "healthy" | "repairing" | "unknown";
   };
   reportedAt: number;
   sequences: {
@@ -99,6 +105,20 @@ export type PosTerminalRuntimeCopyDiagnostics = {
     localTerminalId?: string;
     registerNumber?: string;
     storeId?: string;
+  };
+  authority: {
+    drawer?: {
+      cloudRegisterSessionId?: string;
+      localRegisterSessionId: string;
+      reason?: string;
+      registerNumber?: string;
+      status: PosDrawerAuthorityState["status"];
+    };
+    terminal?: {
+      reason?: string;
+      registerNumber?: string;
+      status: PosTerminalIntegrityState["status"];
+    };
   };
   timestamps: {
     availabilitySnapshotRefreshedAt?: number;
@@ -190,6 +210,37 @@ export function buildPosTerminalRuntimeStatus(
         ? { oldestPendingEventAt: sync.oldestPendingEventAt }
         : {}),
     },
+    ...(input.terminalIntegrity &&
+    input.terminalIntegrity.status !== "healthy"
+      ? {
+          terminalIntegrity: {
+            observedAt: input.terminalIntegrity.observedAt,
+            ...(input.terminalIntegrity.reason
+              ? { reason: input.terminalIntegrity.reason }
+              : {}),
+            status: input.terminalIntegrity.status,
+          },
+        }
+      : {}),
+    ...(input.drawerAuthority && input.drawerAuthority.status === "blocked"
+      ? {
+          drawerAuthority: {
+            localRegisterSessionId:
+              input.drawerAuthority.localRegisterSessionId,
+            observedAt: input.drawerAuthority.observedAt,
+            ...(input.drawerAuthority.cloudRegisterSessionId
+              ? {
+                  cloudRegisterSessionId:
+                    input.drawerAuthority.cloudRegisterSessionId,
+                }
+              : {}),
+            ...(input.drawerAuthority.reason
+              ? { reason: input.drawerAuthority.reason }
+              : {}),
+            status: input.drawerAuthority.status,
+          },
+        }
+      : {}),
   };
 }
 
@@ -223,9 +274,13 @@ export function buildPosTerminalRuntimeCopyDiagnostics(
       ...(syncFailure ? { sync: syncFailure } : {}),
     },
     labels: {
+      drawerAuthority: input.drawerAuthority
+        ? input.drawerAuthority.status
+        : "unknown",
       localStore: localStoreFailure ? "unavailable" : "available",
       staffAuthority: staffAuthorityStatus,
       sync: sync.status,
+      terminalIntegrity: getTerminalIntegrityLabel(input.terminalIntegrity),
     },
     reportedAt: now,
     sequences: {
@@ -250,6 +305,42 @@ export function buildPosTerminalRuntimeCopyDiagnostics(
         ? { registerNumber: input.terminalSeed.registerNumber }
         : {}),
       ...(input.terminalSeed?.storeId ? { storeId: input.terminalSeed.storeId } : {}),
+    },
+    authority: {
+      ...(input.drawerAuthority
+        ? {
+            drawer: {
+              ...(input.drawerAuthority.cloudRegisterSessionId
+                ? {
+                    cloudRegisterSessionId:
+                      input.drawerAuthority.cloudRegisterSessionId,
+                  }
+                : {}),
+              localRegisterSessionId:
+                input.drawerAuthority.localRegisterSessionId,
+              ...(input.drawerAuthority.reason
+                ? { reason: input.drawerAuthority.reason }
+                : {}),
+              ...(input.drawerAuthority.registerNumber
+                ? { registerNumber: input.drawerAuthority.registerNumber }
+                : {}),
+              status: input.drawerAuthority.status,
+            },
+          }
+        : {}),
+      ...(input.terminalIntegrity
+        ? {
+            terminal: {
+              ...(input.terminalIntegrity.reason
+                ? { reason: input.terminalIntegrity.reason }
+                : {}),
+              ...(input.terminalIntegrity.registerNumber
+                ? { registerNumber: input.terminalIntegrity.registerNumber }
+                : {}),
+              status: input.terminalIntegrity.status,
+            },
+          }
+        : {}),
     },
     timestamps: {
       ...(input.snapshots?.availabilityRefreshedAt
@@ -360,6 +451,15 @@ function normalizeStaffAuthorityStatus(
     return status;
   }
   return "unknown";
+}
+
+function getTerminalIntegrityLabel(
+  state?: PosTerminalIntegrityState | null,
+): "blocked" | "healthy" | "repairing" | "unknown" {
+  if (!state) return "unknown";
+  if (state.status === "healthy") return "healthy";
+  if (state.status === "repairing") return "repairing";
+  return "blocked";
 }
 
 function snapshotAges(

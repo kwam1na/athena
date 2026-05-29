@@ -233,6 +233,10 @@ describe("usePosLocalSyncRuntimeStatus", () => {
           terminalId: "local-terminal-1",
         },
       })),
+      writeTerminalIntegrityState: vi.fn(async () => ({
+        ok: true,
+        value: null,
+      })),
     };
     const storeFactory = () => store as never;
     const onLocalEventsChanged = vi.fn();
@@ -261,7 +265,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       );
     });
 
-    act(() => {
+    await act(async () => {
       result.current?.onRetrySync?.();
     });
 
@@ -363,6 +367,10 @@ describe("usePosLocalSyncRuntimeStatus", () => {
           storeId: "store-1",
           terminalId: "local-terminal-1",
         },
+      })),
+      writeTerminalIntegrityState: vi.fn(async () => ({
+        ok: true,
+        value: null,
       })),
     };
     const storeFactory = () => store as never;
@@ -541,7 +549,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
         }),
       );
     });
-    act(() => {
+    await act(async () => {
       result.current?.onRetrySync?.();
     });
     await waitFor(() => expect(oldStore.listEvents).toHaveBeenCalled());
@@ -725,6 +733,21 @@ describe("usePosLocalSyncRuntimeStatus", () => {
         ok: true,
         value: [],
       })),
+      clearDrawerAuthorityState: vi.fn(async () => ({
+        ok: true,
+        value: null,
+      })),
+      readDrawerAuthorityState: vi.fn(async () => ({
+        ok: true,
+        value: {
+          localRegisterSessionId: "register-1",
+          observedAt: 1,
+          reason: "lifecycle_rejected",
+          status: "blocked",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
       writeLocalCloudMapping: vi.fn(async () => ({
         ok: true,
         value: {},
@@ -740,6 +763,10 @@ describe("usePosLocalSyncRuntimeStatus", () => {
           storeId: "store-1",
           terminalId: "local-terminal-1",
         },
+      })),
+      writeTerminalIntegrityState: vi.fn(async () => ({
+        ok: true,
+        value: null,
       })),
     };
     const storeFactory = () => store as never;
@@ -784,6 +811,11 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       }),
     );
     expect(store.markEventsNeedsReview).not.toHaveBeenCalled();
+    expect(store.clearDrawerAuthorityState).toHaveBeenCalledWith({
+      localRegisterSessionId: "register-1",
+      storeId: "store-1",
+      terminalId: "local-terminal-1",
+    });
   });
 
   it("does not manually retry review events that were never uploaded", async () => {
@@ -908,6 +940,10 @@ describe("usePosLocalSyncRuntimeStatus", () => {
         ok: true,
         value: [],
       })),
+      writeDrawerAuthorityState: vi.fn(async () => ({
+        ok: true,
+        value: null,
+      })),
       readProvisionedTerminalSeed: vi.fn(async () => ({
         ok: true,
         value: {
@@ -941,6 +977,207 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       ),
     );
     expect(store.markEventsSynced).not.toHaveBeenCalled();
+    expect(store.writeDrawerAuthorityState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        localRegisterSessionId: "register-1",
+        reason: "lifecycle_rejected",
+        status: "blocked",
+        storeId: "store-1",
+      }),
+    );
+  });
+
+  it("persists terminal integrity instead of marking events for review when sync authorization fails", async () => {
+    mocks.ingestLocalEvents.mockResolvedValue({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "Sync secret is no longer valid.",
+        metadata: { terminalAuthorizationFailure: true },
+      },
+    });
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [
+          buildLocalEvent({
+            localEventId: "event-open",
+            sequence: 1,
+            type: "register.opened",
+            uploadSequence: 1,
+          }),
+        ],
+      })),
+      markEventsNeedsReview: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      markEventsSynced: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          registerNumber: "1",
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+      writeTerminalIntegrityState: vi.fn(async () => ({
+        ok: true,
+        value: null,
+      })),
+    };
+    const storeFactory = () => store as never;
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        storeFactory,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() => expect(mocks.ingestLocalEvents).toHaveBeenCalled());
+    expect(store.writeTerminalIntegrityState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cloudTerminalId: "terminal-cloud-1",
+        reason: "authorization_failed",
+        status: "requires_reprovision",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      }),
+    );
+    expect(store.markEventsNeedsReview).not.toHaveBeenCalled();
+    expect(store.markEventsSynced).not.toHaveBeenCalled();
+  });
+
+  it("does not persist terminal integrity for generic sync authorization failures", async () => {
+    mocks.ingestLocalEvents.mockResolvedValue({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "User session expired.",
+      },
+    });
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [
+          buildLocalEvent({
+            localEventId: "event-open",
+            sequence: 1,
+            type: "register.opened",
+            uploadSequence: 1,
+          }),
+        ],
+      })),
+      markEventsNeedsReview: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      markEventsSynced: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          registerNumber: "1",
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+      writeDrawerAuthorityState: vi.fn(async () => ({
+        ok: true,
+        value: null,
+      })),
+      writeTerminalIntegrityState: vi.fn(async () => ({
+        ok: true,
+        value: null,
+      })),
+    };
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() => expect(mocks.ingestLocalEvents).toHaveBeenCalled());
+    expect(store.markEventsNeedsReview).not.toHaveBeenCalled();
+    expect(store.markEventsSynced).not.toHaveBeenCalled();
+    expect(store.writeDrawerAuthorityState).not.toHaveBeenCalled();
+    expect(store.writeTerminalIntegrityState).not.toHaveBeenCalled();
+  });
+
+  it("skips upload attempts while terminal integrity is blocked", async () => {
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [
+          buildLocalEvent({
+            localEventId: "event-open",
+            sequence: 1,
+            type: "register.opened",
+            uploadSequence: 1,
+          }),
+        ],
+      })),
+      markEventsSynced: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          registerNumber: "1",
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+      readTerminalIntegrityState: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          observedAt: 1,
+          reason: "authorization_failed",
+          status: "requires_reprovision",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() => expect(store.readTerminalIntegrityState).toHaveBeenCalled());
+    expect(mocks.ingestLocalEvents).not.toHaveBeenCalled();
+    expect(store.markEventsSynced).not.toHaveBeenCalled();
   });
 
   it("returns failure when local cloud mapping persistence fails", async () => {
@@ -973,6 +1210,389 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       cloudId: "session-1",
       mappedAt: 10,
     });
+  });
+
+  it("writes drawer authority when mapping persistence fails during runtime upload", async () => {
+    mocks.ingestLocalEvents.mockResolvedValue({
+      kind: "ok",
+      data: {
+        accepted: [
+          {
+            localEventId: "event-open",
+            sequence: 1,
+            status: "projected",
+          },
+        ],
+        held: [],
+        mappings: [
+          {
+            _id: "mapping-open",
+            storeId: "store-1",
+            terminalId: "terminal-cloud-1",
+            localRegisterSessionId: "register-1",
+            localEventId: "event-open",
+            localIdKind: "registerSession",
+            localId: "register-1",
+            cloudTable: "registerSession",
+            cloudId: "register-session-1",
+            createdAt: 12,
+          },
+        ],
+        conflicts: [],
+        syncCursor: {
+          localRegisterSessionId: "register-1",
+          acceptedThroughSequence: 1,
+        },
+      },
+    });
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [
+          buildLocalEvent({
+            localEventId: "event-open",
+            localRegisterSessionId: "register-1",
+            sequence: 1,
+            type: "register.opened",
+          }),
+        ],
+      })),
+      markEventsNeedsReview: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      markEventsSynced: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          registerNumber: "1",
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+      writeDrawerAuthorityState: vi.fn(async () => ({
+        ok: true,
+        value: null,
+      })),
+      writeLocalCloudMapping: vi.fn(async () => ({
+        ok: false,
+        error: { code: "write_failed", message: "mapping write failed" },
+      })),
+    };
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(store.markEventsNeedsReview).toHaveBeenCalledWith(
+        ["event-open"],
+        "Cloud sync needs review before this local event can finish.",
+        { uploaded: true },
+      ),
+    );
+    expect(store.writeDrawerAuthorityState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        localRegisterSessionId: "register-1",
+        reason: "authority_unknown",
+        status: "blocked",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      }),
+    );
+    expect(store.markEventsSynced).not.toHaveBeenCalled();
+  });
+
+  it("does not clear hard drawer authority blocks after a blocked closeout sync succeeds", async () => {
+    mocks.ingestLocalEvents.mockResolvedValue({
+      kind: "ok",
+      data: {
+        accepted: [
+          {
+            localEventId: "event-closeout",
+            sequence: 1,
+            status: "projected",
+          },
+        ],
+        held: [],
+        mappings: [],
+        conflicts: [],
+        syncCursor: {
+          localRegisterSessionId: "register-1",
+          acceptedThroughSequence: 1,
+        },
+      },
+    });
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [
+          buildLocalEvent({
+            localEventId: "event-closeout",
+            sequence: 1,
+            sync: { status: "pending" },
+            type: "register.closeout_started",
+          }),
+        ],
+      })),
+      clearDrawerAuthorityState: vi.fn(async () => ({
+        ok: true,
+        value: null,
+      })),
+      markEventsSynced: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readDrawerAuthorityState: vi.fn(async () => ({
+        ok: true,
+        value: {
+          localRegisterSessionId: "register-1",
+          observedAt: 1,
+          reason: "cloud_closed",
+          status: "blocked",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+      writeLocalCloudMapping: vi.fn(async () => ({
+        ok: true,
+        value: {},
+      })),
+    };
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() => expect(mocks.ingestLocalEvents).toHaveBeenCalled());
+    await waitFor(() => expect(store.markEventsSynced).toHaveBeenCalled());
+    expect(store.clearDrawerAuthorityState).not.toHaveBeenCalled();
+  });
+
+  it("clears recoverable authority-unknown drawer blocks after retry succeeds", async () => {
+    mocks.ingestLocalEvents.mockResolvedValue({
+      kind: "ok",
+      data: {
+        accepted: [
+          {
+            localEventId: "event-closeout",
+            sequence: 1,
+            status: "projected",
+          },
+        ],
+        held: [],
+        mappings: [],
+        conflicts: [],
+        syncCursor: {
+          localRegisterSessionId: "register-1",
+          acceptedThroughSequence: 1,
+        },
+      },
+    });
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [
+          buildLocalEvent({
+            localEventId: "event-closeout",
+            sequence: 1,
+            sync: { status: "pending" },
+            type: "register.closeout_started",
+          }),
+        ],
+      })),
+      clearDrawerAuthorityState: vi.fn(async () => ({
+        ok: true,
+        value: null,
+      })),
+      markEventsSynced: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readDrawerAuthorityState: vi.fn(async () => ({
+        ok: true,
+        value: {
+          localRegisterSessionId: "register-1",
+          observedAt: 1,
+          reason: "authority_unknown",
+          status: "blocked",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+      writeLocalCloudMapping: vi.fn(async () => ({
+        ok: true,
+        value: {},
+      })),
+    };
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(store.clearDrawerAuthorityState).toHaveBeenCalledWith({
+        localRegisterSessionId: "register-1",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      }),
+    );
+    expect(store.markEventsSynced).toHaveBeenCalledWith(["event-closeout"], {
+      uploaded: true,
+    });
+  });
+
+  it("keeps drawer authority blocked when a same-drawer review event remains", async () => {
+    mocks.ingestLocalEvents.mockResolvedValue({
+      kind: "ok",
+      data: {
+        accepted: [
+          {
+            localEventId: "event-open",
+            sequence: 1,
+            status: "projected",
+          },
+          {
+            localEventId: "event-closeout",
+            sequence: 2,
+            status: "rejected",
+          },
+        ],
+        held: [],
+        mappings: [],
+        conflicts: [],
+        syncCursor: {
+          localRegisterSessionId: "register-1",
+          acceptedThroughSequence: 2,
+        },
+      },
+    });
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [
+          buildLocalEvent({
+            localEventId: "event-open",
+            sequence: 1,
+            type: "register.opened",
+          }),
+          buildLocalEvent({
+            localEventId: "event-closeout",
+            sequence: 2,
+            type: "register.closeout_started",
+          }),
+        ],
+      })),
+      clearDrawerAuthorityState: vi.fn(async () => ({
+        ok: true,
+        value: null,
+      })),
+      markEventsNeedsReview: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      markEventsSynced: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readDrawerAuthorityState: vi.fn(async () => ({
+        ok: true,
+        value: {
+          localRegisterSessionId: "register-1",
+          observedAt: 1,
+          reason: "lifecycle_rejected",
+          status: "blocked",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+      writeDrawerAuthorityState: vi.fn(async () => ({
+        ok: true,
+        value: null,
+      })),
+      writeLocalCloudMapping: vi.fn(async () => ({
+        ok: true,
+        value: {},
+      })),
+    };
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(store.markEventsNeedsReview).toHaveBeenCalledWith(
+        ["event-closeout"],
+        "Cloud sync needs review before this local event can finish.",
+        { uploaded: true },
+      ),
+    );
+    expect(store.writeDrawerAuthorityState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        localRegisterSessionId: "register-1",
+        reason: "lifecycle_rejected",
+        status: "blocked",
+      }),
+    );
+    expect(store.clearDrawerAuthorityState).not.toHaveBeenCalled();
   });
 
   it("throws local store write failures before the scheduler can clear sync state", () => {
@@ -1359,6 +1979,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       error: {
         code: "authorization_failed",
         message: "You do not have access to update this POS terminal status.",
+        metadata: { terminalAuthorizationFailure: true },
       },
     });
     const store = {
@@ -1377,6 +1998,10 @@ describe("usePosLocalSyncRuntimeStatus", () => {
           storeId: "store-1",
           terminalId: "local-terminal-1",
         },
+      })),
+      writeTerminalIntegrityState: vi.fn(async () => ({
+        ok: true,
+        value: null,
       })),
     };
 
@@ -1400,6 +2025,128 @@ describe("usePosLocalSyncRuntimeStatus", () => {
         }),
       ),
     );
+    expect(store.writeTerminalIntegrityState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cloudTerminalId: "terminal-cloud-1",
+        reason: "authorization_failed",
+        status: "requires_reprovision",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      }),
+    );
+  });
+
+  it("publishes drawer authority blocks written under the cloud terminal id", async () => {
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [
+          buildLocalEvent({
+            localEventId: "event-open",
+            localRegisterSessionId: "register-1",
+            sequence: 1,
+            terminalId: "terminal-cloud-1",
+            type: "register.opened",
+          }),
+        ],
+      })),
+      readDrawerAuthorityState: vi.fn(async (input: { terminalId: string }) => ({
+        ok: true,
+        value:
+          input.terminalId === "terminal-cloud-1"
+            ? {
+                localRegisterSessionId: "register-1",
+                observedAt: 1,
+                reason: "cloud_closed",
+                status: "blocked",
+                storeId: "store-1",
+                terminalId: "terminal-cloud-1",
+              }
+            : null,
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "status-only",
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: expect.objectContaining({
+            drawerAuthority: expect.objectContaining({
+              localRegisterSessionId: "register-1",
+              reason: "cloud_closed",
+              status: "blocked",
+            }),
+          }),
+        }),
+      ),
+    );
+  });
+
+  it("does not persist terminal integrity for generic runtime check-in rejections", async () => {
+    mocks.reportTerminalRuntimeStatus.mockResolvedValue({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "User session expired.",
+      },
+    });
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+      writeTerminalIntegrityState: vi.fn(async () => ({
+        ok: true,
+        value: null,
+      })),
+    };
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "status-only",
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalled(),
+    );
+    await Promise.resolve();
+    expect(store.writeTerminalIntegrityState).not.toHaveBeenCalled();
   });
 
   it("clears stale completion time while a fresh runtime check-in publish is pending", async () => {

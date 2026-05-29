@@ -207,40 +207,43 @@ export const ingestLocalEvents = mutation({
       });
     }
 
-    let submittedByUserId;
+    let athenaUser;
     try {
-      const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-      submittedByUserId = athenaUser._id;
+      athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
       await requireOrganizationMemberRoleWithCtx(ctx, {
         allowedRoles: ["full_admin", "pos_only"],
         failureMessage: "You do not have access to sync this POS terminal.",
         organizationId: store.organizationId,
         userId: athenaUser._id,
       });
-      const terminal = await ctx.db.get("posTerminal", args.terminalId);
-      const submittedSyncSecretHash = await hashPosTerminalSyncSecret(
-        args.syncSecretHash,
-      );
-      if (
-        !terminal ||
-        terminal.storeId !== args.storeId ||
-        terminal.status !== "active" ||
-        terminal.registeredByUserId !== athenaUser._id ||
-        !terminal.syncSecretHash ||
-        terminal.syncSecretHash !== submittedSyncSecretHash
-      ) {
-        throw new Error("Terminal is not bound to the signed-in user.");
-      }
     } catch {
       return userError({
         code: "authorization_failed",
         message: "You do not have access to sync this POS terminal.",
       });
     }
+    const terminal = await ctx.db.get("posTerminal", args.terminalId);
+    const submittedSyncSecretHash = await hashPosTerminalSyncSecret(
+      args.syncSecretHash,
+    );
+    if (
+      !terminal ||
+      terminal.storeId !== args.storeId ||
+      terminal.status !== "active" ||
+      terminal.registeredByUserId !== athenaUser._id ||
+      !terminal.syncSecretHash ||
+      terminal.syncSecretHash !== submittedSyncSecretHash
+    ) {
+      return userError({
+        code: "authorization_failed",
+        message: "You do not have access to sync this POS terminal.",
+        metadata: { terminalAuthorizationFailure: true },
+      });
+    }
 
     return ingestLocalEventsWithCtx(ctx, {
       ...args,
-      submittedByUserId,
+      submittedByUserId: athenaUser._id,
       submittedAt: args.submittedAt ?? Date.now(),
     });
   },

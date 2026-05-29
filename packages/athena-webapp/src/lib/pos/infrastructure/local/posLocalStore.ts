@@ -8,7 +8,7 @@ import type {
   PosServiceCatalogRowDto,
 } from "@/lib/pos/application/dto";
 
-export const POS_LOCAL_STORE_SCHEMA_VERSION = 6;
+export const POS_LOCAL_STORE_SCHEMA_VERSION = 7;
 
 export type PosLocalEntityKind =
   | "registerSession"
@@ -88,6 +88,51 @@ export interface PosLocalCloudMapping {
   mappedAt: number;
 }
 
+export type PosTerminalIntegrityStatus =
+  | "healthy"
+  | "repairing"
+  | "requires_reprovision"
+  | "reset_required";
+
+export type PosTerminalIntegrityReason =
+  | "authorization_failed"
+  | "repair_rejected"
+  | "seed_write_failed"
+  | "terminal_revoked"
+  | "ownership_conflict"
+  | "store_access_missing"
+  | "unknown";
+
+export interface PosTerminalIntegrityState {
+  cloudTerminalId?: string;
+  message?: string;
+  observedAt: number;
+  reason?: PosTerminalIntegrityReason;
+  registerNumber?: string;
+  status: PosTerminalIntegrityStatus;
+  storeId: string;
+  terminalId: string;
+}
+
+export type PosDrawerAuthorityStatus = "healthy" | "blocked";
+
+export type PosDrawerAuthorityBlockReason =
+  | "cloud_closed"
+  | "lifecycle_rejected"
+  | "authority_unknown";
+
+export interface PosDrawerAuthorityState {
+  cloudRegisterSessionId?: string;
+  localRegisterSessionId: string;
+  message?: string;
+  observedAt: number;
+  reason?: PosDrawerAuthorityBlockReason;
+  registerNumber?: string;
+  status: PosDrawerAuthorityStatus;
+  storeId: string;
+  terminalId: string;
+}
+
 export type PosLocalStoreDayReadinessStatus =
   | "started"
   | "not_started"
@@ -163,6 +208,7 @@ export type PosLocalStoreResult<T> =
     };
 
 export type PosLocalObjectStoreName =
+  | "authority"
   | "meta"
   | "terminalSeed"
   | "events"
@@ -219,6 +265,8 @@ const META_SCHEMA_VERSION_KEY = "schemaVersion";
 const META_SEQUENCE_KEY = "sequence";
 const META_UPLOAD_SEQUENCE_PREFIX = "uploadSequence:";
 const TERMINAL_SEED_KEY = "current";
+const TERMINAL_INTEGRITY_PREFIX = "terminalIntegrity:";
+const DRAWER_AUTHORITY_PREFIX = "drawerAuthority:";
 
 class PosLocalStoreSchemaError extends Error {
   readonly code = "unsupported_schema_version" as const;
@@ -380,6 +428,41 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       }
     },
 
+    async writeProvisionedTerminalSeedAndClearTerminalIntegrity(input: {
+      seed: PosProvisionedTerminalSeed;
+      terminalIntegrity: { storeId: string; terminalId: string };
+    }): Promise<PosLocalStoreResult<PosProvisionedTerminalSeed>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readwrite",
+          ["meta", "terminalSeed", "authority"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            const states = await transaction.getAll<unknown>("authority");
+            for (const state of states) {
+              if (
+                isTerminalIntegrityState(state) &&
+                state.storeId === input.terminalIntegrity.storeId &&
+                (state.terminalId === input.terminalIntegrity.terminalId ||
+                  state.cloudTerminalId === input.terminalIntegrity.terminalId)
+              ) {
+                await transaction.delete(
+                  "authority",
+                  terminalIntegrityKey(state.storeId, state.terminalId),
+                );
+              }
+            }
+            await transaction.put("terminalSeed", TERMINAL_SEED_KEY, input.seed);
+            return input.seed;
+          },
+        );
+
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
     async readProvisionedTerminalSeed(): Promise<
       PosLocalStoreResult<PosProvisionedTerminalSeed | null>
     > {
@@ -399,6 +482,186 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
         );
 
         return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async writeTerminalIntegrityState(
+      state: PosTerminalIntegrityState,
+    ): Promise<PosLocalStoreResult<PosTerminalIntegrityState>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readwrite",
+          ["meta", "authority"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            const normalized = normalizeTerminalIntegrityState(state);
+            await transaction.put(
+              "authority",
+              terminalIntegrityKey(normalized.storeId, normalized.terminalId),
+              normalized,
+            );
+            return normalized;
+          },
+        );
+
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async readTerminalIntegrityState(input: {
+      storeId: string;
+      terminalId: string;
+    }): Promise<PosLocalStoreResult<PosTerminalIntegrityState | null>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readonly",
+          ["meta", "authority"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readonly");
+            const states = await transaction.getAll<unknown>("authority");
+            return (
+              states
+                .filter(isTerminalIntegrityState)
+                .filter(
+                  (state) =>
+                    state.storeId === input.storeId &&
+                    (state.terminalId === input.terminalId ||
+                      state.cloudTerminalId === input.terminalId),
+                )
+                .sort((left, right) => right.observedAt - left.observedAt)
+                .at(0) ?? null
+            );
+          },
+        );
+
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async clearTerminalIntegrityState(input: {
+      storeId: string;
+      terminalId: string;
+    }): Promise<PosLocalStoreResult<null>> {
+      try {
+        await options.adapter.transaction(
+          "readwrite",
+          ["meta", "authority"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            const states = await transaction.getAll<unknown>("authority");
+            for (const state of states) {
+              if (
+                isTerminalIntegrityState(state) &&
+                state.storeId === input.storeId &&
+                (state.terminalId === input.terminalId ||
+                  state.cloudTerminalId === input.terminalId)
+              ) {
+                await transaction.delete(
+                  "authority",
+                  terminalIntegrityKey(state.storeId, state.terminalId),
+                );
+              }
+            }
+          },
+        );
+
+        return { ok: true, value: null };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async writeDrawerAuthorityState(
+      state: PosDrawerAuthorityState,
+    ): Promise<PosLocalStoreResult<PosDrawerAuthorityState>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readwrite",
+          ["meta", "authority"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            const normalized = normalizeDrawerAuthorityState(state);
+            await transaction.put(
+              "authority",
+              drawerAuthorityKey(normalized),
+              normalized,
+            );
+            return normalized;
+          },
+        );
+
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async readDrawerAuthorityState(input: {
+      localRegisterSessionId: string;
+      storeId: string;
+      terminalId: string;
+    }): Promise<PosLocalStoreResult<PosDrawerAuthorityState | null>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readonly",
+          ["meta", "authority"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readonly");
+            const states = await transaction.getAll<unknown>("authority");
+            return (
+              states
+                .filter(isDrawerAuthorityState)
+                .filter(
+                  (state) =>
+                    state.storeId === input.storeId &&
+                    state.terminalId === input.terminalId &&
+                    state.localRegisterSessionId ===
+                      input.localRegisterSessionId,
+                )
+                .sort((left, right) => right.observedAt - left.observedAt)
+                .at(0) ?? null
+            );
+          },
+        );
+
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async clearDrawerAuthorityState(input: {
+      localRegisterSessionId: string;
+      storeId: string;
+      terminalId: string;
+    }): Promise<PosLocalStoreResult<null>> {
+      try {
+        await options.adapter.transaction(
+          "readwrite",
+          ["meta", "authority"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            const states = await transaction.getAll<unknown>("authority");
+            for (const state of states) {
+              if (
+                isDrawerAuthorityState(state) &&
+                state.storeId === input.storeId &&
+                state.terminalId === input.terminalId &&
+                state.localRegisterSessionId === input.localRegisterSessionId
+              ) {
+                await transaction.delete("authority", drawerAuthorityKey(state));
+              }
+            }
+          },
+        );
+
+        return { ok: true, value: null };
       } catch (error) {
         return toFailure(error);
       }
@@ -1018,6 +1281,18 @@ function mappingKey(entity: PosLocalEntityKind, localId: string) {
   return `${entity}:${localId}`;
 }
 
+function terminalIntegrityKey(storeId: string, terminalId: string) {
+  return `${TERMINAL_INTEGRITY_PREFIX}${storeId}:${terminalId}`;
+}
+
+function drawerAuthorityKey(input: {
+  storeId: string;
+  terminalId: string;
+  localRegisterSessionId: string;
+}) {
+  return `${DRAWER_AUTHORITY_PREFIX}${input.storeId}:${input.terminalId}:${input.localRegisterSessionId}`;
+}
+
 function readinessKey(storeId: string, operatingDate: string) {
   return `${storeId}:${operatingDate}`;
 }
@@ -1070,6 +1345,87 @@ function preserveWrappedStaffProof(
   };
 }
 
+function normalizeTerminalIntegrityState(
+  state: PosTerminalIntegrityState,
+): PosTerminalIntegrityState {
+  return {
+    ...state,
+    ...(state.message
+      ? { message: toSafeAuthorityMessage(state.message, state.reason) }
+      : state.reason === "authorization_failed"
+        ? { message: "Terminal authorization failed. Repair terminal setup." }
+        : {}),
+  };
+}
+
+function normalizeDrawerAuthorityState(
+  state: PosDrawerAuthorityState,
+): PosDrawerAuthorityState {
+  return {
+    ...state,
+    ...(state.message
+      ? { message: toSafeAuthorityMessage(state.message) }
+      : state.reason === "cloud_closed"
+        ? { message: "Drawer setup changed. Open a current drawer before selling." }
+        : state.reason === "lifecycle_rejected"
+          ? { message: "Drawer sync needs review before selling can continue." }
+          : {}),
+  };
+}
+
+function toSafeAuthorityMessage(
+  message: string,
+  reason?: PosTerminalIntegrityReason,
+) {
+  if (reason === "authorization_failed") {
+    return "Terminal authorization failed. Repair terminal setup.";
+  }
+
+  const collapsed = message.replace(/\s+/g, " ").trim();
+  if (!collapsed) return undefined;
+
+  return collapsed
+    .replace(
+      /\b(staffProofToken|syncSecretHash|syncSecret|staff proof|sync secret|verifier|credential|credentials|token)\b(?:\s+[^.,;]*)?/gi,
+      (match) => `${match.split(/\s+/)[0]} [redacted]`,
+    )
+    .replace(/[A-Za-z0-9_-]{24,}/g, "[redacted]")
+    .slice(0, 240);
+}
+
+function isTerminalIntegrityState(
+  value: unknown,
+): value is PosTerminalIntegrityState {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.observedAt === "number" &&
+    typeof record.status === "string" &&
+    (record.status === "healthy" ||
+      record.status === "repairing" ||
+      record.status === "requires_reprovision" ||
+      record.status === "reset_required") &&
+    typeof record.storeId === "string" &&
+    typeof record.terminalId === "string" &&
+    (record.cloudTerminalId === undefined ||
+      typeof record.cloudTerminalId === "string")
+  );
+}
+
+function isDrawerAuthorityState(
+  value: unknown,
+): value is PosDrawerAuthorityState {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.localRegisterSessionId === "string" &&
+    typeof record.observedAt === "number" &&
+    (record.status === "healthy" || record.status === "blocked") &&
+    typeof record.storeId === "string" &&
+    typeof record.terminalId === "string"
+  );
+}
+
 function isStaffAuthorityRecord(
   value: unknown,
 ): value is PosLocalStaffAuthorityRecord {
@@ -1119,6 +1475,7 @@ export function createIndexedDbPosLocalStorageAdapter(options?: {
       request.onupgradeneeded = () => {
         const database = request.result;
         for (const storeName of [
+          "authority",
           "meta",
           "terminalSeed",
           "events",
@@ -1286,6 +1643,7 @@ type MemoryStore = Record<PosLocalObjectStoreName, Map<string, unknown>>;
 
 function createEmptyMemoryStore(): MemoryStore {
   return {
+    authority: new Map(),
     meta: new Map(),
     terminalSeed: new Map(),
     events: new Map(),
@@ -1300,6 +1658,7 @@ function createEmptyMemoryStore(): MemoryStore {
 
 function cloneMemoryStore(store: MemoryStore): MemoryStore {
   return {
+    authority: new Map(store.authority),
     meta: new Map(store.meta),
     terminalSeed: new Map(store.terminalSeed),
     events: new Map(store.events),
