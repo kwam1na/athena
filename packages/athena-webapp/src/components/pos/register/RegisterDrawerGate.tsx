@@ -1,5 +1,10 @@
 import type { FormEvent } from "react";
-import { ArrowRightIcon, Clock3Icon, LogOutIcon } from "lucide-react";
+import {
+  ArrowRightIcon,
+  Clock3Icon,
+  LogOutIcon,
+  RefreshCwIcon,
+} from "lucide-react";
 import { Link } from "@tanstack/react-router";
 
 import { Button } from "@/components/ui/button";
@@ -121,6 +126,16 @@ export function RegisterDrawerGate({
             </p>
           </div>
           <div className="flex flex-wrap gap-2 pt-2">
+            {!isTerminalRepair && drawerGate.onRetrySync ? (
+              <Button
+                type="button"
+                variant="default"
+                onClick={drawerGate.onRetrySync}
+              >
+                <RefreshCwIcon className="mr-2 h-4 w-4" />
+                Retry sync
+              </Button>
+            ) : null}
             <Button type="button" variant="outline" onClick={drawerGate.onSignOut}>
               <LogOutIcon className="mr-2 h-4 w-4" />
               Sign out

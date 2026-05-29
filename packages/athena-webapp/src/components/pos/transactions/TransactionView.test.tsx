@@ -343,13 +343,21 @@ vi.mock("../OrderSummary", () => ({
 vi.mock("../CartItems", () => ({
   CartItems: ({
     cartItems,
+    serviceItems = [],
   }: {
     cartItems: Array<{ name: string; price: number; quantity: number }>;
+    serviceItems?: Array<{ name: string; price: number; quantity: number }>;
   }) => (
     <div data-testid="cart-items">
       {cartItems.map((item) => (
         <span key={item.name}>
           {item.name} qty {item.quantity} total {item.price * item.quantity}
+        </span>
+      ))}
+      {serviceItems.map((item) => (
+        <span key={`service-${item.name}`}>
+          {item.name} service qty {item.quantity} total{" "}
+          {item.price * item.quantity}
         </span>
       ))}
     </div>
@@ -598,6 +606,47 @@ describe("TransactionView", () => {
     expect(screen.getByText("Customer")).toBeInTheDocument();
     expect(screen.getByText("Ama Mensah")).toBeInTheDocument();
     expect(screen.getByText("ama@example.com • 0240000000")).toBeInTheDocument();
+  });
+
+  it("renders service lines in the main transaction items list", () => {
+    useParamsMock.mockReturnValue({ transactionId: "txn_service_items" });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      _id: "txn_service_items",
+      items: [
+        {
+          _id: "item_1",
+          productId: "product_1",
+          productName: "Bacca",
+          productSku: "6N2Y-D3-4RC",
+          productSkuId: "sku_1",
+          quantity: 1,
+          totalPrice: 150,
+          unitPrice: 150,
+        },
+      ],
+      serviceLines: [
+        {
+          id: "service_line_1",
+          name: "tokin",
+          quantity: 2,
+          serviceMode: "revamp",
+          servicePaymentStatus: "paid",
+          totalPrice: 800,
+          unitPrice: 400,
+        },
+      ],
+    });
+
+    render(<TransactionView />);
+
+    expect(screen.getByTestId("cart-items")).toHaveTextContent(
+      "Bacca qty 1 total 150",
+    );
+    expect(screen.getByTestId("cart-items")).toHaveTextContent(
+      "tokin service qty 2 total 800",
+    );
+    expect(screen.queryByText("Service lines")).not.toBeInTheDocument();
   });
 
   it("renders fallback customer info without an email and phone separator", () => {

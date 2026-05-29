@@ -136,6 +136,7 @@ export interface PosLocalRegisterReadModel {
   activeRegisterSession: PosLocalCashDrawerReadModel | null;
   activeSale: PosLocalActiveSaleReadModel | null;
   canSell: boolean;
+  drawerAuthorityReason?: PosDrawerAuthorityState["reason"];
   saleBlockReason?: PosLocalSaleBlockReason;
   clearedSaleIds: string[];
   closeoutState: PosLocalCloseoutState;
@@ -427,6 +428,9 @@ export function projectLocalRegisterReadModel(input: {
     activeRegisterSession,
     activeSale,
     canSell,
+    ...(input.drawerAuthority?.status === "blocked"
+      ? { drawerAuthorityReason: input.drawerAuthority.reason }
+      : {}),
     ...(saleBlockReason ? { saleBlockReason } : {}),
     clearedSaleIds: [...clearedSaleIds],
     closeoutState,

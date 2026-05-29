@@ -29,6 +29,7 @@ import type { ReceiptDeliveryHistoryEntry } from "../receipt/PosReceiptShareCont
 import { CartItems } from "../CartItems";
 import type { CartItem, PosServiceReceiptLine } from "../types";
 import type { Id } from "~/convex/_generated/dataModel";
+import type { RegisterServiceLineState } from "~/src/lib/pos/presentation/register/registerUiState";
 import { CardContent, CardHeader } from "../../ui/card";
 import { WorkflowTraceRouteLink } from "../../traces/WorkflowTraceRouteLink";
 import { Button } from "../../ui/button";
@@ -123,6 +124,41 @@ const PAYMENT_METHOD_OPTIONS = [
 const ghsCurrencyFormatter = currencyFormatter("GHS");
 const REGISTER_EXPECTED_CASH_ERROR =
   "Register session expected cash cannot be negative.";
+
+function normalizeReceiptServiceMode(
+  value: PosServiceReceiptLine["serviceMode"],
+): RegisterServiceLineState["serviceMode"] {
+  if (
+    value === "consultation" ||
+    value === "repair" ||
+    value === "revamp" ||
+    value === "same_day"
+  ) {
+    return value;
+  }
+
+  return "same_day";
+}
+
+function receiptServiceLineToCartServiceLine(
+  line: PosServiceReceiptLine,
+): RegisterServiceLineState {
+  const quantity = line.quantity && line.quantity > 0 ? line.quantity : 1;
+  const unitPrice =
+    line.unitPrice && line.unitPrice > 0
+      ? line.unitPrice
+      : Math.round(line.totalPrice / quantity);
+
+  return {
+    id: line.id,
+    name: line.name,
+    serviceMode: normalizeReceiptServiceMode(line.serviceMode),
+    pricingModel: "fixed",
+    price: unitPrice,
+    quantity,
+    amountRequired: false,
+  };
+}
 
 function isAdjustedLineItem(line: {
   adjustedQuantity?: number;
@@ -563,10 +599,18 @@ export function TransactionView() {
   const displayCartItems = hasAppliedItemAdjustment
     ? adjustedCartItems
     : cartItems;
-  const serviceLines = (
-    ((transaction as { serviceLines?: PosServiceReceiptLine[] } | null)
-      ?.serviceLines ?? []) as PosServiceReceiptLine[]
-  ).filter((line) => line.totalPrice > 0 || line.serviceCaseUnavailable);
+  const serviceLines = useMemo(
+    () =>
+      (
+        ((transaction as { serviceLines?: PosServiceReceiptLine[] } | null)
+          ?.serviceLines ?? []) as PosServiceReceiptLine[]
+      ).filter((line) => line.totalPrice > 0 || line.serviceCaseUnavailable),
+    [transaction],
+  );
+  const displayServiceItems = useMemo(
+    () => serviceLines.map(receiptServiceLineToCartServiceLine),
+    [serviceLines],
+  );
   const effectiveSaleTotal =
     transaction?.adjustmentSummary?.effectiveNetTotal ??
     transaction?.effectiveNetTotal ??
@@ -2331,56 +2375,6 @@ export function TransactionView() {
                 </section>
               ) : null}
 
-              {serviceLines.length > 0 ? (
-                <section className="space-y-4 overflow-hidden rounded-[calc(var(--radius)*1.35)] border border-border/80 bg-surface-raised p-5 shadow-surface">
-                  <div className="space-y-1">
-                    <h2 className="font-display text-xl font-semibold text-foreground">
-                      Service lines
-                    </h2>
-                    <p className="text-sm text-muted-foreground">
-                      POS-collected service payments are linked to service cases
-                      while retail product lines stay on the sale.
-                    </p>
-                  </div>
-                  <div className="divide-y divide-border/70 rounded-lg border border-border bg-background">
-                    {serviceLines.map((line) => (
-                      <div
-                        className="grid gap-2 px-4 py-3"
-                        key={`${line.id}-${line.serviceCaseId ?? "service"}`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-foreground">
-                              {line.name}
-                            </p>
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {line.serviceCaseUnavailable
-                                ? "Service case unavailable"
-                                : [
-                                    line.serviceCaseTitle,
-                                    line.serviceStatus?.replaceAll("_", " "),
-                                    line.servicePaymentStatus?.replaceAll(
-                                      "_",
-                                      " ",
-                                    ),
-                                  ]
-                                    .filter(Boolean)
-                                    .join(" • ")}
-                            </p>
-                          </div>
-                          <p className="shrink-0 font-medium text-foreground">
-                            {formatStoredAmount(
-                              ghsCurrencyFormatter,
-                              line.totalPrice,
-                            )}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
               <OrderSummary
                 cartItems={displayCartItems}
                 readOnly
@@ -2429,6 +2423,7 @@ export function TransactionView() {
 
             <CartItems
               cartItems={displayCartItems}
+              serviceItems={displayServiceItems}
               readOnly
               className="h-full min-h-0"
             />

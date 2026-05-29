@@ -518,12 +518,16 @@ function RegisterSessionSyncNotice({
   errorMessage,
   isResolving,
   onReviewDecision,
+  orgUrlSlug,
+  storeUrlSlug,
   syncStatus,
 }: {
   currency: string;
   errorMessage?: string;
   isResolving?: boolean;
   onReviewDecision?: (decision: "approved" | "rejected") => void;
+  orgUrlSlug?: string;
+  storeUrlSlug?: string;
   syncStatus: PosSyncStatusPresentation;
 }) {
   if (syncStatus.status === "synced") {
@@ -531,6 +535,10 @@ function RegisterSessionSyncNotice({
   }
 
   const reconciliationItems = syncStatus.reconciliationItems;
+  const hasOnlyRejectedReviewItems =
+    syncStatus.status === "needs_review" &&
+    reconciliationItems.length > 0 &&
+    reconciliationItems.every((item) => item.status === "rejected");
   const hasClosedRegisterSyncedCloseout = reconciliationItems.some(
     isClosedRegisterSyncedCloseoutReviewItem,
   );
@@ -539,6 +547,8 @@ function RegisterSessionSyncNotice({
   );
   const noticeLabel = hasClosedRegisterSyncedCloseout
     ? "Synced closeout cannot be applied"
+    : hasOnlyRejectedReviewItems
+      ? "Synced activity rejected"
     : syncStatus.status === "locally_closed_pending_sync"
       ? "Pending reconciliation"
       : hasCloseoutReview
@@ -546,6 +556,8 @@ function RegisterSessionSyncNotice({
         : syncStatus.label;
   const noticeDescription = hasClosedRegisterSyncedCloseout
     ? "This register is already closed. Reject the duplicate synced activity to clear the review."
+    : hasOnlyRejectedReviewItems
+      ? "Server-rejected sync activity is recorded for this register session. Retry pending sync in POS to settle the local queue."
     : syncStatus.description;
   const approveLabel = hasCloseoutReview
     ? "Approve synced closeout"
@@ -667,7 +679,28 @@ function RegisterSessionSyncNotice({
           ) : null}
         </div>
         <div className="flex flex-wrap items-center justify-end gap-layout-sm">
-          {syncStatus.status === "needs_review" && onReviewDecision ? (
+          {syncStatus.status === "needs_review" &&
+          hasOnlyRejectedReviewItems &&
+          orgUrlSlug &&
+          storeUrlSlug ? (
+            <Button
+              asChild
+              className="border-border bg-background text-foreground hover:bg-muted"
+              size="sm"
+              variant="outline"
+            >
+              <Link
+                params={{ orgUrlSlug, storeUrlSlug }}
+                search={{ o: getOrigin() }}
+                to="/$orgUrlSlug/store/$storeUrlSlug/pos/register"
+              >
+                Open POS sync
+              </Link>
+            </Button>
+          ) : null}
+          {syncStatus.status === "needs_review" &&
+          !hasOnlyRejectedReviewItems &&
+          onReviewDecision ? (
             <>
               {canApproveSyncReview ? (
                 <LoadingButton
@@ -1970,6 +2003,8 @@ export function RegisterSessionViewContent({
               onReviewDecision={
                 canResolveSyncReview ? requestResolveSyncReview : undefined
               }
+              orgUrlSlug={orgUrlSlug}
+              storeUrlSlug={storeUrlSlug}
               syncStatus={syncStatus}
             />
           ) : null}

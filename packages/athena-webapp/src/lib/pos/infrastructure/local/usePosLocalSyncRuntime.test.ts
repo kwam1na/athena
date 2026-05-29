@@ -26,9 +26,11 @@ vi.mock("~/convex/_generated/api", () => ({
 
 import {
   assertPosLocalStoreOk,
+  collectLocallySettledSkippedReviewEventIds,
   collectSyncedLocalEventIds,
   collectServerHeldLocalEventIds,
   collectServerReviewLocalEventIds,
+  collectServerSettledLocalEventIds,
   collectServerSyncedLocalEventIds,
   derivePosLocalRuntimeSyncStatus,
   getRuntimeStatusSignature,
@@ -36,6 +38,7 @@ import {
   writeReturnedLocalCloudMappings,
 } from "./usePosLocalSyncRuntime";
 import type { PosLocalEventRecord } from "./posLocalStore";
+import { buildPosLocalSyncUploadEvents } from "./syncContract";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -884,6 +887,47 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     expect(store.markEventsNeedsReview).not.toHaveBeenCalled();
   });
 
+  it("identifies superseded review rows that are skipped when retrying the later sale", () => {
+    const events = [
+      buildLocalEvent({
+        localEventId: "event-clear",
+        localPosSessionId: "local-session-1",
+        payload: {
+          localPosSessionId: "local-session-1",
+          stage: "cartCleared",
+        },
+        sequence: 1,
+        sync: { status: "needs_review", uploaded: true },
+        type: "cart.cleared",
+      }),
+      buildLocalEvent({
+        localEventId: "event-checkout",
+        localPosSessionId: "local-session-1",
+        localTransactionId: "local-txn-1",
+        payload: {
+          localPosSessionId: "local-session-1",
+          localTransactionId: "local-txn-1",
+          receiptNumber: "LOCAL-1-000001",
+          subtotal: 25,
+          tax: 0,
+          total: 25,
+          payments: [{ method: "cash", amount: 25, timestamp: 2 }],
+        },
+        sequence: 2,
+        sync: { status: "needs_review", uploaded: true },
+        type: "transaction.completed",
+      }),
+    ];
+    const uploadEvents = buildPosLocalSyncUploadEvents(events, events);
+
+    expect(uploadEvents.map((event) => event.localEventId)).toEqual([
+      "event-checkout",
+    ]);
+    expect(
+      collectLocallySettledSkippedReviewEventIds(events, uploadEvents),
+    ).toEqual(["event-clear"]);
+  });
+
   it("marks uploaded events for review when the server rejects the batch", async () => {
     mocks.ingestLocalEvents.mockResolvedValue({
       kind: "user_error",
@@ -968,7 +1012,9 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       }),
     );
 
-    await waitFor(() => expect(mocks.ingestLocalEvents).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.ingestLocalEvents).toHaveBeenCalled(), {
+      timeout: 5000,
+    });
     await waitFor(() =>
       expect(store.markEventsNeedsReview).toHaveBeenCalledWith(
         ["event-checkout", "event-session", "event-cart"],
@@ -1484,6 +1530,72 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     });
   });
 
+  it("clears stale recoverable drawer blocks when lifecycle events are already settled", async () => {
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [
+          buildLocalEvent({
+            localEventId: "event-open",
+            localRegisterSessionId: "register-1",
+            sequence: 1,
+            sync: { status: "synced" },
+            type: "register.opened",
+          }),
+          buildLocalEvent({
+            localEventId: "event-closeout",
+            localRegisterSessionId: "register-1",
+            sequence: 2,
+            sync: { status: "synced", uploaded: true },
+            type: "register.closeout_started",
+          }),
+        ],
+      })),
+      clearDrawerAuthorityState: vi.fn(async () => ({
+        ok: true,
+        value: null,
+      })),
+      readDrawerAuthorityState: vi.fn(async () => ({
+        ok: true,
+        value: {
+          localRegisterSessionId: "register-1",
+          observedAt: 1,
+          reason: "lifecycle_rejected",
+          status: "blocked",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(store.clearDrawerAuthorityState).toHaveBeenCalledWith({
+        localRegisterSessionId: "register-1",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      }),
+    );
+  });
+
   it("keeps drawer authority blocked when a same-drawer review event remains", async () => {
     mocks.ingestLocalEvents.mockResolvedValue({
       kind: "ok",
@@ -1497,7 +1609,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
           {
             localEventId: "event-closeout",
             sequence: 2,
-            status: "rejected",
+            status: "conflicted",
           },
         ],
         held: [],
@@ -2543,7 +2655,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       .toEqual([1, 2]);
   });
 
-  it("marks server-conflicted accepted events for local review instead of sync retry", () => {
+  it("keeps server-conflicted events in review and settles server-rejected events locally", () => {
     expect(
       collectServerSyncedLocalEventIds([
         { localEventId: "event-checkout", status: "conflicted" },
@@ -2559,7 +2671,15 @@ describe("usePosLocalSyncRuntimeStatus", () => {
         { localEventId: "event-held", status: "held" },
         { localEventId: "event-rejected", status: "rejected" },
       ]),
-    ).toEqual(["event-checkout", "event-rejected"]);
+    ).toEqual(["event-checkout"]);
+    expect(
+      collectServerSettledLocalEventIds([
+        { localEventId: "event-checkout", status: "conflicted" },
+        { localEventId: "event-open", status: "projected" },
+        { localEventId: "event-held", status: "held" },
+        { localEventId: "event-rejected", status: "rejected" },
+      ]),
+    ).toEqual(["event-open", "event-rejected"]);
     expect(
       collectServerHeldLocalEventIds([
         { localEventId: "event-held" },
@@ -2608,7 +2728,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     );
   });
 
-  it("marks rejected runtime sale responses and embedded local events for review", async () => {
+  it("marks rejected runtime sale responses and embedded local events as settled", async () => {
     mocks.ingestLocalEvents.mockResolvedValue({
       kind: "ok",
       data: {
@@ -2727,13 +2847,12 @@ describe("usePosLocalSyncRuntimeStatus", () => {
 
     await waitFor(() => expect(mocks.ingestLocalEvents).toHaveBeenCalled());
     await waitFor(() =>
-      expect(store.markEventsNeedsReview).toHaveBeenCalledWith(
+      expect(store.markEventsSynced).toHaveBeenCalledWith(
         ["event-checkout", "event-session", "event-cart", "event-payment"],
-        "Cloud sync needs review before this local event can finish.",
         { uploaded: true },
       ),
     );
-    expect(store.markEventsSynced).not.toHaveBeenCalled();
+    expect(store.markEventsNeedsReview).not.toHaveBeenCalled();
   });
 
   it("presents unsynced closeout events as locally closed pending sync", () => {

@@ -253,6 +253,7 @@ function stripRuntimeStatusInput(
       failedEventCount: status.sync.failedEventCount,
       reviewEventCount: status.sync.reviewEventCount,
       localOnlyEventCount: status.sync.localOnlyEventCount,
+      reviewEvents: status.sync.reviewEvents,
       oldestPendingEventAt: status.sync.oldestPendingEventAt,
       nextPendingUploadSequence: status.sync.nextPendingUploadSequence,
       lastSyncedSequence: status.sync.lastSyncedSequence,

@@ -52,12 +52,12 @@ vi.mock("@tanstack/react-router", () => ({
             orgUrlSlug: "$orgUrlSlug",
             sessionId: "$sessionId",
             storeUrlSlug: "$storeUrlSlug",
+            terminalId: "$terminalId",
           })
         : params;
-    const href = to.replace(
-      "$sessionId",
-      resolvedParams?.sessionId ?? "$sessionId",
-    );
+    const href = to
+      .replace("$sessionId", resolvedParams?.sessionId ?? "$sessionId")
+      .replace("$terminalId", resolvedParams?.terminalId ?? "$terminalId");
     const query = search ? `?${new URLSearchParams(search)}` : "";
 
     return <a href={`${href}${query}`}>{children}</a>;
@@ -106,6 +106,7 @@ vi.mock("@/components/pos/ProductEntry", async () => {
       (
         {
           onAddProduct,
+          serviceEntry,
         }: {
           onAddProduct?: (product: {
             id: string;
@@ -114,6 +115,17 @@ vi.mock("@/components/pos/ProductEntry", async () => {
             productId: string;
             skuId: string;
           }) => boolean | Promise<boolean>;
+          serviceEntry?: {
+            onAddService?: (
+              service: {
+                id: string;
+                name: string;
+                serviceMode: "repair";
+                pricingModel: "fixed";
+              },
+              amount?: number,
+            ) => boolean | Promise<boolean>;
+          };
         },
         ref,
       ) => {
@@ -139,6 +151,21 @@ vi.mock("@/components/pos/ProductEntry", async () => {
                 }
               >
                 mock-add-product
+              </button>
+            ) : null}
+            {serviceEntry?.onAddService ? (
+              <button
+                type="button"
+                onClick={() =>
+                  void serviceEntry.onAddService?.({
+                    id: "service-1",
+                    name: "Repair",
+                    serviceMode: "repair",
+                    pricingModel: "fixed",
+                  })
+                }
+              >
+                mock-add-service
               </button>
             ) : null}
           </div>
@@ -343,6 +370,77 @@ describe("POSRegisterView", () => {
     expect(screen.queryByText("cashier-auth-dialog")).not.toBeInTheDocument();
   });
 
+  it("returns focus to the header product search after adding a service", async () => {
+    const onAddService = vi.fn(async () => true);
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: true,
+      },
+      registerInfo: {
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: false,
+        productSearchQuery: "repair",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+        onAddProduct: vi.fn(async () => true),
+        searchResults: [],
+        isSearchLoading: false,
+        isSearchReady: true,
+        canQuickAddProduct: false,
+      },
+      serviceEntry: {
+        disabled: false,
+        serviceSearchQuery: "repair",
+        setServiceSearchQuery: vi.fn(),
+        searchResults: [],
+        isSearchLoading: false,
+        isSearchReady: true,
+        items: [],
+        onAddService,
+        onUpdateServiceAmount: vi.fn(),
+        onRemoveService: vi.fn(),
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: {},
+      cashierCard: {
+        cashierName: "Ato K.",
+        onSignOut: vi.fn(),
+      },
+      closeoutControl: null,
+      authDialog: {
+        open: false,
+      },
+      drawerGate: null,
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    const searchInput = screen.getByLabelText("product search input");
+    searchInput.blur();
+    expect(searchInput).not.toHaveFocus();
+
+    await userEvent.click(screen.getByRole("button", { name: "mock-add-service" }));
+
+    await waitFor(() => expect(searchInput).toHaveFocus());
+    expect(onAddService).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "service-1" }),
+      undefined,
+    );
+  });
+
   it("renders local-only register context with debug state instead of the blank shell", async () => {
     mockUseRegisterViewModel.mockReturnValue({
       hasActiveStore: true,
@@ -518,9 +616,15 @@ describe("POSRegisterView", () => {
     expect(screen.getByText("next sync step")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Use pending sync retry to settle uploaded review events; resolve any remaining server review, then retry again.",
+        "Use pending sync retry to settle uploaded review events; if the count stays put, open terminal health to review server conflicts.",
       ),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /open terminal health/i }),
+    ).toHaveAttribute(
+      "href",
+      expect.stringContaining("/pos/terminals/terminal-1"),
+    );
     expect(screen.getByText("runtime mode")).toBeInTheDocument();
     expect(screen.getByText("Status only")).toBeInTheDocument();
     expect(screen.getByText("check-in publish")).toBeInTheDocument();
@@ -844,6 +948,9 @@ describe("POSRegisterView", () => {
     );
 
     expect(screen.getByText("Ready for product lookup")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /add service/i }),
+    ).not.toBeInTheDocument();
     expect(setShowProductLookup).toHaveBeenCalledWith(true);
     await waitFor(() => expect(mockOpenQuickAddProduct).toHaveBeenCalled());
   });
@@ -896,6 +1003,9 @@ describe("POSRegisterView", () => {
 
     expect(
       screen.queryByRole("button", { name: /quick add product/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /add service/i }),
     ).not.toBeInTheDocument();
   });
 

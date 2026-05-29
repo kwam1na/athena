@@ -73,6 +73,7 @@ type CompletedTransaction = {
   cashierName: string | null;
   customerName: string | null;
   itemCount: number;
+  serviceLineCount?: number;
   completedAt: number;
   hasTrace: boolean;
   sessionTraceId: string | null;
@@ -166,7 +167,7 @@ export function TransactionsView() {
       hasMultiplePaymentMethods: Boolean(transaction.hasMultiplePaymentMethods),
       cashierName: transaction.cashierName,
       customerName: transaction.customerName,
-      itemCount: transaction.itemCount,
+      itemCount: transaction.itemCount + (transaction.serviceLineCount ?? 0),
       completedAt: transaction.completedAt,
       hasTrace: transaction.hasTrace,
       sessionTraceId: null,

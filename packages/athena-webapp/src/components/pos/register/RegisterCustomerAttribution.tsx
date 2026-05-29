@@ -12,9 +12,7 @@ import {
   Plus,
   Search,
   User,
-  User2,
   UserCheck,
-  UserRound,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -27,6 +25,8 @@ interface RegisterCustomerAttributionProps {
     customer: CustomerInfo | ((currentCustomer: CustomerInfo) => CustomerInfo),
   ) => void;
   disabled?: boolean;
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 const EMPTY_CUSTOMER_INFO: CustomerInfo = {
@@ -90,13 +90,17 @@ export function RegisterCustomerAttribution({
   onCustomerCommitted,
   setCustomerInfo,
   disabled = false,
+  isOpen,
+  onOpenChange,
 }: RegisterCustomerAttributionProps) {
   const { activeStore } = useGetActiveStore();
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [uncontrolledIsExpanded, setUncontrolledIsExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddingCustomer, setIsAddingCustomer] = useState(false);
   const [inlineError, setInlineError] = useState<string | null>(null);
   const addOperationVersionRef = useRef(0);
+  const isExpanded = isOpen ?? uncontrolledIsExpanded;
+  const setIsExpanded = onOpenChange ?? setUncontrolledIsExpanded;
 
   const normalizedCustomer = useMemo(
     () => trimCustomerInfo(customerInfo),
@@ -266,6 +270,7 @@ export function RegisterCustomerAttribution({
               className="h-8 px-3 text-xs"
               disabled={disabled}
               onClick={() => setIsExpanded(true)}
+              variant="workflow-soft"
             >
               <Search className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
               Find or add customer
@@ -352,7 +357,7 @@ export function RegisterCustomerAttribution({
           )}
 
           {trimmedSearchQuery && searchResults.length > 0 && (
-            <div className="mt-2 grid gap-1">
+            <div className="mt-2 grid gap-2">
               {searchResults.map((customer) => {
                 const customerIdentifier = customer.email || customer.phone;
 
@@ -361,7 +366,7 @@ export function RegisterCustomerAttribution({
                     key={customer._id}
                     type="button"
                     className={cn(
-                      "flex min-w-0 items-center justify-between gap-3 rounded-md border border-transparent px-3 py-2 text-left text-sm hover:border-border hover:bg-white focus:outline-none focus:ring-2 focus:ring-ring",
+                      "flex min-h-12 min-w-0 items-center justify-between gap-3 rounded-lg border border-transparent px-3.5 py-3 text-left text-sm hover:border-border hover:bg-white focus:outline-none focus:ring-2 focus:ring-ring",
                       disabled && "opacity-60",
                     )}
                     disabled={disabled}

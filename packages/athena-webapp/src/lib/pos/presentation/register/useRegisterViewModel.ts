@@ -695,13 +695,41 @@ function mapLocalServiceLineToState(
     serviceMode: line.serviceMode,
     pricingModel: line.pricingModel,
     price: line.unitPrice,
-    quantity: 1,
+    quantity: line.quantity,
     amountRequired:
       (line.pricingModel === "starting_at" ||
         line.pricingModel === "quote_after_consultation") &&
       line.unitPrice <= 0,
     catalogUpdatedAt: line.catalogUpdatedAt,
   };
+}
+
+function matchingServiceLineDraft(
+  drafts: RegisterServiceLineState[],
+  service: RegisterServiceSearchResult,
+) {
+  const serviceCatalogId = service.serviceCatalogId?.toString();
+  const normalizedName = service.name.trim().toLowerCase();
+
+  return drafts.find(
+    (line) => {
+      const lineCatalogId = line.serviceCatalogId?.toString();
+
+      if (serviceCatalogId && lineCatalogId) {
+        return serviceCatalogId === lineCatalogId;
+      }
+
+      if (serviceCatalogId || lineCatalogId) {
+        return false;
+      }
+
+      return (
+        line.name.trim().toLowerCase() === normalizedName &&
+        line.serviceMode === service.serviceMode &&
+        line.pricingModel === service.pricingModel
+      );
+    },
+  );
 }
 
 function serviceLineStateToLocalPayload(line: RegisterServiceLineState) {
@@ -1126,10 +1154,13 @@ export function useRegisterViewModel(): RegisterViewModel {
   const [showCustomerPanel, setShowCustomerPanel] = useState(false);
   const [showProductEntry, setShowProductEntry] = useState(true);
   const [productSearchQuery, setProductSearchQuery] = useState("");
-  const [serviceSearchQuery, setServiceSearchQuery] = useState("");
   const [serviceLineDrafts, setServiceLineDrafts] = useState<
     RegisterServiceLineState[]
   >([]);
+  const serviceLineDraftsRef = useRef<RegisterServiceLineState[]>([]);
+  useEffect(() => {
+    serviceLineDraftsRef.current = serviceLineDrafts;
+  }, [serviceLineDrafts]);
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo>(
     EMPTY_REGISTER_CUSTOMER_INFO,
   );
@@ -2075,7 +2106,7 @@ export function useRegisterViewModel(): RegisterViewModel {
           .filter((row) => row.status === undefined || row.status === "active")
           .map(mapServiceCatalogRowToSearchRow),
       );
-      return searchRegisterServiceCatalog(index, serviceSearchQuery, {
+      return searchRegisterServiceCatalog(index, productSearchQuery, {
         limit: 25,
       }).results.map((result) =>
         mapServiceCatalogRowToRegisterSearchResult({
@@ -2096,7 +2127,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         }),
       );
     },
-    [serviceCatalogRows, serviceSearchQuery],
+    [productSearchQuery, serviceCatalogRows],
   );
   const serviceSubtotal = useMemo(
     () =>
@@ -2168,6 +2199,11 @@ export function useRegisterViewModel(): RegisterViewModel {
   );
   const localSaleAuthorityBlockReason =
     localRegisterReadModel?.saleBlockReason ?? null;
+  const localDrawerAuthorityReason =
+    localRegisterReadModel?.drawerAuthorityReason ?? null;
+  const hasRecoverableDrawerAuthorityBlock =
+    localDrawerAuthorityReason === "authority_unknown" ||
+    localDrawerAuthorityReason === "lifecycle_rejected";
   const hasLocalSaleAuthorityBlock = Boolean(localSaleAuthorityBlockReason);
   const requiresDrawerGate = Boolean(
     activeStoreId &&
@@ -2243,7 +2279,8 @@ export function useRegisterViewModel(): RegisterViewModel {
     ? "openingFloatCorrection"
     : localSaleAuthorityBlockReason === "terminal_integrity"
       ? "terminalRepair"
-      : localSaleAuthorityBlockReason === "drawer_authority" ||
+      : (localSaleAuthorityBlockReason === "drawer_authority" &&
+            hasRecoverableDrawerAuthorityBlock) ||
           localSaleAuthorityBlockReason === "lifecycle_needs_review"
         ? "drawerAuthorityRepair"
         : hasCloseoutBlockedDrawerState || activeCloseoutRegisterSession
@@ -2282,7 +2319,6 @@ export function useRegisterViewModel(): RegisterViewModel {
       setShowCustomerPanel(false);
       setShowProductEntry(true);
       setProductSearchQuery("");
-      setServiceSearchQuery("");
       setServiceLineDrafts([]);
       setCustomerInfo(EMPTY_REGISTER_CUSTOMER_INFO);
       setPaymentState([]);
@@ -2594,9 +2630,11 @@ export function useRegisterViewModel(): RegisterViewModel {
       return;
     }
 
-    setServiceLineDrafts(
-      projectedLocalServiceLines.map(mapLocalServiceLineToState),
+    const nextServiceLineDrafts = projectedLocalServiceLines.map(
+      mapLocalServiceLineToState,
     );
+    serviceLineDraftsRef.current = nextServiceLineDrafts;
+    setServiceLineDrafts(nextServiceLineDrafts);
   }, [
     isProjectedLocalActiveSaleOwnedByCurrentStaff,
     projectedLocalSaleId,
@@ -3693,6 +3731,16 @@ export function useRegisterViewModel(): RegisterViewModel {
             return false;
           }
 
+          const currentServiceLineDrafts = serviceLineDraftsRef.current;
+          const existingServiceLine = matchingServiceLineDraft(
+            currentServiceLineDrafts,
+            service,
+          );
+
+          if (existingServiceLine) {
+            return false;
+          }
+
           const serviceLine: RegisterServiceLineState = {
             id: createLocalFallbackId("local-service-line"),
             serviceCatalogId: service.serviceCatalogId,
@@ -3719,9 +3767,11 @@ export function useRegisterViewModel(): RegisterViewModel {
             return false;
           }
 
-          setServiceLineDrafts((current) => [...current, serviceLine]);
+          const nextServiceLineDrafts = [...currentServiceLineDrafts, serviceLine];
+          serviceLineDraftsRef.current = nextServiceLineDrafts;
+          setServiceLineDrafts(nextServiceLineDrafts);
           setShowProductEntry(true);
-          setServiceSearchQuery("");
+          setProductSearchQuery("");
           return true;
         });
       serviceMutationQueueRef.current = queued.then(
@@ -5007,6 +5057,21 @@ export function useRegisterViewModel(): RegisterViewModel {
     activeCloseoutRegisterSession ||
     activeOpeningFloatCorrectionRegisterSession,
   );
+  const localRuntimeSyncSource = usePosLocalSyncRuntimeStatus({
+    drainOnAppend: true,
+    eventAppendToken: localSyncEventAppendToken,
+    mode: "status-only",
+    onLocalEventsChanged: noteLocalRegisterEventChanged,
+    storeId: activeStoreId,
+    staffProfileId,
+    terminalId: terminal?._id,
+    onRetrySync: requestBootstrap,
+    storeFactory: localRuntimeStoreFactory,
+  });
+  const handleRetryLocalSync = useCallback(() => {
+    localRuntimeSyncSource?.onRetrySync?.();
+    requestBootstrap();
+  }, [localRuntimeSyncSource, requestBootstrap]);
 
   const drawerGate =
     activeStoreId && terminal?._id && staffProfileId && shouldShowDrawerGate
@@ -5124,6 +5189,10 @@ export function useRegisterViewModel(): RegisterViewModel {
                 setDrawerErrorMessage(null);
               },
               onSubmit: handleOpenDrawer,
+              onRetrySync:
+                drawerGateMode === "drawerAuthorityRepair"
+                  ? handleRetryLocalSync
+                  : undefined,
               onSignOut: handleCashierSignOut,
             }
       : null;
@@ -5173,17 +5242,6 @@ export function useRegisterViewModel(): RegisterViewModel {
           },
         }
       : null;
-  const localRuntimeSyncSource = usePosLocalSyncRuntimeStatus({
-    drainOnAppend: true,
-    eventAppendToken: localSyncEventAppendToken,
-    mode: "status-only",
-    onLocalEventsChanged: noteLocalRegisterEventChanged,
-    storeId: activeStoreId,
-    staffProfileId,
-    terminalId: terminal?._id,
-    onRetrySync: requestBootstrap,
-    storeFactory: localRuntimeStoreFactory,
-  });
   const localRuntimeStatusSource = localRuntimeSyncSource?.status
     ? localRuntimeSyncSource
     : null;
@@ -5251,7 +5309,7 @@ export function useRegisterViewModel(): RegisterViewModel {
           ...buildPosSyncStatusPresentation(localSyncSource),
           onRetrySync: () => {
             localSyncSource?.onRetrySync?.();
-            requestBootstrap();
+            handleRetryLocalSync();
           },
         }
       : null;
@@ -5393,8 +5451,8 @@ export function useRegisterViewModel(): RegisterViewModel {
         cloudRegisterSessionBlocksLocalProjection ||
         activeSessionHasBlockedRegisterBinding ||
         isOpeningDrawer,
-      serviceSearchQuery,
-      setServiceSearchQuery,
+      serviceSearchQuery: productSearchQuery,
+      setServiceSearchQuery: setProductSearchQuery,
       searchResults: serviceSearchResults,
       isSearchLoading: serviceCatalogResult === undefined,
       isSearchReady: serviceCatalogResult !== undefined,
@@ -5435,6 +5493,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       hasTerminal: Boolean(terminal),
       isTransactionCompleted,
       completedOrderNumber,
+      completionBlockMessage: serviceCheckoutBlockMessage,
       completedTransactionData,
       cashierName: getCashierDisplayName(cashier),
       actorStaffProfileId: staffProfileId,

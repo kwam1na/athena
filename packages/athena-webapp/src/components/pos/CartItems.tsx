@@ -6,7 +6,7 @@ import {
   Minus,
   ShoppingBasket,
   Package,
-  Wrench,
+  Scissors,
 } from "lucide-react";
 import { CartItem } from "./types";
 import { currencyFormatter } from "~/convex/utils";
@@ -125,6 +125,7 @@ export function CartItems({
                   : item.pricingModel === "starting_at"
                     ? "Entered amount"
                     : "Quoted amount";
+              const lineTotal = item.price * item.quantity;
 
               return (
                 <div
@@ -139,7 +140,7 @@ export function CartItems({
                   <div
                     className={cn(
                       "flex items-start gap-4",
-                      !isCompact && "col-span-7",
+                      !isCompact && "col-span-5",
                     )}
                   >
                     <div
@@ -148,24 +149,46 @@ export function CartItems({
                         isCompact ? "w-12 h-12" : "w-16 h-16",
                       )}
                     >
-                      <Wrench className="h-5 w-5 text-muted-foreground" />
+                      <Scissors className="h-5 w-5 text-muted-foreground" />
                     </div>
 
-                    <div className="min-w-0 flex-1 space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="truncate text-sm font-medium leading-tight">
-                          {capitalizeWords(item.name)}
-                        </h4>
-                        <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                          Service
-                        </span>
+                    <div
+                      className={cn(
+                        "flex min-w-0 flex-1",
+                        isCompact
+                          ? "items-start justify-between gap-3"
+                          : "block space-y-2",
+                      )}
+                    >
+                      <div className="min-w-0 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="truncate text-sm font-medium leading-tight">
+                            {capitalizeWords(item.name)}
+                          </h4>
+                          <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                            Service
+                          </span>
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-xs capitalize text-muted-foreground">
+                            {item.serviceMode.replace(/_/g, " ")} · {amountLabel}
+                          </p>
+                          {!canEditAmount ? (
+                            <p className="text-sm font-medium">
+                              {formatStoredAmount(formatter, item.price)}
+                            </p>
+                          ) : null}
+                        </div>
+                        {item.amountRequired ? (
+                          <p className="text-xs font-medium text-amber-700">
+                            Enter an amount before checkout.
+                          </p>
+                        ) : null}
                       </div>
-                      <p className="text-xs capitalize text-muted-foreground">
-                        {item.serviceMode.replace(/_/g, " ")} · {amountLabel}
-                      </p>
-                      {item.amountRequired ? (
-                        <p className="text-xs font-medium text-amber-700">
-                          Enter an amount before checkout.
+
+                      {isCompact && !canEditAmount ? (
+                        <p className="shrink-0 text-right text-sm font-semibold">
+                          {formatStoredAmount(formatter, lineTotal)}
                         </p>
                       ) : null}
                     </div>
@@ -177,10 +200,11 @@ export function CartItems({
                       isCompact ? "justify-between pt-3" : "contents",
                     )}
                   >
+                    {!isCompact ? <div className="col-span-4" /> : null}
                     <div
                       className={cn(
                         "flex items-center",
-                        isCompact ? "justify-start" : "col-span-3 justify-end",
+                        isCompact ? "justify-start" : "col-span-2 justify-end",
                       )}
                     >
                       {canEditAmount ? (
@@ -201,10 +225,14 @@ export function CartItems({
                             }
                           }}
                         />
+                      ) : isCompact ? (
+                        null
                       ) : (
-                        <p className="text-sm font-medium">
-                          {formatStoredAmount(formatter, item.price)}
-                        </p>
+                        <div className="text-right">
+                          <p className="text-sm font-medium">
+                            {formatStoredAmount(formatter, lineTotal)}
+                          </p>
+                        </div>
                       )}
                     </div>
 
@@ -212,7 +240,7 @@ export function CartItems({
                       <div
                         className={cn(
                           "flex justify-center",
-                          !isCompact && "col-span-2",
+                          !isCompact && "col-span-1",
                         )}
                       >
                         <Button

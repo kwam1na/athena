@@ -412,11 +412,17 @@ export function usePosLocalSyncRuntimeStatus(input: {
             eventsToUpload,
             latestEvents.value.events,
           );
+          const locallySettledEventIds = collectLocallySettledSkippedReviewEventIds(
+            eventsToUpload,
+            uploadedEvents,
+          );
           setDebug((current) => ({
             ...current,
             lastBatchEventCount: uploadedEvents.length,
           }));
-          if (uploadedEvents.length === 0) return { syncedEventIds: [] };
+          if (uploadedEvents.length === 0) {
+            return { syncedEventIds: locallySettledEventIds };
+          }
 
           const result = await ingestLocalEvents(
             toIngestLocalEventsArgs({
@@ -456,15 +462,19 @@ export function usePosLocalSyncRuntimeStatus(input: {
               latestEvents.value.events,
               uploadedEvents.map((event) => event.localEventId),
             );
+            const localReviewEventIds = withoutEventIds(
+              reviewEventIds,
+              locallySettledEventIds,
+            );
             await persistDrawerAuthorityBlockForReviewEvents({
               events: latestEvents.value.events,
               reason: "lifecycle_rejected",
-              reviewEventIds,
+              reviewEventIds: localReviewEventIds,
               store,
             });
             return {
-              syncedEventIds: [],
-              reviewEventIds,
+              syncedEventIds: locallySettledEventIds,
+              reviewEventIds: localReviewEventIds,
             };
           }
 
@@ -485,15 +495,19 @@ export function usePosLocalSyncRuntimeStatus(input: {
               latestEvents.value.events,
               uploadedEvents.map((event) => event.localEventId),
             );
+            const localReviewEventIds = withoutEventIds(
+              reviewEventIds,
+              locallySettledEventIds,
+            );
             await persistDrawerAuthorityBlockForReviewEvents({
               events: latestEvents.value.events,
               reason: "authority_unknown",
-              reviewEventIds,
+              reviewEventIds: localReviewEventIds,
               store,
             });
             return {
-              syncedEventIds: [],
-              reviewEventIds,
+              syncedEventIds: locallySettledEventIds,
+              reviewEventIds: localReviewEventIds,
             };
           }
           const reviewEventIds = collectServerReviewLocalEventIds(
@@ -516,19 +530,26 @@ export function usePosLocalSyncRuntimeStatus(input: {
           });
           const syncedEventIds = collectSyncedLocalEventIds(
             latestEvents.value.events,
-            collectServerSyncedLocalEventIds(result.data.accepted),
+            collectServerSettledLocalEventIds(result.data.accepted),
+          );
+          const localSyncedEventIds = mergeEventIds(
+            locallySettledEventIds,
+            syncedEventIds,
           );
           await clearRecoverableDrawerAuthorityForSyncedEvents({
             events: latestEvents.value.events,
             reviewEventIds: localReviewEventIds,
             store,
-            syncedEventIds,
+            syncedEventIds: localSyncedEventIds,
           });
 
           return {
             heldEventIds: collectServerHeldLocalEventIds(result.data.held),
-            syncedEventIds,
-            reviewEventIds: localReviewEventIds,
+            syncedEventIds: localSyncedEventIds,
+            reviewEventIds: withoutEventIds(
+              localReviewEventIds,
+              locallySettledEventIds,
+            ),
           };
         },
         markNeedsReview: async (eventIds) => {
@@ -966,7 +987,7 @@ async function refreshTerminalRuntimeReadiness(input: {
     localRegisterModel.ok
       ? localRegisterModel.value?.activeRegisterSession?.localRegisterSessionId
       : undefined;
-  const drawerAuthority =
+  let drawerAuthority =
     activeLocalRegisterSessionId && readDrawerAuthorityState
       ? await readLatestRuntimeDrawerAuthorityState({
           localRegisterSessionId: activeLocalRegisterSessionId,
@@ -975,6 +996,16 @@ async function refreshTerminalRuntimeReadiness(input: {
           terminalIds: scope.terminalIds,
         })
       : ({ ok: true, value: null } as const);
+  if (drawerAuthority.ok && drawerAuthority.value && localRegisterModel.ok) {
+    const clearResult = await clearSettledRecoverableDrawerAuthorityBlock({
+      drawerAuthority: drawerAuthority.value,
+      events: localRegisterModel.value?.sourceEvents ?? [],
+      store: input.store,
+    });
+    if (clearResult.ok && clearResult.value) {
+      drawerAuthority = { ok: true, value: null };
+    }
+  }
 
   return {
     drawerAuthority: drawerAuthority.ok ? drawerAuthority.value : null,
@@ -1190,6 +1221,62 @@ function isRecoverableDrawerAuthorityReason(
   reason: PosDrawerAuthorityState["reason"] | undefined,
 ) {
   return reason === "lifecycle_rejected" || reason === "authority_unknown";
+}
+
+async function clearSettledRecoverableDrawerAuthorityBlock(input: {
+  drawerAuthority: PosDrawerAuthorityState;
+  events: PosLocalEventRecord[];
+  store: PosLocalRuntimeStore;
+}): Promise<PosLocalStoreResult<boolean>> {
+  const clearDrawerAuthorityState = (
+    input.store as {
+      clearDrawerAuthorityState?: PosLocalRuntimeStore["clearDrawerAuthorityState"];
+    }
+  ).clearDrawerAuthorityState;
+  if (
+    !clearDrawerAuthorityState ||
+    input.drawerAuthority.status !== "blocked" ||
+    !isRecoverableDrawerAuthorityReason(input.drawerAuthority.reason)
+  ) {
+    return { ok: true, value: false };
+  }
+
+  const drawerLifecycleEvents = input.events.filter(
+    (event) =>
+      event.localRegisterSessionId ===
+        input.drawerAuthority.localRegisterSessionId &&
+      event.storeId === input.drawerAuthority.storeId &&
+      event.terminalId === input.drawerAuthority.terminalId &&
+      isDrawerAuthorityLifecycleEvent(event),
+  );
+  if (drawerLifecycleEvents.length === 0) {
+    return { ok: true, value: false };
+  }
+
+  const hasUnsettledLifecycleEvent = drawerLifecycleEvents.some(
+    (event) => event.sync.status !== "synced",
+  );
+  if (hasUnsettledLifecycleEvent) {
+    return { ok: true, value: false };
+  }
+
+  const hasRemainingLifecycleReview = drawerLifecycleEvents.some(
+    (event) =>
+      event.sync.status === "needs_review" &&
+      event.sync.uploaded,
+  );
+  if (hasRemainingLifecycleReview) {
+    return { ok: true, value: false };
+  }
+
+  const result = await clearDrawerAuthorityState({
+    localRegisterSessionId: input.drawerAuthority.localRegisterSessionId,
+    storeId: input.drawerAuthority.storeId,
+    terminalId: input.drawerAuthority.terminalId,
+  });
+  if (!result.ok) return result;
+
+  return { ok: true, value: true };
 }
 
 async function readLatestRuntimeDrawerAuthorityState(input: {
@@ -1477,7 +1564,7 @@ export function collectServerSyncedLocalEventIds(
     .map((event) => event.localEventId);
 }
 
-export function collectServerReviewLocalEventIds(
+export function collectServerSettledLocalEventIds(
   acceptedEvents: Array<{
     localEventId: string;
     status: string;
@@ -1485,8 +1572,19 @@ export function collectServerReviewLocalEventIds(
 ) {
   return acceptedEvents
     .filter(
-      (event) => event.status === "conflicted" || event.status === "rejected",
+      (event) => event.status === "projected" || event.status === "rejected",
     )
+    .map((event) => event.localEventId);
+}
+
+export function collectServerReviewLocalEventIds(
+  acceptedEvents: Array<{
+    localEventId: string;
+    status: string;
+  }>,
+) {
+  return acceptedEvents
+    .filter((event) => event.status === "conflicted")
     .map((event) => event.localEventId);
 }
 
@@ -1544,6 +1642,64 @@ function collectReviewLocalEventIds(
   acceptedReviewEventIds: string[],
 ) {
   return collectAcceptedEventIdsWithLocalPrecursors(events, acceptedReviewEventIds);
+}
+
+export function collectLocallySettledSkippedReviewEventIds(
+  eventsToUpload: PosLocalEventRecord[],
+  uploadedEvents: PosLocalUploadEvent[],
+) {
+  const uploadedEventIds = new Set(
+    uploadedEvents.map((event) => event.localEventId),
+  );
+
+  return eventsToUpload
+    .filter(
+      (event) =>
+        event.type === "cart.cleared" &&
+        event.sync.status === "needs_review" &&
+        event.sync.uploaded &&
+        !uploadedEventIds.has(event.localEventId) &&
+        hasLaterLocalCompletedSale(
+          event,
+          eventsToUpload,
+          event.localPosSessionId ??
+            stringValueFromPayload(event.payload, "localPosSessionId"),
+        ),
+    )
+    .map((event) => event.localEventId);
+}
+
+function hasLaterLocalCompletedSale(
+  event: PosLocalEventRecord,
+  events: PosLocalEventRecord[],
+  localPosSessionId: string,
+) {
+  if (!localPosSessionId) return false;
+
+  return events.some(
+    (candidate) =>
+      candidate.sequence > event.sequence &&
+      candidate.type === "transaction.completed" &&
+      (candidate.localPosSessionId ??
+        stringValueFromPayload(candidate.payload, "localPosSessionId")) ===
+        localPosSessionId,
+  );
+}
+
+function stringValueFromPayload(payload: unknown, key: string) {
+  if (!payload || typeof payload !== "object") return "";
+  const value = (payload as Record<string, unknown>)[key];
+  return typeof value === "string" ? value : "";
+}
+
+function mergeEventIds(left: string[], right: string[]) {
+  return Array.from(new Set([...left, ...right]));
+}
+
+function withoutEventIds(eventIds: string[], excludedEventIds: string[]) {
+  if (excludedEventIds.length === 0) return eventIds;
+  const excluded = new Set(excludedEventIds);
+  return eventIds.filter((eventId) => !excluded.has(eventId));
 }
 
 function collectAcceptedEventIdsWithLocalPrecursors(

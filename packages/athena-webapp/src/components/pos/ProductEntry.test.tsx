@@ -95,7 +95,8 @@ function buildServiceResult(
 ): RegisterServiceSearchResult {
   return {
     id: "service-1",
-    serviceCatalogId: "service-1" as RegisterServiceSearchResult["serviceCatalogId"],
+    serviceCatalogId:
+      "service-1" as RegisterServiceSearchResult["serviceCatalogId"],
     name: "Closure Repair",
     serviceMode: "repair",
     pricingModel: "fixed",
@@ -166,9 +167,9 @@ describe("ProductEntry", () => {
       expect(onAddProduct).toHaveBeenCalledWith(quickAddedProduct),
     );
     expect(setProductSearchQuery).toHaveBeenCalledWith("");
-    expect(
-      setProductSearchQuery.mock.invocationCallOrder.at(-1),
-    ).toBeLessThan(onAddProduct.mock.invocationCallOrder[0]);
+    expect(setProductSearchQuery.mock.invocationCallOrder.at(-1)).toBeLessThan(
+      onAddProduct.mock.invocationCallOrder[0],
+    );
   });
 
   it("creates additional SKU variants before adding the primary quick-add product to the cart", async () => {
@@ -201,7 +202,9 @@ describe("ProductEntry", () => {
       screen.getByRole("button", { name: /add product variants/i }),
     );
 
-    await waitFor(() => expect(quickAddProductSkuMock).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(quickAddProductSkuMock).toHaveBeenCalledTimes(2),
+    );
     expect(quickAddProductSkuMock).toHaveBeenNthCalledWith(1, {
       storeId: "store-1",
       createdByUserId: "user-1",
@@ -305,7 +308,7 @@ describe("ProductEntry", () => {
     renderProductEntryWithServices({ serviceEntry, setProductSearchQuery });
 
     await user.type(
-      screen.getByPlaceholderText(/lookup product by name/i),
+      screen.getByPlaceholderText(/lookup product or service by name/i),
       "closure",
     );
 
@@ -315,7 +318,7 @@ describe("ProductEntry", () => {
 
   it("adds a fixed-price service from explicit service lookup", async () => {
     const user = userEvent.setup();
-    const service = buildServiceResult();
+    const service = buildServiceResult({ name: "tokin" });
     const serviceEntry: RegisterServiceEntryState = {
       disabled: false,
       serviceSearchQuery: "closure",
@@ -334,10 +337,95 @@ describe("ProductEntry", () => {
       serviceEntry,
     });
 
-    await user.click(screen.getByRole("button", { name: /add service/i }));
+    expect(screen.getByText("Tokin")).toBeInTheDocument();
+    expect(document.querySelector(".lucide-scissors")).toBeInTheDocument();
+    expect(screen.queryByText("Add service")).not.toBeInTheDocument();
+    expect(screen.queryByText("No products found")).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: /add tokin service/i }),
+    );
 
     expect(serviceEntry.onAddService).toHaveBeenCalledWith(service, undefined);
     expect(serviceEntry.setServiceSearchQuery).toHaveBeenCalledWith("");
+  });
+
+  it("disables service search results already in the cart", async () => {
+    const user = userEvent.setup();
+    const service = buildServiceResult({ name: "tokin" });
+    const serviceEntry: RegisterServiceEntryState = {
+      disabled: false,
+      serviceSearchQuery: "tokin",
+      setServiceSearchQuery: vi.fn(),
+      searchResults: [service],
+      isSearchLoading: false,
+      isSearchReady: true,
+      items: [
+        {
+          id: "service-line-1",
+          serviceCatalogId: service.serviceCatalogId,
+          name: service.name,
+          serviceMode: service.serviceMode,
+          pricingModel: service.pricingModel,
+          price: service.basePrice ?? 0,
+          quantity: 1,
+          amountRequired: false,
+        },
+      ],
+      onAddService: vi.fn(async () => true),
+      onUpdateServiceAmount: vi.fn(),
+      onRemoveService: vi.fn(),
+    };
+
+    renderProductEntryWithServices({
+      lookupMode: "service",
+      serviceEntry,
+    });
+
+    const serviceCard = screen.getByRole("button", {
+      name: /add tokin service/i,
+    });
+    expect(serviceCard).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByText("Already added")).toBeInTheDocument();
+
+    await user.click(serviceCard);
+
+    expect(serviceEntry.onAddService).not.toHaveBeenCalled();
+    expect(serviceEntry.setServiceSearchQuery).not.toHaveBeenCalled();
+  });
+
+  it("adds a fixed-price service from the unified register search", async () => {
+    const user = userEvent.setup();
+    const service = buildServiceResult();
+    const serviceEntry: RegisterServiceEntryState = {
+      disabled: false,
+      serviceSearchQuery: "closure",
+      setServiceSearchQuery: vi.fn(),
+      searchResults: [service],
+      isSearchLoading: false,
+      isSearchReady: true,
+      items: [],
+      onAddService: vi.fn(async () => true),
+      onUpdateServiceAmount: vi.fn(),
+      onRemoveService: vi.fn(),
+    };
+
+    renderProductEntryWithServices({
+      serviceEntry,
+    });
+
+    expect(screen.queryByText("Add service")).not.toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: /add closure repair service/i }),
+    );
+
+    expect(serviceEntry.onAddService).toHaveBeenCalledWith(service, undefined);
+    expect(serviceEntry.setServiceSearchQuery).toHaveBeenCalledWith("");
+    await waitFor(() =>
+      expect(
+        screen.getByPlaceholderText(/lookup product or service by name/i),
+      ).toHaveFocus(),
+    );
   });
 
   it("requires an entered amount before adding a starting-at service", async () => {
@@ -364,12 +452,15 @@ describe("ProductEntry", () => {
       serviceEntry,
     });
 
-    const addButton = screen.getByRole("button", { name: /add service/i });
-    expect(addButton).toBeDisabled();
+    const serviceCard = screen.getByRole("button", {
+      name: /add closure repair service/i,
+    });
+    expect(serviceCard).toHaveAttribute("aria-disabled", "true");
+    expect(screen.queryByText("Add service")).not.toBeInTheDocument();
 
     await user.type(screen.getByLabelText(/closure repair amount/i), "65");
-    expect(addButton).toBeEnabled();
-    await user.click(addButton);
+    expect(serviceCard).toHaveAttribute("aria-disabled", "false");
+    await user.click(serviceCard);
 
     expect(serviceEntry.onAddService).toHaveBeenCalledWith(service, 6500);
   });

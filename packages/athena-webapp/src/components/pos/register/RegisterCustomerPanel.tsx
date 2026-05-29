@@ -13,6 +13,8 @@ export function RegisterCustomerPanel({
   return (
     <RegisterCustomerAttribution
       customerInfo={customerPanel.customerInfo}
+      isOpen={customerPanel.isOpen}
+      onOpenChange={customerPanel.onOpenChange}
       onCustomerCommitted={customerPanel.onCustomerCommitted}
       setCustomerInfo={customerPanel.setCustomerInfo}
       disabled={disabled}

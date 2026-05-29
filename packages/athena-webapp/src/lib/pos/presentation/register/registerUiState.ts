@@ -79,7 +79,7 @@ export interface RegisterServiceLineState {
   serviceMode: RegisterServiceMode;
   pricingModel: RegisterServicePricingModel;
   price: number;
-  quantity: 1;
+  quantity: number;
   amountRequired: boolean;
   catalogUpdatedAt?: number;
 }
@@ -163,6 +163,7 @@ export interface RegisterCheckoutState {
   hasTerminal: boolean;
   isTransactionCompleted: boolean;
   completedOrderNumber: string | null;
+  completionBlockMessage?: string;
   completedTransactionData?: {
     paymentMethod: string;
     payments?: Payment[];
@@ -253,6 +254,7 @@ export interface RegisterDrawerGateState {
   onSubmitOpeningFloatCorrection?: () => Promise<void>;
   onSubmitCloseout?: () => Promise<void>;
   onReopenRegister?: () => Promise<void>;
+  onRetrySync?: () => void;
   onSubmit?: () => Promise<void>;
   onSignOut: () => Promise<void>;
 }
