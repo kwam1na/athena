@@ -49,7 +49,7 @@ not to require a learning document for every small edit.
 
 The workflow-sensitive path list covers repo delivery and validation surfaces:
 compound checks, pre-push/pre-commit repair scripts, harness scripts, coverage
-and architecture gates, GitHub workflow files, Husky hooks, package command
+and architecture gates, GitHub workflow files, husky hooks, package command
 wiring, and the core delivery skills. These files change how future agents
 deliver work, so small edits there can be more reusable than a larger ordinary
 component change.
