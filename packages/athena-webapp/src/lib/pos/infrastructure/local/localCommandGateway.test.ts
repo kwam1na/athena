@@ -80,6 +80,64 @@ describe("createLocalCommandGateway", () => {
     expect(onEventAppended).toHaveBeenCalledTimes(1);
   });
 
+  it("reuses an active mapped local drawer instead of appending a duplicate register open", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 10_000,
+      createLocalId: (kind) => `local-event-${kind}`,
+    });
+    await store.appendEvent({
+      type: "register.opened",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      registerNumber: "1",
+      localRegisterSessionId: "local-register-1",
+      staffProfileId: "staff-1",
+      payload: {
+        localRegisterSessionId: "local-register-1",
+        openingFloat: 100,
+        expectedCash: 100,
+        notes: "Morning drawer",
+      },
+    });
+    await store.writeLocalCloudMapping({
+      entity: "registerSession",
+      localId: "local-register-1",
+      cloudId: "cloud-register-1",
+      mappedAt: 10_001,
+    });
+    const onEventAppended = vi.fn();
+    const gateway = createLocalCommandGateway({
+      store,
+      createLocalId: (kind) => `${kind}-new`,
+      onEventAppended,
+    });
+
+    const reopened = await gateway.openDrawer({
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      staffProfileId: "staff-1" as never,
+      registerNumber: "1",
+      openingFloat: 500,
+      notes: "Duplicate open attempt",
+    });
+
+    expect(reopened).toMatchObject({
+      kind: "ok",
+      data: {
+        localRegisterSessionId: "local-register-1",
+        openingFloat: 100,
+        expectedCash: 100,
+        notes: "Morning drawer",
+      },
+    });
+    expect(onEventAppended).not.toHaveBeenCalled();
+    await expect(store.listEvents()).resolves.toMatchObject({
+      ok: true,
+      value: [expect.objectContaining({ type: "register.opened" })],
+    });
+  });
+
   it("refuses to start a sale from another store's local drawer", async () => {
     const store = createPosLocalStore({
       adapter: createMemoryPosLocalStorageAdapter(),

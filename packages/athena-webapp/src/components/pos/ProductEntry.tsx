@@ -20,6 +20,7 @@ import {
   extractBarcodeFromInput,
   isUrlOrBarcode,
 } from "@/lib/pos/barcodeUtils";
+import { formatStoredAmount } from "@/lib/pos/displayAmounts";
 import {
   forwardRef,
   useCallback,
@@ -189,6 +190,10 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
             productSkuId: String(item.productSkuId),
             name: item.name,
             sku: item.sku,
+            priceLabel:
+              typeof item.price === "number"
+                ? `Price ${formatStoredAmount(formatter, item.price)}`
+                : undefined,
             category: item.category,
             barcode: item.barcode,
             variantAttributes: [
@@ -199,7 +204,7 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
                 : `${item.length}"`,
             ].filter((value): value is string => Boolean(value?.trim())),
           })),
-      [registerCatalog],
+      [formatter, registerCatalog],
     );
 
     const handleOpenQuickAdd = useCallback((selectedProduct?: Product) => {

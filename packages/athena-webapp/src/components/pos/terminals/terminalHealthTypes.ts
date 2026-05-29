@@ -64,6 +64,19 @@ export type TerminalRuntimeStatus = {
     nextPendingUploadSequence?: number;
     oldestPendingEventAt?: number;
     pendingEventCount: number;
+    reviewEvents?: Array<{
+      createdAt: number;
+      localEventId: string;
+      localPosSessionId?: string;
+      localRegisterSessionId?: string;
+      localTransactionId?: string;
+      sequence: number;
+      staffProfileId?: string;
+      status: string;
+      type: string;
+      uploaded?: boolean;
+      uploadSequence?: number;
+    }>;
     reviewEventCount: number;
     status:
       | "failed"
@@ -95,6 +108,11 @@ export type TerminalSyncEvent = {
   submittedAt: number;
 };
 
+export type TerminalSyncReviewEvent = Pick<
+  TerminalSyncEvent,
+  "eventType" | "localEventId" | "localRegisterSessionId" | "sequence" | "status"
+>;
+
 export type TerminalSyncConflict = {
   _id: string;
   conflictType: string;
@@ -112,6 +130,7 @@ export type TerminalSyncEvidence = {
   cursorUpdatedAt?: number | null;
   heldCount?: number;
   latestEvent?: TerminalSyncEvent | null;
+  latestReviewEvent?: TerminalSyncReviewEvent | null;
   projectedCount?: number;
   rejectedCount?: number;
   sampledEventCount?: number;
@@ -119,7 +138,14 @@ export type TerminalSyncEvidence = {
   unresolvedConflicts?: TerminalSyncConflict[];
 };
 
+export type TerminalHealthAttentionActionTarget =
+  | { registerSessionId: Id<"registerSession"> | string; type: "cash_control_register_session" }
+  | { type: "open_work" }
+  | { type: "pos_register" }
+  | { type: "pos_settings" };
+
 export type TerminalHealthAttentionReason = {
+  actionTarget?: TerminalHealthAttentionActionTarget;
   count?: number;
   latestEventSequence?: number;
   latestEventStatus?: string;

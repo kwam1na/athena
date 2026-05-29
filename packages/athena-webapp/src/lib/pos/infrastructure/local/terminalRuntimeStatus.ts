@@ -173,6 +173,7 @@ export function buildPosTerminalRuntimeStatus(
       localOnlyEventCount: sync.localOnlyEventCount,
       pendingEventCount: sync.pendingEventCount,
       reviewEventCount: sync.reviewEventCount,
+      reviewEvents: getReviewDiagnosticsEvents(input.events),
       status: sync.status,
       uploadableEventCount: sync.uploadableEventCount,
       lastSyncedSequence: sync.lastSyncedSequence,
@@ -394,10 +395,22 @@ function toDiagnosticsEvent(
     ...(event.staffProfileId ? { staffProfileId: event.staffProfileId } : {}),
     status: event.sync.status,
     type: event.type,
+    ...(event.sync.uploaded !== undefined ? { uploaded: event.sync.uploaded } : {}),
     ...(typeof event.uploadSequence === "number"
       ? { uploadSequence: event.uploadSequence }
       : {}),
   };
+}
+
+function getReviewDiagnosticsEvents(
+  events: PosLocalEventRecord[],
+): PosTerminalRuntimeDiagnosticsEvent[] {
+  return events
+    .filter((event) => event.sync.status === "needs_review")
+    .slice()
+    .sort(compareUploadableEventOrder)
+    .slice(0, 10)
+    .map(toDiagnosticsEvent);
 }
 
 function compareUploadableEventOrder(

@@ -35,6 +35,7 @@ export type QuickAddExistingSkuOption = {
   productSkuId: string;
   name: string;
   sku: string;
+  priceLabel?: string;
   category?: string;
   barcode?: string;
   variantAttributes?: string[];
@@ -112,6 +113,7 @@ function validateQuickAddLookupCode(lookupCode: string) {
 function getExistingSkuMetadata(option: QuickAddExistingSkuOption) {
   return [
     option.sku || "No SKU",
+    option.priceLabel,
     option.category,
     ...(option.variantAttributes ?? []),
   ]
@@ -449,10 +451,10 @@ export function QuickAddProductDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="flex max-h-[min(90vh,760px)] flex-col overflow-hidden sm:max-w-2xl">
+      <DialogContent className="flex max-h-[min(94vh,900px)] flex-col overflow-hidden sm:max-w-3xl">
         <form
           onSubmit={handleQuickAddSubmit}
-          className="flex min-h-0 flex-1 flex-col gap-5 overflow-hidden"
+          className="flex min-h-0 flex-1 flex-col gap-6 overflow-hidden"
         >
           <DialogHeader className="shrink-0">
             <DialogTitle>
@@ -473,10 +475,10 @@ export function QuickAddProductDialog({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="scrollbar-hide min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain pr-1">
-            <div className="space-y-5">
+          <div className="scrollbar-hide min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain pr-1">
+            <div className="space-y-6">
               {shouldShowBarcodeRecovery && (
-                <section className="space-y-3 rounded-md border border-border bg-surface px-3 py-3">
+                <section className="space-y-4 rounded-md border border-border bg-surface px-4 py-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <p className="text-sm font-medium text-foreground">
@@ -520,7 +522,7 @@ export function QuickAddProductDialog({
                       autoFocus
                     />
                   </div>
-                  <div className="max-h-36 space-y-1.5 overflow-y-auto">
+                  <div className="max-h-64 space-y-2 overflow-y-auto">
                     {existingSkuQuery.trim() && matchingExistingSkus.length ? (
                       matchingExistingSkus.map((option) => {
                         const isSelected =
@@ -532,7 +534,7 @@ export function QuickAddProductDialog({
                             key={option.productSkuId}
                             type="button"
                             className={cn(
-                              "flex min-h-11 w-full items-center justify-between gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors",
+                              "flex min-h-14 w-full items-center justify-between gap-4 rounded-md border px-4 py-3 text-left text-sm transition-colors",
                               isSelected
                                 ? "border-primary bg-primary/5"
                                 : "border-border bg-background hover:bg-muted/50",

@@ -199,6 +199,45 @@ export function createLocalCommandGateway(
     async openDrawer(
       input: PosOpenDrawerInput,
     ): Promise<LocalOpenDrawerResult> {
+      const existingModel = await readModel({
+        storeId: input.storeId.toString(),
+        terminalId: input.terminalId.toString(),
+      });
+      if (!existingModel.ok) {
+        return toLocalUserError(existingModel.error.message);
+      }
+
+      const activeRegisterSession = existingModel.value.activeRegisterSession;
+      if (
+        activeRegisterSession &&
+        isOpenLocalRegisterSessionStatus(activeRegisterSession.status)
+      ) {
+        if (
+          activeRegisterSession.registerNumber &&
+          input.registerNumber &&
+          activeRegisterSession.registerNumber !== input.registerNumber
+        ) {
+          return userError({
+            code: "conflict",
+            message:
+              "A local drawer is already open for another register on this terminal.",
+          });
+        }
+
+        return ok({
+          localRegisterSessionId: activeRegisterSession.localRegisterSessionId,
+          status: "open",
+          terminalId:
+            activeRegisterSession.terminalId ?? input.terminalId.toString(),
+          registerNumber:
+            activeRegisterSession.registerNumber ?? input.registerNumber,
+          openingFloat: activeRegisterSession.openingFloat,
+          expectedCash: activeRegisterSession.expectedCash,
+          openedAt: activeRegisterSession.openedAt,
+          notes: activeRegisterSession.notes,
+        });
+      }
+
       const localRegisterSessionId = createLocalId("local-register-session");
       const openedAt = clock();
       const appendError = await append({
@@ -396,6 +435,10 @@ function hasLocalSaleActivity(
       event.type === "transaction.completed"
     );
   });
+}
+
+function isOpenLocalRegisterSessionStatus(status: string) {
+  return status === "open" || status === "active";
 }
 
 function toLocalUserError(message: string) {

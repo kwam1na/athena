@@ -1353,6 +1353,226 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     });
   });
 
+  it("exposes rejected runtime check-in publishes in debug state", async () => {
+    mocks.reportTerminalRuntimeStatus.mockResolvedValue({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "You do not have access to update this POS terminal status.",
+      },
+    });
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+
+    const storeFactory = () => store as never;
+    const { result } = renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "status-only",
+        storeFactory,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(result.current?.debug).toEqual(
+        expect.objectContaining({
+          checkInPublishMessage:
+            "You do not have access to update this POS terminal status.",
+          checkInPublishReason: "authorization_failed",
+          checkInPublishStatus: "rejected",
+        }),
+      ),
+    );
+  });
+
+  it("clears stale completion time while a fresh runtime check-in publish is pending", async () => {
+    const nextPublish = deferred<{
+      kind: "ok";
+      data: Record<string, never>;
+    }>();
+    mocks.reportTerminalRuntimeStatus
+      .mockResolvedValueOnce({
+        kind: "ok",
+        data: {},
+      })
+      .mockReturnValueOnce(nextPublish.promise);
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+
+    const storeFactory = () => store as never;
+    const { result, rerender } = renderHook(
+      ({ staffProfileId }) =>
+        usePosLocalSyncRuntimeStatus({
+          mode: "status-only",
+          staffProfileId,
+          storeFactory,
+          storeId: "store-1",
+          terminalId: "terminal-cloud-1",
+        }),
+      {
+        initialProps: { staffProfileId: "staff-1" },
+      },
+    );
+
+    await waitFor(() =>
+      expect(result.current?.debug).toEqual(
+        expect.objectContaining({
+          checkInPublishCompletedAt: expect.any(Number),
+          checkInPublishStatus: "accepted",
+        }),
+      ),
+    );
+
+    rerender({ staffProfileId: "staff-2" });
+
+    await waitFor(() =>
+      expect(result.current?.debug).toEqual(
+        expect.objectContaining({
+          checkInPublishCompletedAt: undefined,
+          checkInPublishStatus: "pending",
+        }),
+      ),
+    );
+    nextPublish.resolve({
+      kind: "ok",
+      data: {},
+    });
+    await waitFor(() =>
+      expect(result.current?.debug).toEqual(
+        expect.objectContaining({
+          checkInPublishCompletedAt: expect.any(Number),
+          checkInPublishStatus: "accepted",
+        }),
+      ),
+    );
+  });
+
+  it("does not republish runtime check-ins when only publish debug changes", async () => {
+    const nextPublish = deferred<{
+      kind: "ok";
+      data: Record<string, never>;
+    }>();
+    mocks.reportTerminalRuntimeStatus.mockReturnValue(nextPublish.promise);
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+
+    const storeFactory = () => store as never;
+    const { result } = renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "status-only",
+        storeFactory,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(result.current?.debug).toEqual(
+        expect.objectContaining({
+          checkInPublishCompletedAt: undefined,
+          checkInPublishStatus: "pending",
+        }),
+      ),
+    );
+    expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledTimes(1);
+
+    nextPublish.resolve({
+      kind: "ok",
+      data: {},
+    });
+
+    await waitFor(() =>
+      expect(result.current?.debug).toEqual(
+        expect.objectContaining({
+          checkInPublishCompletedAt: expect.any(Number),
+          checkInPublishStatus: "accepted",
+        }),
+      ),
+    );
+    expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it("exposes missing check-in publish prerequisites in debug state", async () => {
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: null,
+      })),
+    };
+
+    const { result } = renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "status-only",
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(result.current?.debug).toEqual(
+        expect.objectContaining({
+          checkInPublishReason: "missing_sync_secret",
+          checkInPublishStatus: "not_ready",
+        }),
+      ),
+    );
+    expect(mocks.reportTerminalRuntimeStatus).not.toHaveBeenCalled();
+  });
+
   it("refreshes status-only mode on connectivity changes without uploading", async () => {
     const store = {
       listEvents: vi.fn(async () => ({
@@ -1550,24 +1770,26 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       }),
     );
 
-    await waitFor(() =>
-      expect(mocks.ingestLocalEvents).toHaveBeenCalledWith(
-        expect.objectContaining({
-          events: [
-            expect.objectContaining({
-              localEventId: "event-staff-a-open",
-              sequence: 1,
-              staffProfileId: "staff-a",
-              staffProofToken: "proof-token-a",
-            }),
-            expect.objectContaining({
-              localEventId: "event-staff-b-sale",
-              sequence: 2,
-              staffProfileId: "staff-b",
-            }),
-          ],
-        }),
-      ),
+    await waitFor(
+      () =>
+        expect(mocks.ingestLocalEvents).toHaveBeenCalledWith(
+          expect.objectContaining({
+            events: [
+              expect.objectContaining({
+                localEventId: "event-staff-a-open",
+                sequence: 1,
+                staffProfileId: "staff-a",
+                staffProofToken: "proof-token-a",
+              }),
+              expect.objectContaining({
+                localEventId: "event-staff-b-sale",
+                sequence: 2,
+                staffProfileId: "staff-b",
+              }),
+            ],
+          }),
+        ),
+      { timeout: 3000 },
     );
     const uploadedEvents = mocks.ingestLocalEvents.mock.calls[0]?.[0].events;
     expect(uploadedEvents.map((event: { sequence: number }) => event.sequence))

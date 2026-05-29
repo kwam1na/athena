@@ -331,7 +331,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
     await user.type(dialog.getByLabelText(/search existing sku/i), "body");
     await user.click(dialog.getByRole("button", { name: /body wave bundle/i }));
     expect(
-      dialog.getByText('BW-24 - Hair - dark brown - Medium - 24"'),
+      dialog.getByText('BW-24 - Price pending - Hair - dark brown - Medium - 24"'),
     ).toBeInTheDocument();
     await user.click(dialog.getByRole("button", { name: /attach barcode/i }));
 

@@ -1,8 +1,9 @@
-import { useParams } from "@tanstack/react-router";
+import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import type { FunctionReference } from "convex/server";
 import {
   AlertTriangle,
+  ArrowRight,
   CheckCircle2,
   Clock3,
   ShieldCheck,
@@ -15,9 +16,12 @@ import { EmptyState } from "@/components/states/empty/empty-state";
 import { NoPermissionView } from "@/components/states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "@/components/states/signed-out/ProtectedAdminSignInView";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
+import { getOrigin } from "@/lib/navigationUtils";
+import { cn } from "@/lib/utils";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import {
@@ -33,7 +37,9 @@ import {
 } from "./terminalHealthPresentation";
 import type {
   TerminalHealthDetail,
+  TerminalHealthAttentionReason,
   TerminalRuntimeStatus,
+  TerminalSyncEvent,
   TerminalSyncEvidence,
 } from "./terminalHealthTypes";
 
@@ -49,7 +55,9 @@ const posTerminalApi = api.inventory.posTerminal as unknown as {
 type POSTerminalDetailViewContentProps = {
   detail: TerminalHealthDetail | null;
   isLoading: boolean;
+  orgUrlSlug?: string;
   queryUnavailable?: boolean;
+  storeUrlSlug?: string;
 };
 
 function DetailPanel({
@@ -62,8 +70,8 @@ function DetailPanel({
   title: string;
 }) {
   return (
-    <section className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
-      <div className="mb-layout-md flex items-center gap-layout-xs">
+    <section className="rounded-lg border border-border bg-surface-raised p-layout-lg shadow-surface">
+      <div className="mb-layout-lg flex items-center gap-layout-xs">
         {icon}
         <h2 className="text-lg font-medium text-foreground">{title}</h2>
       </div>
@@ -87,6 +95,175 @@ function Field({
   );
 }
 
+function RailField({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="grid gap-layout-2xs">
+      <p className="text-xs font-medium uppercase text-muted-foreground">
+        {label}
+      </p>
+      <div className="text-sm leading-5 text-foreground">{value}</div>
+    </div>
+  );
+}
+
+function RailSection({
+  children,
+  icon,
+  title,
+}: {
+  children: React.ReactNode;
+  icon?: React.ReactNode;
+  title: string;
+}) {
+  return (
+    <section className="space-y-layout-md p-layout-lg">
+      <div className="flex items-center gap-layout-xs">
+        {icon}
+        <h2 className="text-base font-medium text-foreground">{title}</h2>
+      </div>
+      <div className="space-y-layout-md">{children}</div>
+    </section>
+  );
+}
+
+function TerminalContextRail({
+  detail,
+  runtimeStatus,
+}: {
+  detail: TerminalHealthDetail;
+  runtimeStatus: TerminalRuntimeStatus | null;
+}) {
+  return (
+    <aside className="self-start overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface">
+      <RailSection title="Identity">
+        <RailField
+          label="Register"
+          value={formatRegisterNumber(detail.terminal.registerNumber)}
+        />
+        <RailField
+          label="Status"
+          value={formatStatusLabel(detail.terminal.status)}
+        />
+        <RailField
+          label="Registered"
+          value={formatTerminalTimestamp(detail.terminal.registeredAt)}
+        />
+      </RailSection>
+
+      <div className="border-t border-border/80">
+        <RailSection
+          icon={<Clock3 className="h-4 w-4 text-muted-foreground" />}
+          title="Latest check-in"
+        >
+          <RailField
+            label="Received"
+            value={formatTerminalTimestamp(runtimeStatus?.receivedAt)}
+          />
+          <RailField
+            label="Source"
+            value={runtimeStatus ? formatStatusLabel(runtimeStatus.source) : "No check-in"}
+          />
+          <RailField
+            label="Browser online"
+            value={
+              runtimeStatus?.browserInfo?.online === false
+                ? "No"
+                : runtimeStatus
+                  ? "Yes"
+                  : "Not reported"
+            }
+          />
+          <RailField
+            label="Snapshots"
+            value={getSnapshotAgeSummary(runtimeStatus?.snapshots)}
+          />
+          <RailField
+            label="Staff authority"
+            value={getStaffAuthorityLabel(runtimeStatus?.staffAuthority)}
+          />
+        </RailSection>
+      </div>
+    </aside>
+  );
+}
+
+function SyncMetric({
+  detail,
+  label,
+  tone = "neutral",
+  value,
+}: {
+  detail: string;
+  label: string;
+  tone?: "danger" | "neutral" | "success" | "warning";
+  value: React.ReactNode;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-md border bg-surface px-layout-md py-layout-md",
+        tone === "success"
+          ? "border-success/25 bg-success/5"
+          : tone === "warning"
+            ? "border-warning/30 bg-warning/10"
+            : tone === "danger"
+              ? "border-danger/25 bg-danger/5"
+              : "border-border/80",
+      )}
+    >
+      <p className="text-xs font-medium uppercase text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-1 font-numeric text-xl font-semibold tabular-nums text-foreground">
+        {value}
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
+    </div>
+  );
+}
+
+function getSyncEventStatusClassName(status: string) {
+  switch (status) {
+    case "accepted":
+    case "projected":
+      return "border-success/25 bg-success/10 text-success";
+    case "held":
+      return "border-warning/30 bg-warning/10 text-warning-foreground";
+    case "rejected":
+    case "conflicted":
+      return "border-danger/25 bg-danger/10 text-danger";
+    default:
+      return "border-border bg-surface text-muted-foreground";
+  }
+}
+
+function RecentSyncEventRow({ event }: { event: TerminalSyncEvent }) {
+  return (
+    <div className="grid gap-layout-sm px-layout-md py-layout-sm text-sm md:grid-cols-[5rem_minmax(0,1fr)_7rem] md:items-center">
+      <span className="font-numeric text-xs font-semibold tabular-nums text-muted-foreground">
+        #{event.sequence}
+      </span>
+      <span className="min-w-0 truncate font-medium text-foreground">
+        {event.eventType}
+      </span>
+      <span
+        className={cn(
+          "inline-flex w-fit items-center rounded-md border px-layout-xs py-1 text-xs font-medium",
+          getSyncEventStatusClassName(event.status),
+        )}
+      >
+        {formatStatusLabel(event.status)}
+      </span>
+    </div>
+  );
+}
+
 function SyncEvidenceSection({
   syncEvidence,
 }: {
@@ -101,57 +278,93 @@ function SyncEvidenceSection({
       icon={<CheckCircle2 className="h-4 w-4 text-muted-foreground" />}
       title="Cloud sync evidence"
     >
-      <div className="grid gap-layout-sm sm:grid-cols-3">
-        <Field
-          label="Accepted sequence"
-          value={
-            syncEvidence.acceptedThroughSequence == null
-              ? "No accepted sequence"
-              : syncEvidence.acceptedThroughSequence
-          }
-        />
-        <Field
-          label="Cursor updated"
-          value={formatTerminalTimestamp(syncEvidence.cursorUpdatedAt)}
-        />
-        <Field
-          label="Recent events"
-          value={`${sampledEventCount} sampled`}
-        />
-      </div>
-      <div className="mt-layout-md grid gap-layout-sm sm:grid-cols-4">
-        <Field label="Accepted" value={syncEvidence.acceptedCount ?? 0} />
-        <Field label="Projected" value={syncEvidence.projectedCount ?? 0} />
-        <Field label="Held" value={syncEvidence.heldCount ?? 0} />
-        <Field label="Rejected" value={syncEvidence.rejectedCount ?? 0} />
-      </div>
-      <div className="mt-layout-md divide-y divide-border rounded-md border border-border">
-        {recentEvents.length === 0 ? (
-          <p className="px-layout-md py-layout-sm text-sm text-muted-foreground">
-            No recent sync events reported for this terminal.
-          </p>
-        ) : (
-          recentEvents.map((event) => (
-            <div
-              className="grid gap-layout-xs px-layout-md py-layout-sm text-sm md:grid-cols-[8rem_minmax(0,1fr)_8rem]"
-              key={event._id ?? event.localEventId}
-            >
-              <span className="font-numeric tabular-nums">#{event.sequence}</span>
-              <span className="min-w-0 truncate">{event.eventType}</span>
-              <span className="text-muted-foreground">{formatStatusLabel(event.status)}</span>
+      <div className="rounded-md border border-border/80 bg-surface px-layout-md py-layout-md">
+        <div className="grid gap-layout-md md:grid-cols-[minmax(0,1fr)_11rem_10rem] md:items-center">
+          <div className="min-w-0">
+            <p className="text-xs font-medium uppercase text-muted-foreground">
+              Accepted through sequence
+            </p>
+            <div className="mt-1 flex min-w-0 flex-wrap items-baseline gap-layout-xs">
+              <p className="font-numeric text-2xl font-semibold tabular-nums text-foreground">
+                {syncEvidence.acceptedThroughSequence == null
+                  ? "No sequence"
+                  : `#${syncEvidence.acceptedThroughSequence}`}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                latest cloud cursor for this terminal
+              </p>
             </div>
-          ))
-        )}
+          </div>
+          <Field
+            label="Cursor updated"
+            value={formatTerminalTimestamp(syncEvidence.cursorUpdatedAt)}
+          />
+          <Field
+            label="Recent sample"
+            value={`${sampledEventCount} sampled`}
+          />
+        </div>
+      </div>
+
+      <div className="mt-layout-md grid gap-layout-sm sm:grid-cols-2 xl:grid-cols-4">
+        <SyncMetric
+          detail="accepted by cloud"
+          label="Accepted"
+          tone="success"
+          value={syncEvidence.acceptedCount ?? 0}
+        />
+        <SyncMetric
+          detail="applied to read models"
+          label="Projected"
+          value={syncEvidence.projectedCount ?? 0}
+        />
+        <SyncMetric
+          detail="waiting before projection"
+          label="Held"
+          tone={(syncEvidence.heldCount ?? 0) > 0 ? "warning" : "neutral"}
+          value={syncEvidence.heldCount ?? 0}
+        />
+        <SyncMetric
+          detail="rejected by server"
+          label="Rejected"
+          tone={(syncEvidence.rejectedCount ?? 0) > 0 ? "danger" : "neutral"}
+          value={syncEvidence.rejectedCount ?? 0}
+        />
+      </div>
+
+      <div className="mt-layout-md overflow-hidden rounded-md border border-border/80 bg-surface">
+        <div className="grid gap-layout-sm border-b border-border/80 bg-surface-muted/40 px-layout-md py-layout-xs text-xs font-medium uppercase text-muted-foreground md:grid-cols-[5rem_minmax(0,1fr)_7rem]">
+          <span>Sequence</span>
+          <span>Event</span>
+          <span>Status</span>
+        </div>
+        <div className="divide-y divide-border/80">
+          {recentEvents.length === 0 ? (
+            <p className="px-layout-md py-layout-sm text-sm text-muted-foreground">
+              No recent sync events reported for this terminal.
+            </p>
+          ) : (
+            recentEvents.map((event) => (
+              <RecentSyncEventRow
+                event={event}
+                key={event._id ?? event.localEventId}
+              />
+            ))
+          )}
+        </div>
       </div>
     </DetailPanel>
   );
 }
 
 function ConflictSection({
+  runtimeStatus,
   syncEvidence,
 }: {
+  runtimeStatus: TerminalRuntimeStatus | null;
   syncEvidence: TerminalSyncEvidence;
 }) {
+  const localReviewEvents = runtimeStatus?.sync.reviewEvents ?? [];
   const unresolvedConflicts = syncEvidence.unresolvedConflicts ?? [];
   const reviewCount = getReviewEvidenceCount(syncEvidence);
 
@@ -160,15 +373,15 @@ function ConflictSection({
       icon={<AlertTriangle className="h-4 w-4 text-muted-foreground" />}
       title="Conflicts and review"
     >
-      {unresolvedConflicts.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          {reviewCount > 0
-            ? `${reviewCount} sync item${reviewCount === 1 ? "" : "s"} need review; detailed conflict records were not returned.`
-            : "No unresolved cloud sync conflicts are currently reported. Local runtime review, pending sync, or stale check-ins may still need attention above."}
-        </p>
-      ) : (
-        <div className="space-y-layout-sm">
-          {unresolvedConflicts.map((conflict) => (
+      <div className="space-y-layout-sm">
+        {unresolvedConflicts.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            {reviewCount > 0
+              ? `${reviewCount} sync item${reviewCount === 1 ? "" : "s"} need review; detailed conflict records were not returned.`
+              : "No unresolved cloud sync conflicts are currently reported. Local runtime review, pending sync, or stale check-ins may still need attention above."}
+          </p>
+        ) : (
+          unresolvedConflicts.map((conflict) => (
             <div
               className="rounded-md border border-warning/30 bg-warning/10 px-layout-md py-layout-sm"
               key={conflict._id}
@@ -180,17 +393,62 @@ function ConflictSection({
                 Sequence {conflict.sequence} / {formatStatusLabel(conflict.conflictType)}
               </p>
             </div>
-          ))}
-        </div>
-      )}
+          ))
+        )}
+
+        {localReviewEvents.length > 0 ? (
+          <div className="overflow-hidden rounded-md border border-border/80 bg-surface">
+            <div className="grid gap-layout-sm border-b border-border/80 bg-surface-muted/40 px-layout-md py-layout-xs text-xs font-medium uppercase text-muted-foreground md:grid-cols-[5rem_minmax(0,1fr)_8rem_7rem]">
+              <span>Sequence</span>
+              <span>Local review item</span>
+              <span>Upload</span>
+              <span>Status</span>
+            </div>
+            <div className="divide-y divide-border/80">
+              {localReviewEvents.map((event) => (
+                <div
+                  className="grid gap-layout-sm px-layout-md py-layout-sm text-sm md:grid-cols-[5rem_minmax(0,1fr)_8rem_7rem] md:items-center"
+                  key={event.localEventId}
+                >
+                  <span className="font-numeric tabular-nums text-muted-foreground">
+                    #{event.sequence}
+                  </span>
+                  <span className="min-w-0 truncate font-medium text-foreground">
+                    {event.type}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {event.uploaded
+                      ? "Uploaded"
+                      : event.uploadSequence == null
+                        ? "Local only"
+                        : `Upload #${event.uploadSequence}`}
+                  </span>
+                  <span
+                    className={cn(
+                      "inline-flex w-fit items-center rounded-md border px-layout-xs py-1 text-xs font-medium",
+                      getSyncEventStatusClassName(event.status),
+                    )}
+                  >
+                    {formatStatusLabel(event.status)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
     </DetailPanel>
   );
 }
 
 function AttentionReasonsSection({
   detail,
+  orgUrlSlug,
+  storeUrlSlug,
 }: {
   detail: TerminalHealthDetail;
+  orgUrlSlug?: string;
+  storeUrlSlug?: string;
 }) {
   const reasons = getTerminalAttentionReasons(detail);
 
@@ -209,24 +467,115 @@ function AttentionReasonsSection({
             className="rounded-md border border-warning/30 bg-warning/10 px-layout-md py-layout-sm"
             key={`${reason.type}-${index}`}
           >
-            <p className="text-sm font-medium text-foreground">
-              {reason.summary}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {reason.source === "cloud_sync"
-                ? "Cloud sync evidence"
-                : reason.source === "local_runtime"
-                  ? "Local runtime review"
-                  : "Terminal check-in"}
-              {reason.nextPendingUploadSequence == null
-                ? ""
-                : ` / next upload #${reason.nextPendingUploadSequence}`}
-            </p>
+            <div className="flex flex-col gap-layout-sm md:flex-row md:items-start md:justify-between">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-foreground">
+                  {reason.summary}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {reason.source === "cloud_sync"
+                    ? "Cloud sync evidence"
+                    : reason.source === "local_runtime"
+                      ? "Local runtime review"
+                      : "Terminal check-in"}
+                  {reason.nextPendingUploadSequence == null
+                    ? ""
+                    : ` / next upload #${reason.nextPendingUploadSequence}`}
+                </p>
+              </div>
+              <AttentionReasonAction
+                orgUrlSlug={orgUrlSlug}
+                reason={reason}
+                storeUrlSlug={storeUrlSlug}
+              />
+            </div>
           </div>
         ))}
       </div>
     </DetailPanel>
   );
+}
+
+function AttentionReasonAction({
+  orgUrlSlug,
+  reason,
+  storeUrlSlug,
+}: {
+  orgUrlSlug?: string;
+  reason: TerminalHealthAttentionReason;
+  storeUrlSlug?: string;
+}) {
+  const target = reason.actionTarget;
+
+  if (!orgUrlSlug || !storeUrlSlug || !target) {
+    return null;
+  }
+
+  if (target.type === "cash_control_register_session") {
+    return (
+      <Button asChild size="sm" variant="utility">
+        <Link
+          params={{
+            orgUrlSlug,
+            sessionId: String(target.registerSessionId),
+            storeUrlSlug,
+          }}
+          search={{ o: getOrigin() }}
+          to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId"
+        >
+          Review register session
+          <ArrowRight aria-hidden="true" />
+        </Link>
+      </Button>
+    );
+  }
+
+  if (target.type === "open_work") {
+    return (
+      <Button asChild size="sm" variant="utility">
+        <Link
+          params={{ orgUrlSlug, storeUrlSlug }}
+          search={{ o: getOrigin() }}
+          to="/$orgUrlSlug/store/$storeUrlSlug/operations/open-work"
+        >
+          Review open work
+          <ArrowRight aria-hidden="true" />
+        </Link>
+      </Button>
+    );
+  }
+
+  if (target.type === "pos_settings") {
+    return (
+      <Button asChild size="sm" variant="utility">
+        <Link
+          params={{ orgUrlSlug, storeUrlSlug }}
+          search={{ o: getOrigin() }}
+          to="/$orgUrlSlug/store/$storeUrlSlug/pos/settings"
+        >
+          Open register setup
+          <ArrowRight aria-hidden="true" />
+        </Link>
+      </Button>
+    );
+  }
+
+  if (target.type === "pos_register") {
+    return (
+      <Button asChild size="sm" variant="utility">
+        <Link
+          params={{ orgUrlSlug, storeUrlSlug }}
+          search={{ o: getOrigin() }}
+          to="/$orgUrlSlug/store/$storeUrlSlug/pos/register"
+        >
+          Open register
+          <ArrowRight aria-hidden="true" />
+        </Link>
+      </Button>
+    );
+  }
+
+  return null;
 }
 
 function SupportNotesSection({
@@ -270,7 +619,9 @@ function SupportNotesSection({
 export function POSTerminalDetailViewContent({
   detail,
   isLoading,
+  orgUrlSlug,
   queryUnavailable = false,
+  storeUrlSlug,
 }: POSTerminalDetailViewContentProps) {
   if (queryUnavailable) {
     return (
@@ -327,34 +678,20 @@ export function POSTerminalDetailViewContent({
             </Badge>
           </div>
 
-          <div className="grid gap-layout-lg xl:grid-cols-[20rem_minmax(0,1fr)]">
-            <aside className="space-y-layout-md">
-              <DetailPanel title="Identity">
-                <div className="space-y-layout-sm">
-                  <Field label="Register" value={formatRegisterNumber(detail.terminal.registerNumber)} />
-                  <Field label="Status" value={formatStatusLabel(detail.terminal.status)} />
-                  <Field label="Registered" value={formatTerminalTimestamp(detail.terminal.registeredAt)} />
-                </div>
-              </DetailPanel>
+          <div className="grid gap-layout-xl xl:grid-cols-[20rem_minmax(0,1fr)]">
+            <TerminalContextRail detail={detail} runtimeStatus={runtimeStatus} />
 
-              <DetailPanel
-                icon={<Clock3 className="h-4 w-4 text-muted-foreground" />}
-                title="Latest check-in"
-              >
-                <div className="space-y-layout-sm">
-                  <Field label="Received" value={formatTerminalTimestamp(runtimeStatus?.receivedAt)} />
-                  <Field label="Source" value={runtimeStatus ? formatStatusLabel(runtimeStatus.source) : "No check-in"} />
-                  <Field label="Browser online" value={runtimeStatus?.browserInfo?.online === false ? "No" : runtimeStatus ? "Yes" : "Not reported"} />
-                  <Field label="Snapshots" value={getSnapshotAgeSummary(runtimeStatus?.snapshots)} />
-                  <Field label="Staff authority" value={getStaffAuthorityLabel(runtimeStatus?.staffAuthority)} />
-                </div>
-              </DetailPanel>
-            </aside>
-
-            <main className="space-y-layout-md">
-              <AttentionReasonsSection detail={detail} />
+            <main className="space-y-layout-lg">
+              <AttentionReasonsSection
+                detail={detail}
+                orgUrlSlug={orgUrlSlug}
+                storeUrlSlug={storeUrlSlug}
+              />
               <SyncEvidenceSection syncEvidence={detail.syncEvidence} />
-              <ConflictSection syncEvidence={detail.syncEvidence} />
+              <ConflictSection
+                runtimeStatus={detail.runtimeStatus}
+                syncEvidence={detail.syncEvidence}
+              />
               <SupportNotesSection runtimeStatus={runtimeStatus} />
             </main>
           </div>
@@ -425,7 +762,9 @@ export function POSTerminalDetailView() {
       <POSTerminalDetailViewContent
         detail={detail ?? null}
         isLoading={detail === undefined}
+        orgUrlSlug={params.orgUrlSlug}
         queryUnavailable={detail === null && !params.terminalId}
+        storeUrlSlug={params.storeUrlSlug}
       />
   );
 }

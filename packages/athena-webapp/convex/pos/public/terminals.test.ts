@@ -491,6 +491,8 @@ describe("POS terminal public mutations", () => {
 
     for (const value of [
       "attentionReasons",
+      "actionTarget",
+      "cash_control_register_session",
       "local_review",
       "sync_failed",
       "sync_unavailable",
@@ -502,6 +504,10 @@ describe("POS terminal public mutations", () => {
       "cloud_sync",
       "local_runtime",
       "terminal_runtime",
+      "latestReviewEvent",
+      "open_work",
+      "pos_register",
+      "pos_settings",
     ]) {
       expect(returnValidator).toContain(value);
     }

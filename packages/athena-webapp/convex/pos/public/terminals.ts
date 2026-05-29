@@ -111,15 +111,51 @@ const terminalSyncEvidenceReturnValidator = v.object({
     }),
     v.null(),
   ),
+  latestReviewEvent: v.optional(v.union(
+    v.object({
+      localEventId: v.string(),
+      localRegisterSessionId: v.string(),
+      sequence: v.number(),
+      eventType: v.string(),
+      status: v.string(),
+    }),
+    v.null(),
+  )),
   sampledEventCount: v.number(),
   acceptedCount: v.number(),
   projectedCount: v.number(),
   conflictedCount: v.number(),
   heldCount: v.number(),
   rejectedCount: v.number(),
+  unresolvedConflictCount: v.optional(v.number()),
+  unresolvedConflicts: v.optional(v.array(v.object({
+    _id: v.id("posLocalSyncConflict"),
+    conflictType: v.string(),
+    createdAt: v.number(),
+    localEventId: v.string(),
+    localRegisterSessionId: v.string(),
+    sequence: v.number(),
+    summary: v.string(),
+  }))),
   acceptedThroughSequence: v.optional(v.number()),
   cursorUpdatedAt: v.optional(v.number()),
 });
+
+const terminalHealthActionTargetReturnValidator = v.union(
+  v.object({
+    type: v.literal("cash_control_register_session"),
+    registerSessionId: v.id("registerSession"),
+  }),
+  v.object({
+    type: v.literal("open_work"),
+  }),
+  v.object({
+    type: v.literal("pos_register"),
+  }),
+  v.object({
+    type: v.literal("pos_settings"),
+  }),
+);
 
 const terminalHealthStatusValidator = v.union(
   v.literal("online"),
@@ -130,6 +166,7 @@ const terminalHealthStatusValidator = v.union(
 );
 
 const terminalHealthAttentionReasonReturnValidator = v.object({
+  actionTarget: v.optional(terminalHealthActionTargetReturnValidator),
   count: v.optional(v.number()),
   latestEventSequence: v.optional(v.number()),
   latestEventStatus: v.optional(v.string()),

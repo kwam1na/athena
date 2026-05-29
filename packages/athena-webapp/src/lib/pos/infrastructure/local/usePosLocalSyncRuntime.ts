@@ -35,6 +35,7 @@ import {
   type PosTerminalRuntimeSnapshotReadiness,
   type PosTerminalRuntimeStatusPayload,
   type PosTerminalRuntimeStatusSource,
+  type PosTerminalRuntimeSyncDebugInput,
 } from "./terminalRuntimeStatus";
 
 export type PosLocalRuntimeSyncStatusSource = {
@@ -49,6 +50,23 @@ export type PosLocalRuntimeSyncStatusSource = {
 };
 
 export type PosLocalRuntimeSyncDebug = {
+  checkInPublishAttemptedAt?: number;
+  checkInPublishCompletedAt?: number;
+  checkInPublishMessage?: string;
+  checkInPublishReason?:
+    | "authorization_failed"
+    | "missing_store"
+    | "missing_sync_secret"
+    | "missing_terminal"
+    | "not_ready"
+    | "rejected"
+    | "unavailable";
+  checkInPublishStatus?:
+    | "accepted"
+    | "failed"
+    | "not_ready"
+    | "pending"
+    | "rejected";
   failureCount?: number;
   failedEventCount?: number;
   lastBatchEventCount?: number;
@@ -106,6 +124,8 @@ export function usePosLocalSyncRuntimeStatus(input: {
   const [readError, setReadError] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
   const [manualRetryToken, setManualRetryToken] = useState(0);
+  const [runtimeStatusObservationToken, setRuntimeStatusObservationToken] =
+    useState(0);
   const [debug, setDebug] = useState<PosLocalRuntimeSyncDebug>({});
   const [isOnline, setIsOnline] = useState(() =>
     typeof navigator === "undefined" ? true : navigator.onLine,
@@ -199,6 +219,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
       }).then((readiness) => {
         if (shouldStop()) return;
         setRuntimeReadiness(readiness);
+        setRuntimeStatusObservationToken((current) => current + 1);
       });
       const trigger: PosLocalSyncTrigger =
         manualRetryToken !== lastManualRetryTokenRef.current
@@ -238,6 +259,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
         }
         setReadError(null);
         setEvents(refreshedEvents.value.events);
+        setRuntimeStatusObservationToken((current) => current + 1);
         setDebug((current) => ({
           ...current,
           ...buildRuntimeSyncDebug(refreshedEvents.value.events, mode),
@@ -246,6 +268,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
       };
       setEvents(eventsResult.value.events);
       setReadError(null);
+      setRuntimeStatusObservationToken((current) => current + 1);
       setDebug((current) => ({
         ...current,
         ...buildRuntimeSyncDebug(eventsResult.value.events, mode),
@@ -530,6 +553,31 @@ export function usePosLocalSyncRuntimeStatus(input: {
     refreshToken,
   ]);
 
+  const runtimeStatusSyncDebug = useMemo<PosTerminalRuntimeSyncDebugInput>(
+    () => ({
+      failedEventCount: debug.failedEventCount,
+      lastFailure: debug.lastFailure,
+      lastTrigger: debug.lastTrigger,
+      localOnlyEventCount: debug.localOnlyEventCount,
+      nextPendingUploadSequence: debug.nextPendingUploadSequence,
+      oldestPendingEventAt: debug.oldestPendingEventAt,
+      pendingUploadEventCount: debug.pendingUploadEventCount,
+      reviewEventCount: debug.reviewEventCount,
+      schedulerRunning: debug.schedulerRunning,
+    }),
+    [
+      debug.failedEventCount,
+      debug.lastFailure,
+      debug.lastTrigger,
+      debug.localOnlyEventCount,
+      debug.nextPendingUploadSequence,
+      debug.oldestPendingEventAt,
+      debug.pendingUploadEventCount,
+      debug.reviewEventCount,
+      debug.schedulerRunning,
+    ],
+  );
+
   const runtimeStatusInput = useMemo(
     () => ({
       browserInfo: getRuntimeBrowserInfo(isOnline),
@@ -540,11 +588,10 @@ export function usePosLocalSyncRuntimeStatus(input: {
       staffAuthorityStatus:
         input.staffAuthorityStatus ?? runtimeReadiness.staffAuthorityStatus,
       staffProfileId,
-      syncDebug: debug,
+      syncDebug: runtimeStatusSyncDebug,
       terminalSeed: runtimeReadiness.terminalSeed,
     }),
     [
-      debug,
       events,
       input.staffAuthorityStatus,
       isOnline,
@@ -552,6 +599,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
       runtimeReadiness.snapshots,
       runtimeReadiness.staffAuthorityStatus,
       runtimeReadiness.terminalSeed,
+      runtimeStatusSyncDebug,
       source,
       staffProfileId,
     ],
@@ -570,7 +618,18 @@ export function usePosLocalSyncRuntimeStatus(input: {
     runtimeReadiness.terminalSeed?.syncSecretHash ?? null;
 
   useEffect(() => {
-    if (!storeId || !runtimeStatusTerminalId || !runtimeStatusSyncSecretHash) {
+    const notReadyReason = getRuntimeCheckInNotReadyReason({
+      storeId,
+      syncSecretHash: runtimeStatusSyncSecretHash,
+      terminalId: runtimeStatusTerminalId,
+    });
+    if (notReadyReason) {
+      setDebug((current) =>
+        withCheckInPublishDebug(current, {
+          checkInPublishReason: notReadyReason,
+          checkInPublishStatus: "not_ready",
+        }),
+      );
       return;
     }
     if (
@@ -578,28 +637,86 @@ export function usePosLocalSyncRuntimeStatus(input: {
       !readError &&
       events.length === 0
     ) {
+      setDebug((current) =>
+        withCheckInPublishDebug(current, {
+          checkInPublishReason: "not_ready",
+          checkInPublishStatus: "not_ready",
+        }),
+      );
       return;
     }
 
-    const signature = getRuntimeStatusSignature({
+    const checkInStoreId = storeId as string;
+    const checkInTerminalId = runtimeStatusTerminalId as string;
+    const checkInSyncSecretHash = runtimeStatusSyncSecretHash as string;
+    const signature = getRuntimeStatusPublishSignature({
+      observationToken: runtimeStatusObservationToken,
       runtimeStatus,
-      storeId,
-      terminalId: runtimeStatusTerminalId,
+      storeId: checkInStoreId,
+      terminalId: checkInTerminalId,
     });
     if (signature === lastRuntimeStatusSignatureRef.current) return;
     lastRuntimeStatusSignatureRef.current = signature;
 
+    const attemptedAt = Date.now();
+    setDebug((current) =>
+      withCheckInPublishDebug(current, {
+        checkInPublishAttemptedAt: attemptedAt,
+        checkInPublishCompletedAt: undefined,
+        checkInPublishMessage: undefined,
+        checkInPublishReason: undefined,
+        checkInPublishStatus: "pending",
+      }),
+    );
+
     void reportTerminalRuntimeStatus({
-      storeId: storeId as Id<"store">,
-      terminalId: runtimeStatusTerminalId as Id<"posTerminal">,
-      syncSecretHash: runtimeStatusSyncSecretHash,
+      storeId: checkInStoreId as Id<"store">,
+      terminalId: checkInTerminalId as Id<"posTerminal">,
+      syncSecretHash: checkInSyncSecretHash,
       status: runtimeStatus,
-    }).catch(() => undefined);
+    })
+      .then((result) => {
+        if (result.kind === "ok") {
+          setDebug((current) =>
+            withCheckInPublishDebug(current, {
+              checkInPublishCompletedAt: Date.now(),
+              checkInPublishMessage: undefined,
+              checkInPublishReason: undefined,
+              checkInPublishStatus: "accepted",
+            }),
+          );
+          return;
+        }
+
+        const error = result.kind === "user_error" ? result.error : null;
+        setDebug((current) =>
+          withCheckInPublishDebug(current, {
+            checkInPublishCompletedAt: Date.now(),
+            checkInPublishMessage: error?.message ?? "Check-in was rejected.",
+            checkInPublishReason:
+              error?.code === "authorization_failed"
+                ? "authorization_failed"
+                : "rejected",
+            checkInPublishStatus: "rejected",
+          }),
+        );
+      })
+      .catch(() => {
+        setDebug((current) =>
+          withCheckInPublishDebug(current, {
+            checkInPublishCompletedAt: Date.now(),
+            checkInPublishMessage: "Check-in could not reach the server.",
+            checkInPublishReason: "unavailable",
+            checkInPublishStatus: "failed",
+          }),
+        );
+      });
   }, [
     reportTerminalRuntimeStatus,
     events.length,
     readError,
     runtimeStatus,
+    runtimeStatusObservationToken,
     runtimeReadiness.terminalSeed,
     runtimeStatusSyncSecretHash,
     runtimeStatusTerminalId,
@@ -719,6 +836,26 @@ export function getRuntimeStatusSignature(input: {
   });
 }
 
+export function getRuntimeStatusPublishSignature(input: {
+  observationToken: number;
+  runtimeStatus: PosTerminalRuntimeStatusPayload;
+  storeId: string;
+  terminalId: string;
+}) {
+  const stableStatus: Partial<PosTerminalRuntimeStatusPayload> = {
+    ...input.runtimeStatus,
+  };
+  delete stableStatus.reportedAt;
+  delete stableStatus.snapshots;
+
+  return JSON.stringify({
+    observationToken: input.observationToken,
+    runtimeStatus: stableStatus,
+    storeId: input.storeId,
+    terminalId: input.terminalId,
+  });
+}
+
 function startStatusOnlyRuntimeTriggers(refresh: () => void) {
   const win = globalThis.window;
   const doc = globalThis.document;
@@ -740,6 +877,46 @@ function startStatusOnlyRuntimeTriggers(refresh: () => void) {
     win?.removeEventListener?.("offline", handleOnlineStateChange);
     doc?.removeEventListener?.("visibilitychange", handleVisibility);
   };
+}
+
+function getRuntimeCheckInNotReadyReason(input: {
+  storeId?: string | null;
+  syncSecretHash?: string | null;
+  terminalId?: string | null;
+}): PosLocalRuntimeSyncDebug["checkInPublishReason"] | null {
+  if (!input.storeId) return "missing_store";
+  if (!input.terminalId) return "missing_terminal";
+  if (!input.syncSecretHash) return "missing_sync_secret";
+  return null;
+}
+
+function withCheckInPublishDebug(
+  current: PosLocalRuntimeSyncDebug,
+  patch: Pick<
+    PosLocalRuntimeSyncDebug,
+    | "checkInPublishAttemptedAt"
+    | "checkInPublishCompletedAt"
+    | "checkInPublishMessage"
+    | "checkInPublishReason"
+    | "checkInPublishStatus"
+  >,
+) {
+  const next = {
+    ...current,
+    ...patch,
+  };
+
+  if (
+    current.checkInPublishAttemptedAt === next.checkInPublishAttemptedAt &&
+    current.checkInPublishCompletedAt === next.checkInPublishCompletedAt &&
+    current.checkInPublishMessage === next.checkInPublishMessage &&
+    current.checkInPublishReason === next.checkInPublishReason &&
+    current.checkInPublishStatus === next.checkInPublishStatus
+  ) {
+    return current;
+  }
+
+  return next;
 }
 
 function toIngestLocalEventsArgs(input: {
