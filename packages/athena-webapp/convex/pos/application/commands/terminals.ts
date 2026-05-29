@@ -21,6 +21,8 @@ const REGISTER_NUMBER_REQUIRED_MESSAGE =
   "A register number is required to identify the terminal.";
 const REGISTER_NUMBER_UNIQUE_MESSAGE =
   "A terminal with this register number already exists in this store.";
+const TERMINAL_REACTIVATION_REPROVISION_MESSAGE =
+  "Re-provision this terminal before returning it to service.";
 
 const REGISTER_TERMINAL_VALIDATION_MESSAGES = new Set([
   REGISTER_NUMBER_REQUIRED_MESSAGE,
@@ -187,6 +189,9 @@ export async function updateTerminal(
     updates.displayName = args.displayName;
   }
   if (args.status !== undefined) {
+    if (terminal.status !== "active" && args.status === "active") {
+      throw new Error(TERMINAL_REACTIVATION_REPROVISION_MESSAGE);
+    }
     updates.status = args.status;
   }
   if (args.browserInfo !== undefined) {
@@ -248,12 +253,46 @@ export type TerminalRuntimeStatusInput = {
     staffProfileId?: Id<"staffProfile">;
     expiresAt?: number;
   };
+  terminalIntegrity?: {
+    observedAt: number;
+    reason?: TerminalIntegrityReason;
+    status: TerminalIntegrityStatus;
+  };
+  drawerAuthority?: {
+    cloudRegisterSessionId?: string;
+    localRegisterSessionId: string;
+    observedAt: number;
+    reason?: DrawerAuthorityReason;
+    status: DrawerAuthorityStatus;
+  };
   snapshots: {
     catalogAgeMs?: number;
     availabilityAgeMs?: number;
     registerReadModelAgeMs?: number;
   };
 };
+
+type TerminalIntegrityStatus =
+  | "healthy"
+  | "repairing"
+  | "requires_reprovision"
+  | "reset_required";
+
+type TerminalIntegrityReason =
+  | "authorization_failed"
+  | "ownership_conflict"
+  | "repair_rejected"
+  | "seed_write_failed"
+  | "store_access_missing"
+  | "terminal_revoked"
+  | "unknown";
+
+type DrawerAuthorityStatus = "healthy" | "blocked";
+
+type DrawerAuthorityReason =
+  | "authority_unknown"
+  | "cloud_closed"
+  | "lifecycle_rejected";
 
 const TERMINAL_NOT_ACTIVE_FOR_STORE_MESSAGE =
   "This terminal is not active for this store.";
@@ -357,6 +396,10 @@ export async function submitTerminalRuntimeStatus(
         args.status.snapshots.registerReadModelAgeMs,
       ),
     }),
+    ...omitUndefined({
+      terminalIntegrity: cleanTerminalIntegrity(args.status.terminalIntegrity),
+      drawerAuthority: cleanDrawerAuthority(args.status.drawerAuthority),
+    }),
   });
 
   return ok({
@@ -403,6 +446,73 @@ function cleanDiagnosticMessage(value: string | undefined, maxLength: number) {
     cleaned,
   );
 }
+
+function cleanTerminalIntegrity(
+  terminalIntegrity: TerminalRuntimeStatusInput["terminalIntegrity"],
+) {
+  if (!terminalIntegrity) return undefined;
+
+  return omitUndefined({
+    observedAt: positiveTimestamp(terminalIntegrity.observedAt) ?? Date.now(),
+    reason: terminalIntegrityReasons.has(terminalIntegrity.reason)
+      ? terminalIntegrity.reason
+      : undefined,
+    status: terminalIntegrityStatuses.has(terminalIntegrity.status)
+      ? terminalIntegrity.status
+      : "reset_required",
+  });
+}
+
+function cleanDrawerAuthority(
+  drawerAuthority: TerminalRuntimeStatusInput["drawerAuthority"],
+) {
+  if (!drawerAuthority) return undefined;
+
+  return omitUndefined({
+    cloudRegisterSessionId: cleanOptionalString(
+      drawerAuthority.cloudRegisterSessionId,
+      120,
+    ),
+    localRegisterSessionId:
+      cleanOptionalString(drawerAuthority.localRegisterSessionId, 120) ??
+      "unknown",
+    observedAt: positiveTimestamp(drawerAuthority.observedAt) ?? Date.now(),
+    reason: drawerAuthorityReasons.has(drawerAuthority.reason)
+      ? drawerAuthority.reason
+      : undefined,
+    status: drawerAuthorityStatuses.has(drawerAuthority.status)
+      ? drawerAuthority.status
+      : "blocked",
+  });
+}
+
+const terminalIntegrityStatuses = new Set<TerminalIntegrityStatus>([
+  "healthy",
+  "repairing",
+  "requires_reprovision",
+  "reset_required",
+]);
+
+const terminalIntegrityReasons = new Set<TerminalIntegrityReason | undefined>([
+  "authorization_failed",
+  "ownership_conflict",
+  "repair_rejected",
+  "seed_write_failed",
+  "store_access_missing",
+  "terminal_revoked",
+  "unknown",
+]);
+
+const drawerAuthorityStatuses = new Set<DrawerAuthorityStatus>([
+  "healthy",
+  "blocked",
+]);
+
+const drawerAuthorityReasons = new Set<DrawerAuthorityReason | undefined>([
+  "authority_unknown",
+  "cloud_closed",
+  "lifecycle_rejected",
+]);
 
 function positiveTimestamp(value: number | undefined) {
   return Number.isFinite(value) && value !== undefined && value > 0

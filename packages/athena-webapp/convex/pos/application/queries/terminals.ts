@@ -46,6 +46,8 @@ export type TerminalHealthAttentionReason = {
     | "local_store_unavailable"
     | "sync_failed"
     | "sync_unavailable"
+    | "terminal_authorization_failed"
+    | "drawer_authority_blocked"
     | "terminal_seed_missing";
 };
 
@@ -243,7 +245,10 @@ function getAttentionReasonActionTarget(
           }
         : { type: "open_work" };
     case "terminal_seed_missing":
+    case "terminal_authorization_failed":
       return { type: "pos_settings" };
+    case "drawer_authority_blocked":
+      return { type: "pos_register" };
     case "local_review":
     case "local_store_unavailable":
     case "sync_failed":
@@ -293,6 +298,27 @@ function deriveTerminalHealthAttentionReasons(input: {
   const reasons: TerminalHealthAttentionReason[] = [];
   const sync = input.runtimeStatus?.sync;
   const latestEvent = input.syncEvidence.latestEvent;
+
+  if (
+    input.runtimeStatus?.terminalIntegrity &&
+    input.runtimeStatus.terminalIntegrity.status !== "healthy"
+  ) {
+    reasons.push({
+      source: "terminal_runtime",
+      summary:
+        "Terminal setup needs repair before this checkout station can record new sales.",
+      type: "terminal_authorization_failed",
+    });
+  }
+
+  if (input.runtimeStatus?.drawerAuthority?.status === "blocked") {
+    reasons.push({
+      source: "terminal_runtime",
+      summary:
+        "Drawer setup needs repair before this checkout station can record new sales.",
+      type: "drawer_authority_blocked",
+    });
+  }
 
   if (sync && (sync.status === "needs_review" || sync.reviewEventCount > 0)) {
     const count = Math.max(1, sync.reviewEventCount);

@@ -1178,6 +1178,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   const exactAddKeyRef = useRef<string | null>(null);
   const pendingSessionStartKeyRef = useRef<string | null>(null);
   const seededRegisterSessionIdsRef = useRef<Set<string>>(new Set());
+  const persistedDrawerAuthorityBlockRef = useRef<string | null>(null);
   const [optimisticCartQuantities, setOptimisticCartQuantities] = useState<
     Record<string, number>
   >({});
@@ -1552,6 +1553,58 @@ export function useRegisterViewModel(): RegisterViewModel {
       }),
     [],
   );
+  useEffect(() => {
+    const localRegisterSession = localRegisterReadModel?.activeRegisterSession;
+    const cloudRegisterSessionId =
+      registerState?.activeRegisterSession?._id?.toString() ??
+      localRegisterSession?.cloudRegisterSessionId;
+    if (
+      !cloudRegisterSessionBlocksLocalProjection ||
+      !activeStoreId ||
+      !localRegisterSession ||
+      !cloudRegisterSessionId ||
+      localRegisterReadModel?.saleBlockReason === "drawer_authority"
+    ) {
+      return;
+    }
+    const blockKey = `${activeStoreId}:${localRegisterSession.localRegisterSessionId}:${cloudRegisterSessionId}`;
+    if (persistedDrawerAuthorityBlockRef.current === blockKey) {
+      return;
+    }
+
+    void localStore
+      .writeDrawerAuthorityState({
+        cloudRegisterSessionId,
+        localRegisterSessionId: localRegisterSession.localRegisterSessionId,
+        message:
+          "The drawer is already closed. Repair drawer setup before continuing.",
+        observedAt: Date.now(),
+        reason: "cloud_closed",
+        registerNumber: localRegisterSession.registerNumber,
+        status: "blocked",
+        storeId: activeStoreId,
+        terminalId:
+          localRegisterSession.terminalId ??
+          terminal?.localTerminalId ??
+          terminal?._id?.toString() ??
+          "",
+      })
+      .then((result) => {
+        if (result.ok) {
+          persistedDrawerAuthorityBlockRef.current = blockKey;
+          setLocalRegisterReadModelVersion((current) => current + 1);
+        }
+      });
+  }, [
+    activeStoreId,
+    cloudRegisterSessionBlocksLocalProjection,
+    localRegisterReadModel?.activeRegisterSession,
+    localRegisterReadModel?.saleBlockReason,
+    localStore,
+    registerState?.activeRegisterSession?._id,
+    terminal?._id,
+    terminal?.localTerminalId,
+  ]);
   const localCommandGateway = useMemo(
     () =>
       createLocalCommandGateway({
@@ -2113,6 +2166,9 @@ export function useRegisterViewModel(): RegisterViewModel {
       bootstrapState.phase === "resumable" ||
       hasActivePosSession),
   );
+  const localSaleAuthorityBlockReason =
+    localRegisterReadModel?.saleBlockReason ?? null;
+  const hasLocalSaleAuthorityBlock = Boolean(localSaleAuthorityBlockReason);
   const requiresDrawerGate = Boolean(
     activeStoreId &&
     terminal?._id &&
@@ -2121,7 +2177,8 @@ export function useRegisterViewModel(): RegisterViewModel {
     (hasMissingDrawerStartupState ||
       hasCloseoutBlockedDrawerState ||
       hasMissingDrawerRecoveryState ||
-      activeSessionHasBlockedRegisterBinding),
+      activeSessionHasBlockedRegisterBinding ||
+      hasLocalSaleAuthorityBlock),
   ) && !hasCloudBlockedRecoverableLocalSale;
   const closeoutBlockedGateIsRecovery = Boolean(
     hasCloseoutBlockedDrawerState &&
@@ -2180,13 +2237,21 @@ export function useRegisterViewModel(): RegisterViewModel {
     | "initialSetup"
     | "recovery"
     | "closeoutBlocked"
-    | "openingFloatCorrection" = activeOpeningFloatCorrectionRegisterSession
+    | "openingFloatCorrection"
+    | "terminalRepair"
+    | "drawerAuthorityRepair" = activeOpeningFloatCorrectionRegisterSession
     ? "openingFloatCorrection"
-    : hasCloseoutBlockedDrawerState || activeCloseoutRegisterSession
-      ? "closeoutBlocked"
-      : hasMissingDrawerRecoveryState || activeSessionHasBlockedRegisterBinding
-        ? "recovery"
-        : "initialSetup";
+    : localSaleAuthorityBlockReason === "terminal_integrity"
+      ? "terminalRepair"
+      : localSaleAuthorityBlockReason === "drawer_authority" ||
+          localSaleAuthorityBlockReason === "lifecycle_needs_review"
+        ? "drawerAuthorityRepair"
+        : hasCloseoutBlockedDrawerState || activeCloseoutRegisterSession
+          ? "closeoutBlocked"
+          : hasMissingDrawerRecoveryState ||
+              activeSessionHasBlockedRegisterBinding
+            ? "recovery"
+            : "initialSetup";
   const setPaymentState = useCallback((nextPayments: Payment[]) => {
     paymentsRef.current = nextPayments;
     setPayments(nextPayments);
@@ -2703,6 +2768,7 @@ export function useRegisterViewModel(): RegisterViewModel {
           sessionId: operableActiveSession._id,
           stage: args.stage,
         });
+        await refreshLocalRegisterReadModel();
         return false;
       }
 
@@ -2718,6 +2784,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       localCommandGateway,
       noteLocalRegisterEventChanged,
       registerNumber,
+      refreshLocalRegisterReadModel,
       staffProfileId,
       terminal?._id,
     ],

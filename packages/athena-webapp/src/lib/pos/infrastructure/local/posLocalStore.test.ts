@@ -10,6 +10,7 @@ import {
   createMemoryPosLocalStorageAdapter,
   createPosLocalStore,
 } from "./posLocalStore";
+import { readProjectedLocalRegisterModel } from "./localRegisterReader";
 
 function buildAuthorityRecord(overrides = {}) {
   return {
@@ -113,6 +114,347 @@ describe("posLocalStore", () => {
         schemaVersion: POS_LOCAL_STORE_SCHEMA_VERSION,
       },
     });
+  });
+
+  it("persists terminal integrity state without storing secret material", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 2_000,
+    });
+
+    const write = await store.writeTerminalIntegrityState({
+      cloudTerminalId: "terminal-cloud-1",
+      message:
+        "syncSecretHash stale-secret staffProofToken proof-token should not persist",
+      observedAt: 1_900,
+      reason: "authorization_failed",
+      registerNumber: "1",
+      status: "requires_reprovision",
+      storeId: "store-1",
+      terminalId: "local-terminal-1",
+    });
+
+    expect(write).toMatchObject({
+      ok: true,
+      value: {
+        cloudTerminalId: "terminal-cloud-1",
+        message: "Terminal authorization failed. Repair terminal setup.",
+        observedAt: 1_900,
+        reason: "authorization_failed",
+        status: "requires_reprovision",
+      },
+    });
+    await expect(
+      store.readTerminalIntegrityState({
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: expect.objectContaining({
+        terminalId: "local-terminal-1",
+        cloudTerminalId: "terminal-cloud-1",
+        status: "requires_reprovision",
+      }),
+    });
+  });
+
+  it("clears terminal integrity state without deleting local events", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+
+    await store.appendEvent({
+      type: "register.opened",
+      terminalId: "local-terminal-1",
+      storeId: "store-1",
+      localRegisterSessionId: "local-register-1",
+      payload: { openingFloat: 100 },
+    });
+    await store.writeTerminalIntegrityState({
+      observedAt: 1_000,
+      reason: "authorization_failed",
+      status: "requires_reprovision",
+      storeId: "store-1",
+      terminalId: "local-terminal-1",
+    });
+
+    await expect(
+      store.clearTerminalIntegrityState({
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      }),
+    ).resolves.toEqual({ ok: true, value: null });
+    await expect(
+      store.readTerminalIntegrityState({
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      }),
+    ).resolves.toEqual({ ok: true, value: null });
+    await expect(store.listEvents()).resolves.toMatchObject({
+      ok: true,
+      value: [expect.objectContaining({ type: "register.opened" })],
+    });
+  });
+
+  it("persists drawer authority blocks scoped to the active local drawer", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 3_000,
+    });
+
+    await store.writeDrawerAuthorityState({
+      cloudRegisterSessionId: "cloud-register-1",
+      localRegisterSessionId: "local-register-1",
+      observedAt: 2_900,
+      reason: "cloud_closed",
+      registerNumber: "1",
+      status: "blocked",
+      storeId: "store-1",
+      terminalId: "local-terminal-1",
+    });
+
+    await expect(
+      store.readDrawerAuthorityState({
+        localRegisterSessionId: "local-register-1",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: expect.objectContaining({
+        cloudRegisterSessionId: "cloud-register-1",
+        localRegisterSessionId: "local-register-1",
+        reason: "cloud_closed",
+        status: "blocked",
+      }),
+    });
+    await expect(
+      store.readDrawerAuthorityState({
+        localRegisterSessionId: "local-register-other",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      }),
+    ).resolves.toEqual({ ok: true, value: null });
+  });
+
+  it("projects drawer authority written under the cloud terminal id for a provisioned local terminal", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 3_000,
+    });
+
+    await store.writeProvisionedTerminalSeed({
+      terminalId: "local-terminal-1",
+      cloudTerminalId: "terminal-cloud-1",
+      syncSecretHash: "sync-secret-1",
+      storeId: "store-1",
+      registerNumber: "1",
+      displayName: "Front register",
+      provisionedAt: 1_000,
+      schemaVersion: POS_LOCAL_STORE_SCHEMA_VERSION,
+    });
+    await store.appendEvent({
+      type: "register.opened",
+      terminalId: "terminal-cloud-1",
+      storeId: "store-1",
+      registerNumber: "1",
+      localRegisterSessionId: "local-register-1",
+      payload: {
+        localRegisterSessionId: "local-register-1",
+        openingFloat: 100,
+        expectedCash: 100,
+        status: "open",
+      },
+    });
+    await store.writeDrawerAuthorityState({
+      cloudRegisterSessionId: "cloud-register-1",
+      localRegisterSessionId: "local-register-1",
+      observedAt: 2_900,
+      reason: "cloud_closed",
+      status: "blocked",
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
+    });
+
+    await expect(
+      readProjectedLocalRegisterModel({
+        store,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: {
+        canSell: false,
+        saleBlockReason: "drawer_authority",
+      },
+    });
+  });
+
+  it("atomically writes repaired terminal seed and clears stale integrity state", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+
+    await store.writeTerminalIntegrityState({
+      cloudTerminalId: "terminal-cloud-1",
+      observedAt: 1_000,
+      reason: "authorization_failed",
+      status: "requires_reprovision",
+      storeId: "store-1",
+      terminalId: "local-terminal-1",
+    });
+
+    await expect(
+      store.writeProvisionedTerminalSeedAndClearTerminalIntegrity({
+        seed: {
+          terminalId: "local-terminal-1",
+          cloudTerminalId: "terminal-cloud-1",
+          syncSecretHash: "sync-secret-2",
+          storeId: "store-1",
+          registerNumber: "1",
+          displayName: "Front register",
+          provisionedAt: 2_000,
+          schemaVersion: POS_LOCAL_STORE_SCHEMA_VERSION,
+        },
+        terminalIntegrity: {
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: {
+        syncSecretHash: "sync-secret-2",
+      },
+    });
+    await expect(store.readProvisionedTerminalSeed()).resolves.toMatchObject({
+      ok: true,
+      value: {
+        syncSecretHash: "sync-secret-2",
+      },
+    });
+    await expect(
+      store.readTerminalIntegrityState({
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      }),
+    ).resolves.toEqual({ ok: true, value: null });
+  });
+
+  it("persists terminal and drawer authority state through the IndexedDB authority store", async () => {
+    const originalIndexedDb = globalThis.indexedDB;
+    const fakeIndexedDb = createControlledIndexedDb();
+    Object.defineProperty(globalThis, "indexedDB", {
+      configurable: true,
+      value: fakeIndexedDb.indexedDB,
+    });
+
+    try {
+      const store = createPosLocalStore({
+        adapter: createIndexedDbPosLocalStorageAdapter({
+          databaseName: "athena-pos-local-authority-test",
+        }),
+      });
+
+      const terminalWrite = store.writeTerminalIntegrityState({
+        cloudTerminalId: "terminal-cloud-1",
+        observedAt: 1_000,
+        reason: "authorization_failed",
+        status: "requires_reprovision",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      });
+      await fakeIndexedDb.waitForTransaction();
+      fakeIndexedDb.completeLastTransaction();
+      await expect(terminalWrite).resolves.toMatchObject({
+        ok: true,
+        value: {
+          status: "requires_reprovision",
+        },
+      });
+
+      const terminalRead = store.readTerminalIntegrityState({
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      });
+      await fakeIndexedDb.waitForTransaction();
+      fakeIndexedDb.completeLastTransaction();
+      await expect(terminalRead).resolves.toMatchObject({
+        ok: true,
+        value: expect.objectContaining({
+          terminalId: "local-terminal-1",
+        }),
+      });
+
+      const drawerWrite = store.writeDrawerAuthorityState({
+        cloudRegisterSessionId: "cloud-register-1",
+        localRegisterSessionId: "local-register-1",
+        observedAt: 2_000,
+        reason: "authority_unknown",
+        status: "blocked",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      });
+      await fakeIndexedDb.waitForTransaction();
+      fakeIndexedDb.completeLastTransaction();
+      await expect(drawerWrite).resolves.toMatchObject({
+        ok: true,
+        value: {
+          reason: "authority_unknown",
+          status: "blocked",
+        },
+      });
+
+      const drawerRead = store.readDrawerAuthorityState({
+        localRegisterSessionId: "local-register-1",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      });
+      await fakeIndexedDb.waitForTransaction();
+      fakeIndexedDb.completeLastTransaction();
+      await expect(drawerRead).resolves.toMatchObject({
+        ok: true,
+        value: expect.objectContaining({
+          cloudRegisterSessionId: "cloud-register-1",
+        }),
+      });
+
+      const drawerClear = store.clearDrawerAuthorityState({
+        localRegisterSessionId: "local-register-1",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      });
+      await fakeIndexedDb.waitForTransaction();
+      fakeIndexedDb.completeLastTransaction();
+      await expect(drawerClear).resolves.toEqual({ ok: true, value: null });
+
+      const drawerReadAfterClear = store.readDrawerAuthorityState({
+        localRegisterSessionId: "local-register-1",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      });
+      await fakeIndexedDb.waitForTransaction();
+      fakeIndexedDb.completeLastTransaction();
+      await expect(drawerReadAfterClear).resolves.toEqual({
+        ok: true,
+        value: null,
+      });
+
+      expect(fakeIndexedDb.database.createObjectStore).toHaveBeenCalledWith(
+        "authority",
+      );
+      expect(fakeIndexedDb.database.transaction).toHaveBeenCalledWith(
+        ["meta", "authority"],
+        "readwrite",
+      );
+    } finally {
+      Object.defineProperty(globalThis, "indexedDB", {
+        configurable: true,
+        value: originalIndexedDb,
+      });
+    }
   });
 
   it("writes and reads a register catalog snapshot for offline lookup", async () => {
@@ -990,6 +1332,10 @@ function createControlledIndexedDb() {
           data.set(storeName, store);
 
           return {
+            delete: (key: string) => {
+              store.delete(key);
+              return createSuccessfulRequest(undefined);
+            },
             get: (key: string) => createSuccessfulRequest(store.get(key)),
             getAll: () => createSuccessfulRequest(Array.from(store.values())),
             put: (value: unknown, key: string) => {
@@ -1057,6 +1403,7 @@ type ControlledIndexedDbTransaction = {
   error: Error | null;
   fail(error: Error): void;
   objectStore(storeName: string): {
+    delete(key: string): IDBRequest<undefined>;
     get(key: string): IDBRequest<unknown>;
     getAll(): IDBRequest<unknown[]>;
     put(value: unknown, key: string): IDBRequest<undefined>;

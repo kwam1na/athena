@@ -161,6 +161,8 @@ export type TerminalHealthAttentionReason = {
     | "local_store_unavailable"
     | "sync_failed"
     | "sync_unavailable"
+    | "terminal_authorization_failed"
+    | "drawer_authority_blocked"
     | "terminal_seed_missing"
     | string;
 };
