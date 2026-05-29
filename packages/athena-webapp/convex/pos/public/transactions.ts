@@ -45,6 +45,20 @@ const customerInfoValidator = v.object({
   phone: v.optional(v.string()),
 });
 
+const transactionServiceLineValidator = v.object({
+  id: v.string(),
+  name: v.string(),
+  quantity: v.number(),
+  serviceCaseId: v.union(v.id("serviceCase"), v.null()),
+  serviceCaseTitle: v.union(v.string(), v.null()),
+  serviceCaseUnavailable: v.boolean(),
+  serviceMode: v.union(v.string(), v.null()),
+  servicePaymentStatus: v.union(v.string(), v.null()),
+  serviceStatus: v.union(v.string(), v.null()),
+  totalPrice: v.number(),
+  unitPrice: v.number(),
+});
+
 const adjustmentLineItemValidator = v.object({
   adjustedQuantity: v.optional(v.number()),
   originalQuantity: v.optional(v.number()),
@@ -282,6 +296,8 @@ export const getCompletedTransactions = query({
       customerProfileId: v.optional(v.id("customerProfile")),
       customerName: v.union(v.string(), v.null()),
       itemCount: v.number(),
+      serviceLineCount: v.number(),
+      servicePaymentTotal: v.number(),
     }),
   ),
   handler: async (ctx, args) => getCompletedTransactionsQuery(ctx, args),
@@ -382,6 +398,9 @@ export const getTransactionById = query({
           retryable: v.boolean(),
         }),
       ),
+      serviceLines: v.array(transactionServiceLineValidator),
+      serviceLineCount: v.number(),
+      servicePaymentTotal: v.number(),
       items: v.array(
         v.object({
           _id: v.id("posTransactionItem"),

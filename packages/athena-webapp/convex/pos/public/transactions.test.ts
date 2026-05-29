@@ -112,11 +112,19 @@ describe("POS public transaction query validators", () => {
         },
         status: expect.any(Object),
         voidedAt: expect.any(Object),
+        serviceLineCount: {
+          fieldType: { type: "number" },
+          optional: false,
+        },
+        servicePaymentTotal: {
+          fieldType: { type: "number" },
+          optional: false,
+        },
       },
     });
   });
 
-  it("exposes session trace and terminal ids for transaction details", () => {
+  it("exposes session trace, terminal, and service line fields for transaction details", () => {
     const validator = parseValidator(exportReturns(getTransactionById));
 
     expect(validator.type).toBe("union");
@@ -126,6 +134,30 @@ describe("POS public transaction query validators", () => {
       value: {
         sessionTraceId: expect.any(Object),
         terminalId: expect.any(Object),
+        serviceLines: {
+          fieldType: {
+            type: "array",
+            value: {
+              type: "object",
+              value: {
+                serviceCaseId: expect.any(Object),
+                serviceCaseTitle: expect.any(Object),
+                servicePaymentStatus: expect.any(Object),
+                serviceStatus: expect.any(Object),
+                totalPrice: expect.any(Object),
+              },
+            },
+          },
+          optional: false,
+        },
+        serviceLineCount: {
+          fieldType: { type: "number" },
+          optional: false,
+        },
+        servicePaymentTotal: {
+          fieldType: { type: "number" },
+          optional: false,
+        },
       },
     });
   });
