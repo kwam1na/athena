@@ -669,7 +669,6 @@ function getDailyCloseStatus(snapshot: DailyCloseSnapshot): DailyCloseStatus {
 function canReopenDailyClose(snapshot: DailyCloseSnapshot) {
   return (
     getDailyCloseStatus(snapshot) === "completed" &&
-    snapshot.existingClose?.isCurrent !== false &&
     snapshot.existingClose?.lifecycleStatus !== "reopened" &&
     snapshot.existingClose?.lifecycleStatus !== "superseded"
   );
