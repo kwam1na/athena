@@ -113,6 +113,27 @@ describe("RegisterCustomerAttribution", () => {
     ).toBeInTheDocument();
   });
 
+  it("opens the customer lookup from a controlled parent state", () => {
+    render(
+      <RegisterCustomerAttribution
+        customerInfo={{
+          customerProfileId: undefined,
+          name: "",
+          email: "",
+          phone: "",
+        }}
+        isOpen
+        onOpenChange={vi.fn()}
+        onCustomerCommitted={vi.fn().mockResolvedValue(undefined)}
+        setCustomerInfo={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByPlaceholderText("Name, phone, or email"),
+    ).toBeInTheDocument();
+  });
+
   it("disables the entire attribution flow when active store session is not active", async () => {
     const user = userEvent.setup();
 
@@ -144,6 +165,10 @@ describe("RegisterCustomerAttribution", () => {
     expect(
       screen.getByRole("button", { name: /Ama Serwa/ }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Ama Serwa/ })).toHaveClass(
+      "min-h-12",
+      "py-3",
+    );
     expect(
       screen.getByRole("button", { name: 'Add "ama"' }),
     ).toBeInTheDocument();

@@ -73,6 +73,36 @@ describe("PaymentView", () => {
       expect(onComplete).toHaveBeenCalledTimes(1);
     });
 
+    it("does not show Complete Sale when checkout completion is blocked", async () => {
+      const onAddPayment = vi.fn().mockResolvedValue(true);
+      const onComplete = vi.fn().mockResolvedValue(true);
+      const user = userEvent.setup();
+
+      render(
+        <PaymentView
+          cartItemCount={1}
+          totalPaid={0}
+          remainingDue={5000}
+          amountDue={5000}
+          formatter={formatter}
+          selectedPaymentMethod={method}
+          setSelectedPaymentMethod={vi.fn()}
+          onAddPayment={onAddPayment}
+          onComplete={onComplete}
+          completionBlockMessage="Customer required. Add a customer before checking out services."
+        />,
+      );
+
+      expect(
+        screen.queryByRole("button", { name: "Complete Sale" }),
+      ).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "Add Payment" }));
+
+      expect(onAddPayment).toHaveBeenCalledWith(method, expectedAmount);
+      expect(onComplete).not.toHaveBeenCalled();
+    });
+
     it("waits for durable payment save before completing the sale", async () => {
       let resolvePayment!: (value: boolean) => void;
       const onAddPayment = vi.fn(

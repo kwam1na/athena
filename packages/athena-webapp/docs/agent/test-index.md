@@ -95,6 +95,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/pos/application/transactionAdjustmentPlanner.test.ts`](../../convex/pos/application/transactionAdjustmentPlanner.test.ts)
 - [`convex/pos/application/transactionAdjustments.test.ts`](../../convex/pos/application/transactionAdjustments.test.ts)
 - [`convex/pos/infrastructure/integrations/inventoryHoldGateway.test.ts`](../../convex/pos/infrastructure/integrations/inventoryHoldGateway.test.ts)
+- [`convex/pos/infrastructure/repositories/localSyncRepository.test.ts`](../../convex/pos/infrastructure/repositories/localSyncRepository.test.ts)
 - [`convex/pos/infrastructure/repositories/registerSessionRepository.test.ts`](../../convex/pos/infrastructure/repositories/registerSessionRepository.test.ts)
 - [`convex/pos/infrastructure/repositories/sessionCommandRepository.test.ts`](../../convex/pos/infrastructure/repositories/sessionCommandRepository.test.ts)
 - [`convex/pos/infrastructure/repositories/sessionRepository.test.ts`](../../convex/pos/infrastructure/repositories/sessionRepository.test.ts)

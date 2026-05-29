@@ -332,6 +332,23 @@ describe("POS terminal public mutations", () => {
           reason: "cloud_closed",
           status: "blocked",
         },
+        sync: {
+          ...buildRuntimeStatus().sync,
+          reviewEventCount: 1,
+          reviewEvents: [
+            {
+              createdAt: 101,
+              localEventId: "event-review-1",
+              localRegisterSessionId: "local-register-1",
+              sequence: 9,
+              status: "needs_review",
+              type: "transaction.completed",
+              uploaded: true,
+              uploadSequence: 9,
+            },
+          ],
+          status: "needs_review",
+        },
         staffProofToken: "proof-token",
         terminalIntegrity: {
           observedAt: 111,
@@ -372,6 +389,15 @@ describe("POS terminal public mutations", () => {
             reason: "cloud_closed",
             status: "blocked",
           },
+          sync: expect.objectContaining({
+            reviewEvents: [
+              expect.objectContaining({
+                localEventId: "event-review-1",
+                localRegisterSessionId: "local-register-1",
+                status: "needs_review",
+              }),
+            ],
+          }),
           terminalIntegrity: {
             observedAt: 111,
             reason: "authorization_failed",

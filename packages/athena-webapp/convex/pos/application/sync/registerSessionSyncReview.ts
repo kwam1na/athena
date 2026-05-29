@@ -3,22 +3,19 @@ import type { QueryCtx } from "../../../_generated/server";
 
 const SYNC_CONFLICT_LIMIT = 500;
 
-export type RegisterSessionSyncConflict = Pick<
-  Doc<"posLocalSyncConflict">,
-  | "_id"
-  | "conflictType"
-  | "createdAt"
-  | "localEventId"
-  | "sequence"
-  | "status"
-  | "summary"
-> &
-  Partial<
-    Pick<
-      Doc<"posLocalSyncConflict">,
-      "details" | "localRegisterSessionId" | "storeId" | "terminalId"
-    >
-  >;
+export type RegisterSessionSyncConflict = {
+  _id: string;
+  conflictType?: string;
+  createdAt: number;
+  details?: Record<string, unknown>;
+  localEventId: string;
+  localRegisterSessionId?: string;
+  sequence: number;
+  status: string;
+  storeId?: Id<"store">;
+  summary?: string;
+  terminalId?: Id<"posTerminal">;
+};
 
 export type RegisterSessionLocalSyncStatus = {
   status: "needs_review";
@@ -53,7 +50,7 @@ function getSyncConflictReconciliationType(
     return "register_closeout";
   }
 
-  return conflict.conflictType;
+  return conflict.conflictType ?? null;
 }
 
 function numberDetail(
@@ -92,8 +89,9 @@ export function buildRegisterSessionLocalSyncStatus(
 export async function listOpenLocalSyncConflictsByRegisterSession(
   ctx: Pick<QueryCtx, "db">,
   storeId: Id<"store">,
+  options: { includeRejectedEvidence?: boolean } = {},
 ) {
-  const [needsReviewConflicts, resolvedConflicts] = await Promise.all([
+  const [needsReviewConflicts, resolvedConflicts, rejectedEvents] = await Promise.all([
     ctx.db
       .query("posLocalSyncConflict")
       .withIndex("by_store_status", (q) =>
@@ -106,6 +104,14 @@ export async function listOpenLocalSyncConflictsByRegisterSession(
         q.eq("storeId", storeId).eq("status", "resolved"),
       )
       .take(SYNC_CONFLICT_LIMIT),
+    options.includeRejectedEvidence
+      ? ctx.db
+          .query("posLocalSyncEvent")
+          .withIndex("by_store_status", (q) =>
+            q.eq("storeId", storeId).eq("status", "rejected"),
+          )
+          .take(SYNC_CONFLICT_LIMIT)
+      : Promise.resolve([]),
   ]);
   const staleResolvedConflicts = await Promise.all(
     resolvedConflicts.map(async (conflict) => {
@@ -119,27 +125,70 @@ export async function listOpenLocalSyncConflictsByRegisterSession(
         )
         .unique();
 
-      return syncEvent?.status === "conflicted" ? conflict : null;
+      if (syncEvent?.status === "conflicted") {
+        return { ...conflict, status: "needs_review" };
+      }
+
+      if (options.includeRejectedEvidence && syncEvent?.status === "rejected") {
+        return {
+          ...conflict,
+          conflictType: "server_rejected",
+          status: "rejected",
+          summary:
+            syncEvent.rejectionMessage ??
+            "Server rejected synced register activity for this drawer.",
+        };
+      }
+
+      return null;
     }),
   );
-  const conflicts: Doc<"posLocalSyncConflict">[] = [
+  const conflicts: RegisterSessionSyncConflict[] = [
     ...needsReviewConflicts,
     ...staleResolvedConflicts.filter(
       (conflict): conflict is Doc<"posLocalSyncConflict"> => conflict !== null,
     ),
   ];
+  const includedConflictKeys = new Set(
+    conflicts.map((conflict) =>
+      [conflict.terminalId, conflict.localEventId].join(":"),
+    ),
+  );
+  if (options.includeRejectedEvidence) {
+    for (const event of rejectedEvents) {
+      const key = [event.terminalId, event.localEventId].join(":");
+      if (includedConflictKeys.has(key)) continue;
+
+      conflicts.push({
+        _id: event._id,
+        conflictType: "server_rejected",
+        createdAt: event.acceptedAt ?? event.submittedAt,
+        details: {},
+        localEventId: event.localEventId,
+        localRegisterSessionId: event.localRegisterSessionId,
+        sequence: event.sequence,
+        status: event.status,
+        storeId: event.storeId,
+        summary:
+          event.rejectionMessage ??
+          "Server rejected synced register activity for this drawer.",
+        terminalId: event.terminalId,
+      });
+    }
+  }
   const entries = await Promise.all(
     conflicts.map(async (conflict) => {
       const { terminalId, localRegisterSessionId } = conflict;
       if (!terminalId || !localRegisterSessionId) {
         return null;
       }
+      const conflictStoreId = conflict.storeId ?? storeId;
 
       const registerSessionMapping = await ctx.db
         .query("posLocalSyncMapping")
         .withIndex("by_store_terminal_local", (q) =>
           q
-            .eq("storeId", conflict.storeId)
+            .eq("storeId", conflictStoreId)
             .eq("terminalId", terminalId)
             .eq("localRegisterSessionId", localRegisterSessionId)
             .eq("localIdKind", "registerSession")
@@ -171,7 +220,7 @@ export async function listOpenLocalSyncConflictsByRegisterSession(
         );
         if (!registerSession) return null;
         if (
-          registerSession.storeId === conflict.storeId &&
+          registerSession.storeId === conflictStoreId &&
           registerSession.terminalId === terminalId
         ) {
           return [cloudRegisterSessionId, conflict] as const;

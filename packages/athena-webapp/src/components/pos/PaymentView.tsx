@@ -39,6 +39,7 @@ interface PaymentViewProps {
     amount: number,
   ) => boolean | Promise<boolean>;
   onComplete: () => void | Promise<boolean | void>;
+  completionBlockMessage?: string;
   onPaymentAmountChange?: (amount: number | undefined) => void;
   isCompleting?: boolean;
 }
@@ -99,6 +100,7 @@ export const PaymentView = ({
   setSelectedPaymentMethod,
   onAddPayment,
   onComplete,
+  completionBlockMessage,
   onPaymentAmountChange,
   isCompleting = false,
 }: PaymentViewProps) => {
@@ -108,7 +110,9 @@ export const PaymentView = ({
   const [displayValue, setDisplayValue] = useState("");
   const [keypadValue, setKeypadValue] = useState("");
 
-  const canComplete = canCompleteTransaction(totalPaid, amountDue);
+  const completionBlocked = Boolean(completionBlockMessage);
+  const canComplete =
+    canCompleteTransaction(totalPaid, amountDue) && !completionBlocked;
   const enteredAmount = currentAmount ?? 0;
   const shouldCompleteWithCurrentAmount =
     Boolean(selectedPaymentMethod) &&
@@ -212,7 +216,7 @@ export const PaymentView = ({
       return;
     }
 
-    if (shouldCompleteWithCurrentAmount) {
+    if (shouldCompleteWithCurrentAmount && !completionBlocked) {
       const isCompleted = await onComplete();
       if (isCompleted === false) {
         return;
@@ -423,7 +427,8 @@ export const PaymentView = ({
       </div>
 
       <div className="shrink-0 space-y-3">
-        {shouldCompleteWithCurrentAmount || isCompleting ? (
+        {(shouldCompleteWithCurrentAmount && !completionBlocked) ||
+        isCompleting ? (
           <Button
             variant="outline"
             className={cn(

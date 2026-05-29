@@ -660,7 +660,9 @@ export const getDashboardSnapshot = query({
         .order("desc")
         .take(SESSION_LIMIT),
       listStoreDeposits(ctx, args.storeId),
-      listRegisterSessionSyncReviewConflicts(ctx, args.storeId),
+      listRegisterSessionSyncReviewConflicts(ctx, args.storeId, {
+        includeRejectedEvidence: true,
+      }),
     ]);
 
     const dashboardRegisterSessions =
@@ -749,7 +751,9 @@ export const getRegisterSessionSnapshot = query({
             registerSession.managerApprovalRequestId,
           )
         : Promise.resolve(null),
-      listRegisterSessionSyncReviewConflicts(ctx, args.storeId),
+      listRegisterSessionSyncReviewConflicts(ctx, args.storeId, {
+        includeRejectedEvidence: true,
+      }),
       resolveRegisterSessionWorkflowTraceId(ctx, registerSession),
     ]);
     const registerSessionWithTraceId = {
@@ -1283,11 +1287,15 @@ export const resolveRegisterSessionSyncReview = mutation({
 
     await Promise.all(
       conflicts.map((conflict) =>
-        ctx.db.patch("posLocalSyncConflict", conflict._id, {
-          resolvedAt,
-          resolvedByStaffProfileId: args.actorStaffProfileId,
-          status: "resolved",
-        }),
+        ctx.db.patch(
+          "posLocalSyncConflict",
+          conflict._id as Id<"posLocalSyncConflict">,
+          {
+            resolvedAt,
+            resolvedByStaffProfileId: args.actorStaffProfileId,
+            status: "resolved",
+          },
+        ),
       ),
     );
 

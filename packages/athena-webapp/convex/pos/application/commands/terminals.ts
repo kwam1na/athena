@@ -242,6 +242,9 @@ export type TerminalRuntimeStatusInput = {
     failedEventCount: number;
     reviewEventCount: number;
     localOnlyEventCount: number;
+    reviewEvents?: NonNullable<
+      Doc<"posTerminalRuntimeStatus">["sync"]["reviewEvents"]
+    >;
     oldestPendingEventAt?: number;
     nextPendingUploadSequence?: number;
     lastSyncedSequence?: number;

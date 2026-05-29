@@ -460,6 +460,100 @@ describe("RegisterSessionViewContent", () => {
     ).toBeInTheDocument();
   });
 
+  it("surfaces rejected server sync activity without review actions", () => {
+    render(
+      <RegisterSessionViewContent
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        onResolveSyncReview={vi.fn()}
+        orgUrlSlug="org"
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            localSyncStatus: {
+              status: "needs_review",
+              reconciliationItems: [
+                {
+                  localEventId: "event-rejected-sale",
+                  sequence: 10,
+                  status: "rejected",
+                  summary: "Register was closed before this sale synced.",
+                  type: "server_rejected",
+                },
+              ],
+            },
+          },
+        }}
+        storeUrlSlug="store"
+      />,
+    );
+
+    expect(screen.getByText("Synced activity rejected")).toBeInTheDocument();
+    expect(
+      screen.getByText("Register was closed before this sale synced."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /approve synced sales/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /reject synced activity/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open POS sync" })).toHaveAttribute(
+      "href",
+      expect.stringContaining("/pos/register"),
+    );
+  });
+
+  it("does not offer closeout review actions for already rejected closeout evidence", () => {
+    render(
+      <RegisterSessionViewContent
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        onResolveSyncReview={vi.fn()}
+        orgUrlSlug="org"
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            localSyncStatus: {
+              status: "needs_review",
+              reconciliationItems: [
+                {
+                  localEventId: "event-register-closeout-1",
+                  sequence: 10,
+                  status: "rejected",
+                  summary:
+                    "Manager rejected synced register activity during cash-controls review.",
+                  type: "register_closeout",
+                  variance: 2500,
+                },
+              ],
+            },
+          },
+        }}
+        storeUrlSlug="store"
+      />,
+    );
+
+    expect(screen.getByText("Synced activity rejected")).toBeInTheDocument();
+    expect(screen.getByText("Closeout variance review")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /reject synced closeout/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /approve synced closeout/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open POS sync" })).toHaveAttribute(
+      "href",
+      expect.stringContaining("/pos/register"),
+    );
+  });
+
   it("communicates synced closeout variance review as closeout work", () => {
     render(
       <RegisterSessionViewContent

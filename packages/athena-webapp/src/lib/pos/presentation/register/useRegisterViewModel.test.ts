@@ -3597,12 +3597,13 @@ describe("useRegisterViewModel", () => {
     });
 
     act(() => {
-      result.current.serviceEntry?.setServiceSearchQuery("closure");
+      result.current.productEntry.setProductSearchQuery("closure");
     });
 
     await waitFor(() =>
       expect(result.current.serviceEntry?.searchResults).toHaveLength(1),
     );
+    expect(result.current.serviceEntry?.serviceSearchQuery).toBe("closure");
 
     await act(async () => {
       await result.current.serviceEntry?.onAddService(
@@ -3621,6 +3622,9 @@ describe("useRegisterViewModel", () => {
     expect(result.current.serviceEntry?.checkoutBlockMessage).toBe(
       "Customer required. Add a customer before checking out services.",
     );
+    expect(result.current.checkout.completionBlockMessage).toBe(
+      "Customer required. Add a customer before checking out services.",
+    );
 
     await act(async () => {
       await result.current.checkout.onCompleteTransaction();
@@ -3628,6 +3632,65 @@ describe("useRegisterViewModel", () => {
 
     expect(toast.error).toHaveBeenCalledWith(
       "Customer required. Add a customer before checking out services.",
+    );
+  });
+
+  it("does not add the same service twice", async () => {
+    mockRegisterServiceCatalogRows = [
+      {
+        serviceCatalogId: "service-1" as Id<"serviceCatalog">,
+        name: "Closure Repair",
+        description: "Repair a closure install.",
+        serviceMode: "repair",
+        pricingModel: "fixed",
+        basePrice: 4500,
+        status: "active",
+      },
+    ];
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("closure");
+    });
+
+    await waitFor(() =>
+      expect(result.current.serviceEntry?.searchResults).toHaveLength(1),
+    );
+    const service = result.current.serviceEntry?.searchResults[0];
+    expect(service).toBeDefined();
+
+    await act(async () => {
+      await result.current.serviceEntry?.onAddService(service!);
+      await result.current.serviceEntry?.onAddService(service!);
+    });
+
+    expect(result.current.cart.serviceItems).toEqual([
+      expect.objectContaining({
+        name: "Closure Repair",
+        pricingModel: "fixed",
+        price: 4500,
+        quantity: 1,
+      }),
+    ]);
+
+    const serviceEvents = mockAppendLocalEvent.mock.calls.filter(
+      ([event]) => event.type === "cart.service_added",
+    );
+    expect(serviceEvents).toHaveLength(1);
+    expect(serviceEvents[0]?.[0].payload).toEqual(
+      expect.objectContaining({
+        quantity: 1,
+        unitPrice: 4500,
+        totalPrice: 4500,
+      }),
     );
   });
 
@@ -5560,7 +5623,57 @@ describe("useRegisterViewModel", () => {
     );
   });
 
-  it("routes drawer authority blocks to the drawer repair gate", async () => {
+  it("routes recoverable drawer authority blocks to the drawer repair gate", async () => {
+    mockListLocalEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          localEventId: "local-event-open",
+          schemaVersion: 1,
+          sequence: 1,
+          type: "register.opened",
+          terminalId: "local-terminal-1",
+          storeId: "store-1",
+          registerNumber: "1",
+          localRegisterSessionId: "local-register-1",
+          staffProfileId: "staff-1",
+          payload: {
+            localRegisterSessionId: "local-register-1",
+            openingFloat: 5000,
+          },
+          createdAt: 100,
+          sync: { status: "synced" },
+        },
+      ],
+    });
+    mockReadDrawerAuthorityState.mockResolvedValue({
+      ok: true,
+      value: {
+        localRegisterSessionId: "local-register-1",
+        observedAt: 110,
+        reason: "lifecycle_rejected",
+        status: "blocked",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      },
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult(),
+      );
+    });
+
+    await waitFor(() =>
+      expect(result.current.drawerGate?.mode).toBe("drawerAuthorityRepair"),
+    );
+    expect(result.current.drawerGate?.onRetrySync).toBeTypeOf("function");
+  });
+
+  it("routes closed drawer authority blocks to the open-drawer gate", async () => {
     mockListLocalEvents.mockResolvedValue({
       ok: true,
       value: [
@@ -5605,8 +5718,10 @@ describe("useRegisterViewModel", () => {
     });
 
     await waitFor(() =>
-      expect(result.current.drawerGate?.mode).toBe("drawerAuthorityRepair"),
+      expect(result.current.drawerGate?.mode).toBe("initialSetup"),
     );
+    expect(result.current.drawerGate?.onSubmit).toBeTypeOf("function");
+    expect(result.current.drawerGate?.onRetrySync).toBeUndefined();
   });
 
   it("persists drawer authority when a mapped cloud drawer is no longer usable", async () => {

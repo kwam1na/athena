@@ -163,8 +163,10 @@ describe("RegisterDrawerGate", () => {
   it("shows drawer authority repair copy and sign-out action", async () => {
     const user = userEvent.setup();
     const onSignOut = vi.fn();
+    const onRetrySync = vi.fn();
     renderGate({
       mode: "drawerAuthorityRepair",
+      onRetrySync,
       onSignOut,
     });
 
@@ -172,6 +174,9 @@ describe("RegisterDrawerGate", () => {
     expect(
       screen.getByText("Drawer needs repair"),
     ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Retry sync" }));
+    expect(onRetrySync).toHaveBeenCalledTimes(1);
 
     await user.click(screen.getByRole("button", { name: "Sign out" }));
 

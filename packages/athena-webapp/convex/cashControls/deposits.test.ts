@@ -1103,6 +1103,63 @@ describe("cash control deposits", () => {
     ).resolves.toEqual(new Map());
   });
 
+  it("surfaces rejected sync events as register-session evidence when requested", async () => {
+    const ctx = createQueryCtx({
+      posLocalSyncConflict: [],
+      posLocalSyncEvent: [
+        {
+          _id: "sync_event_rejected",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_1",
+          sequence: 1,
+          eventType: "sale_completed",
+          occurredAt: 2,
+          staffProfileId: "staff_1",
+          payload: {},
+          rejectionMessage: "Register was closed before this sale synced.",
+          status: "rejected",
+          submittedAt: 3,
+        },
+      ],
+      posLocalSyncMapping: [
+        {
+          _id: "sync_mapping_1",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localIdKind: "registerSession",
+          localId: "local-register-1",
+          cloudTable: "registerSession",
+          cloudId: "session_open",
+        },
+      ],
+      registerSession: [{ _id: "session_open" }],
+    });
+
+    await expect(
+      listOpenLocalSyncConflictsByRegisterSession(
+        ctx as never,
+        "store_1" as Id<"store">,
+        { includeRejectedEvidence: true },
+      ),
+    ).resolves.toEqual(
+      new Map([
+        [
+          "session_open",
+          [
+            expect.objectContaining({
+              _id: "sync_event_rejected",
+              status: "rejected",
+              summary: "Register was closed before this sale synced.",
+            }),
+          ],
+        ],
+      ]),
+    );
+  });
+
   it("keeps resolved sync conflicts reviewable when the source event is still conflicted", async () => {
     const conflict = {
       _id: "sync_conflict_1",
@@ -1164,7 +1221,94 @@ describe("cash control deposits", () => {
       ),
     ).resolves.toEqual(
       new Map([
-        ["session_open", [expect.objectContaining({ _id: "sync_conflict_1" })]],
+        [
+          "session_open",
+          [
+            expect.objectContaining({
+              _id: "sync_conflict_1",
+              status: "needs_review",
+            }),
+          ],
+        ],
+      ]),
+    );
+  });
+
+  it("surfaces resolved sync conflicts as rejected evidence when the source event is rejected", async () => {
+    const conflict = {
+      _id: "sync_conflict_1",
+      storeId: "store_1",
+      terminalId: "terminal_1",
+      localRegisterSessionId: "local-register-1",
+      localEventId: "event_1",
+      sequence: 1,
+      conflictType: "permission",
+      status: "resolved",
+      summary:
+        "Register closeout variance requires manager review before synced closeout can be applied.",
+      details: {},
+      createdAt: 1,
+    };
+    const ctx = createQueryCtx({
+      posLocalSyncConflict: [conflict],
+      posLocalSyncEvent: [
+        {
+          _id: "sync_event_1",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_1",
+          sequence: 1,
+          eventType: "register_closed",
+          occurredAt: 2,
+          staffProfileId: "staff_1",
+          payload: { countedCash: 45000 },
+          rejectionMessage:
+            "Manager rejected synced register activity during cash-controls review.",
+          status: "rejected",
+          submittedAt: 3,
+        },
+      ],
+      posLocalSyncMapping: [
+        {
+          _id: "sync_mapping_1",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localIdKind: "registerSession",
+          localId: "local-register-1",
+          cloudTable: "registerSession",
+          cloudId: "session_open",
+        },
+      ],
+      registerSession: [
+        {
+          _id: "session_open",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+        },
+      ],
+    });
+
+    await expect(
+      listOpenLocalSyncConflictsByRegisterSession(
+        ctx as never,
+        "store_1" as Id<"store">,
+        { includeRejectedEvidence: true },
+      ),
+    ).resolves.toEqual(
+      new Map([
+        [
+          "session_open",
+          [
+            expect.objectContaining({
+              _id: "sync_conflict_1",
+              status: "rejected",
+              summary:
+                "Manager rejected synced register activity during cash-controls review.",
+            }),
+          ],
+        ],
       ]),
     );
   });

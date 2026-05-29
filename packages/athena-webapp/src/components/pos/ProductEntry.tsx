@@ -7,7 +7,7 @@ import {
 } from "@/components/product/QuickAddProductDialog";
 import { normalizeQuickAddInitialLookupCode } from "@/components/product/quickAddProductDialogUtils";
 import type { QuickAddProductSubmitPayload } from "@/components/product/QuickAddProductDialog";
-import { ScanBarcode, Search, Wrench } from "lucide-react";
+import { ScanBarcode, Scissors, Search } from "lucide-react";
 import type { Product } from "./types";
 import type {
   RegisterLookupMode,
@@ -36,7 +36,7 @@ import {
   useState,
 } from "react";
 import { SearchResultsSection } from "./SearchResultsSection";
-import { cn } from "@/lib/utils";
+import { capitalizeWords, cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import {
@@ -89,13 +89,41 @@ const pricingModelLabels: Record<RegisterServicePricingModel, string> = {
   quote_after_consultation: "Quote after consultation",
 };
 
+function serviceSearchResultIsInCart(
+  serviceEntry: RegisterServiceEntryState,
+  service: RegisterServiceSearchResult,
+) {
+  const serviceCatalogId = service.serviceCatalogId?.toString();
+  const normalizedName = service.name.trim().toLowerCase();
+
+  return serviceEntry.items.some((item) => {
+    const itemCatalogId = item.serviceCatalogId?.toString();
+
+    if (serviceCatalogId && itemCatalogId) {
+      return serviceCatalogId === itemCatalogId;
+    }
+
+    if (serviceCatalogId || itemCatalogId) {
+      return false;
+    }
+
+    return (
+      item.name.trim().toLowerCase() === normalizedName &&
+      item.serviceMode === service.serviceMode &&
+      item.pricingModel === service.pricingModel
+    );
+  });
+}
+
 function ServiceSearchResults({
   formatter,
   isLoading,
+  onServiceAdded,
   serviceEntry,
 }: {
   formatter: Intl.NumberFormat;
   isLoading: boolean;
+  onServiceAdded?: () => void;
   serviceEntry: RegisterServiceEntryState;
 }) {
   const [amountInputs, setAmountInputs] = useState<Record<string, string>>({});
@@ -121,6 +149,7 @@ function ServiceSearchResults({
         delete next[service.id];
         return next;
       });
+      onServiceAdded?.();
     }
   };
 
@@ -133,7 +162,7 @@ function ServiceSearchResults({
       <div className="max-h-[586px] space-y-1 overflow-y-auto scrollbar-hide">
         <div className="flex h-full flex-col items-center justify-center py-8 text-center text-gray-500">
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
-            <Wrench className="h-6 w-6 text-gray-400" />
+            <Scissors className="h-6 w-6 text-gray-400" />
           </div>
           <p className="text-sm font-medium">No services found</p>
           <p className="mt-1 text-xs text-gray-400">
@@ -145,96 +174,135 @@ function ServiceSearchResults({
   }
 
   return (
-    <div className="max-h-[586px] space-y-2 overflow-y-auto pr-1 scrollbar-hide">
-      {serviceEntry.searchResults.map((service) => {
-        const requiresAmount =
-          service.pricingModel === "starting_at" ||
-          service.pricingModel === "quote_after_consultation";
-        const amountInput = amountInputs[service.id] ?? "";
-        const parsedAmount = amountInput.trim()
-          ? parseDisplayAmountInput(amountInput)
-          : undefined;
-        const canAdd = !requiresAmount || (parsedAmount ?? 0) > 0;
-        const priceLabel =
-          service.basePrice === undefined
-            ? pricingModelLabels[service.pricingModel]
-            : `${pricingModelLabels[service.pricingModel]} · ${formatStoredAmount(
-                formatter,
-                service.basePrice,
-              )}`;
-        const amountHelp =
-          service.pricingModel === "starting_at"
-            ? "Enter the service amount before adding."
-            : service.pricingModel === "quote_after_consultation"
-              ? "Enter the quoted amount before adding."
-              : null;
+    <div className="max-h-[586px] overflow-y-auto scrollbar-hide">
+      <div className="space-y-8 py-8">
+        {serviceEntry.searchResults.map((service) => {
+          const requiresAmount =
+            service.pricingModel === "starting_at" ||
+            service.pricingModel === "quote_after_consultation";
+          const amountInput = amountInputs[service.id] ?? "";
+          const parsedAmount = amountInput.trim()
+            ? parseDisplayAmountInput(amountInput)
+            : undefined;
+          const isAlreadyAdded = serviceSearchResultIsInCart(
+            serviceEntry,
+            service,
+          );
+          const canAdd =
+            !isAlreadyAdded && (!requiresAmount || (parsedAmount ?? 0) > 0);
+          const isDisabled = serviceEntry.disabled || isAlreadyAdded || !canAdd;
+          const priceLabel = pricingModelLabels[service.pricingModel];
+          const amountHelp =
+            service.pricingModel === "starting_at"
+              ? "Enter the service amount before adding."
+              : service.pricingModel === "quote_after_consultation"
+                ? "Enter the quoted amount before adding."
+                : null;
+          const handleCardClick = () => {
+            if (isDisabled) {
+              return;
+            }
+            void handleAddService(service);
+          };
+          const handleCardKeyDown = (
+            event: React.KeyboardEvent<HTMLDivElement>,
+          ) => {
+            if (event.key !== "Enter" && event.key !== " ") {
+              return;
+            }
+            event.preventDefault();
+            handleCardClick();
+          };
 
-        return (
-          <div
-            key={service.id}
-            className="rounded-lg border border-border bg-white p-4 shadow-sm"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="truncate text-sm font-semibold text-foreground">
-                    {service.name}
-                  </p>
-                  <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                    {serviceModeLabels[service.serviceMode]}
-                  </span>
+          return (
+            <div
+              key={service.id}
+              role="button"
+              tabIndex={isDisabled ? -1 : 0}
+              aria-disabled={isDisabled}
+              aria-label={`Add ${service.name} service`}
+              className={cn(
+                "group rounded-lg border bg-white/80 p-4 shadow-sm backdrop-blur-sm transition-all duration-200",
+                isDisabled
+                  ? "cursor-not-allowed border-gray-200 opacity-75"
+                  : "cursor-pointer border-gray-200 hover:border-blue-200 hover:shadow-md hover:shadow-blue-100/50",
+              )}
+              onClick={handleCardClick}
+              onKeyDown={handleCardKeyDown}
+            >
+              <div className="flex items-center gap-4">
+                <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-hidden rounded bg-muted">
+                  <Scissors className="h-5 w-5 text-muted-foreground" />
                 </div>
-                <p className="text-xs text-muted-foreground">{priceLabel}</p>
-                {service.description ? (
-                  <p className="line-clamp-2 text-xs text-muted-foreground">
-                    {service.description}
-                  </p>
-                ) : null}
-              </div>
-              {!requiresAmount ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={serviceEntry.disabled}
-                  onClick={() => void handleAddService(service)}
-                >
-                  Add service
-                </Button>
-              ) : null}
-            </div>
 
-            {requiresAmount ? (
-              <div className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-                <div className="space-y-1">
-                  <Input
-                    aria-label={`${service.name} amount`}
-                    inputMode="decimal"
-                    placeholder="Amount"
-                    value={amountInput}
-                    disabled={serviceEntry.disabled}
-                    onChange={(event) =>
-                      handleAmountChange(service.id, event.target.value)
-                    }
-                  />
-                  {amountHelp ? (
-                    <p className="text-xs text-muted-foreground">
-                      {amountHelp}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="truncate text-md font-semibold text-gray-600 group-hover:text-gray-900">
+                          {capitalizeWords(service.name)}
+                        </p>
+                        <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                          {serviceModeLabels[service.serviceMode]}
+                        </span>
+                        {isAlreadyAdded ? (
+                          <span className="rounded-full border border-action-workflow-border bg-action-workflow-soft px-2 py-0.5 text-[11px] font-medium text-action-workflow">
+                            Already added
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {priceLabel}
+                      </p>
+                    </div>
+                    {service.basePrice !== undefined ? (
+                      <p className="flex-shrink-0 px-4 text-lg font-medium">
+                        {formatStoredAmount(formatter, service.basePrice)}
+                      </p>
+                    ) : null}
+                  </div>
+                  {service.description ? (
+                    <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
+                      {service.description}
                     </p>
                   ) : null}
                 </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={serviceEntry.disabled || !canAdd}
-                  onClick={() => void handleAddService(service)}
-                >
-                  Add service
-                </Button>
               </div>
-            ) : null}
-          </div>
-        );
-      })}
+
+              {requiresAmount ? (
+                <div
+                  className="mt-4 pl-20"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="space-y-1">
+                    <Input
+                      aria-label={`${service.name} amount`}
+                      inputMode="decimal"
+                      placeholder="Amount"
+                      value={amountInput}
+                      disabled={serviceEntry.disabled || isAlreadyAdded}
+                      onChange={(event) =>
+                        handleAmountChange(service.id, event.target.value)
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && canAdd) {
+                          event.preventDefault();
+                          void handleAddService(service);
+                        }
+                      }}
+                    />
+                    {amountHelp ? (
+                      <p className="text-xs text-muted-foreground">
+                        {amountHelp}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -250,7 +318,7 @@ export const ProductSearchInput = forwardRef<
     onBarcodeSubmit,
     className,
     inputClassName,
-    placeholder = "Lookup product by name, bar/qr code, sku, or product url...",
+    placeholder = "Lookup product or service by name, bar/qr code, sku, or product url...",
   },
   ref,
 ) {
@@ -337,8 +405,6 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
       resultsClassName,
       onQuickAddOpenChange,
       forceQuickAddHost = false,
-      lookupMode = "product",
-      setLookupMode,
       serviceEntry,
     },
     ref,
@@ -358,16 +424,17 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
     const inputIsUrlOrBarcode = isUrlOrBarcode(productSearchQuery);
 
     const formatter = currencyFormatter(activeStore?.currency || "GHS");
-    const activeLookupMode: RegisterLookupMode =
-      serviceEntry && lookupMode === "service" ? "service" : "product";
-    const activeSearchQuery =
-      activeLookupMode === "service"
-        ? serviceEntry?.serviceSearchQuery ?? ""
-        : productSearchQuery;
-    const setActiveSearchQuery =
-      activeLookupMode === "service" && serviceEntry
-        ? serviceEntry.setServiceSearchQuery
-        : setProductSearchQuery;
+    const serviceSearchQuery = serviceEntry?.serviceSearchQuery ?? "";
+    const shouldShowServiceResults =
+      Boolean(serviceEntry) &&
+      serviceSearchQuery.trim().length > 0 &&
+      serviceEntry!.searchResults.length > 0 &&
+      !inputIsUrlOrBarcode;
+    const shouldShowProductResults =
+      Boolean(productSearchQuery) &&
+      (!shouldShowServiceResults ||
+        searchResults.length > 0 ||
+        isSearchLoading);
 
     // Handler to clear search after adding product
     const handleClearSearch = () => {
@@ -400,31 +467,39 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
       [formatter, registerCatalog],
     );
 
-    const handleOpenQuickAdd = useCallback((selectedProduct?: Product) => {
-      if (!canQuickAddProduct) {
-        return;
-      }
+    const handleOpenQuickAdd = useCallback(
+      (selectedProduct?: Product) => {
+        if (!canQuickAddProduct) {
+          return;
+        }
 
-      const rawQuery = productSearchQuery.trim();
-      const extractedQuery = extractBarcodeFromInput(rawQuery).value.trim();
+        const rawQuery = productSearchQuery.trim();
+        const extractedQuery = extractBarcodeFromInput(rawQuery).value.trim();
 
-      setQuickAddInitialName(
-        selectedProduct?.name || (inputIsUrlOrBarcode ? "" : rawQuery),
-      );
-      setQuickAddInitialLookupCode(
-        normalizeQuickAddInitialLookupCode(extractedQuery),
-      );
-      setQuickAddSourceProduct(
-        selectedProduct && selectedProduct.productId ? selectedProduct : null,
-      );
-      setIsQuickAddOpen(true);
-      onQuickAddOpenChange?.(true);
-    }, [
-      canQuickAddProduct,
-      inputIsUrlOrBarcode,
-      onQuickAddOpenChange,
-      productSearchQuery,
-    ]);
+        setQuickAddInitialName(
+          selectedProduct?.name || (inputIsUrlOrBarcode ? "" : rawQuery),
+        );
+        setQuickAddInitialLookupCode(
+          normalizeQuickAddInitialLookupCode(extractedQuery),
+        );
+        setQuickAddSourceProduct(
+          selectedProduct && selectedProduct.productId ? selectedProduct : null,
+        );
+        setIsQuickAddOpen(true);
+        onQuickAddOpenChange?.(true);
+      },
+      [
+        canQuickAddProduct,
+        inputIsUrlOrBarcode,
+        onQuickAddOpenChange,
+        productSearchQuery,
+      ],
+    );
+
+    const refocusProductSearchInput = useCallback(() => {
+      productSearchInputRef.current?.focus();
+      productSearchInputRef.current?.select();
+    }, []);
 
     useImperativeHandle(
       ref,
@@ -564,7 +639,7 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
       !showProductLookup ||
       (!showSearchInput &&
         !productSearchQuery &&
-        !serviceEntry?.serviceSearchQuery &&
+        !serviceSearchQuery &&
         !isQuickAddOpen &&
         !forceQuickAddHost)
     ) {
@@ -583,64 +658,26 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
           >
             {showSearchInput && (
               <div className="space-y-3">
-                {serviceEntry ? (
-                  <div className="inline-flex rounded-lg border border-border bg-white p-1">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={
-                        activeLookupMode === "product" ? "default" : "ghost"
-                      }
-                      onClick={() => setLookupMode?.("product")}
-                    >
-                      Products
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={
-                        activeLookupMode === "service" ? "default" : "ghost"
-                      }
-                      onClick={() => setLookupMode?.("service")}
-                    >
-                      Services
-                    </Button>
-                  </div>
-                ) : null}
                 <ProductSearchInput
                   ref={productSearchInputRef}
-                  disabled={
-                    activeLookupMode === "service"
-                      ? serviceEntry?.disabled
-                      : disabled || isQuickAddOpen
-                  }
-                  productSearchQuery={activeSearchQuery}
-                  setProductSearchQuery={setActiveSearchQuery}
-                  onBarcodeSubmit={
-                    activeLookupMode === "service"
-                      ? (event) => event.preventDefault()
-                      : onBarcodeSubmit
-                  }
-                  placeholder={
-                    activeLookupMode === "service"
-                      ? "Search services by name or service type..."
-                      : undefined
-                  }
+                  disabled={disabled || isQuickAddOpen}
+                  productSearchQuery={productSearchQuery}
+                  setProductSearchQuery={setProductSearchQuery}
+                  onBarcodeSubmit={onBarcodeSubmit}
                 />
               </div>
             )}
 
-            {activeLookupMode === "service" &&
-            serviceEntry &&
-            activeSearchQuery ? (
+            {shouldShowServiceResults && serviceEntry ? (
               <ServiceSearchResults
                 formatter={formatter}
                 isLoading={serviceEntry.isSearchLoading}
+                onServiceAdded={refocusProductSearchInput}
                 serviceEntry={serviceEntry}
               />
             ) : null}
 
-            {activeLookupMode === "product" && productSearchQuery && (
+            {shouldShowProductResults ? (
               <SearchResultsSection
                 isLoading={isSearchLoading}
                 products={searchResults}
@@ -656,7 +693,7 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
                 quickAddShortcutDisabled={isQuickAddOpen}
                 className={resultsClassName}
               />
-            )}
+            ) : null}
           </div>
         </div>
 

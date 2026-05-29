@@ -12,6 +12,7 @@ interface RegisterCheckoutPanelProps {
   checkout: RegisterCheckoutState;
   onPaymentFlowChange?: (isActive: boolean) => void;
   onPaymentEntryStart?: () => void;
+  onCompletionBlockAction?: () => void;
   onEditingPaymentChange?: (isEditing: boolean) => void;
   hidePaymentItemCountSummary?: boolean;
   hideActiveSummaryCards?: boolean;
@@ -23,6 +24,7 @@ export function RegisterCheckoutPanel({
   checkout,
   onPaymentFlowChange,
   onPaymentEntryStart,
+  onCompletionBlockAction,
   onEditingPaymentChange,
   hidePaymentItemCountSummary = false,
   hideActiveSummaryCards = false,
@@ -60,6 +62,7 @@ export function RegisterCheckoutPanel({
         hasTerminal={checkout.hasTerminal}
         isTransactionCompleted={checkout.isTransactionCompleted}
         completedOrderNumber={checkout.completedOrderNumber}
+        completionBlockMessage={checkout.completionBlockMessage}
         completedTransactionData={checkout.completedTransactionData}
         cashierName={checkout.cashierName}
         actorStaffProfileId={checkout.actorStaffProfileId}
@@ -74,6 +77,7 @@ export function RegisterCheckoutPanel({
         }
         onPaymentFlowChange={onPaymentFlowChange}
         onPaymentEntryStart={onPaymentEntryStart}
+        onCompletionBlockAction={onCompletionBlockAction}
         onEditingPaymentChange={onEditingPaymentChange}
         hidePaymentItemCountSummary={hidePaymentItemCountSummary}
         hideActiveSummaryCards={hideActiveSummaryCards}

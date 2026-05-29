@@ -8,6 +8,7 @@ import {
   Plus,
   Printer,
   Smartphone,
+  UserPlus,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -67,6 +68,25 @@ function parseReceiptLocation(location?: string) {
   };
 }
 
+function formatServiceLabel(value?: string | null) {
+  const label = value?.replaceAll("_", " ").trim();
+  return label ? capitalizeWords(label) : null;
+}
+
+function formatServiceLineMeta(line: PosServiceReceiptLine) {
+  if (line.serviceCaseUnavailable) {
+    return "Service Case Unavailable";
+  }
+
+  return [
+    formatServiceLabel(line.serviceCaseTitle),
+    formatServiceLabel(line.serviceStatus),
+    formatServiceLabel(line.servicePaymentStatus),
+  ]
+    .filter(Boolean)
+    .join(" • ");
+}
+
 interface OrderSummaryProps {
   cartItems: CartItem[];
   customerInfo?: {
@@ -83,6 +103,7 @@ interface OrderSummaryProps {
   isTransactionCompleted?: boolean;
   readOnly?: boolean;
   completedOrderNumber?: string | null;
+  completionBlockMessage?: string;
   completedTransactionData?: {
     paymentMethod: string;
     payments?: Payment[];
@@ -127,6 +148,7 @@ interface OrderSummaryProps {
   onVoidTransaction?: () => void | Promise<void>;
   onPaymentFlowChange?: (isActive: boolean) => void;
   onPaymentEntryStart?: () => void;
+  onCompletionBlockAction?: () => void;
   onEditingPaymentChange?: (isEditing: boolean) => void;
   hidePaymentItemCountSummary?: boolean;
   hideActiveSummaryCards?: boolean;
@@ -145,6 +167,7 @@ export function OrderSummary({
   isTransactionCompleted = false,
   readOnly = false,
   completedOrderNumber,
+  completionBlockMessage,
   completedTransactionData,
   completedAdjustmentSummary,
   presentation = "workspace",
@@ -161,6 +184,7 @@ export function OrderSummary({
   onVoidTransaction,
   onPaymentFlowChange,
   onPaymentEntryStart,
+  onCompletionBlockAction,
   onEditingPaymentChange,
   hidePaymentItemCountSummary = false,
   hideActiveSummaryCards = false,
@@ -333,6 +357,8 @@ export function OrderSummary({
     !isEditingPaymentAmount &&
     selectedPaymentMethod === null &&
     (payments.length === 0 || remainingDue > 0);
+  const paymentMethodsDisabled =
+    cartItemsCount === 0 || Boolean(completionBlockMessage);
   const showPaymentEditor =
     !readOnly &&
     !isTransactionCompleted &&
@@ -365,6 +391,15 @@ export function OrderSummary({
   const balanceDueLabelClass = isPaymentAmountOverpaying
     ? "text-success"
     : "text-transaction-signal";
+  const [completionBlockTitle, completionBlockDetail] = completionBlockMessage
+    ? (() => {
+        const [title, ...detailParts] = completionBlockMessage.split(". ");
+        return [
+          title.replace(/\.$/, ""),
+          detailParts.join(". ").replace(/\.$/, "") || "Add a customer to continue.",
+        ];
+      })()
+    : [null, null];
 
   const completedAdjustmentSettlementLabel =
     completedAdjustmentSummary?.settlementDirection === "refund"
@@ -399,6 +434,16 @@ export function OrderSummary({
 
     onPaymentFlowChange?.(isPaymentEntryActive);
   }, [isPaymentEntryActive, onPaymentFlowChange, selectedPaymentMethod]);
+
+  useEffect(() => {
+    if (!completionBlockMessage || selectedPaymentMethod === null) {
+      return;
+    }
+
+    setSelectedPaymentMethod(null);
+    setPaymentAmountDraft(undefined);
+    onPaymentFlowChange?.(false);
+  }, [completionBlockMessage, onPaymentFlowChange, selectedPaymentMethod]);
 
   useEffect(() => {
     return () => onPaymentFlowChange?.(false);
@@ -488,7 +533,7 @@ export function OrderSummary({
       });
       const receiptServiceItems = (completedData.serviceLines ?? []).map(
         (line) => ({
-          name: line.name,
+          name: formatServiceLabel(line.name) ?? line.name,
           totalPrice: formatStoredAmount(formatter, line.totalPrice),
           quantityLabel: `${line.quantity ?? 1} × ${formatStoredAmount(
             formatter,
@@ -499,10 +544,10 @@ export function OrderSummary({
             : undefined,
           attributes: [
             line.serviceMode
-              ? `Service mode: ${line.serviceMode.replaceAll("_", " ")}`
+              ? `Service mode: ${formatServiceLabel(line.serviceMode)}`
               : null,
             line.servicePaymentStatus
-              ? `Payment: ${line.servicePaymentStatus.replaceAll("_", " ")}`
+              ? `Payment: ${formatServiceLabel(line.servicePaymentStatus)}`
               : null,
           ]
             .filter(Boolean)
@@ -644,32 +689,30 @@ export function OrderSummary({
                 Service lines
               </p>
               <div className="space-y-4">
-                {completedServiceLines.map((line) => (
-                  <div
-                    className="grid gap-1"
-                    key={`${line.id}-${line.serviceCaseId ?? "service"}`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <span className="min-w-0 text-foreground">
-                        {line.name}
-                      </span>
-                      <span className="font-medium text-foreground">
-                        {formatStoredAmount(formatter, line.totalPrice)}
-                      </span>
+                {completedServiceLines.map((line) => {
+                  const serviceMeta = formatServiceLineMeta(line);
+
+                  return (
+                    <div
+                      className="grid gap-1"
+                      key={`${line.id}-${line.serviceCaseId ?? "service"}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="min-w-0 text-foreground">
+                          {formatServiceLabel(line.name) ?? line.name}
+                        </span>
+                        <span className="font-medium text-foreground">
+                          {formatStoredAmount(formatter, line.totalPrice)}
+                        </span>
+                      </div>
+                      {serviceMeta ? (
+                        <p className="text-xs text-muted-foreground">
+                          {serviceMeta}
+                        </p>
+                      ) : null}
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      {line.serviceCaseUnavailable
-                        ? "Service case unavailable"
-                        : [
-                            line.serviceCaseTitle,
-                            line.serviceStatus?.replaceAll("_", " "),
-                            line.servicePaymentStatus?.replaceAll("_", " "),
-                          ]
-                            .filter(Boolean)
-                            .join(" • ")}
-                    </p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ) : null}
@@ -975,35 +1018,30 @@ export function OrderSummary({
                     Service lines
                   </p>
                   <div className="space-y-3">
-                    {completedServiceLines.map((line) => (
-                      <div
-                        className="grid gap-1"
-                        key={`${line.id}-${line.serviceCaseId ?? "service"}`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <span className="min-w-0 text-foreground">
-                            {line.name}
-                          </span>
-                          <span className="font-medium text-foreground">
-                            {formatStoredAmount(formatter, line.totalPrice)}
-                          </span>
+                    {completedServiceLines.map((line) => {
+                      const serviceMeta = formatServiceLineMeta(line);
+
+                      return (
+                        <div
+                          className="grid gap-1"
+                          key={`${line.id}-${line.serviceCaseId ?? "service"}`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="min-w-0 text-foreground">
+                              {formatServiceLabel(line.name) ?? line.name}
+                            </span>
+                            <span className="font-medium text-foreground">
+                              {formatStoredAmount(formatter, line.totalPrice)}
+                            </span>
+                          </div>
+                          {serviceMeta ? (
+                            <p className="text-xs text-muted-foreground">
+                              {serviceMeta}
+                            </p>
+                          ) : null}
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                          {line.serviceCaseUnavailable
-                            ? "Service case unavailable"
-                            : [
-                                line.serviceCaseTitle,
-                                line.serviceStatus?.replaceAll("_", " "),
-                                line.servicePaymentStatus?.replaceAll(
-                                  "_",
-                                  " ",
-                                ),
-                              ]
-                                .filter(Boolean)
-                                .join(" • ")}
-                        </p>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ) : null}
@@ -1209,6 +1247,33 @@ export function OrderSummary({
               </div>
             )}
 
+            {completionBlockMessage ? (
+              <button
+                type="button"
+                disabled={!onCompletionBlockAction}
+                onClick={onCompletionBlockAction}
+                className={cn(
+                  "flex w-full items-center gap-3 rounded-xl border border-action-workflow-border bg-action-workflow-soft px-3.5 py-3 text-left text-action-workflow transition-colors hover:bg-action-workflow-soft/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-default disabled:hover:bg-action-workflow-soft",
+                  !shouldDockPaymentButtons && "col-span-2",
+                )}
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/70 text-action-workflow">
+                  <UserPlus className="h-4 w-4" aria-hidden="true" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold">
+                    {completionBlockTitle}
+                  </span>
+                  <span className="mt-0.5 block text-xs leading-5 text-action-workflow/80">
+                    {completionBlockDetail}
+                  </span>
+                </span>
+                <span className="shrink-0 rounded-md border border-action-workflow-border/80 bg-white/70 px-2.5 py-1 text-xs font-semibold text-action-workflow">
+                  Find/add
+                </span>
+              </button>
+            ) : null}
+
             <div
               className={cn(
                 "grid grid-cols-2 gap-3",
@@ -1220,7 +1285,7 @@ export function OrderSummary({
                   onPaymentEntryStart?.();
                   setSelectedPaymentMethod("cash");
                 }}
-                disabled={cartItemsCount === 0}
+                disabled={paymentMethodsDisabled}
                 className="flex h-28 flex-col items-start justify-between rounded-xl bg-transaction-signal p-4 text-left text-transaction-signal-foreground shadow-md shadow-transaction-signal/20 hover:bg-transaction-signal/90 hover:text-transaction-signal-foreground"
                 size="lg"
                 variant="outline"
@@ -1233,7 +1298,7 @@ export function OrderSummary({
                   onPaymentEntryStart?.();
                   setSelectedPaymentMethod("card");
                 }}
-                disabled={cartItemsCount === 0}
+                disabled={paymentMethodsDisabled}
                 variant="outline"
                 className="flex h-28 flex-col items-start justify-between rounded-xl border-border bg-surface-raised p-4 text-left text-foreground shadow-surface hover:bg-muted/30"
                 size="lg"
@@ -1246,7 +1311,7 @@ export function OrderSummary({
                   onPaymentEntryStart?.();
                   setSelectedPaymentMethod("mobile_money");
                 }}
-                disabled={cartItemsCount === 0}
+                disabled={paymentMethodsDisabled}
                 variant="outline"
                 className="col-span-2 flex h-24 items-center justify-between rounded-xl bg-yellow-200 p-4 text-left text-yellow-950 shadow-sm shadow-yellow-200/70 hover:bg-yellow-100 hover:text-yellow-950"
                 size="lg"
@@ -1277,6 +1342,7 @@ export function OrderSummary({
               }
               onPaymentAmountChange={setPaymentAmountDraft}
               onComplete={handleCompleteTransaction}
+              completionBlockMessage={completionBlockMessage}
               isCompleting={isCompleting}
             />
           </div>

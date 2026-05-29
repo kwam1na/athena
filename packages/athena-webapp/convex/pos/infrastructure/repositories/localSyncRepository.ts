@@ -22,32 +22,6 @@ import type {
 } from "../../application/sync/types";
 import { hashPosLocalStaffProofToken } from "../../application/sync/staffProof";
 
-const SERVICE_CASE_FINANCIALS_PAGE_SIZE = 100;
-
-type PaginatedPage<TItem> = {
-  page: TItem[];
-  isDone: boolean;
-  continueCursor: string;
-};
-
-async function collectAllPages<TItem>(
-  loadPage: (cursor: string | null) => Promise<PaginatedPage<TItem>>,
-): Promise<TItem[]> {
-  const items: TItem[] = [];
-  let cursor: string | null = null;
-
-  while (true) {
-    const page = await loadPage(cursor);
-    items.push(...page.page);
-
-    if (page.isDone) {
-      return items;
-    }
-
-    cursor = page.continueCursor;
-  }
-}
-
 export function createConvexLocalSyncRepository(
   ctx: MutationCtx,
 ): LocalSyncRepository {
@@ -489,25 +463,23 @@ export function createConvexLocalSyncRepository(
     async syncServiceCaseFinancials(serviceCaseId) {
       const serviceCase = await ctx.db.get("serviceCase", serviceCaseId);
       if (!serviceCase) return;
-      const lineItems = await collectAllPages((cursor) =>
-        ctx.db
-          .query("serviceCaseLineItem")
-          .withIndex("by_serviceCaseId", (q) =>
-            q.eq("serviceCaseId", serviceCaseId),
-          )
-          .paginate({ cursor, numItems: SERVICE_CASE_FINANCIALS_PAGE_SIZE }),
-      );
-      const paymentAllocations = await collectAllPages((cursor) =>
-        ctx.db
-          .query("paymentAllocation")
-          .withIndex("by_storeId_target", (q) =>
-            q
-              .eq("storeId", serviceCase.storeId)
-              .eq("targetType", "service_case")
-              .eq("targetId", serviceCaseId),
-          )
-          .paginate({ cursor, numItems: SERVICE_CASE_FINANCIALS_PAGE_SIZE }),
-      );
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- Service-case financial sync runs inside local sync ingestion, where Convex forbids paginated-query fanout; this read is scoped to one service case.
+      const lineItems = await ctx.db
+        .query("serviceCaseLineItem")
+        .withIndex("by_serviceCaseId", (q) =>
+          q.eq("serviceCaseId", serviceCaseId),
+        )
+        .collect();
+      // eslint-disable-next-line @convex-dev/no-collect-in-query -- Service-case payment allocations are scoped to one service case and cannot use pagination inside local sync ingestion.
+      const paymentAllocations = await ctx.db
+        .query("paymentAllocation")
+        .withIndex("by_storeId_target", (q) =>
+          q
+            .eq("storeId", serviceCase.storeId)
+            .eq("targetType", "service_case")
+            .eq("targetId", serviceCaseId),
+        )
+        .collect();
       const totalAmount =
         lineItems.length > 0
           ? lineItems.reduce((sum, lineItem) => sum + lineItem.amount, 0)

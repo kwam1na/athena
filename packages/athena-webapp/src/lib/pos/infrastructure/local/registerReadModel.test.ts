@@ -823,6 +823,7 @@ describe("projectLocalRegisterReadModel", () => {
 
     expect(model.canSell).toBe(false);
     expect(model.saleBlockReason).toBe("drawer_authority");
+    expect(model.drawerAuthorityReason).toBe("cloud_closed");
   });
 
   it("blocks selling when an uploaded register lifecycle event needs review", () => {

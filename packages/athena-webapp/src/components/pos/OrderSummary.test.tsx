@@ -319,10 +319,10 @@ describe("OrderSummary completed transaction summary", () => {
           serviceLines: [
             {
               id: "service-line-1",
-              name: "Closure repair",
+              name: "tokin",
               quantity: 1,
               serviceCaseId: "case-1",
-              serviceCaseTitle: "Repair for Ama",
+              serviceCaseTitle: "tokin",
               serviceMode: "repair",
               servicePaymentStatus: "partially_paid",
               serviceStatus: "intake",
@@ -344,8 +344,10 @@ describe("OrderSummary completed transaction summary", () => {
     );
 
     expect(screen.getByText("Service lines")).toBeInTheDocument();
-    expect(screen.getByText("Closure repair")).toBeInTheDocument();
-    expect(screen.getByText(/Repair for Ama/i)).toBeInTheDocument();
+    expect(screen.getByText("Tokin")).toBeInTheDocument();
+    expect(
+      screen.getByText("Tokin • Intake • Partially Paid"),
+    ).toBeInTheDocument();
     expect(screen.getByText("2 items")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /Print receipt/i }));
@@ -365,8 +367,8 @@ describe("OrderSummary completed transaction summary", () => {
     expect(receiptElement.props.items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          attributes: expect.stringContaining("Payment: partially paid"),
-          name: "Closure repair",
+          attributes: expect.stringContaining("Payment: Partially Paid"),
+          name: "Tokin",
           totalPrice: "GH₵150",
         }),
       ]),
@@ -682,6 +684,77 @@ describe("OrderSummary completed transaction summary", () => {
     expect(
       screen.queryByRole("button", { name: "Complete Sale" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("keeps the service checkout blocker beside disabled payment methods", async () => {
+    const user = userEvent.setup();
+    const onPaymentEntryStart = vi.fn();
+    const onCompletionBlockAction = vi.fn();
+
+    render(
+      <OrderSummary
+        cartItems={[
+          {
+            id: "item-1",
+            name: "Hair",
+            barcode: "123456789012",
+            price: 1700,
+            quantity: 1,
+            productId: "product-1",
+            skuId: "sku-1",
+          } as never,
+        ]}
+        total={1700}
+        completionBlockMessage="Customer required. Add a customer before checking out services."
+        onPaymentEntryStart={onPaymentEntryStart}
+        onCompletionBlockAction={onCompletionBlockAction}
+      />,
+    );
+
+    const blocker = screen.getByText("Customer required");
+    expect(blocker).toBeInTheDocument();
+    expect(blocker.closest("button")).toBeInTheDocument();
+    expect(
+      screen.getByText("Add a customer before checking out services"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Find/add")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cash" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Card" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Mobile Money" })).toBeDisabled();
+
+    await user.click(blocker);
+
+    expect(onCompletionBlockAction).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole("button", { name: "Cash" }));
+
+    expect(onPaymentEntryStart).not.toHaveBeenCalled();
+  });
+
+  it("disables the service checkout blocker action when no customer lookup handler is available", () => {
+    render(
+      <OrderSummary
+        cartItems={[
+          {
+            id: "item-1",
+            name: "Hair",
+            barcode: "123456789012",
+            price: 1700,
+            quantity: 1,
+            productId: "product-1",
+            skuId: "sku-1",
+          } as never,
+        ]}
+        total={1700}
+        completionBlockMessage="Customer required. Add a customer before checking out services."
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "Customer required",
+      ).closest("button"),
+    ).toBeDisabled();
   });
 
   it("keeps item count out of the payment summary when the cart already owns it", () => {

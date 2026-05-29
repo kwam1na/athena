@@ -52,6 +52,7 @@ vi.mock("../../base/table/data-table", () => ({
     data,
   }: {
     data: Array<{
+      itemCount?: number;
       transactionNumber: string;
       sessionTraceId: string | null;
       status?: string;
@@ -61,6 +62,11 @@ vi.mock("../../base/table/data-table", () => ({
       {data.map((row) => (
         <div key={row.transactionNumber}>
           <span>{row.transactionNumber}</span>
+          {row.itemCount !== undefined ? (
+            <span>
+              {row.itemCount} {row.itemCount === 1 ? "item" : "items"}
+            </span>
+          ) : null}
           {row.sessionTraceId ? (
             <span data-testid={`session-trace-${row.transactionNumber}`}>
               trace
@@ -168,6 +174,36 @@ describe("TransactionsView", () => {
 
     expect(screen.getByText("POS-VOID")).toBeInTheDocument();
     expect(screen.getByText("Voided")).toBeInTheDocument();
+  });
+
+  it("includes service lines in completed transaction item counts", () => {
+    getActiveStoreMock.mockReturnValue({
+      activeStore: {
+        _id: "store-1",
+        currency: "GHS",
+      },
+    });
+    useQueryMock.mockReturnValue([
+      {
+        _id: "txn-service-count",
+        transactionNumber: "POS-SERVICE-COUNT",
+        total: 1000,
+        paymentMethod: "cash",
+        paymentMethods: ["cash"],
+        cashierName: "Ada L.",
+        customerName: null,
+        itemCount: 2,
+        serviceLineCount: 1,
+        completedAt: Date.now(),
+        hasTrace: false,
+        sessionTraceId: null,
+      },
+    ]);
+
+    render(<TransactionsView />);
+
+    expect(screen.getByText("POS-SERVICE-COUNT")).toBeInTheDocument();
+    expect(screen.getByText("3 items")).toBeInTheDocument();
   });
 
   it("passes the register session filter to the completed transactions query", () => {

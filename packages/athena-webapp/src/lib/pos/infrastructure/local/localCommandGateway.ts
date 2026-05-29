@@ -111,6 +111,42 @@ export function createLocalCommandGateway(
     return !(await append(input));
   }
 
+  async function appendNewDrawer(input: PosOpenDrawerInput) {
+    const localRegisterSessionId = createLocalId("local-register-session");
+    const openedAt = clock();
+    const appendError = await append({
+      type: "register.opened",
+      terminalId: input.terminalId.toString(),
+      storeId: input.storeId.toString(),
+      registerNumber: input.registerNumber,
+      localRegisterSessionId,
+      staffProfileId: input.staffProfileId.toString(),
+      staffProofToken: resolveStaffProofToken(
+        options.staffProofToken,
+        input.staffProfileId.toString(),
+      ),
+      payload: {
+        localRegisterSessionId,
+        openingFloat: input.openingFloat,
+        expectedCash: input.openingFloat,
+        notes: input.notes ?? null,
+        status: "open",
+      },
+    });
+    if (appendError) return appendError;
+
+    return ok({
+      localRegisterSessionId,
+      status: "open" as const,
+      terminalId: input.terminalId.toString(),
+      registerNumber: input.registerNumber,
+      openingFloat: input.openingFloat,
+      expectedCash: input.openingFloat,
+      openedAt,
+      notes: input.notes,
+    });
+  }
+
   async function readDrawerAuthorityBlock(input: {
     localRegisterSessionId: string;
     storeId: string;
@@ -344,7 +380,10 @@ export function createLocalCommandGateway(
       if (!existingModel.ok) {
         return toLocalUserError(existingModel.error.message);
       }
-      if (existingModel.value.saleBlockReason) {
+      const isClosedCloudDrawerBlock =
+        existingModel.value.saleBlockReason === "drawer_authority" &&
+        existingModel.value.drawerAuthorityReason === "cloud_closed";
+      if (existingModel.value.saleBlockReason && !isClosedCloudDrawerBlock) {
         return toLocalUserError(
           blockedSaleMessage(existingModel.value.saleBlockReason),
         );
@@ -355,6 +394,9 @@ export function createLocalCommandGateway(
         activeRegisterSession &&
         isOpenLocalRegisterSessionStatus(activeRegisterSession.status)
       ) {
+        if (isClosedCloudDrawerBlock) {
+          return appendNewDrawer(input);
+        }
         if (!existingModel.value.canSell) {
           return toLocalUserError(
             blockedSaleMessage(existingModel.value.saleBlockReason),
@@ -386,39 +428,7 @@ export function createLocalCommandGateway(
         });
       }
 
-      const localRegisterSessionId = createLocalId("local-register-session");
-      const openedAt = clock();
-      const appendError = await append({
-        type: "register.opened",
-        terminalId: input.terminalId.toString(),
-        storeId: input.storeId.toString(),
-        registerNumber: input.registerNumber,
-        localRegisterSessionId,
-        staffProfileId: input.staffProfileId.toString(),
-        staffProofToken: resolveStaffProofToken(
-          options.staffProofToken,
-          input.staffProfileId.toString(),
-        ),
-        payload: {
-          localRegisterSessionId,
-          openingFloat: input.openingFloat,
-          expectedCash: input.openingFloat,
-          notes: input.notes ?? null,
-          status: "open",
-        },
-      });
-      if (appendError) return appendError;
-
-      return ok({
-        localRegisterSessionId,
-        status: "open",
-        terminalId: input.terminalId.toString(),
-        registerNumber: input.registerNumber,
-        openingFloat: input.openingFloat,
-        expectedCash: input.openingFloat,
-        openedAt,
-        notes: input.notes,
-      });
+      return appendNewDrawer(input);
     },
 
     async reopenRegister(input: ReopenLocalRegisterInput) {
