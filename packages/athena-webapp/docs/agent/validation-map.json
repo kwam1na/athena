@@ -199,6 +199,57 @@
       ]
     },
     {
+      "name": "pos-service-mixed-checkout-edits",
+      "pathPrefixes": [
+        "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
+        "packages/athena-webapp/convex/pos/application/commands/correctTransaction.ts",
+        "packages/athena-webapp/convex/pos/application/queries/getTransactions.ts",
+        "packages/athena-webapp/convex/pos/application/sync",
+        "packages/athena-webapp/convex/pos/public/transactions.ts",
+        "packages/athena-webapp/convex/operations/dailyClose.ts",
+        "packages/athena-webapp/convex/cashControls",
+        "packages/athena-webapp/convex/serviceOps",
+        "packages/athena-webapp/shared/posLocalSyncContract.ts",
+        "packages/athena-webapp/src/components/pos/OrderSummary.tsx",
+        "packages/athena-webapp/src/components/pos/register/RegisterCheckoutPanel.tsx",
+        "packages/athena-webapp/src/components/pos/receipt/PosReceiptShareControl.tsx",
+        "packages/athena-webapp/src/components/pos/transactions",
+        "packages/athena-webapp/src/components/services/ServiceCasesView.tsx",
+        "packages/athena-webapp/src/components/operations/CommandApprovalDialog.tsx",
+        "packages/athena-webapp/src/lib/pos/infrastructure/local",
+        "packages/athena-webapp/src/lib/pos/presentation/register"
+      ],
+      "commands": [
+        {
+          "kind": "raw",
+          "command": "bun run --filter '@athena/webapp' test -- convex/pos/application/completeTransaction.test.ts convex/pos/application/getTransactions.test.ts convex/pos/public/transactions.test.ts convex/operations/dailyClose.test.ts convex/cashControls/registerSessions.test.ts src/components/pos/OrderSummary.test.tsx src/components/pos/register/RegisterCheckoutPanel.test.tsx src/components/pos/receipt/PosReceiptShareControl.test.tsx src/components/pos/transactions/TransactionView.test.tsx src/components/pos/transactions/TransactionsView.test.tsx src/components/services/ServiceCasesView.test.tsx src/components/operations/CommandApprovalDialog.test.tsx src/lib/pos/infrastructure/local/localPosReadiness.test.ts src/lib/pos/infrastructure/local/posLocalStore.test.ts src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.test.ts"
+        },
+        {
+          "kind": "script",
+          "script": "audit:convex"
+        },
+        {
+          "kind": "script",
+          "script": "lint:convex:changed"
+        },
+        {
+          "kind": "script",
+          "script": "lint:frontend:changed"
+        },
+        {
+          "kind": "raw",
+          "command": "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json"
+        },
+        {
+          "kind": "script",
+          "script": "build"
+        }
+      ],
+      "behaviorScenarios": [
+        "athena-admin-shell-boot"
+      ]
+    },
+    {
       "name": "service-operations-intake-catalog-appointments-and-cases",
       "pathPrefixes": [
         "packages/athena-webapp/convex/serviceOps",

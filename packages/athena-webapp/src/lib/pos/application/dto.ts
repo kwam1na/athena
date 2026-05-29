@@ -1,4 +1,9 @@
-import type { PosPaymentMethod, PosRegisterPhase } from "@/lib/pos/domain";
+import type {
+  PosPaymentMethod,
+  PosRegisterPhase,
+  PosServiceLinePricingSource,
+  PosServiceMode,
+} from "@/lib/pos/domain";
 import type { Id } from "~/convex/_generated/dataModel";
 import type { CommandResult } from "~/shared/commandResult";
 
@@ -163,6 +168,55 @@ export interface PosRegisterCatalogInput {
   storeId?: Id<"store">;
 }
 
+export type PosServiceCatalogPricingModel =
+  | "fixed"
+  | "starting_at"
+  | "quote_after_consultation";
+
+export type PosServiceCatalogDepositType = "none" | "flat" | "percentage";
+
+export type PosServiceCatalogCheckoutReadiness =
+  | {
+      status: "ready";
+      reason: "fixed_price";
+      canCheckoutDirectly: true;
+      message: string;
+      suggestedAmount?: number;
+      minimumAmount?: number;
+    }
+  | {
+      status: "amount_required";
+      reason: "starting_at_amount_required";
+      canCheckoutDirectly: false;
+      message: string;
+      suggestedAmount?: number;
+      minimumAmount?: number;
+    }
+  | {
+      status: "case_or_amount_required";
+      reason: "quote_after_consultation_requires_case_or_amount";
+      canCheckoutDirectly: false;
+      requiresExistingCaseOrAmount: true;
+      message: string;
+      suggestedAmount?: number;
+      minimumAmount?: number;
+    };
+
+export interface PosServiceCatalogRowDto {
+  serviceCatalogId: Id<"serviceCatalog">;
+  name: string;
+  description?: string;
+  serviceMode: PosServiceMode;
+  pricingModel: PosServiceCatalogPricingModel;
+  basePrice?: number;
+  depositType: PosServiceCatalogDepositType;
+  depositValue?: number;
+  requiresManagerApproval: boolean;
+  status: "active";
+  updatedAt: number;
+  checkoutReadiness: PosServiceCatalogCheckoutReadiness;
+}
+
 export interface PosRegisterCatalogAvailabilityRowDto {
   availabilitySource?: "live" | "local";
   productSkuId: Id<"productSku">;
@@ -268,10 +322,39 @@ export interface PosPaymentDto {
   timestamp: number;
 }
 
+export interface PosProductSaleLineDto {
+  lineKind: "product";
+  productId: Id<"product">;
+  productSkuId: Id<"productSku">;
+  productName: string;
+  productSku: string;
+  barcode?: string;
+  image?: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+}
+
+export interface PosServiceSaleLineDto {
+  lineKind: "service";
+  serviceCatalogId: Id<"serviceCatalog">;
+  serviceCaseId?: Id<"serviceCase">;
+  serviceMode: PosServiceMode;
+  displayName: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  pricingSource: PosServiceLinePricingSource;
+  notes?: string | null;
+}
+
+export type PosSaleLineDto = PosProductSaleLineDto | PosServiceSaleLineDto;
+
 export interface PosCompleteTransactionInput {
   sessionId: Id<"posSession">;
   staffProfileId: Id<"staffProfile">;
   payments: PosPaymentDto[];
+  saleLines?: PosSaleLineDto[];
   notes?: string;
   subtotal: number;
   tax: number;

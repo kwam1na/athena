@@ -256,6 +256,7 @@ import type * as schemas_pos_posTransaction from "../schemas/pos/posTransaction.
 import type * as schemas_pos_posTransactionAdjustment from "../schemas/pos/posTransactionAdjustment.js";
 import type * as schemas_pos_posTransactionAdjustmentLine from "../schemas/pos/posTransactionAdjustmentLine.js";
 import type * as schemas_pos_posTransactionItem from "../schemas/pos/posTransactionItem.js";
+import type * as schemas_pos_posTransactionServiceLine from "../schemas/pos/posTransactionServiceLine.js";
 import type * as schemas_serviceOps_index from "../schemas/serviceOps/index.js";
 import type * as schemas_serviceOps_serviceAppointment from "../schemas/serviceOps/serviceAppointment.js";
 import type * as schemas_serviceOps_serviceCase from "../schemas/serviceOps/serviceCase.js";
@@ -595,6 +596,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/pos/posTransactionAdjustment": typeof schemas_pos_posTransactionAdjustment;
   "schemas/pos/posTransactionAdjustmentLine": typeof schemas_pos_posTransactionAdjustmentLine;
   "schemas/pos/posTransactionItem": typeof schemas_pos_posTransactionItem;
+  "schemas/pos/posTransactionServiceLine": typeof schemas_pos_posTransactionServiceLine;
   "schemas/serviceOps/index": typeof schemas_serviceOps_index;
   "schemas/serviceOps/serviceAppointment": typeof schemas_serviceOps_serviceAppointment;
   "schemas/serviceOps/serviceCase": typeof schemas_serviceOps_serviceCase;

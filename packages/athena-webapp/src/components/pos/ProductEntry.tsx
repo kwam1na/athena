@@ -7,8 +7,14 @@ import {
 } from "@/components/product/QuickAddProductDialog";
 import { normalizeQuickAddInitialLookupCode } from "@/components/product/quickAddProductDialogUtils";
 import type { QuickAddProductSubmitPayload } from "@/components/product/QuickAddProductDialog";
-import { ScanBarcode, Search } from "lucide-react";
+import { ScanBarcode, Search, Wrench } from "lucide-react";
 import type { Product } from "./types";
+import type {
+  RegisterLookupMode,
+  RegisterServiceEntryState,
+  RegisterServicePricingModel,
+  RegisterServiceSearchResult,
+} from "@/lib/pos/presentation/register/registerUiState";
 import {
   usePOSQuickAddProductSku,
   usePOSRegisterCatalog,
@@ -20,7 +26,6 @@ import {
   extractBarcodeFromInput,
   isUrlOrBarcode,
 } from "@/lib/pos/barcodeUtils";
-import { formatStoredAmount } from "@/lib/pos/displayAmounts";
 import {
   forwardRef,
   useCallback,
@@ -34,6 +39,10 @@ import { SearchResultsSection } from "./SearchResultsSection";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import {
+  formatStoredAmount,
+  parseDisplayAmountInput,
+} from "@/lib/pos/displayAmounts";
 
 interface ProductSearchInputProps {
   productSearchQuery: string;
@@ -42,6 +51,7 @@ interface ProductSearchInputProps {
   disabled?: boolean;
   className?: string;
   inputClassName?: string;
+  placeholder?: string;
 }
 
 interface ProductEntryProps extends ProductSearchInputProps {
@@ -58,6 +68,175 @@ interface ProductEntryProps extends ProductSearchInputProps {
   resultsClassName?: string;
   onQuickAddOpenChange?: (open: boolean) => void;
   forceQuickAddHost?: boolean;
+  lookupMode?: RegisterLookupMode;
+  setLookupMode?: (mode: RegisterLookupMode) => void;
+  serviceEntry?: RegisterServiceEntryState;
+}
+
+const serviceModeLabels: Record<
+  RegisterServiceSearchResult["serviceMode"],
+  string
+> = {
+  same_day: "Same day",
+  consultation: "Consultation",
+  repair: "Repair",
+  revamp: "Revamp",
+};
+
+const pricingModelLabels: Record<RegisterServicePricingModel, string> = {
+  fixed: "Fixed price",
+  starting_at: "Starting at",
+  quote_after_consultation: "Quote after consultation",
+};
+
+function ServiceSearchResults({
+  formatter,
+  isLoading,
+  serviceEntry,
+}: {
+  formatter: Intl.NumberFormat;
+  isLoading: boolean;
+  serviceEntry: RegisterServiceEntryState;
+}) {
+  const [amountInputs, setAmountInputs] = useState<Record<string, string>>({});
+
+  const handleAmountChange = (serviceId: string, value: string) => {
+    setAmountInputs((current) => ({
+      ...current,
+      [serviceId]: value,
+    }));
+  };
+
+  const handleAddService = async (service: RegisterServiceSearchResult) => {
+    const amountInput = amountInputs[service.id] ?? "";
+    const parsedAmount = amountInput.trim()
+      ? parseDisplayAmountInput(amountInput)
+      : undefined;
+    const added = await serviceEntry.onAddService(service, parsedAmount);
+
+    if (added !== false) {
+      serviceEntry.setServiceSearchQuery("");
+      setAmountInputs((current) => {
+        const next = { ...current };
+        delete next[service.id];
+        return next;
+      });
+    }
+  };
+
+  if (isLoading) {
+    return null;
+  }
+
+  if (serviceEntry.searchResults.length === 0) {
+    return (
+      <div className="max-h-[586px] space-y-1 overflow-y-auto scrollbar-hide">
+        <div className="flex h-full flex-col items-center justify-center py-8 text-center text-gray-500">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
+            <Wrench className="h-6 w-6 text-gray-400" />
+          </div>
+          <p className="text-sm font-medium">No services found</p>
+          <p className="mt-1 text-xs text-gray-400">
+            Search by service name or service type
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-h-[586px] space-y-2 overflow-y-auto pr-1 scrollbar-hide">
+      {serviceEntry.searchResults.map((service) => {
+        const requiresAmount =
+          service.pricingModel === "starting_at" ||
+          service.pricingModel === "quote_after_consultation";
+        const amountInput = amountInputs[service.id] ?? "";
+        const parsedAmount = amountInput.trim()
+          ? parseDisplayAmountInput(amountInput)
+          : undefined;
+        const canAdd = !requiresAmount || (parsedAmount ?? 0) > 0;
+        const priceLabel =
+          service.basePrice === undefined
+            ? pricingModelLabels[service.pricingModel]
+            : `${pricingModelLabels[service.pricingModel]} · ${formatStoredAmount(
+                formatter,
+                service.basePrice,
+              )}`;
+        const amountHelp =
+          service.pricingModel === "starting_at"
+            ? "Enter the service amount before adding."
+            : service.pricingModel === "quote_after_consultation"
+              ? "Enter the quoted amount before adding."
+              : null;
+
+        return (
+          <div
+            key={service.id}
+            className="rounded-lg border border-border bg-white p-4 shadow-sm"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="truncate text-sm font-semibold text-foreground">
+                    {service.name}
+                  </p>
+                  <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                    {serviceModeLabels[service.serviceMode]}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">{priceLabel}</p>
+                {service.description ? (
+                  <p className="line-clamp-2 text-xs text-muted-foreground">
+                    {service.description}
+                  </p>
+                ) : null}
+              </div>
+              {!requiresAmount ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={serviceEntry.disabled}
+                  onClick={() => void handleAddService(service)}
+                >
+                  Add service
+                </Button>
+              ) : null}
+            </div>
+
+            {requiresAmount ? (
+              <div className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                <div className="space-y-1">
+                  <Input
+                    aria-label={`${service.name} amount`}
+                    inputMode="decimal"
+                    placeholder="Amount"
+                    value={amountInput}
+                    disabled={serviceEntry.disabled}
+                    onChange={(event) =>
+                      handleAmountChange(service.id, event.target.value)
+                    }
+                  />
+                  {amountHelp ? (
+                    <p className="text-xs text-muted-foreground">
+                      {amountHelp}
+                    </p>
+                  ) : null}
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={serviceEntry.disabled || !canAdd}
+                  onClick={() => void handleAddService(service)}
+                >
+                  Add service
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export const ProductSearchInput = forwardRef<
@@ -71,6 +250,7 @@ export const ProductSearchInput = forwardRef<
     onBarcodeSubmit,
     className,
     inputClassName,
+    placeholder = "Lookup product by name, bar/qr code, sku, or product url...",
   },
   ref,
 ) {
@@ -100,7 +280,7 @@ export const ProductSearchInput = forwardRef<
       </div>
       <Input
         ref={searchInputRef}
-        placeholder="Lookup product by name, bar/qr code, sku, or product url..."
+        placeholder={placeholder}
         value={productSearchQuery}
         disabled={disabled}
         onChange={(e) => setProductSearchQuery(e.target.value)}
@@ -157,6 +337,9 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
       resultsClassName,
       onQuickAddOpenChange,
       forceQuickAddHost = false,
+      lookupMode = "product",
+      setLookupMode,
+      serviceEntry,
     },
     ref,
   ) {
@@ -175,6 +358,16 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
     const inputIsUrlOrBarcode = isUrlOrBarcode(productSearchQuery);
 
     const formatter = currencyFormatter(activeStore?.currency || "GHS");
+    const activeLookupMode: RegisterLookupMode =
+      serviceEntry && lookupMode === "service" ? "service" : "product";
+    const activeSearchQuery =
+      activeLookupMode === "service"
+        ? serviceEntry?.serviceSearchQuery ?? ""
+        : productSearchQuery;
+    const setActiveSearchQuery =
+      activeLookupMode === "service" && serviceEntry
+        ? serviceEntry.setServiceSearchQuery
+        : setProductSearchQuery;
 
     // Handler to clear search after adding product
     const handleClearSearch = () => {
@@ -371,6 +564,7 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
       !showProductLookup ||
       (!showSearchInput &&
         !productSearchQuery &&
+        !serviceEntry?.serviceSearchQuery &&
         !isQuickAddOpen &&
         !forceQuickAddHost)
     ) {
@@ -388,16 +582,65 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
             )}
           >
             {showSearchInput && (
-              <ProductSearchInput
-                ref={productSearchInputRef}
-                disabled={disabled || isQuickAddOpen}
-                productSearchQuery={productSearchQuery}
-                setProductSearchQuery={setProductSearchQuery}
-                onBarcodeSubmit={onBarcodeSubmit}
-              />
+              <div className="space-y-3">
+                {serviceEntry ? (
+                  <div className="inline-flex rounded-lg border border-border bg-white p-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={
+                        activeLookupMode === "product" ? "default" : "ghost"
+                      }
+                      onClick={() => setLookupMode?.("product")}
+                    >
+                      Products
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={
+                        activeLookupMode === "service" ? "default" : "ghost"
+                      }
+                      onClick={() => setLookupMode?.("service")}
+                    >
+                      Services
+                    </Button>
+                  </div>
+                ) : null}
+                <ProductSearchInput
+                  ref={productSearchInputRef}
+                  disabled={
+                    activeLookupMode === "service"
+                      ? serviceEntry?.disabled
+                      : disabled || isQuickAddOpen
+                  }
+                  productSearchQuery={activeSearchQuery}
+                  setProductSearchQuery={setActiveSearchQuery}
+                  onBarcodeSubmit={
+                    activeLookupMode === "service"
+                      ? (event) => event.preventDefault()
+                      : onBarcodeSubmit
+                  }
+                  placeholder={
+                    activeLookupMode === "service"
+                      ? "Search services by name or service type..."
+                      : undefined
+                  }
+                />
+              </div>
             )}
 
-            {productSearchQuery && (
+            {activeLookupMode === "service" &&
+            serviceEntry &&
+            activeSearchQuery ? (
+              <ServiceSearchResults
+                formatter={formatter}
+                isLoading={serviceEntry.isSearchLoading}
+                serviceEntry={serviceEntry}
+              />
+            ) : null}
+
+            {activeLookupMode === "product" && productSearchQuery && (
               <SearchResultsSection
                 isLoading={isSearchLoading}
                 products={searchResults}

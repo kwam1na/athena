@@ -69,7 +69,8 @@ export function isPaymentSufficient(
  */
 export function getEffectivePrice(
   price: number,
-  areProcessingFeesAbsorbed?: boolean
+  _areProcessingFeesAbsorbed?: boolean
 ): number {
-  return getPosEffectivePrice(price, areProcessingFeesAbsorbed);
+  void _areProcessingFeesAbsorbed;
+  return getPosEffectivePrice(price);
 }

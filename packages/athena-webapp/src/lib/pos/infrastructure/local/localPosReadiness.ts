@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import type { PosLocalEntryContext } from "./localPosEntryContext";
+import type { RegisterServiceCatalogSnapshotState } from "./registerServiceCatalogSnapshot";
 import { readProjectedLocalRegisterModel } from "./localRegisterReader";
 import type { PosLocalRegisterReadModel } from "./registerReadModel";
 import {
@@ -38,6 +39,19 @@ export type LocalPosReadiness =
         | "waiting_for_close_snapshot"
         | "unknown"
         | "local_store_unavailable";
+      message: string;
+    };
+
+export type LocalPosServiceCatalogReadiness =
+  | {
+      status: "ready";
+      source: "local_service_catalog";
+      stale: boolean;
+      refreshedAt: number;
+    }
+  | {
+      status: "blocked";
+      reason: "missing_service_catalog" | "local_store_unavailable";
       message: string;
     };
 
@@ -218,6 +232,35 @@ export function evaluateLocalPosReadiness(input: {
     "unknown",
     "Store day status unavailable. Connect this terminal before starting sales.",
   );
+}
+
+export function evaluateLocalPosServiceCatalogReadiness(
+  state: RegisterServiceCatalogSnapshotState,
+): LocalPosServiceCatalogReadiness {
+  if (state.status === "ready" || state.status === "stale") {
+    return {
+      status: "ready",
+      source: "local_service_catalog",
+      stale: state.status === "stale",
+      refreshedAt: state.snapshot.refreshedAt,
+    };
+  }
+
+  if (state.status === "local-store-failure") {
+    return {
+      status: "blocked",
+      reason: "local_store_unavailable",
+      message:
+        "Service catalog is unavailable on this terminal. Connect before service checkout.",
+    };
+  }
+
+  return {
+    status: "blocked",
+    reason: "missing_service_catalog",
+    message:
+      "Service catalog is not ready on this terminal. Connect before service checkout.",
+  };
 }
 
 function localReadinessMatchesInput(input: {

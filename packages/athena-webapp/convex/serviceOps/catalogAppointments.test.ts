@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Id } from "../_generated/dataModel";
 import {
+  buildPosServiceCatalogRow,
   buildServiceCatalogItem,
   normalizeServiceCatalogNameKey,
 } from "./catalog";
@@ -76,6 +77,86 @@ describe("service catalog and appointment helpers", () => {
         status: "active",
       },
     });
+  });
+
+  it("maps active service catalog items into POS checkout readiness rows", () => {
+    const fixed = buildPosServiceCatalogRow({
+      _id: "catalog-fixed" as Id<"serviceCatalog">,
+      basePrice: 4_500,
+      depositType: "flat",
+      depositValue: 1_000,
+      name: "Closure Repair",
+      pricingModel: "fixed",
+      requiresManagerApproval: false,
+      serviceMode: "repair",
+      status: "active",
+      updatedAt: 1_000,
+    });
+    const startingAt = buildPosServiceCatalogRow({
+      _id: "catalog-starting" as Id<"serviceCatalog">,
+      basePrice: 8_000,
+      depositType: "percentage",
+      depositValue: 50,
+      name: "Wig Revamp",
+      pricingModel: "starting_at",
+      requiresManagerApproval: true,
+      serviceMode: "revamp",
+      status: "active",
+      updatedAt: 1_001,
+    });
+    const quote = buildPosServiceCatalogRow({
+      _id: "catalog-quote" as Id<"serviceCatalog">,
+      depositType: "none",
+      name: "Custom Consultation",
+      pricingModel: "quote_after_consultation",
+      requiresManagerApproval: true,
+      serviceMode: "consultation",
+      status: "active",
+      updatedAt: 1_002,
+    });
+
+    expect(fixed).toMatchObject({
+      checkoutReadiness: {
+        canCheckoutDirectly: true,
+        reason: "fixed_price",
+        status: "ready",
+        suggestedAmount: 4_500,
+        minimumAmount: 1_000,
+      },
+      status: "active",
+    });
+    expect(startingAt).toMatchObject({
+      checkoutReadiness: {
+        canCheckoutDirectly: false,
+        reason: "starting_at_amount_required",
+        status: "amount_required",
+        suggestedAmount: 4_000,
+      },
+    });
+    expect(quote).toMatchObject({
+      checkoutReadiness: {
+        canCheckoutDirectly: false,
+        reason: "quote_after_consultation_requires_case_or_amount",
+        requiresExistingCaseOrAmount: true,
+        status: "case_or_amount_required",
+      },
+    });
+  });
+
+  it("keeps archived service catalog items out of POS rows", () => {
+    expect(
+      buildPosServiceCatalogRow({
+        _id: "catalog-archived" as Id<"serviceCatalog">,
+        basePrice: 4_500,
+        depositType: "none",
+        name: "Archived Repair",
+        pricingModel: "fixed",
+        requiresManagerApproval: false,
+        serviceMode: "repair",
+        status: "archived",
+        updatedAt: 1_003,
+      }),
+    ).toBeNull();
   });
 
   it("returns a validation_failed user_error for invalid appointment duration", () => {

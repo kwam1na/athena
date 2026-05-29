@@ -593,6 +593,38 @@ function validateLocalSyncEventReferences(
     }
   }
 
+  const serviceLines = payload.serviceLines;
+  if (!Array.isArray(serviceLines)) {
+    return null;
+  }
+
+  for (const line of serviceLines) {
+    if (!isRecord(line)) {
+      continue;
+    }
+
+    if (
+      isNonEmptyString(line.serviceCatalogId) &&
+      !repository.normalizeCloudId("serviceCatalog", line.serviceCatalogId)
+    ) {
+      return "POS sale service catalog reference is invalid.";
+    }
+
+    if (
+      isNonEmptyString(line.existingServiceCaseId) &&
+      !repository.normalizeCloudId("serviceCase", line.existingServiceCaseId)
+    ) {
+      return "POS sale service case reference is invalid.";
+    }
+
+    if (
+      isNonEmptyString(line.customerProfileId) &&
+      !repository.normalizeCloudId("customerProfile", line.customerProfileId)
+    ) {
+      return "POS sale service customer reference is invalid.";
+    }
+  }
+
   return null;
 }
 
@@ -649,29 +681,60 @@ function validateSaleCompletedPayload(payload: Record<string, unknown>) {
   }
 
   const items = payload.items;
-  if (!Array.isArray(items) || items.length === 0) {
+  const serviceLines = payload.serviceLines;
+  if (!Array.isArray(items)) {
+    return "POS sale has no line items.";
+  }
+  if (serviceLines !== undefined && !Array.isArray(serviceLines)) {
+    return "POS sale service lines are invalid.";
+  }
+  if (items.length === 0 && (!Array.isArray(serviceLines) || serviceLines.length === 0)) {
     return "POS sale has no line items.";
   }
 
-  const canonicalSubtotal = roundMoney(
-    items.reduce((sum, item) => {
-      if (!isRecord(item)) return Number.NaN;
+  const productSubtotal = items.reduce((sum, item) => {
+    if (!isRecord(item)) return Number.NaN;
+    if (
+      !isNonEmptyString(item.productName) ||
+      !isNonEmptyString(item.productId) ||
+      !isNonEmptyString(item.productSkuId) ||
+      !isOptionalString(item.productSku) ||
+      !isOptionalNonEmptyString(item.localTransactionItemId) ||
+      !isPositiveInteger(item.quantity) ||
+      !isNonNegativeFiniteNumber(item.unitPrice)
+    ) {
+      return Number.NaN;
+    }
+    return sum + item.quantity * item.unitPrice;
+  }, 0);
+  const serviceSubtotal = (Array.isArray(serviceLines) ? serviceLines : []).reduce(
+    (sum, line) => {
+      if (!isRecord(line)) return Number.NaN;
       if (
-        !isNonEmptyString(item.productName) ||
-        !isNonEmptyString(item.productId) ||
-        !isNonEmptyString(item.productSkuId) ||
-        !isOptionalString(item.productSku) ||
-        !isOptionalNonEmptyString(item.localTransactionItemId) ||
-        !isPositiveInteger(item.quantity) ||
-        !isNonNegativeFiniteNumber(item.unitPrice)
+        !isOptionalNonEmptyString(line.localServiceLineId) ||
+        !isOptionalNonEmptyString(line.localServiceCaseId) ||
+        !isOptionalNonEmptyString(line.existingServiceCaseId) ||
+        !isNonEmptyString(line.serviceCatalogId) ||
+        !isNonEmptyString(line.serviceCatalogName) ||
+        !isServiceMode(line.serviceMode) ||
+        !isServicePricingModel(line.pricingModel) ||
+        !isPositiveInteger(line.quantity) ||
+        !isNonNegativeFiniteNumber(line.unitPrice) ||
+        !isNonNegativeFiniteNumber(line.totalPrice) ||
+        !isOptionalFiniteNumber(line.catalogUpdatedAt) ||
+        !isOptionalNonEmptyString(line.customerProfileId) ||
+        roundMoney(line.quantity * line.unitPrice) !==
+          roundMoney(line.totalPrice)
       ) {
         return Number.NaN;
       }
-      return sum + item.quantity * item.unitPrice;
-    }, 0),
+      return sum + line.totalPrice;
+    },
+    0,
   );
+  const canonicalSubtotal = roundMoney(productSubtotal + serviceSubtotal);
 
-  if (!Number.isFinite(canonicalSubtotal)) {
+  if (!Number.isFinite(productSubtotal) || !Number.isFinite(serviceSubtotal)) {
     return "POS sale line items are invalid.";
   }
 
@@ -824,6 +887,39 @@ function parseSaleCompletedPayload(
       unitPrice: item.unitPrice as number,
       image: optionalString(item.image),
     })),
+    serviceLines: Array.isArray(payload.serviceLines)
+      ? (payload.serviceLines as Record<string, unknown>[]).map((line) => {
+          const existingServiceCaseId = optionalString(line.existingServiceCaseId);
+          const customerProfileId = optionalString(line.customerProfileId);
+          return {
+            localServiceLineId: optionalString(line.localServiceLineId),
+            localServiceCaseId: optionalString(line.localServiceCaseId),
+            existingServiceCaseId: existingServiceCaseId
+              ? repository.normalizeCloudId("serviceCase", existingServiceCaseId) ??
+                undefined
+              : undefined,
+            serviceCatalogId: requireNormalizedCloudId(
+              repository,
+              "serviceCatalog",
+              line.serviceCatalogId as string,
+            ),
+            serviceCatalogName: line.serviceCatalogName as string,
+            serviceMode: line.serviceMode as never,
+            pricingModel: line.pricingModel as never,
+            quantity: line.quantity as number,
+            unitPrice: line.unitPrice as number,
+            totalPrice: line.totalPrice as number,
+            catalogUpdatedAt:
+              typeof line.catalogUpdatedAt === "number"
+                ? line.catalogUpdatedAt
+                : undefined,
+            customerProfileId: customerProfileId
+              ? repository.normalizeCloudId("customerProfile", customerProfileId) ??
+                undefined
+              : undefined,
+          };
+        })
+      : undefined,
     payments: (payload.payments as Record<string, unknown>[]).map((payment) => ({
       localPaymentId: optionalString(payment.localPaymentId),
       method: payment.method as string,
@@ -875,8 +971,29 @@ function isNonNegativeFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 
+function isOptionalFiniteNumber(value: unknown): value is number | undefined {
+  return value === undefined || (typeof value === "number" && Number.isFinite(value));
+}
+
 function isPositiveInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+}
+
+function isServiceMode(value: unknown) {
+  return (
+    value === "same_day" ||
+    value === "consultation" ||
+    value === "repair" ||
+    value === "revamp"
+  );
+}
+
+function isServicePricingModel(value: unknown) {
+  return (
+    value === "fixed" ||
+    value === "starting_at" ||
+    value === "quote_after_consultation"
+  );
 }
 
 function roundMoney(value: number) {

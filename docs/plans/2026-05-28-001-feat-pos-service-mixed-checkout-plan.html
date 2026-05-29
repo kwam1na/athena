@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plan: Add POS Service Mixed Checkout</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f7f4;
+      --panel: #ffffff;
+      --ink: #1f2933;
+      --muted: #5f6b76;
+      --line: #d9ddd8;
+      --accent: #0f766e;
+      --accent-soft: #e6f2ef;
+      --risk: #8a4b0f;
+      --risk-soft: #fff3df;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+    main {
+      width: min(1120px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 40px 0 64px;
+    }
+    header {
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 28px;
+      padding-bottom: 24px;
+    }
+    .eyebrow {
+      color: var(--accent);
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+    h1 {
+      font-size: clamp(2rem, 4vw, 3.6rem);
+      line-height: 1.05;
+      margin: 0 0 14px;
+      max-width: 920px;
+    }
+    h2 {
+      font-size: 1.35rem;
+      margin: 0 0 14px;
+    }
+    h3 {
+      font-size: 1rem;
+      margin: 24px 0 8px;
+    }
+    p { margin: 0 0 12px; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .meta {
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 0.95rem;
+    }
+    nav {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      margin-bottom: 24px;
+      padding: 16px;
+    }
+    nav ol {
+      columns: 2;
+      margin: 0;
+      padding-left: 20px;
+    }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      margin: 18px 0;
+      padding: 22px;
+    }
+    .summary {
+      background: var(--accent-soft);
+      border-color: #b7d8d0;
+    }
+    .grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .unit {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .unit h3 {
+      margin-top: 0;
+    }
+    ul, ol { margin: 0 0 12px; padding-left: 22px; }
+    li + li { margin-top: 6px; }
+    table {
+      border-collapse: collapse;
+      font-size: 0.92rem;
+      margin: 12px 0;
+      width: 100%;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f0f2ef; }
+    code {
+      background: #eef1ee;
+      border-radius: 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.9em;
+      padding: 0.1rem 0.3rem;
+    }
+    .callout {
+      background: var(--risk-soft);
+      border: 1px solid #e8c891;
+      border-radius: 8px;
+      color: var(--risk);
+      padding: 14px;
+    }
+    .flow {
+      background: #fbfbfa;
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.9rem;
+      overflow-x: auto;
+      padding: 14px;
+      white-space: pre;
+    }
+    @media (max-width: 760px) {
+      nav ol { columns: 1; }
+      .grid { grid-template-columns: 1fr; }
+      main { width: min(100% - 20px, 1120px); padding-top: 24px; }
+      section { padding: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="eyebrow">Implementation Plan</div>
+      <h1>feat: Add POS service mixed checkout</h1>
+      <div class="meta">
+        <span>Date: 2026-05-28</span>
+        <span>Type: feat</span>
+        <span>Status: active</span>
+        <span>Source: <a href="./2026-05-28-001-feat-pos-service-mixed-checkout-plan.md">markdown plan</a></span>
+      </div>
+    </header>
+
+    <nav aria-label="Plan sections">
+      <ol>
+        <li><a href="#summary">Summary</a></li>
+        <li><a href="#requirements">Requirements</a></li>
+        <li><a href="#decisions">Key Decisions</a></li>
+        <li><a href="#units">Implementation Units</a></li>
+        <li><a href="#impact">System-Wide Impact</a></li>
+        <li><a href="#risks">Risks</a></li>
+      </ol>
+    </nav>
+
+    <section id="summary" class="summary">
+      <h2>Summary</h2>
+      <p>Add a mixed POS checkout that lets a cashier sell service work and retail product add-ons in one local-first register flow. Services remain service cases, product add-ons stay on the POS product sale path, and internal service material usage stays out of this release.</p>
+      <div class="callout">
+        Core invariant: one cashier checkout, two correct business records, and one drawer tender event.
+      </div>
+    </section>
+
+    <section id="requirements">
+      <h2>Requirements</h2>
+      <ul>
+        <li>POS can add service catalog entries alongside product lines.</li>
+        <li>Service lines create or attach to first-class service cases instead of fake SKUs.</li>
+        <li>Customer attribution is required before checkout when services are present.</li>
+        <li>One payment flow splits value across retail POS and service case targets.</li>
+        <li>Drawer/register expected money is affected once by the tender.</li>
+        <li>Internal service material usage remains outside POS v1.</li>
+        <li>Completion remains local-first and syncs through the existing local POS pipeline.</li>
+        <li>Active service catalog entries are snapshotted locally so service checkout works after reload while offline.</li>
+      </ul>
+    </section>
+
+    <section id="decisions">
+      <h2>Key Decisions</h2>
+      <table>
+        <thead>
+          <tr><th>Decision</th><th>Rationale</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Typed cart and transaction lines</td><td>Product and service lines have different identities, inventory effects, and ledger targets.</td></tr>
+          <tr><td>Separate service transaction line persistence</td><td>Existing <code>posTransactionItem</code> rows are product/SKU-shaped and should stay that way.</td></tr>
+          <tr><td>Create or attach service cases during projection</td><td>The service case remains the service system of record.</td></tr>
+          <tr><td>Split allocations, count drawer once</td><td>Retail and service reporting need separate targets while cash controls need one tender event.</td></tr>
+          <tr><td>Use a mixed-checkout allocation planner</td><td>One tender can include multiple payment methods and targets, so allocation must preserve method totals while splitting business value.</td></tr>
+          <tr><td>Add an offline service catalog snapshot</td><td>Service search and checkout readiness should use local storage first, matching product SKU catalog behavior.</td></tr>
+          <tr><td>Extend local sync</td><td>Service checkout must not introduce an online-primary POS completion path.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="units">
+      <h2>Implementation Units</h2>
+      <div class="flow">U1 Typed line contracts
+  -> U2 Service catalog access
+  -> U9 Offline service catalog snapshot
+  -> U3 Register mixed-cart UX
+  -> U4 Local sync contract
+  -> U5 Projection and ledgers
+  -> U6 Read models and reporting
+  -> U7 Void/refund guardrails
+  -> U8 Harness docs and validation</div>
+      <div class="grid">
+        <article class="unit">
+          <h3>U1. Define typed POS sale lines</h3>
+          <p>Add product/service line contracts and completed service-line persistence without weakening product item invariants.</p>
+        </article>
+        <article class="unit">
+          <h3>U2. Expose active service catalog entries for POS</h3>
+          <p>Provide a POS-safe service catalog read model with checkout readiness and pricing state.</p>
+        </article>
+        <article class="unit">
+          <h3>U9. Add offline service catalog snapshot readiness</h3>
+          <p>Store active service catalog rows locally and make service search/readiness work offline like product SKU catalog data.</p>
+        </article>
+        <article class="unit">
+          <h3>U3. Add service lines to the register UI</h3>
+          <p>Let cashiers search, add, price, and remove service lines while preserving product entry.</p>
+        </article>
+        <article class="unit">
+          <h3>U4. Extend local POS event and read-model contracts</h3>
+          <p>Make service lines durable in the local event timeline and uploadable through sync.</p>
+        </article>
+        <article class="unit">
+          <h3>U5. Project mixed sales into POS, service, inventory, and payment ledgers</h3>
+          <p>Create the receipt shell, product effects, service effects, split allocations, and one drawer tender.</p>
+        </article>
+        <article class="unit">
+          <h3>U6. Surface mixed receipts, details, and reports</h3>
+          <p>Show mixed service/product context in receipts, transaction detail, service cases, daily close, and cash controls.</p>
+        </article>
+        <article class="unit">
+          <h3>U7. Add mixed-sale void and refund guardrails</h3>
+          <p>Prevent partial reversal across product inventory, service balances, allocations, and drawer state.</p>
+        </article>
+        <article class="unit">
+          <h3>U8. Update validation map, docs, and solution notes</h3>
+          <p>Preserve the new invariant in repo knowledge and validation ownership.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="impact">
+      <h2>System-Wide Impact</h2>
+      <ul>
+        <li><strong>POS register:</strong> gains service lines while product checkout remains the hot path.</li>
+        <li><strong>Offline service catalog:</strong> active service rows are refreshed opportunistically and read from local storage first.</li>
+        <li><strong>Local sync:</strong> service lines become part of the local completed-sale event and projection contract.</li>
+        <li><strong>Service Ops:</strong> service cases receive POS-originated service payments and receipt links.</li>
+        <li><strong>Inventory:</strong> retail add-ons decrement through POS; service materials remain in Service Ops.</li>
+        <li><strong>Cash controls:</strong> drawer tender is counted once even when allocations split.</li>
+        <li><strong>Reporting:</strong> service and retail totals must be explicit to avoid changing existing retail semantics silently.</li>
+      </ul>
+    </section>
+
+    <section id="risks">
+      <h2>Risks</h2>
+      <table>
+        <thead>
+          <tr><th>Risk</th><th>Mitigation</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Double-counting drawer tender</td><td>Record register tender once and test split-allocation cases.</td></tr>
+          <tr><td>Sync conflict after local receipt</td><td>Preserve local receipt timeline and surface manager-reviewable conflicts.</td></tr>
+          <tr><td>Retail add-on confused with service material</td><td>Use explicit line kinds and defer service material usage from POS.</td></tr>
+          <tr><td>Product-only POS regression</td><td>Characterize product search/add behavior before adding service controls.</td></tr>
+          <tr><td>Service catalog missing offline</td><td>Add local snapshot readiness states; product-only checkout remains available if the service snapshot is missing.</td></tr>
+          <tr><td>Partial mixed-sale reversal</td><td>Gate void/refund behavior conservatively and test all ledger effects together.</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>

@@ -34,6 +34,8 @@ function mockCorrectionHistoryDb(overrides?: {
   approvalRequests?: unknown[];
   get?: ReturnType<typeof vi.fn>;
   correctionHistory?: unknown[];
+  paymentAllocations?: unknown[];
+  serviceLines?: unknown[];
 }) {
   return {
     get: overrides?.get ?? vi.fn().mockResolvedValue(null),
@@ -44,6 +46,10 @@ function mockCorrectionHistoryDb(overrides?: {
           .mockResolvedValue(
             tableName === "approvalRequest"
               ? (overrides?.approvalRequests ?? [])
+              : tableName === "posTransactionServiceLine"
+                ? (overrides?.serviceLines ?? [])
+                : tableName === "paymentAllocation"
+                  ? (overrides?.paymentAllocations ?? [])
               : (overrides?.correctionHistory ?? []),
           ),
       })),
@@ -68,7 +74,7 @@ describe("getCompletedTransactions", () => {
     vi.mocked(getPosSessionById).mockResolvedValue(null as never);
     vi.mocked(listTransactionItems).mockResolvedValue([] as never);
 
-    const result = await getCompletedTransactions({} as never, {
+    const result = await getCompletedTransactions({ db: mockCorrectionHistoryDb() } as never, {
       storeId: "store-1" as Id<"store">,
     });
 
@@ -101,7 +107,7 @@ describe("getCompletedTransactions", () => {
     } as never);
     vi.mocked(listTransactionItems).mockResolvedValue([] as never);
 
-    const result = await getCompletedTransactions({} as never, {
+    const result = await getCompletedTransactions({ db: mockCorrectionHistoryDb() } as never, {
       storeId: "store-1" as Id<"store">,
     });
 
@@ -131,12 +137,12 @@ describe("getCompletedTransactions", () => {
 
     const result = await getCompletedTransactions(
       {
-        db: {
+        db: mockCorrectionHistoryDb({
           get: vi.fn().mockResolvedValue({
             _id: "profile-1" as Id<"customerProfile">,
             fullName: "Ama Serwa",
           }),
-        },
+        }),
       } as never,
       {
         storeId: "store-1" as Id<"store">,
@@ -170,7 +176,7 @@ describe("getCompletedTransactions", () => {
     vi.mocked(getPosSessionById).mockResolvedValue(null as never);
     vi.mocked(listTransactionItems).mockResolvedValue([] as never);
 
-    const result = await getCompletedTransactions({} as never, {
+    const result = await getCompletedTransactions({ db: mockCorrectionHistoryDb() } as never, {
       storeId: "store-1" as Id<"store">,
     });
 
@@ -204,7 +210,7 @@ describe("getCompletedTransactions", () => {
     vi.mocked(getPosSessionById).mockResolvedValue(null as never);
     vi.mocked(listTransactionItems).mockResolvedValue([] as never);
 
-    const result = await getCompletedTransactions({} as never, {
+    const result = await getCompletedTransactions({ db: mockCorrectionHistoryDb() } as never, {
       storeId: "store-1" as Id<"store">,
     });
 
@@ -511,6 +517,97 @@ describe("getTransactionById", () => {
         registerNumber: "2",
         registerSessionId: "register-session-1",
         registerSessionStatus: "closing",
+      }),
+    );
+  });
+
+  it("surfaces POS-linked service payment lines on mixed transaction detail", async () => {
+    vi.mocked(getPosTransactionById).mockResolvedValue({
+      _id: "txn-mixed" as Id<"posTransaction">,
+      registerSessionId: "register-session-1" as Id<"registerSession">,
+      storeId: "store-1" as Id<"store">,
+      transactionNumber: "POS-MIXED",
+      subtotal: 22000,
+      tax: 0,
+      total: 22000,
+      paymentMethod: "cash",
+      payments: [{ method: "cash", amount: 22000, timestamp: 1 }],
+      totalPaid: 22000,
+      status: "completed",
+      completedAt: 100,
+    } as never);
+    vi.mocked(getCashierById).mockResolvedValue(null as never);
+    vi.mocked(getPosSessionById).mockResolvedValue(null as never);
+    vi.mocked(getRegisterSessionById).mockResolvedValue({
+      _id: "register-session-1" as Id<"registerSession">,
+      registerNumber: "2",
+      status: "open",
+    } as never);
+    vi.mocked(listTransactionItems).mockResolvedValue([
+      {
+        _id: "item-1",
+        productName: "Edge brush",
+        productSku: "BRUSH",
+        quantity: 1,
+        totalPrice: 7000,
+      },
+    ] as never);
+
+    const result = await getTransactionById(
+      {
+        db: mockCorrectionHistoryDb({
+          get: vi.fn(async (tableName: string, id: string) => {
+            if (tableName === "serviceCase" && id === "case-1") {
+              return {
+                _id: "case-1",
+                operationalWorkItemId: "work-1",
+                paymentStatus: "partially_paid",
+                serviceCatalogId: "catalog-1",
+                serviceMode: "repair",
+                status: "intake",
+              };
+            }
+            if (tableName === "serviceCatalog" && id === "catalog-1") {
+              return { _id: "catalog-1", name: "Closure repair" };
+            }
+            if (tableName === "operationalWorkItem" && id === "work-1") {
+              return { _id: "work-1", title: "Repair for Ama" };
+            }
+            return null;
+          }),
+          serviceLines: [
+            {
+              _id: "service-line-1",
+              transactionId: "txn-mixed",
+              serviceCaseId: "case-1",
+              serviceCatalogId: "catalog-1",
+              serviceName: "Closure repair",
+              serviceMode: "repair",
+              quantity: 1,
+              unitPrice: 15000,
+              totalPrice: 15000,
+            },
+          ],
+        }),
+      } as never,
+      {
+        transactionId: "txn-mixed" as Id<"posTransaction">,
+      },
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        serviceLineCount: 1,
+        servicePaymentTotal: 15000,
+        serviceLines: [
+          expect.objectContaining({
+            name: "Closure repair",
+            serviceCaseId: "case-1",
+            serviceCaseTitle: "Repair for Ama",
+            servicePaymentStatus: "partially_paid",
+            totalPrice: 15000,
+          }),
+        ],
       }),
     );
   });

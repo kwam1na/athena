@@ -182,6 +182,15 @@ let mockRegisterCatalogRows: Array<{
   color: string;
   areProcessingFeesAbsorbed: boolean;
 }>;
+let mockRegisterServiceCatalogRows: Array<{
+  serviceCatalogId: Id<"serviceCatalog">;
+  name: string;
+  description?: string;
+  serviceMode: "same_day" | "consultation" | "repair" | "revamp";
+  pricingModel: "fixed" | "starting_at" | "quote_after_consultation";
+  basePrice?: number;
+  status: "active";
+}>;
 let mockRegisterCatalogAvailabilityRows: Array<{
   availabilitySource?: "live" | "local";
   productSkuId: Id<"productSku">;
@@ -236,6 +245,7 @@ vi.mock("@/hooks/usePOSProducts", () => ({
 
 vi.mock("@/lib/pos/infrastructure/convex/catalogGateway", () => ({
   useConvexRegisterCatalog: () => mockRegisterCatalogRows,
+  useConvexRegisterServiceCatalog: () => mockRegisterServiceCatalogRows,
   useConvexRegisterCatalogAvailability: (...args: unknown[]) =>
     mockUseConvexRegisterCatalogAvailability(...args),
 }));
@@ -481,6 +491,7 @@ describe("useRegisterViewModel", () => {
       _id: "user-1" as Id<"athenaUser">,
     };
     mockRegisterCatalogRows = [];
+    mockRegisterServiceCatalogRows = [];
     mockRegisterCatalogAvailabilityRows = [];
     mockUseConvexRegisterCatalogAvailability.mockReset();
     mockUseConvexRegisterCatalogAvailability.mockImplementation(
@@ -3545,6 +3556,312 @@ describe("useRegisterViewModel", () => {
         ([event]) => event?.type === "cart.item_added",
       ),
     ).toHaveLength(1);
+  });
+
+  it("adds service lines to the register review state and blocks checkout without customer attribution", async () => {
+    mockActiveSession = {
+      ...mockActiveSession!,
+      customer: null,
+    };
+    mockRegisterServiceCatalogRows = [
+      {
+        serviceCatalogId: "service-1" as Id<"serviceCatalog">,
+        name: "Closure Repair",
+        description: "Repair a closure install.",
+        serviceMode: "repair",
+        pricingModel: "fixed",
+        basePrice: 4500,
+        status: "active",
+      },
+    ];
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.serviceEntry?.setServiceSearchQuery("closure");
+    });
+
+    await waitFor(() =>
+      expect(result.current.serviceEntry?.searchResults).toHaveLength(1),
+    );
+
+    await act(async () => {
+      await result.current.serviceEntry?.onAddService(
+        result.current.serviceEntry.searchResults[0],
+      );
+    });
+
+    expect(result.current.cart.serviceItems).toEqual([
+      expect.objectContaining({
+        name: "Closure Repair",
+        pricingModel: "fixed",
+        price: 4500,
+      }),
+    ]);
+    expect(result.current.checkout.total).toBe(4620);
+    expect(result.current.serviceEntry?.checkoutBlockMessage).toBe(
+      "Customer required. Add a customer before checking out services.",
+    );
+
+    await act(async () => {
+      await result.current.checkout.onCompleteTransaction();
+    });
+
+    expect(toast.error).toHaveBeenCalledWith(
+      "Customer required. Add a customer before checking out services.",
+    );
+  });
+
+  it("includes service lines in the durable local completion payload", async () => {
+    mockRegisterServiceCatalogRows = [
+      {
+        serviceCatalogId: "service-1" as Id<"serviceCatalog">,
+        name: "Closure Repair",
+        description: "Repair a closure install.",
+        serviceMode: "repair",
+        pricingModel: "fixed",
+        basePrice: 4500,
+        status: "active",
+      },
+    ];
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.serviceEntry?.setServiceSearchQuery("closure");
+    });
+
+    await waitFor(() =>
+      expect(result.current.serviceEntry?.searchResults).toHaveLength(1),
+    );
+
+    await act(async () => {
+      await result.current.serviceEntry?.onAddService(
+        result.current.serviceEntry.searchResults[0],
+      );
+    });
+
+    await act(async () => {
+      await result.current.checkout.onAddPayment("cash", 4620);
+    });
+
+    await act(async () => {
+      await result.current.checkout.onCompleteTransaction();
+    });
+
+    await waitFor(() =>
+      expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "transaction.completed",
+          payload: expect.objectContaining({
+            serviceLines: [
+              expect.objectContaining({
+                serviceCatalogId: "service-1",
+                serviceCatalogName: "Closure Repair",
+                serviceMode: "repair",
+                pricingModel: "fixed",
+                quantity: 1,
+                unitPrice: 4500,
+                totalPrice: 4500,
+                customerProfileId: "profile-1",
+              }),
+            ],
+          }),
+        }),
+      ),
+    );
+  });
+
+  it("waits for pending service draft writes before completing checkout", async () => {
+    mockRegisterServiceCatalogRows = [
+      {
+        serviceCatalogId: "service-1" as Id<"serviceCatalog">,
+        name: "Closure Repair",
+        description: "Repair a closure install.",
+        serviceMode: "repair",
+        pricingModel: "fixed",
+        basePrice: 4500,
+        status: "active",
+      },
+    ];
+    const pendingServiceWrite = deferred<{
+      ok: true;
+      value: { localEventId: string };
+    }>();
+    mockAppendLocalEvent.mockImplementation((event: { type: string }) => {
+      if (event.type === "cart.service_added") {
+        return pendingServiceWrite.promise;
+      }
+      return Promise.resolve({
+        ok: true,
+        value: { localEventId: `local-${event.type}` },
+      });
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.serviceEntry?.setServiceSearchQuery("closure");
+    });
+
+    await waitFor(() =>
+      expect(result.current.serviceEntry?.searchResults).toHaveLength(1),
+    );
+
+    let addServicePromise: Promise<boolean | undefined> | undefined;
+    await act(async () => {
+      addServicePromise = result.current.serviceEntry?.onAddService(
+        result.current.serviceEntry.searchResults[0],
+      );
+    });
+
+    await act(async () => {
+      await result.current.checkout.onAddPayment("cash", 4620);
+    });
+
+    let completePromise: Promise<boolean> | undefined;
+    await act(async () => {
+      completePromise = result.current.checkout.onCompleteTransaction();
+    });
+
+    expect(
+      mockAppendLocalEvent.mock.calls.some(
+        ([event]) => event.type === "transaction.completed",
+      ),
+    ).toBe(false);
+
+    pendingServiceWrite.resolve({
+      ok: true,
+      value: { localEventId: "local-service-event-1" },
+    });
+    await act(async () => {
+      await addServicePromise;
+      await completePromise;
+    });
+
+    expect(mockAppendLocalEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      "cart.service_added",
+      "session.payments_updated",
+      "transaction.completed",
+    ]);
+  });
+
+  it("blocks service draft edits while checkout completion is in flight", async () => {
+    mockRegisterServiceCatalogRows = [
+      {
+        serviceCatalogId: "service-1" as Id<"serviceCatalog">,
+        name: "Closure Repair",
+        description: "Repair a closure install.",
+        serviceMode: "repair",
+        pricingModel: "fixed",
+        basePrice: 4500,
+        status: "active",
+      },
+    ];
+    const pendingCompletionWrite = deferred<{
+      ok: true;
+      value: { localEventId: string };
+    }>();
+    mockAppendLocalEvent.mockImplementation((event: { type: string }) => {
+      if (event.type === "transaction.completed") {
+        return pendingCompletionWrite.promise;
+      }
+      return Promise.resolve({
+        ok: true,
+        value: { localEventId: `local-${event.type}` },
+      });
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.serviceEntry?.setServiceSearchQuery("closure");
+    });
+
+    await waitFor(() =>
+      expect(result.current.serviceEntry?.searchResults).toHaveLength(1),
+    );
+
+    await act(async () => {
+      await result.current.serviceEntry?.onAddService(
+        result.current.serviceEntry.searchResults[0],
+      );
+    });
+    const serviceLineId = result.current.cart.serviceItems?.[0]?.id;
+    const updateServiceAmount = result.current.cart.onUpdateServiceAmount;
+    const removeService = result.current.cart.onRemoveService;
+    expect(serviceLineId).toBeDefined();
+    expect(updateServiceAmount).toBeDefined();
+    expect(removeService).toBeDefined();
+
+    await act(async () => {
+      await result.current.checkout.onAddPayment("cash", 4620);
+    });
+
+    let completePromise: Promise<boolean> | undefined;
+    await act(async () => {
+      completePromise = result.current.checkout.onCompleteTransaction();
+    });
+    await waitFor(() =>
+      expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "transaction.completed" }),
+      ),
+    );
+
+    await act(async () => {
+      await updateServiceAmount!(serviceLineId!, 6000);
+      await removeService!(serviceLineId!);
+    });
+
+    const serviceEvents = mockAppendLocalEvent.mock.calls.filter(
+      ([event]) => event.type === "cart.service_added",
+    );
+    expect(serviceEvents).toHaveLength(1);
+    expect(result.current.cart.serviceItems).toEqual([
+      expect.objectContaining({
+        id: serviceLineId,
+        price: 4500,
+      }),
+    ]);
+    expect(toast.error).toHaveBeenCalledWith(
+      "Finish the current checkout update before changing the sale.",
+    );
+
+    pendingCompletionWrite.resolve({
+      ok: true,
+      value: { localEventId: "local-transaction-event-1" },
+    });
+    await act(async () => {
+      await completePromise;
+    });
   });
 
   it("does not repeat exact barcode auto-add after the local write completes", async () => {

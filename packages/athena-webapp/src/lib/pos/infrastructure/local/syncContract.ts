@@ -4,6 +4,7 @@ import {
 } from "./posLocalStore";
 import type {
   PosLocalSyncPaymentPayload,
+  PosLocalSyncServiceLinePayload,
   PosLocalSyncUploadEvent,
 } from "../../../../../shared/posLocalSyncContract";
 
@@ -107,6 +108,7 @@ function toUploadEvent(
           total: numberOrZero(payload.total),
         },
         items: getCompletedSaleItems(payload, event, orderedEvents),
+        serviceLines: getCompletedServiceLines(payload),
         payments: Array.isArray(payload.payments)
           ? payload.payments.map(toPaymentPayload)
           : [],
@@ -234,6 +236,43 @@ function toSaleItemPayload(value: unknown) {
   };
 }
 
+function getCompletedServiceLines(payload: Record<string, unknown>) {
+  if (!Array.isArray(payload.serviceLines)) return undefined;
+  return payload.serviceLines.map(toServiceLinePayload);
+}
+
+function toServiceLinePayload(value: unknown): PosLocalSyncServiceLinePayload {
+  const payload = asRecord(value);
+  return {
+    ...(nullableStringToOptional(payload.localServiceLineId)
+      ? { localServiceLineId: nullableStringToOptional(payload.localServiceLineId) }
+      : {}),
+    ...(nullableStringToOptional(payload.localServiceCaseId)
+      ? { localServiceCaseId: nullableStringToOptional(payload.localServiceCaseId) }
+      : {}),
+    ...(nullableStringToOptional(payload.existingServiceCaseId)
+      ? {
+          existingServiceCaseId: nullableStringToOptional(
+            payload.existingServiceCaseId,
+          ),
+        }
+      : {}),
+    serviceCatalogId: stringOrEmpty(payload.serviceCatalogId),
+    serviceCatalogName: stringOrEmpty(payload.serviceCatalogName),
+    serviceMode: serviceModeOrDefault(payload.serviceMode),
+    pricingModel: pricingModelOrDefault(payload.pricingModel),
+    quantity: numberOrZero(payload.quantity),
+    unitPrice: numberOrZero(payload.unitPrice),
+    totalPrice: numberOrZero(payload.totalPrice),
+    ...(typeof payload.catalogUpdatedAt === "number"
+      ? { catalogUpdatedAt: payload.catalogUpdatedAt }
+      : {}),
+    ...(nullableStringToOptional(payload.customerProfileId)
+      ? { customerProfileId: nullableStringToOptional(payload.customerProfileId) }
+      : {}),
+  };
+}
+
 function toPaymentPayload(value: unknown): PosLocalSyncPaymentPayload {
   const payload = asRecord(value);
   return {
@@ -256,6 +295,27 @@ function stringOrEmpty(value: unknown): string {
 
 function nullableStringToOptional(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+}
+
+function serviceModeOrDefault(
+  value: unknown,
+): PosLocalSyncServiceLinePayload["serviceMode"] {
+  return value === "same_day" ||
+    value === "consultation" ||
+    value === "repair" ||
+    value === "revamp"
+    ? value
+    : "same_day";
+}
+
+function pricingModelOrDefault(
+  value: unknown,
+): PosLocalSyncServiceLinePayload["pricingModel"] {
+  return value === "fixed" ||
+    value === "starting_at" ||
+    value === "quote_after_consultation"
+    ? value
+    : "fixed";
 }
 
 function numberOrZero(value: unknown): number {

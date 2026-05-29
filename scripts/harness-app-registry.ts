@@ -440,6 +440,46 @@ export const HARNESS_APP_REGISTRY = [
         note: "Use this when completed-transaction item adjustments, adjustment approval/application, transaction detail adjustment history, daily close/operations adjusted totals, or cash-control settlement display changes. It keeps original sale totals and explicit adjusted/net settlement fields covered together.",
       },
       {
+        title: "POS service mixed-checkout edits",
+        touchedPaths: [
+          "convex/pos/application/commands/completeTransaction.ts",
+          "convex/pos/application/commands/correctTransaction.ts",
+          "convex/pos/application/queries/getTransactions.ts",
+          "convex/pos/application/sync",
+          "convex/pos/public/transactions.ts",
+          "convex/operations/dailyClose.ts",
+          "convex/cashControls",
+          "convex/serviceOps",
+          "shared/posLocalSyncContract.ts",
+          "src/components/pos/OrderSummary.tsx",
+          "src/components/pos/register/RegisterCheckoutPanel.tsx",
+          "src/components/pos/receipt/PosReceiptShareControl.tsx",
+          "src/components/pos/transactions",
+          "src/components/services/ServiceCasesView.tsx",
+          "src/components/operations/CommandApprovalDialog.tsx",
+          "src/lib/pos/infrastructure/local",
+          "src/lib/pos/presentation/register",
+        ],
+        commands: [
+          {
+            kind: "raw",
+            command:
+              "bun run --filter '@athena/webapp' test -- convex/pos/application/completeTransaction.test.ts convex/pos/application/getTransactions.test.ts convex/pos/public/transactions.test.ts convex/operations/dailyClose.test.ts convex/cashControls/registerSessions.test.ts src/components/pos/OrderSummary.test.tsx src/components/pos/register/RegisterCheckoutPanel.test.tsx src/components/pos/receipt/PosReceiptShareControl.test.tsx src/components/pos/transactions/TransactionView.test.tsx src/components/pos/transactions/TransactionsView.test.tsx src/components/services/ServiceCasesView.test.tsx src/components/operations/CommandApprovalDialog.test.tsx src/lib/pos/infrastructure/local/localPosReadiness.test.ts src/lib/pos/infrastructure/local/posLocalStore.test.ts src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.test.ts",
+          },
+          { kind: "script", script: "audit:convex" },
+          { kind: "script", script: "lint:convex:changed" },
+          { kind: "script", script: "lint:frontend:changed" },
+          {
+            kind: "raw",
+            command:
+              "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+          },
+          { kind: "script", script: "build" },
+        ],
+        behaviorScenarios: ["athena-admin-shell-boot"],
+        note: "Use this when POS service mixed checkout changes receipts, transaction read models, service-case payment context, service catalog local readiness, payment allocation splits, daily close/cash-control reporting, or mixed-sale void guardrails. It preserves the split between retail add-ons and service material usage while confirming drawer tender is counted once.",
+      },
+      {
         title: "Service operations intake, catalog, appointments, and cases",
         touchedPaths: [
           "convex/serviceOps",

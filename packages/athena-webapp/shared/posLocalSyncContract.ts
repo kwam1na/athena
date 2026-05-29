@@ -38,6 +38,21 @@ export type PosLocalSyncSaleItemPayload = {
   image?: string;
 };
 
+export type PosLocalSyncServiceLinePayload = {
+  localServiceLineId?: string;
+  localServiceCaseId?: string;
+  existingServiceCaseId?: string;
+  serviceCatalogId: string;
+  serviceCatalogName: string;
+  serviceMode: "same_day" | "consultation" | "repair" | "revamp";
+  pricingModel: "fixed" | "starting_at" | "quote_after_consultation";
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  catalogUpdatedAt?: number;
+  customerProfileId?: string;
+};
+
 export type PosLocalSyncPaymentPayload = {
   localPaymentId?: string;
   method: string;
@@ -63,6 +78,7 @@ export type PosLocalSyncSaleCompletedPayload = {
     total: number;
   };
   items: PosLocalSyncSaleItemPayload[];
+  serviceLines?: PosLocalSyncServiceLinePayload[];
   payments: PosLocalSyncPaymentPayload[];
 };
 

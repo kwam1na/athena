@@ -5,9 +5,164 @@ import type { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { toSlug } from "../utils";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
+import {
+  requireAuthenticatedAthenaUserWithCtx,
+  requireOrganizationMemberRoleWithCtx,
+} from "../lib/athenaUserAuth";
+
+type ServiceCatalogPricingModel =
+  | "fixed"
+  | "starting_at"
+  | "quote_after_consultation";
+
+type ServiceCatalogDepositType = "none" | "flat" | "percentage";
+
+type PosServiceCatalogRowInput = {
+  _id: Id<"serviceCatalog">;
+  basePrice?: number;
+  depositType: ServiceCatalogDepositType;
+  depositValue?: number;
+  description?: string;
+  name: string;
+  pricingModel: ServiceCatalogPricingModel;
+  requiresManagerApproval: boolean;
+  serviceMode: "same_day" | "consultation" | "repair" | "revamp";
+  status: "active" | "archived";
+  updatedAt: number;
+};
+
+const posServiceCatalogCheckoutReadinessValidator = v.union(
+  v.object({
+    canCheckoutDirectly: v.literal(true),
+    message: v.string(),
+    minimumAmount: v.optional(v.number()),
+    reason: v.literal("fixed_price"),
+    status: v.literal("ready"),
+    suggestedAmount: v.optional(v.number()),
+  }),
+  v.object({
+    canCheckoutDirectly: v.literal(false),
+    message: v.string(),
+    minimumAmount: v.optional(v.number()),
+    reason: v.literal("starting_at_amount_required"),
+    status: v.literal("amount_required"),
+    suggestedAmount: v.optional(v.number()),
+  }),
+  v.object({
+    canCheckoutDirectly: v.literal(false),
+    message: v.string(),
+    minimumAmount: v.optional(v.number()),
+    reason: v.literal("quote_after_consultation_requires_case_or_amount"),
+    requiresExistingCaseOrAmount: v.literal(true),
+    status: v.literal("case_or_amount_required"),
+    suggestedAmount: v.optional(v.number()),
+  })
+);
+
+const posServiceCatalogRowValidator = v.object({
+  serviceCatalogId: v.id("serviceCatalog"),
+  name: v.string(),
+  description: v.optional(v.string()),
+  serviceMode: v.union(
+    v.literal("same_day"),
+    v.literal("consultation"),
+    v.literal("repair"),
+    v.literal("revamp")
+  ),
+  pricingModel: v.union(
+    v.literal("fixed"),
+    v.literal("starting_at"),
+    v.literal("quote_after_consultation")
+  ),
+  basePrice: v.optional(v.number()),
+  depositType: v.union(
+    v.literal("none"),
+    v.literal("flat"),
+    v.literal("percentage")
+  ),
+  depositValue: v.optional(v.number()),
+  requiresManagerApproval: v.boolean(),
+  status: v.literal("active"),
+  updatedAt: v.number(),
+  checkoutReadiness: posServiceCatalogCheckoutReadinessValidator,
+});
 
 export function normalizeServiceCatalogNameKey(name: string) {
   return toSlug(name);
+}
+
+export function buildPosServiceCatalogRow(input: PosServiceCatalogRowInput) {
+  if (input.status !== "active") {
+    return null;
+  }
+
+  return {
+    serviceCatalogId: input._id,
+    name: input.name,
+    ...(input.description ? { description: input.description } : {}),
+    serviceMode: input.serviceMode,
+    pricingModel: input.pricingModel,
+    ...(input.basePrice !== undefined ? { basePrice: input.basePrice } : {}),
+    depositType: input.depositType,
+    ...(input.depositValue !== undefined ? { depositValue: input.depositValue } : {}),
+    requiresManagerApproval: input.requiresManagerApproval,
+    status: "active" as const,
+    updatedAt: input.updatedAt,
+    checkoutReadiness: buildPosServiceCheckoutReadiness(input),
+  };
+}
+
+function buildPosServiceCheckoutReadiness(input: PosServiceCatalogRowInput) {
+  const depositAmount = suggestedDepositAmount(input);
+
+  if (input.pricingModel === "fixed") {
+    return {
+      canCheckoutDirectly: true as const,
+      message: "Ready for checkout.",
+      ...(depositAmount !== undefined ? { minimumAmount: depositAmount } : {}),
+      reason: "fixed_price" as const,
+      status: "ready" as const,
+      ...(input.basePrice !== undefined
+        ? { suggestedAmount: input.basePrice }
+        : {}),
+    };
+  }
+
+  if (input.pricingModel === "starting_at") {
+    return {
+      canCheckoutDirectly: false as const,
+      message: "Enter the service amount before checkout.",
+      ...(depositAmount !== undefined ? { suggestedAmount: depositAmount } : {}),
+      reason: "starting_at_amount_required" as const,
+      status: "amount_required" as const,
+    };
+  }
+
+  return {
+    canCheckoutDirectly: false as const,
+    message:
+      "Attach a service case or enter the collected amount before checkout.",
+    ...(depositAmount !== undefined ? { suggestedAmount: depositAmount } : {}),
+    reason: "quote_after_consultation_requires_case_or_amount" as const,
+    requiresExistingCaseOrAmount: true as const,
+    status: "case_or_amount_required" as const,
+  };
+}
+
+function suggestedDepositAmount(input: PosServiceCatalogRowInput) {
+  if (input.depositType === "flat") {
+    return input.depositValue;
+  }
+
+  if (
+    input.depositType === "percentage" &&
+    input.depositValue !== undefined &&
+    input.basePrice !== undefined
+  ) {
+    return Math.ceil((input.basePrice * input.depositValue) / 100);
+  }
+
+  return undefined;
 }
 
 export function buildServiceCatalogItem(args: {
@@ -112,6 +267,38 @@ export const listServiceCatalogItems = query({
       .query("serviceCatalog")
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
       .collect();
+  },
+});
+
+export const listPosServiceCatalogSnapshot = query({
+  args: {
+    storeId: v.id("store"),
+  },
+  returns: v.array(posServiceCatalogRowValidator),
+  handler: async (ctx, args) => {
+    const store = await ctx.db.get("store", args.storeId);
+    if (!store) {
+      return [];
+    }
+    const user = await requireAuthenticatedAthenaUserWithCtx(ctx);
+    await requireOrganizationMemberRoleWithCtx(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "You do not have access to this store's service catalog.",
+      organizationId: store.organizationId,
+      userId: user._id,
+    });
+
+    const rows = await ctx.db
+      .query("serviceCatalog")
+      .withIndex("by_storeId_status", (q) =>
+        q.eq("storeId", args.storeId).eq("status", "active")
+      )
+      .collect();
+
+    return rows.flatMap((row) => {
+      const posRow = buildPosServiceCatalogRow(row);
+      return posRow ? [posRow] : [];
+    });
   },
 });
 

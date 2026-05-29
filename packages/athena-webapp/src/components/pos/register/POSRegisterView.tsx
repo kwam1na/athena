@@ -28,6 +28,7 @@ import {
   ScanBarcode,
   Search,
   ShoppingBasket,
+  Wrench,
   Settings,
   Users,
 } from "lucide-react";
@@ -35,6 +36,7 @@ import { Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  type RegisterLookupMode,
   type RegisterViewModel,
   type RegisterWorkflowMode,
 } from "@/lib/pos/presentation/register/registerUiState";
@@ -85,11 +87,13 @@ function ProductLookupEmptyState({
   canQuickAddProduct = false,
   onActivate,
   onQuickAddProduct,
+  onServiceLookup,
   workflowMode,
 }: {
   canQuickAddProduct?: boolean;
   onActivate?: () => void;
   onQuickAddProduct?: () => void;
+  onServiceLookup?: () => void;
   workflowMode: RegisterWorkflowMode;
 }) {
   const isExpenseWorkflow = workflowMode === "expense";
@@ -140,6 +144,18 @@ function ProductLookupEmptyState({
           >
             <PackagePlus className="h-3.5 w-3.5" />
             Quick add product
+          </Button>
+        ) : null}
+        {!isExpenseWorkflow && onServiceLookup ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1.5 rounded-full bg-surface px-3 text-xs"
+            onClick={onServiceLookup}
+          >
+            <Wrench className="h-3.5 w-3.5" />
+            Add service
           </Button>
         ) : null}
       </div>
@@ -904,6 +920,7 @@ export function POSRegisterView({
   const [isPaymentsListExpanded, setIsPaymentsListExpanded] = useState(false);
   const [isEmptyStateQuickAddActive, setIsEmptyStateQuickAddActive] =
     useState(false);
+  const [lookupMode, setLookupMode] = useState<RegisterLookupMode>("product");
   const productEntryRef = useRef<ProductEntryHandle>(null);
   const pendingEmptyStateQuickAddRef = useRef(false);
   const headerProductSearchInputRef = useRef<HTMLInputElement>(null);
@@ -919,8 +936,21 @@ export function POSRegisterView({
   );
   const hasProductSearchIntent =
     (viewModel.productEntry?.productSearchQuery ?? "").trim().length > 0;
+  const hasServiceSearchIntent =
+    lookupMode === "service" &&
+    (viewModel.serviceEntry?.serviceSearchQuery ?? "").trim().length > 0;
+  const shouldShowServiceLookup =
+    isPosWorkflow &&
+    lookupMode === "service" &&
+    viewModel.productEntry?.showProductLookup;
+  const hasLookupIntent = hasProductSearchIntent || hasServiceSearchIntent;
   const cartItemCount =
-    viewModel.cart?.items?.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
+    (viewModel.cart?.items?.reduce((sum, item) => sum + item.quantity, 0) ??
+      0) +
+    (viewModel.cart?.serviceItems?.reduce(
+      (sum, item) => sum + item.quantity,
+      0,
+    ) ?? 0);
   const isAwaitingCashierAuth = Boolean(viewModel.authDialog?.open);
   const isStaffSignedIn =
     viewModel.debug?.staffSignedIn === true || Boolean(viewModel.cashierCard);
@@ -965,12 +995,13 @@ export function POSRegisterView({
   const shouldRenderCheckoutPanel =
     isPosWorkflow || shouldRenderExpenseCompletionPanel;
   const shouldShowPaymentWorkspace =
-    isPosWorkflow && isPaymentEntryActive && !hasProductSearchIntent;
+    isPosWorkflow && isPaymentEntryActive && !hasLookupIntent;
   const shouldShowIdleLookupCartSplit =
     isPosWorkflow &&
     shouldRenderSaleSurface &&
     cartItemCount > 0 &&
-    !hasProductSearchIntent &&
+    !hasLookupIntent &&
+    !shouldShowServiceLookup &&
     !shouldShowPaymentWorkspace &&
     !isPaymentEditActive &&
     !isPaymentsListExpanded &&
@@ -981,7 +1012,7 @@ export function POSRegisterView({
   const shouldShowCartSummarySidebar =
     isPosWorkflow &&
     shouldRenderSaleSurface &&
-    ((isPaymentEntryActive && hasProductSearchIntent) ||
+    ((isPaymentEntryActive && hasLookupIntent) ||
       isPaymentEditActive ||
       isPaymentsListExpanded) &&
     !shouldShowPaymentWorkspace &&
@@ -1064,19 +1095,41 @@ export function POSRegisterView({
     if (hasProductSearchIntent) {
       viewModel.productEntry?.setProductSearchQuery?.("");
     }
+    if (hasServiceSearchIntent) {
+      viewModel.serviceEntry?.setServiceSearchQuery?.("");
+    }
 
     setIsPaymentEntryActive(true);
-  }, [hasProductSearchIntent, viewModel.productEntry]);
+  }, [
+    hasProductSearchIntent,
+    hasServiceSearchIntent,
+    viewModel.productEntry,
+    viewModel.serviceEntry,
+  ]);
 
   const handleProductLookupEmptyStateActivate = useCallback(() => {
     if (!isHeaderProductSearchSupported) {
       return;
     }
 
+    setLookupMode("product");
     viewModel.productEntry?.setShowProductLookup?.(true);
     headerProductSearchInputRef.current?.focus();
     headerProductSearchInputRef.current?.select();
   }, [isHeaderProductSearchSupported, viewModel.productEntry]);
+
+  const handleServiceLookupEmptyStateActivate = useCallback(() => {
+    if (!isHeaderProductSearchSupported || !viewModel.serviceEntry) {
+      return;
+    }
+
+    setLookupMode("service");
+    viewModel.productEntry?.setShowProductLookup?.(true);
+  }, [
+    isHeaderProductSearchSupported,
+    viewModel.productEntry,
+    viewModel.serviceEntry,
+  ]);
 
   const handleProductLookupEmptyStateQuickAdd = useCallback(() => {
     if (
@@ -1162,7 +1215,10 @@ export function POSRegisterView({
       canQuickAddProduct={viewModel.productEntry.canQuickAddProduct}
       onQuickAddOpenChange={setIsEmptyStateQuickAddActive}
       forceQuickAddHost={forceQuickAddHost}
-      showSearchInput={false}
+      lookupMode={lookupMode}
+      setLookupMode={setLookupMode}
+      serviceEntry={viewModel.serviceEntry}
+      showSearchInput={lookupMode === "service"}
       containerClassName={containerClassName}
       lookupPanelClassName={lookupPanelClassName}
       resultsClassName={resultsClassName}
@@ -1238,9 +1294,10 @@ export function POSRegisterView({
                   ref={headerProductSearchInputRef}
                   disabled={!isHeaderProductSearchSupported}
                   productSearchQuery={viewModel.productEntry.productSearchQuery}
-                  setProductSearchQuery={
-                    viewModel.productEntry.setProductSearchQuery
-                  }
+                  setProductSearchQuery={(query) => {
+                    setLookupMode("product");
+                    viewModel.productEntry.setProductSearchQuery(query);
+                  }}
                   onBarcodeSubmit={viewModel.productEntry.onBarcodeSubmit}
                   className="max-w-[800px] flex-1"
                   inputClassName="h-14"
@@ -1309,12 +1366,15 @@ export function POSRegisterView({
                 ) : shouldShowPaymentWorkspace ? (
                   <CartItems
                     cartItems={viewModel.cart.items}
+                    serviceItems={viewModel.cart.serviceItems}
                     onUpdateQuantity={viewModel.cart.onUpdateQuantity}
                     onRemoveItem={viewModel.cart.onRemoveItem}
+                    onUpdateServiceAmount={viewModel.cart.onUpdateServiceAmount}
+                    onRemoveService={viewModel.cart.onRemoveService}
                     clearCart={viewModel.cart.onClearCart}
                     density="comfortable"
                   />
-                ) : hasProductSearchIntent ? (
+                ) : hasLookupIntent || shouldShowServiceLookup ? (
                   <div className="min-h-0 flex-1">
                     {renderProductEntry()}
                   </div>
@@ -1335,12 +1395,20 @@ export function POSRegisterView({
                           ? handleProductLookupEmptyStateQuickAdd
                           : undefined
                       }
+                      onServiceLookup={
+                        viewModel.serviceEntry
+                          ? handleServiceLookupEmptyStateActivate
+                          : undefined
+                      }
                       workflowMode={effectiveWorkflowMode}
                     />
                     <CartItems
                       cartItems={viewModel.cart.items}
+                      serviceItems={viewModel.cart.serviceItems}
                       onUpdateQuantity={viewModel.cart.onUpdateQuantity}
                       onRemoveItem={viewModel.cart.onRemoveItem}
+                      onUpdateServiceAmount={viewModel.cart.onUpdateServiceAmount}
+                      onRemoveService={viewModel.cart.onRemoveService}
                       clearCart={viewModel.cart.onClearCart}
                       density="compact"
                     />
@@ -1370,6 +1438,11 @@ export function POSRegisterView({
                           ? handleProductLookupEmptyStateQuickAdd
                           : undefined
                       }
+                      onServiceLookup={
+                        viewModel.serviceEntry
+                          ? handleServiceLookupEmptyStateActivate
+                          : undefined
+                      }
                       workflowMode={effectiveWorkflowMode}
                     />
                     {isEmptyStateQuickAddActive
@@ -1396,8 +1469,11 @@ export function POSRegisterView({
                   {shouldRenderCartSidebar ? (
                     <CartItems
                       cartItems={viewModel.cart.items}
+                      serviceItems={viewModel.cart.serviceItems}
                       onUpdateQuantity={viewModel.cart.onUpdateQuantity}
                       onRemoveItem={viewModel.cart.onRemoveItem}
+                      onUpdateServiceAmount={viewModel.cart.onUpdateServiceAmount}
+                      onRemoveService={viewModel.cart.onRemoveService}
                       clearCart={viewModel.cart.onClearCart}
                       density="compact"
                     />
@@ -1422,6 +1498,11 @@ export function POSRegisterView({
                           : "shrink-0",
                       )}
                     >
+                      {viewModel.serviceEntry?.checkoutBlockMessage ? (
+                        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                          {viewModel.serviceEntry.checkoutBlockMessage}
+                        </div>
+                      ) : null}
                       {isPosWorkflow ? (
                         <RegisterCheckoutPanel
                           checkout={viewModel.checkout}

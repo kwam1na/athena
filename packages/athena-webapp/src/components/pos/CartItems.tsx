@@ -1,28 +1,35 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  ShoppingCart,
   Trash2,
   Plus,
   Minus,
   ShoppingBasket,
-  ShoppingBag,
   Package,
+  Wrench,
 } from "lucide-react";
 import { CartItem } from "./types";
 import { currencyFormatter } from "~/convex/utils";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { capitalizeWords, cn } from "~/src/lib/utils";
 import { Id } from "~/convex/_generated/dataModel";
-import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
+import {
+  formatStoredAmount,
+  parseDisplayAmountInput,
+} from "~/src/lib/pos/displayAmounts";
+import type { RegisterServiceLineState } from "@/lib/pos/presentation/register/registerUiState";
+import { Input } from "@/components/ui/input";
 
 interface CartItemsProps {
   cartItems: CartItem[];
+  serviceItems?: RegisterServiceLineState[];
   onUpdateQuantity?: (
     id: Id<"posSessionItem"> | Id<"expenseSessionItem">,
     newQuantity: number,
   ) => void;
   onRemoveItem?: (id: Id<"posSessionItem"> | Id<"expenseSessionItem">) => void;
+  onUpdateServiceAmount?: (lineId: string, amount: number) => void;
+  onRemoveService?: (lineId: string) => void;
   clearCart?: () => void;
   readOnly?: boolean;
   density?: "comfortable" | "compact";
@@ -31,8 +38,11 @@ interface CartItemsProps {
 
 export function CartItems({
   cartItems,
+  serviceItems = [],
   onUpdateQuantity,
   onRemoveItem,
+  onUpdateServiceAmount,
+  onRemoveService,
   clearCart,
   readOnly = false,
   density = "comfortable",
@@ -43,7 +53,9 @@ export function CartItems({
   const isCompact = density === "compact";
 
   // Compute total quantity once
-  const totalQuantity = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+  const totalQuantity =
+    cartItems.reduce((sum, item) => sum + item.quantity, 0) +
+    serviceItems.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
     <div
@@ -86,7 +98,7 @@ export function CartItems({
           isCompact && "flex-1 pt-0",
         )}
       >
-        {cartItems.length === 0 ? (
+        {cartItems.length === 0 && serviceItems.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center py-8 text-center text-muted-foreground">
             <ShoppingBasket className="w-16 h-16 mx-auto mb-4 opacity-50" />
             <div className="space-y-1">
@@ -101,6 +113,128 @@ export function CartItems({
               isCompact && "h-full",
             )}
           >
+            {serviceItems.map((item) => {
+              const canEditAmount =
+                !readOnly &&
+                (item.pricingModel === "starting_at" ||
+                  item.pricingModel === "quote_after_consultation") &&
+                Boolean(onUpdateServiceAmount);
+              const amountLabel =
+                item.pricingModel === "fixed"
+                  ? "Fixed price"
+                  : item.pricingModel === "starting_at"
+                    ? "Entered amount"
+                    : "Quoted amount";
+
+              return (
+                <div
+                  key={item.id}
+                  className={cn(
+                    "border bg-white rounded-lg",
+                    isCompact
+                      ? "space-y-3 p-3"
+                      : "grid grid-cols-12 gap-2 p-8 items-center",
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "flex items-start gap-4",
+                      !isCompact && "col-span-7",
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "bg-muted rounded flex items-center justify-center flex-shrink-0",
+                        isCompact ? "w-12 h-12" : "w-16 h-16",
+                      )}
+                    >
+                      <Wrench className="h-5 w-5 text-muted-foreground" />
+                    </div>
+
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h4 className="truncate text-sm font-medium leading-tight">
+                          {capitalizeWords(item.name)}
+                        </h4>
+                        <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                          Service
+                        </span>
+                      </div>
+                      <p className="text-xs capitalize text-muted-foreground">
+                        {item.serviceMode.replace(/_/g, " ")} · {amountLabel}
+                      </p>
+                      {item.amountRequired ? (
+                        <p className="text-xs font-medium text-amber-700">
+                          Enter an amount before checkout.
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div
+                    className={cn(
+                      "flex items-center",
+                      isCompact ? "justify-between pt-3" : "contents",
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "flex items-center",
+                        isCompact ? "justify-start" : "col-span-3 justify-end",
+                      )}
+                    >
+                      {canEditAmount ? (
+                        <Input
+                          aria-label={`${item.name} service amount`}
+                          className="h-10 max-w-32 text-right"
+                          defaultValue={
+                            item.price > 0 ? (item.price / 100).toString() : ""
+                          }
+                          inputMode="decimal"
+                          placeholder="Amount"
+                          onBlur={(event) => {
+                            const parsedAmount = parseDisplayAmountInput(
+                              event.target.value,
+                            );
+                            if (parsedAmount !== undefined) {
+                              onUpdateServiceAmount?.(item.id, parsedAmount);
+                            }
+                          }}
+                        />
+                      ) : (
+                        <p className="text-sm font-medium">
+                          {formatStoredAmount(formatter, item.price)}
+                        </p>
+                      )}
+                    </div>
+
+                    {!readOnly && onRemoveService ? (
+                      <div
+                        className={cn(
+                          "flex justify-center",
+                          !isCompact && "col-span-2",
+                        )}
+                      >
+                        <Button
+                          variant="ghost"
+                          size="default"
+                          className={cn(
+                            "text-destructive hover:text-destructive hover:bg-destructive/10",
+                            isCompact ? "h-10 w-10 p-0" : "h-10 w-10 p-8",
+                          )}
+                          onClick={() => onRemoveService(item.id)}
+                        >
+                          <Trash2
+                            className={cn(isCompact ? "w-4 h-4" : "w-5 h-5")}
+                          />
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+
             {cartItems.map((item) => (
               <div
                 key={item.id}

@@ -58,11 +58,23 @@ type ServiceCaseListItem = {
   status: string;
 };
 
+type ServiceCasePaymentAllocation = {
+  _id?: string;
+  allocationType?: string;
+  amount: number;
+  direction?: "in" | "out";
+  externalReference?: string;
+  method: string;
+  posTransactionId?: string;
+  status?: string;
+  targetType?: string;
+};
+
 type ServiceCaseDetails = {
   _id: string;
   balanceDueAmount: number;
   lineItems: Array<unknown>;
-  paymentAllocations: Array<unknown>;
+  paymentAllocations: Array<ServiceCasePaymentAllocation>;
   paymentStatus: string;
   pendingApprovals: Array<{ _id: string }>;
   status: string;
@@ -185,6 +197,16 @@ export function ServiceCasesViewContent({
       serviceCases.find((serviceCase) => serviceCase._id === selectedCaseId) ??
       null,
     [selectedCaseId, serviceCases],
+  );
+  const posCollectedPayments = useMemo(
+    () =>
+      (selectedCaseDetails?.paymentAllocations ?? []).filter(
+        (allocation) =>
+          allocation.posTransactionId &&
+          allocation.targetType !== "pos_transaction" &&
+          allocation.status !== "voided",
+      ),
+    [selectedCaseDetails?.paymentAllocations],
   );
 
   useEffect(() => {
@@ -551,6 +573,30 @@ export function ServiceCasesViewContent({
                       <div className="grid gap-4 lg:grid-cols-2">
                         <section className="space-y-3 rounded-md border border-border bg-background p-3">
                           <h4 className="font-medium">Payments</h4>
+                          {posCollectedPayments.length > 0 ? (
+                            <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3 text-sm">
+                              <p className="font-medium text-foreground">
+                                POS-collected service payment
+                              </p>
+                              {posCollectedPayments.map((allocation) => (
+                                <div
+                                  className="flex items-center justify-between gap-3 text-muted-foreground"
+                                  key={
+                                    allocation._id ??
+                                    allocation.externalReference ??
+                                    allocation.posTransactionId
+                                  }
+                                >
+                                  <span>
+                                    {allocation.method.replaceAll("_", " ")}
+                                  </span>
+                                  <span className="font-medium text-foreground">
+                                    {allocation.amount}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
                           <div className="space-y-2">
                             <Label htmlFor="payment-amount">
                               Payment amount

@@ -41,6 +41,21 @@ export interface PosLocalCartItemReadModel {
   areProcessingFeesAbsorbed: boolean;
 }
 
+export interface PosLocalServiceLineReadModel {
+  localServiceLineId: string;
+  localServiceCaseId?: string;
+  existingServiceCaseId?: string;
+  serviceCatalogId: string;
+  serviceCatalogName: string;
+  serviceMode: "same_day" | "consultation" | "repair" | "revamp";
+  pricingModel: "fixed" | "starting_at" | "quote_after_consultation";
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  catalogUpdatedAt?: number;
+  customerProfileId?: string;
+}
+
 export interface PosLocalActiveSaleReadModel {
   localPosSessionId: string;
   localRegisterSessionId: string;
@@ -52,6 +67,7 @@ export interface PosLocalActiveSaleReadModel {
   registerNumber?: string;
   updatedAt: number;
   items: PosLocalCartItemReadModel[];
+  serviceLines: PosLocalServiceLineReadModel[];
   payments: PosPaymentDto[];
   startedAt: number;
   subtotal: number;
@@ -67,6 +83,7 @@ export interface PosLocalCompletedSaleReadModel {
   receiptNumber: string;
   completedAt: number;
   items: PosLocalCartItemReadModel[];
+  serviceLines: PosLocalServiceLineReadModel[];
   payments: PosPaymentDto[];
   subtotal: number;
   tax: number;
@@ -261,6 +278,7 @@ export function projectLocalRegisterReadModel(input: {
         registerNumber: event.registerNumber,
         updatedAt: event.createdAt,
         items: [],
+        serviceLines: [],
         payments: [],
         startedAt: event.createdAt,
         subtotal: 0,
@@ -288,7 +306,37 @@ export function projectLocalRegisterReadModel(input: {
         ...sale,
         items: nextItems,
         updatedAt: event.createdAt,
-        ...totalsFromItems(nextItems),
+        ...totalsFromItemsAndServices(nextItems, sale.serviceLines),
+      });
+      activeRegisterSession = { ...activeRegisterSession, status: "active" };
+      continue;
+    }
+
+    if (event.type === "cart.service_added") {
+      const serviceLine = parseServiceLine(event.payload);
+      if (!serviceLine) {
+        errors.push(errorFor(event, "malformed_payload"));
+        continue;
+      }
+
+      const sale = getOrCreateSale({
+        activeRegisterSession,
+        event,
+        sales,
+        mappings,
+      });
+      const nextServiceLines =
+        serviceLine.quantity <= 0
+          ? sale.serviceLines.filter(
+              (line) =>
+                line.localServiceLineId !== serviceLine.localServiceLineId,
+            )
+          : upsertServiceLine(sale.serviceLines, serviceLine);
+      sales.set(sale.localPosSessionId, {
+        ...sale,
+        serviceLines: nextServiceLines,
+        updatedAt: event.createdAt,
+        ...totalsFromItemsAndServices(sale.items, nextServiceLines),
       });
       activeRegisterSession = { ...activeRegisterSession, status: "active" };
       continue;
@@ -516,6 +564,7 @@ function getOrCreateSale(input: {
     registerNumber: input.event.registerNumber,
     updatedAt: input.event.createdAt,
     items: [],
+    serviceLines: [],
     payments: [],
     startedAt: input.event.createdAt,
     subtotal: 0,
@@ -546,11 +595,13 @@ function getCompletedSale(input: {
       )
     : [];
   if (payloadItems.some((item) => !item)) return null;
+  const serviceLines = parseServiceLines(payload.serviceLines);
+  if (!serviceLines) return null;
 
   const items = payloadItems.length
     ? (payloadItems as PosLocalCartItemReadModel[])
     : (activeSale?.items ?? []);
-  const fallbackTotals = totalsFromItems(items);
+  const fallbackTotals = totalsFromItemsAndServices(items, serviceLines);
   const payments = parsePayments(payload.payments);
   if (!payments) return null;
 
@@ -567,6 +618,7 @@ function getCompletedSale(input: {
     receiptNumber: stringField(payload, "receiptNumber") ?? localTransactionId,
     completedAt: input.event.createdAt,
     items,
+    serviceLines,
     payments,
     subtotal: numberField(payload, "subtotal") ?? fallbackTotals.subtotal,
     tax: numberField(payload, "tax") ?? fallbackTotals.tax,
@@ -609,6 +661,57 @@ function parseCartItemPayload(
         ? payload.areProcessingFeesAbsorbed
         : false,
   };
+}
+
+function parseServiceLines(value: unknown): PosLocalServiceLineReadModel[] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) return null;
+
+  const serviceLines: PosLocalServiceLineReadModel[] = [];
+  for (const lineValue of value) {
+    const payload = asRecord(lineValue);
+    const serviceCatalogId = stringField(payload, "serviceCatalogId");
+    const serviceCatalogName = stringField(payload, "serviceCatalogName");
+    const quantity = numberField(payload, "quantity");
+    const unitPrice = numberField(payload, "unitPrice");
+    const totalPrice = numberField(payload, "totalPrice");
+    const serviceMode = serviceModeField(payload.serviceMode);
+    const pricingModel = pricingModelField(payload.pricingModel);
+    if (
+      !serviceCatalogId ||
+      !serviceCatalogName ||
+      !serviceMode ||
+      !pricingModel ||
+      quantity === undefined ||
+      unitPrice === undefined ||
+      totalPrice === undefined
+    ) {
+      return null;
+    }
+
+    serviceLines.push({
+      localServiceLineId:
+        stringField(payload, "localServiceLineId") ??
+        `local-service-line-${serviceLines.length + 1}`,
+      localServiceCaseId: optionalString(payload.localServiceCaseId),
+      existingServiceCaseId: optionalString(payload.existingServiceCaseId),
+      serviceCatalogId,
+      serviceCatalogName,
+      serviceMode,
+      pricingModel,
+      quantity,
+      unitPrice,
+      totalPrice,
+      catalogUpdatedAt: numberField(payload, "catalogUpdatedAt"),
+      customerProfileId: optionalString(payload.customerProfileId),
+    });
+  }
+  return serviceLines;
+}
+
+function parseServiceLine(value: unknown): PosLocalServiceLineReadModel | null {
+  const serviceLines = parseServiceLines([value]);
+  return serviceLines?.[0] ?? null;
 }
 
 function parsePayments(value: unknown): PosPaymentDto[] | null {
@@ -672,12 +775,42 @@ function upsertCartItem(
   return next;
 }
 
+function upsertServiceLine(
+  serviceLines: PosLocalServiceLineReadModel[],
+  serviceLine: PosLocalServiceLineReadModel,
+) {
+  const index = serviceLines.findIndex(
+    (line) => line.localServiceLineId === serviceLine.localServiceLineId,
+  );
+  if (index === -1) return [...serviceLines, serviceLine];
+
+  const next = [...serviceLines];
+  next[index] = serviceLine;
+  return next;
+}
+
 function totalsFromItems(items: PosLocalCartItemReadModel[]) {
   const subtotal = items.reduce(
     (sum, item) => sum + item.price * item.quantity,
     0,
   );
   return { subtotal, tax: 0, total: subtotal };
+}
+
+function totalsFromItemsAndServices(
+  items: PosLocalCartItemReadModel[],
+  serviceLines: PosLocalServiceLineReadModel[],
+) {
+  const itemTotals = totalsFromItems(items);
+  const serviceSubtotal = serviceLines.reduce(
+    (sum, line) => sum + line.totalPrice,
+    0,
+  );
+  return {
+    subtotal: itemTotals.subtotal + serviceSubtotal,
+    tax: itemTotals.tax,
+    total: itemTotals.total + serviceSubtotal,
+  };
 }
 
 function errorFor(
@@ -738,6 +871,27 @@ function registerStatus(
     value === "active" ||
     value === "closing" ||
     value === "closed"
+    ? value
+    : undefined;
+}
+
+function serviceModeField(
+  value: unknown,
+): PosLocalServiceLineReadModel["serviceMode"] | undefined {
+  return value === "same_day" ||
+    value === "consultation" ||
+    value === "repair" ||
+    value === "revamp"
+    ? value
+    : undefined;
+}
+
+function pricingModelField(
+  value: unknown,
+): PosLocalServiceLineReadModel["pricingModel"] | undefined {
+  return value === "fixed" ||
+    value === "starting_at" ||
+    value === "quote_after_consultation"
     ? value
     : undefined;
 }

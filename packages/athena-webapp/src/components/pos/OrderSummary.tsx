@@ -28,7 +28,7 @@ import type { Id } from "~/convex/_generated/dataModel";
 
 import { PaymentView, type SelectedPaymentMethod } from "./PaymentView";
 import { PaymentsAddedList } from "./PaymentsAddedList";
-import type { CartItem, Payment } from "./types";
+import type { CartItem, Payment, PosServiceReceiptLine } from "./types";
 
 function formatReceiptWebsite(url: string) {
   return url.replace(/^https?:\/\//, (protocol) =>
@@ -89,6 +89,7 @@ interface OrderSummaryProps {
     transactionId?: string;
     completedAt: Date | number;
     cartItems: CartItem[];
+    serviceLines?: PosServiceReceiptLine[];
     subtotal: number;
     tax: number;
     total: number;
@@ -181,6 +182,11 @@ export function OrderSummary({
     completedTransactionData?.cartItems && (readOnly || isTransactionCompleted)
       ? completedTransactionData.cartItems
       : cartItems;
+  const completedServiceLines = completedTransactionData?.serviceLines ?? [];
+  const serviceLinesCount = completedServiceLines.reduce(
+    (sum, line) => sum + (line.quantity ?? 1),
+    0,
+  );
   const effectiveCustomerInfo =
     completedTransactionData?.customerInfo ?? customerInfo;
   const summarySubtotal =
@@ -238,7 +244,7 @@ export function OrderSummary({
   const cartItemsCount = effectiveCartItems.reduce(
     (sum, item) => sum + item.quantity,
     0,
-  );
+  ) + serviceLinesCount;
   const completedAtDate = completedTransactionData?.completedAt
     ? completedTransactionData.completedAt instanceof Date
       ? completedTransactionData.completedAt
@@ -462,7 +468,7 @@ export function OrderSummary({
           ? completedData.completedAt
           : new Date(completedData.completedAt);
 
-      const receiptItems = completedData.cartItems.map((item) => {
+      const receiptProductItems = completedData.cartItems.map((item) => {
         const attributeParts: string[] = [];
         if (item.size) {
           attributeParts.push(`${item.size}`);
@@ -480,6 +486,30 @@ export function OrderSummary({
             attributeParts.length > 0 ? attributeParts.join(" • ") : undefined,
         };
       });
+      const receiptServiceItems = (completedData.serviceLines ?? []).map(
+        (line) => ({
+          name: line.name,
+          totalPrice: formatStoredAmount(formatter, line.totalPrice),
+          quantityLabel: `${line.quantity ?? 1} × ${formatStoredAmount(
+            formatter,
+            line.unitPrice ?? line.totalPrice,
+          )}`,
+          skuOrBarcode: line.serviceCaseId
+            ? `Service case ${line.serviceCaseId}`
+            : undefined,
+          attributes: [
+            line.serviceMode
+              ? `Service mode: ${line.serviceMode.replaceAll("_", " ")}`
+              : null,
+            line.servicePaymentStatus
+              ? `Payment: ${line.servicePaymentStatus.replaceAll("_", " ")}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" • ") || undefined,
+        }),
+      );
+      const receiptItems = [...receiptProductItems, ...receiptServiceItems];
 
       const paymentMethodLabel = formatPaymentMethod(
         completedData.paymentMethod,
@@ -608,6 +638,41 @@ export function OrderSummary({
               {formatStoredAmount(formatter, summarySubtotal)}
             </span>
           </div>
+          {completedServiceLines.length > 0 ? (
+            <div className="space-y-4 border-y border-border/70 py-4 text-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Service lines
+              </p>
+              <div className="space-y-4">
+                {completedServiceLines.map((line) => (
+                  <div
+                    className="grid gap-1"
+                    key={`${line.id}-${line.serviceCaseId ?? "service"}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="min-w-0 text-foreground">
+                        {line.name}
+                      </span>
+                      <span className="font-medium text-foreground">
+                        {formatStoredAmount(formatter, line.totalPrice)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {line.serviceCaseUnavailable
+                        ? "Service case unavailable"
+                        : [
+                            line.serviceCaseTitle,
+                            line.serviceStatus?.replaceAll("_", " "),
+                            line.servicePaymentStatus?.replaceAll("_", " "),
+                          ]
+                            .filter(Boolean)
+                            .join(" • ")}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
           {completedTransactionData && (
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">
@@ -904,6 +969,44 @@ export function OrderSummary({
                   </span>
                 </div>
               )}
+              {completedServiceLines.length > 0 ? (
+                <div className="space-y-3 border-y border-border/70 py-4 text-sm">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Service lines
+                  </p>
+                  <div className="space-y-3">
+                    {completedServiceLines.map((line) => (
+                      <div
+                        className="grid gap-1"
+                        key={`${line.id}-${line.serviceCaseId ?? "service"}`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <span className="min-w-0 text-foreground">
+                            {line.name}
+                          </span>
+                          <span className="font-medium text-foreground">
+                            {formatStoredAmount(formatter, line.totalPrice)}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {line.serviceCaseUnavailable
+                            ? "Service case unavailable"
+                            : [
+                                line.serviceCaseTitle,
+                                line.serviceStatus?.replaceAll("_", " "),
+                                line.servicePaymentStatus?.replaceAll(
+                                  "_",
+                                  " ",
+                                ),
+                              ]
+                                .filter(Boolean)
+                                .join(" • ")}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               {showCompletedPaymentBreakdown && (
                 <div className="space-y-3 border-y border-border/70 py-4 text-sm">
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">

@@ -5,6 +5,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ProductEntry } from "./ProductEntry";
 import type { Product } from "./types";
+import type {
+  RegisterLookupMode,
+  RegisterServiceEntryState,
+  RegisterServiceSearchResult,
+} from "@/lib/pos/presentation/register/registerUiState";
 
 const quickAddProductSkuMock = vi.fn();
 const registerCatalogMock = vi.fn();
@@ -74,6 +79,55 @@ function renderProductEntry(input: {
         searchResults={[]}
         setProductSearchQuery={(query) => {
           input.setProductSearchQuery(query);
+          setProductSearchQuery(query);
+        }}
+        setShowProductLookup={vi.fn()}
+        showProductLookup
+      />
+    );
+  }
+
+  render(<Harness />);
+}
+
+function buildServiceResult(
+  overrides: Partial<RegisterServiceSearchResult> = {},
+): RegisterServiceSearchResult {
+  return {
+    id: "service-1",
+    serviceCatalogId: "service-1" as RegisterServiceSearchResult["serviceCatalogId"],
+    name: "Closure Repair",
+    serviceMode: "repair",
+    pricingModel: "fixed",
+    basePrice: 4500,
+    ...overrides,
+  };
+}
+
+function renderProductEntryWithServices(input: {
+  lookupMode?: RegisterLookupMode;
+  serviceEntry: RegisterServiceEntryState;
+  setProductSearchQuery?: (query: string) => void;
+}) {
+  function Harness() {
+    const [lookupMode, setLookupMode] = useState<RegisterLookupMode>(
+      input.lookupMode ?? "product",
+    );
+    const [productSearchQuery, setProductSearchQuery] = useState("");
+
+    return (
+      <ProductEntry
+        isSearchLoading={false}
+        isSearchReady
+        lookupMode={lookupMode}
+        onAddProduct={vi.fn()}
+        onBarcodeSubmit={vi.fn()}
+        productSearchQuery={productSearchQuery}
+        searchResults={[]}
+        serviceEntry={input.serviceEntry}
+        setLookupMode={setLookupMode}
+        setProductSearchQuery={(query) => {
+          input.setProductSearchQuery?.(query);
           setProductSearchQuery(query);
         }}
         setShowProductLookup={vi.fn()}
@@ -230,5 +284,93 @@ describe("ProductEntry", () => {
         quantityAvailable: 1,
       }),
     );
+  });
+
+  it("keeps product lookup as the default when service search is available", async () => {
+    const user = userEvent.setup();
+    const setProductSearchQuery = vi.fn();
+    const serviceEntry: RegisterServiceEntryState = {
+      disabled: false,
+      serviceSearchQuery: "",
+      setServiceSearchQuery: vi.fn(),
+      searchResults: [buildServiceResult()],
+      isSearchLoading: false,
+      isSearchReady: true,
+      items: [],
+      onAddService: vi.fn(),
+      onUpdateServiceAmount: vi.fn(),
+      onRemoveService: vi.fn(),
+    };
+
+    renderProductEntryWithServices({ serviceEntry, setProductSearchQuery });
+
+    await user.type(
+      screen.getByPlaceholderText(/lookup product by name/i),
+      "closure",
+    );
+
+    expect(setProductSearchQuery).toHaveBeenLastCalledWith("closure");
+    expect(serviceEntry.setServiceSearchQuery).not.toHaveBeenCalled();
+  });
+
+  it("adds a fixed-price service from explicit service lookup", async () => {
+    const user = userEvent.setup();
+    const service = buildServiceResult();
+    const serviceEntry: RegisterServiceEntryState = {
+      disabled: false,
+      serviceSearchQuery: "closure",
+      setServiceSearchQuery: vi.fn(),
+      searchResults: [service],
+      isSearchLoading: false,
+      isSearchReady: true,
+      items: [],
+      onAddService: vi.fn(async () => true),
+      onUpdateServiceAmount: vi.fn(),
+      onRemoveService: vi.fn(),
+    };
+
+    renderProductEntryWithServices({
+      lookupMode: "service",
+      serviceEntry,
+    });
+
+    await user.click(screen.getByRole("button", { name: /add service/i }));
+
+    expect(serviceEntry.onAddService).toHaveBeenCalledWith(service, undefined);
+    expect(serviceEntry.setServiceSearchQuery).toHaveBeenCalledWith("");
+  });
+
+  it("requires an entered amount before adding a starting-at service", async () => {
+    const user = userEvent.setup();
+    const service = buildServiceResult({
+      pricingModel: "starting_at",
+      basePrice: 5000,
+    });
+    const serviceEntry: RegisterServiceEntryState = {
+      disabled: false,
+      serviceSearchQuery: "revamp",
+      setServiceSearchQuery: vi.fn(),
+      searchResults: [service],
+      isSearchLoading: false,
+      isSearchReady: true,
+      items: [],
+      onAddService: vi.fn(async () => true),
+      onUpdateServiceAmount: vi.fn(),
+      onRemoveService: vi.fn(),
+    };
+
+    renderProductEntryWithServices({
+      lookupMode: "service",
+      serviceEntry,
+    });
+
+    const addButton = screen.getByRole("button", { name: /add service/i });
+    expect(addButton).toBeDisabled();
+
+    await user.type(screen.getByLabelText(/closure repair amount/i), "65");
+    expect(addButton).toBeEnabled();
+    await user.click(addButton);
+
+    expect(serviceEntry.onAddService).toHaveBeenCalledWith(service, 6500);
   });
 });

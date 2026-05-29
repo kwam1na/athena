@@ -48,6 +48,7 @@ import {
 import {
   posTransactionSchema,
   posTransactionItemSchema,
+  posTransactionServiceLineSchema,
   posTransactionAdjustmentSchema,
   posTransactionAdjustmentLineSchema,
   posSessionItemSchema,
@@ -344,6 +345,10 @@ const schema = defineSchema({
     "by_transactionId",
     ["transactionId"]
   ),
+  posTransactionServiceLine: defineTable(posTransactionServiceLineSchema)
+    .index("by_transactionId", ["transactionId"])
+    .index("by_serviceCaseId", ["serviceCaseId"])
+    .index("by_serviceCatalogId", ["serviceCatalogId"]),
   posTransactionAdjustment: defineTable(posTransactionAdjustmentSchema)
     .index("by_transactionId", ["transactionId"])
     .index("by_storeId_transactionId", ["storeId", "transactionId"])
@@ -559,6 +564,7 @@ const schema = defineSchema({
     .index("by_storeId", ["storeId"])
     .index("by_storeId_target", ["storeId", "targetType", "targetId"])
     .index("by_registerSessionId", ["registerSessionId"])
+    .index("by_posTransactionId", ["posTransactionId"])
     .index("by_customerProfileId", ["customerProfileId"])
     .index("by_onlineOrderId", ["onlineOrderId"])
     .index("by_workItemId", ["workItemId"]),

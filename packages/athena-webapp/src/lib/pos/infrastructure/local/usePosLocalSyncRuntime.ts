@@ -784,10 +784,14 @@ async function refreshTerminalRuntimeReadiness(input: {
       getStaffAuthorityReadiness: PosLocalRuntimeStore["getStaffAuthorityReadiness"];
       readRegisterAvailabilitySnapshot: PosLocalRuntimeStore["readRegisterAvailabilitySnapshot"];
       readRegisterCatalogSnapshot: PosLocalRuntimeStore["readRegisterCatalogSnapshot"];
+      readRegisterServiceCatalogSnapshot: PosLocalRuntimeStore["readRegisterServiceCatalogSnapshot"];
     }>;
-  const [catalog, availability, staffAuthority] = await Promise.all([
+  const [catalog, serviceCatalog, availability, staffAuthority] = await Promise.all([
     store.readRegisterCatalogSnapshot
       ? store.readRegisterCatalogSnapshot({ storeId: input.storeId })
+      : Promise.resolve({ ok: true as const, value: null }),
+    store.readRegisterServiceCatalogSnapshot
+      ? store.readRegisterServiceCatalogSnapshot({ storeId: input.storeId })
       : Promise.resolve({ ok: true as const, value: null }),
     store.readRegisterAvailabilitySnapshot
       ? store.readRegisterAvailabilitySnapshot({ storeId: input.storeId })
@@ -804,6 +808,9 @@ async function refreshTerminalRuntimeReadiness(input: {
     snapshots: {
       ...(catalog.ok && catalog.value
         ? { catalogRefreshedAt: catalog.value.refreshedAt }
+        : {}),
+      ...(serviceCatalog.ok && serviceCatalog.value
+        ? { serviceCatalogRefreshedAt: serviceCatalog.value.refreshedAt }
         : {}),
       ...(availability.ok && availability.value
         ? { availabilityRefreshedAt: availability.value.refreshedAt }

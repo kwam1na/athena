@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { PosRegisterCatalogAvailabilityRowDto } from "@/lib/pos/application/dto";
+import type {
+  PosRegisterCatalogAvailabilityRowDto,
+  PosServiceCatalogRowDto,
+} from "@/lib/pos/application/dto";
 import {
   POS_LOCAL_STORE_SCHEMA_VERSION,
   createIndexedDbPosLocalStorageAdapter,
@@ -47,6 +50,33 @@ function buildAvailabilityRow(
     skuId: "sku-1" as never,
     inStock: true,
     quantityAvailable: 5,
+    ...overrides,
+  };
+}
+
+function buildServiceCatalogRow(
+  overrides: Partial<PosServiceCatalogRowDto> = {},
+): PosServiceCatalogRowDto {
+  return {
+    serviceCatalogId: "service-1" as never,
+    name: "Closure Repair",
+    description: "Repair a closure install",
+    serviceMode: "repair",
+    pricingModel: "fixed",
+    basePrice: 4_500,
+    depositType: "flat",
+    depositValue: 1_000,
+    requiresManagerApproval: false,
+    status: "active",
+    updatedAt: 1_000,
+    checkoutReadiness: {
+      canCheckoutDirectly: true,
+      message: "Ready for checkout.",
+      minimumAmount: 1_000,
+      reason: "fixed_price",
+      status: "ready",
+      suggestedAmount: 4_500,
+    },
     ...overrides,
   };
 }
@@ -130,6 +160,43 @@ describe("posLocalStore", () => {
     });
     await expect(
       store.readRegisterCatalogSnapshot({ storeId: "store-1" }),
+    ).resolves.toEqual(write);
+  });
+
+  it("writes and reads active service catalog snapshots for offline lookup", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 1_750,
+    });
+
+    const write = await store.writeRegisterServiceCatalogSnapshot({
+      storeId: "store-1",
+      rows: [
+        buildServiceCatalogRow(),
+        buildServiceCatalogRow({
+          serviceCatalogId: "service-archived" as never,
+          name: "Archived Repair",
+          status: "archived" as never,
+        }),
+      ],
+    });
+
+    expect(write).toEqual({
+      ok: true,
+      value: {
+        refreshedAt: 1_750,
+        rows: [
+          expect.objectContaining({
+            serviceCatalogId: "service-1",
+            status: "active",
+          }),
+        ],
+        schemaVersion: POS_LOCAL_STORE_SCHEMA_VERSION,
+        storeId: "store-1",
+      },
+    });
+    await expect(
+      store.readRegisterServiceCatalogSnapshot({ storeId: "store-1" }),
     ).resolves.toEqual(write);
   });
 

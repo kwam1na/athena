@@ -1,4 +1,5 @@
 import { useMutation, useQuery } from "convex/react";
+import type { FunctionReference } from "convex/server";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
@@ -10,6 +11,7 @@ import type {
   PosRegisterCatalogAvailabilityRowDto,
   PosRegisterCatalogInput,
   PosRegisterCatalogRowDto,
+  PosServiceCatalogRowDto,
 } from "@/lib/pos/application/dto";
 import type { PosCatalogReader } from "@/lib/pos/application/ports";
 import {
@@ -29,6 +31,21 @@ import type { Id } from "~/convex/_generated/dataModel";
 
 const REGISTER_CATALOG_AVAILABILITY_LIMIT = 50;
 const REGISTER_AVAILABILITY_SNAPSHOT_WRITE_RETRY_DELAY_MS = 250;
+
+type RegisterServiceCatalogSnapshotQuery = FunctionReference<
+  "query",
+  "public",
+  { storeId: Id<"store"> },
+  PosServiceCatalogRowDto[]
+>;
+
+const serviceCatalogApi = api as unknown as {
+  serviceOps: {
+    catalog: {
+      listPosServiceCatalogSnapshot: RegisterServiceCatalogSnapshotQuery;
+    };
+  };
+};
 
 type RegisterCatalogAvailabilityGatewayState =
   | {
@@ -170,6 +187,70 @@ export function useConvexRegisterCatalog(
   return liveRows ?? localRows;
 }
 
+export function useConvexRegisterServiceCatalog(input: {
+  storeId?: Id<"store">;
+}): PosServiceCatalogRowDto[] | undefined {
+  const liveRows = useQuery(
+    serviceCatalogApi.serviceOps.catalog.listPosServiceCatalogSnapshot,
+    input.storeId ? { storeId: input.storeId } : "skip",
+  );
+  const [localRows, setLocalRows] = useState<
+    PosServiceCatalogRowDto[] | undefined
+  >(undefined);
+  const [localReadComplete, setLocalReadComplete] = useState(false);
+  const storeId = input.storeId;
+
+  useEffect(() => {
+    let cancelled = false;
+    setLocalRows(undefined);
+    setLocalReadComplete(false);
+
+    if (!storeId || typeof indexedDB === "undefined") {
+      setLocalReadComplete(true);
+      return;
+    }
+
+    void (async () => {
+      const result = await createPosLocalStore({
+        adapter: createIndexedDbPosLocalStorageAdapter(),
+      }).readRegisterServiceCatalogSnapshot({ storeId });
+
+      if (cancelled) return;
+      if (result.ok && result.value) {
+        setLocalRows(result.value.rows);
+      }
+      setLocalReadComplete(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [storeId]);
+
+  useEffect(() => {
+    if (
+      !storeId ||
+      !localReadComplete ||
+      liveRows === undefined ||
+      typeof indexedDB === "undefined"
+    ) {
+      return;
+    }
+
+    void (async () => {
+      const writeResult = await createPosLocalStore({
+        adapter: createIndexedDbPosLocalStorageAdapter(),
+      }).writeRegisterServiceCatalogSnapshot({ storeId, rows: liveRows });
+
+      if (writeResult.ok) {
+        setLocalRows(writeResult.value.rows);
+      }
+    })();
+  }, [liveRows, localReadComplete, storeId]);
+
+  return localRows ?? (localReadComplete ? liveRows : undefined);
+}
+
 export function useConvexRegisterCatalogAvailability(
   input: PosRegisterCatalogAvailabilityInput,
 ): PosRegisterCatalogAvailabilityRowDto[] | undefined {
@@ -182,6 +263,7 @@ export function usePrewarmRegisterCatalogOfflineSnapshots(input: {
   storeId?: Id<"store">;
 }) {
   useConvexRegisterCatalog({ storeId: input.storeId });
+  useConvexRegisterServiceCatalog({ storeId: input.storeId });
   useConvexRegisterCatalogAvailabilityState({
     refreshFullAvailabilitySnapshot: true,
     storeId: input.storeId,
@@ -493,6 +575,7 @@ export function useConvexQuickAddCatalogItem() {
 
 export const convexCatalogReader: PosCatalogReader = {
   useRegisterCatalog: useConvexRegisterCatalog,
+  useRegisterServiceCatalog: useConvexRegisterServiceCatalog,
   useRegisterCatalogAvailability: useConvexRegisterCatalogAvailability,
   useProductSearch: useConvexProductSearch,
   useBarcodeLookup: useConvexBarcodeLookup,

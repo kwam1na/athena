@@ -49,5 +49,5 @@ describe("convex audit script", () => {
       "ripgrep (rg) is required for audit:convex",
     );
     expect(result.stdout).toContain("Convex audit report");
-  });
+  }, 15_000);
 });

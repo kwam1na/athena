@@ -4,19 +4,23 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   PosRegisterCatalogAvailabilityRowDto,
   PosRegisterCatalogRowDto,
+  PosServiceCatalogRowDto,
 } from "@/lib/pos/application/dto";
 import type { Id } from "~/convex/_generated/dataModel";
 import {
   useConvexRegisterCatalog,
   useConvexRegisterCatalogAvailability,
   useConvexRegisterCatalogAvailabilityState,
+  useConvexRegisterServiceCatalog,
 } from "./catalogGateway";
 
 const catalogStoreMocks = vi.hoisted(() => ({
   readRegisterAvailabilitySnapshot: vi.fn(),
   readRegisterCatalogSnapshot: vi.fn(),
+  readRegisterServiceCatalogSnapshot: vi.fn(),
   writeRegisterAvailabilitySnapshot: vi.fn(),
   writeRegisterCatalogSnapshot: vi.fn(),
+  writeRegisterServiceCatalogSnapshot: vi.fn(),
 }));
 const convexMocks = vi.hoisted(() => ({
   useMutation: vi.fn(),
@@ -68,6 +72,31 @@ function buildAvailabilityRow(
   };
 }
 
+function buildServiceCatalogRow(
+  overrides: Partial<PosServiceCatalogRowDto> = {},
+): PosServiceCatalogRowDto {
+  return {
+    serviceCatalogId: "service-1" as Id<"serviceCatalog">,
+    name: "Closure Repair",
+    description: "Repair a closure install",
+    serviceMode: "repair",
+    pricingModel: "fixed",
+    basePrice: 4_500,
+    depositType: "none",
+    requiresManagerApproval: false,
+    status: "active",
+    updatedAt: 1_000,
+    checkoutReadiness: {
+      canCheckoutDirectly: true,
+      message: "Ready for checkout.",
+      reason: "fixed_price",
+      status: "ready",
+      suggestedAmount: 4_500,
+    },
+    ...overrides,
+  };
+}
+
 describe("catalogGateway", () => {
   let liveAvailabilityRows: PosRegisterCatalogAvailabilityRowDto[] | undefined;
   let fullAvailabilitySnapshotRows:
@@ -86,13 +115,19 @@ describe("catalogGateway", () => {
     });
     catalogStoreMocks.readRegisterAvailabilitySnapshot.mockReset();
     catalogStoreMocks.readRegisterCatalogSnapshot.mockReset();
+    catalogStoreMocks.readRegisterServiceCatalogSnapshot.mockReset();
     catalogStoreMocks.writeRegisterAvailabilitySnapshot.mockReset();
     catalogStoreMocks.writeRegisterCatalogSnapshot.mockReset();
+    catalogStoreMocks.writeRegisterServiceCatalogSnapshot.mockReset();
     catalogStoreMocks.readRegisterAvailabilitySnapshot.mockResolvedValue({
       ok: true,
       value: null,
     });
     catalogStoreMocks.readRegisterCatalogSnapshot.mockResolvedValue({
+      ok: true,
+      value: null,
+    });
+    catalogStoreMocks.readRegisterServiceCatalogSnapshot.mockResolvedValue({
       ok: true,
       value: null,
     });
@@ -108,6 +143,10 @@ describe("catalogGateway", () => {
       }),
     );
     catalogStoreMocks.writeRegisterCatalogSnapshot.mockResolvedValue({
+      ok: true,
+      value: null,
+    });
+    catalogStoreMocks.writeRegisterServiceCatalogSnapshot.mockResolvedValue({
       ok: true,
       value: null,
     });
@@ -173,6 +212,53 @@ describe("catalogGateway", () => {
         rows: liveRows,
       }),
     );
+  });
+
+  it("returns the local service catalog snapshot before live service rows refresh it", async () => {
+    const cachedRows = [buildServiceCatalogRow({ name: "Cached Repair" })];
+    const liveRows = [buildServiceCatalogRow({ name: "Live Repair" })];
+    const liveServiceRows: { current: PosServiceCatalogRowDto[] | undefined } =
+      { current: undefined };
+    convexMocks.useQuery.mockImplementation((_query, args) => {
+      if (args === "skip") return undefined;
+      if ("productSkuIds" in args) return liveAvailabilityRows;
+      return liveServiceRows.current;
+    });
+    catalogStoreMocks.readRegisterServiceCatalogSnapshot.mockResolvedValue({
+      ok: true,
+      value: {
+        refreshedAt: 1_700,
+        rows: cachedRows,
+        schemaVersion: 5,
+        storeId: "store-1",
+      },
+    });
+    catalogStoreMocks.writeRegisterServiceCatalogSnapshot.mockImplementation(
+      async (input: { rows: PosServiceCatalogRowDto[]; storeId: string }) => ({
+        ok: true,
+        value: {
+          refreshedAt: 1_800,
+          rows: input.rows,
+          schemaVersion: 5,
+          storeId: input.storeId,
+        },
+      }),
+    );
+
+    const { result, rerender } = renderHook(() =>
+      useConvexRegisterServiceCatalog({ storeId: "store-1" as Id<"store"> }),
+    );
+
+    await waitFor(() => expect(result.current).toEqual(cachedRows));
+    liveServiceRows.current = liveRows;
+    rerender();
+    await waitFor(() =>
+      expect(catalogStoreMocks.writeRegisterServiceCatalogSnapshot).toHaveBeenCalledWith({
+        storeId: "store-1",
+        rows: liveRows,
+      }),
+    );
+    await waitFor(() => expect(result.current).toEqual(liveRows));
   });
 
   it("refreshes the full local availability snapshot online without changing bounded live rows", async () => {

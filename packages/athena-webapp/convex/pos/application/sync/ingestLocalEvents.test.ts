@@ -11,6 +11,7 @@ import type {
   LocalSyncEventRecord,
   LocalSyncMappingRecord,
   LocalSyncRepository,
+  PosLocalSalePayload,
   PosLocalSyncEventInput,
   SyncProjectionRepository,
 } from "./types";
@@ -2015,6 +2016,27 @@ describe("createLocalSyncIngestionService", () => {
       },
       rejectionMessage: "POS sale product SKU reference is invalid.",
     },
+    {
+      invalidId: "not-a-service-catalog-id",
+      payload: {
+        ...buildSaleCompletedEvent({ sequence: 2 }).payload,
+        customerProfileId: "customer-1" as never,
+        totals: { subtotal: 75, tax: 0, total: 75 },
+        items: [],
+        serviceLines: [
+          buildServiceLine({ serviceCatalogId: "not-a-service-catalog-id" as never }),
+        ],
+        payments: [
+          {
+            localPaymentId: "local-payment-2",
+            method: "cash",
+            amount: 75,
+            timestamp: 21,
+          },
+        ],
+      },
+      rejectionMessage: "POS sale service catalog reference is invalid.",
+    },
   ])(
     "rejects malformed nested $invalidId before projection",
     async ({ invalidId, payload, rejectionMessage }) => {
@@ -2050,6 +2072,55 @@ describe("createLocalSyncIngestionService", () => {
       );
     },
   );
+
+  it("accepts service-only sales at the ingestion boundary", async () => {
+    const repository = createFakeSyncRepository();
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 100,
+    });
+
+    const result = await service.ingestBatch(
+      buildBatch({
+        events: [
+          buildRegisterOpenedEvent({ sequence: 1 }),
+          buildSaleCompletedEvent({
+            sequence: 2,
+            payload: {
+              ...buildSaleCompletedEvent({ sequence: 2 }).payload,
+              customerProfileId: "customer-1" as never,
+              totals: { subtotal: 75, tax: 0, total: 75 },
+              items: [],
+              serviceLines: [buildServiceLine()],
+              payments: [
+                {
+                  localPaymentId: "local-payment-service",
+                  method: "cash",
+                  amount: 75,
+                  timestamp: 21,
+                },
+              ],
+            },
+          }),
+        ],
+      }),
+    );
+
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("Expected ok result");
+    expect(result.data.accepted[1]).toEqual(
+      expect.objectContaining({ sequence: 2, status: "projected" }),
+    );
+    expect(repository.createdTransactions).toHaveLength(1);
+    expect(repository.createdPaymentAllocations).toEqual([
+      expect.objectContaining({
+        targetType: "service_case",
+        amount: 75,
+        registerSessionId: "register-session-1",
+      }),
+    ]);
+  });
 
   it("conflicts cashier-only attempts to sync manager-only register reopen events", async () => {
     const repository = createFakeSyncRepository({
@@ -2775,6 +2846,24 @@ function buildSaleCompletedEvent(
   };
 }
 
+function buildServiceLine(
+  overrides: Partial<NonNullable<PosLocalSalePayload["serviceLines"]>[number]> = {},
+): NonNullable<PosLocalSalePayload["serviceLines"]>[number] {
+  return {
+    localServiceLineId: "local-service-line-1",
+    localServiceCaseId: "local-service-case-1",
+    serviceCatalogId: "service-catalog-1" as never,
+    serviceCatalogName: "Install",
+    serviceMode: "same_day",
+    pricingModel: "fixed",
+    quantity: 1,
+    unitPrice: 75,
+    totalPrice: 75,
+    catalogUpdatedAt: 1_000,
+    ...overrides,
+  };
+}
+
 function buildSaleClearedEvent(
   overrides: Partial<PosLocalSyncEventInput> & { sequence: number },
 ): PosLocalSyncEventInput {
@@ -2975,6 +3064,24 @@ function createFakeSyncRepository(
             images: [],
           } as never)
         : null;
+    },
+    async getServiceCatalog(serviceCatalogId) {
+      return serviceCatalogId === "service-catalog-1"
+        ? ({
+            _id: "service-catalog-1",
+            storeId: "store-1",
+            organizationId: "org-1",
+            name: "Install",
+            serviceMode: "same_day",
+            pricingModel: "fixed",
+            basePrice: 75,
+            status: "active",
+            updatedAt: 1_000,
+          } as never)
+        : null;
+    },
+    async getServiceCase() {
+      return null;
     },
     async getRegisterSession(registerSessionId) {
       const existing =
@@ -3183,6 +3290,16 @@ function createFakeSyncRepository(
     async createPosSessionItem() {
       return `pos-session-item-${nextId++}` as never;
     },
+    async createServiceWorkItem() {
+      return `service-work-item-${nextId++}` as never;
+    },
+    async createServiceCase() {
+      return `service-case-${nextId++}` as never;
+    },
+    async createServiceCaseLineItem() {
+      return `service-line-${nextId++}` as never;
+    },
+    async syncServiceCaseFinancials() {},
     async createTransaction(input) {
       const id = `transaction-${createdTransactions.length + 1}`;
       createdTransactions.push({ _id: id, ...input });
@@ -3190,6 +3307,9 @@ function createFakeSyncRepository(
     },
     async createTransactionItem() {
       return `transaction-item-${nextId++}` as never;
+    },
+    async createTransactionServiceLine() {
+      return `transaction-service-line-${nextId++}` as never;
     },
     async patchProductSku() {},
     async createPaymentAllocation(input) {

@@ -3,6 +3,12 @@ import {
   searchFuzzyEntries,
   type FuzzySearchEntry,
 } from "@/lib/search/fuzzySearch";
+import type {
+  PosServiceCatalogCheckoutReadiness,
+  PosServiceCatalogDepositType,
+  PosServiceCatalogPricingModel,
+} from "@/lib/pos/application/dto";
+import type { PosServiceMode } from "@/lib/pos/domain";
 
 export interface RegisterCatalogSearchRow {
   productId: string;
@@ -50,6 +56,48 @@ export interface RegisterCatalogIndex {
   byProductSkuId: Map<string, RegisterCatalogSearchRow[]>;
   byProductId: Map<string, RegisterCatalogSearchRow[]>;
   searchableRows: Array<FuzzySearchEntry<RegisterCatalogSearchRow>>;
+}
+
+export interface RegisterServiceCatalogSearchRow {
+  serviceCatalogId: string;
+  name: string;
+  description?: string | null;
+  serviceMode: PosServiceMode;
+  pricingModel: PosServiceCatalogPricingModel;
+  basePrice?: number | null;
+  depositType: PosServiceCatalogDepositType;
+  depositValue?: number | null;
+  requiresManagerApproval: boolean;
+  checkoutReadiness: PosServiceCatalogCheckoutReadiness;
+}
+
+export type RegisterServiceCatalogSearchResult =
+  | {
+      intent: "empty";
+      query: "";
+      results: [];
+      exactMatch: null;
+      canAutoAdd: false;
+    }
+  | {
+      intent: "exact";
+      query: string;
+      results: RegisterServiceCatalogSearchRow[];
+      exactMatch: RegisterServiceCatalogSearchRow | null;
+      canAutoAdd: false;
+    }
+  | {
+      intent: "text";
+      query: string;
+      results: RegisterServiceCatalogSearchRow[];
+      exactMatch: null;
+      canAutoAdd: false;
+    };
+
+export interface RegisterServiceCatalogIndex {
+  rows: RegisterServiceCatalogSearchRow[];
+  byServiceCatalogId: Map<string, RegisterServiceCatalogSearchRow[]>;
+  searchableRows: Array<FuzzySearchEntry<RegisterServiceCatalogSearchRow>>;
 }
 
 type ParsedCatalogSearchInput =
@@ -147,6 +195,76 @@ export function searchRegisterCatalog(
   };
 }
 
+export function buildRegisterServiceCatalogIndex(
+  rows: readonly RegisterServiceCatalogSearchRow[],
+): RegisterServiceCatalogIndex {
+  const byServiceCatalogId = new Map<string, RegisterServiceCatalogSearchRow[]>();
+  const indexedRows = rows.map((row) => {
+    addKey(byServiceCatalogId, normalizeIdentifier(row.serviceCatalogId), row);
+
+    return createFuzzySearchEntry(row, {
+      name: row.name,
+      category: normalizeSearchText([
+        row.serviceMode,
+        row.pricingModel,
+        row.requiresManagerApproval ? "manager approval" : "",
+      ]),
+      description: row.description,
+      attributes: normalizeSearchText([
+        row.depositType,
+        row.depositValue == null ? "" : String(row.depositValue),
+        row.basePrice == null ? "" : String(row.basePrice),
+        row.checkoutReadiness.status,
+      ]),
+    });
+  });
+
+  return {
+    rows: [...rows],
+    byServiceCatalogId,
+    searchableRows: indexedRows,
+  };
+}
+
+export function searchRegisterServiceCatalog(
+  index: RegisterServiceCatalogIndex,
+  input: string,
+  options: { limit?: number } = {},
+): RegisterServiceCatalogSearchResult {
+  const query = input.trim();
+
+  if (!query) {
+    return {
+      intent: "empty",
+      query: "",
+      results: [],
+      exactMatch: null,
+      canAutoAdd: false,
+    };
+  }
+
+  const exactResults =
+    index.byServiceCatalogId.get(normalizeIdentifier(query)) ?? [];
+
+  if (exactResults.length > 0) {
+    return {
+      intent: "exact",
+      query,
+      results: exactResults,
+      exactMatch: exactResults.length === 1 ? exactResults[0] : null,
+      canAutoAdd: false,
+    };
+  }
+
+  return {
+    intent: "text",
+    query,
+    results: searchRegisterServiceCatalogByText(index, query, options.limit),
+    exactMatch: null,
+    canAutoAdd: false,
+  };
+}
+
 function findExactMatches(
   index: RegisterCatalogIndex,
   rawValue: string,
@@ -227,6 +345,22 @@ function searchByText(
   });
 }
 
+function searchRegisterServiceCatalogByText(
+  index: RegisterServiceCatalogIndex,
+  input: string,
+  limit = 20,
+): RegisterServiceCatalogSearchRow[] {
+  return searchFuzzyEntries(index.searchableRows, input, {
+    fieldWeights: {
+      name: 8,
+      category: 4,
+      attributes: 3,
+      description: 2,
+    },
+    limit,
+  });
+}
+
 function normalizeIdentifier(value: unknown): string {
   return String(value ?? "").trim().toLowerCase();
 }
@@ -241,10 +375,10 @@ function normalizeSearchText(value: unknown): string {
     .replace(/\s+/g, " ");
 }
 
-function addKey(
-  map: Map<string, RegisterCatalogSearchRow[]>,
+function addKey<T>(
+  map: Map<string, T[]>,
   key: string,
-  row: RegisterCatalogSearchRow,
+  row: T,
 ): void {
   if (!key) {
     return;

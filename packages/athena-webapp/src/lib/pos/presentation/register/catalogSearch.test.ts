@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildRegisterCatalogIndex,
+  buildRegisterServiceCatalogIndex,
   searchRegisterCatalog,
+  searchRegisterServiceCatalog,
   type RegisterCatalogSearchRow,
+  type RegisterServiceCatalogSearchRow,
 } from "./catalogSearch";
 
 const rows: RegisterCatalogSearchRow[] = [
@@ -58,6 +61,46 @@ const rows: RegisterCatalogSearchRow[] = [
     size: "32",
     color: "Brown",
     length: 32,
+  },
+];
+
+const serviceRows: RegisterServiceCatalogSearchRow[] = [
+  {
+    serviceCatalogId: "service-closure",
+    name: "Closure Repair",
+    description: "Repair a closure install",
+    serviceMode: "repair",
+    pricingModel: "fixed",
+    basePrice: 4_500,
+    depositType: "flat",
+    depositValue: 1_000,
+    requiresManagerApproval: false,
+    checkoutReadiness: {
+      canCheckoutDirectly: true,
+      message: "Ready for checkout.",
+      reason: "fixed_price",
+      status: "ready",
+      suggestedAmount: 4_500,
+      minimumAmount: 1_000,
+    },
+  },
+  {
+    serviceCatalogId: "service-revamp",
+    name: "Wig Revamp",
+    description: "Refresh and style a wig",
+    serviceMode: "revamp",
+    pricingModel: "starting_at",
+    basePrice: 8_000,
+    depositType: "percentage",
+    depositValue: 50,
+    requiresManagerApproval: true,
+    checkoutReadiness: {
+      canCheckoutDirectly: false,
+      message: "Enter the service amount before checkout.",
+      reason: "starting_at_amount_required",
+      status: "amount_required",
+      suggestedAmount: 4_000,
+    },
   },
 ];
 
@@ -275,5 +318,36 @@ describe("catalogSearch", () => {
     expect(result.intent).toBe("exact");
     expect(result.exactMatch?.productSkuId).toBe("sku-red-large");
     expect(result.canAutoAdd).toBe(false);
+  });
+
+  it("searches service catalog rows separately from SKU-backed product rows", () => {
+    const result = searchRegisterServiceCatalog(
+      buildRegisterServiceCatalogIndex(serviceRows),
+      "wig revamp",
+    );
+
+    expect(result.intent).toBe("text");
+    expect(result.results.map((row) => row.serviceCatalogId)).toEqual([
+      "service-revamp",
+    ]);
+    expect(
+      searchRegisterCatalog(buildRegisterCatalogIndex(rows), "wig revamp").results,
+    ).toEqual([]);
+  });
+
+  it("returns service catalog id exact matches without product auto-add semantics", () => {
+    const result = searchRegisterServiceCatalog(
+      buildRegisterServiceCatalogIndex(serviceRows),
+      "service-closure",
+    );
+
+    expect(result).toMatchObject({
+      intent: "exact",
+      canAutoAdd: false,
+      exactMatch: expect.objectContaining({
+        serviceCatalogId: "service-closure",
+        checkoutReadiness: expect.objectContaining({ status: "ready" }),
+      }),
+    });
   });
 });

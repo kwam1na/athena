@@ -46,6 +46,7 @@ export type PosTerminalRuntimeSnapshotReadiness = {
   availabilityRefreshedAt?: number;
   catalogRefreshedAt?: number;
   registerReadModelRefreshedAt?: number;
+  serviceCatalogRefreshedAt?: number;
 };
 
 export type PosTerminalRuntimeStatusInput = {
@@ -104,6 +105,7 @@ export type PosTerminalRuntimeCopyDiagnostics = {
     catalogSnapshotRefreshedAt?: number;
     oldestPendingEventAt?: number;
     registerReadModelRefreshedAt?: number;
+    serviceCatalogSnapshotRefreshedAt?: number;
   };
 };
 
@@ -255,6 +257,12 @@ export function buildPosTerminalRuntimeCopyDiagnostics(
         : {}),
       ...(input.snapshots?.catalogRefreshedAt
         ? { catalogSnapshotRefreshedAt: input.snapshots.catalogRefreshedAt }
+        : {}),
+      ...(input.snapshots?.serviceCatalogRefreshedAt
+        ? {
+            serviceCatalogSnapshotRefreshedAt:
+              input.snapshots.serviceCatalogRefreshedAt,
+          }
         : {}),
       ...(sync.oldestPendingEventAt
         ? { oldestPendingEventAt: sync.oldestPendingEventAt }

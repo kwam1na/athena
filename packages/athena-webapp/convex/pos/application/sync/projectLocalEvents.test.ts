@@ -106,6 +106,376 @@ describe("projectLocalSyncEvent", () => {
     ]);
   });
 
+  it("projects a mixed product and service sale into one receipt with split ledgers and one drawer tender effect", async () => {
+    const repository = createProjectionRepository();
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        payload: {
+          ...buildSaleCompletedEvent().payload,
+          customerProfileId: "customer-1" as never,
+          totals: {
+            subtotal: 100,
+            tax: 0,
+            total: 100,
+          },
+          items: [
+            {
+              localTransactionItemId: "local-txn-item-1",
+              productId: "product-1" as never,
+              productSkuId: "sku-1" as never,
+              productName: "Wig Cap",
+              productSku: "CAP-1",
+              quantity: 1,
+              unitPrice: 25,
+            },
+          ],
+          serviceLines: [
+            buildServiceLine({
+              localServiceLineId: "local-service-line-1",
+              localServiceCaseId: "local-service-case-1",
+              unitPrice: 75,
+              totalPrice: 75,
+            }),
+          ],
+          payments: [
+            {
+              localPaymentId: "local-payment-cash",
+              method: "cash",
+              amount: 60,
+              timestamp: 21,
+            },
+            {
+              localPaymentId: "local-payment-card",
+              method: "card",
+              amount: 40,
+              timestamp: 22,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(repository.createdTransactions).toEqual([
+      expect.objectContaining({
+        total: 100,
+        payments: [
+          { method: "cash", amount: 60, timestamp: 21 },
+          { method: "card", amount: 40, timestamp: 22 },
+        ],
+      }),
+    ]);
+    expect(repository.createdTransactionItems).toEqual([
+      expect.objectContaining({
+        productSkuId: "sku-1",
+        totalPrice: 25,
+      }),
+    ]);
+    expect(repository.createdServiceCases).toEqual([
+      expect.objectContaining({
+        customerProfileId: "customer-1",
+        serviceCatalogId: "service-catalog-1",
+        quotedAmount: 75,
+      }),
+    ]);
+    expect(repository.createdServiceCaseLineItems).toEqual([
+      expect.objectContaining({
+        serviceCaseId: "service-case-1",
+        description: "Install",
+        amount: 75,
+      }),
+    ]);
+    expect(repository.createdTransactionServiceLines).toEqual([
+      expect.objectContaining({
+        transactionId: "transaction-1",
+        serviceCaseId: "service-case-1",
+        serviceCatalogId: "service-catalog-1",
+        serviceName: "Install",
+        totalPrice: 75,
+      }),
+    ]);
+    expect(repository.createdPaymentAllocations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          targetType: "pos_transaction",
+          targetId: "transaction-1",
+          method: "cash",
+          amount: 25,
+        }),
+        expect.objectContaining({
+          targetType: "service_case",
+          targetId: "service-case-1",
+          method: "cash",
+          amount: 35,
+          registerSessionId: "register-session-1",
+          posTransactionId: "transaction-1",
+        }),
+        expect.objectContaining({
+          targetType: "service_case",
+          targetId: "service-case-1",
+          method: "card",
+          amount: 40,
+          registerSessionId: "register-session-1",
+          posTransactionId: "transaction-1",
+        }),
+      ]),
+    );
+    expect(repository.registerSessionPatches).toEqual(
+      expect.arrayContaining([
+        {
+          registerSessionId: "register-session-1",
+          patch: {
+            expectedCash: 160,
+          },
+        },
+      ]),
+    );
+    expect(result.mappings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          localIdKind: "serviceCase",
+          localId: "local-service-case-1",
+          cloudTable: "serviceCase",
+          cloudId: "service-case-1",
+        }),
+        expect.objectContaining({
+          localIdKind: "serviceLine",
+          localId: "local-service-line-1",
+          cloudTable: "serviceCaseLineItem",
+          cloudId: "service-line-1",
+        }),
+      ]),
+    );
+  });
+
+  it("projects service-only sales without product inventory movement or retail allocations", async () => {
+    const repository = createProjectionRepository();
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        payload: {
+          ...buildSaleCompletedEvent().payload,
+          customerProfileId: "customer-1" as never,
+          totals: { subtotal: 75, tax: 0, total: 75 },
+          items: [],
+          serviceLines: [buildServiceLine()],
+          payments: [
+            {
+              localPaymentId: "local-payment-1",
+              method: "card",
+              amount: 75,
+              timestamp: 21,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(repository.createdTransactions).toHaveLength(1);
+    expect(repository.createdTransactionItems).toEqual([]);
+    expect(repository.productPatches).toEqual([]);
+    expect(repository.createdPaymentAllocations).toEqual([
+      expect.objectContaining({
+        _id: "payment-allocation-1",
+        targetType: "service_case",
+        amount: 75,
+        method: "card",
+      }),
+    ]);
+    expect(result.mappings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          localIdKind: "payment",
+          localId: "local-payment-1",
+          cloudTable: "paymentAllocation",
+          cloudId: "payment-allocation-1",
+        }),
+      ]),
+    );
+  });
+
+  it("attaches service lines to an existing active service case without creating a duplicate case", async () => {
+    const repository = createProjectionRepository({
+      serviceCase: {
+        _id: "service-case-existing",
+        storeId: "store-1",
+        organizationId: "org-1",
+        operationalWorkItemId: "work-item-existing",
+        customerProfileId: "customer-1",
+        status: "in_progress",
+      },
+      validCloudIds: new Set(["service-case-existing"]),
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        payload: {
+          ...buildSaleCompletedEvent().payload,
+          totals: { subtotal: 75, tax: 0, total: 75 },
+          items: [],
+          serviceLines: [
+            buildServiceLine({
+              existingServiceCaseId: "service-case-existing" as never,
+              localServiceCaseId: undefined,
+            }),
+          ],
+          payments: [
+            {
+              localPaymentId: "local-payment-1",
+              method: "cash",
+              amount: 75,
+              timestamp: 21,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(repository.createdServiceCases).toEqual([]);
+    expect(repository.createdServiceCaseLineItems).toEqual([
+      expect.objectContaining({
+        serviceCaseId: "service-case-existing",
+        amount: 75,
+      }),
+    ]);
+    expect(repository.createdPaymentAllocations).toEqual([
+      expect.objectContaining({
+        targetId: "service-case-existing",
+        workItemId: "work-item-existing",
+      }),
+    ]);
+  });
+
+  it("applies cash change once while splitting mixed service allocations", async () => {
+    const repository = createProjectionRepository();
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        payload: {
+          ...buildSaleCompletedEvent().payload,
+          customerProfileId: "customer-1" as never,
+          totals: { subtotal: 100, tax: 0, total: 100 },
+          serviceLines: [buildServiceLine({ unitPrice: 75, totalPrice: 75 })],
+          payments: [
+            {
+              localPaymentId: "local-payment-cash",
+              method: "cash",
+              amount: 120,
+              timestamp: 21,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(repository.createdTransactions).toEqual([
+      expect.objectContaining({
+        changeGiven: 20,
+        totalPaid: 120,
+      }),
+    ]);
+    expect(repository.createdPaymentAllocations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ targetType: "pos_transaction", amount: 25 }),
+        expect.objectContaining({ targetType: "service_case", amount: 75 }),
+      ]),
+    );
+    expect(repository.registerSessionPatches).toEqual(
+      expect.arrayContaining([
+        { registerSessionId: "register-session-1", patch: { expectedCash: 200 } },
+      ]),
+    );
+  });
+
+  it("conflicts service sales without customer attribution before creating cases", async () => {
+    const repository = createProjectionRepository();
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        payload: {
+          ...buildSaleCompletedEvent().payload,
+          totals: { subtotal: 75, tax: 0, total: 75 },
+          items: [],
+          serviceLines: [buildServiceLine()],
+          payments: [{ method: "card", amount: 75, timestamp: 21 }],
+        },
+      }),
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        summary: "Service line is missing customer attribution.",
+      }),
+    ]);
+    expect(repository.createdServiceCases).toEqual([]);
+  });
+
+  it("conflicts service catalog store or snapshot drift before projection", async () => {
+    const repository = createProjectionRepository({
+      serviceCatalog: {
+        _id: "service-catalog-1",
+        storeId: "store-1",
+        organizationId: "org-1",
+        name: "Install",
+        serviceMode: "same_day",
+        pricingModel: "fixed",
+        basePrice: 90,
+        status: "active",
+        updatedAt: 1_100,
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        payload: {
+          ...buildSaleCompletedEvent().payload,
+          customerProfileId: "customer-1" as never,
+          totals: { subtotal: 75, tax: 0, total: 75 },
+          items: [],
+          serviceLines: [buildServiceLine()],
+          payments: [{ method: "card", amount: 75, timestamp: 21 }],
+        },
+      }),
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        summary: "Service catalog changed before this offline sale synced.",
+      }),
+    ]);
+    expect(repository.createdServiceCases).toEqual([]);
+  });
+
   it("keeps the display receipt number separate from the local sync receipt id", async () => {
     const repository = createProjectionRepository();
 
@@ -2489,6 +2859,24 @@ function buildSaleCompletedEvent(
   };
 }
 
+function buildServiceLine(
+  overrides: Partial<NonNullable<PosLocalSalePayload["serviceLines"]>[number]> = {},
+): NonNullable<PosLocalSalePayload["serviceLines"]>[number] {
+  return {
+    localServiceLineId: "local-service-line-1",
+    localServiceCaseId: "local-service-case-1",
+    serviceCatalogId: "service-catalog-1" as never,
+    serviceCatalogName: "Install",
+    serviceMode: "same_day",
+    pricingModel: "fixed",
+    quantity: 1,
+    unitPrice: 75,
+    totalPrice: 75,
+    catalogUpdatedAt: 1_000,
+    ...overrides,
+  };
+}
+
 function buildSaleClearedEvent(
   payloadOverrides: Partial<ParsedSaleClearedEvent["payload"]> = {},
 ): ParsedSaleClearedEvent {
@@ -2542,6 +2930,25 @@ function createProjectionRepository(
     };
     productStoreId: string;
     customerStoreId: string;
+    serviceCatalog: {
+      _id: string;
+      storeId: string;
+      organizationId?: string;
+      name: string;
+      serviceMode: "same_day" | "consultation" | "repair" | "revamp";
+      pricingModel: "fixed" | "starting_at" | "quote_after_consultation";
+      basePrice?: number;
+      status: "active" | "archived";
+      updatedAt: number;
+    } | null;
+    serviceCase: {
+      _id: string;
+      storeId: string;
+      organizationId?: string;
+      operationalWorkItemId: string;
+      customerProfileId: string;
+      status: string;
+    } | null;
     activeHeldQuantity: number;
     consumedHoldQuantities: Map<string, number>;
 	    existingPosSession: {
@@ -2585,7 +2992,11 @@ function createProjectionRepository(
   createdPaymentAllocations: unknown[];
   createdPosSessions: unknown[];
   createdPosSessionItems: unknown[];
+  createdServiceCaseLineItems: unknown[];
+  createdServiceCases: unknown[];
+  createdServiceWorkItems: unknown[];
   createdTransactionItems: unknown[];
+  createdTransactionServiceLines: unknown[];
   createdTransactions: unknown[];
   posSessionPatches: unknown[];
   productPatches: unknown[];
@@ -2613,7 +3024,11 @@ function createProjectionRepository(
   const createdPaymentAllocations: unknown[] = [];
   const createdPosSessions: unknown[] = [];
   const createdPosSessionItems: unknown[] = [];
+  const createdServiceCaseLineItems: unknown[] = [];
+  const createdServiceCases: unknown[] = [];
+  const createdServiceWorkItems: unknown[] = [];
   const createdTransactionItems: unknown[] = [];
+  const createdTransactionServiceLines: unknown[] = [];
   const createdTransactions: unknown[] = [];
   const posSessionPatches: unknown[] = [];
   const productPatches: unknown[] = [];
@@ -2649,6 +3064,24 @@ function createProjectionRepository(
     registeredByUserId: overrides.terminalRegisteredByUserId ?? "user-1",
     status: "active",
   };
+  const serviceCatalog =
+    overrides.serviceCatalog === null
+      ? null
+      : (overrides.serviceCatalog ?? {
+          _id: "service-catalog-1",
+          storeId: "store-1",
+          organizationId: "org-1",
+          name: "Install",
+          serviceMode: "same_day",
+          pricingModel: "fixed",
+          basePrice: 75,
+          status: "active",
+          updatedAt: 1_000,
+        });
+  const serviceCase =
+    overrides.serviceCase === null
+      ? null
+      : (overrides.serviceCase ?? null);
 
   return {
     createdConflicts,
@@ -2656,7 +3089,11 @@ function createProjectionRepository(
     createdPaymentAllocations,
     createdPosSessions,
     createdPosSessionItems,
+    createdServiceCaseLineItems,
+    createdServiceCases,
+    createdServiceWorkItems,
     createdTransactionItems,
+    createdTransactionServiceLines,
     createdTransactions,
     posSessionPatches,
     productPatches,
@@ -2735,6 +3172,16 @@ function createProjectionRepository(
     },
     async getProductSku(productSkuId) {
       return productSkuId === "sku-1" ? (sku as never) : null;
+    },
+    async getServiceCatalog(serviceCatalogId) {
+      return serviceCatalog && serviceCatalogId === serviceCatalog._id
+        ? (serviceCatalog as never)
+        : null;
+    },
+    async getServiceCase(serviceCaseId) {
+      return serviceCase && serviceCaseId === serviceCase._id
+        ? (serviceCase as never)
+        : null;
     },
     async getRegisterSession(registerSessionId) {
       return registerSession && registerSessionId === registerSession._id
@@ -2874,6 +3321,22 @@ function createProjectionRepository(
       createdPosSessionItems.push(input);
       return `pos-session-item-${nextId++}` as never;
     },
+    async createServiceWorkItem(input) {
+      const id = `service-work-item-${createdServiceWorkItems.length + 1}`;
+      createdServiceWorkItems.push({ _id: id, ...input });
+      return id as never;
+    },
+    async createServiceCase(input) {
+      const id = `service-case-${createdServiceCases.length + 1}`;
+      createdServiceCases.push({ _id: id, ...input });
+      return id as never;
+    },
+    async createServiceCaseLineItem(input) {
+      const id = `service-line-${createdServiceCaseLineItems.length + 1}`;
+      createdServiceCaseLineItems.push({ _id: id, ...input });
+      return id as never;
+    },
+    async syncServiceCaseFinancials() {},
     async createTransaction(input) {
       const id = `transaction-${createdTransactions.length + 1}`;
       createdTransactions.push({ _id: id, ...input });
@@ -2882,6 +3345,11 @@ function createProjectionRepository(
     async createTransactionItem(input) {
       createdTransactionItems.push(input);
       return `transaction-item-${nextId++}` as never;
+    },
+    async createTransactionServiceLine(input) {
+      const id = `transaction-service-line-${createdTransactionServiceLines.length + 1}`;
+      createdTransactionServiceLines.push({ _id: id, ...input });
+      return id as never;
     },
     async patchProductSku(productSkuId, patch) {
       productPatches.push({ productSkuId, patch });
