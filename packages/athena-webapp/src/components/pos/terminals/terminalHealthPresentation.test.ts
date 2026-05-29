@@ -259,6 +259,22 @@ describe("terminal health presentation", () => {
       },
     },
     {
+      expectedLabel: "Setup needed",
+      reason: {
+        source: "terminal_runtime" as const,
+        summary: "Terminal authorization was rejected.",
+        type: "terminal_authorization_failed" as const,
+      },
+    },
+    {
+      expectedLabel: "Drawer repair needed",
+      reason: {
+        source: "terminal_runtime" as const,
+        summary: "Drawer authority is blocked locally.",
+        type: "drawer_authority_blocked" as const,
+      },
+    },
+    {
       expectedLabel: "Needs review",
       reason: {
         source: "cloud_sync" as const,

@@ -8,8 +8,15 @@ import { derivePosLocalSyncStatus } from "./syncStatus";
 import type {
   PosLocalCloudMapping,
   PosLocalEventRecord,
+  PosDrawerAuthorityState,
+  PosTerminalIntegrityState,
   PosProvisionedTerminalSeed,
 } from "./posLocalStore";
+
+export type PosLocalSaleBlockReason =
+  | "terminal_integrity"
+  | "drawer_authority"
+  | "lifecycle_needs_review";
 
 export type PosLocalRegisterReadModelErrorCode =
   | "malformed_payload"
@@ -129,6 +136,7 @@ export interface PosLocalRegisterReadModel {
   activeRegisterSession: PosLocalCashDrawerReadModel | null;
   activeSale: PosLocalActiveSaleReadModel | null;
   canSell: boolean;
+  saleBlockReason?: PosLocalSaleBlockReason;
   clearedSaleIds: string[];
   closeoutState: PosLocalCloseoutState;
   completedSales: PosLocalCompletedSaleReadModel[];
@@ -140,6 +148,8 @@ export interface PosLocalRegisterReadModel {
 
 export function projectLocalRegisterReadModel(input: {
   events: PosLocalEventRecord[];
+  drawerAuthority?: PosDrawerAuthorityState | null;
+  terminalIntegrity?: PosTerminalIntegrityState | null;
   terminalSeed?: PosProvisionedTerminalSeed | null;
   mappings?: PosLocalCloudMapping[];
   isOnline?: boolean;
@@ -402,13 +412,22 @@ export function projectLocalRegisterReadModel(input: {
   }
 
   const activeSale = [...sales.values()].at(-1) ?? null;
+  const saleBlockReason = getSaleBlockReason({
+    activeRegisterSession,
+    drawerAuthority: input.drawerAuthority,
+    events: orderedEvents,
+    terminalIntegrity: input.terminalIntegrity,
+  });
   const canSell =
-    Boolean(activeRegisterSession) && activeRegisterSession?.status !== "closing";
+    Boolean(activeRegisterSession) &&
+    activeRegisterSession?.status !== "closing" &&
+    !saleBlockReason;
 
   return {
     activeRegisterSession,
     activeSale,
     canSell,
+    ...(saleBlockReason ? { saleBlockReason } : {}),
     clearedSaleIds: [...clearedSaleIds],
     closeoutState,
     completedSales,
@@ -429,6 +448,55 @@ export function projectLocalRegisterReadModel(input: {
       lastSyncedSequence: input.lastSyncedSequence,
     }),
   };
+}
+
+function getSaleBlockReason(input: {
+  activeRegisterSession: PosLocalCashDrawerReadModel | null;
+  drawerAuthority?: PosDrawerAuthorityState | null;
+  events: PosLocalEventRecord[];
+  terminalIntegrity?: PosTerminalIntegrityState | null;
+}): PosLocalSaleBlockReason | undefined {
+  if (
+    input.terminalIntegrity &&
+    input.terminalIntegrity.status !== "healthy"
+  ) {
+    return "terminal_integrity";
+  }
+
+  if (input.drawerAuthority?.status === "blocked") {
+    return "drawer_authority";
+  }
+
+  const activeRegisterSession = input.activeRegisterSession;
+  if (
+    activeRegisterSession &&
+    input.events.some((event) =>
+      isBlockingLifecycleReviewEvent(event, activeRegisterSession),
+    )
+  ) {
+    return "lifecycle_needs_review";
+  }
+
+  return undefined;
+}
+
+function isBlockingLifecycleReviewEvent(
+  event: PosLocalEventRecord,
+  activeRegisterSession: PosLocalCashDrawerReadModel,
+) {
+  if (event.sync.status !== "needs_review" || !event.sync.uploaded) {
+    return false;
+  }
+  if (
+    event.type !== "register.opened" &&
+    event.type !== "register.closeout_started" &&
+    event.type !== "register.reopened" &&
+    event.type !== "transaction.completed"
+  ) {
+    return false;
+  }
+
+  return registerLifecycleEventMatchesActiveSession(event, activeRegisterSession);
 }
 
 function createMappingIndex(mappings: PosLocalCloudMapping[]) {

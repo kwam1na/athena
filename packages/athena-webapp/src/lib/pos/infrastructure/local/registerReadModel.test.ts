@@ -749,6 +749,100 @@ describe("projectLocalRegisterReadModel", () => {
       status: "closed_locally",
     });
   });
+
+  it("blocks selling when terminal integrity requires repair", () => {
+    const model = projectLocalRegisterReadModel({
+      terminalIntegrity: {
+        observedAt: 1_010,
+        reason: "authorization_failed",
+        status: "requires_reprovision",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      },
+      events: [
+        event({
+          sequence: 1,
+          type: "register.opened",
+          payload: { openingFloat: 100 },
+        }),
+      ],
+      isOnline: false,
+    });
+
+    expect(model.canSell).toBe(false);
+    expect(model.saleBlockReason).toBe("terminal_integrity");
+    expect(model.syncStatus.state).toBe("synced");
+  });
+
+  it("keeps normal pending offline sync sellable", () => {
+    const model = projectLocalRegisterReadModel({
+      events: [
+        event({
+          sequence: 1,
+          uploadSequence: 1,
+          type: "register.opened",
+          payload: { openingFloat: 100 },
+          sync: { status: "pending" },
+        }),
+      ],
+      isOnline: false,
+    });
+
+    expect(model.canSell).toBe(true);
+    expect(model.saleBlockReason).toBeUndefined();
+    expect(model.syncStatus.state).toBe("offline");
+  });
+
+  it("blocks selling when drawer authority is blocked for the active session", () => {
+    const model = projectLocalRegisterReadModel({
+      drawerAuthority: {
+        cloudRegisterSessionId: "cloud-register-1",
+        localRegisterSessionId: "local-register-1",
+        observedAt: 1_050,
+        reason: "cloud_closed",
+        status: "blocked",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      },
+      mappings: [
+        {
+          entity: "registerSession",
+          localId: "local-register-1",
+          cloudId: "cloud-register-1",
+          mappedAt: 1_001,
+        },
+      ],
+      events: [
+        event({
+          sequence: 1,
+          type: "register.opened",
+          payload: { openingFloat: 100 },
+        }),
+      ],
+    });
+
+    expect(model.canSell).toBe(false);
+    expect(model.saleBlockReason).toBe("drawer_authority");
+  });
+
+  it("blocks selling when an uploaded register lifecycle event needs review", () => {
+    const model = projectLocalRegisterReadModel({
+      events: [
+        event({
+          sequence: 1,
+          uploadSequence: 1,
+          type: "register.opened",
+          payload: { openingFloat: 100 },
+          sync: { status: "needs_review", uploaded: true },
+        }),
+      ],
+      isOnline: true,
+    });
+
+    expect(model.canSell).toBe(false);
+    expect(model.saleBlockReason).toBe("lifecycle_needs_review");
+    expect(model.syncStatus.state).toBe("needs_review");
+  });
 });
 
 function errorCodes(errors: PosLocalRegisterReadModelError[]) {

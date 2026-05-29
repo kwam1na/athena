@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Id } from "../../_generated/dataModel";
+import type { Doc, Id } from "../../_generated/dataModel";
 import { userError } from "../../../shared/commandResult";
 import {
   registerTerminal,
   submitTerminalRuntimeStatus,
+  updateTerminal,
 } from "./commands/terminals";
 import {
   getTerminalHealthSummary,
@@ -278,6 +279,31 @@ describe("registerTerminal", () => {
   });
 });
 
+describe("updateTerminal", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("does not reactivate a non-active terminal with its old sync secret", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue({
+      ...existingTerminal,
+      status: "lost",
+    });
+
+    await expect(
+      updateTerminal({ db: null as never } as never, {
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        status: "active",
+      }),
+    ).rejects.toThrow("Re-provision this terminal before returning it to service.");
+    expect(vi.mocked(patchTerminalRecord)).not.toHaveBeenCalled();
+  });
+});
+
 describe("submitTerminalRuntimeStatus", () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -303,7 +329,19 @@ describe("submitTerminalRuntimeStatus", () => {
         terminalId: "terminal-1" as Id<"posTerminal">,
         status: {
           ...buildRuntimeStatus(),
+          drawerAuthority: {
+            cloudRegisterSessionId: "cloud-register-1",
+            localRegisterSessionId: "local-register-1",
+            observedAt: 112,
+            reason: "cloud_closed",
+            status: "blocked",
+          },
           staffProofToken: "proof-token",
+          terminalIntegrity: {
+            observedAt: 111,
+            reason: "authorization_failed",
+            status: "requires_reprovision",
+          },
           verifierMetadata: { salt: "never" },
           rawLocalEvents: [
             {
@@ -350,6 +388,18 @@ describe("submitTerminalRuntimeStatus", () => {
           pendingEventCount: 2,
           lastFailureMessage: "[redacted] and [redacted]",
         }),
+        terminalIntegrity: {
+          observedAt: 111,
+          reason: "authorization_failed",
+          status: "requires_reprovision",
+        },
+        drawerAuthority: {
+          cloudRegisterSessionId: "cloud-register-1",
+          localRegisterSessionId: "local-register-1",
+          observedAt: 112,
+          reason: "cloud_closed",
+          status: "blocked",
+        },
       }),
     );
   });
@@ -778,6 +828,65 @@ describe("terminal health summaries", () => {
     ]);
   });
 
+  it("surfaces terminal and drawer authority blocks from runtime status", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(getLatestRuntimeStatusForTerminal).mockResolvedValue(
+      buildPersistedRuntimeStatus({
+        drawerAuthority: {
+          cloudRegisterSessionId: "cloud-register-1",
+          localRegisterSessionId: "local-register-1",
+          observedAt: 112,
+          reason: "cloud_closed",
+          status: "blocked",
+        },
+        terminalIntegrity: {
+          observedAt: 111,
+          reason: "authorization_failed",
+          status: "requires_reprovision",
+        },
+        sync: {
+          ...buildRuntimeStatus().sync,
+          failedEventCount: 0,
+          pendingEventCount: 0,
+          status: "idle" as never,
+          uploadableEventCount: 0,
+        },
+      }),
+    );
+    vi.mocked(getTerminalSyncEvidence).mockResolvedValue({
+      latestEvent: null,
+      sampledEventCount: 0,
+      acceptedCount: 0,
+      projectedCount: 0,
+      conflictedCount: 0,
+      heldCount: 0,
+      rejectedCount: 0,
+    });
+
+    const result = await getTerminalHealthSummary(
+      { db: null as never } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        now: 220,
+      },
+    );
+
+    expect(result?.health).toBe("needs_attention");
+    expect(result?.attentionReasons).toEqual([
+      expect.objectContaining({
+        actionTarget: { type: "pos_settings" },
+        source: "terminal_runtime",
+        type: "terminal_authorization_failed",
+      }),
+      expect.objectContaining({
+        actionTarget: { type: "pos_register" },
+        source: "terminal_runtime",
+        type: "drawer_authority_blocked",
+      }),
+    ]);
+  });
+
   it.each([
     {
       expectedHealth: "offline",
@@ -958,7 +1067,9 @@ function buildRuntimeStatus() {
 
 function buildPersistedRuntimeStatus(
   overrides: Partial<ReturnType<typeof buildRuntimeStatus>> & {
+    drawerAuthority?: Doc<"posTerminalRuntimeStatus">["drawerAuthority"];
     receivedAt?: number;
+    terminalIntegrity?: Doc<"posTerminalRuntimeStatus">["terminalIntegrity"];
   } = {},
 ) {
   return {

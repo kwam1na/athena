@@ -6,6 +6,81 @@ import {
   createPosLocalStore,
 } from "./posLocalStore";
 
+function saleCommandInput() {
+  return {
+    terminalId: "terminal-1",
+    storeId: "store-1",
+    registerNumber: "1",
+    localRegisterSessionId: "drawer-1",
+    localPosSessionId: "session-1",
+    staffProfileId: "staff-1",
+  };
+}
+
+async function appendOpenDrawer(store: ReturnType<typeof createPosLocalStore>) {
+  await store.appendEvent({
+    type: "register.opened",
+    terminalId: "terminal-1",
+    storeId: "store-1",
+    registerNumber: "1",
+    localRegisterSessionId: "drawer-1",
+    staffProfileId: "staff-1",
+    payload: { localRegisterSessionId: "drawer-1", openingFloat: 100 },
+  });
+}
+
+async function blockDrawerAuthority(store: ReturnType<typeof createPosLocalStore>) {
+  await store.writeDrawerAuthorityState({
+    cloudRegisterSessionId: "cloud-register-1",
+    localRegisterSessionId: "drawer-1",
+    observedAt: 10_010,
+    reason: "cloud_closed",
+    status: "blocked",
+    storeId: "store-1",
+    terminalId: "terminal-1",
+  });
+}
+
+async function createBlockedSaleGateway() {
+  const store = createPosLocalStore({
+    adapter: createMemoryPosLocalStorageAdapter(),
+  });
+  await appendOpenDrawer(store);
+  await store.appendEvent({
+    type: "session.started",
+    terminalId: "terminal-1",
+    storeId: "store-1",
+    registerNumber: "1",
+    localRegisterSessionId: "drawer-1",
+    localPosSessionId: "session-1",
+    staffProfileId: "staff-1",
+    payload: { localPosSessionId: "session-1" },
+  });
+  await store.appendEvent({
+    type: "cart.item_added",
+    terminalId: "terminal-1",
+    storeId: "store-1",
+    registerNumber: "1",
+    localRegisterSessionId: "drawer-1",
+    localPosSessionId: "session-1",
+    staffProfileId: "staff-1",
+    payload: {
+      localItemId: "item-1",
+      productId: "product-1",
+      productName: "Body Wave",
+      productSkuId: "sku-1",
+      quantity: 1,
+      price: 100,
+    },
+  });
+  await blockDrawerAuthority(store);
+
+  return {
+    gateway: createLocalCommandGateway({ store }),
+    store,
+  };
+}
+
 describe("createLocalCommandGateway", () => {
   it("opens the drawer and starts a sale locally without Convex", async () => {
     let nextId = 1;
@@ -138,6 +213,56 @@ describe("createLocalCommandGateway", () => {
     });
   });
 
+  it("does not reuse a local drawer when drawer authority is blocked", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 10_000,
+    });
+    await store.appendEvent({
+      type: "register.opened",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      registerNumber: "1",
+      localRegisterSessionId: "local-register-1",
+      staffProfileId: "staff-1",
+      payload: {
+        localRegisterSessionId: "local-register-1",
+        openingFloat: 100,
+      },
+    });
+    await store.writeDrawerAuthorityState({
+      cloudRegisterSessionId: "cloud-register-1",
+      localRegisterSessionId: "local-register-1",
+      observedAt: 10_010,
+      reason: "cloud_closed",
+      status: "blocked",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+    const onEventAppended = vi.fn();
+    const gateway = createLocalCommandGateway({ store, onEventAppended });
+
+    const result = await gateway.openDrawer({
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      staffProfileId: "staff-1" as never,
+      registerNumber: "1",
+      openingFloat: 500,
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: expect.objectContaining({
+        message: "Drawer setup needs repair before selling can continue.",
+      }),
+    });
+    expect(onEventAppended).not.toHaveBeenCalled();
+    await expect(store.listEvents()).resolves.toMatchObject({
+      ok: true,
+      value: [expect.objectContaining({ type: "register.opened" })],
+    });
+  });
+
   it("refuses to start a sale from another store's local drawer", async () => {
     const store = createPosLocalStore({
       adapter: createMemoryPosLocalStorageAdapter(),
@@ -171,6 +296,82 @@ describe("createLocalCommandGateway", () => {
         message: "Open the drawer before starting a sale.",
       }),
     });
+  });
+
+  it("refuses to start a sale when terminal integrity is blocked", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 10_000,
+    });
+    await store.appendEvent({
+      type: "register.opened",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      registerNumber: "1",
+      localRegisterSessionId: "local-register-1",
+      staffProfileId: "staff-1",
+      payload: {
+        localRegisterSessionId: "local-register-1",
+        openingFloat: 100,
+      },
+    });
+    await store.writeTerminalIntegrityState({
+      observedAt: 10_010,
+      reason: "authorization_failed",
+      status: "requires_reprovision",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+
+    const gateway = createLocalCommandGateway({ store });
+    const result = await gateway.startSession({
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      staffProfileId: "staff-1" as never,
+      registerNumber: "1",
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: expect.objectContaining({
+        message: "Terminal setup needs repair before selling can continue.",
+      }),
+    });
+    await expect(store.listEvents()).resolves.toMatchObject({
+      ok: true,
+      value: [expect.objectContaining({ type: "register.opened" })],
+    });
+  });
+
+  it("does not open a new drawer when terminal integrity is blocked", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 10_000,
+    });
+    await store.writeTerminalIntegrityState({
+      observedAt: 10_010,
+      reason: "authorization_failed",
+      status: "requires_reprovision",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+    const gateway = createLocalCommandGateway({ store });
+
+    const result = await gateway.openDrawer({
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      staffProfileId: "staff-1" as never,
+      registerNumber: "1",
+      openingFloat: 100,
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: expect.objectContaining({
+        message: "Terminal setup needs repair before selling can continue.",
+      }),
+    });
+    await expect(store.listEvents()).resolves.toEqual({ ok: true, value: [] });
   });
 
   it("starts a sale against an explicit usable local register session", async () => {
@@ -369,6 +570,416 @@ describe("createLocalCommandGateway", () => {
       error: expect.objectContaining({
         message: "Open the drawer before starting a sale.",
       }),
+    });
+  });
+
+  it("allows a locally closed register session to be reopened when authority is healthy", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    await store.appendEvent({
+      type: "register.opened",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      registerNumber: "1",
+      localRegisterSessionId: "local-register-1",
+      staffProfileId: "staff-1",
+      payload: {
+        localRegisterSessionId: "local-register-1",
+        openingFloat: 100,
+      },
+    });
+    await store.appendEvent({
+      type: "register.closeout_started",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      registerNumber: "1",
+      localRegisterSessionId: "local-register-1",
+      staffProfileId: "staff-1",
+      payload: { countedCash: 100 },
+    });
+
+    const gateway = createLocalCommandGateway({ store });
+
+    await expect(
+      gateway.reopenRegister({
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        localRegisterSessionId: "local-register-1",
+        staffProfileId: "staff-1",
+        reason: "Manager correction",
+      }),
+    ).resolves.toBe(true);
+
+    await expect(store.listEvents()).resolves.toMatchObject({
+      ok: true,
+      value: expect.arrayContaining([
+        expect.objectContaining({ type: "register.reopened" }),
+      ]),
+    });
+  });
+
+  it("fails closed when the local projection cannot be read for a sale command", async () => {
+    const appendEvent = vi.fn();
+    const gateway = createLocalCommandGateway({
+      store: {
+        appendEvent,
+        listEvents: async () => ({
+          ok: false as const,
+          error: {
+            code: "write_failed" as const,
+            message: "IndexedDB read failed.",
+          },
+        }),
+      },
+    });
+
+    await expect(
+      gateway.appendCartItem({
+        terminalId: "terminal-1",
+        storeId: "store-1",
+        registerNumber: "1",
+        localRegisterSessionId: "local-register-1",
+        localPosSessionId: "local-pos-session-1",
+        staffProfileId: "staff-1",
+        payload: {
+          localItemId: "item-1",
+          productId: "product-1",
+          productName: "Body Wave",
+          productSkuId: "sku-1",
+          quantity: 1,
+          price: 120,
+        },
+      }),
+    ).resolves.toBe(false);
+    expect(appendEvent).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      "cart item",
+      async (gateway: ReturnType<typeof createLocalCommandGateway>) =>
+        gateway.appendCartItem({
+          ...saleCommandInput(),
+          payload: {
+            localItemId: "item-1",
+            productId: "product-1",
+            productName: "Body Wave",
+            productSkuId: "sku-1",
+            quantity: 1,
+            price: 120,
+          },
+        }),
+    ],
+    [
+      "service line",
+      async (gateway: ReturnType<typeof createLocalCommandGateway>) =>
+        gateway.appendServiceLine({
+          ...saleCommandInput(),
+          payload: {
+            localServiceLineId: "service-line-1",
+            serviceCatalogId: "service-1",
+            name: "Install",
+            amount: 100,
+          },
+        }),
+    ],
+    [
+      "payment state",
+      async (gateway: ReturnType<typeof createLocalCommandGateway>) =>
+        gateway.appendPaymentState({
+          ...saleCommandInput(),
+          checkoutStateVersion: 1,
+          payments: [{ id: "payment-1", method: "cash", amount: 100, timestamp: 1 }],
+          stage: "paymentAdded",
+        }),
+    ],
+    [
+      "transaction completion",
+      async (gateway: ReturnType<typeof createLocalCommandGateway>) =>
+        gateway.completeTransaction({
+          ...saleCommandInput(),
+          localTransactionId: "transaction-1",
+          payload: {
+            localTransactionId: "transaction-1",
+            receiptNumber: "LOCAL-1",
+            subtotal: 100,
+            tax: 0,
+            total: 100,
+            payments: [{ method: "cash", amount: 100, timestamp: 1 }],
+          },
+        }),
+    ],
+    [
+      "clear cart with prior sale activity",
+      async (gateway: ReturnType<typeof createLocalCommandGateway>) =>
+        gateway.clearCart({
+          ...saleCommandInput(),
+          reason: "Cart cleared",
+        }),
+    ],
+  ])("blocks %s when the command points at a stale drawer", async (_label, runCommand) => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    await appendOpenDrawer(store);
+    await store.appendEvent({
+      type: "session.started",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      registerNumber: "1",
+      localRegisterSessionId: "drawer-1",
+      localPosSessionId: "session-1",
+      staffProfileId: "staff-1",
+      payload: { localPosSessionId: "session-1" },
+    });
+    await store.appendEvent({
+      type: "cart.item_added",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      registerNumber: "1",
+      localRegisterSessionId: "drawer-1",
+      localPosSessionId: "session-1",
+      staffProfileId: "staff-1",
+      payload: {
+        localItemId: "existing-item-1",
+        productId: "product-1",
+        productName: "Body Wave",
+        productSkuId: "sku-1",
+        quantity: 1,
+        price: 100,
+      },
+    });
+    await store.appendEvent({
+      type: "register.opened",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      registerNumber: "1",
+      localRegisterSessionId: "drawer-2",
+      staffProfileId: "staff-1",
+      payload: { localRegisterSessionId: "drawer-2", openingFloat: 200 },
+    });
+    const gateway = createLocalCommandGateway({ store });
+
+    await expect(runCommand(gateway)).resolves.toBe(false);
+    await expect(store.listEvents()).resolves.toMatchObject({
+      ok: true,
+      value: [
+        expect.objectContaining({ type: "register.opened" }),
+        expect.objectContaining({ type: "session.started" }),
+        expect.objectContaining({ type: "cart.item_added" }),
+        expect.objectContaining({ type: "register.opened" }),
+      ],
+    });
+  });
+
+  it.each([
+    [
+      "service line",
+      async (gateway: ReturnType<typeof createLocalCommandGateway>) =>
+        gateway.appendServiceLine({
+          ...saleCommandInput(),
+          payload: {
+            localServiceLineId: "service-line-1",
+            serviceCatalogId: "service-1",
+            name: "Install",
+            amount: 100,
+          },
+        }),
+    ],
+    [
+      "payment state",
+      async (gateway: ReturnType<typeof createLocalCommandGateway>) =>
+        gateway.appendPaymentState({
+          ...saleCommandInput(),
+          checkoutStateVersion: 1,
+          payments: [{ id: "payment-1", method: "cash", amount: 100, timestamp: 1 }],
+          stage: "paymentAdded",
+        }),
+    ],
+    [
+      "transaction completion",
+      async (gateway: ReturnType<typeof createLocalCommandGateway>) =>
+        gateway.completeTransaction({
+          ...saleCommandInput(),
+          localTransactionId: "transaction-1",
+          payload: {
+            localTransactionId: "transaction-1",
+            receiptNumber: "LOCAL-1",
+            subtotal: 100,
+            tax: 0,
+            total: 100,
+            payments: [{ method: "cash", amount: 100, timestamp: 1 }],
+          },
+        }),
+    ],
+    [
+      "clear cart with prior sale activity",
+      async (gateway: ReturnType<typeof createLocalCommandGateway>) =>
+        gateway.clearCart({
+          ...saleCommandInput(),
+          reason: "Cart cleared",
+        }),
+    ],
+  ])("blocks %s when drawer authority is blocked", async (_label, runCommand) => {
+    const { gateway, store } = await createBlockedSaleGateway();
+
+    await expect(runCommand(gateway)).resolves.toBe(false);
+    await expect(store.listEvents()).resolves.toMatchObject({
+      ok: true,
+      value: [
+        expect.objectContaining({ type: "register.opened" }),
+        expect.objectContaining({ type: "session.started" }),
+        expect.objectContaining({ type: "cart.item_added" }),
+      ],
+    });
+  });
+
+  it("blocks closeout when drawer authority is blocked", async () => {
+    const { gateway, store } = await createBlockedSaleGateway();
+
+    await expect(
+      gateway.startCloseout({
+        terminalId: "terminal-1",
+        storeId: "store-1",
+        registerNumber: "1",
+        localRegisterSessionId: "drawer-1",
+        staffProfileId: "staff-1",
+        countedCash: 100,
+      }),
+    ).resolves.toEqual({
+      kind: "user_error",
+      error: expect.objectContaining({
+        message: "Drawer setup needs repair before closeout can continue.",
+      }),
+    });
+    await expect(store.listEvents()).resolves.toMatchObject({
+      ok: true,
+      value: expect.not.arrayContaining([
+        expect.objectContaining({ type: "register.closeout_started" }),
+      ]),
+    });
+  });
+
+  it("blocks register reopen when drawer authority is blocked", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    await appendOpenDrawer(store);
+    await store.appendEvent({
+      type: "register.closeout_started",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      registerNumber: "1",
+      localRegisterSessionId: "drawer-1",
+      staffProfileId: "staff-1",
+      payload: { countedCash: 100 },
+    });
+    await blockDrawerAuthority(store);
+    const gateway = createLocalCommandGateway({ store });
+
+    await expect(
+      gateway.reopenRegister({
+        terminalId: "terminal-1",
+        storeId: "store-1",
+        registerNumber: "1",
+        localRegisterSessionId: "drawer-1",
+        staffProfileId: "staff-1",
+        reason: "Manager correction",
+      }),
+    ).resolves.toBe(false);
+  });
+
+  it("blocks explicit register seeding when drawer authority is blocked before projection", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    await blockDrawerAuthority(store);
+    const gateway = createLocalCommandGateway({
+      allowExplicitRegisterSessionWithoutProjection: true,
+      store,
+    });
+
+    await expect(
+      gateway.seedRegisterSession({
+        terminalId: "terminal-1",
+        storeId: "store-1",
+        registerNumber: "1",
+        localRegisterSessionId: "drawer-1",
+        staffProfileId: "staff-1",
+        openingFloat: 100,
+        expectedCash: 100,
+        status: "open",
+      }),
+    ).resolves.toBe(false);
+    await expect(store.listEvents()).resolves.toEqual({ ok: true, value: [] });
+  });
+
+  it("blocks explicit sale start when drawer authority is blocked before projection", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    await blockDrawerAuthority(store);
+    const gateway = createLocalCommandGateway({
+      allowExplicitRegisterSessionWithoutProjection: true,
+      store,
+    });
+
+    await expect(
+      gateway.startSession({
+        terminalId: "terminal-1" as never,
+        storeId: "store-1" as never,
+        registerNumber: "1",
+        localRegisterSessionId: "drawer-1",
+        staffProfileId: "staff-1" as never,
+      }),
+    ).resolves.toEqual({
+      kind: "user_error",
+      error: expect.objectContaining({
+        message: "Drawer setup needs repair before selling can continue.",
+      }),
+    });
+    await expect(store.listEvents()).resolves.toEqual({ ok: true, value: [] });
+  });
+
+  it("blocks register reopen while drawer lifecycle needs review", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    await appendOpenDrawer(store);
+    const closeout = await store.appendEvent({
+      type: "register.closeout_started",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      registerNumber: "1",
+      localRegisterSessionId: "drawer-1",
+      staffProfileId: "staff-1",
+      payload: { countedCash: 100 },
+    });
+    if (!closeout.ok) throw new Error("Failed to seed closeout event");
+    await store.markEventsNeedsReview(
+      [closeout.value.localEventId],
+      "Cloud sync needs review before this local event can finish.",
+      { uploaded: true },
+    );
+    const gateway = createLocalCommandGateway({ store });
+
+    await expect(
+      gateway.reopenRegister({
+        terminalId: "terminal-1",
+        storeId: "store-1",
+        registerNumber: "1",
+        localRegisterSessionId: "drawer-1",
+        staffProfileId: "staff-1",
+        reason: "Manager correction",
+      }),
+    ).resolves.toBe(false);
+    await expect(store.listEvents()).resolves.toMatchObject({
+      ok: true,
+      value: expect.not.arrayContaining([
+        expect.objectContaining({ type: "register.reopened" }),
+      ]),
     });
   });
 

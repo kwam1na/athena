@@ -90,6 +90,46 @@ export function RegisterDrawerGate({
   const isCloseoutBlocked = drawerGate.mode === "closeoutBlocked";
   const isOpeningFloatCorrection = drawerGate.mode === "openingFloatCorrection";
   const isRecovery = drawerGate.mode === "recovery";
+  const isAuthorityRepair =
+    drawerGate.mode === "terminalRepair" ||
+    drawerGate.mode === "drawerAuthorityRepair";
+
+  if (isAuthorityRepair) {
+    const isTerminalRepair = drawerGate.mode === "terminalRepair";
+
+    return (
+      <div className="mx-auto max-w-2xl rounded-lg border border-border bg-surface-raised p-8 shadow-surface">
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <p className="text-sm font-medium uppercase tracking-[0.2em] text-muted-foreground">
+              Register {drawerGate.registerNumber}
+            </p>
+            <span className="rounded-full border border-warning/35 bg-warning/10 px-2.5 py-1 text-xs font-medium text-warning-foreground">
+              Setup needed
+            </span>
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-2xl font-semibold text-foreground">
+              {isTerminalRepair
+                ? "Terminal setup needs repair"
+                : "Drawer needs repair"}
+            </h2>
+            <p className="text-sm leading-6 text-muted-foreground">
+              {isTerminalRepair
+                ? `${drawerGate.registerLabel} cannot record new sales until terminal setup is repaired. Existing local activity is preserved for support.`
+                : `${drawerGate.registerLabel} needs a current drawer before sales can continue. Existing local activity is preserved for support.`}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={drawerGate.onSignOut}>
+              <LogOutIcon className="mr-2 h-4 w-4" />
+              Sign out
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (isOpeningFloatCorrection) {
     const currency = drawerGate.currency ?? "GHS";

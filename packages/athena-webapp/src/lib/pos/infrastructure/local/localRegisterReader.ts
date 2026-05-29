@@ -3,9 +3,11 @@ import {
   type PosLocalRegisterReadModel,
 } from "./registerReadModel";
 import type {
+  PosDrawerAuthorityState,
   PosLocalCloudMapping,
   PosLocalEventRecord,
   PosLocalStoreResult,
+  PosTerminalIntegrityState,
   PosProvisionedTerminalSeed,
 } from "./posLocalStore";
 import {
@@ -17,9 +19,18 @@ import {
 export type PosLocalRegisterReaderStore = {
   listEvents(): Promise<PosLocalStoreResult<PosLocalEventRecord[]>>;
   listLocalCloudMappings?(): Promise<PosLocalStoreResult<PosLocalCloudMapping[]>>;
+  readDrawerAuthorityState?(input: {
+    localRegisterSessionId: string;
+    storeId: string;
+    terminalId: string;
+  }): Promise<PosLocalStoreResult<PosDrawerAuthorityState | null>>;
   readProvisionedTerminalSeed?(): Promise<
     PosLocalStoreResult<PosProvisionedTerminalSeed | null>
   >;
+  readTerminalIntegrityState?(input: {
+    storeId: string;
+    terminalId: string;
+  }): Promise<PosLocalStoreResult<PosTerminalIntegrityState | null>>;
 };
 
 export async function readScopedPosLocalEvents(input: {
@@ -77,6 +88,48 @@ export async function readProjectedLocalRegisterModel(input: {
         value: [] as PosLocalCloudMapping[],
       } as const);
   if (!mappings.ok) return mappings;
+  const scope = resolvePosLocalTerminalScope({
+    storeId: input.storeId,
+    terminal: input.terminal,
+    terminalId: input.terminalId,
+    terminalSeed: scoped.value.terminalSeed,
+  });
+  const scopedTerminalId =
+    scoped.value.terminalSeed?.terminalId ??
+    input.terminal?.localTerminalId ??
+    input.terminalId ??
+    input.terminal?._id ??
+    null;
+  const terminalIntegrity =
+    input.store.readTerminalIntegrityState && scope.storeId && scopedTerminalId
+      ? await input.store.readTerminalIntegrityState({
+          storeId: scope.storeId,
+          terminalId: scopedTerminalId,
+        })
+      : ({ ok: true, value: null } as const);
+  if (!terminalIntegrity.ok) return terminalIntegrity;
+
+  const baseModel = projectLocalRegisterReadModel({
+    events: scoped.value.events,
+    terminalSeed: scoped.value.terminalSeed,
+    mappings: mappings.value,
+    isOnline: input.isOnline,
+    terminalIntegrity: terminalIntegrity.value,
+  });
+  const activeLocalRegisterSessionId =
+    baseModel.activeRegisterSession?.localRegisterSessionId;
+  const drawerAuthority =
+    input.store.readDrawerAuthorityState &&
+    scope.storeId &&
+    activeLocalRegisterSessionId
+      ? await readLatestDrawerAuthorityState({
+          localRegisterSessionId: activeLocalRegisterSessionId,
+          store: input.store,
+          storeId: scope.storeId,
+          terminalIds: scope.terminalIds,
+        })
+      : ({ ok: true, value: null } as const);
+  if (!drawerAuthority.ok) return drawerAuthority;
 
   return {
     ok: true,
@@ -85,6 +138,37 @@ export async function readProjectedLocalRegisterModel(input: {
       terminalSeed: scoped.value.terminalSeed,
       mappings: mappings.value,
       isOnline: input.isOnline,
+      drawerAuthority: drawerAuthority.value,
+      terminalIntegrity: terminalIntegrity.value,
     }),
+  };
+}
+
+async function readLatestDrawerAuthorityState(input: {
+  localRegisterSessionId: string;
+  store: PosLocalRegisterReaderStore;
+  storeId: string;
+  terminalIds: Set<string>;
+}): Promise<PosLocalStoreResult<PosDrawerAuthorityState | null>> {
+  if (!input.store.readDrawerAuthorityState || input.terminalIds.size === 0) {
+    return { ok: true, value: null };
+  }
+
+  const states: PosDrawerAuthorityState[] = [];
+  for (const terminalId of input.terminalIds) {
+    const result = await input.store.readDrawerAuthorityState({
+      localRegisterSessionId: input.localRegisterSessionId,
+      storeId: input.storeId,
+      terminalId,
+    });
+    if (!result.ok) return result;
+    if (result.value) states.push(result.value);
+  }
+
+  return {
+    ok: true,
+    value:
+      states.sort((left, right) => right.observedAt - left.observedAt).at(0) ??
+      null,
   };
 }

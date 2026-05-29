@@ -7,8 +7,11 @@ import { ok, userError, type CommandResult } from "~/shared/commandResult";
 import { readProjectedLocalRegisterModel } from "./localRegisterReader";
 import type {
   PosLocalAppendEventInput,
+  PosDrawerAuthorityState,
   PosLocalEventRecord,
+  PosLocalCloudMapping,
   PosLocalStoreResult,
+  PosTerminalIntegrityState,
   PosProvisionedTerminalSeed,
 } from "./posLocalStore";
 
@@ -17,9 +20,19 @@ type PosLocalCommandStore = {
     input: PosLocalAppendEventInput,
   ): Promise<PosLocalStoreResult<PosLocalEventRecord>>;
   listEvents(): Promise<PosLocalStoreResult<PosLocalEventRecord[]>>;
+  listLocalCloudMappings?(): Promise<PosLocalStoreResult<PosLocalCloudMapping[]>>;
+  readDrawerAuthorityState?(input: {
+    localRegisterSessionId: string;
+    storeId: string;
+    terminalId: string;
+  }): Promise<PosLocalStoreResult<PosDrawerAuthorityState | null>>;
   readProvisionedTerminalSeed?(): Promise<
     PosLocalStoreResult<PosProvisionedTerminalSeed | null>
   >;
+  readTerminalIntegrityState?(input: {
+    storeId: string;
+    terminalId: string;
+  }): Promise<PosLocalStoreResult<PosTerminalIntegrityState | null>>;
 };
 
 type CreateLocalCommandGatewayOptions = {
@@ -98,6 +111,104 @@ export function createLocalCommandGateway(
     return !(await append(input));
   }
 
+  async function readDrawerAuthorityBlock(input: {
+    localRegisterSessionId: string;
+    storeId: string;
+    terminalId: string;
+  }) {
+    const drawerAuthority = options.store.readDrawerAuthorityState
+      ? await options.store.readDrawerAuthorityState(input)
+      : ({ ok: true, value: null } as const);
+    if (!drawerAuthority.ok) return { ok: false as const };
+
+    return {
+      ok: true as const,
+      blocked: drawerAuthority.value?.status === "blocked",
+    };
+  }
+
+  async function canAppendSaleAffectingEvent(input: {
+    localRegisterSessionId?: string;
+    storeId: string;
+    terminalId: string;
+  }) {
+    const model = await readModel(input);
+    if (!model.ok) return false;
+    if (model.value.canSell) {
+      return (
+        Boolean(input.localRegisterSessionId) &&
+        model.value.activeRegisterSession?.localRegisterSessionId ===
+          input.localRegisterSessionId
+      );
+    }
+    if (model.value.saleBlockReason || model.value.activeRegisterSession) {
+      return false;
+    }
+    if (!input.localRegisterSessionId) return false;
+
+    const drawerAuthority = await readDrawerAuthorityBlock({
+      localRegisterSessionId: input.localRegisterSessionId,
+      storeId: input.storeId,
+      terminalId: input.terminalId,
+    });
+    return drawerAuthority.ok && !drawerAuthority.blocked;
+  }
+
+  async function canAppendRegisterReopen(input: ReopenLocalRegisterInput) {
+    const model = await readModel({
+      storeId: input.storeId,
+      terminalId: input.terminalId,
+    });
+    if (!model.ok) return false;
+    if (
+      hasLifecycleReviewForRegisterSession(
+        model.value.sourceEvents,
+        input.localRegisterSessionId,
+      )
+    ) {
+      return false;
+    }
+    if (!model.value.activeRegisterSession) {
+      if (
+        !options.allowExplicitRegisterSessionWithoutProjection ||
+        model.eventCount > 0
+      ) {
+        return false;
+      }
+      const drawerAuthority = await readDrawerAuthorityBlock({
+        localRegisterSessionId: input.localRegisterSessionId,
+        storeId: input.storeId,
+        terminalId: input.terminalId,
+      });
+      return drawerAuthority.ok && !drawerAuthority.blocked;
+    }
+
+    return !model.value.saleBlockReason;
+  }
+
+  async function canSeedRegisterSession(input: SeedLocalRegisterSessionInput) {
+    const model = await readModel({
+      storeId: input.storeId,
+      terminalId: input.terminalId,
+    });
+    if (!model.ok) return false;
+    if (model.value.canSell) return true;
+    if (model.value.saleBlockReason) return false;
+    if (
+      !options.allowExplicitRegisterSessionWithoutProjection ||
+      model.eventCount > 0
+    ) {
+      return false;
+    }
+
+    const drawerAuthority = await readDrawerAuthorityBlock({
+      localRegisterSessionId: input.localRegisterSessionId,
+      storeId: input.storeId,
+      terminalId: input.terminalId,
+    });
+    return drawerAuthority.ok && !drawerAuthority.blocked;
+  }
+
   async function appendWithResult(input: PosLocalAppendEventInput) {
     const result = await options.store.appendEvent(input);
     if (!result.ok) return toLocalUserError(result.error.message);
@@ -106,7 +217,8 @@ export function createLocalCommandGateway(
   }
 
   return {
-    appendCartItem(input: AppendLocalCartItemInput) {
+    async appendCartItem(input: AppendLocalCartItemInput) {
+      if (!(await canAppendSaleAffectingEvent(input))) return false;
       return appendBoolean({
         type: "cart.item_added",
         terminalId: input.terminalId,
@@ -119,7 +231,8 @@ export function createLocalCommandGateway(
       });
     },
 
-    appendServiceLine(input: AppendLocalServiceLineInput) {
+    async appendServiceLine(input: AppendLocalServiceLineInput) {
+      if (!(await canAppendSaleAffectingEvent(input))) return false;
       return appendBoolean({
         type: "cart.service_added",
         terminalId: input.terminalId,
@@ -135,7 +248,8 @@ export function createLocalCommandGateway(
       });
     },
 
-    appendPaymentState(input: AppendLocalPaymentStateInput) {
+    async appendPaymentState(input: AppendLocalPaymentStateInput) {
+      if (!(await canAppendSaleAffectingEvent(input))) return false;
       return appendBoolean({
         type: "session.payments_updated",
         terminalId: input.terminalId,
@@ -171,6 +285,12 @@ export function createLocalCommandGateway(
         model.value.sourceEvents,
         input,
       );
+      if (
+        hasPriorSaleActivity &&
+        !(await canAppendSaleAffectingEvent(input))
+      ) {
+        return false;
+      }
 
       return appendBoolean({
         type: "cart.cleared",
@@ -195,7 +315,8 @@ export function createLocalCommandGateway(
       });
     },
 
-    completeTransaction(input: CompleteLocalTransactionInput) {
+    async completeTransaction(input: CompleteLocalTransactionInput) {
+      if (!(await canAppendSaleAffectingEvent(input))) return false;
       return appendBoolean({
         type: "transaction.completed",
         terminalId: input.terminalId,
@@ -223,12 +344,22 @@ export function createLocalCommandGateway(
       if (!existingModel.ok) {
         return toLocalUserError(existingModel.error.message);
       }
+      if (existingModel.value.saleBlockReason) {
+        return toLocalUserError(
+          blockedSaleMessage(existingModel.value.saleBlockReason),
+        );
+      }
 
       const activeRegisterSession = existingModel.value.activeRegisterSession;
       if (
         activeRegisterSession &&
         isOpenLocalRegisterSessionStatus(activeRegisterSession.status)
       ) {
+        if (!existingModel.value.canSell) {
+          return toLocalUserError(
+            blockedSaleMessage(existingModel.value.saleBlockReason),
+          );
+        }
         if (
           activeRegisterSession.registerNumber &&
           input.registerNumber &&
@@ -290,7 +421,8 @@ export function createLocalCommandGateway(
       });
     },
 
-    reopenRegister(input: ReopenLocalRegisterInput) {
+    async reopenRegister(input: ReopenLocalRegisterInput) {
+      if (!(await canAppendRegisterReopen(input))) return false;
       return appendBoolean({
         type: "register.reopened",
         terminalId: input.terminalId,
@@ -308,7 +440,8 @@ export function createLocalCommandGateway(
       });
     },
 
-    seedRegisterSession(input: SeedLocalRegisterSessionInput) {
+    async seedRegisterSession(input: SeedLocalRegisterSessionInput) {
+      if (!(await canSeedRegisterSession(input))) return false;
       return appendBoolean({
         type: "register.opened",
         terminalId: input.terminalId,
@@ -349,9 +482,25 @@ export function createLocalCommandGateway(
       const explicitlyTrustedBeforeProjection =
         options.allowExplicitRegisterSessionWithoutProjection &&
         explicitRegisterSessionId &&
-        model.eventCount === 0;
+        model.eventCount === 0 &&
+        !model.value.saleBlockReason;
+      if (explicitlyTrustedBeforeProjection) {
+        const drawerAuthority = await readDrawerAuthorityBlock({
+          localRegisterSessionId: explicitRegisterSessionId,
+          storeId: input.storeId.toString(),
+          terminalId: input.terminalId.toString(),
+        });
+        if (!drawerAuthority.ok || drawerAuthority.blocked) {
+          return toLocalUserError(
+            "Drawer setup needs repair before selling can continue.",
+          );
+        }
+      }
       if (!registerSessionCanSell && !explicitlyTrustedBeforeProjection) {
-        return toLocalUserError("Open the drawer before starting a sale.");
+        return toLocalUserError(
+          blockedSaleMessage(model.value.saleBlockReason) ??
+            "Open the drawer before starting a sale.",
+        );
       }
 
       const expiresAt = clock() + SESSION_TTL_MS;
@@ -395,7 +544,12 @@ export function createLocalCommandGateway(
       });
     },
 
-    startCloseout(input: StartLocalCloseoutInput) {
+    async startCloseout(input: StartLocalCloseoutInput) {
+      if (!(await canAppendSaleAffectingEvent(input))) {
+        return toLocalUserError(
+          "Drawer setup needs repair before closeout can continue.",
+        );
+      }
       return appendWithResult({
         type: "register.closeout_started",
         terminalId: input.terminalId,
@@ -455,6 +609,28 @@ function hasLocalSaleActivity(
   });
 }
 
+function hasLifecycleReviewForRegisterSession(
+  events: PosLocalEventRecord[],
+  localRegisterSessionId: string,
+) {
+  return events.some((event) => {
+    if (
+      event.localRegisterSessionId !== localRegisterSessionId ||
+      event.sync.status !== "needs_review" ||
+      !event.sync.uploaded
+    ) {
+      return false;
+    }
+
+    return (
+      event.type === "register.opened" ||
+      event.type === "register.closeout_started" ||
+      event.type === "register.reopened" ||
+      event.type === "transaction.completed"
+    );
+  });
+}
+
 function isOpenLocalRegisterSessionStatus(status: string) {
   return status === "open" || status === "active";
 }
@@ -465,6 +641,19 @@ function toLocalUserError(message: string) {
     message,
     retryable: true,
   });
+}
+
+function blockedSaleMessage(reason?: string) {
+  if (reason === "terminal_integrity") {
+    return "Terminal setup needs repair before selling can continue.";
+  }
+  if (reason === "drawer_authority") {
+    return "Drawer setup needs repair before selling can continue.";
+  }
+  if (reason === "lifecycle_needs_review") {
+    return "Drawer sync needs review before selling can continue.";
+  }
+  return "Open the drawer before starting a sale.";
 }
 
 type LocalCommandContext = {

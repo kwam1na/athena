@@ -77,6 +77,41 @@ export const posTerminalRuntimeSnapshotsValidator = v.object({
   registerReadModelAgeMs: v.optional(v.number()),
 });
 
+export const posTerminalRuntimeTerminalIntegrityReasonValidator = v.union(
+  v.literal("authorization_failed"),
+  v.literal("ownership_conflict"),
+  v.literal("repair_rejected"),
+  v.literal("seed_write_failed"),
+  v.literal("store_access_missing"),
+  v.literal("terminal_revoked"),
+  v.literal("unknown"),
+);
+
+export const posTerminalRuntimeDrawerAuthorityReasonValidator = v.union(
+  v.literal("authority_unknown"),
+  v.literal("cloud_closed"),
+  v.literal("lifecycle_rejected"),
+);
+
+export const posTerminalRuntimeTerminalIntegrityValidator = v.object({
+  observedAt: v.number(),
+  reason: v.optional(posTerminalRuntimeTerminalIntegrityReasonValidator),
+  status: v.union(
+    v.literal("healthy"),
+    v.literal("repairing"),
+    v.literal("requires_reprovision"),
+    v.literal("reset_required"),
+  ),
+});
+
+export const posTerminalRuntimeDrawerAuthorityValidator = v.object({
+  cloudRegisterSessionId: v.optional(v.string()),
+  localRegisterSessionId: v.string(),
+  observedAt: v.number(),
+  reason: v.optional(posTerminalRuntimeDrawerAuthorityReasonValidator),
+  status: v.union(v.literal("healthy"), v.literal("blocked")),
+});
+
 export const posTerminalRuntimeStatusSchema = v.object({
   storeId: v.id("store"),
   terminalId: v.id("posTerminal"),
@@ -90,4 +125,6 @@ export const posTerminalRuntimeStatusSchema = v.object({
   sync: posTerminalRuntimeSyncValidator,
   staffAuthority: posTerminalRuntimeStaffAuthorityValidator,
   snapshots: posTerminalRuntimeSnapshotsValidator,
+  terminalIntegrity: v.optional(posTerminalRuntimeTerminalIntegrityValidator),
+  drawerAuthority: v.optional(posTerminalRuntimeDrawerAuthorityValidator),
 });

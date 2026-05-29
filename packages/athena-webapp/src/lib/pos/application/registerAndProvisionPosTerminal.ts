@@ -64,12 +64,12 @@ export async function registerAndProvisionPosTerminal(input: {
   });
   if (result.kind === "user_error") return result;
 
-  const seedWrite = await (
+  const store =
     input.storeFactory?.() ??
     createPosLocalStore({
       adapter: createIndexedDbPosLocalStorageAdapter(),
-    })
-  ).writeProvisionedTerminalSeed({
+    });
+  const seed = {
     terminalId: input.fingerprintHash,
     cloudTerminalId: result.data._id,
     syncSecretHash: result.data.syncSecretHash ?? syncSecretToken,
@@ -78,9 +78,30 @@ export async function registerAndProvisionPosTerminal(input: {
     displayName: result.data.displayName,
     provisionedAt: input.now?.() ?? Date.now(),
     schemaVersion: POS_LOCAL_STORE_SCHEMA_VERSION,
-  });
+  };
+  const seedWrite = store.writeProvisionedTerminalSeedAndClearTerminalIntegrity
+    ? await store.writeProvisionedTerminalSeedAndClearTerminalIntegrity({
+        seed,
+        terminalIntegrity: {
+          storeId: input.activeStoreId,
+          terminalId: input.fingerprintHash,
+        },
+      })
+    : await store.writeProvisionedTerminalSeed(seed);
   if (!seedWrite.ok) {
     throw new Error(seedWrite.error.message);
+  }
+  if (
+    !store.writeProvisionedTerminalSeedAndClearTerminalIntegrity &&
+    typeof store.clearTerminalIntegrityState === "function"
+  ) {
+    const integrityClear = await store.clearTerminalIntegrityState({
+      storeId: input.activeStoreId,
+      terminalId: input.fingerprintHash,
+    });
+    if (!integrityClear.ok) {
+      throw new Error(integrityClear.error.message);
+    }
   }
 
   return result;

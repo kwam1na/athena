@@ -38,6 +38,9 @@ const mockGetStaffAuthorityReadiness = vi.fn();
 const mockMarkLocalEventsSynced = vi.fn();
 const mockWriteLocalCloudMapping = vi.fn();
 const mockListLocalCloudMappings = vi.fn();
+const mockReadDrawerAuthorityState = vi.fn();
+const mockReadTerminalIntegrityState = vi.fn();
+const mockWriteDrawerAuthorityState = vi.fn();
 
 let mockActiveStore: { _id: Id<"store">; currency: string } | null;
 let mockTerminal:
@@ -304,8 +307,11 @@ vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
     listEvents: mockListLocalEvents,
     listEventsForUpload: mockListLocalEvents,
     listLocalCloudMappings: mockListLocalCloudMappings,
+    readDrawerAuthorityState: mockReadDrawerAuthorityState,
     readProvisionedTerminalSeed: mockReadProvisionedTerminalSeed,
+    readTerminalIntegrityState: mockReadTerminalIntegrityState,
     markEventsSynced: mockMarkLocalEventsSynced,
+    writeDrawerAuthorityState: mockWriteDrawerAuthorityState,
     writeLocalCloudMapping: mockWriteLocalCloudMapping,
   })),
 }));
@@ -538,6 +544,12 @@ describe("useRegisterViewModel", () => {
     mockWriteLocalCloudMapping.mockResolvedValue({ ok: true, value: {} });
     mockListLocalCloudMappings.mockReset();
     mockListLocalCloudMappings.mockResolvedValue({ ok: true, value: [] });
+    mockReadDrawerAuthorityState.mockReset();
+    mockReadDrawerAuthorityState.mockResolvedValue({ ok: true, value: null });
+    mockReadTerminalIntegrityState.mockReset();
+    mockReadTerminalIntegrityState.mockResolvedValue({ ok: true, value: null });
+    mockWriteDrawerAuthorityState.mockReset();
+    mockWriteDrawerAuthorityState.mockResolvedValue({ ok: true, value: {} });
     (globalThis as typeof globalThis & { indexedDB?: IDBFactory }).indexedDB =
       {} as IDBFactory;
     mockUseMutation.mockReset();
@@ -5497,6 +5509,167 @@ describe("useRegisterViewModel", () => {
     );
     expect(mockAppendLocalEvent).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: "register.opened" }),
+    );
+  });
+
+  it("routes terminal integrity blocks to the terminal repair drawer gate", async () => {
+    mockListLocalEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          localEventId: "local-event-open",
+          schemaVersion: 1,
+          sequence: 1,
+          type: "register.opened",
+          terminalId: "local-terminal-1",
+          storeId: "store-1",
+          registerNumber: "1",
+          localRegisterSessionId: "local-register-1",
+          staffProfileId: "staff-1",
+          payload: {
+            localRegisterSessionId: "local-register-1",
+            openingFloat: 5000,
+          },
+          createdAt: 100,
+          sync: { status: "synced" },
+        },
+      ],
+    });
+    mockReadTerminalIntegrityState.mockResolvedValue({
+      ok: true,
+      value: {
+        observedAt: 110,
+        reason: "authorization_failed",
+        status: "requires_reprovision",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      },
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult(),
+      );
+    });
+
+    await waitFor(() =>
+      expect(result.current.drawerGate?.mode).toBe("terminalRepair"),
+    );
+  });
+
+  it("routes drawer authority blocks to the drawer repair gate", async () => {
+    mockListLocalEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          localEventId: "local-event-open",
+          schemaVersion: 1,
+          sequence: 1,
+          type: "register.opened",
+          terminalId: "local-terminal-1",
+          storeId: "store-1",
+          registerNumber: "1",
+          localRegisterSessionId: "local-register-1",
+          staffProfileId: "staff-1",
+          payload: {
+            localRegisterSessionId: "local-register-1",
+            openingFloat: 5000,
+          },
+          createdAt: 100,
+          sync: { status: "synced" },
+        },
+      ],
+    });
+    mockReadDrawerAuthorityState.mockResolvedValue({
+      ok: true,
+      value: {
+        localRegisterSessionId: "local-register-1",
+        observedAt: 110,
+        reason: "cloud_closed",
+        status: "blocked",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      },
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult(),
+      );
+    });
+
+    await waitFor(() =>
+      expect(result.current.drawerGate?.mode).toBe("drawerAuthorityRepair"),
+    );
+  });
+
+  it("persists drawer authority when a mapped cloud drawer is no longer usable", async () => {
+    mockRegisterState = {
+      ...mockRegisterState!,
+      activeRegisterSession: {
+        _id: "drawer-1",
+        status: "closed",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        openingFloat: 5000,
+        expectedCash: 5000,
+        openedAt: 100,
+      },
+      activeSession: null,
+    };
+    mockActiveSession = null;
+    mockListLocalEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          localEventId: "local-event-open",
+          schemaVersion: 1,
+          sequence: 1,
+          type: "register.opened",
+          terminalId: "local-terminal-1",
+          storeId: "store-1",
+          registerNumber: "1",
+          localRegisterSessionId: "local-register-1",
+          staffProfileId: "staff-1",
+          payload: {
+            localRegisterSessionId: "local-register-1",
+            openingFloat: 5000,
+          },
+          createdAt: 100,
+          sync: { status: "synced" },
+        },
+      ],
+    });
+    mockListLocalCloudMappings.mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          entity: "registerSession",
+          localId: "local-register-1",
+          cloudId: "drawer-1",
+          mappedAt: 101,
+        },
+      ],
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    renderHook(() => useRegisterViewModel());
+
+    await waitFor(() =>
+      expect(mockWriteDrawerAuthorityState).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cloudRegisterSessionId: "drawer-1",
+          localRegisterSessionId: "local-register-1",
+          reason: "cloud_closed",
+          status: "blocked",
+        }),
+      ),
     );
   });
 

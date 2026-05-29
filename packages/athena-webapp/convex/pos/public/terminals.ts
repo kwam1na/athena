@@ -24,11 +24,13 @@ import {
 import { hashPosTerminalSyncSecret } from "../application/sync/terminalSyncSecret";
 import {
   posTerminalRuntimeBrowserInfoValidator,
+  posTerminalRuntimeDrawerAuthorityValidator,
   posTerminalRuntimeLocalStoreValidator,
   posTerminalRuntimeSnapshotsValidator,
   posTerminalRuntimeStaffAuthorityValidator,
   posTerminalRuntimeStatusSourceValidator,
   posTerminalRuntimeSyncValidator,
+  posTerminalRuntimeTerminalIntegrityValidator,
 } from "../../schemas/pos/posTerminalRuntimeStatus";
 
 const statusValidator = v.union(
@@ -83,6 +85,8 @@ const runtimeStatusInputValidator = v.object({
   sync: posTerminalRuntimeSyncValidator,
   staffAuthority: posTerminalRuntimeStaffAuthorityValidator,
   snapshots: posTerminalRuntimeSnapshotsValidator,
+  terminalIntegrity: v.optional(posTerminalRuntimeTerminalIntegrityValidator),
+  drawerAuthority: v.optional(posTerminalRuntimeDrawerAuthorityValidator),
 });
 
 const runtimeStatusWriteResultValidator = v.object({
@@ -186,6 +190,8 @@ const terminalHealthAttentionReasonReturnValidator = v.object({
     v.literal("local_store_unavailable"),
     v.literal("sync_failed"),
     v.literal("sync_unavailable"),
+    v.literal("terminal_authorization_failed"),
+    v.literal("drawer_authority_blocked"),
     v.literal("terminal_seed_missing"),
   ),
 });
@@ -258,6 +264,22 @@ function stripRuntimeStatusInput(
       staffProfileId: status.staffAuthority.staffProfileId,
       expiresAt: status.staffAuthority.expiresAt,
     },
+    terminalIntegrity: status.terminalIntegrity
+      ? {
+          observedAt: status.terminalIntegrity.observedAt,
+          reason: status.terminalIntegrity.reason,
+          status: status.terminalIntegrity.status,
+        }
+      : undefined,
+    drawerAuthority: status.drawerAuthority
+      ? {
+          cloudRegisterSessionId: status.drawerAuthority.cloudRegisterSessionId,
+          localRegisterSessionId: status.drawerAuthority.localRegisterSessionId,
+          observedAt: status.drawerAuthority.observedAt,
+          reason: status.drawerAuthority.reason,
+          status: status.drawerAuthority.status,
+        }
+      : undefined,
     snapshots: {
       catalogAgeMs: status.snapshots.catalogAgeMs,
       availabilityAgeMs: status.snapshots.availabilityAgeMs,
@@ -372,8 +394,9 @@ export const submitTerminalRuntimeStatus = mutation({
   },
   returns: commandResultValidator(runtimeStatusWriteResultValidator),
   handler: async (ctx, args) => {
+    let athenaUser;
     try {
-      const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
       await requireTerminalStoreAccess(ctx, {
         allowedRoles: ["full_admin", "pos_only"],
         failureMessage:
@@ -381,36 +404,36 @@ export const submitTerminalRuntimeStatus = mutation({
         storeId: args.storeId,
         userId: athenaUser._id,
       });
-
-      const terminal = await ctx.db.get("posTerminal", args.terminalId);
-      const submittedSyncSecretHash = await hashPosTerminalSyncSecret(
-        args.syncSecretHash,
-      );
-      if (
-        !terminal ||
-        terminal.storeId !== args.storeId ||
-        terminal.status !== "active" ||
-        terminal.registeredByUserId !== athenaUser._id ||
-        !terminal.syncSecretHash ||
-        terminal.syncSecretHash !== submittedSyncSecretHash
-      ) {
-        return userError({
-          code: "authorization_failed",
-          message: "You do not have access to update this POS terminal status.",
-        });
-      }
-
-      return submitTerminalRuntimeStatusCommand(ctx, {
-        storeId: args.storeId,
-        terminalId: args.terminalId,
-        status: stripRuntimeStatusInput(args.status),
-      });
     } catch {
       return userError({
         code: "authorization_failed",
         message: "You do not have access to update this POS terminal status.",
       });
     }
+    const terminal = await ctx.db.get("posTerminal", args.terminalId);
+    const submittedSyncSecretHash = await hashPosTerminalSyncSecret(
+      args.syncSecretHash,
+    );
+    if (
+      !terminal ||
+      terminal.storeId !== args.storeId ||
+      terminal.status !== "active" ||
+      terminal.registeredByUserId !== athenaUser._id ||
+      !terminal.syncSecretHash ||
+      terminal.syncSecretHash !== submittedSyncSecretHash
+    ) {
+      return userError({
+        code: "authorization_failed",
+        message: "You do not have access to update this POS terminal status.",
+        metadata: { terminalAuthorizationFailure: true },
+      });
+    }
+
+    return submitTerminalRuntimeStatusCommand(ctx, {
+      storeId: args.storeId,
+      terminalId: args.terminalId,
+      status: stripRuntimeStatusInput(args.status),
+    });
   },
 });
 

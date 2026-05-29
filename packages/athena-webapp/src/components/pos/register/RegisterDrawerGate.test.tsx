@@ -141,4 +141,40 @@ describe("RegisterDrawerGate", () => {
 
     expect(onCloseoutSecondaryAction).toHaveBeenCalledTimes(1);
   });
+
+  it("shows terminal repair copy and sign-out action", async () => {
+    const user = userEvent.setup();
+    const onSignOut = vi.fn();
+    renderGate({
+      mode: "terminalRepair",
+      onSignOut,
+    });
+
+    expect(screen.getByText("Setup needed")).toBeInTheDocument();
+    expect(
+      screen.getByText("Terminal setup needs repair"),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Sign out" }));
+
+    expect(onSignOut).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows drawer authority repair copy and sign-out action", async () => {
+    const user = userEvent.setup();
+    const onSignOut = vi.fn();
+    renderGate({
+      mode: "drawerAuthorityRepair",
+      onSignOut,
+    });
+
+    expect(screen.getByText("Setup needed")).toBeInTheDocument();
+    expect(
+      screen.getByText("Drawer needs repair"),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Sign out" }));
+
+    expect(onSignOut).toHaveBeenCalledTimes(1);
+  });
 });

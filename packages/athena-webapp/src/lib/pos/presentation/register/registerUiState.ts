@@ -213,7 +213,9 @@ export interface RegisterDrawerGateState {
     | "initialSetup"
     | "recovery"
     | "closeoutBlocked"
-    | "openingFloatCorrection";
+    | "openingFloatCorrection"
+    | "terminalRepair"
+    | "drawerAuthorityRepair";
   isRecovery?: boolean;
   registerLabel: string;
   registerNumber: string;

@@ -378,6 +378,117 @@ describe("registerAndProvisionPosTerminal", () => {
     );
   });
 
+  it("uses the atomic terminal seed repair path when the local store supports it", async () => {
+    const registerTerminalMutation = vi.fn(async (args) => ({
+      kind: "ok" as const,
+      data: {
+        _id: "terminal-1" as never,
+        _creationTime: 1,
+        browserInfo: args.browserInfo,
+        displayName: args.displayName,
+        fingerprintHash: args.fingerprintHash,
+        registeredAt: 1,
+        registeredByUserId: "user-1" as never,
+        registerNumber: args.registerNumber,
+        status: "active" as const,
+        storeId: args.storeId as never,
+        syncSecretHash: args.syncSecretHash,
+      },
+    }));
+    const writeProvisionedTerminalSeed = vi.fn(async () => ({
+      ok: true,
+      value: null,
+    }));
+    const writeProvisionedTerminalSeedAndClearTerminalIntegrity = vi.fn(
+      async () => ({
+        ok: true,
+        value: null,
+      }),
+    );
+
+    await registerAndProvisionPosTerminal({
+      activeStoreId: "store-1" as never,
+      browserInfo: { userAgent: "test" },
+      displayName: "Front register",
+      fingerprintHash: "fingerprint-1",
+      now: () => 123,
+      registerNumber: "1",
+      registerTerminalMutation,
+      storeFactory: () =>
+        ({
+          writeProvisionedTerminalSeed,
+          writeProvisionedTerminalSeedAndClearTerminalIntegrity,
+        }) as never,
+    });
+
+    expect(writeProvisionedTerminalSeedAndClearTerminalIntegrity).toHaveBeenCalledWith({
+      seed: expect.objectContaining({
+        cloudTerminalId: "terminal-1",
+        syncSecretHash: "01020304",
+        terminalId: "fingerprint-1",
+      }),
+      terminalIntegrity: {
+        storeId: "store-1",
+        terminalId: "fingerprint-1",
+      },
+    });
+    expect(writeProvisionedTerminalSeed).not.toHaveBeenCalled();
+  });
+
+  it("clears terminal integrity after fallback terminal seed repair", async () => {
+    const registerTerminalMutation = vi.fn(async (args) => ({
+      kind: "ok" as const,
+      data: {
+        _id: "terminal-1" as never,
+        _creationTime: 1,
+        browserInfo: args.browserInfo,
+        displayName: args.displayName,
+        fingerprintHash: args.fingerprintHash,
+        registeredAt: 1,
+        registeredByUserId: "user-1" as never,
+        registerNumber: args.registerNumber,
+        status: "active" as const,
+        storeId: args.storeId as never,
+        syncSecretHash: args.syncSecretHash,
+      },
+    }));
+    const writeProvisionedTerminalSeed = vi.fn(async () => ({
+      ok: true,
+      value: null,
+    }));
+    const clearTerminalIntegrityState = vi.fn(async () => ({
+      ok: true,
+      value: null,
+    }));
+
+    await registerAndProvisionPosTerminal({
+      activeStoreId: "store-1" as never,
+      browserInfo: { userAgent: "test" },
+      displayName: "Front register",
+      fingerprintHash: "fingerprint-1",
+      now: () => 123,
+      registerNumber: "1",
+      registerTerminalMutation,
+      storeFactory: () =>
+        ({
+          clearTerminalIntegrityState,
+          writeProvisionedTerminalSeed,
+        }) as never,
+    });
+
+    expect(writeProvisionedTerminalSeed).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cloudTerminalId: "terminal-1",
+        syncSecretHash: "01020304",
+        terminalId: "fingerprint-1",
+      }),
+    );
+    expect(clearTerminalIntegrityState).toHaveBeenCalledWith({
+      storeId: "store-1",
+      terminalId: "fingerprint-1",
+    });
+  });
+
   it("fails provisioning when the local terminal seed cannot be written", async () => {
     const registerTerminalMutation = vi.fn(async (args) => ({
       kind: "ok" as const,

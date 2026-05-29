@@ -75,6 +75,24 @@ describe("terminalRuntimeStatus", () => {
         syncSecretHash: "sync-secret-hash",
         terminalId: "local-terminal-1",
       },
+      terminalIntegrity: {
+        message: "syncSecretHash secret should not leave local storage",
+        observedAt: 1_990,
+        reason: "authorization_failed",
+        status: "requires_reprovision",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      },
+      drawerAuthority: {
+        cloudRegisterSessionId: "cloud-register-1",
+        localRegisterSessionId: "register-1",
+        message: "staffProofToken secret should not leave local storage",
+        observedAt: 1_995,
+        reason: "cloud_closed",
+        status: "blocked",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      },
     });
 
     expect(status).toEqual({
@@ -110,6 +128,18 @@ describe("terminalRuntimeStatus", () => {
         reviewEvents: [],
         status: "pending",
         uploadableEventCount: 2,
+      },
+      terminalIntegrity: {
+        observedAt: 1_990,
+        reason: "authorization_failed",
+        status: "requires_reprovision",
+      },
+      drawerAuthority: {
+        cloudRegisterSessionId: "cloud-register-1",
+        localRegisterSessionId: "register-1",
+        observedAt: 1_995,
+        reason: "cloud_closed",
+        status: "blocked",
       },
     });
 
@@ -156,6 +186,22 @@ describe("terminalRuntimeStatus", () => {
         syncSecretHash: "sync-secret-hash",
         terminalId: "local-terminal-1",
       },
+      terminalIntegrity: {
+        observedAt: 1_900,
+        reason: "authorization_failed",
+        status: "requires_reprovision",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      },
+      drawerAuthority: {
+        cloudRegisterSessionId: "cloud-register-1",
+        localRegisterSessionId: "register-1",
+        observedAt: 1_950,
+        reason: "cloud_closed",
+        status: "blocked",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      },
     });
 
     expect(diagnostics).toEqual(
@@ -165,11 +211,25 @@ describe("terminalRuntimeStatus", () => {
           sync: "token [redacted]",
         },
         labels: {
+          drawerAuthority: "blocked",
           localStore: "unavailable",
           staffAuthority: "expired",
           sync: "failed",
+          terminalIntegrity: "blocked",
         },
         source: "support-diagnostics",
+        authority: {
+          drawer: {
+            cloudRegisterSessionId: "cloud-register-1",
+            localRegisterSessionId: "register-1",
+            reason: "cloud_closed",
+            status: "blocked",
+          },
+          terminal: {
+            reason: "authorization_failed",
+            status: "requires_reprovision",
+          },
+        },
         terminal: {
           cloudTerminalId: "terminal-cloud-1",
           displayName: "Front register",

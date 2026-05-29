@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>fix: Block stale POS terminals from local sales</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8fa;
+      --panel: #ffffff;
+      --text: #172033;
+      --muted: #5f6b7a;
+      --line: #d9dee7;
+      --accent: #0f766e;
+      --warn: #a15c00;
+      --danger: #b42318;
+      --code: #eef2f6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    header, main {
+      width: min(1120px, calc(100% - 40px));
+      margin: 0 auto;
+    }
+    header {
+      padding: 40px 0 18px;
+    }
+    .eyebrow {
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 8px 0 10px;
+      font-size: clamp(28px, 4vw, 44px);
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+    .meta {
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+    }
+    nav {
+      margin: 22px 0 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    nav a {
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 6px 10px;
+      text-decoration: none;
+      background: var(--panel);
+    }
+    main { padding: 12px 0 48px; }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 22px;
+      margin: 16px 0;
+    }
+    h2 {
+      margin: 0 0 12px;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+    h3 {
+      margin: 18px 0 8px;
+      font-size: 16px;
+      letter-spacing: 0;
+    }
+    p { margin: 0 0 12px; }
+    ul { margin: 8px 0 0; padding-left: 22px; }
+    li { margin: 5px 0; }
+    code {
+      background: var(--code);
+      border-radius: 4px;
+      padding: 1px 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f1f4f7; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 12px;
+    }
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: #eef8f6;
+      padding: 12px 14px;
+      border-radius: 6px;
+    }
+    .warn {
+      border-left-color: var(--warn);
+      background: #fff7ed;
+    }
+    .danger {
+      border-left-color: var(--danger);
+      background: #fff1f0;
+    }
+    .unit {
+      border-top: 1px solid var(--line);
+      padding-top: 16px;
+      margin-top: 16px;
+    }
+    .unit:first-of-type {
+      border-top: 0;
+      padding-top: 0;
+    }
+    .tag {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 2px 8px;
+      background: #e7f0ff;
+      color: #1f4b99;
+      font-size: 12px;
+      font-weight: 700;
+      margin-right: 6px;
+    }
+    .sequence {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(120px, 1fr));
+      gap: 8px;
+      margin: 12px 0;
+    }
+    .sequence div {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 10px;
+      background: #fafbfc;
+      min-height: 74px;
+    }
+    .arrow {
+      color: var(--muted);
+      font-size: 13px;
+    }
+    @media (max-width: 760px) {
+      header, main { width: min(100% - 24px, 1120px); }
+      section { padding: 18px; }
+      .sequence { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Implementation Plan · Fix · Active · 2026-05-29 · Deepened</div>
+    <h1>Block stale POS terminals from local sales</h1>
+    <div class="meta">
+      <span>Markdown source: <a href="2026-05-29-001-fix-pos-stale-terminal-sale-block-plan.md">2026-05-29-001-fix-pos-stale-terminal-sale-block-plan.md</a></span>
+      <span>Origin: <a href="../brainstorms/2026-05-13-pos-local-first-register-requirements.md">POS local-first register requirements</a></span>
+    </div>
+    <nav aria-label="Plan sections">
+      <a href="#summary">Summary</a>
+      <a href="#decisions">Decisions</a>
+      <a href="#units">Implementation Units</a>
+      <a href="#impact">Impact</a>
+      <a href="#risks">Risks</a>
+      <a href="#verification">Verification</a>
+    </nav>
+  </header>
+  <main>
+    <section id="summary">
+      <h2>Summary</h2>
+      <p>Preserve POS local-first checkout for normal offline or pending sync, but pause selling when cloud explicitly rejects the terminal's sync/check-in authorization or when a mapped cloud drawer is closed/rejected while IndexedDB still projects it open. The fix adds persistent terminal-integrity and drawer-lifecycle authority state, threads both through local projection and command boundaries, self-heals eligible sync-secret drift, and falls back to setup or drawer-authority recovery only when repair cannot be trusted.</p>
+      <div class="grid">
+        <div class="callout">
+          <strong>Allowed</strong>
+          <p>Offline, pending upload, ordinary syncing, and normal local-first checkout for provisioned terminals.</p>
+        </div>
+        <div class="callout danger">
+          <strong>Blocked</strong>
+          <p>New sale-affecting events after terminal sync/check-in returns <code>authorization_failed</code>, or after cloud drawer lifecycle contradicts local open state.</p>
+        </div>
+        <div class="callout warn">
+          <strong>Self-heal first</strong>
+          <p>Use the authenticated session and terminal fingerprint to repair eligible sync-secret drift, preserving stranded local event diagnostics.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Problem Frame</h2>
+      <p>Arc completed local-only sales from stale IndexedDB state even though Convex had no active register session for that Arc terminal and rejected its local sync token. Separately, the Codex browser showed a successful terminal check-in while local IndexedDB still projected an open drawer whose mapped cloud register session was closed. In both cases the browser failed to convert explicit cloud authority into a local sale block.</p>
+    </section>
+
+    <section>
+      <h2>Scope</h2>
+      <ul>
+        <li>Do not change POS into cloud-confirm-before-sale.</li>
+        <li>Do not auto-delete local IndexedDB events or stranded sales.</li>
+        <li>Do not move manager reconciliation out of Cash Controls / Operations.</li>
+        <li>Do not add payment-provider-specific offline authorization or cross-terminal offline coordination.</li>
+      </ul>
+    </section>
+
+    <section id="decisions">
+      <h2>Key Decisions</h2>
+      <ul>
+        <li><strong>Terminal auth rejection becomes terminal-integrity state.</strong> This separates stale-terminal rejection from normal pending sync.</li>
+        <li><strong>Persist the block locally.</strong> Reloads and route entry must not resume selling from stale projections.</li>
+        <li><strong>Enforce at command boundaries.</strong> UI gates help operators, but local command writes must also reject blocked sale-affecting events.</li>
+        <li><strong>Cloud drawer lifecycle is authority after mapping.</strong> A mapped cloud register session that is closed, rejected, missing, or not current overrides stale local open/reopen events.</li>
+        <li><strong>Self-healing is the first recovery path.</strong> Eligible sync-secret drift can repair itself after cloud re-attestation and durable local seed persistence.</li>
+        <li><strong>Operator recovery is fallback.</strong> Revoked terminals, ownership conflicts, register conflicts, missing access, and local seed write failures remain blocked.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>State Model</h2>
+      <div class="sequence" aria-label="State model">
+        <div><strong>Sellable</strong><br><span class="arrow">healthy local terminal</span></div>
+        <div><strong>Pending Sync</strong><br><span class="arrow">offline or upload pending</span></div>
+        <div><strong>Repairing</strong><br><span class="arrow">auth rejected, re-attesting</span></div>
+        <div><strong>Lifecycle Blocked</strong><br><span class="arrow">drawer authority rejected or closed</span></div>
+        <div><strong>Repaired</strong><br><span class="arrow">fresh seed persisted</span></div>
+      </div>
+      <p>Pending sync can remain sellable. Authorization failure pauses new sale-affecting commands while safe repair runs; mapped closed/rejected drawer authority blocks until a valid drawer authority is established.</p>
+    </section>
+
+    <section id="units">
+      <h2>Implementation Units</h2>
+
+      <article class="unit">
+        <h3><span class="tag">U1</span>Persist terminal and drawer authority state</h3>
+        <p>Add safe local metadata for terminal-integrity and drawer-lifecycle authority status, then expose it through POS local storage and runtime diagnostics.</p>
+        <p><strong>Primary files:</strong> <code>posLocalStore.ts</code>, <code>terminalRuntimeStatus.ts</code>, and their tests.</p>
+      </article>
+
+      <article class="unit">
+        <h3><span class="tag">U2</span>Classify sync and check-in authorization failures</h3>
+        <p>Convert `authorization_failed` responses from sync upload and runtime check-in into the persistent terminal-integrity block.</p>
+        <p><strong>Primary files:</strong> <code>usePosLocalSyncRuntime.ts</code>, <code>convex/pos/public/sync.ts</code>, <code>convex/pos/public/terminals.ts</code>.</p>
+      </article>
+
+      <article class="unit">
+        <h3><span class="tag">U7</span>Self-heal terminal re-attestation</h3>
+        <p>Automatically repair eligible sync-secret drift using the authenticated Athena session, same terminal fingerprint, same store/register scope, and durable local seed write.</p>
+        <p><strong>Primary files:</strong> <code>registerAndProvisionPosTerminal.ts</code>, <code>usePosLocalSyncRuntime.ts</code>, <code>convex/pos/application/commands/terminals.ts</code>.</p>
+      </article>
+
+      <article class="unit">
+        <h3><span class="tag">U3</span>Block local projection and commands</h3>
+        <p>Thread terminal-integrity, uploaded lifecycle review, and mapped cloud drawer closed/rejected authority through `canSell` and the local command gateway so stale clients cannot append new sale events or reuse a stale local drawer.</p>
+        <p><strong>Primary files:</strong> <code>registerReadModel.ts</code>, <code>localRegisterReader.ts</code>, <code>localCommandGateway.ts</code>, <code>syncStatus.ts</code>.</p>
+      </article>
+
+      <article class="unit">
+        <h3><span class="tag">U4</span>Add POS repair/recovery gate</h3>
+        <p>Render automatic repair progress, drawer authority recovery, or setup recovery in the register, and disable checkout and sale controls while blocked.</p>
+        <p><strong>Primary files:</strong> <code>useRegisterViewModel.ts</code>, <code>POSRegisterView.tsx</code>, <code>syncStatusPresentation.ts</code>.</p>
+      </article>
+
+      <article class="unit">
+        <h3><span class="tag">U5</span>Align setup and health evidence</h3>
+        <p>Keep POS Settings, terminal health/detail, and register diagnostics consistent about stale authorization and stale drawer authority without creating new reconciliation ownership.</p>
+        <p><strong>Primary files:</strong> <code>POSSettingsView.tsx</code>, <code>POSTerminalDetailView.tsx</code>, <code>terminalHealthPresentation.ts</code>, <code>convex/pos/application/queries/terminals.ts</code>.</p>
+      </article>
+
+      <article class="unit">
+        <h3><span class="tag">U6</span>Validation, graph, and docs</h3>
+        <p>Update harness coverage, solution docs, and graphify artifacts so stale-terminal sale blocking remains protected.</p>
+        <p><strong>Primary files:</strong> <code>scripts/harness-app-registry.ts</code>, generated validation docs, solution docs, and graphify output.</p>
+      </article>
+    </section>
+
+    <section id="impact">
+      <h2>System-Wide Impact</h2>
+      <table>
+        <thead><tr><th>Surface</th><th>Impact</th></tr></thead>
+        <tbody>
+          <tr><td>Local store</td><td>New safe terminal-integrity and drawer-authority metadata.</td></tr>
+          <tr><td>Sync runtime</td><td>Auth rejection writes the block and continues preserving local events.</td></tr>
+          <tr><td>Register projection and commands</td><td>Blocked terminals and stale mapped drawers cannot append sale-affecting events.</td></tr>
+          <tr><td>Cloud register session</td><td>Closed/rejected mapped drawer authority is consumed as sale-blocking evidence instead of ignored by local projection.</td></tr>
+          <tr><td>POS UI</td><td>Repair/recovery gate distinguishes self-healing, setup repair, drawer authority repair, drawer closeout, and pending sync.</td></tr>
+          <tr><td>Terminal health</td><td>Support evidence explains stale auth without secrets or manager-review drift.</td></tr>
+          <tr><td>Terminal repair</td><td>Fresh local seed persistence is required before clearing the block.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="risks">
+      <h2>Risks</h2>
+      <table>
+        <thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+        <tbody>
+          <tr><td>Over-blocking breaks local-first POS</td><td>Only explicit auth rejection, lifecycle-authority review, or mapped cloud drawer closure/rejection block; offline/pending remains sellable.</td></tr>
+          <tr><td>UI-only blocking misses bypasses</td><td>Enforce in local command gateway and read model.</td></tr>
+          <tr><td>Stale local drawer keeps bypassing cloud closeout</td><td>Check mapped cloud drawer authority before `openDrawer` can return idempotent local success.</td></tr>
+          <tr><td>Self-healing hides a real access problem</td><td>Repair only when cloud verifies the same active terminal, scope, and allowed user policy.</td></tr>
+          <tr><td>Recovery deletes evidence</td><td>Clear the block and update seed without deleting local events by default.</td></tr>
+          <tr><td>Cloud repair succeeds but local seed write fails</td><td>Keep POS blocked until seed persistence succeeds.</td></tr>
+          <tr><td>Support copy leaks sensitive data</td><td>Reuse runtime redaction and avoid raw payloads/secrets.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="verification">
+      <h2>Verification Strategy</h2>
+      <ul>
+        <li>Characterize current stale-terminal event/rejection behavior before changing projection.</li>
+        <li>Test local store persistence, auth failure classification, mapped cloud drawer closure, read-model `canSell`, command rejection, register gate rendering, setup re-provision clearing, terminal health copy, harness registry coverage, and graphify rebuild.</li>
+        <li>Run the focused POS local sync/register validation slice, Convex audits, typecheck, build, harness review, and graphify rebuild during implementation.</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

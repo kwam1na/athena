@@ -325,7 +325,19 @@ describe("POS terminal public mutations", () => {
       terminalId: "terminal-1",
       syncSecretHash: "sync-secret-1",
       status: buildRuntimeStatus({
+        drawerAuthority: {
+          cloudRegisterSessionId: "cloud-register-1",
+          localRegisterSessionId: "local-register-1",
+          observedAt: 112,
+          reason: "cloud_closed",
+          status: "blocked",
+        },
         staffProofToken: "proof-token",
+        terminalIntegrity: {
+          observedAt: 111,
+          reason: "authorization_failed",
+          status: "requires_reprovision",
+        },
         verifierMetadata: { salt: "never" },
         rawLocalEvents: [{ payload: { customerInfo: { phone: "never" } } }],
       }),
@@ -352,11 +364,29 @@ describe("POS terminal public mutations", () => {
       expect.objectContaining({
         storeId: "store-1",
         terminalId: "terminal-1",
-        status: expect.not.objectContaining({
-          staffProofToken: expect.anything(),
-          verifierMetadata: expect.anything(),
-          rawLocalEvents: expect.anything(),
+        status: expect.objectContaining({
+          drawerAuthority: {
+            cloudRegisterSessionId: "cloud-register-1",
+            localRegisterSessionId: "local-register-1",
+            observedAt: 112,
+            reason: "cloud_closed",
+            status: "blocked",
+          },
+          terminalIntegrity: {
+            observedAt: 111,
+            reason: "authorization_failed",
+            status: "requires_reprovision",
+          },
         }),
+      }),
+    );
+    expect(
+      mocks.submitTerminalRuntimeStatusCommand.mock.calls[0]?.[1].status,
+    ).not.toEqual(
+      expect.objectContaining({
+        staffProofToken: expect.anything(),
+        verifierMetadata: expect.anything(),
+        rawLocalEvents: expect.anything(),
       }),
     );
   });
@@ -431,6 +461,7 @@ describe("POS terminal public mutations", () => {
       error: {
         code: "authorization_failed",
         message: "You do not have access to update this POS terminal status.",
+        metadata: { terminalAuthorizationFailure: true },
       },
     });
     expect(mocks.submitTerminalRuntimeStatusCommand).not.toHaveBeenCalled();
@@ -498,6 +529,8 @@ describe("POS terminal public mutations", () => {
       "sync_unavailable",
       "local_store_unavailable",
       "terminal_seed_missing",
+      "terminal_authorization_failed",
+      "drawer_authority_blocked",
       "cloud_conflict",
       "cloud_held",
       "cloud_rejected",
