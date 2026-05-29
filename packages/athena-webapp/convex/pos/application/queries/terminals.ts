@@ -7,11 +7,13 @@ import {
   getTerminalById,
   getTerminalSyncEvidence,
   listTerminalsForStore,
+  resolveTerminalRegisterSessionActionTarget,
   type TerminalSyncEvidence,
 } from "../../infrastructure/repositories/terminalRepository";
 
 const EMPTY_TERMINAL_SYNC_EVIDENCE: TerminalSyncEvidence = {
   latestEvent: null,
+  latestReviewEvent: null,
   sampledEventCount: 0,
   acceptedCount: 0,
   projectedCount: 0,
@@ -28,6 +30,7 @@ export type TerminalHealth =
   | "unknown";
 
 export type TerminalHealthAttentionReason = {
+  actionTarget?: TerminalHealthAttentionActionTarget;
   count?: number;
   latestEventSequence?: number;
   latestEventStatus?: string;
@@ -45,6 +48,12 @@ export type TerminalHealthAttentionReason = {
     | "sync_unavailable"
     | "terminal_seed_missing";
 };
+
+export type TerminalHealthAttentionActionTarget =
+  | { type: "cash_control_register_session"; registerSessionId: Id<"registerSession"> }
+  | { type: "open_work" }
+  | { type: "pos_register" }
+  | { type: "pos_settings" };
 
 export type TerminalHealthSummary = {
   terminal: {
@@ -155,6 +164,15 @@ async function buildTerminalHealthSummary(
     syncEvidence,
     terminalStatus: args.terminal.status,
   });
+  const resolvedAttentionReasons = await resolveAttentionReasonActionTargets(
+    ctx,
+    {
+      attentionReasons,
+      storeId: args.terminal.storeId,
+      syncEvidence,
+      terminalId: args.terminal._id,
+    },
+  );
 
   return {
     terminal: {
@@ -167,7 +185,7 @@ async function buildTerminalHealthSummary(
       browserInfo: args.terminal.browserInfo,
     },
     health: deriveTerminalHealth({
-      attentionReasons,
+      attentionReasons: resolvedAttentionReasons,
       runtimeAgeMs,
       runtimeStatus,
       syncEvidence,
@@ -175,9 +193,63 @@ async function buildTerminalHealthSummary(
     }),
     runtimeAgeMs,
     runtimeStatus: runtimeStatus ? stripRuntimeStatusIdentity(runtimeStatus) : null,
-    attentionReasons,
+    attentionReasons: resolvedAttentionReasons,
     syncEvidence,
   };
+}
+
+async function resolveAttentionReasonActionTargets(
+  ctx: QueryCtx,
+  args: {
+    attentionReasons: TerminalHealthAttentionReason[];
+    storeId: Id<"store">;
+    syncEvidence: TerminalSyncEvidence;
+    terminalId: Id<"posTerminal">;
+  },
+): Promise<TerminalHealthAttentionReason[]> {
+  const cloudRegisterSessionId =
+    args.attentionReasons.some((reason) => reason.source === "cloud_sync")
+      ? await resolveTerminalRegisterSessionActionTarget(ctx, {
+          localRegisterSessionId:
+            args.syncEvidence.latestReviewEvent?.localRegisterSessionId ??
+            args.syncEvidence.latestEvent?.localRegisterSessionId,
+          storeId: args.storeId,
+          terminalId: args.terminalId,
+        })
+      : null;
+
+  return args.attentionReasons.map((reason) => ({
+    ...reason,
+    actionTarget: getAttentionReasonActionTarget(reason, {
+      cloudRegisterSessionId,
+    }),
+  }));
+}
+
+function getAttentionReasonActionTarget(
+  reason: TerminalHealthAttentionReason,
+  context: {
+    cloudRegisterSessionId: Id<"registerSession"> | null;
+  },
+): TerminalHealthAttentionActionTarget {
+  switch (reason.type) {
+    case "cloud_conflict":
+    case "cloud_held":
+    case "cloud_rejected":
+      return context.cloudRegisterSessionId
+        ? {
+            registerSessionId: context.cloudRegisterSessionId,
+            type: "cash_control_register_session",
+          }
+        : { type: "open_work" };
+    case "terminal_seed_missing":
+      return { type: "pos_settings" };
+    case "local_review":
+    case "local_store_unavailable":
+    case "sync_failed":
+    case "sync_unavailable":
+      return { type: "pos_register" };
+  }
 }
 
 function deriveTerminalHealth(input: {

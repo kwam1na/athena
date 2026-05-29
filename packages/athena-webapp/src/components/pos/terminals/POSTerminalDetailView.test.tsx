@@ -27,7 +27,13 @@ vi.mock("@tanstack/react-router", () => ({
     to,
   }: {
     children?: React.ReactNode;
-    params?: { orgUrlSlug: string; storeUrlSlug: string; transactionId?: string };
+    params?: {
+      orgUrlSlug: string;
+      sessionId?: string;
+      storeUrlSlug: string;
+      terminalId?: string;
+      transactionId?: string;
+    };
     to?: string;
   }) => (
     <a
@@ -35,6 +41,8 @@ vi.mock("@tanstack/react-router", () => ({
         to
           ?.replace("$orgUrlSlug", params?.orgUrlSlug ?? "")
           .replace("$storeUrlSlug", params?.storeUrlSlug ?? "")
+          .replace("$sessionId", params?.sessionId ?? "")
+          .replace("$terminalId", params?.terminalId ?? "")
           .replace("$transactionId", params?.transactionId ?? "") ?? "#"
       }
     >
@@ -101,6 +109,7 @@ vi.mock("@/components/states/signed-out/ProtectedAdminSignInView", () => ({
 const detail: TerminalHealthDetail = {
   attentionReasons: [
     {
+      actionTarget: { type: "pos_register" },
       count: 1,
       nextPendingUploadSequence: 14,
       source: "local_runtime",
@@ -108,6 +117,10 @@ const detail: TerminalHealthDetail = {
       type: "local_review",
     },
     {
+      actionTarget: {
+        registerSessionId: "register-session-1",
+        type: "cash_control_register_session",
+      },
       count: 1,
       latestEventSequence: 14,
       latestEventStatus: "held",
@@ -146,6 +159,27 @@ const detail: TerminalHealthDetail = {
       localOnlyEventCount: 1,
       nextPendingUploadSequence: 14,
       pendingEventCount: 3,
+      reviewEvents: [
+        {
+          createdAt: Date.now() - 6 * 60_000,
+          localEventId: "local-review-1",
+          localRegisterSessionId: "local-session-2",
+          sequence: 5,
+          status: "needs_review",
+          type: "register.opened",
+          uploaded: true,
+          uploadSequence: 1,
+        },
+        {
+          createdAt: Date.now() - 5 * 60_000,
+          localEventId: "local-review-2",
+          localPosSessionId: "local-sale-1",
+          localRegisterSessionId: "local-session-2",
+          sequence: 9,
+          status: "needs_review",
+          type: "cart.item_added",
+        },
+      ],
       reviewEventCount: 1,
       status: "failed",
       uploadableEventCount: 2,
@@ -226,8 +260,47 @@ describe("POSTerminalDetailViewContent", () => {
     expect(screen.getByText("Local runtime review / next upload #14")).toBeInTheDocument();
     expect(screen.getAllByText("Cloud sync evidence").length).toBeGreaterThan(0);
     expect(screen.getByText("Staff authority changed before sync.")).toBeInTheDocument();
+    expect(screen.getByText("register.opened")).toBeInTheDocument();
+    expect(screen.getByText("cart.item_added")).toBeInTheDocument();
+    expect(screen.getByText("Uploaded")).toBeInTheDocument();
+    expect(screen.getByText("Local only")).toBeInTheDocument();
     expect(screen.getByText("IndexedDB blocked")).toBeInTheDocument();
     expect(screen.getByText("Upload failed")).toBeInTheDocument();
+  });
+
+  it("routes attention reasons to the available action surfaces", () => {
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          attentionReasons: [
+            ...(detail.attentionReasons ?? []),
+            {
+              actionTarget: { type: "pos_settings" },
+              source: "terminal_runtime",
+              summary: "Terminal setup data is not ready on this checkout station.",
+              type: "terminal_seed_missing",
+            },
+          ],
+        }}
+        isLoading={false}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: /^open register$/i }),
+    ).toHaveAttribute("href", "/wigclub/store/osu/pos/register");
+    expect(
+      screen.getByRole("link", { name: /review register session/i }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/cash-controls/registers/register-session-1",
+    );
+    expect(
+      screen.getByRole("link", { name: /open register setup/i }),
+    ).toHaveAttribute("href", "/wigclub/store/osu/pos/settings");
   });
 
   it("does not render attention reasons for a healthy terminal", () => {

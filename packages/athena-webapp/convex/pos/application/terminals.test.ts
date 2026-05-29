@@ -19,6 +19,7 @@ import {
   listTerminalsForStore,
   patchTerminalRecord,
   registerTerminalRecord,
+  resolveTerminalRegisterSessionActionTarget,
   upsertLatestRuntimeStatus,
 } from "../infrastructure/repositories/terminalRepository";
 
@@ -64,6 +65,7 @@ vi.mock("../infrastructure/repositories/terminalRepository", () => ({
   mapTerminalRecord: (terminal: typeof existingTerminal) => terminal,
   patchTerminalRecord: vi.fn(),
   registerTerminalRecord: vi.fn(),
+  resolveTerminalRegisterSessionActionTarget: vi.fn(),
   upsertLatestRuntimeStatus: vi.fn(),
   deleteTerminalRecord: vi.fn(),
 }));
@@ -380,6 +382,7 @@ describe("submitTerminalRuntimeStatus", () => {
 describe("terminal health summaries", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.mocked(resolveTerminalRegisterSessionActionTarget).mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -436,6 +439,7 @@ describe("terminal health summaries", () => {
         }),
         syncEvidence: {
           latestEvent: null,
+          latestReviewEvent: null,
           sampledEventCount: 0,
           acceptedCount: 0,
           projectedCount: 0,
@@ -650,22 +654,84 @@ describe("terminal health summaries", () => {
     expect(result?.health).toBe("needs_attention");
     expect(result?.attentionReasons).toEqual([
       expect.objectContaining({
+        actionTarget: { type: "open_work" },
         count: 1,
         source: "cloud_sync",
         summary: "1 cloud sync conflict needs review.",
         type: "cloud_conflict",
       }),
       expect.objectContaining({
+        actionTarget: { type: "open_work" },
         count: 1,
         source: "cloud_sync",
         summary: "1 synced item is held before projection.",
         type: "cloud_held",
       }),
       expect.objectContaining({
+        actionTarget: { type: "open_work" },
         count: 1,
         source: "cloud_sync",
         summary: "1 synced item was rejected by the server.",
         type: "cloud_rejected",
+      }),
+    ]);
+  });
+
+  it("resolves cloud review reasons to a cash-control register session when sync mapping exists", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(getLatestRuntimeStatusForTerminal).mockResolvedValue(null);
+    vi.mocked(getTerminalSyncEvidence).mockResolvedValue({
+      latestEvent: {
+        localEventId: "local-event-1",
+        localRegisterSessionId: "local-register-1",
+        sequence: 9,
+        eventType: "register_closed",
+        status: "conflicted",
+        occurredAt: 120,
+        submittedAt: 130,
+      },
+      latestReviewEvent: {
+        localEventId: "local-event-1",
+        localRegisterSessionId: "local-register-1",
+        sequence: 9,
+        eventType: "register_closed",
+        status: "conflicted",
+      },
+      sampledEventCount: 1,
+      acceptedCount: 0,
+      projectedCount: 0,
+      conflictedCount: 1,
+      heldCount: 0,
+      rejectedCount: 0,
+    });
+    vi.mocked(resolveTerminalRegisterSessionActionTarget).mockResolvedValue(
+      "register-session-1" as Id<"registerSession">,
+    );
+
+    const result = await getTerminalHealthSummary(
+      { db: null as never } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        now: 220,
+      },
+    );
+
+    expect(resolveTerminalRegisterSessionActionTarget).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        localRegisterSessionId: "local-register-1",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+    );
+    expect(result?.attentionReasons).toEqual([
+      expect.objectContaining({
+        actionTarget: {
+          registerSessionId: "register-session-1",
+          type: "cash_control_register_session",
+        },
+        type: "cloud_conflict",
       }),
     ]);
   });

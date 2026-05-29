@@ -432,6 +432,7 @@ const schema = defineSchema({
   posLocalSyncConflict: defineTable(posLocalSyncConflictSchema)
     .index("by_store_status", ["storeId", "status"])
     .index("by_store_type_status", ["storeId", "conflictType", "status"])
+    .index("by_store_terminal_status", ["storeId", "terminalId", "status"])
     .index("by_store_terminal_localEvent", [
       "storeId",
       "terminalId",

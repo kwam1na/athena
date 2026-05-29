@@ -424,11 +424,17 @@ describe("POSRegisterView", () => {
         staffSignedIn: true,
         storeId: "store-1",
         syncFlow: {
+          checkInPublishAttemptedAt: Date.UTC(2026, 4, 15, 12, 35, 0),
+          checkInPublishCompletedAt: Date.UTC(2026, 4, 15, 12, 35, 1),
+          checkInPublishMessage:
+            "You do not have access to update this POS terminal status.",
+          checkInPublishReason: "authorization_failed",
+          checkInPublishStatus: "rejected",
           eventAppendToken: 2,
           failureCount: 0,
           lastFailure: null,
           lastLocalSequence: 4,
-          localOnlyEventCount: 1,
+          localOnlyEventCount: 29,
           lastRuntimeTrigger: "event-appended",
           lastRuntimeTriggerAt: Date.UTC(2026, 4, 15, 12, 34, 56),
           lastRuntimeTriggerPriority: "high",
@@ -440,13 +446,14 @@ describe("POSRegisterView", () => {
           oldestPendingUploadSequence: 2,
           nextPendingUploadSequence: 2,
           pendingEventCount: 0,
-          pendingUploadEventCount: 0,
+          pendingUploadEventCount: 5,
+          reviewEventCount: 33,
           schedulerBackoffUntil: null,
           schedulerRunning: false,
           schedulerScheduled: false,
           source: "none",
           staffProof: "present",
-          status: "synced",
+          status: "needs_review",
         },
         terminalId: "terminal-1",
         terminalSource: "live",
@@ -494,15 +501,40 @@ describe("POSRegisterView", () => {
     expect(screen.getByText("Support sync diagnostics")).toBeInTheDocument();
     expect(screen.getByText("Online")).toBeInTheDocument();
     expect(screen.getAllByText("Live")).not.toHaveLength(0);
-    expect(screen.getByText("Server current")).toBeInTheDocument();
+    expect(screen.getAllByText("Local review")).not.toHaveLength(0);
+    expect(screen.getByText("Local review item")).toBeInTheDocument();
     expect(screen.getByText("New register activity")).toBeInTheDocument();
     expect(screen.getByText("High")).toBeInTheDocument();
     expect(screen.getByText("2026-05-15T12:34:56Z")).toBeInTheDocument();
     expect(screen.getByText("local 4 synced 4 next n/a")).toBeInTheDocument();
     expect(screen.getByText("eligible uploads")).toBeInTheDocument();
     expect(screen.getByText("local review items")).toBeInTheDocument();
+    expect(screen.getByText("sync hold-up")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "5 uploaded review events can be retried; 29 local-only review records need support inspection.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("next sync step")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Use pending sync retry to settle uploaded review events; resolve any remaining server review, then retry again.",
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText("runtime mode")).toBeInTheDocument();
     expect(screen.getByText("Status only")).toBeInTheDocument();
+    expect(screen.getByText("check-in publish")).toBeInTheDocument();
+    expect(screen.getByText("Rejected")).toBeInTheDocument();
+    expect(screen.getByText("check-in reason")).toBeInTheDocument();
+    expect(screen.getByText("Authorization Failed")).toBeInTheDocument();
+    expect(screen.getByText("check-in attempted")).toBeInTheDocument();
+    expect(screen.getByText("2026-05-15T12:35:00Z")).toBeInTheDocument();
+    expect(screen.getByText("check-in completed")).toBeInTheDocument();
+    expect(screen.getByText("2026-05-15T12:35:01Z")).toBeInTheDocument();
+    expect(screen.getByText("check-in note")).toBeInTheDocument();
+    expect(
+      screen.getByText("You do not have access to update this POS terminal status."),
+    ).toBeInTheDocument();
     expect(screen.getByText("local-only events")).toBeInTheDocument();
     expect(screen.getByText("oldest pending")).toBeInTheDocument();
     expect(screen.getByText("2026-05-15T12:00:00Z")).toBeInTheDocument();

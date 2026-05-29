@@ -4667,6 +4667,16 @@ export function useRegisterViewModel(): RegisterViewModel {
       staffSignedIn: Boolean(staffProfileId),
       ...(activeStoreId ? { storeId: activeStoreId } : {}),
       syncFlow: {
+        checkInPublishAttemptedAt:
+          localRuntimeSyncSource?.debug?.checkInPublishAttemptedAt,
+        checkInPublishCompletedAt:
+          localRuntimeSyncSource?.debug?.checkInPublishCompletedAt,
+        checkInPublishMessage:
+          localRuntimeSyncSource?.debug?.checkInPublishMessage,
+        checkInPublishReason:
+          localRuntimeSyncSource?.debug?.checkInPublishReason,
+        checkInPublishStatus:
+          localRuntimeSyncSource?.debug?.checkInPublishStatus,
         eventAppendToken: localSyncEventAppendToken,
         failureCount: localRuntimeSyncSource?.debug?.failureCount,
         failedEventCount: localRuntimeSyncSource?.debug?.failedEventCount,

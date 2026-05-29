@@ -110,24 +110,44 @@ export type TerminalSyncEvidence = {
     acceptedAt?: number;
     projectedAt?: number;
   } | null;
+  latestReviewEvent?: {
+    localEventId: string;
+    localRegisterSessionId: string;
+    sequence: number;
+    eventType: Doc<"posLocalSyncEvent">["eventType"];
+    status: PosLocalSyncEventStatus;
+  } | null;
   sampledEventCount: number;
   acceptedCount: number;
   projectedCount: number;
   conflictedCount: number;
   heldCount: number;
   rejectedCount: number;
+  unresolvedConflictCount?: number;
+  unresolvedConflicts?: Array<{
+    _id: Id<"posLocalSyncConflict">;
+    conflictType: Doc<"posLocalSyncConflict">["conflictType"];
+    createdAt: number;
+    localEventId: string;
+    localRegisterSessionId: string;
+    sequence: number;
+    summary: string;
+  }>;
   acceptedThroughSequence?: number;
   cursorUpdatedAt?: number;
 };
 
 const EMPTY_TERMINAL_SYNC_EVIDENCE: TerminalSyncEvidence = {
   latestEvent: null,
+  latestReviewEvent: null,
   sampledEventCount: 0,
   acceptedCount: 0,
   projectedCount: 0,
   conflictedCount: 0,
   heldCount: 0,
   rejectedCount: 0,
+  unresolvedConflictCount: 0,
+  unresolvedConflicts: [],
 };
 
 export async function getTerminalSyncEvidence(
@@ -145,12 +165,35 @@ export async function getTerminalSyncEvidence(
     .order("desc")
     .take(100);
 
-  const cursors = await ctx.db
-    .query("posLocalSyncCursor")
-    .withIndex("by_store_terminal", (q) =>
-      q.eq("storeId", args.storeId).eq("terminalId", args.terminalId),
-    )
-    .take(50);
+  const [cursors, conflicts] = await Promise.all([
+    ctx.db
+      .query("posLocalSyncCursor")
+      .withIndex("by_store_terminal", (q) =>
+        q.eq("storeId", args.storeId).eq("terminalId", args.terminalId),
+      )
+      .take(50),
+    ctx.db
+      .query("posLocalSyncConflict")
+      .withIndex("by_store_terminal_status", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("terminalId", args.terminalId)
+          .eq("status", "needs_review"),
+      )
+      .take(100),
+  ]);
+  const terminalConflicts = conflicts
+    .sort((left, right) => right.sequence - left.sequence)
+    .slice(0, 20);
+  const unresolvedConflicts = terminalConflicts.map((conflict) => ({
+    _id: conflict._id,
+    conflictType: conflict.conflictType,
+    createdAt: conflict.createdAt,
+    localEventId: conflict.localEventId,
+    localRegisterSessionId: conflict.localRegisterSessionId,
+    sequence: conflict.sequence,
+    summary: conflict.summary,
+  }));
 
   const latestCursor = cursors.reduce<Doc<"posLocalSyncCursor"> | null>(
     (latest, cursor) =>
@@ -163,12 +206,18 @@ export async function getTerminalSyncEvidence(
       ...EMPTY_TERMINAL_SYNC_EVIDENCE,
       acceptedThroughSequence: latestCursor?.acceptedThroughSequence,
       cursorUpdatedAt: latestCursor?.updatedAt,
+      unresolvedConflictCount: unresolvedConflicts.length,
+      unresolvedConflicts,
     };
   }
 
   const count = (status: PosLocalSyncEventStatus) =>
     events.filter((event) => event.status === status).length;
   const latestEvent = events[0];
+  const latestReviewEvent =
+    events.find((event) =>
+      ["conflicted", "held", "rejected"].includes(event.status),
+    ) ?? null;
 
   return {
     latestEvent: {
@@ -182,15 +231,83 @@ export async function getTerminalSyncEvidence(
       acceptedAt: latestEvent.acceptedAt,
       projectedAt: latestEvent.projectedAt,
     },
+    latestReviewEvent: latestReviewEvent
+      ? {
+          localEventId: latestReviewEvent.localEventId,
+          localRegisterSessionId: latestReviewEvent.localRegisterSessionId,
+          sequence: latestReviewEvent.sequence,
+          eventType: latestReviewEvent.eventType,
+          status: latestReviewEvent.status,
+        }
+      : null,
     sampledEventCount: events.length,
     acceptedCount: count("accepted"),
     projectedCount: count("projected"),
     conflictedCount: count("conflicted"),
     heldCount: count("held"),
     rejectedCount: count("rejected"),
+    unresolvedConflictCount: unresolvedConflicts.length,
+    unresolvedConflicts,
     acceptedThroughSequence: latestCursor?.acceptedThroughSequence,
     cursorUpdatedAt: latestCursor?.updatedAt,
   };
+}
+
+export async function resolveTerminalRegisterSessionActionTarget(
+  ctx: QueryCtx | MutationCtx,
+  args: {
+    localRegisterSessionId?: string | null;
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  },
+): Promise<Id<"registerSession"> | null> {
+  if (!args.localRegisterSessionId) {
+    return null;
+  }
+  const localRegisterSessionId = args.localRegisterSessionId;
+
+  const registerSessionMapping = await ctx.db
+    .query("posLocalSyncMapping")
+    .withIndex("by_store_terminal_local", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("terminalId", args.terminalId)
+        .eq("localRegisterSessionId", localRegisterSessionId)
+        .eq("localIdKind", "registerSession")
+        .eq("localId", localRegisterSessionId),
+    )
+    .unique();
+  if (registerSessionMapping?.cloudTable === "registerSession") {
+    return registerSessionMapping.cloudId as Id<"registerSession">;
+  }
+
+  const normalizeId = (
+    ctx.db as unknown as {
+      normalizeId?: (
+        tableName: string,
+        value: string,
+      ) => Id<"registerSession"> | null;
+    }
+  ).normalizeId;
+  const cloudRegisterSessionId =
+    normalizeId?.call(ctx.db, "registerSession", localRegisterSessionId) ??
+    null;
+  if (!cloudRegisterSessionId) {
+    return null;
+  }
+
+  const registerSession = await ctx.db.get(
+    "registerSession",
+    cloudRegisterSessionId,
+  );
+  if (
+    registerSession?.storeId === args.storeId &&
+    registerSession.terminalId === args.terminalId
+  ) {
+    return cloudRegisterSessionId;
+  }
+
+  return null;
 }
 
 export async function getTerminalByFingerprint(
