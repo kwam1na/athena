@@ -1263,7 +1263,7 @@ describe("DailyCloseViewContent", () => {
     expect(screen.getByText("Enter manager credentials")).toBeInTheDocument();
   });
 
-  it("shows manager-approved reopen only for current completed close and requires a reason", async () => {
+  it("shows manager-approved reopen for active completed close and requires a reason", async () => {
     const user = userEvent.setup();
     const onReopen = vi.fn(async () => ok({ action: "reopened" }));
 
@@ -1276,7 +1276,7 @@ describe("DailyCloseViewContent", () => {
         },
         existingClose: {
           _id: "daily-close-1",
-          isCurrent: true,
+          isCurrent: false,
           lifecycleStatus: "active",
         },
         status: "completed",
