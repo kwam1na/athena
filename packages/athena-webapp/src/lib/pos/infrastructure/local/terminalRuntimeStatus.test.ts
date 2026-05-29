@@ -107,6 +107,7 @@ describe("terminalRuntimeStatus", () => {
         oldestPendingEventAt: 1_000,
         pendingEventCount: 2,
         reviewEventCount: 0,
+        reviewEvents: [],
         status: "pending",
         uploadableEventCount: 2,
       },
@@ -199,6 +200,48 @@ describe("terminalRuntimeStatus", () => {
     expect(serialized).not.toContain("Customer Name");
     expect(serialized).not.toContain("sync-secret-hash");
     expect(serialized).not.toContain("123456789012345678901234");
+  });
+
+  it("includes sanitized local review event samples in server check-ins", () => {
+    const status = buildPosTerminalRuntimeStatus({
+      clock: () => 2_000,
+      events: [
+        buildLocalEvent({
+          localEventId: "event-review",
+          localPosSessionId: "sale-1",
+          localTransactionId: "transaction-1",
+          payload: {
+            customerEmail: "customer@example.com",
+            payments: [{ amount: 10_000, method: "cash" }],
+          },
+          sequence: 5,
+          sync: { status: "needs_review", uploaded: true },
+          type: "transaction.completed",
+          uploadSequence: 2,
+        }),
+      ],
+      source: "register",
+    });
+
+    expect(status.sync.reviewEvents).toEqual([
+      {
+        createdAt: 1_000,
+        localEventId: "event-review",
+        localPosSessionId: "sale-1",
+        localRegisterSessionId: "register-1",
+        localTransactionId: "transaction-1",
+        sequence: 5,
+        staffProfileId: "staff-1",
+        status: "needs_review",
+        type: "transaction.completed",
+        uploaded: true,
+        uploadSequence: 2,
+      },
+    ]);
+    expect(JSON.stringify(status.sync.reviewEvents)).not.toContain("payments");
+    expect(JSON.stringify(status.sync.reviewEvents)).not.toContain(
+      "customer@example.com",
+    );
   });
 });
 

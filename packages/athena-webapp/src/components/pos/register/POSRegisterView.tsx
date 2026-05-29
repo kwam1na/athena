@@ -360,6 +360,66 @@ function formatDebugRuntimeMode(value?: string | null) {
   }
 }
 
+function formatDebugCheckInPublishStatus(value?: string | null) {
+  switch (value) {
+    case "accepted":
+      return "Accepted";
+    case "failed":
+      return "Failed";
+    case "not_ready":
+      return "Not ready";
+    case "pending":
+      return "Publishing";
+    case "rejected":
+      return "Rejected";
+    default:
+      return "Not observed";
+  }
+}
+
+function getDebugSyncHoldUp(debug: NonNullable<RegisterViewModel["debug"]>) {
+  const reviewCount = debug.syncFlow.reviewEventCount ?? 0;
+  const retryableCount = debug.syncFlow.pendingUploadEventCount ?? 0;
+  const localOnlyCount = debug.syncFlow.localOnlyEventCount ?? 0;
+
+  if (debug.syncFlow.status === "needs_review") {
+    if (retryableCount > 0 && localOnlyCount > 0) {
+      return `${retryableCount} uploaded review events can be retried; ${localOnlyCount} local-only review records need support inspection.`;
+    }
+    if (retryableCount > 0) {
+      return `${retryableCount} uploaded review events need manual retry.`;
+    }
+    if (localOnlyCount > 0 || reviewCount > 0) {
+      return "Local review records remain on this browser.";
+    }
+    return "The local sync status is waiting for review settlement.";
+  }
+
+  if (retryableCount > 0) {
+    return `${retryableCount} local events are eligible to upload.`;
+  }
+
+  return "No sync hold-up detected.";
+}
+
+function getDebugSyncNextStep(debug: NonNullable<RegisterViewModel["debug"]>) {
+  const retryableCount = debug.syncFlow.pendingUploadEventCount ?? 0;
+
+  if (debug.syncFlow.status === "needs_review" && retryableCount > 0) {
+    return "Use pending sync retry to settle uploaded review events; resolve any remaining server review, then retry again.";
+  }
+
+  if (debug.syncFlow.status === "needs_review") {
+    return "Inspect local review records before clearing browser data or discarding local activity.";
+  }
+
+  if (retryableCount > 0) {
+    return "Let the upload worker drain or trigger retry from the pending sync control.";
+  }
+
+  return "No action required.";
+}
+
 function usePosDebugPanelToggle() {
   const [isVisible, setIsVisible] = useState(false);
 
@@ -412,8 +472,20 @@ function POSLocalDebugStrip({
     ],
     ["sign-in panel", debug.authDialogOpen ? "Open" : "Closed"],
     ["sync status", formatDebugStatus(debug.syncFlow.status)],
+    ["sync hold-up", getDebugSyncHoldUp(debug)],
+    ["next sync step", getDebugSyncNextStep(debug)],
     ["status source", formatDebugSource(debug.syncFlow.source)],
     ["runtime mode", formatDebugRuntimeMode(debug.syncFlow.mode)],
+    [
+      "check-in publish",
+      formatDebugCheckInPublishStatus(debug.syncFlow.checkInPublishStatus),
+    ],
+    [
+      "check-in reason",
+      debug.syncFlow.checkInPublishReason
+        ? formatDebugStatus(debug.syncFlow.checkInPublishReason)
+        : "n/a",
+    ],
     ["activity signal", String(debug.syncFlow.eventAppendToken)],
     [
       "last sync attempt",
@@ -424,6 +496,15 @@ function POSLocalDebugStrip({
       debug.syncFlow.lastRuntimeTriggerPriority === "high" ? "High" : "Normal",
     ],
     ["attempted at", formatDebugTimestamp(debug.syncFlow.lastRuntimeTriggerAt)],
+    [
+      "check-in attempted",
+      formatDebugTimestamp(debug.syncFlow.checkInPublishAttemptedAt),
+    ],
+    [
+      "check-in completed",
+      formatDebugTimestamp(debug.syncFlow.checkInPublishCompletedAt),
+    ],
+    ["check-in note", debug.syncFlow.checkInPublishMessage ?? "none"],
     ["waiting to sync", String(debug.syncFlow.pendingEventCount ?? 0)],
     [
       "eligible uploads",
@@ -604,7 +685,7 @@ function POSLocalDebugStrip({
             <dt className="uppercase tracking-wide text-muted-foreground">
               {label}
             </dt>
-            <dd className="truncate font-mono text-foreground">{value}</dd>
+            <dd className="break-words font-mono text-foreground">{value}</dd>
           </div>
         ))}
       </dl>

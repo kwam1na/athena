@@ -382,6 +382,14 @@ function getSkuDetailEntries(item: InventorySnapshotItem) {
   );
 }
 
+function formatInventoryItemPriceLabel(item: InventorySnapshotItem) {
+  return typeof item.price === "number"
+    ? `Price ${formatStoredCurrencyAmount("GHS", item.price, {
+        revealMinorUnits: true,
+      })}`
+    : "Price pending";
+}
+
 function parseCountScopeKeys(value?: string | null) {
   return (
     value
@@ -1944,6 +1952,7 @@ export function StockAdjustmentWorkspaceContent({
           productSkuId: String(item._id),
           name: getInventoryItemDisplayName(item),
           sku: item.sku ?? "",
+          priceLabel: formatInventoryItemPriceLabel(item),
           category: item.productCategory ?? undefined,
           barcode: item.barcode ?? undefined,
           variantAttributes: [

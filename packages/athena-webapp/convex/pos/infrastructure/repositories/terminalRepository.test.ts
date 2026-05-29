@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Doc, Id } from "../../../_generated/dataModel";
 import {
   getTerminalSyncEvidence,
+  resolveTerminalRegisterSessionActionTarget,
   upsertLatestRuntimeStatus,
 } from "./terminalRepository";
 
@@ -73,12 +74,15 @@ describe("terminalRepository sync evidence", () => {
 
     expect(result).toEqual({
       latestEvent: null,
+      latestReviewEvent: null,
       sampledEventCount: 0,
       acceptedCount: 0,
       projectedCount: 0,
       conflictedCount: 0,
       heldCount: 0,
       rejectedCount: 0,
+      unresolvedConflictCount: 0,
+      unresolvedConflicts: [],
       acceptedThroughSequence: 12,
       cursorUpdatedAt: 300,
     });
@@ -104,6 +108,34 @@ describe("terminalRepository sync evidence", () => {
         buildSyncEvent({ localEventId: "event-held", sequence: 4, status: "held" }),
         buildSyncEvent({ localEventId: "event-rejected", sequence: 5, status: "rejected" }),
       ],
+      posLocalSyncConflict: [
+        buildSyncConflict({
+          _id: "conflict-older" as Id<"posLocalSyncConflict">,
+          localEventId: "event-conflicted",
+          sequence: 3,
+          summary: "Older conflict.",
+        }),
+        buildSyncConflict({
+          _id: "conflict-latest" as Id<"posLocalSyncConflict">,
+          localEventId: "event-rejected",
+          sequence: 5,
+          summary: "A register session is already open for this terminal.",
+        }),
+        buildSyncConflict({
+          _id: "conflict-other-terminal" as Id<"posLocalSyncConflict">,
+          localEventId: "event-other",
+          sequence: 6,
+          summary: "Other terminal conflict.",
+          terminalId: "terminal-2" as Id<"posTerminal">,
+        }),
+        buildSyncConflict({
+          _id: "conflict-resolved" as Id<"posLocalSyncConflict">,
+          localEventId: "event-resolved",
+          sequence: 7,
+          status: "resolved",
+          summary: "Resolved conflict.",
+        }),
+      ],
     });
 
     const result = await getTerminalSyncEvidence(ctx as never, {
@@ -117,25 +149,76 @@ describe("terminalRepository sync evidence", () => {
         sequence: 5,
         status: "rejected",
       }),
+      latestReviewEvent: expect.objectContaining({
+        localEventId: "event-rejected",
+        sequence: 5,
+        status: "rejected",
+      }),
       sampledEventCount: 5,
       acceptedCount: 1,
       projectedCount: 1,
       conflictedCount: 1,
       heldCount: 1,
       rejectedCount: 1,
+      unresolvedConflictCount: 2,
+      unresolvedConflicts: [
+        expect.objectContaining({
+          _id: "conflict-latest",
+          localEventId: "event-rejected",
+          sequence: 5,
+          summary: "A register session is already open for this terminal.",
+        }),
+        expect.objectContaining({
+          _id: "conflict-older",
+          localEventId: "event-conflicted",
+          sequence: 3,
+          summary: "Older conflict.",
+        }),
+      ],
       acceptedThroughSequence: 7,
       cursorUpdatedAt: 400,
     });
+  });
+
+  it("resolves a local register session to its cloud register session mapping", async () => {
+    const ctx = buildCtx({
+      posLocalSyncMapping: [
+        {
+          _id: "mapping-1" as Id<"posLocalSyncMapping">,
+          _creationTime: 1,
+          cloudId: "register-session-1",
+          cloudTable: "registerSession",
+          createdAt: 1,
+          localEventId: "event-1",
+          localId: "local-register-1",
+          localIdKind: "registerSession",
+          localRegisterSessionId: "local-register-1",
+          storeId: "store-1" as Id<"store">,
+          terminalId: "terminal-1" as Id<"posTerminal">,
+        },
+      ],
+    });
+
+    await expect(
+      resolveTerminalRegisterSessionActionTarget(ctx as never, {
+        localRegisterSessionId: "local-register-1",
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+      }),
+    ).resolves.toBe("register-session-1");
   });
 });
 
 function buildCtx(seed: {
   posLocalSyncCursor?: Array<Doc<"posLocalSyncCursor">>;
+  posLocalSyncConflict?: Array<Doc<"posLocalSyncConflict">>;
   posLocalSyncEvent?: Array<Doc<"posLocalSyncEvent">>;
+  posLocalSyncMapping?: Array<Doc<"posLocalSyncMapping">>;
   posTerminalRuntimeStatus?: Array<Doc<"posTerminalRuntimeStatus">>;
 } = {}) {
   return {
     db: {
+      get: vi.fn(async () => null),
       insert: vi.fn(async () => "runtime-status-new"),
       patch: vi.fn(async () => undefined),
       query: vi.fn((tableName: keyof typeof seed) =>
@@ -178,6 +261,7 @@ function buildQuery<T extends { _creationTime?: number; sequence?: number }>(
           };
         }),
         take: vi.fn(async (count: number) => currentRows.slice(0, count)),
+        unique: vi.fn(async () => currentRows[0] ?? null),
       };
     }),
   };
@@ -231,4 +315,24 @@ function buildSyncEvent(
     submittedAt: 110,
     ...overrides,
   } as Doc<"posLocalSyncEvent">;
+}
+
+function buildSyncConflict(
+  overrides: Partial<Doc<"posLocalSyncConflict">> = {},
+): Doc<"posLocalSyncConflict"> {
+  return {
+    _id: "conflict-1" as Id<"posLocalSyncConflict">,
+    _creationTime: overrides.sequence ?? 1,
+    storeId: "store-1" as Id<"store">,
+    terminalId: "terminal-1" as Id<"posTerminal">,
+    localRegisterSessionId: "register-1",
+    localEventId: "event-1",
+    sequence: 1,
+    conflictType: "permission",
+    status: "needs_review",
+    summary: "Register session mapping is missing for synced POS history.",
+    details: {},
+    createdAt: 120,
+    ...overrides,
+  } as Doc<"posLocalSyncConflict">;
 }

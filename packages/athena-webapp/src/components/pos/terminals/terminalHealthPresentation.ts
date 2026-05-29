@@ -127,12 +127,12 @@ export function getReviewEvidenceCount(
     return 0;
   }
 
-  return (
-    syncEvidence.unresolvedConflictCount ??
+  const cloudReviewCount =
     (syncEvidence.conflictedCount ?? 0) +
-      (syncEvidence.heldCount ?? 0) +
-      (syncEvidence.rejectedCount ?? 0)
-  );
+    (syncEvidence.heldCount ?? 0) +
+    (syncEvidence.rejectedCount ?? 0);
+
+  return Math.max(syncEvidence.unresolvedConflictCount ?? 0, cloudReviewCount);
 }
 
 export function getRecentSyncEvents(

@@ -238,6 +238,11 @@ export interface RegisterViewModel {
     staffSignedIn: boolean;
     storeId?: string;
     syncFlow: {
+      checkInPublishAttemptedAt?: number;
+      checkInPublishCompletedAt?: number;
+      checkInPublishMessage?: string;
+      checkInPublishReason?: string;
+      checkInPublishStatus?: string;
       eventAppendToken: number;
       failureCount?: number;
       failedEventCount?: number;
