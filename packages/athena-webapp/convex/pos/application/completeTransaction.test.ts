@@ -141,6 +141,7 @@ function createVoidCtx(overrides?: {
   inventoryMovements?: unknown[];
   insert?: ReturnType<typeof vi.fn>;
   patch?: ReturnType<typeof vi.fn>;
+  paymentAllocations?: unknown[];
 }) {
   const approvalRequests = overrides?.approvalRequests ?? [];
   return {
@@ -171,8 +172,10 @@ function createVoidCtx(overrides?: {
                 ? (overrides?.completedDailyCloses ?? [])
                 : tableName === "approvalRequest"
                   ? approvalRequests
-                  : tableName === "inventoryMovement"
-                    ? (overrides?.inventoryMovements ?? [])
+                : tableName === "inventoryMovement"
+                  ? (overrides?.inventoryMovements ?? [])
+                : tableName === "paymentAllocation"
+                  ? (overrides?.paymentAllocations ?? [])
                 : [],
             ),
           take: vi
@@ -182,8 +185,10 @@ function createVoidCtx(overrides?: {
                 ? (overrides?.completedDailyCloses ?? [])
                 : tableName === "approvalRequest"
                   ? approvalRequests
-                  : tableName === "inventoryMovement"
-                    ? (overrides?.inventoryMovements ?? [])
+                : tableName === "inventoryMovement"
+                  ? (overrides?.inventoryMovements ?? [])
+                : tableName === "paymentAllocation"
+                  ? (overrides?.paymentAllocations ?? [])
                 : [],
             ),
         })),
@@ -389,6 +394,43 @@ describe("voidTransaction", () => {
     });
 
     expect(ctx.db.insert).not.toHaveBeenCalled();
+    expectNoVoidBusinessSideEffects();
+  });
+
+  it("blocks mixed service sales before creating a void approval request", async () => {
+    const ctx = createVoidCtx({
+      paymentAllocations: [
+        {
+          _id: "allocation-service-1",
+          amount: 15000,
+          direction: "in",
+          posTransactionId: "txn-1",
+          registerSessionId: "register-session-1",
+          status: "recorded",
+          targetId: "case-1",
+          targetType: "service_case",
+        },
+      ],
+    });
+
+    const result = await voidTransaction(ctx as never, {
+      actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+      transactionId: "txn-1" as Id<"posTransaction">,
+      reason: "Customer changed service plan",
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message:
+          "Mixed service sales cannot be voided from POS yet. Reverse the service payment in Service Ops before voiding the retail sale.",
+      },
+    });
+    expect(ctx.db.insert).not.toHaveBeenCalledWith(
+      "approvalRequest",
+      expect.anything(),
+    );
     expectNoVoidBusinessSideEffects();
   });
 

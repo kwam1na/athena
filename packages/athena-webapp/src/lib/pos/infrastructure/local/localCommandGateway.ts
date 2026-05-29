@@ -56,6 +56,7 @@ export function createLocalCommandGateway(
 ): {
   appendCartItem(input: AppendLocalCartItemInput): Promise<boolean>;
   appendPaymentState(input: AppendLocalPaymentStateInput): Promise<boolean>;
+  appendServiceLine(input: AppendLocalServiceLineInput): Promise<boolean>;
   clearCart(input: ClearLocalCartInput): Promise<boolean>;
   completeTransaction(input: CompleteLocalTransactionInput): Promise<boolean>;
   openDrawer(input: PosOpenDrawerInput): Promise<LocalOpenDrawerResult>;
@@ -115,6 +116,22 @@ export function createLocalCommandGateway(
         localPosSessionId: input.localPosSessionId,
         staffProfileId: input.staffProfileId,
         payload: input.payload,
+      });
+    },
+
+    appendServiceLine(input: AppendLocalServiceLineInput) {
+      return appendBoolean({
+        type: "cart.service_added",
+        terminalId: input.terminalId,
+        storeId: input.storeId,
+        registerNumber: input.registerNumber,
+        localRegisterSessionId: input.localRegisterSessionId,
+        localPosSessionId: input.localPosSessionId,
+        staffProfileId: input.staffProfileId,
+        payload: {
+          localPosSessionId: input.localPosSessionId,
+          ...input.payload,
+        },
       });
     },
 
@@ -431,6 +448,7 @@ function hasLocalSaleActivity(
 
     return (
       event.type === "cart.item_added" ||
+      event.type === "cart.service_added" ||
       event.type === "session.payments_updated" ||
       event.type === "transaction.completed"
     );
@@ -472,6 +490,10 @@ type LocalSaleCommandContext = LocalCommandContext & {
 
 type AppendLocalCartItemInput = LocalSaleCommandContext & {
   payload: unknown;
+};
+
+type AppendLocalServiceLineInput = LocalSaleCommandContext & {
+  payload: Record<string, unknown>;
 };
 
 type AppendLocalPaymentStateInput = LocalSaleCommandContext & {

@@ -295,6 +295,84 @@ describe("OrderSummary completed transaction summary", () => {
     ]);
   });
 
+  it("includes service lines in completed summaries and printed receipts", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <OrderSummary
+        cartItems={[]}
+        completedOrderNumber="404929"
+        completedTransactionData={{
+          paymentMethod: "cash",
+          completedAt: new Date("2026-05-28T12:00:00.000Z"),
+          cartItems: [
+            {
+              id: "item-1",
+              name: "edge brush",
+              barcode: "123456789012",
+              price: 7000,
+              quantity: 1,
+              productId: "product-1",
+              skuId: "sku-1",
+            },
+          ] as never,
+          serviceLines: [
+            {
+              id: "service-line-1",
+              name: "Closure repair",
+              quantity: 1,
+              serviceCaseId: "case-1",
+              serviceCaseTitle: "Repair for Ama",
+              serviceMode: "repair",
+              servicePaymentStatus: "partially_paid",
+              serviceStatus: "intake",
+              totalPrice: 15000,
+              unitPrice: 15000,
+            },
+          ],
+          customerInfo: undefined,
+          subtotal: 22000,
+          tax: 0,
+          total: 22000,
+          payments: [
+            { id: "payment-1", method: "cash", amount: 22000, timestamp: 1 },
+          ],
+        }}
+        isTransactionCompleted
+        presentation="rail"
+      />,
+    );
+
+    expect(screen.getByText("Service lines")).toBeInTheDocument();
+    expect(screen.getByText("Closure repair")).toBeInTheDocument();
+    expect(screen.getByText(/Repair for Ama/i)).toBeInTheDocument();
+    expect(screen.getByText("2 items")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Print receipt/i }));
+
+    await waitFor(() => {
+      expect(renderEmail).toHaveBeenCalled();
+    });
+
+    const receiptElement = vi.mocked(renderEmail).mock.calls[0][0] as {
+      props: {
+        items: Array<{ attributes?: string; name: string; totalPrice: string }>;
+        itemsCount: number;
+      };
+    };
+
+    expect(receiptElement.props.itemsCount).toBe(2);
+    expect(receiptElement.props.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          attributes: expect.stringContaining("Payment: partially paid"),
+          name: "Closure repair",
+          totalPrice: "GH₵150",
+        }),
+      ]),
+    );
+  });
+
   it("prints receipt header contact fields from grouped store configuration", async () => {
     const user = userEvent.setup();
     mockStoreState.activeStore = {

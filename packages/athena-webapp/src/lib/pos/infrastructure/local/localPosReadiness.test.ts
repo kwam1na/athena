@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PosLocalEntryContext } from "./localPosEntryContext";
 import {
   evaluateLocalPosReadiness,
+  evaluateLocalPosServiceCatalogReadiness,
   localReadinessRecordFromSnapshots,
   refreshLocalPosReadinessFromSnapshots,
   useLocalPosReadiness,
@@ -94,6 +95,35 @@ describe("localPosReadiness", () => {
       status: "ready",
       source: "local_readiness",
       storeDayStatus: "started",
+    });
+  });
+
+  it("keeps stale service catalog snapshots usable while distinguishing missing snapshots", () => {
+    expect(
+      evaluateLocalPosServiceCatalogReadiness({
+        status: "stale",
+        snapshot: {
+          refreshedAt: 1_000,
+          rows: [],
+          schemaVersion: 6,
+          storeId: "store-1",
+        },
+      }),
+    ).toEqual({
+      status: "ready",
+      source: "local_service_catalog",
+      stale: true,
+      refreshedAt: 1_000,
+    });
+
+    expect(
+      evaluateLocalPosServiceCatalogReadiness({
+        status: "missing",
+        snapshot: null,
+      }),
+    ).toMatchObject({
+      status: "blocked",
+      reason: "missing_service_catalog",
     });
   });
 

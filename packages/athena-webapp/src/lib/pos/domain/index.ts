@@ -1,18 +1,27 @@
 export type {
   PosCartLineId,
   PosCartLineInput,
+  PosCartLineKind,
   PosMoneyTotals,
   PosPayment,
   PosPaymentMethod,
   PosPaymentState,
+  PosProductCartLineInput,
   PosRegisterPhase,
   PosRegisterPhaseInput,
+  PosServiceCartLineInput,
+  PosServiceLinePricingSource,
+  PosServiceMode,
 } from "./types";
 
 export {
+  assertValidPosCartLine,
+  calculatePosCartLineSubtotal,
   calculatePosCartTotals,
   calculatePosItemTotal,
   getPosEffectivePrice,
+  isPosProductCartLine,
+  isPosServiceCartLine,
 } from "./cart";
 
 export {

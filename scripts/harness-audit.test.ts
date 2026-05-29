@@ -658,6 +658,11 @@ async function createFixtureRepo() {
     rootDir
   );
   await write(
+    "packages/athena-webapp/src/components/pos/OrderSummary.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
     "packages/athena-webapp/src/components/pos/transactions/TransactionsView.tsx",
     "export {};\n",
     rootDir
@@ -683,7 +688,17 @@ async function createFixtureRepo() {
     rootDir
   );
   await write(
+    "packages/athena-webapp/src/components/pos/register/RegisterCheckoutPanel.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
     "packages/athena-webapp/src/components/pos/register/RegisterDrawerGate.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/components/pos/receipt/PosReceiptShareControl.tsx",
     "export {};\n",
     rootDir
   );
@@ -729,6 +744,11 @@ async function createFixtureRepo() {
   );
   await write(
     "packages/athena-webapp/src/components/services/ServiceCatalogView.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/components/services/ServiceCasesView.tsx",
     "export {};\n",
     rootDir
   );
@@ -779,6 +799,11 @@ async function createFixtureRepo() {
   );
   await write(
     "packages/athena-webapp/src/components/operations/OperationsQueueView.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/components/operations/CommandApprovalDialog.tsx",
     "export {};\n",
     rootDir
   );
@@ -1048,6 +1073,11 @@ async function createFixtureRepo() {
   );
   await write(
     "packages/athena-webapp/convex/pos/application/commands/completeTransaction.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/pos/application/commands/correctTransaction.ts",
     "export {};\n",
     rootDir
   );

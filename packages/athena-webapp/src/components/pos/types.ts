@@ -1,6 +1,8 @@
 import { Id } from "../../../convex/_generated/dataModel";
 export type {
   PosCartLineInput as CartItem,
+  PosProductCartLineInput as ProductCartItem,
+  PosServiceCartLineInput as ServiceCartItem,
   PosPayment as Payment,
   PosPaymentState as PaymentState,
 } from "@/lib/pos/domain";
@@ -10,6 +12,20 @@ export interface CustomerInfo {
   name: string;
   email: string;
   phone: string;
+}
+
+export interface PosServiceReceiptLine {
+  id: string;
+  name: string;
+  quantity?: number;
+  unitPrice?: number;
+  totalPrice: number;
+  serviceCaseId?: string | null;
+  serviceCaseTitle?: string | null;
+  serviceCaseUnavailable?: boolean;
+  serviceMode?: string | null;
+  servicePaymentStatus?: string | null;
+  serviceStatus?: string | null;
 }
 
 export interface Product {

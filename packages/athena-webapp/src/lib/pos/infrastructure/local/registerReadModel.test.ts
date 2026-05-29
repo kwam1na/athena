@@ -288,6 +288,88 @@ describe("projectLocalRegisterReadModel", () => {
     expect(model.activeSale?.total).toBe(0);
   });
 
+  it("replays local service draft adds and updates into active sale totals", () => {
+    const model = projectLocalRegisterReadModel({
+      events: [
+        ...serviceDraftPrelude(),
+        serviceDraftEvent({
+          sequence: 3,
+          localServiceLineId: "service-line-1",
+          unitPrice: 75,
+          totalPrice: 75,
+        }),
+        serviceDraftEvent({
+          sequence: 4,
+          localServiceLineId: "service-line-1",
+          unitPrice: 125,
+          totalPrice: 125,
+        }),
+      ],
+    });
+
+    expect(model.activeSale?.serviceLines).toEqual([
+      expect.objectContaining({
+        localServiceLineId: "service-line-1",
+        totalPrice: 125,
+        unitPrice: 125,
+      }),
+    ]);
+    expect(model.activeSale).toEqual(
+      expect.objectContaining({
+        subtotal: 125,
+        tax: 0,
+        total: 125,
+      }),
+    );
+    expect(model.errors).toEqual([]);
+  });
+
+  it("replays local service draft removals into active sale totals", () => {
+    const model = projectLocalRegisterReadModel({
+      events: [
+        ...serviceDraftPrelude(),
+        serviceDraftEvent({
+          sequence: 3,
+          localServiceLineId: "service-line-1",
+          unitPrice: 125,
+          totalPrice: 125,
+        }),
+        serviceDraftEvent({
+          sequence: 4,
+          localServiceLineId: "service-line-2",
+          serviceCatalogId: "service-catalog-2",
+          serviceCatalogName: "Consultation",
+          unitPrice: 40,
+          totalPrice: 40,
+        }),
+        serviceDraftEvent({
+          sequence: 5,
+          localServiceLineId: "service-line-1",
+          quantity: 0,
+          unitPrice: 0,
+          totalPrice: 0,
+        }),
+      ],
+    });
+
+    expect(model.activeSale?.serviceLines).toEqual([
+      expect.objectContaining({
+        localServiceLineId: "service-line-2",
+        serviceCatalogId: "service-catalog-2",
+        serviceCatalogName: "Consultation",
+        totalPrice: 40,
+      }),
+    ]);
+    expect(model.activeSale).toEqual(
+      expect.objectContaining({
+        subtotal: 40,
+        tax: 0,
+        total: 40,
+      }),
+    );
+    expect(model.errors).toEqual([]);
+  });
+
   it("clears local cart and payment state with one durable clear event", () => {
     const model = projectLocalRegisterReadModel({
       events: [
@@ -404,6 +486,76 @@ describe("projectLocalRegisterReadModel", () => {
         total: 80,
       }),
     ]);
+  });
+
+  it("preserves completed service lines from the local sale payload", () => {
+    const model = projectLocalRegisterReadModel({
+      events: [
+        event({
+          sequence: 1,
+          type: "register.opened",
+          localRegisterSessionId: "local-register-1",
+          payload: { openingFloat: 100 },
+        }),
+        event({
+          sequence: 2,
+          type: "transaction.completed",
+          localRegisterSessionId: "local-register-1",
+          localPosSessionId: "local-sale-1",
+          localTransactionId: "local-txn-1",
+          payload: {
+            localPosSessionId: "local-sale-1",
+            localTransactionId: "local-txn-1",
+            receiptNumber: "R-1",
+            customerProfileId: "customer-profile-1",
+            subtotal: 100,
+            tax: 0,
+            total: 100,
+            items: [
+              {
+                localItemId: "payload-item-1",
+                productId: "product-1",
+                productSkuId: "sku-1",
+                productSku: "SKU-1",
+                productName: "Payload Item",
+                price: 25,
+                quantity: 1,
+              },
+            ],
+            serviceLines: [
+              {
+                localServiceLineId: "local-service-line-1",
+                localServiceCaseId: "local-service-case-1",
+                serviceCatalogId: "service-catalog-1",
+                serviceCatalogName: "Install",
+                serviceMode: "same_day",
+                pricingModel: "fixed",
+                quantity: 1,
+                unitPrice: 75,
+                totalPrice: 75,
+              },
+            ],
+            payments: [{ method: "card", amount: 100, timestamp: 1_004 }],
+          },
+        }),
+      ],
+    });
+
+    expect(model.completedSales).toEqual([
+      expect.objectContaining({
+        serviceLines: [
+          expect.objectContaining({
+            localServiceLineId: "local-service-line-1",
+            localServiceCaseId: "local-service-case-1",
+            serviceCatalogId: "service-catalog-1",
+            serviceCatalogName: "Install",
+            totalPrice: 75,
+          }),
+        ],
+        total: 100,
+      }),
+    ]);
+    expect(model.errors).toEqual([]);
   });
 
   it("adds only cash retained after change to local expected cash", () => {
@@ -625,4 +777,49 @@ function event(
     sync: { status: "pending" },
     ...rest,
   };
+}
+
+function serviceDraftPrelude() {
+  return [
+    event({
+      sequence: 1,
+      type: "register.opened",
+      localRegisterSessionId: "local-register-1",
+      payload: { openingFloat: 100 },
+    }),
+    event({
+      sequence: 2,
+      type: "session.started",
+      localRegisterSessionId: "local-register-1",
+      localPosSessionId: "local-sale-1",
+      payload: { localPosSessionId: "local-sale-1", status: "active" },
+    }),
+  ];
+}
+
+function serviceDraftEvent(input: {
+  sequence: number;
+  localServiceLineId: string;
+  serviceCatalogId?: string;
+  serviceCatalogName?: string;
+  quantity?: number;
+  unitPrice: number;
+  totalPrice: number;
+}) {
+  return event({
+    sequence: input.sequence,
+    type: "cart.service_added",
+    localRegisterSessionId: "local-register-1",
+    localPosSessionId: "local-sale-1",
+    payload: {
+      localServiceLineId: input.localServiceLineId,
+      serviceCatalogId: input.serviceCatalogId ?? "service-catalog-1",
+      serviceCatalogName: input.serviceCatalogName ?? "Install",
+      serviceMode: "same_day",
+      pricingModel: "fixed",
+      quantity: input.quantity ?? 1,
+      unitPrice: input.unitPrice,
+      totalPrice: input.totalPrice,
+    },
+  });
 }

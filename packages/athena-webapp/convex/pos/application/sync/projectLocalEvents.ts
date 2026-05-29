@@ -56,6 +56,12 @@ type CanonicalSaleItem = {
   productSku: string;
 };
 
+type CanonicalServiceLine = {
+  serviceCatalogName: string;
+  serviceMode: "same_day" | "consultation" | "repair" | "revamp";
+  pricingModel: "fixed" | "starting_at" | "quote_after_consultation";
+};
+
 type SaleValidationContext = {
   payload: PosLocalSalePayload;
   store: StoreRecord;
@@ -63,6 +69,7 @@ type SaleValidationContext = {
   catalogValidation: {
     conflict: LocalSyncConflictRecord | null;
     itemsByLocalId: Map<string, CanonicalSaleItem>;
+    serviceLinesByLocalId: Map<string, CanonicalServiceLine>;
   };
 };
 
@@ -78,9 +85,18 @@ type SalePaymentCalculation = {
   expectedCashDelta: number;
   paymentConflict: LocalSyncConflictRecord | null;
   primaryPaymentMethod?: string;
+  retailAllocations: PlannedPaymentAllocation[];
+  serviceAllocationsByLineKey: Map<string, PlannedPaymentAllocation[]>;
   totalPaid: number;
   transactionPayments: PosLocalSalePayload["payments"];
   validPayments: PosLocalSalePayload["payments"];
+};
+
+type PlannedPaymentAllocation = {
+  localPaymentId?: string;
+  method: string;
+  amount: number;
+  timestamp: number;
 };
 
 type PersistedSaleSession = {
@@ -91,8 +107,19 @@ type PersistedSaleSession = {
 
 type PersistedSale = {
   receiptMapping: LocalSyncMappingRecord;
+  registerSessionId: Id<"registerSession">;
   transactionId: Id<"posTransaction">;
   transactionMapping: LocalSyncMappingRecord;
+};
+
+type PersistedServiceLine = {
+  line: NonNullable<PosLocalSalePayload["serviceLines"]>[number];
+  lineKey: string;
+  serviceCaseId: Id<"serviceCase">;
+  serviceCaseLineItemId: Id<"serviceCaseLineItem">;
+  transactionServiceLineId: Id<"posTransactionServiceLine">;
+  workItemId?: Id<"operationalWorkItem">;
+  customerProfileId: Id<"customerProfile">;
 };
 
 async function persistRegisterSessionWorkflowTraceId(
@@ -506,6 +533,13 @@ async function projectSaleCompleted(
     sale,
     saleSession,
   });
+  const serviceProjection = await persistSaleServiceLines(repository, args, {
+    payload: validation.payload,
+    payments,
+    sale,
+    serviceLinesByLocalId: validation.catalogValidation.serviceLinesByLocalId,
+    store: validation.store,
+  });
   const paymentMappings = await persistPaymentAllocations(repository, args, {
     payments,
     sale,
@@ -543,6 +577,7 @@ async function projectSaleCompleted(
       sale.transactionMapping,
       sale.receiptMapping,
       ...itemMappings,
+      ...serviceProjection.mappings,
       ...paymentMappings,
     ],
     conflicts,
@@ -588,6 +623,17 @@ async function validateSaleCompletedInputs(
   const payload = getSalePayload(args.event);
   const store = await repository.getStore(args.storeId);
   const terminal = await repository.getTerminal(args.terminalId);
+
+  if ((payload.serviceLines?.length ?? 0) > 0 && !store?.organizationId) {
+    const conflict = await createConflict(repository, args, {
+      conflictType: "permission",
+      summary: "Store reference is missing for synced service sale.",
+      details: {
+        localTransactionId: payload.localTransactionId,
+      },
+    });
+    return conflictResult(conflict);
+  }
 
   const customerReferenceConflict = await validateSaleCustomerReference(
     repository,
@@ -936,12 +982,19 @@ async function calculateSalePayments(
   const cashCollected = validPayments
     .filter((payment) => payment.method === "cash")
     .reduce((sum, payment) => sum + payment.amount, 0);
+  const allocationPlan = planSalePaymentAllocations({
+    changeGiven,
+    payload,
+    payments: validPayments,
+  });
 
   return {
     changeGiven,
     expectedCashDelta: Math.max(0, cashCollected - (changeGiven ?? 0)),
     paymentConflict,
     primaryPaymentMethod: validPayments[0]?.method,
+    retailAllocations: allocationPlan.retailAllocations,
+    serviceAllocationsByLineKey: allocationPlan.serviceAllocationsByLineKey,
     totalPaid,
     transactionPayments: validPayments.map(({ method, amount, timestamp }) => ({
       method,
@@ -950,6 +1003,51 @@ async function calculateSalePayments(
     })),
     validPayments,
   };
+}
+
+function planSalePaymentAllocations(args: {
+  changeGiven?: number;
+  payload: PosLocalSalePayload;
+  payments: PosLocalSalePayload["payments"];
+}) {
+  const normalizedPayments = normalizeLocalSalePayments({
+    changeGiven: args.changeGiven,
+    payments: args.payments,
+  });
+  const serviceLines = args.payload.serviceLines ?? [];
+  const serviceTargets = serviceLines.map((line, index) => ({
+    lineKey: serviceLineKey(line, index),
+    remaining: roundMoney(line.totalPrice),
+  }));
+  let retailRemaining = roundMoney(
+    args.payload.totals.total -
+      serviceTargets.reduce((sum, target) => sum + target.remaining, 0),
+  );
+  const retailAllocations: PlannedPaymentAllocation[] = [];
+  const serviceAllocationsByLineKey = new Map<string, PlannedPaymentAllocation[]>();
+
+  for (const payment of normalizedPayments) {
+    let remainingPayment = roundMoney(payment.amount);
+    if (retailRemaining > 0 && remainingPayment > 0) {
+      const amount = roundMoney(Math.min(retailRemaining, remainingPayment));
+      retailAllocations.push({ ...payment, amount });
+      retailRemaining = roundMoney(retailRemaining - amount);
+      remainingPayment = roundMoney(remainingPayment - amount);
+    }
+
+    for (const target of serviceTargets) {
+      if (remainingPayment <= 0) break;
+      if (target.remaining <= 0) continue;
+      const amount = roundMoney(Math.min(target.remaining, remainingPayment));
+      const allocations = serviceAllocationsByLineKey.get(target.lineKey) ?? [];
+      allocations.push({ ...payment, amount });
+      serviceAllocationsByLineKey.set(target.lineKey, allocations);
+      target.remaining = roundMoney(target.remaining - amount);
+      remainingPayment = roundMoney(remainingPayment - amount);
+    }
+  }
+
+  return { retailAllocations, serviceAllocationsByLineKey };
 }
 
 async function persistSaleSession(
@@ -1048,7 +1146,12 @@ async function persistSaleRecord(
     cloudId: transactionId,
   });
 
-  return { receiptMapping, transactionId, transactionMapping };
+  return {
+    receiptMapping,
+    registerSessionId: session.registerSession._id,
+    transactionId,
+    transactionMapping,
+  };
 }
 
 async function persistSaleItemsAndInventory(
@@ -1137,6 +1240,199 @@ async function persistSaleItemsAndInventory(
   return itemMappings;
 }
 
+async function persistSaleServiceLines(
+  repository: SyncProjectionRepository,
+  args: SaleCompletedArgs,
+  input: {
+    payload: PosLocalSalePayload;
+    payments: SalePaymentCalculation;
+    sale: PersistedSale;
+    serviceLinesByLocalId: Map<string, CanonicalServiceLine>;
+    store: StoreRecord;
+  },
+): Promise<{
+  mappings: LocalSyncMappingRecord[];
+  serviceLines: PersistedServiceLine[];
+}> {
+  const mappings: LocalSyncMappingRecord[] = [];
+  const serviceLines: PersistedServiceLine[] = [];
+  const mappedServicePaymentIds = new Set<string>();
+  const retailMappedPaymentIds = new Set(
+    input.payments.retailAllocations.flatMap((payment) =>
+      payment.localPaymentId ? [payment.localPaymentId] : [],
+    ),
+  );
+
+  for (const [index, line] of (input.payload.serviceLines ?? []).entries()) {
+    const lineKey = serviceLineKey(line, index);
+    const canonicalLine = input.serviceLinesByLocalId.get(lineKey);
+    const existingServiceCase = line.existingServiceCaseId
+      ? await repository.getServiceCase(line.existingServiceCaseId)
+      : null;
+    const customerProfileId =
+      existingServiceCase?.customerProfileId ??
+      line.customerProfileId ??
+      input.payload.customerProfileId;
+    if (!customerProfileId) continue;
+
+    const serviceCaseId =
+      existingServiceCase?._id ??
+      (await createProjectedServiceCase(repository, args, {
+        customerProfileId,
+        line,
+        lineKey,
+        serviceCatalogName:
+          canonicalLine?.serviceCatalogName ?? line.serviceCatalogName,
+        store: input.store,
+      }));
+    const serviceCase = existingServiceCase ?? (await repository.getServiceCase(serviceCaseId));
+    const workItemId = serviceCase?.operationalWorkItemId;
+    const serviceCaseLineItemId = await repository.createServiceCaseLineItem({
+      serviceCaseId,
+      lineType: "labor",
+      description: canonicalLine?.serviceCatalogName ?? line.serviceCatalogName,
+      quantity: line.quantity,
+      unitPrice: line.unitPrice,
+      amount: line.totalPrice,
+      notes: `Synced from POS receipt ${input.payload.receiptNumber}.`,
+      createdAt: args.event.occurredAt,
+    });
+    const transactionServiceLineId =
+      await repository.createTransactionServiceLine({
+        transactionId: input.sale.transactionId,
+        serviceCaseId,
+        serviceCatalogId: line.serviceCatalogId,
+        serviceName: canonicalLine?.serviceCatalogName ?? line.serviceCatalogName,
+        serviceMode: canonicalLine?.serviceMode ?? line.serviceMode,
+        pricingSource:
+          line.pricingModel === "fixed"
+            ? "catalog_base_price"
+            : line.existingServiceCaseId
+              ? "service_case_quote"
+              : "pos_entered",
+        quantity: line.quantity,
+        unitPrice: line.unitPrice,
+        totalPrice: line.totalPrice,
+        notes: `Synced from POS receipt ${input.payload.receiptNumber}.`,
+      });
+
+    if (line.localServiceCaseId) {
+      mappings.push(
+        await createMapping(repository, args, {
+          localIdKind: "serviceCase",
+          localId: line.localServiceCaseId,
+          cloudTable: "serviceCase",
+          cloudId: serviceCaseId,
+        }),
+      );
+    }
+    if (line.localServiceLineId) {
+      mappings.push(
+        await createMapping(repository, args, {
+          localIdKind: "serviceLine",
+          localId: line.localServiceLineId,
+          cloudTable: "serviceCaseLineItem",
+          cloudId: serviceCaseLineItemId,
+        }),
+      );
+    }
+
+    for (const payment of input.payments.serviceAllocationsByLineKey.get(lineKey) ??
+      []) {
+      const allocationId = await repository.createPaymentAllocation({
+        storeId: args.storeId,
+        organizationId: input.store?.organizationId,
+        targetType: "service_case",
+        targetId: serviceCaseId,
+        allocationType: "service_payment",
+        direction: "in",
+        method: payment.method,
+        amount: payment.amount,
+        status: "recorded",
+        collectedInStore: true,
+        recordedAt: payment.timestamp,
+        actorStaffProfileId: args.event.staffProfileId,
+        customerProfileId,
+        workItemId,
+        registerSessionId: input.sale.registerSessionId,
+        posTransactionId: input.sale.transactionId,
+        externalReference: payment.localPaymentId
+          ? `${payment.localPaymentId}:${lineKey}`
+          : undefined,
+        notes: "Synced from offline POS service sale.",
+      });
+      if (
+        payment.localPaymentId &&
+        !retailMappedPaymentIds.has(payment.localPaymentId) &&
+        !mappedServicePaymentIds.has(payment.localPaymentId)
+      ) {
+        mappings.push(
+          await createMapping(repository, args, {
+            localIdKind: "payment",
+            localId: payment.localPaymentId,
+            cloudTable: "paymentAllocation",
+            cloudId: allocationId,
+          }),
+        );
+        mappedServicePaymentIds.add(payment.localPaymentId);
+      }
+    }
+
+    await repository.syncServiceCaseFinancials(serviceCaseId);
+    serviceLines.push({
+      line,
+      lineKey,
+      serviceCaseId,
+      serviceCaseLineItemId,
+      transactionServiceLineId,
+      workItemId,
+      customerProfileId,
+    });
+  }
+
+  return { mappings, serviceLines };
+}
+
+async function createProjectedServiceCase(
+  repository: SyncProjectionRepository,
+  args: SaleCompletedArgs,
+  input: {
+    customerProfileId: Id<"customerProfile">;
+    line: NonNullable<PosLocalSalePayload["serviceLines"]>[number];
+    lineKey: string;
+    serviceCatalogName: string;
+    store: StoreRecord;
+  },
+) {
+  const workItemId = await repository.createServiceWorkItem({
+    storeId: args.storeId,
+    organizationId: input.store?.organizationId as Id<"organization">,
+    type: "service_case",
+    status: "open",
+    priority: "normal",
+    approvalState: "not_required",
+    title: input.serviceCatalogName,
+    metadata: {
+      localEventId: args.event.localEventId,
+      localServiceLineId: input.line.localServiceLineId,
+      serviceCatalogId: input.line.serviceCatalogId,
+      source: "pos_local_sync",
+    },
+    createdByStaffProfileId: args.event.staffProfileId,
+    customerProfileId: input.customerProfileId,
+  });
+
+  return repository.createServiceCase({
+    customerProfileId: input.customerProfileId,
+    operationalWorkItemId: workItemId,
+    organizationId: input.store?.organizationId,
+    quotedAmount: input.line.totalPrice,
+    serviceCatalogId: input.line.serviceCatalogId,
+    serviceMode: input.line.serviceMode,
+    storeId: args.storeId,
+  });
+}
+
 async function persistPaymentAllocations(
   repository: SyncProjectionRepository,
   args: SaleCompletedArgs,
@@ -1150,10 +1446,7 @@ async function persistPaymentAllocations(
   const { payments, sale, session, store } = input;
   const paymentMappings: LocalSyncMappingRecord[] = [];
 
-  for (const payment of normalizeLocalSalePayments({
-    changeGiven: payments.changeGiven,
-    payments: payments.validPayments,
-  })) {
+  for (const payment of payments.retailAllocations) {
     const allocationId = await repository.createPaymentAllocation({
       storeId: args.storeId,
       organizationId: store?.organizationId,
@@ -1408,6 +1701,35 @@ async function validateSaleCustomerReference(
     }
   }
 
+  for (const line of payload.serviceLines ?? []) {
+    const lineCustomerProfileId = line.customerProfileId ?? payload.customerProfileId;
+    if (!lineCustomerProfileId) {
+      if (line.existingServiceCaseId) continue;
+      return createConflict(repository, args, {
+        conflictType: "permission",
+        summary: "Service line is missing customer attribution.",
+        details: {
+          localTransactionId: payload.localTransactionId,
+          localServiceLineId: line.localServiceLineId,
+          serviceCatalogId: line.serviceCatalogId,
+        },
+      });
+    }
+    const lineCustomer = await repository.getCustomerProfile(lineCustomerProfileId);
+    if (!lineCustomer || lineCustomer.storeId !== args.storeId) {
+      return createConflict(repository, args, {
+        conflictType: "permission",
+        summary: "Service line customer reference is outside this store.",
+        details: {
+          localTransactionId: payload.localTransactionId,
+          localServiceLineId: line.localServiceLineId,
+          serviceCatalogId: line.serviceCatalogId,
+          customerProfileId: lineCustomerProfileId,
+        },
+      });
+    }
+  }
+
   return null;
 }
 
@@ -1425,6 +1747,7 @@ async function validateSaleCatalogReferences(
       productSku: string;
     }
   >();
+  const serviceLinesByLocalId = new Map<string, CanonicalServiceLine>();
   let priceConflict: LocalSyncConflictRecord | null = null;
   for (const item of payload.items) {
     const [product, sku] = await Promise.all([
@@ -1456,6 +1779,7 @@ async function validateSaleCatalogReferences(
           },
         }),
         itemsByLocalId,
+        serviceLinesByLocalId,
       };
     }
     if (
@@ -1484,7 +1808,135 @@ async function validateSaleCatalogReferences(
     });
   }
 
-  return { conflict: priceConflict, itemsByLocalId };
+  for (const [index, line] of (payload.serviceLines ?? []).entries()) {
+    const serviceCatalog = await repository.getServiceCatalog(
+      line.serviceCatalogId,
+    );
+    if (
+      !serviceCatalog ||
+      serviceCatalog.storeId !== args.storeId ||
+      serviceCatalog.status !== "active"
+    ) {
+      return {
+        conflict: await createConflict(repository, args, {
+          conflictType: "permission",
+          summary: "Service catalog reference is outside this store.",
+          details: {
+            localTransactionId: payload.localTransactionId,
+            serviceCatalogId: line.serviceCatalogId,
+            blocksProjection: true,
+          },
+        }),
+        itemsByLocalId,
+        serviceLinesByLocalId,
+      };
+    }
+
+    if (
+      line.pricingModel !== serviceCatalog.pricingModel ||
+      line.serviceMode !== serviceCatalog.serviceMode ||
+      (line.catalogUpdatedAt !== undefined &&
+        serviceCatalog.updatedAt > line.catalogUpdatedAt) ||
+      (serviceCatalog.pricingModel === "fixed" &&
+        roundMoney(line.unitPrice) !==
+          roundMoney(serviceCatalog.basePrice ?? 0))
+    ) {
+      return {
+        conflict: await createConflict(repository, args, {
+          conflictType: "permission",
+          summary: "Service catalog changed before this offline sale synced.",
+          details: {
+            localTransactionId: payload.localTransactionId,
+            serviceCatalogId: line.serviceCatalogId,
+            submittedPricingModel: line.pricingModel,
+            catalogPricingModel: serviceCatalog.pricingModel,
+            submittedUnitPrice: line.unitPrice,
+            catalogBasePrice: serviceCatalog.basePrice ?? null,
+            blocksProjection: true,
+          },
+        }),
+        itemsByLocalId,
+        serviceLinesByLocalId,
+      };
+    }
+
+    if (
+      line.pricingModel === "quote_after_consultation" &&
+      !line.existingServiceCaseId &&
+      line.totalPrice <= 0
+    ) {
+      return {
+        conflict: await createConflict(repository, args, {
+          conflictType: "permission",
+          summary:
+            "Quote-after-consultation service needs a collected amount or existing service case.",
+          details: {
+            localTransactionId: payload.localTransactionId,
+            serviceCatalogId: line.serviceCatalogId,
+            blocksProjection: true,
+          },
+        }),
+        itemsByLocalId,
+        serviceLinesByLocalId,
+      };
+    }
+
+    if (line.existingServiceCaseId) {
+      const serviceCase = await repository.getServiceCase(line.existingServiceCaseId);
+      if (
+        !serviceCase ||
+        serviceCase.storeId !== args.storeId ||
+        serviceCase.status === "completed" ||
+        serviceCase.status === "cancelled"
+      ) {
+        return {
+          conflict: await createConflict(repository, args, {
+            conflictType: "permission",
+            summary: "Service case is not available for synced POS service sale.",
+            details: {
+              localTransactionId: payload.localTransactionId,
+              existingServiceCaseId: line.existingServiceCaseId,
+              status: serviceCase?.status ?? null,
+              blocksProjection: true,
+            },
+          }),
+          itemsByLocalId,
+          serviceLinesByLocalId,
+        };
+      }
+      const lineCustomerProfileId =
+        line.customerProfileId ?? payload.customerProfileId;
+      if (
+        lineCustomerProfileId &&
+        serviceCase.customerProfileId !== lineCustomerProfileId
+      ) {
+        return {
+          conflict: await createConflict(repository, args, {
+            conflictType: "permission",
+            summary:
+              "Service case customer does not match the synced POS service sale.",
+            details: {
+              localTransactionId: payload.localTransactionId,
+              existingServiceCaseId: line.existingServiceCaseId,
+              customerProfileId: lineCustomerProfileId,
+              serviceCaseCustomerProfileId: serviceCase.customerProfileId,
+              blocksProjection: true,
+            },
+          }),
+          itemsByLocalId,
+          serviceLinesByLocalId,
+        };
+      }
+    }
+
+    serviceLinesByLocalId.set(serviceLineKey(line, index), {
+      serviceCatalogName: serviceCatalog.name,
+      serviceMode: serviceCatalog.serviceMode,
+      pricingModel: serviceCatalog.pricingModel,
+    });
+  }
+
+  return { conflict: priceConflict, itemsByLocalId, serviceLinesByLocalId };
 }
 
 async function validateSaleLocalIds(
@@ -1502,6 +1954,18 @@ async function validateSaleLocalIds(
       .map((item) => ({
         localIdKind: "transactionItem" as const,
         localId: item.localTransactionItemId!,
+      })),
+    ...(payload.serviceLines ?? [])
+      .filter((line) => line.localServiceCaseId)
+      .map((line) => ({
+        localIdKind: "serviceCase" as const,
+        localId: line.localServiceCaseId!,
+      })),
+    ...(payload.serviceLines ?? [])
+      .filter((line) => line.localServiceLineId)
+      .map((line) => ({
+        localIdKind: "serviceLine" as const,
+        localId: line.localServiceLineId!,
       })),
     ...payload.payments
       .filter((payment) => payment.localPaymentId)
@@ -1694,6 +2158,13 @@ function roundMoney(value: number) {
   return Number(value.toFixed(2));
 }
 
+function serviceLineKey(
+  line: NonNullable<PosLocalSalePayload["serviceLines"]>[number],
+  index: number,
+) {
+  return line.localServiceLineId ?? `${line.serviceCatalogId}:${index}`;
+}
+
 async function collectExistingSaleMappings(
   repository: SyncProjectionRepository,
   args: ProjectEventArgsFor<"sale_completed">,
@@ -1711,6 +2182,18 @@ async function collectExistingSaleMappings(
       .map((item) => ({
         localIdKind: "transactionItem" as const,
         localId: item.localTransactionItemId!,
+      })),
+    ...(payload.serviceLines ?? [])
+      .filter((line) => line.localServiceCaseId)
+      .map((line) => ({
+        localIdKind: "serviceCase" as const,
+        localId: line.localServiceCaseId!,
+      })),
+    ...(payload.serviceLines ?? [])
+      .filter((line) => line.localServiceLineId)
+      .map((line) => ({
+        localIdKind: "serviceLine" as const,
+        localId: line.localServiceLineId!,
       })),
     ...payload.payments
       .filter((payment) => payment.localPaymentId)

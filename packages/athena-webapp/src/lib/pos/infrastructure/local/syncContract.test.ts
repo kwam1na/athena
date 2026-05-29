@@ -399,6 +399,73 @@ describe("syncContract", () => {
     ]);
   });
 
+  it("embeds completed service lines in the sale upload event", () => {
+    const events: PosLocalEventRecord[] = [
+      buildLocalEvent({
+        localEventId: "event-sale",
+        sequence: 1,
+        type: "transaction.completed",
+        payload: {
+          localPosSessionId: "local-session-1",
+          localTransactionId: "local-txn-1",
+          localReceiptNumber: "local-txn-1",
+          receiptNumber: "123456",
+          customerProfileId: "profile-1",
+          subtotal: 100,
+          tax: 0,
+          total: 100,
+          items: [
+            {
+              localItemId: "local-item-1",
+              productId: "product-1",
+              productSkuId: "sku-1",
+              productName: "Wig Cap",
+              productSku: "CAP-1",
+              quantity: 1,
+              price: 25,
+            },
+          ],
+          serviceLines: [
+            {
+              localServiceLineId: "local-service-line-1",
+              localServiceCaseId: "local-service-case-1",
+              serviceCatalogId: "service-catalog-1",
+              serviceCatalogName: "Install",
+              serviceMode: "same_day",
+              pricingModel: "fixed",
+              quantity: 1,
+              unitPrice: 75,
+              totalPrice: 75,
+              catalogUpdatedAt: 1_000,
+            },
+          ],
+          payments: [{ method: "cash", amount: 100, timestamp: 3 }],
+        },
+      }),
+    ];
+
+    expect(buildPosLocalSyncUploadEvents(events, events)).toEqual([
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          serviceLines: [
+            {
+              localServiceLineId: "local-service-line-1",
+              localServiceCaseId: "local-service-case-1",
+              serviceCatalogId: "service-catalog-1",
+              serviceCatalogName: "Install",
+              serviceMode: "same_day",
+              pricingModel: "fixed",
+              quantity: 1,
+              unitPrice: 75,
+              totalPrice: 75,
+              catalogUpdatedAt: 1_000,
+            },
+          ],
+        }),
+      }),
+    ]);
+  });
+
   it("does not count already-synced online events in pending upload sequences", () => {
     const events: PosLocalEventRecord[] = [
       buildLocalEvent({

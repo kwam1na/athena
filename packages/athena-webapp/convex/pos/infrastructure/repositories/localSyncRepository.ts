@@ -2,6 +2,12 @@ import type { Id, TableNames } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
 import { isRegisterSessionConflictBlockingStatus } from "../../../../shared/registerSessionStatus";
 import { recordRegisterSessionTraceBestEffort } from "../../../operations/registerSessionTracing";
+import { buildOperationalWorkItem } from "../../../operations/operationalWorkItems";
+import {
+  buildServiceCase,
+  buildServiceCaseLineItem,
+} from "../../../serviceOps/serviceCases";
+import { summarizePaymentAllocations } from "../../../operations/paymentAllocations";
 import { createPosSessionTraceRecorder } from "../../application/commands/posSessionTracing";
 import {
   consumeInventoryHoldsForSession as consumeInventoryHoldsForSessionHelper,
@@ -15,6 +21,32 @@ import type {
   PosSyncOperationalRole,
 } from "../../application/sync/types";
 import { hashPosLocalStaffProofToken } from "../../application/sync/staffProof";
+
+const SERVICE_CASE_FINANCIALS_PAGE_SIZE = 100;
+
+type PaginatedPage<TItem> = {
+  page: TItem[];
+  isDone: boolean;
+  continueCursor: string;
+};
+
+async function collectAllPages<TItem>(
+  loadPage: (cursor: string | null) => Promise<PaginatedPage<TItem>>,
+): Promise<TItem[]> {
+  const items: TItem[] = [];
+  let cursor: string | null = null;
+
+  while (true) {
+    const page = await loadPage(cursor);
+    items.push(...page.page);
+
+    if (page.isDone) {
+      return items;
+    }
+
+    cursor = page.continueCursor;
+  }
+}
 
 export function createConvexLocalSyncRepository(
   ctx: MutationCtx,
@@ -103,6 +135,12 @@ export function createConvexLocalSyncRepository(
     },
     getProductSku(productSkuId) {
       return ctx.db.get("productSku", productSkuId);
+    },
+    getServiceCatalog(serviceCatalogId) {
+      return ctx.db.get("serviceCatalog", serviceCatalogId);
+    },
+    getServiceCase(serviceCaseId) {
+      return ctx.db.get("serviceCase", serviceCaseId);
     },
     getRegisterSession(registerSessionId) {
       return ctx.db.get("registerSession", registerSessionId);
@@ -432,6 +470,67 @@ export function createConvexLocalSyncRepository(
     async createPosSessionItem(input) {
       return ctx.db.insert("posSessionItem", input);
     },
+    async createServiceWorkItem(input) {
+      return ctx.db.insert(
+        "operationalWorkItem",
+        buildOperationalWorkItem(input),
+      );
+    },
+    async createServiceCase(input) {
+      return ctx.db.insert("serviceCase", buildServiceCase(input));
+    },
+    async createServiceCaseLineItem(input) {
+      const lineItem = buildServiceCaseLineItem(input);
+      if (lineItem.kind === "user_error") {
+        throw new Error(lineItem.error.message);
+      }
+      return ctx.db.insert("serviceCaseLineItem", lineItem.data);
+    },
+    async syncServiceCaseFinancials(serviceCaseId) {
+      const serviceCase = await ctx.db.get("serviceCase", serviceCaseId);
+      if (!serviceCase) return;
+      const lineItems = await collectAllPages((cursor) =>
+        ctx.db
+          .query("serviceCaseLineItem")
+          .withIndex("by_serviceCaseId", (q) =>
+            q.eq("serviceCaseId", serviceCaseId),
+          )
+          .paginate({ cursor, numItems: SERVICE_CASE_FINANCIALS_PAGE_SIZE }),
+      );
+      const paymentAllocations = await collectAllPages((cursor) =>
+        ctx.db
+          .query("paymentAllocation")
+          .withIndex("by_storeId_target", (q) =>
+            q
+              .eq("storeId", serviceCase.storeId)
+              .eq("targetType", "service_case")
+              .eq("targetId", serviceCaseId),
+          )
+          .paginate({ cursor, numItems: SERVICE_CASE_FINANCIALS_PAGE_SIZE }),
+      );
+      const totalAmount =
+        lineItems.length > 0
+          ? lineItems.reduce((sum, lineItem) => sum + lineItem.amount, 0)
+          : (serviceCase.quotedAmount ?? 0);
+      const summary = summarizePaymentAllocations(paymentAllocations);
+      const balanceDueAmount = Math.max(totalAmount - summary.netAmount, 0);
+      const paymentStatus =
+        summary.totalOut > 0 && summary.totalOut >= summary.totalIn
+          ? "refunded"
+          : summary.totalIn <= 0
+            ? "unpaid"
+            : totalAmount <= 0
+              ? "deposit_paid"
+              : summary.totalIn >= totalAmount
+                ? "paid"
+                : "partially_paid";
+      await ctx.db.patch("serviceCase", serviceCaseId, {
+        balanceDueAmount,
+        paymentStatus,
+        totalAmount,
+        updatedAt: Date.now(),
+      });
+    },
     async createTransaction(input) {
       return ctx.db.insert("posTransaction", {
         transactionNumber: input.transactionNumber,
@@ -457,6 +556,9 @@ export function createConvexLocalSyncRepository(
     },
     async createTransactionItem(input) {
       return ctx.db.insert("posTransactionItem", input);
+    },
+    async createTransactionServiceLine(input) {
+      return ctx.db.insert("posTransactionServiceLine", input);
     },
     async patchProductSku(productSkuId, patch) {
       await ctx.db.patch("productSku", productSkuId, patch);

@@ -114,6 +114,33 @@ describe("ServiceCasesViewContent", () => {
     });
   });
 
+  it("shows POS-collected payment context on service case details", () => {
+    render(
+      <ServiceCasesViewContent
+        {...baseProps}
+        selectedCaseDetails={{
+          ...baseProps.selectedCaseDetails,
+          paymentAllocations: [
+            {
+              _id: "allocation-1",
+              amount: 15000,
+              method: "mobile_money",
+              posTransactionId: "txn-1",
+              status: "recorded",
+              targetType: "service_case",
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText("POS-collected service payment"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("mobile money")).toBeInTheDocument();
+    expect(screen.getByText("15000")).toBeInTheDocument();
+  });
+
   it("renders case details and dispatches payment, inventory, line-item, and status actions", async () => {
     const user = userEvent.setup();
     const onAddLineItem = vi.fn().mockResolvedValue({ kind: "ok", data: null });

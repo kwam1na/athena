@@ -127,6 +127,33 @@ const posLocalSyncUploadEventValidator = v.union(
           image: v.optional(v.string()),
         }),
       ),
+      serviceLines: v.optional(
+        v.array(
+          v.object({
+            localServiceLineId: v.optional(v.string()),
+            localServiceCaseId: v.optional(v.string()),
+            existingServiceCaseId: v.optional(v.string()),
+            serviceCatalogId: v.string(),
+            serviceCatalogName: v.string(),
+            serviceMode: v.union(
+              v.literal("same_day"),
+              v.literal("consultation"),
+              v.literal("repair"),
+              v.literal("revamp"),
+            ),
+            pricingModel: v.union(
+              v.literal("fixed"),
+              v.literal("starting_at"),
+              v.literal("quote_after_consultation"),
+            ),
+            quantity: v.number(),
+            unitPrice: v.number(),
+            totalPrice: v.number(),
+            catalogUpdatedAt: v.optional(v.number()),
+            customerProfileId: v.optional(v.string()),
+          }),
+        ),
+      ),
       payments: v.array(
         v.object({
           localPaymentId: v.optional(v.string()),

@@ -42,6 +42,20 @@ type AdjustmentMetadata = {
   transactionId?: Id<"posTransaction">;
 };
 
+type MixedServiceLine = {
+  id: string;
+  name: string;
+  quantity: number;
+  serviceCaseId: Id<"serviceCase"> | null;
+  serviceCaseTitle: string | null;
+  serviceCaseUnavailable: boolean;
+  serviceMode: string | null;
+  servicePaymentStatus: string | null;
+  serviceStatus: string | null;
+  totalPrice: number;
+  unitPrice: number;
+};
+
 function summarizeCashierName(args: {
   fullName?: string;
   firstName?: string;
@@ -221,6 +235,52 @@ function normalizeAdjustmentMetadata(metadata?: Record<string, unknown>) {
   };
 }
 
+async function listMixedServiceLinesForTransaction(
+  ctx: QueryCtx,
+  transaction: {
+    _id: Id<"posTransaction">;
+  },
+): Promise<MixedServiceLine[]> {
+  // eslint-disable-next-line @convex-dev/no-collect-in-query -- Transaction-scoped service lines are bounded by checkout line count and are needed together for receipt/report totals.
+  const serviceLines = await ctx.db
+    .query("posTransactionServiceLine")
+    .withIndex("by_transactionId", (q) =>
+      q.eq("transactionId", transaction._id),
+    )
+    .collect();
+
+  return Promise.all(
+    serviceLines.map(async (line) => {
+      const serviceCase = await ctx.db.get("serviceCase", line.serviceCaseId);
+      const workItem = serviceCase?.operationalWorkItemId
+        ? await ctx.db.get("operationalWorkItem", serviceCase.operationalWorkItemId)
+        : null;
+      const refundedAmount =
+        line.isRefunded && line.refundedQuantity
+          ? Math.min(line.totalPrice, line.refundedQuantity * line.unitPrice)
+          : 0;
+      const totalPrice = Math.max(0, line.totalPrice - refundedAmount);
+
+      return {
+        id: String(line._id),
+        name:
+          line.serviceName ??
+          workItem?.title ??
+          (serviceCase ? "Service case" : "Service case unavailable"),
+        quantity: line.quantity,
+        serviceCaseId: serviceCase ? line.serviceCaseId : null,
+        serviceCaseTitle: workItem?.title ?? null,
+        serviceCaseUnavailable: !serviceCase,
+        serviceMode: serviceCase?.serviceMode ?? line.serviceMode ?? null,
+        servicePaymentStatus: serviceCase?.paymentStatus ?? null,
+        serviceStatus: serviceCase?.status ?? null,
+        totalPrice,
+        unitPrice: line.unitPrice,
+      };
+    }),
+  );
+}
+
 export async function getTransaction(
   ctx: QueryCtx,
   args: {
@@ -267,6 +327,7 @@ export async function getCompletedTransactions(
         ? await getPosSessionById(ctx, transaction.sessionId)
         : null;
       const items = await listTransactionItems(ctx, transaction._id);
+      const serviceLines = await listMixedServiceLinesForTransaction(ctx, transaction);
       const sessionTraceId = session?.workflowTraceId ?? null;
       const customerProfileId =
         transaction.customerProfileId ?? session?.customerProfileId;
@@ -294,6 +355,11 @@ export async function getCompletedTransactions(
         customerName:
           customerProfile?.fullName ?? transaction.customerInfo?.name ?? null,
         itemCount: items.reduce((sum, item) => sum + item.quantity, 0),
+        serviceLineCount: serviceLines.length,
+        servicePaymentTotal: serviceLines.reduce(
+          (sum, line) => sum + line.totalPrice,
+          0,
+        ),
       };
     }),
   );
@@ -328,6 +394,9 @@ export async function getTransactionById(
   const terminalId =
     transaction.terminalId ?? session?.terminalId ?? registerSession?.terminalId;
   const items = await listTransactionItems(ctx, transaction._id);
+  const serviceLines = await listMixedServiceLinesForTransaction(ctx, {
+    _id: transaction._id,
+  });
   const sessionTraceId = session?.workflowTraceId ?? null;
   const customerProfileId =
     transaction.customerProfileId ?? session?.customerProfileId;
@@ -515,6 +584,12 @@ export async function getTransactionById(
       failureMessage: delivery.failureMessage,
       retryable: statusIsRetryable(delivery.status),
     })),
+    serviceLines,
+    serviceLineCount: serviceLines.length,
+    servicePaymentTotal: serviceLines.reduce(
+      (sum, line) => sum + line.totalPrice,
+      0,
+    ),
     items: items.map((item) => ({
       _id: item._id,
       productId: item.productId,

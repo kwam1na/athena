@@ -1,5 +1,5 @@
 import { internal } from "../../../_generated/api";
-import type { Id } from "../../../_generated/dataModel";
+import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
 import type { ApprovalRequirement } from "../../../../shared/approvalPolicy";
 import { capitalizeWords, generateTransactionNumber } from "../../../utils";
@@ -185,6 +185,27 @@ function registerSessionMatchesIdentity(
 
 function isUsableRegisterSession(registerSession: { status: string }) {
   return isPosUsableRegisterSessionStatus(registerSession.status);
+}
+
+async function listLinkedServicePaymentAllocationsForTransaction(
+  ctx: MutationCtx,
+  transaction: {
+    _id: Id<"posTransaction">;
+  },
+) {
+  // eslint-disable-next-line @convex-dev/no-collect-in-query -- Transaction-scoped service payment allocations are bounded by checkout payments and service lines; void preflight must inspect all linked allocations before mutating.
+  const allocations = await ctx.db
+    .query("paymentAllocation")
+    .withIndex("by_posTransactionId", (q) =>
+      q.eq("posTransactionId", transaction._id),
+    )
+    .collect();
+
+  return allocations.filter(
+    (allocation) =>
+      allocation.targetType === "service_case" &&
+      allocation.status === "recorded",
+  );
 }
 
 async function resolveSessionRegisterSessionId(
@@ -884,6 +905,17 @@ async function validateTransactionVoidPreconditions(
     return userError({
       code: "precondition_failed",
       message: "Drawer closed. Open the drawer before voiding this sale.",
+    });
+  }
+
+  const linkedServiceAllocations =
+    await listLinkedServicePaymentAllocationsForTransaction(ctx, transaction);
+
+  if (linkedServiceAllocations.length > 0) {
+    return userError({
+      code: "precondition_failed",
+      message:
+        "Mixed service sales cannot be voided from POS yet. Reverse the service payment in Service Ops before voiding the retail sale.",
     });
   }
 

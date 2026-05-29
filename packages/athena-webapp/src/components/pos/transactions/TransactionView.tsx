@@ -27,7 +27,7 @@ import { PosPaymentMethod } from "~/src/lib/pos/domain";
 import { OrderSummary } from "../OrderSummary";
 import type { ReceiptDeliveryHistoryEntry } from "../receipt/PosReceiptShareControl";
 import { CartItems } from "../CartItems";
-import type { CartItem } from "../types";
+import type { CartItem, PosServiceReceiptLine } from "../types";
 import type { Id } from "~/convex/_generated/dataModel";
 import { CardContent, CardHeader } from "../../ui/card";
 import { WorkflowTraceRouteLink } from "../../traces/WorkflowTraceRouteLink";
@@ -284,6 +284,14 @@ function normalizeVoidCommandError(message: string) {
     normalizedMessage.includes("can only void completed")
   ) {
     return "Sale already voided or no longer eligible. Refresh the transaction before continuing.";
+  }
+
+  if (
+    normalizedMessage.includes("mixed service") ||
+    normalizedMessage.includes("service ops") ||
+    normalizedMessage.includes("service payment")
+  ) {
+    return "Mixed service sale. Reverse the service payment in Service Ops before voiding the retail sale.";
   }
 
   if (
@@ -555,6 +563,10 @@ export function TransactionView() {
   const displayCartItems = hasAppliedItemAdjustment
     ? adjustedCartItems
     : cartItems;
+  const serviceLines = (
+    ((transaction as { serviceLines?: PosServiceReceiptLine[] } | null)
+      ?.serviceLines ?? []) as PosServiceReceiptLine[]
+  ).filter((line) => line.totalPrice > 0 || line.serviceCaseUnavailable);
   const effectiveSaleTotal =
     transaction?.adjustmentSummary?.effectiveNetTotal ??
     transaction?.effectiveNetTotal ??
@@ -605,6 +617,7 @@ export function TransactionView() {
       paymentMethod: transaction.paymentMethod || "cash",
       completedAt: transaction.completedAt,
       cartItems: displayCartItems,
+      serviceLines,
       subtotal: hasAppliedItemAdjustment
         ? effectiveSubtotal
         : transaction.subtotal,
@@ -641,6 +654,7 @@ export function TransactionView() {
     effectiveSubtotal,
     hasAppliedItemAdjustment,
     localVoidState,
+    serviceLines,
     transaction,
   ]);
 
@@ -2313,6 +2327,56 @@ export function TransactionView() {
                             }`}
                       </Button>
                     ) : null}
+                  </div>
+                </section>
+              ) : null}
+
+              {serviceLines.length > 0 ? (
+                <section className="space-y-4 overflow-hidden rounded-[calc(var(--radius)*1.35)] border border-border/80 bg-surface-raised p-5 shadow-surface">
+                  <div className="space-y-1">
+                    <h2 className="font-display text-xl font-semibold text-foreground">
+                      Service lines
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      POS-collected service payments are linked to service cases
+                      while retail product lines stay on the sale.
+                    </p>
+                  </div>
+                  <div className="divide-y divide-border/70 rounded-lg border border-border bg-background">
+                    {serviceLines.map((line) => (
+                      <div
+                        className="grid gap-2 px-4 py-3"
+                        key={`${line.id}-${line.serviceCaseId ?? "service"}`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-foreground">
+                              {line.name}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {line.serviceCaseUnavailable
+                                ? "Service case unavailable"
+                                : [
+                                    line.serviceCaseTitle,
+                                    line.serviceStatus?.replaceAll("_", " "),
+                                    line.servicePaymentStatus?.replaceAll(
+                                      "_",
+                                      " ",
+                                    ),
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" • ")}
+                            </p>
+                          </div>
+                          <p className="shrink-0 font-medium text-foreground">
+                            {formatStoredAmount(
+                              ghsCurrencyFormatter,
+                              line.totalPrice,
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </section>
               ) : null}

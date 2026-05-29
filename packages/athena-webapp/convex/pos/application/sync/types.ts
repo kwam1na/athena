@@ -22,6 +22,8 @@ export type PosLocalSyncMappingKind =
   | "transactionItem"
   | "payment"
   | "receipt"
+  | "serviceCase"
+  | "serviceLine"
   | "closeout";
 
 export type PosLocalPaymentInput = {
@@ -43,6 +45,21 @@ export type PosLocalSaleItemInput = {
   image?: string;
 };
 
+export type PosLocalServiceLineInput = {
+  localServiceLineId?: string;
+  localServiceCaseId?: string;
+  existingServiceCaseId?: Id<"serviceCase">;
+  serviceCatalogId: Id<"serviceCatalog">;
+  serviceCatalogName: string;
+  serviceMode: "same_day" | "consultation" | "repair" | "revamp";
+  pricingModel: "fixed" | "starting_at" | "quote_after_consultation";
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  catalogUpdatedAt?: number;
+  customerProfileId?: Id<"customerProfile">;
+};
+
 export type PosLocalSalePayload = {
   localPosSessionId: string;
   localTransactionId: string;
@@ -61,6 +78,7 @@ export type PosLocalSalePayload = {
     total: number;
   };
   items: PosLocalSaleItemInput[];
+  serviceLines?: PosLocalServiceLineInput[];
   payments: PosLocalPaymentInput[];
 };
 
@@ -216,6 +234,12 @@ export type SyncProjectionRepository = {
   ): Promise<Doc<"customerProfile"> | null>;
   getProduct(productId: Id<"product">): Promise<Doc<"product"> | null>;
   getProductSku(productSkuId: Id<"productSku">): Promise<Doc<"productSku"> | null>;
+  getServiceCatalog(
+    serviceCatalogId: Id<"serviceCatalog">,
+  ): Promise<Doc<"serviceCatalog"> | null>;
+  getServiceCase(
+    serviceCaseId: Id<"serviceCase">,
+  ): Promise<Doc<"serviceCase"> | null>;
   getActiveHeldQuantity(args: {
     excludeSessionId?: Id<"posSession">;
     productSkuId: Id<"productSku">;
@@ -289,7 +313,7 @@ export type SyncProjectionRepository = {
     terminalId: Id<"posTerminal">;
     localRegisterSessionId: string;
     localPosSessionId: string;
-    registerSessionId: Id<"registerSession">;
+    registerSessionId?: Id<"registerSession">;
   }): Promise<Doc<"posSession"> | null>;
   patchRegisterSession(
     registerSessionId: Id<"registerSession">,
@@ -321,6 +345,41 @@ export type SyncProjectionRepository = {
     createdAt: number;
     updatedAt: number;
   }): Promise<Id<"posSessionItem">>;
+  createServiceWorkItem(input: {
+    storeId: Id<"store">;
+    organizationId: Id<"organization">;
+    type: string;
+    status: string;
+    priority: string;
+    approvalState?: string;
+    title: string;
+    notes?: string;
+    metadata?: Record<string, unknown>;
+    createdByStaffProfileId?: Id<"staffProfile">;
+    customerProfileId?: Id<"customerProfile">;
+  }): Promise<Id<"operationalWorkItem">>;
+  createServiceCase(input: {
+    customerProfileId: Id<"customerProfile">;
+    operationalWorkItemId: Id<"operationalWorkItem">;
+    organizationId?: Id<"organization">;
+    quotedAmount?: number;
+    serviceCatalogId?: Id<"serviceCatalog">;
+    serviceMode: "same_day" | "consultation" | "repair" | "revamp";
+    storeId: Id<"store">;
+  }): Promise<Id<"serviceCase">>;
+  createServiceCaseLineItem(input: {
+    serviceCaseId: Id<"serviceCase">;
+    lineType: "labor" | "material" | "adjustment";
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    amount: number;
+    notes?: string;
+    createdAt: number;
+  }): Promise<Id<"serviceCaseLineItem">>;
+  syncServiceCaseFinancials(
+    serviceCaseId: Id<"serviceCase">,
+  ): Promise<void>;
   createTransaction(input: {
     transactionNumber: string;
     storeId: Id<"store">;
@@ -352,6 +411,22 @@ export type SyncProjectionRepository = {
     totalPrice: number;
     image?: string;
   }): Promise<Id<"posTransactionItem">>;
+  createTransactionServiceLine(input: {
+    transactionId: Id<"posTransaction">;
+    serviceCaseId: Id<"serviceCase">;
+    serviceCatalogId?: Id<"serviceCatalog">;
+    serviceName: string;
+    serviceMode: "same_day" | "consultation" | "repair" | "revamp";
+    pricingSource:
+      | "catalog_base_price"
+      | "pos_entered"
+      | "service_case_quote"
+      | "deposit_rule";
+    quantity: number;
+    unitPrice: number;
+    totalPrice: number;
+    notes?: string;
+  }): Promise<Id<"posTransactionServiceLine">>;
   patchProductSku(
     productSkuId: Id<"productSku">,
     patch: Partial<Omit<Doc<"productSku">, "_id" | "_creationTime">>,
@@ -373,7 +448,9 @@ export type SyncProjectionRepository = {
     collectedInStore: boolean;
     recordedAt: number;
     actorStaffProfileId: Id<"staffProfile">;
-    registerSessionId: Id<"registerSession">;
+    customerProfileId?: Id<"customerProfile">;
+    workItemId?: Id<"operationalWorkItem">;
+    registerSessionId?: Id<"registerSession">;
     posTransactionId: Id<"posTransaction">;
     externalReference?: string;
     notes?: string;

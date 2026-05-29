@@ -47,8 +47,65 @@ export interface RegisterProductEntryState {
   canQuickAddProduct: boolean;
 }
 
+export type RegisterLookupMode = "product" | "service";
+
+export type RegisterServicePricingModel =
+  | "fixed"
+  | "starting_at"
+  | "quote_after_consultation";
+
+export type RegisterServiceMode =
+  | "same_day"
+  | "consultation"
+  | "repair"
+  | "revamp";
+
+export interface RegisterServiceSearchResult {
+  id: string;
+  serviceCatalogId?: Id<"serviceCatalog">;
+  name: string;
+  description?: string;
+  serviceMode: RegisterServiceMode;
+  pricingModel: RegisterServicePricingModel;
+  basePrice?: number;
+  requiresManagerApproval?: boolean;
+  updatedAt?: number;
+}
+
+export interface RegisterServiceLineState {
+  id: string;
+  serviceCatalogId?: Id<"serviceCatalog">;
+  name: string;
+  serviceMode: RegisterServiceMode;
+  pricingModel: RegisterServicePricingModel;
+  price: number;
+  quantity: 1;
+  amountRequired: boolean;
+  catalogUpdatedAt?: number;
+}
+
+export interface RegisterServiceEntryState {
+  disabled: boolean;
+  serviceSearchQuery: string;
+  setServiceSearchQuery: (query: string) => void;
+  searchResults: RegisterServiceSearchResult[];
+  isSearchLoading: boolean;
+  isSearchReady: boolean;
+  items: RegisterServiceLineState[];
+  onAddService: (
+    service: RegisterServiceSearchResult,
+    amount?: number,
+  ) => Promise<boolean>;
+  onUpdateServiceAmount: (lineId: string, amount: number) => Promise<void>;
+  onRemoveService: (lineId: string) => Promise<void>;
+  checkoutBlockMessage?: string;
+}
+
 export interface RegisterCartState {
   items: CartItem[];
+  serviceItems?: RegisterServiceLineState[];
+  onUpdateServiceAmount?: (lineId: string, amount: number) => Promise<void>;
+  onRemoveService?: (lineId: string) => Promise<void>;
   onUpdateQuantity: (
     itemId: Id<"posSessionItem"> | Id<"expenseSessionItem">,
     quantity: number,
@@ -116,6 +173,19 @@ export interface RegisterCheckoutState {
     subtotal: number;
     tax: number;
     total: number;
+    serviceLines?: Array<{
+      id: string;
+      name: string;
+      quantity?: number;
+      unitPrice?: number;
+      totalPrice: number;
+      serviceCaseId?: string | null;
+      serviceCaseTitle?: string | null;
+      serviceCaseUnavailable?: boolean;
+      serviceMode?: string | null;
+      servicePaymentStatus?: string | null;
+      serviceStatus?: string | null;
+    }>;
     notes?: string | null;
     customerInfo?: {
       name: string;
@@ -281,6 +351,7 @@ export interface RegisterViewModel {
   onboarding: RegisterOnboardingState;
   customerPanel: RegisterCustomerPanelState;
   productEntry: RegisterProductEntryState;
+  serviceEntry?: RegisterServiceEntryState;
   cart: RegisterCartState;
   checkout: RegisterCheckoutState;
   sessionPanel: RegisterSessionPanelState | null;

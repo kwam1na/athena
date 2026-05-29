@@ -5,9 +5,10 @@ import type {
 import type {
   PosRegisterCatalogAvailabilityRowDto,
   PosRegisterCatalogRowDto,
+  PosServiceCatalogRowDto,
 } from "@/lib/pos/application/dto";
 
-export const POS_LOCAL_STORE_SCHEMA_VERSION = 5;
+export const POS_LOCAL_STORE_SCHEMA_VERSION = 6;
 
 export type PosLocalEntityKind =
   | "registerSession"
@@ -21,6 +22,8 @@ export type PosLocalEventType =
   | "session.payments_updated"
   | "cart.cleared"
   | "cart.item_added"
+  | "cart.service_added"
+  | "cart.service_removed"
   | "transaction.completed"
   | "register.closeout_started"
   | "register.reopened"
@@ -131,6 +134,13 @@ export interface PosLocalRegisterCatalogSnapshot {
   storeId: string;
 }
 
+export interface PosLocalRegisterServiceCatalogSnapshot {
+  refreshedAt: number;
+  rows: PosServiceCatalogRowDto[];
+  schemaVersion: number;
+  storeId: string;
+}
+
 export interface PosLocalRegisterAvailabilitySnapshot {
   refreshedAt: number;
   rows: PosRegisterCatalogAvailabilityRowDto[];
@@ -160,6 +170,7 @@ export type PosLocalObjectStoreName =
   | "readiness"
   | "staffAuthority"
   | "registerCatalog"
+  | "registerServiceCatalog"
   | "registerAvailability";
 
 export interface PosLocalStoreTransaction {
@@ -636,6 +647,63 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       }
     },
 
+    async writeRegisterServiceCatalogSnapshot(input: {
+      rows: PosServiceCatalogRowDto[];
+      storeId: string;
+    }): Promise<PosLocalStoreResult<PosLocalRegisterServiceCatalogSnapshot>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readwrite",
+          ["meta", "registerServiceCatalog"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            const snapshot: PosLocalRegisterServiceCatalogSnapshot = {
+              refreshedAt: clock(),
+              rows: input.rows.filter((row) => row.status === "active"),
+              schemaVersion: POS_LOCAL_STORE_SCHEMA_VERSION,
+              storeId: input.storeId,
+            };
+            await transaction.put(
+              "registerServiceCatalog",
+              input.storeId,
+              snapshot,
+            );
+            return snapshot;
+          },
+        );
+
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async readRegisterServiceCatalogSnapshot(input: {
+      storeId: string;
+    }): Promise<
+      PosLocalStoreResult<PosLocalRegisterServiceCatalogSnapshot | null>
+    > {
+      try {
+        const value = await options.adapter.transaction(
+          "readonly",
+          ["meta", "registerServiceCatalog"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readonly");
+            return (
+              (await transaction.get<PosLocalRegisterServiceCatalogSnapshot>(
+                "registerServiceCatalog",
+                input.storeId,
+              )) ?? null
+            );
+          },
+        );
+
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
     async writeRegisterAvailabilitySnapshot(input: {
       rows: PosRegisterCatalogAvailabilityRowDto[];
       storeId: string;
@@ -1058,6 +1126,7 @@ export function createIndexedDbPosLocalStorageAdapter(options?: {
           "readiness",
           "staffAuthority",
           "registerCatalog",
+          "registerServiceCatalog",
           "registerAvailability",
         ] satisfies PosLocalObjectStoreName[]) {
           if (!database.objectStoreNames.contains(storeName)) {
@@ -1224,6 +1293,7 @@ function createEmptyMemoryStore(): MemoryStore {
     readiness: new Map(),
     staffAuthority: new Map(),
     registerCatalog: new Map(),
+    registerServiceCatalog: new Map(),
     registerAvailability: new Map(),
   };
 }
@@ -1237,6 +1307,7 @@ function cloneMemoryStore(store: MemoryStore): MemoryStore {
     readiness: new Map(store.readiness),
     staffAuthority: new Map(store.staffAuthority),
     registerCatalog: new Map(store.registerCatalog),
+    registerServiceCatalog: new Map(store.registerServiceCatalog),
     registerAvailability: new Map(store.registerAvailability),
   };
 }
