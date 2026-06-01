@@ -464,6 +464,39 @@ describe("cycle count drafts", () => {
     expect(tables.cycleCountDraft.get(String(ensured.data.draft._id))).toMatchObject({
       status: "submitted",
     });
+    expect(Array.from(tables.operationalEvent.values())).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventType: "cycle_count_draft_created",
+          message: "operator@example.com started a cycle count for Hair.",
+          metadata: expect.objectContaining({
+            actorLabel: "operator@example.com",
+            scopeKey: "Hair",
+          }),
+        }),
+        expect.objectContaining({
+          eventType: "cycle_count_draft_updated",
+          message:
+            "operator@example.com counted Closure wig (CW-18) as 5. Draft has 1 changed SKU.",
+          metadata: expect.objectContaining({
+            actorLabel: "operator@example.com",
+            changedLineCount: 1,
+            countedQuantity: 5,
+            productSkuLabel: "Closure wig (CW-18)",
+          }),
+        }),
+        expect.objectContaining({
+          eventType: "cycle_count_draft_submitted",
+          message:
+            "operator@example.com submitted the Hair cycle count with 1 changed SKU.",
+          metadata: expect.objectContaining({
+            actorLabel: "operator@example.com",
+            lineItemCount: 1,
+            scopeKey: "Hair",
+          }),
+        }),
+      ]),
+    );
   });
 
   it("keeps submitted draft retries authorized and idempotent", async () => {

@@ -8,6 +8,7 @@ type TableName =
   | "athenaUser"
   | "category"
   | "color"
+  | "operationalEvent"
   | "product"
   | "productSku"
   | "store"
@@ -19,6 +20,7 @@ function createQuickAddCtx(seed?: Partial<Record<TableName, Row[]>>) {
     athenaUser: new Map(),
     category: new Map(),
     color: new Map(),
+    operationalEvent: new Map(),
     product: new Map(),
     productSku: new Map(),
     store: new Map(),
@@ -28,6 +30,7 @@ function createQuickAddCtx(seed?: Partial<Record<TableName, Row[]>>) {
     athenaUser: 0,
     category: 0,
     color: 0,
+    operationalEvent: 0,
     product: 0,
     productSku: 0,
     store: 0,
@@ -123,6 +126,14 @@ function createQuickAddCtx(seed?: Partial<Record<TableName, Row[]>>) {
 }
 
 const baseSeed = {
+  athenaUser: [
+    {
+      _id: "user0001",
+      email: "kwamina@example.com",
+      firstName: "Kwamina",
+      lastName: "Nuh",
+    },
+  ],
   store: [
     {
       _id: "storezzzz",
@@ -167,6 +178,26 @@ describe("quickAddCatalogItem", () => {
       sku: sku.sku,
       inStock: true,
     });
+
+    expect(Array.from(tables.operationalEvent.values())).toEqual([
+      expect.objectContaining({
+        actorUserId: "user0001",
+        eventType: "pos_quick_add_product_created",
+        organizationId: "org0001",
+        storeId: "storezzzz",
+        subjectId: sku._id,
+        subjectLabel: "123456789012",
+        subjectType: "product_sku",
+        message: "Kwamina Nuh quick added 123456789012 with quantity 2.",
+        metadata: expect.objectContaining({
+          barcode: "123456789012",
+          productId: product._id,
+          productSkuId: sku._id,
+          quantityAvailable: 2,
+          sku: sku.sku,
+        }),
+      }),
+    ]);
   });
 
   it("always auto-generates SKU and stores lookup code only as barcode when provided", async () => {
@@ -229,7 +260,14 @@ describe("quickAddCatalogItem", () => {
       quantityAvailable: 1,
     });
 
-    expect(insertSpy).not.toHaveBeenCalled();
+    expect(insertSpy).not.toHaveBeenCalledWith(
+      "product",
+      expect.any(Object),
+    );
+    expect(insertSpy).not.toHaveBeenCalledWith(
+      "productSku",
+      expect.any(Object),
+    );
     expect(result).toMatchObject({
       name: "Existing wig",
       barcode: "998877665544",
@@ -278,7 +316,14 @@ describe("quickAddCatalogItem", () => {
       productSkuId: "productSku001" as Id<"productSku">,
     });
 
-    expect(insertSpy).not.toHaveBeenCalled();
+    expect(insertSpy).not.toHaveBeenCalledWith(
+      "product",
+      expect.any(Object),
+    );
+    expect(insertSpy).not.toHaveBeenCalledWith(
+      "productSku",
+      expect.any(Object),
+    );
     expect(tables.productSku.get("productSku001")).toMatchObject({
       barcode: "111122223333",
     });
@@ -287,6 +332,26 @@ describe("quickAddCatalogItem", () => {
       barcode: "111122223333",
       sku: "EXISTING-SKU",
     });
+
+    expect(Array.from(tables.operationalEvent.values())).toEqual([
+      expect.objectContaining({
+        actorUserId: "user0001",
+        eventType: "pos_quick_add_barcode_attached",
+        organizationId: "org0001",
+        storeId: "storezzzz",
+        subjectId: "productSku001",
+        subjectLabel: "Existing wig",
+        subjectType: "product_sku",
+        message:
+          "Kwamina Nuh attached barcode 111122223333 to Existing wig.",
+        metadata: expect.objectContaining({
+          barcode: "111122223333",
+          productId: "product001",
+          productSkuId: "productSku001",
+          sku: "EXISTING-SKU",
+        }),
+      }),
+    ]);
   });
 
   it("blocks attaching a barcode that already belongs to another SKU", async () => {
@@ -387,5 +452,24 @@ describe("quickAddCatalogItem", () => {
       barcode: "",
       inStock: true,
     });
+
+    expect(Array.from(tables.operationalEvent.values())).toEqual([
+      expect.objectContaining({
+        actorUserId: "user0001",
+        eventType: "pos_quick_add_variant_created",
+        organizationId: "org0001",
+        storeId: "storezzzz",
+        subjectId: sku._id,
+        subjectLabel: "Existing wig",
+        subjectType: "product_sku",
+        message: "Kwamina Nuh quick added Existing wig with quantity 4.",
+        metadata: expect.objectContaining({
+          productId: "product001",
+          productSkuId: sku._id,
+          quantityAvailable: 4,
+          sku: sku.sku,
+        }),
+      }),
+    ]);
   });
 });

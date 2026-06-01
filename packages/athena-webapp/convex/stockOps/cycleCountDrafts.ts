@@ -72,6 +72,57 @@ function trimRequiredScopeKey(scopeKey: string) {
   return nextScopeKey;
 }
 
+function getActorLabel(user: Doc<"athenaUser"> | null, fallbackId: string) {
+  const fullName = [user?.firstName, user?.lastName]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(" ");
+
+  return fullName || user?.email?.trim() || fallbackId;
+}
+
+function pluralize(count: number, singular: string, plural = `${singular}s`) {
+  return count === 1 ? singular : plural;
+}
+
+function formatCountScope(scopeKey: string) {
+  return scopeKey.trim() || "selected scope";
+}
+
+function formatSkuLabel(
+  productSku: Pick<Doc<"productSku">, "productName" | "sku">,
+) {
+  const productName = productSku.productName?.trim();
+  const sku = productSku.sku?.trim();
+
+  if (productName && sku) return `${productName} (${sku})`;
+  return productName || sku || "selected SKU";
+}
+
+function buildCycleCountDraftCreatedMessage(args: {
+  actorLabel: string;
+  scopeKey: string;
+}) {
+  return `${args.actorLabel} started a cycle count for ${formatCountScope(args.scopeKey)}.`;
+}
+
+function buildCycleCountDraftSavedMessage(args: {
+  actorLabel: string;
+  changedLineCount: number;
+  countedQuantity: number;
+  productSkuLabel: string;
+}) {
+  return `${args.actorLabel} counted ${args.productSkuLabel} as ${args.countedQuantity}. Draft has ${args.changedLineCount} changed ${pluralize(args.changedLineCount, "SKU")}.`;
+}
+
+function buildCycleCountDraftSubmittedMessage(args: {
+  actorLabel: string;
+  lineItemCount: number;
+  scopeKey: string;
+}) {
+  return `${args.actorLabel} submitted the ${formatCountScope(args.scopeKey)} cycle count with ${args.lineItemCount} changed ${pluralize(args.lineItemCount, "SKU")}.`;
+}
+
 function buildCycleCountDraftSubmissionKey(args: {
   ownerUserId: Id<"athenaUser">;
   scopeKey: string;
@@ -215,11 +266,17 @@ async function createCycleCountDraftWithCtx(
     updatedAt: now,
   });
 
+  const actorLabel = getActorLabel(args.actorUser, String(args.actorUser._id));
+
   await recordOperationalEventWithCtx(ctx, {
     actorUserId: args.actorUser._id,
     eventType: "cycle_count_draft_created",
-    message: "Cycle count draft started.",
+    message: buildCycleCountDraftCreatedMessage({
+      actorLabel,
+      scopeKey: args.scopeKey,
+    }),
     metadata: {
+      actorLabel,
       scopeKey: args.scopeKey,
     },
     organizationId: args.store.organizationId,
@@ -453,13 +510,23 @@ export async function saveCycleCountDraftLineCommandWithCtx(
       lastSavedAt: now,
       ...summary,
     });
+    const actorLabel = getActorLabel(actorUser, String(actorUser._id));
+    const productSkuLabel = formatSkuLabel(productSku);
     await recordOperationalEventWithCtx(ctx, {
       actorUserId: actorUser._id,
       eventType: "cycle_count_draft_updated",
-      message: "Cycle count draft saved.",
-      metadata: {
+      message: buildCycleCountDraftSavedMessage({
+        actorLabel,
         changedLineCount: summary.changedLineCount,
+        countedQuantity: args.countedQuantity,
+        productSkuLabel,
+      }),
+      metadata: {
+        actorLabel,
+        changedLineCount: summary.changedLineCount,
+        countedQuantity: args.countedQuantity,
         productSkuId: String(args.productSkuId),
+        productSkuLabel,
         scopeKey: draft.scopeKey,
       },
       organizationId: store.organizationId,
@@ -507,11 +574,13 @@ export async function discardCycleCountDraftCommandWithCtx(
       status: "discarded",
       updatedAt: now,
     });
+    const actorLabel = getActorLabel(actorUser, String(actorUser._id));
     await recordOperationalEventWithCtx(ctx, {
       actorUserId: actorUser._id,
       eventType: "cycle_count_draft_discarded",
-      message: "Cycle count draft discarded.",
+      message: `${actorLabel} discarded the ${formatCountScope(draft.scopeKey)} cycle count draft.`,
       metadata: {
+        actorLabel,
         scopeKey: draft.scopeKey,
       },
       organizationId: store.organizationId,
@@ -585,12 +654,16 @@ export async function refreshCycleCountDraftLineBaselineCommandWithCtx(
       lastSavedAt: now,
       ...summary,
     });
+    const actorLabel = getActorLabel(actorUser, String(actorUser._id));
+    const productSkuLabel = formatSkuLabel(productSku);
     await recordOperationalEventWithCtx(ctx, {
       actorUserId: actorUser._id,
       eventType: "cycle_count_draft_baseline_refreshed",
-      message: "Cycle count draft baseline refreshed.",
+      message: `${actorLabel} refreshed the count baseline for ${productSkuLabel}.`,
       metadata: {
+        actorLabel,
         productSkuId: String(args.productSkuId),
+        productSkuLabel,
         scopeKey: draftLineEntry.draft.scopeKey,
       },
       organizationId: store.organizationId,
@@ -747,11 +820,17 @@ export async function submitCycleCountDraftCommandWithCtx(
       submittedStockAdjustmentBatchId: batch?._id,
       updatedAt: now,
     });
+    const actorLabel = getActorLabel(actorUser, String(actorUser._id));
     await recordOperationalEventWithCtx(ctx, {
       actorUserId: actorUser._id,
       eventType: "cycle_count_draft_submitted",
-      message: "Cycle count draft submitted.",
+      message: buildCycleCountDraftSubmittedMessage({
+        actorLabel,
+        lineItemCount: lines.length,
+        scopeKey: draft.scopeKey,
+      }),
       metadata: {
+        actorLabel,
         lineItemCount: lines.length,
         scopeKey: draft.scopeKey,
         stockAdjustmentBatchId: batch?._id ? String(batch._id) : undefined,
@@ -869,16 +948,24 @@ export async function submitActiveCycleCountDraftsCommandWithCtx(
         }),
       ),
     );
+    const actorLabel = getActorLabel(actorUser, String(actorUser._id));
     await Promise.all(
-      changedDrafts.map((draft) =>
-        recordOperationalEventWithCtx(ctx, {
+      changedDrafts.map((draft) => {
+        const lineItemCount =
+          draftLines.find((entry) => entry.draft._id === draft._id)?.lines
+            .length ?? 0;
+
+        return recordOperationalEventWithCtx(ctx, {
           actorUserId: actorUser._id,
           eventType: "cycle_count_draft_submitted",
-          message: "Cycle count draft submitted.",
+          message: buildCycleCountDraftSubmittedMessage({
+            actorLabel,
+            lineItemCount,
+            scopeKey: draft.scopeKey,
+          }),
           metadata: {
-            lineItemCount:
-              draftLines.find((entry) => entry.draft._id === draft._id)?.lines
-                .length ?? 0,
+            actorLabel,
+            lineItemCount,
             scopeKey: draft.scopeKey,
             stockAdjustmentBatchId: batch?._id ? String(batch._id) : undefined,
           },
@@ -887,8 +974,8 @@ export async function submitActiveCycleCountDraftsCommandWithCtx(
           subjectId: String(draft._id),
           subjectLabel: "Cycle count draft",
           subjectType: "cycle_count_draft",
-        }),
-      ),
+        });
+      }),
     );
 
     return ok({

@@ -12,6 +12,10 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { capitalizeWords, cn } from "@/lib/utils";
 import { parseDisplayAmountInput } from "@/lib/pos/displayAmounts";
+import {
+  matchesSkuSearchTerms,
+  normalizeSkuSearchQuery,
+} from "@/lib/stockOps/skuSearch";
 import { Link2, Loader2, PackagePlus, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -377,7 +381,7 @@ export function QuickAddProductDialog({
   );
   const shouldShowBarcodeRecovery = canAttachBarcode && !isAddingVariant;
   const matchingExistingSkus = useMemo(() => {
-    const normalizedQuery = existingSkuQuery.trim().toLowerCase();
+    const normalizedQuery = normalizeSkuSearchQuery(existingSkuQuery);
     const unbarcodedOptions = existingSkuOptions.filter(
       (option) => !option.barcode,
     );
@@ -387,16 +391,18 @@ export function QuickAddProductDialog({
     }
 
     return unbarcodedOptions
-      .filter((option) =>
-        [
-          option.name,
-          option.sku,
-          option.category,
-          ...(option.variantAttributes ?? []),
-        ]
-          .filter(Boolean)
-          .some((value) => value!.toLowerCase().includes(normalizedQuery)),
-      )
+      .filter((option) => {
+        return matchesSkuSearchTerms(
+          [
+            option.name,
+            option.sku,
+            option.priceLabel,
+            option.category,
+            ...(option.variantAttributes ?? []),
+          ],
+          normalizedQuery,
+        );
+      })
       .slice(0, 6);
   }, [existingSkuOptions, existingSkuQuery]);
 

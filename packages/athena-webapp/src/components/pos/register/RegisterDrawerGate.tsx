@@ -566,7 +566,7 @@ export function RegisterDrawerGate({
           </p>
         ) : drawerGate.canOpenDrawer === false ? (
           <p className="text-sm text-stone-600">
-            Manager sign-in required to open this drawer.
+            Cashier or manager sign-in required to open this drawer.
           </p>
         ) : null}
 

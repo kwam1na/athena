@@ -453,14 +453,18 @@ describe("RegisterSessionViewContent", () => {
     );
 
     expect(screen.getAllByText("Needs review")[0]).toBeInTheDocument();
-    expect(screen.getByText("1 review item")).toBeInTheDocument();
-    expect(screen.getByText("Reconciliation review")).toBeInTheDocument();
     expect(
-      screen.getByText("Review synced register activity."),
+      screen.getByText("1 review item needs manager review."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Types: Reconciliation review."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Reasons: Review synced register activity."),
     ).toBeInTheDocument();
   });
 
-  it("surfaces rejected server sync activity without review actions", () => {
+  it("surfaces rejected server sync activity with manager override recovery", () => {
     render(
       <RegisterSessionViewContent
         currency="GHS"
@@ -491,20 +495,39 @@ describe("RegisterSessionViewContent", () => {
       />,
     );
 
-    expect(screen.getByText("Synced activity rejected")).toBeInTheDocument();
+    expect(screen.getByText("Manager override available")).toBeInTheDocument();
     expect(
-      screen.getByText("Register was closed before this sale synced."),
+      screen.getByText(
+        "Rejected local activity can be synced from Cash Controls. A manager can override and apply these events without the cashier present.",
+      ),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Manager sign-in applies the rejected local events to this drawer and records the override for audit.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("1 review item rejected by the server."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Local queue #10.")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Register was closed before this sale synced."),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Synced activity rejected"),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /approve synced sales/i }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /reject synced activity/i }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Open POS sync" })).toHaveAttribute(
-      "href",
-      expect.stringContaining("/pos/register"),
-    );
+    expect(
+      screen.getByRole("button", { name: "Override and sync events" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Open POS to retry sync" }),
+    ).not.toBeInTheDocument();
   });
 
   it("does not offer closeout review actions for already rejected closeout evidence", () => {
@@ -540,18 +563,22 @@ describe("RegisterSessionViewContent", () => {
       />,
     );
 
-    expect(screen.getByText("Synced activity rejected")).toBeInTheDocument();
-    expect(screen.getByText("Closeout variance review")).toBeInTheDocument();
+    expect(screen.getByText("Manager override available")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Closeout variance review"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText("1 review item rejected by the server."),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /reject synced closeout/i }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /approve synced closeout/i }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Open POS sync" })).toHaveAttribute(
-      "href",
-      expect.stringContaining("/pos/register"),
-    );
+    expect(
+      screen.getByRole("button", { name: "Override and sync events" }),
+    ).toBeInTheDocument();
   });
 
   it("communicates synced closeout variance review as closeout work", () => {
@@ -703,7 +730,7 @@ describe("RegisterSessionViewContent", () => {
     ).toBeInTheDocument();
   });
 
-  it("lists each synced register review item with safe event evidence", () => {
+  it("combines synced register review items with safe event evidence", () => {
     const createdAt = new Date("2026-05-20T14:30:00.000Z").getTime();
 
     render(
@@ -744,25 +771,66 @@ describe("RegisterSessionViewContent", () => {
       />,
     );
 
-    expect(screen.getByText("2 review items")).toBeInTheDocument();
-    expect(screen.getByText("Permission review")).toBeInTheDocument();
-    expect(screen.getByText("Payment review")).toBeInTheDocument();
     expect(
-      screen.getByText("Register was not open before this sale synced."),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("Payment allocation needs manager review."),
+      screen.getByText("2 review items need manager review."),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Sale completed while Athena did not have this register open.",
+        "Reasons: Register was not open before this sale synced; Payment allocation needs manager review.",
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Payment update came from local register activity."),
+      screen.getByText("Types: Permission review and Payment review."),
     ).toBeInTheDocument();
-    expect(screen.getByText("#12 in local queue")).toBeInTheDocument();
-    expect(screen.getByText("#13 in local queue")).toBeInTheDocument();
+    expect(screen.getByText("Local queue #12 and #13.")).toBeInTheDocument();
+    expect(screen.getByText(/Reported .*2026/)).toBeInTheDocument();
+    expect(screen.queryByText("Permission review")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Register was not open before this sale synced."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not offer approval for synced service activity missing customer attribution", () => {
+    render(
+      <RegisterSessionViewContent
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        onResolveSyncReview={vi.fn()}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            localSyncStatus: {
+              status: "needs_review",
+              reconciliationItems: [
+                {
+                  id: "sync_conflict_service_customer",
+                  localEventId: "event-service-sale-1",
+                  sequence: 2,
+                  status: "needs_review",
+                  summary: "Service line is missing customer attribution.",
+                  type: "permission",
+                },
+              ],
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "This synced activity cannot be applied because a service line is missing customer attribution. Reject it to clear this review, then recreate the service work with a customer if needed.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Approve synced sales" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Reject synced activity" }),
+    ).toBeInTheDocument();
   });
 
   it("approves synced register review items after manager sign-in", async () => {
@@ -814,6 +882,73 @@ describe("RegisterSessionViewContent", () => {
     await user.click(
       screen.getByRole("button", {
         name: "Confirm staff for Approve synced sales",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(onAuthenticateStaff).toHaveBeenCalledWith({
+        allowedRoles: ["manager"],
+        pinHash: "hashed-pin",
+        username: "ato",
+      }),
+    );
+    expect(onResolveSyncReview).toHaveBeenCalledWith({
+      actorStaffProfileId: "manager-1",
+      decision: "approved",
+      registerSessionId: "session-1",
+    });
+  });
+
+  it("overrides rejected synced activity after manager sign-in", async () => {
+    const user = userEvent.setup();
+    const onAuthenticateStaff = vi.fn().mockResolvedValue(
+      ok({
+        activeRoles: ["manager"],
+        staffProfile: { fullName: "Ato Kofi" },
+        staffProfileId: "manager-1",
+      }),
+    );
+    const onResolveSyncReview = vi
+      .fn()
+      .mockResolvedValue(
+        ok({ action: "resolved", projectedCount: 1, resolvedCount: 1 }),
+      );
+
+    render(
+      <RegisterSessionViewContent
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        onAuthenticateStaff={onAuthenticateStaff}
+        onResolveSyncReview={onResolveSyncReview}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            localSyncStatus: {
+              status: "needs_review",
+              reconciliationItems: [
+                {
+                  id: "sync_event_1",
+                  sequence: 4,
+                  status: "rejected",
+                  summary: "Server rejected synced register activity.",
+                  type: "server_rejected",
+                },
+              ],
+            },
+          },
+        }}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Override and sync events" }),
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: "Confirm staff for Override and sync events",
       }),
     );
 

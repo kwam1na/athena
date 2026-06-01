@@ -533,6 +533,12 @@ export type LocalSyncIngestionRepository = {
   createConflict(
     input: Omit<LocalSyncConflictRecord, "_id">,
   ): Promise<LocalSyncConflictRecord>;
+  resolveConflictsForEvent(args: {
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+    localEventId: string;
+    resolvedAt: number;
+  }): Promise<void>;
   listMappingsForEvent(args: {
     storeId: Id<"store">;
     terminalId: Id<"posTerminal">;

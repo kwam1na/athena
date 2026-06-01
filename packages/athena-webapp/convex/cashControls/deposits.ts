@@ -43,6 +43,10 @@ const RECENT_DEPOSIT_LIMIT = 10;
 const SESSION_LIMIT = 100;
 const STAFF_ROLE_LOOKUP_LIMIT = 20;
 const TIMELINE_LIMIT = 200;
+const REGISTER_NOT_OPEN_SYNC_REVIEW_SUMMARY =
+  "Register was not open before this sale synced.";
+const SERVICE_CUSTOMER_ATTRIBUTION_SYNC_REVIEW_SUMMARY =
+  "Service line is missing customer attribution.";
 const CLOSED_REGISTER_SYNCED_CLOSEOUT_SUMMARY =
   "Register session is not open for synced POS closeout.";
 
@@ -1125,6 +1129,7 @@ export const resolveRegisterSessionSyncReview = mutation({
     const conflictsBySessionId = await listRegisterSessionSyncReviewConflicts(
       ctx,
       args.storeId,
+      { includeRejectedEvidence: true },
     );
     const conflicts = conflictsBySessionId.get(args.registerSessionId) ?? [];
     if (conflicts.length === 0) {
@@ -1139,6 +1144,11 @@ export const resolveRegisterSessionSyncReview = mutation({
     const resolvedAt = Date.now();
     const localSyncRepository = createConvexLocalSyncRepository(ctx);
     const projectedTransactionIds: string[] = [];
+    const resolvedConflictIds = new Set<Id<"posLocalSyncConflict">>();
+    const localEventIds: string[] = [];
+    const originalStatuses: string[] = [];
+    const sequences: number[] = [];
+    let managerOverrideCount = 0;
     let projectedCloseoutCount = 0;
     const decision = args.decision ?? "approved";
 
@@ -1163,9 +1173,17 @@ export const resolveRegisterSessionSyncReview = mutation({
             "This register review can no longer be applied because the synced activity was not found.",
         });
       }
+      const hasConflictRecord =
+        !(conflict.status === "rejected" && conflict._id === syncEvent._id);
+      localEventIds.push(syncEvent.localEventId);
+      originalStatuses.push(syncEvent.status);
+      sequences.push(syncEvent.sequence);
 
       if (decision === "rejected") {
-        if (syncEvent.status === "conflicted") {
+        if (
+          syncEvent.status === "conflicted" ||
+          syncEvent.status === "rejected"
+        ) {
           await localSyncRepository.patchEvent(syncEvent._id, {
             rejectionCode: "manager_rejected",
             rejectionMessage:
@@ -1173,24 +1191,37 @@ export const resolveRegisterSessionSyncReview = mutation({
             status: "rejected",
           });
         }
+        if (hasConflictRecord) {
+          resolvedConflictIds.add(conflict._id as Id<"posLocalSyncConflict">);
+        }
         continue;
       }
 
+      const shouldApplyManagerOverride =
+        syncEvent.status === "rejected" &&
+        conflict.conflictType === "server_rejected";
+      if (shouldApplyManagerOverride) {
+        managerOverrideCount += 1;
+      }
       const shouldApplyReviewedSale =
-        syncEvent.eventType === "sale_completed" &&
-        (!conflict.localRegisterSessionId ||
-          syncEvent.localRegisterSessionId ===
-            conflict.localRegisterSessionId) &&
-        conflict.conflictType === "permission" &&
-        conflict.summary === "Register was not open before this sale synced.";
+        (syncEvent.eventType === "sale_completed" &&
+          (!conflict.localRegisterSessionId ||
+            syncEvent.localRegisterSessionId ===
+              conflict.localRegisterSessionId) &&
+          conflict.conflictType === "permission" &&
+          conflict.summary === REGISTER_NOT_OPEN_SYNC_REVIEW_SUMMARY) ||
+        (shouldApplyManagerOverride &&
+          syncEvent.eventType === "sale_completed");
       const shouldApplyReviewedCloseout =
-        syncEvent.eventType === "register_closed" &&
-        (!conflict.localRegisterSessionId ||
-          syncEvent.localRegisterSessionId ===
-            conflict.localRegisterSessionId) &&
-        conflict.conflictType === "permission" &&
-        conflict.summary ===
-          "Register closeout variance requires manager review before synced closeout can be applied.";
+        (syncEvent.eventType === "register_closed" &&
+          (!conflict.localRegisterSessionId ||
+            syncEvent.localRegisterSessionId ===
+              conflict.localRegisterSessionId) &&
+          conflict.conflictType === "permission" &&
+          conflict.summary ===
+            "Register closeout variance requires manager review before synced closeout can be applied.") ||
+        (shouldApplyManagerOverride &&
+          syncEvent.eventType === "register_closed");
 
       if (!shouldApplyReviewedSale && !shouldApplyReviewedCloseout) {
         if (
@@ -1201,6 +1232,14 @@ export const resolveRegisterSessionSyncReview = mutation({
             code: "precondition_failed",
             message:
               "This synced closeout cannot be applied because the register is already closed. Reject the synced activity to discard it.",
+          });
+        }
+
+        if (conflict.summary === SERVICE_CUSTOMER_ATTRIBUTION_SYNC_REVIEW_SUMMARY) {
+          return userError({
+            code: "precondition_failed",
+            message:
+              "This synced service sale is missing customer attribution. Reject the synced activity to clear this review, then recreate the service work with a customer if needed.",
           });
         }
 
@@ -1215,7 +1254,7 @@ export const resolveRegisterSessionSyncReview = mutation({
         continue;
       }
 
-      if (syncEvent.status !== "conflicted") {
+      if (syncEvent.status !== "conflicted" && !shouldApplyManagerOverride) {
         return userError({
           code: "precondition_failed",
           message:
@@ -1271,6 +1310,9 @@ export const resolveRegisterSessionSyncReview = mutation({
         status: "projected",
         projectedAt: resolvedAt,
       });
+      if (hasConflictRecord) {
+        resolvedConflictIds.add(conflict._id as Id<"posLocalSyncConflict">);
+      }
       if (shouldApplyReviewedCloseout) {
         projectedCloseoutCount += 1;
       }
@@ -1286,10 +1328,10 @@ export const resolveRegisterSessionSyncReview = mutation({
     }
 
     await Promise.all(
-      conflicts.map((conflict) =>
+      Array.from(resolvedConflictIds).map((conflictId) =>
         ctx.db.patch(
           "posLocalSyncConflict",
-          conflict._id as Id<"posLocalSyncConflict">,
+          conflictId,
           {
             resolvedAt,
             resolvedByStaffProfileId: args.actorStaffProfileId,
@@ -1308,6 +1350,12 @@ export const resolveRegisterSessionSyncReview = mutation({
           ? conflicts.length === 1
             ? "Rejected synced register review."
             : `Rejected ${conflicts.length} synced register reviews.`
+          : managerOverrideCount > 0
+            ? managerOverrideCount === 1
+              ? projectedTransactionIds.length === 1
+                ? "Manager override applied rejected synced register sale."
+                : "Manager override applied rejected synced register activity."
+              : `Manager override applied ${managerOverrideCount} rejected synced register events.`
           : projectedCloseoutCount > 0
             ? projectedCloseoutCount === 1
               ? "Applied reviewed synced register closeout."
@@ -1323,8 +1371,13 @@ export const resolveRegisterSessionSyncReview = mutation({
         conflictIds: conflicts.map((conflict) => conflict._id),
         conflictTypes: conflicts.map((conflict) => conflict.conflictType),
         decision,
+        localEventIds,
+        managerOverride: managerOverrideCount > 0,
+        managerOverrideCount,
+        originalStatuses,
         projectedCloseoutCount,
         projectedTransactionIds,
+        sequences,
       },
       organizationId: store.organizationId,
       registerSessionId: args.registerSessionId,

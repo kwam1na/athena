@@ -4,7 +4,17 @@ import type { MutationCtx, QueryCtx } from "../../../_generated/server";
 import type { PosLocalSyncEventStatus } from "../../../../shared/posLocalSyncContract";
 import type { PosTerminalSummary } from "../../domain/types";
 
+const MANAGER_REJECTED_SYNC_REVIEW_CODE = "manager_rejected";
+
 type PosTerminalReadCtx = QueryCtx | MutationCtx;
+
+type TerminalSyncReviewEvent = {
+  localEventId: string;
+  localRegisterSessionId: string;
+  sequence: number;
+  eventType: Doc<"posLocalSyncEvent">["eventType"];
+  status: PosLocalSyncEventStatus;
+};
 
 export function mapTerminalRecord(
   terminal: Doc<"posTerminal">,
@@ -110,13 +120,12 @@ export type TerminalSyncEvidence = {
     acceptedAt?: number;
     projectedAt?: number;
   } | null;
-  latestReviewEvent?: {
-    localEventId: string;
-    localRegisterSessionId: string;
-    sequence: number;
-    eventType: Doc<"posLocalSyncEvent">["eventType"];
-    status: PosLocalSyncEventStatus;
-  } | null;
+  latestReviewEvent?: TerminalSyncReviewEvent | null;
+  latestReviewEventsByStatus?: {
+    conflicted?: TerminalSyncReviewEvent | null;
+    held?: TerminalSyncReviewEvent | null;
+    rejected?: TerminalSyncReviewEvent | null;
+  };
   sampledEventCount: number;
   acceptedCount: number;
   projectedCount: number;
@@ -140,6 +149,11 @@ export type TerminalSyncEvidence = {
 const EMPTY_TERMINAL_SYNC_EVIDENCE: TerminalSyncEvidence = {
   latestEvent: null,
   latestReviewEvent: null,
+  latestReviewEventsByStatus: {
+    conflicted: null,
+    held: null,
+    rejected: null,
+  },
   sampledEventCount: 0,
   acceptedCount: 0,
   projectedCount: 0,
@@ -212,12 +226,25 @@ export async function getTerminalSyncEvidence(
   }
 
   const count = (status: PosLocalSyncEventStatus) =>
-    events.filter((event) => event.status === status).length;
+    events.filter((event) =>
+      status === "rejected"
+        ? isActionableRejectedSyncEvent(event)
+        : event.status === status,
+    ).length;
   const latestEvent = events[0];
   const latestReviewEvent =
-    events.find((event) =>
-      ["conflicted", "held", "rejected"].includes(event.status),
-    ) ?? null;
+    events.find(isActionableTerminalReviewSyncEvent) ?? null;
+  const latestReviewEventsByStatus = {
+    conflicted: toTerminalSyncReviewEvent(
+      events.find((event) => event.status === "conflicted") ?? null,
+    ),
+    held: toTerminalSyncReviewEvent(
+      events.find((event) => event.status === "held") ?? null,
+    ),
+    rejected: toTerminalSyncReviewEvent(
+      events.find(isActionableRejectedSyncEvent) ?? null,
+    ),
+  };
 
   return {
     latestEvent: {
@@ -231,15 +258,8 @@ export async function getTerminalSyncEvidence(
       acceptedAt: latestEvent.acceptedAt,
       projectedAt: latestEvent.projectedAt,
     },
-    latestReviewEvent: latestReviewEvent
-      ? {
-          localEventId: latestReviewEvent.localEventId,
-          localRegisterSessionId: latestReviewEvent.localRegisterSessionId,
-          sequence: latestReviewEvent.sequence,
-          eventType: latestReviewEvent.eventType,
-          status: latestReviewEvent.status,
-        }
-      : null,
+    latestReviewEvent: toTerminalSyncReviewEvent(latestReviewEvent),
+    latestReviewEventsByStatus,
     sampledEventCount: events.length,
     acceptedCount: count("accepted"),
     projectedCount: count("projected"),
@@ -251,6 +271,35 @@ export async function getTerminalSyncEvidence(
     acceptedThroughSequence: latestCursor?.acceptedThroughSequence,
     cursorUpdatedAt: latestCursor?.updatedAt,
   };
+}
+
+function isActionableTerminalReviewSyncEvent(event: Doc<"posLocalSyncEvent">) {
+  if (event.status === "conflicted" || event.status === "held") {
+    return true;
+  }
+
+  return isActionableRejectedSyncEvent(event);
+}
+
+function isActionableRejectedSyncEvent(event: Doc<"posLocalSyncEvent">) {
+  return (
+    event.status === "rejected" &&
+    event.rejectionCode !== MANAGER_REJECTED_SYNC_REVIEW_CODE
+  );
+}
+
+function toTerminalSyncReviewEvent(
+  event: Doc<"posLocalSyncEvent"> | null,
+): TerminalSyncReviewEvent | null {
+  return event
+    ? {
+        localEventId: event.localEventId,
+        localRegisterSessionId: event.localRegisterSessionId,
+        sequence: event.sequence,
+        eventType: event.eventType,
+        status: event.status,
+      }
+    : null;
 }
 
 export async function resolveTerminalRegisterSessionActionTarget(
@@ -278,7 +327,11 @@ export async function resolveTerminalRegisterSessionActionTarget(
     )
     .unique();
   if (registerSessionMapping?.cloudTable === "registerSession") {
-    return registerSessionMapping.cloudId as Id<"registerSession">;
+    return resolveRegisterSessionActionTarget(ctx, {
+      registerSessionId: registerSessionMapping.cloudId as Id<"registerSession">,
+      storeId: args.storeId,
+      terminalId: args.terminalId,
+    });
   }
 
   const normalizeId = (
@@ -296,15 +349,27 @@ export async function resolveTerminalRegisterSessionActionTarget(
     return null;
   }
 
-  const registerSession = await ctx.db.get(
-    "registerSession",
-    cloudRegisterSessionId,
-  );
+  return resolveRegisterSessionActionTarget(ctx, {
+    registerSessionId: cloudRegisterSessionId,
+    storeId: args.storeId,
+    terminalId: args.terminalId,
+  });
+}
+
+async function resolveRegisterSessionActionTarget(
+  ctx: QueryCtx | MutationCtx,
+  args: {
+    registerSessionId: Id<"registerSession">;
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  },
+) {
+  const registerSession = await ctx.db.get("registerSession", args.registerSessionId);
   if (
     registerSession?.storeId === args.storeId &&
     registerSession.terminalId === args.terminalId
   ) {
-    return cloudRegisterSessionId;
+    return args.registerSessionId;
   }
 
   return null;

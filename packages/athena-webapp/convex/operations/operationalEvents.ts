@@ -1,7 +1,15 @@
-import { internalMutation, internalQuery, MutationCtx } from "../_generated/server";
+import {
+  internalMutation,
+  internalQuery,
+  query,
+  type MutationCtx,
+  type QueryCtx,
+} from "../_generated/server";
 import { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { buildOperationalEventMessage } from "./helpers/eventBuilders";
+
+const PRODUCT_OPERATIONAL_EVENT_LIMIT = 100;
 
 export type RecordOperationalEventArgs = {
   storeId: Id<"store">;
@@ -101,6 +109,71 @@ export async function recordOperationalEventWithCtx(
   return ctx.db.get("operationalEvent", eventId);
 }
 
+export async function listProductOperationalTimelineWithCtx(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    productId: Id<"product">;
+    storeId: Id<"store">;
+  }
+) {
+  const product = await ctx.db.get("product", args.productId);
+  if (!product || String(product.storeId) !== String(args.storeId)) {
+    return [];
+  }
+
+  const productSkus = await ctx.db
+    .query("productSku")
+    .withIndex("by_productId", (q) => q.eq("productId", args.productId))
+    .take(PRODUCT_OPERATIONAL_EVENT_LIMIT);
+
+  const subjects = [
+    { id: String(args.productId), sku: undefined, type: "product" },
+    ...productSkus.map((sku) => ({
+      id: String(sku._id),
+      sku: sku.sku || undefined,
+      type: "product_sku",
+    })),
+  ];
+
+  const eventGroups = await Promise.all(
+    subjects.map((subject) =>
+      ctx.db
+        .query("operationalEvent")
+        .withIndex("by_storeId_subject", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("subjectType", subject.type)
+            .eq("subjectId", subject.id)
+        )
+        .take(PRODUCT_OPERATIONAL_EVENT_LIMIT)
+        .then((events) =>
+          events.map((event) => ({
+            ...event,
+            subjectSku: subject.sku,
+          }))
+        )
+    )
+  );
+
+  return eventGroups
+    .flat()
+    .sort((left, right) => right.createdAt - left.createdAt)
+    .slice(0, PRODUCT_OPERATIONAL_EVENT_LIMIT)
+    .map((event) => ({
+      createdAt: event.createdAt,
+      id: event._id,
+      message: event.message,
+      metadata: event.metadata,
+      subject: {
+        id: event.subjectId,
+        label: event.subjectLabel,
+        sku: event.subjectSku,
+        type: event.subjectType,
+      },
+      type: event.eventType,
+    }));
+}
+
 export const recordOperationalEvent = internalMutation({
   args: {
     storeId: v.id("store"),
@@ -124,6 +197,14 @@ export const recordOperationalEvent = internalMutation({
     posTransactionId: v.optional(v.id("posTransaction")),
   },
   handler: (ctx, args) => recordOperationalEventWithCtx(ctx, args),
+});
+
+export const listProductOperationalTimeline = query({
+  args: {
+    productId: v.id("product"),
+    storeId: v.id("store"),
+  },
+  handler: (ctx, args) => listProductOperationalTimelineWithCtx(ctx, args),
 });
 
 export const listOperationalEventsForSubject = internalQuery({

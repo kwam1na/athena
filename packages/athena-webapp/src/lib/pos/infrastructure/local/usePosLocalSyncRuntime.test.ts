@@ -1342,12 +1342,14 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       }),
     );
 
-    await waitFor(() =>
-      expect(store.markEventsNeedsReview).toHaveBeenCalledWith(
-        ["event-open"],
-        "Cloud sync needs review before this local event can finish.",
-        { uploaded: true },
-      ),
+    await waitFor(
+      () =>
+        expect(store.markEventsNeedsReview).toHaveBeenCalledWith(
+          ["event-open"],
+          "Cloud sync needs review before this local event can finish.",
+          { uploaded: true },
+        ),
+      { timeout: 3_000 },
     );
     expect(store.writeDrawerAuthorityState).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -2944,6 +2946,27 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       expect.objectContaining({
         pendingEventCount: 1,
         status: "pending",
+      }),
+    );
+  });
+
+  it("presents terminal-blocking uploaded review events from another staff profile", () => {
+    expect(
+      derivePosLocalRuntimeSyncStatus(
+        [
+          buildLocalEvent({
+            localEventId: "event-other-staff-open",
+            staffProfileId: "staff-2",
+            sync: { status: "needs_review", uploaded: true },
+            type: "register.opened",
+          }),
+        ],
+        { isOnline: true, staffProfileId: "staff-1" },
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        pendingEventCount: 0,
+        status: "needs_review",
       }),
     );
   });

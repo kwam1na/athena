@@ -41,6 +41,20 @@ function renderQuickAddDialog(input?: {
           category: "POS quick add",
           variantAttributes: ["Green", "2 oz"],
         },
+        {
+          productSkuId: "sku-3",
+          name: "Closure Wig",
+          sku: "CW-18",
+          category: "Wigs",
+          variantAttributes: ["Natural black", "Large", "18"],
+        },
+        {
+          productSkuId: "sku-4",
+          name: "Body Wave Bundle",
+          sku: "111222333444",
+          category: "Wigs",
+          variantAttributes: ["Natural black", "20"],
+        },
       ]}
       initialName={input?.initialName ?? "Quick item"}
       initialLookupCode="999999999999"
@@ -137,5 +151,40 @@ describe("QuickAddProductDialog", () => {
     expect(
       screen.getByText("6N2Y-D3-4RC - POS quick add - Green - 2 oz"),
     ).toBeInTheDocument();
+  });
+
+  it("uses the shared fuzzy SKU matcher for existing SKU barcode recovery", async () => {
+    const user = userEvent.setup();
+    renderQuickAddDialog({
+      initialName: "",
+      onAttachBarcode: vi.fn(async () => true),
+    });
+
+    await user.type(
+      screen.getByLabelText(/search existing sku/i),
+      "natrual blak",
+    );
+
+    expect(
+      screen.getByRole("button", { name: /closure wig/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps barcode-shaped existing SKU searches exact", async () => {
+    const user = userEvent.setup();
+    renderQuickAddDialog({
+      initialName: "",
+      onAttachBarcode: vi.fn(async () => true),
+    });
+
+    await user.type(
+      screen.getByLabelText(/search existing sku/i),
+      "111222333445",
+    );
+
+    expect(screen.getByText("No matching SKUs.")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /body wave bundle/i }),
+    ).not.toBeInTheDocument();
   });
 });

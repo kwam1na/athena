@@ -1043,6 +1043,60 @@ describe("OperationsQueueViewContent", () => {
     );
   });
 
+  it("infers the cycle-count scope from a selected SKU when the route has no scope", async () => {
+    const ensureCycleCountDraft = vi.fn().mockResolvedValue(ok({}));
+    const inventoryItems = [
+      {
+        ...baseProps.inventoryItems[0],
+        productCategory: "POS quick add",
+      },
+    ];
+
+    mockedHooks.useMutation.mockReset();
+    mockedHooks.useQuery.mockReset();
+    mockedHooks.useMutation.mockReturnValue(vi.fn());
+    mockedHooks.useMutation
+      .mockReturnValueOnce(vi.fn())
+      .mockReturnValueOnce(vi.fn())
+      .mockReturnValueOnce(vi.fn())
+      .mockReturnValueOnce(vi.fn())
+      .mockReturnValueOnce(vi.fn())
+      .mockReturnValueOnce(ensureCycleCountDraft)
+      .mockReturnValueOnce(vi.fn())
+      .mockReturnValueOnce(vi.fn())
+      .mockReturnValueOnce(vi.fn());
+    mockedHooks.useQuery
+      .mockReturnValueOnce({
+        approvalRequests: [],
+        workItems: [],
+      })
+      .mockReturnValueOnce(inventoryItems)
+      .mockReturnValueOnce(null);
+
+    render(
+      <OperationsQueueView
+        stockAdjustmentSearch={{
+          mode: "cycle_count",
+          sku: "sku-1",
+        }}
+      />,
+    );
+
+    expect(mockedHooks.useQuery.mock.calls[2]?.[1]).toEqual({
+      scopeKey: "POS quick add",
+      storeId: "store-1",
+    });
+    await waitFor(() =>
+      expect(ensureCycleCountDraft).toHaveBeenCalledWith({
+        scopeKey: "POS quick add",
+        storeId: "store-1",
+      }),
+    );
+    expect(
+      screen.getByRole("button", { name: /pos quick add 1 sku/i }),
+    ).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("skips cycle-count draft loading in manual mode", () => {
     mockedHooks.useMutation.mockReset();
     mockedHooks.useQuery.mockReset();

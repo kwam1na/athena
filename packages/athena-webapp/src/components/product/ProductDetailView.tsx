@@ -21,6 +21,7 @@ import { EmptyState } from "../states/empty/empty-state";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
 import { presentUnexpectedErrorToast } from "~/src/lib/errors/presentUnexpectedErrorToast";
+import { ProductOperationalTimeline } from "./ProductOperationalTimeline";
 
 const ProductDetailViewHeader = () => {
   const [isUnarchiving, setIsUnarchiving] = useState(false);
@@ -106,6 +107,8 @@ export const ProductDetailView = () => {
                 <ImagesView />
 
                 <AnalyticsInsights />
+
+                <ProductOperationalTimeline />
               </div>
             </div>
           )}

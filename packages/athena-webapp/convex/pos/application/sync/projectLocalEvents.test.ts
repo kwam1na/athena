@@ -716,7 +716,51 @@ describe("projectLocalSyncEvent", () => {
     expect(repository.createdTransactions).toHaveLength(0);
   });
 
-  it("conflicts manager-only register opens without valid offline staff proof", async () => {
+  it("projects cashier register opens with valid offline staff proof", async () => {
+    const repository = createProjectionRepository({
+      hasActivePosRole: ({ allowedRoles }) => allowedRoles.includes("cashier"),
+      registerSession: null,
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-register-opened-cashier",
+        localRegisterSessionId: "local-register-cashier",
+        sequence: 1,
+        eventType: "register_opened",
+        occurredAt: 20,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          openingFloat: 100,
+          registerNumber: "1",
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(result.conflicts).toEqual([]);
+    expect(repository.createdRegisterSessions).toEqual([
+      expect.objectContaining({
+        openedByStaffProfileId: "staff-1",
+        openingFloat: 100,
+        registerNumber: "1",
+      }),
+    ]);
+    expect(result.mappings).toEqual([
+      expect.objectContaining({
+        localIdKind: "registerSession",
+        localId: "local-register-cashier",
+        cloudTable: "registerSession",
+      }),
+    ]);
+  });
+
+  it("conflicts register opens without valid offline staff proof", async () => {
     const repository = createProjectionRepository({ validStaffProof: false });
 
     const result = await projectLocalSyncEvent(repository, {
@@ -752,7 +796,7 @@ describe("projectLocalSyncEvent", () => {
     ]);
   });
 
-  it("maps cashier-seeded already-open cloud register sessions before manager open permission", async () => {
+  it("maps cashier-seeded already-open cloud register sessions with cashier open permission", async () => {
     const repository = createProjectionRepository({
       hasActivePosRole: ({ allowedRoles }) => allowedRoles.includes("cashier"),
       registerSession: {
@@ -2155,6 +2199,15 @@ describe("projectLocalSyncEvent", () => {
 
   it("maps a direct cloud register open after staff authorization", async () => {
     const repository = createProjectionRepository({
+      registerSession: {
+        _id: "register-session-1",
+        expectedCash: 100,
+        closeoutRecords: [],
+        registerNumber: "1",
+        status: "active",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      } as never,
       validCloudIds: new Set(["register-session-1"]),
     });
 
@@ -2992,6 +3045,7 @@ function createProjectionRepository(
   createdPaymentAllocations: unknown[];
   createdPosSessions: unknown[];
   createdPosSessionItems: unknown[];
+  createdRegisterSessions: unknown[];
   createdServiceCaseLineItems: unknown[];
   createdServiceCases: unknown[];
   createdServiceWorkItems: unknown[];
@@ -3024,6 +3078,7 @@ function createProjectionRepository(
   const createdPaymentAllocations: unknown[] = [];
   const createdPosSessions: unknown[] = [];
   const createdPosSessionItems: unknown[] = [];
+  const createdRegisterSessions: unknown[] = [];
   const createdServiceCaseLineItems: unknown[] = [];
   const createdServiceCases: unknown[] = [];
   const createdServiceWorkItems: unknown[] = [];
@@ -3089,6 +3144,7 @@ function createProjectionRepository(
     createdPaymentAllocations,
     createdPosSessions,
     createdPosSessionItems,
+    createdRegisterSessions,
     createdServiceCaseLineItems,
     createdServiceCases,
     createdServiceWorkItems,
@@ -3258,7 +3314,8 @@ function createProjectionRepository(
       createdConflicts.push(conflict);
       return conflict;
     },
-    async createRegisterSession() {
+    async createRegisterSession(input) {
+      createdRegisterSessions.push(input);
       return "register-session-1" as never;
     },
     async findBlockingRegisterSession() {

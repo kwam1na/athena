@@ -686,6 +686,37 @@ describe("OrderSummary completed transaction summary", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("enables payment methods for service-only active carts", async () => {
+    const user = userEvent.setup();
+    const onPaymentEntryStart = vi.fn();
+
+    render(
+      <OrderSummary
+        cartItems={[]}
+        serviceLines={[
+          {
+            id: "service-line-1",
+            name: "Token",
+            quantity: 1,
+            unitPrice: 40000,
+            totalPrice: 40000,
+            serviceMode: "revamp",
+          },
+        ]}
+        total={40000}
+        onPaymentEntryStart={onPaymentEntryStart}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Cash" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Card" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Mobile Money" })).toBeEnabled();
+
+    await user.click(screen.getByRole("button", { name: "Cash" }));
+
+    expect(onPaymentEntryStart).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps the service checkout blocker beside disabled payment methods", async () => {
     const user = userEvent.setup();
     const onPaymentEntryStart = vi.fn();

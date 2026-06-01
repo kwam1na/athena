@@ -14,6 +14,11 @@ import {
 const EMPTY_TERMINAL_SYNC_EVIDENCE: TerminalSyncEvidence = {
   latestEvent: null,
   latestReviewEvent: null,
+  latestReviewEventsByStatus: {
+    conflicted: null,
+    held: null,
+    rejected: null,
+  },
   sampledEventCount: 0,
   acceptedCount: 0,
   projectedCount: 0,
@@ -209,23 +214,86 @@ async function resolveAttentionReasonActionTargets(
     terminalId: Id<"posTerminal">;
   },
 ): Promise<TerminalHealthAttentionReason[]> {
-  const cloudRegisterSessionId =
+  const cloudRegisterSessionIdByReasonType =
     args.attentionReasons.some((reason) => reason.source === "cloud_sync")
-      ? await resolveTerminalRegisterSessionActionTarget(ctx, {
-          localRegisterSessionId:
-            args.syncEvidence.latestReviewEvent?.localRegisterSessionId ??
-            args.syncEvidence.latestEvent?.localRegisterSessionId,
-          storeId: args.storeId,
-          terminalId: args.terminalId,
-        })
-      : null;
+      ? await resolveCloudRegisterSessionTargets(ctx, args)
+      : new Map<TerminalHealthAttentionReason["type"], Id<"registerSession"> | null>();
 
   return args.attentionReasons.map((reason) => ({
     ...reason,
     actionTarget: getAttentionReasonActionTarget(reason, {
-      cloudRegisterSessionId,
+      cloudRegisterSessionId:
+        cloudRegisterSessionIdByReasonType.get(reason.type) ?? null,
     }),
   }));
+}
+
+async function resolveCloudRegisterSessionTargets(
+  ctx: QueryCtx,
+  args: {
+    attentionReasons: TerminalHealthAttentionReason[];
+    storeId: Id<"store">;
+    syncEvidence: TerminalSyncEvidence;
+    terminalId: Id<"posTerminal">;
+  },
+) {
+  const uniqueTypes = new Set(
+    args.attentionReasons
+      .filter((reason) => reason.source === "cloud_sync")
+      .map((reason) => reason.type),
+  );
+  const entries = await Promise.all(
+    [...uniqueTypes].map(async (type) => {
+      const localRegisterSessionId = getCloudReasonLocalRegisterSessionId(
+        type,
+        args.syncEvidence,
+      );
+      const registerSessionId = await resolveTerminalRegisterSessionActionTarget(
+        ctx,
+        {
+          localRegisterSessionId,
+          storeId: args.storeId,
+          terminalId: args.terminalId,
+        },
+      );
+      return [type, registerSessionId] as const;
+    }),
+  );
+
+  return new Map(entries);
+}
+
+function getCloudReasonLocalRegisterSessionId(
+  type: TerminalHealthAttentionReason["type"],
+  syncEvidence: TerminalSyncEvidence,
+) {
+  switch (type) {
+    case "cloud_conflict":
+      return (
+        syncEvidence.latestReviewEventsByStatus?.conflicted
+          ?.localRegisterSessionId ??
+        syncEvidence.latestReviewEvent?.localRegisterSessionId ??
+        syncEvidence.latestEvent?.localRegisterSessionId
+      );
+    case "cloud_held":
+      return (
+        syncEvidence.latestReviewEventsByStatus?.held?.localRegisterSessionId ??
+        syncEvidence.latestReviewEvent?.localRegisterSessionId ??
+        syncEvidence.latestEvent?.localRegisterSessionId
+      );
+    case "cloud_rejected":
+      return (
+        syncEvidence.latestReviewEventsByStatus?.rejected
+          ?.localRegisterSessionId ??
+        syncEvidence.latestReviewEvent?.localRegisterSessionId ??
+        syncEvidence.latestEvent?.localRegisterSessionId
+      );
+    default:
+      return (
+        syncEvidence.latestReviewEvent?.localRegisterSessionId ??
+        syncEvidence.latestEvent?.localRegisterSessionId
+      );
+  }
 }
 
 function getAttentionReasonActionTarget(

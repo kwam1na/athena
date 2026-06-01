@@ -63,6 +63,7 @@ export function RegisterCheckoutPanel({
         isTransactionCompleted={checkout.isTransactionCompleted}
         completedOrderNumber={checkout.completedOrderNumber}
         completionBlockMessage={checkout.completionBlockMessage}
+        serviceLines={checkout.serviceLines}
         completedTransactionData={checkout.completedTransactionData}
         cashierName={checkout.cashierName}
         actorStaffProfileId={checkout.actorStaffProfileId}

@@ -103,4 +103,44 @@ describe("RegisterActionBar", () => {
       screen.getByRole("button", { name: /sign out/i }),
     ).toBeInTheDocument();
   });
+
+  it("surfaces drawer recovery instead of closeout controls", () => {
+    const onSubmit = vi.fn();
+
+    render(
+      <RegisterActionBar
+        cashierCard={null}
+        closeoutControl={{
+          canCloseout: true,
+          canShowOpeningFloatCorrection: true,
+          canCorrectOpeningFloat: true,
+          onRequestCloseout: vi.fn(),
+          onRequestOpeningFloatCorrection: vi.fn(),
+        }}
+        drawerGate={{
+          mode: "recovery",
+          registerLabel: "Front Counter",
+          registerNumber: "1",
+          canOpenDrawer: true,
+          errorMessage: null,
+          isSubmitting: false,
+          onSubmit,
+          onSignOut: vi.fn(),
+        }}
+        registerInfo={registerInfo}
+        sessionPanel={null}
+      />,
+    );
+
+    expect(screen.getByText("Drawer closed")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /open drawer/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /float/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /closeout/i }),
+    ).not.toBeInTheDocument();
+  });
 });

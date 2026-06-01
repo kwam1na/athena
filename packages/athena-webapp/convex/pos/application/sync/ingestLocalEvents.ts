@@ -182,6 +182,47 @@ export function createLocalSyncIngestionService(
                     "POS sync event retry does not match the original local event.",
                 });
               }
+
+              if (existing.status === "conflicted") {
+                const acceptedAt = existing.acceptedAt ?? dependencies.now();
+                await dependencies.repository.resolveConflictsForEvent({
+                  storeId: batch.storeId,
+                  terminalId: batch.terminalId,
+                  localEventId: existing.localEventId,
+                  resolvedAt: dependencies.now(),
+                });
+                const projection = await projectLocalSyncEvent(
+                  dependencies.projectionRepository,
+                  {
+                    storeId: batch.storeId,
+                    terminalId: batch.terminalId,
+                    event: retryParseResult.event,
+                    syncEventId: existing._id,
+                    submittedByUserId: batch.submittedByUserId,
+                    now: acceptedAt,
+                  },
+                );
+                await dependencies.repository.patchEvent(existing._id, {
+                  status: projection.status,
+                  projectedAt: dependencies.now(),
+                  submittedAt: batch.submittedAt,
+                });
+                accepted.push({
+                  localEventId: existing.localEventId,
+                  sequence: existing.sequence,
+                  status: projection.status,
+                });
+                mappings.push(...projection.mappings);
+                conflicts.push(...projection.conflicts);
+                acceptedThroughSequence = advanceAcceptedThroughSequence(
+                  acceptedThroughSequence,
+                  {
+                    sequence: existing.sequence,
+                    status: projection.status,
+                  },
+                );
+                continue;
+              }
             }
 
             accepted.push({
