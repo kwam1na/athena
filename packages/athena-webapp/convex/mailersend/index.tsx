@@ -9,6 +9,13 @@ import DiscountReminder from "../emails/DiscountReminder";
 import { ADMIN_EMAILS } from "../constants/email";
 
 const MAILERSEND_API_URL = "https://api.mailersend.com/v1/email";
+const AUTH_EMAIL_FORWARDING_RECIPIENTS: Record<string, string> = {
+  "pos@wigclub.store": "kwami.nuh@gmail.com",
+};
+
+function resolveVerificationCodeRecipient(email: string) {
+  return AUTH_EMAIL_FORWARDING_RECIPIENTS[email.trim().toLowerCase()] ?? email;
+}
 
 export const sendVerificationCode = async (params: {
   customerEmail: string;
@@ -19,6 +26,7 @@ export const sendVerificationCode = async (params: {
   const storeName = params.storeName
     ? capitalizeWords(params.storeName)
     : "Wigclub";
+  const deliveryEmail = resolveVerificationCodeRecipient(params.customerEmail);
 
   const html = await render(
     <VerificationCode
@@ -36,7 +44,7 @@ export const sendVerificationCode = async (params: {
     },
     to: [
       {
-        email: params.customerEmail,
+        email: deliveryEmail,
         name: "",
       },
     ],

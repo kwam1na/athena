@@ -196,6 +196,7 @@ vi.mock("./RegisterActionBar", () => ({
   RegisterActionBar: ({
     cashierCard,
     closeoutControl,
+    drawerGate,
   }: {
     cashierCard?: {
       cashierName?: string;
@@ -207,6 +208,10 @@ vi.mock("./RegisterActionBar", () => ({
       canCorrectOpeningFloat: boolean;
       onRequestCloseout: () => void;
       onRequestOpeningFloatCorrection: () => void;
+    } | null;
+    drawerGate?: {
+      mode?: string;
+      onSubmit?: () => void;
     } | null;
   }) => (
     <div>
@@ -232,6 +237,9 @@ vi.mock("./RegisterActionBar", () => ({
             closeout-control
           </button>
         </>
+      ) : null}
+      {drawerGate?.mode === "recovery" ? (
+        <button onClick={drawerGate.onSubmit}>drawer-recovery-action</button>
       ) : null}
     </div>
   ),
@@ -533,7 +541,7 @@ describe("POSRegisterView", () => {
           lastFailure: null,
           lastLocalSequence: 4,
           localOnlyEventCount: 29,
-          lastRuntimeTrigger: "event-appended",
+          lastRuntimeTrigger: "manual-retry",
           lastRuntimeTriggerAt: Date.UTC(2026, 4, 15, 12, 34, 56),
           lastRuntimeTriggerPriority: "high",
           lastSyncedSequence: 4,
@@ -601,7 +609,7 @@ describe("POSRegisterView", () => {
     expect(screen.getAllByText("Live")).not.toHaveLength(0);
     expect(screen.getAllByText("Local review")).not.toHaveLength(0);
     expect(screen.getByText("Local review item")).toBeInTheDocument();
-    expect(screen.getByText("New register activity")).toBeInTheDocument();
+    expect(screen.getByText("Manual retry")).toBeInTheDocument();
     expect(screen.getByText("High")).toBeInTheDocument();
     expect(screen.getByText("2026-05-15T12:34:56Z")).toBeInTheDocument();
     expect(screen.getByText("local 4 synced 4 next n/a")).toBeInTheDocument();
@@ -610,13 +618,13 @@ describe("POSRegisterView", () => {
     expect(screen.getByText("sync hold-up")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "5 uploaded review events can be retried; 29 local-only review records need support inspection.",
+        "5 uploaded review events are waiting on server review; 29 local-only review records need support inspection.",
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("next sync step")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Use pending sync retry to settle uploaded review events; if the count stays put, open terminal health to review server conflicts.",
+        "Open terminal health or cash controls to resolve the server review. Retry only checks whether that review has settled.",
       ),
     ).toBeInTheDocument();
     expect(
@@ -713,6 +721,122 @@ describe("POSRegisterView", () => {
     await userEvent.click(retrySyncButton);
 
     expect(onRetrySync).toHaveBeenCalled();
+  });
+
+  it("shows an operable register as ready when manager review exists elsewhere", async () => {
+    const onRetrySync = vi.fn();
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: true,
+      },
+      registerInfo: {
+        customerName: "Ama Serwa",
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: false,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: {},
+      cashierCard: {},
+      closeoutControl: null,
+      authDialog: {
+        open: false,
+      },
+      drawerGate: null,
+      syncStatus: {
+        description: "Synced register activity needs manager review.",
+        label: "Needs review",
+        pendingEventCount: 1,
+        reconciliationItems: [],
+        status: "needs_review",
+        tone: "danger",
+        onRetrySync,
+      },
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(screen.getByText("ready")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: /check pos sync review: needs review/i,
+      }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("needs review")).not.toBeInTheDocument();
+    expect(onRetrySync).not.toHaveBeenCalled();
+  });
+
+  it("hides manager review sync from the header when another cashier step owns the flow", async () => {
+    const onRetrySync = vi.fn();
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: true,
+      },
+      registerInfo: {
+        customerName: "Ama Serwa",
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: true,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: {},
+      cashierCard: {},
+      closeoutControl: null,
+      authDialog: {
+        open: true,
+      },
+      drawerGate: null,
+      syncStatus: {
+        description: "Synced register activity needs manager review.",
+        label: "Needs review",
+        pendingEventCount: 1,
+        reconciliationItems: [],
+        status: "needs_review",
+        tone: "danger",
+        onRetrySync,
+      },
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(
+      screen.queryByRole("button", {
+        name: /check pos sync review: needs review/i,
+      }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("needs review")).not.toBeInTheDocument();
+    expect(screen.getByText("cashier-auth-dialog")).toBeInTheDocument();
+    expect(onRetrySync).not.toHaveBeenCalled();
   });
 
   it("hides sale controls while a locally closed register is waiting to sync", async () => {
@@ -2000,7 +2124,8 @@ describe("POSRegisterView", () => {
     expect(screen.queryByText("product-entry")).not.toBeInTheDocument();
     expect(screen.getByText("cart-items")).toBeInTheDocument();
     expect(screen.getByText("register-checkout-panel")).toBeInTheDocument();
-    expect(screen.queryByText("register-action-bar")).not.toBeInTheDocument();
+    expect(screen.getByText("register-action-bar")).toBeInTheDocument();
+    expect(screen.getByText("drawer-recovery-action")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /cash controls/i }),
     ).toHaveAttribute(
@@ -2008,7 +2133,8 @@ describe("POSRegisterView", () => {
       "/$orgUrlSlug/store/$storeUrlSlug/cash-controls?o=%252F",
     );
 
-    await userEvent.click(screen.getByRole("button", { name: /sign out/i }));
+    const signOutButtons = screen.getAllByRole("button", { name: /sign out/i });
+    await userEvent.click(signOutButtons.at(-1)!);
 
     expect(onSignOut).toHaveBeenCalled();
   });

@@ -164,6 +164,14 @@ export interface RegisterCheckoutState {
   isTransactionCompleted: boolean;
   completedOrderNumber: string | null;
   completionBlockMessage?: string;
+  serviceLines?: Array<{
+    id: string;
+    name: string;
+    quantity?: number;
+    unitPrice?: number;
+    totalPrice: number;
+    serviceMode?: string | null;
+  }>;
   completedTransactionData?: {
     paymentMethod: string;
     payments?: Payment[];

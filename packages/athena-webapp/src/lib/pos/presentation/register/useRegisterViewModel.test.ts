@@ -1039,6 +1039,55 @@ describe("useRegisterViewModel", () => {
     );
   });
 
+  it("shows synced after this cashier's completed sale syncs while manager review residue remains", async () => {
+    mockUsePosLocalSyncRuntimeStatus.mockReturnValue({
+      onRetrySync: vi.fn(),
+      pendingEventCount: 0,
+      status: "needs_review",
+    });
+    mockListLocalEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        buildLocalEvent({
+          sequence: 1,
+          sync: { status: "synced", uploaded: true },
+          type: "register.opened",
+        }),
+        buildLocalEvent({
+          localPosSessionId: "local-pos-session-1",
+          sequence: 2,
+          sync: { status: "synced", uploaded: true },
+          type: "transaction.completed",
+        }),
+        buildLocalEvent({
+          localEventId: "manager-review-event",
+          staffProfileId: "staff-2",
+          sequence: 3,
+          sync: { status: "needs_review", uploaded: true },
+          type: "register.opened",
+        }),
+      ],
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult(),
+      );
+    });
+
+    await waitFor(() =>
+      expect(result.current.syncStatus).toEqual(
+        expect.objectContaining({
+          label: "Synced",
+          status: "synced",
+        }),
+      ),
+    );
+  });
+
   it("does not show another staff member's pending local upload count", async () => {
     mockUsePosLocalSyncRuntimeStatus.mockReturnValue({
       debug: {
@@ -1658,6 +1707,7 @@ describe("useRegisterViewModel", () => {
 
     await act(async () => {
       result.current.authDialog?.onAuthenticated({
+        activeRoles: ["manager"],
         staffProfileId: "staff-1" as Id<"staffProfile">,
         staffProfile: {
           firstName: "Ama",
@@ -1862,6 +1912,7 @@ describe("useRegisterViewModel", () => {
 
     await act(async () => {
       result.current.authDialog?.onAuthenticated({
+        activeRoles: ["manager"],
         staffProfileId: "staff-1" as Id<"staffProfile">,
         staffProfile: {
           firstName: "Ama",
@@ -1925,6 +1976,7 @@ describe("useRegisterViewModel", () => {
 
     await act(async () => {
       result.current.authDialog?.onAuthenticated({
+        activeRoles: ["manager"],
         staffProfileId: "staff-1" as Id<"staffProfile">,
         staffProfile: {
           firstName: "Ama",
@@ -2252,12 +2304,43 @@ describe("useRegisterViewModel", () => {
     });
     await waitForLocalRegisterEffects(result);
 
-    expect(result.current.drawerGate).toBeNull();
+    expect(result.current.drawerGate?.mode).toBe("recovery");
+    expect(result.current.drawerGate?.canOpenDrawer).toBe(true);
     expect(result.current.productEntry.disabled).toBe(true);
+    expect(result.current.serviceEntry?.disabled).toBe(true);
     expect(result.current.checkout.cartItems).toHaveLength(1);
     expect(result.current.checkout.payments).toEqual([
       expect.objectContaining({ method: "cash", amount: 15_000 }),
     ]);
+
+    vi.mocked(toast.error).mockClear();
+    await act(async () => {
+      await result.current.drawerGate?.onSignOut();
+    });
+
+    expect(toast.error).not.toHaveBeenCalledWith(
+      "Complete or clear this local sale before leaving the register.",
+    );
+    expect(result.current.cashierCard).toBeNull();
+    expect(result.current.checkout.cartItems).toEqual([]);
+    expect(result.current.checkout.payments).toEqual([]);
+    expect(mockAppendLocalEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "cart.cleared",
+        localRegisterSessionId: "local-register-1",
+        localPosSessionId: "local-sale-1",
+      }),
+    );
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult(),
+      );
+    });
+    await waitForLocalRegisterEffects(result);
+
+    expect(result.current.drawerGate?.mode).toBe("recovery");
+    expect(result.current.checkout.cartItems).toHaveLength(1);
 
     await act(async () => {
       await result.current.checkout.onCompleteTransaction();
@@ -2778,9 +2861,14 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated(
-        "staff-1" as Id<"staffProfile">,
-      );
+      result.current.authDialog?.onAuthenticated({
+        activeRoles: ["manager"],
+        staffProfileId: "staff-1" as Id<"staffProfile">,
+        staffProfile: {
+          firstName: "Ama",
+          lastName: "Kusi",
+        },
+      });
     });
 
     expect(result.current.sessionPanel?.hasExpiredSession).toBe(false);
@@ -3618,6 +3706,13 @@ describe("useRegisterViewModel", () => {
         price: 4500,
       }),
     ]);
+    expect(result.current.checkout.serviceLines).toEqual([
+      expect.objectContaining({
+        name: "Closure Repair",
+        quantity: 1,
+        totalPrice: 4500,
+      }),
+    ]);
     expect(result.current.checkout.total).toBe(4620);
     expect(result.current.serviceEntry?.checkoutBlockMessage).toBe(
       "Customer required. Add a customer before checking out services.",
@@ -3633,6 +3728,144 @@ describe("useRegisterViewModel", () => {
     expect(toast.error).toHaveBeenCalledWith(
       "Customer required. Add a customer before checking out services.",
     );
+  });
+
+  it("keeps service checkout blocked after sale-only name attribution", async () => {
+    mockActiveSession = {
+      ...mockActiveSession!,
+      customer: null,
+    };
+    mockRegisterServiceCatalogRows = [
+      {
+        serviceCatalogId: "service-1" as Id<"serviceCatalog">,
+        name: "Closure Repair",
+        description: "Repair a closure install.",
+        serviceMode: "repair",
+        pricingModel: "fixed",
+        basePrice: 4500,
+        status: "active",
+      },
+    ];
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("closure");
+    });
+
+    await waitFor(() =>
+      expect(result.current.serviceEntry?.searchResults).toHaveLength(1),
+    );
+
+    await act(async () => {
+      await result.current.serviceEntry?.onAddService(
+        result.current.serviceEntry.searchResults[0],
+      );
+    });
+
+    expect(result.current.checkout.completionBlockMessage).toBe(
+      "Customer required. Add a customer before checking out services.",
+    );
+
+    await act(async () => {
+      result.current.customerPanel.setCustomerInfo({
+        name: "Kwamina",
+        email: "",
+        phone: "",
+      });
+      await result.current.customerPanel.onCustomerCommitted({
+        name: "Kwamina",
+        email: "",
+        phone: "",
+      });
+    });
+
+    expect(result.current.customerPanel.customerInfo.name).toBe("Kwamina");
+    expect(result.current.serviceEntry?.checkoutBlockMessage).toBe(
+      "Customer required. Add a customer before checking out services.",
+    );
+    expect(result.current.checkout.completionBlockMessage).toBe(
+      "Customer required. Add a customer before checking out services.",
+    );
+
+    await act(async () => {
+      await result.current.checkout.onCompleteTransaction();
+    });
+
+    expect(toast.error).toHaveBeenCalledWith(
+      "Customer required. Add a customer before checking out services.",
+    );
+  });
+
+  it("allows service checkout after profile-backed customer attribution", async () => {
+    mockActiveSession = {
+      ...mockActiveSession!,
+      customer: null,
+    };
+    mockRegisterServiceCatalogRows = [
+      {
+        serviceCatalogId: "service-1" as Id<"serviceCatalog">,
+        name: "Closure Repair",
+        description: "Repair a closure install.",
+        serviceMode: "repair",
+        pricingModel: "fixed",
+        basePrice: 4500,
+        status: "active",
+      },
+    ];
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("closure");
+    });
+
+    await waitFor(() =>
+      expect(result.current.serviceEntry?.searchResults).toHaveLength(1),
+    );
+
+    await act(async () => {
+      await result.current.serviceEntry?.onAddService(
+        result.current.serviceEntry.searchResults[0],
+      );
+    });
+
+    expect(result.current.checkout.completionBlockMessage).toBe(
+      "Customer required. Add a customer before checking out services.",
+    );
+
+    await act(async () => {
+      result.current.customerPanel.setCustomerInfo({
+        customerProfileId: "profile-2" as Id<"customerProfile">,
+        name: "Kwamina",
+        email: "",
+        phone: "",
+      });
+      await result.current.customerPanel.onCustomerCommitted({
+        customerProfileId: "profile-2" as Id<"customerProfile">,
+        name: "Kwamina",
+        email: "",
+        phone: "",
+      });
+    });
+
+    expect(result.current.customerPanel.customerInfo.name).toBe("Kwamina");
+    expect(result.current.serviceEntry?.checkoutBlockMessage).toBeUndefined();
+    expect(result.current.checkout.completionBlockMessage).toBeUndefined();
   });
 
   it("does not add the same service twice", async () => {
@@ -3692,6 +3925,208 @@ describe("useRegisterViewModel", () => {
         totalPrice: 4500,
       }),
     );
+  });
+
+  it("clears a service-only sale through the local clear event", async () => {
+    mockActiveSession = {
+      ...mockActiveSession!,
+      cartItems: [],
+    };
+    mockRegisterServiceCatalogRows = [
+      {
+        serviceCatalogId: "service-1" as Id<"serviceCatalog">,
+        name: "Closure Repair",
+        description: "Repair a closure install.",
+        serviceMode: "repair",
+        pricingModel: "fixed",
+        basePrice: 4500,
+        status: "active",
+      },
+    ];
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.serviceEntry?.setServiceSearchQuery("closure");
+    });
+
+    await waitFor(() =>
+      expect(result.current.serviceEntry?.searchResults).toHaveLength(1),
+    );
+
+    await act(async () => {
+      await result.current.serviceEntry?.onAddService(
+        result.current.serviceEntry.searchResults[0],
+      );
+    });
+
+    expect(result.current.cart.serviceItems).toHaveLength(1);
+
+    await act(async () => {
+      await result.current.sessionPanel?.onVoidCurrentSession();
+    });
+
+    expect(mockVoidSession).not.toHaveBeenCalled();
+    expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "cart.cleared",
+        localRegisterSessionId: "drawer-1",
+        localPosSessionId: "session-1",
+        payload: expect.objectContaining({
+          localPosSessionId: "session-1",
+          reason: "Sale cleared",
+        }),
+      }),
+    );
+    expect(result.current.cart.serviceItems).toEqual([]);
+    expect(toast.success).toHaveBeenCalledWith("Sale cleared");
+  });
+
+  it("removes a service-only cart item through the bootstrapped local sale", async () => {
+    mockActiveSession = {
+      ...mockActiveSession!,
+      cartItems: [],
+    };
+    mockRegisterServiceCatalogRows = [
+      {
+        serviceCatalogId: "service-1" as Id<"serviceCatalog">,
+        name: "Closure Repair",
+        description: "Repair a closure install.",
+        serviceMode: "repair",
+        pricingModel: "fixed",
+        basePrice: 4500,
+        status: "active",
+      },
+    ];
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.serviceEntry?.setServiceSearchQuery("closure");
+    });
+
+    await waitFor(() =>
+      expect(result.current.serviceEntry?.searchResults).toHaveLength(1),
+    );
+
+    await act(async () => {
+      await result.current.serviceEntry?.onAddService(
+        result.current.serviceEntry.searchResults[0],
+      );
+    });
+
+    const serviceLineId = result.current.cart.serviceItems?.[0]?.id;
+    expect(serviceLineId).toBeDefined();
+
+    await act(async () => {
+      await result.current.cart.onRemoveService?.(serviceLineId!);
+    });
+
+    const appendedEventTypes = mockAppendLocalEvent.mock.calls.map(
+      ([event]) => event.type,
+    );
+    expect(appendedEventTypes.slice(0, 2)).toEqual([
+      "register.opened",
+      "session.started",
+    ]);
+    expect(appendedEventTypes.at(-1)).toBe("cart.service_added");
+    expect(mockAppendLocalEvent.mock.calls.at(-1)?.[0]).toEqual(
+      expect.objectContaining({
+        type: "cart.service_added",
+        localRegisterSessionId: "drawer-1",
+        localPosSessionId: "session-1",
+        payload: expect.objectContaining({
+          localPosSessionId: "session-1",
+          quantity: 0,
+          unitPrice: 0,
+          totalPrice: 0,
+        }),
+      }),
+    );
+    expect(result.current.cart.serviceItems).toEqual([]);
+    expect(toast.error).not.toHaveBeenCalledWith(
+      "Unable to update this sale. Try again.",
+    );
+  });
+
+  it("surfaces drawer recovery when a service sale loses drawer authority", async () => {
+    mockActiveSession = {
+      ...mockActiveSession!,
+      cartItems: [],
+    };
+    mockRegisterServiceCatalogRows = [
+      {
+        serviceCatalogId: "service-1" as Id<"serviceCatalog">,
+        name: "Closure Repair",
+        description: "Repair a closure install.",
+        serviceMode: "repair",
+        pricingModel: "fixed",
+        basePrice: 4500,
+        status: "active",
+      },
+    ];
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result, rerender } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.serviceEntry?.setServiceSearchQuery("closure");
+    });
+
+    await waitFor(() =>
+      expect(result.current.serviceEntry?.searchResults).toHaveLength(1),
+    );
+
+    await act(async () => {
+      await result.current.serviceEntry?.onAddService(
+        result.current.serviceEntry.searchResults[0],
+      );
+    });
+
+    expect(result.current.cart.serviceItems).toHaveLength(1);
+
+    mockActiveSession = null;
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: {
+        _id: "staff-1",
+        firstName: "Ama",
+        lastName: "Kusi",
+        activeRoles: ["manager"],
+      },
+      activeRegisterSession: null,
+      activeSession: null,
+      activeSessionConflict: null,
+      resumableSession: null,
+    };
+
+    rerender();
+
+    expect(result.current.drawerGate?.mode).toBe("recovery");
+    expect(result.current.productEntry.disabled).toBe(true);
+    expect(result.current.serviceEntry?.disabled).toBe(true);
+    expect(result.current.cart.serviceItems).toHaveLength(1);
   });
 
   it("includes service lines in the durable local completion payload", async () => {
@@ -3836,6 +4271,8 @@ describe("useRegisterViewModel", () => {
     });
 
     expect(mockAppendLocalEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      "register.opened",
+      "session.started",
       "cart.service_added",
       "session.payments_updated",
       "transaction.completed",
@@ -5051,6 +5488,7 @@ describe("useRegisterViewModel", () => {
 
     await act(async () => {
       result.current.authDialog?.onAuthenticated({
+        activeRoles: ["manager"],
         staffProfileId: "staff-1" as Id<"staffProfile">,
         staffProfile: {
           firstName: "Ama",
@@ -5127,9 +5565,14 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated(
-        "staff-1" as Id<"staffProfile">,
-      );
+      result.current.authDialog?.onAuthenticated({
+        activeRoles: ["manager"],
+        staffProfileId: "staff-1" as Id<"staffProfile">,
+        staffProfile: {
+          firstName: "Ama",
+          lastName: "Kusi",
+        },
+      });
     });
 
     act(() => {
@@ -5209,7 +5652,7 @@ describe("useRegisterViewModel", () => {
     );
   });
 
-  it("marks drawer opening unavailable for non-manager cashier sign-ins", async () => {
+  it("allows cashier sign-ins to open the drawer without manager-only controls", async () => {
     mockRegisterState = {
       phase: "readyToStart",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
@@ -5230,21 +5673,35 @@ describe("useRegisterViewModel", () => {
 
     await act(async () => {
       result.current.authDialog?.onAuthenticated(
-        "staff-1" as Id<"staffProfile">,
+        buildStaffAuthenticationResult({ activeRoles: ["cashier"] }),
       );
     });
 
     expect(result.current.drawerGate?.mode).toBe("initialSetup");
-    expect(result.current.drawerGate?.canOpenDrawer).toBe(false);
+    expect(result.current.drawerGate?.canOpenDrawer).toBe(true);
     expect(result.current.drawerGate?.canOpenCashControls).toBe(false);
     expect(result.current.closeoutControl?.canShowOpeningFloatCorrection).toBe(
       false,
     );
     expect(result.current.closeoutControl?.canCorrectOpeningFloat).toBe(false);
     expect(result.current.productEntry.canQuickAddProduct).toBe(false);
+
+    act(() => {
+      result.current.drawerGate?.onOpeningFloatChange?.("50.00");
+    });
+
+    await act(async () => {
+      await result.current.drawerGate?.onSubmit?.();
+    });
+
+    expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "register.opened",
+      }),
+    );
   });
 
-  it("binds a preserved active POS session after drawer recovery without clearing checkout state", async () => {
+  it("lets a cashier open the drawer for a preserved active POS session", async () => {
     mockRegisterState = {
       phase: "active",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
@@ -5264,9 +5721,13 @@ describe("useRegisterViewModel", () => {
 
     await act(async () => {
       result.current.authDialog?.onAuthenticated(
-        buildStaffAuthenticationResult(),
+        buildStaffAuthenticationResult({ activeRoles: ["cashier"] }),
       );
     });
+
+    expect(result.current.drawerGate?.mode).toBe("recovery");
+    expect(result.current.drawerGate?.canOpenDrawer).toBe(true);
+    expect(result.current.drawerGate?.canOpenCashControls).toBe(false);
 
     act(() => {
       result.current.drawerGate?.onOpeningFloatChange?.("50.00");
@@ -5623,7 +6084,7 @@ describe("useRegisterViewModel", () => {
     );
   });
 
-  it("routes recoverable drawer authority blocks to the drawer repair gate", async () => {
+  it("routes lifecycle drawer authority blocks to the open-drawer gate", async () => {
     mockListLocalEvents.mockResolvedValue({
       ok: true,
       value: [
@@ -5668,9 +6129,11 @@ describe("useRegisterViewModel", () => {
     });
 
     await waitFor(() =>
-      expect(result.current.drawerGate?.mode).toBe("drawerAuthorityRepair"),
+      expect(result.current.drawerGate?.mode).toBe("recovery"),
     );
-    expect(result.current.drawerGate?.onRetrySync).toBeTypeOf("function");
+    expect(result.current.drawerGate?.canOpenDrawer).toBe(true);
+    expect(result.current.drawerGate?.onSubmit).toBeTypeOf("function");
+    expect(result.current.drawerGate?.onRetrySync).toBeUndefined();
   });
 
   it("routes closed drawer authority blocks to the open-drawer gate", async () => {
@@ -5850,6 +6313,7 @@ describe("useRegisterViewModel", () => {
 
     await act(async () => {
       result.current.authDialog?.onAuthenticated({
+        activeRoles: ["manager"],
         staffProfileId: "staff-1" as Id<"staffProfile">,
         staffProfile: {
           firstName: "Ama",
@@ -5933,6 +6397,7 @@ describe("useRegisterViewModel", () => {
 
     await act(async () => {
       result.current.authDialog?.onAuthenticated({
+        activeRoles: ["manager"],
         staffProfileId: "staff-1" as Id<"staffProfile">,
         staffProfile: {
           firstName: "Ama",
@@ -6068,6 +6533,7 @@ describe("useRegisterViewModel", () => {
 
     await act(async () => {
       result.current.authDialog?.onAuthenticated({
+        activeRoles: ["manager"],
         staffProfileId: "staff-1" as Id<"staffProfile">,
         staffProfile: {
           firstName: "Ama",
@@ -6276,6 +6742,7 @@ describe("useRegisterViewModel", () => {
 
     await act(async () => {
       result.current.authDialog?.onAuthenticated({
+        activeRoles: ["manager"],
         staffProfileId: "staff-1" as Id<"staffProfile">,
         staffProfile: {
           firstName: "Ama",
@@ -6917,6 +7384,7 @@ describe("useRegisterViewModel", () => {
 
     await act(async () => {
       result.current.authDialog?.onAuthenticated({
+        activeRoles: ["manager"],
         staffProfileId: "staff-1" as Id<"staffProfile">,
         staffProfile: {
           firstName: "Ama",
@@ -6977,6 +7445,7 @@ describe("useRegisterViewModel", () => {
 
     await act(async () => {
       result.current.authDialog?.onAuthenticated({
+        activeRoles: ["manager"],
         staffProfileId: "staff-1" as Id<"staffProfile">,
         staffProfile: {
           firstName: "Ama",

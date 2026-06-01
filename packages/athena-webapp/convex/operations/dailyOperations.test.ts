@@ -840,6 +840,22 @@ describe("daily operations overview read model", () => {
             subjectType: "daily_close",
           },
           {
+            _id: "event-quick-add",
+            createdAt: Date.UTC(2026, 4, 8, 12),
+            eventType: "pos_quick_add_product_created",
+            message: "Kwamina Nuh quick added Vitamilk with quantity 100.",
+            metadata: {
+              productId: "product-1",
+              productName: "Vitamilk",
+              productSkuId: "sku-1",
+              sku: "VITAMILK-001",
+            },
+            storeId: "store-1",
+            subjectId: "sku-1",
+            subjectLabel: "Vitamilk",
+            subjectType: "product_sku",
+          },
+          {
             _id: "event-other-day",
             createdAt: Date.UTC(2026, 4, 9, 8),
             eventType: "daily_opening.started",
@@ -861,8 +877,22 @@ describe("daily operations overview read model", () => {
     });
     expect(snapshot.timeline.map((event) => event.id)).toEqual([
       "event-2",
+      "event-quick-add",
       "event-1",
     ]);
+    expect(
+      snapshot.timeline.find((event) => event.id === "event-quick-add")
+        ?.productLink,
+    ).toEqual({
+      label: "Vitamilk",
+      params: {
+        productSlug: "product-1",
+      },
+      search: {
+        variant: "VITAMILK-001",
+      },
+      to: "/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug",
+    });
     expect(snapshot.attentionItems).toEqual([]);
   });
 
@@ -890,5 +920,66 @@ describe("daily operations overview read model", () => {
     expect(snapshot.timeline).toHaveLength(200);
     expect(snapshot.timeline[0].id).toBe("event-200");
     expect(snapshot.timeline.map((event) => event.id)).not.toContain("event-0");
+  });
+
+  it("orders same-minute cycle count lifecycle events by operator relevance", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        operationalEvent: [
+          {
+            _id: "event-draft-started",
+            createdAt: Date.UTC(2026, 4, 8, 20, 41, 50),
+            eventType: "cycle_count_draft_created",
+            message: "Operator started a cycle count for POS quick add.",
+            storeId: "store-1",
+            subjectId: "draft-next",
+            subjectType: "cycle_count_draft",
+          },
+          {
+            _id: "event-draft-submitted",
+            createdAt: Date.UTC(2026, 4, 8, 20, 41, 40),
+            eventType: "cycle_count_draft_submitted",
+            message:
+              "Operator submitted the POS quick add cycle count with 1 changed SKU.",
+            storeId: "store-1",
+            subjectId: "draft-1",
+            subjectType: "cycle_count_draft",
+          },
+          {
+            _id: "event-adjustment-applied",
+            createdAt: Date.UTC(2026, 4, 8, 20, 41, 30),
+            eventType: "stock_adjustment_applied",
+            message:
+              "Operator applied a cycle count for 1 SKU. Net inventory change +171 units.",
+            metadata: {
+              adjustmentType: "cycle_count",
+            },
+            storeId: "store-1",
+            subjectId: "adjustment-1",
+            subjectType: "stock_adjustment_batch",
+          },
+          {
+            _id: "event-draft-updated",
+            createdAt: Date.UTC(2026, 4, 8, 20, 41, 20),
+            eventType: "cycle_count_draft_updated",
+            message: "Operator counted agya (6N2Y-RFF-1J1) as 950.",
+            storeId: "store-1",
+            subjectId: "draft-1",
+            subjectType: "cycle_count_draft",
+          },
+        ],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.timeline.map((event) => event.id)).toEqual([
+      "event-draft-submitted",
+      "event-adjustment-applied",
+      "event-draft-updated",
+      "event-draft-started",
+    ]);
   });
 });

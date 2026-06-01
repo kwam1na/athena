@@ -77,6 +77,10 @@ import {
 const LINKED_TRANSACTIONS_PREVIEW_LIMIT = 5;
 const CLOSED_REGISTER_SYNCED_CLOSEOUT_SUMMARY =
   "register session is not open for synced pos closeout";
+const REGISTER_NOT_OPEN_SYNC_REVIEW_SUMMARY =
+  "Register was not open before this sale synced.";
+const SERVICE_CUSTOMER_ATTRIBUTION_SYNC_REVIEW_SUMMARY =
+  "Service line is missing customer attribution.";
 
 type RegisterSessionApprovalRequest = {
   _id: string;
@@ -473,6 +477,79 @@ function formatReviewItemTimestamp(timestamp?: number | null) {
     : null;
 }
 
+function formatCompactTextList(values: string[]) {
+  if (values.length === 0) {
+    return null;
+  }
+
+  if (values.length === 1) {
+    return values[0];
+  }
+
+  if (values.length === 2) {
+    return `${values[0]} and ${values[1]}`;
+  }
+
+  return `${values.slice(0, -1).join(", ")}, and ${values[values.length - 1]}`;
+}
+
+function formatReviewQueueSummary(items: PosReconciliationItem[]) {
+  const sequences = items
+    .map((item) =>
+      typeof item.sequence === "number" ? `#${item.sequence}` : null,
+    )
+    .filter((value): value is string => Boolean(value));
+  const sequenceList = formatCompactTextList(sequences);
+
+  return sequenceList ? `Local queue ${sequenceList}.` : null;
+}
+
+function formatReviewReportedSummary(items: PosReconciliationItem[]) {
+  const reportedTimes = Array.from(
+    new Set(
+      items
+        .map((item) => formatReviewItemTimestamp(item.createdAt))
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+  const reportedList = formatCompactTextList(reportedTimes);
+
+  return reportedList ? `Reported ${reportedList}.` : null;
+}
+
+function formatReviewTypeSummary(items: PosReconciliationItem[]) {
+  const reviewTypes = Array.from(
+    new Set(
+      items
+        .map((item) => formatPosReconciliationType(item.type, item).trim())
+        .filter(Boolean),
+    ),
+  );
+  const typeList = formatCompactTextList(reviewTypes);
+
+  return typeList ? `Types: ${typeList}.` : null;
+}
+
+function formatReviewReasonSummary(items: PosReconciliationItem[]) {
+  const reasons = Array.from(
+    new Set(
+      items
+        .map((item) => item.summary?.trim())
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+
+  if (reasons.length === 0) {
+    return null;
+  }
+
+  const reasonList = reasons
+    .map((reason) => reason.replace(/[.!?]+$/, ""))
+    .join("; ");
+
+  return `Reasons: ${reasonList}.`;
+}
+
 function formatReviewItemActivity(item: PosReconciliationItem) {
   const localEventId = item.localEventId?.toLowerCase() ?? "";
   const summary = item.summary?.toLowerCase() ?? "";
@@ -513,6 +590,48 @@ function isClosedRegisterSyncedCloseoutReviewItem(item: PosReconciliationItem) {
   return summary.includes(CLOSED_REGISTER_SYNCED_CLOSEOUT_SUMMARY);
 }
 
+function hasOnlyRejectedSyncReviewItems(syncStatus: PosSyncStatusPresentation) {
+  return (
+    syncStatus.status === "needs_review" &&
+    syncStatus.reconciliationItems.length > 0 &&
+    syncStatus.reconciliationItems.every((item) => item.status === "rejected")
+  );
+}
+
+function isApprovableRegisterSyncReviewItem(item: PosReconciliationItem) {
+  if (item.status === "rejected") {
+    return true;
+  }
+
+  if (isRegisterCloseoutReviewItem(item)) {
+    return true;
+  }
+
+  return (
+    item.type === "permission" &&
+    item.summary?.trim() === REGISTER_NOT_OPEN_SYNC_REVIEW_SUMMARY
+  );
+}
+
+function hasServiceCustomerAttributionReview(items: PosReconciliationItem[]) {
+  return items.some(
+    (item) =>
+      item.summary?.trim() === SERVICE_CUSTOMER_ATTRIBUTION_SYNC_REVIEW_SUMMARY,
+  );
+}
+
+function getCombinedReviewNextStep(items: PosReconciliationItem[]) {
+  if (hasServiceCustomerAttributionReview(items)) {
+    return "This synced activity cannot be applied because a service line is missing customer attribution. Reject it to clear this review, then recreate the service work with a customer if needed.";
+  }
+
+  if (items.some((item) => !isApprovableRegisterSyncReviewItem(item))) {
+    return "This synced activity needs correction before it can be applied. Reject it to clear this review, then correct the sale from the appropriate workflow if needed.";
+  }
+
+  return "Manager sign-in reviews and applies the synced register activity to this drawer.";
+}
+
 function RegisterSessionSyncNotice({
   currency,
   errorMessage,
@@ -536,9 +655,7 @@ function RegisterSessionSyncNotice({
 
   const reconciliationItems = syncStatus.reconciliationItems;
   const hasOnlyRejectedReviewItems =
-    syncStatus.status === "needs_review" &&
-    reconciliationItems.length > 0 &&
-    reconciliationItems.every((item) => item.status === "rejected");
+    hasOnlyRejectedSyncReviewItems(syncStatus);
   const hasClosedRegisterSyncedCloseout = reconciliationItems.some(
     isClosedRegisterSyncedCloseoutReviewItem,
   );
@@ -548,7 +665,7 @@ function RegisterSessionSyncNotice({
   const noticeLabel = hasClosedRegisterSyncedCloseout
     ? "Synced closeout cannot be applied"
     : hasOnlyRejectedReviewItems
-      ? "Synced activity rejected"
+      ? "Manager override available"
     : syncStatus.status === "locally_closed_pending_sync"
       ? "Pending reconciliation"
       : hasCloseoutReview
@@ -557,7 +674,7 @@ function RegisterSessionSyncNotice({
   const noticeDescription = hasClosedRegisterSyncedCloseout
     ? "This register is already closed. Reject the duplicate synced activity to clear the review."
     : hasOnlyRejectedReviewItems
-      ? "Server-rejected sync activity is recorded for this register session. Retry pending sync in POS to settle the local queue."
+      ? "Rejected local activity can be synced from Cash Controls. A manager can override and apply these events without the cashier present."
     : syncStatus.description;
   const approveLabel = hasCloseoutReview
     ? "Approve synced closeout"
@@ -579,6 +696,33 @@ function RegisterSessionSyncNotice({
       ? `Variance: ${formatCurrency(currency, closeoutVariance)}.`
       : "Variance needs review.";
   const canApproveSyncReview = !hasClosedRegisterSyncedCloseout;
+  const shouldCombineReviewItems =
+    syncStatus.status === "needs_review" &&
+    reconciliationItems.length > 0 &&
+    !hasCloseoutReview;
+  const hasUnsupportedReviewItems =
+    shouldCombineReviewItems &&
+    !hasOnlyRejectedReviewItems &&
+    reconciliationItems.some((item) => !isApprovableRegisterSyncReviewItem(item));
+  const canApplySyncReview = canApproveSyncReview && !hasUnsupportedReviewItems;
+  const rejectedSyncQueueSummary = hasOnlyRejectedReviewItems
+    ? formatReviewQueueSummary(reconciliationItems)
+    : null;
+  const rejectedSyncReportedSummary = hasOnlyRejectedReviewItems
+    ? formatReviewReportedSummary(reconciliationItems)
+    : null;
+  const reviewQueueSummary = shouldCombineReviewItems
+    ? formatReviewQueueSummary(reconciliationItems)
+    : null;
+  const reviewReportedSummary = shouldCombineReviewItems
+    ? formatReviewReportedSummary(reconciliationItems)
+    : null;
+  const reviewTypeSummary = shouldCombineReviewItems
+    ? formatReviewTypeSummary(reconciliationItems)
+    : null;
+  const reviewReasonSummary = shouldCombineReviewItems
+    ? formatReviewReasonSummary(reconciliationItems)
+    : null;
 
   return (
     <section
@@ -600,8 +744,66 @@ function RegisterSessionSyncNotice({
           <p className="text-sm leading-6 text-muted-foreground">
             {noticeDescription}
           </p>
-          {syncStatus.status === "needs_review" &&
-          reconciliationItems.length > 0 ? (
+          {hasOnlyRejectedReviewItems ? (
+            <div className="pt-layout-xs">
+              <div className="grid gap-layout-sm rounded-md border border-danger/15 bg-background/70 p-layout-sm md:grid-cols-[minmax(0,1fr)_minmax(14rem,0.75fr)]">
+                <div className="space-y-1">
+                  <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                    Next step
+                  </p>
+                  <p className="text-sm leading-6 text-foreground">
+                    Manager sign-in applies the rejected local events to this
+                    drawer and records the override for audit.
+                  </p>
+                </div>
+                <div className="space-y-1 border-t border-border pt-layout-sm text-xs text-muted-foreground md:border-l md:border-t-0 md:pl-layout-sm md:pt-0">
+                  <p className="font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                    Evidence
+                  </p>
+                  <p>
+                    {formatReviewItemCount(reconciliationItems.length)} rejected
+                    by the server.
+                  </p>
+                  {rejectedSyncQueueSummary ? (
+                    <p>{rejectedSyncQueueSummary}</p>
+                  ) : null}
+                  {rejectedSyncReportedSummary ? (
+                    <p>{rejectedSyncReportedSummary}</p>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          ) : shouldCombineReviewItems ? (
+            <div className="pt-layout-xs">
+              <div className="grid gap-layout-sm rounded-md border border-danger/15 bg-background/70 p-layout-sm md:grid-cols-[minmax(0,1fr)_minmax(16rem,0.85fr)]">
+                <div className="space-y-1">
+                  <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                    Next step
+                  </p>
+                  <p className="text-sm leading-6 text-foreground">
+                    {getCombinedReviewNextStep(reconciliationItems)}
+                  </p>
+                </div>
+                <div className="space-y-1 border-t border-border pt-layout-sm text-xs text-muted-foreground md:border-l md:border-t-0 md:pl-layout-sm md:pt-0">
+                  <p className="font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                    Evidence
+                  </p>
+                  <p>
+                    {formatReviewItemCount(reconciliationItems.length)}{" "}
+                    {reconciliationItems.length === 1 ? "needs" : "need"}{" "}
+                    manager review.
+                  </p>
+                  {reviewReasonSummary ? <p>{reviewReasonSummary}</p> : null}
+                  {reviewTypeSummary ? <p>{reviewTypeSummary}</p> : null}
+                  {reviewQueueSummary ? <p>{reviewQueueSummary}</p> : null}
+                  {reviewReportedSummary ? (
+                    <p>{reviewReportedSummary}</p>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          ) : syncStatus.status === "needs_review" &&
+            reconciliationItems.length > 0 ? (
             <div className="space-y-2 pt-layout-xs">
               {!hasCloseoutReview ? (
                 <p className="text-xs font-medium text-foreground">
@@ -681,8 +883,22 @@ function RegisterSessionSyncNotice({
         <div className="flex flex-wrap items-center justify-end gap-layout-sm">
           {syncStatus.status === "needs_review" &&
           hasOnlyRejectedReviewItems &&
-          orgUrlSlug &&
-          storeUrlSlug ? (
+          onReviewDecision ? (
+            <LoadingButton
+              className="border-border bg-background text-foreground hover:bg-muted"
+              disabled={isResolving}
+              isLoading={Boolean(isResolving)}
+              onClick={() => onReviewDecision("approved")}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              Override and sync events
+            </LoadingButton>
+          ) : syncStatus.status === "needs_review" &&
+            hasOnlyRejectedReviewItems &&
+            orgUrlSlug &&
+            storeUrlSlug ? (
             <Button
               asChild
               className="border-border bg-background text-foreground hover:bg-muted"
@@ -694,7 +910,8 @@ function RegisterSessionSyncNotice({
                 search={{ o: getOrigin() }}
                 to="/$orgUrlSlug/store/$storeUrlSlug/pos/register"
               >
-                Open POS sync
+                <span>Open POS to retry sync</span>
+                <ArrowUpRight className="size-3.5" aria-hidden="true" />
               </Link>
             </Button>
           ) : null}
@@ -702,7 +919,7 @@ function RegisterSessionSyncNotice({
           !hasOnlyRejectedReviewItems &&
           onReviewDecision ? (
             <>
-              {canApproveSyncReview ? (
+              {canApplySyncReview ? (
                 <LoadingButton
                   className="border-border bg-background text-foreground hover:bg-muted"
                   disabled={isResolving}
@@ -1570,6 +1787,10 @@ export function RegisterSessionViewContent({
     typeof pendingCloseoutReviewItem?.variance === "number"
       ? pendingCloseoutReviewItem.variance
       : registerSession?.variance;
+  const isRejectedSyncOverride =
+    closeoutStaffAuthIntent?.kind === "sync_review" &&
+    closeoutStaffAuthIntent.decision === "approved" &&
+    hasOnlyRejectedSyncReviewItems(syncStatus);
   const closeoutStaffAuthCopy =
     closeoutStaffAuthIntent?.kind === "review"
       ? {
@@ -1588,7 +1809,9 @@ export function RegisterSessionViewContent({
             title: "Manager sign-in required",
             description:
               closeoutStaffAuthIntent.decision === "approved"
-                ? isRegisterCloseoutSyncReview
+                ? isRejectedSyncOverride
+                  ? "Authenticate to override and sync rejected local activity"
+                  : isRegisterCloseoutSyncReview
                   ? "Authenticate to approve and apply the synced closeout"
                   : "Authenticate to approve and apply reviewed synced sales"
                 : isRegisterCloseoutSyncReview
@@ -1596,7 +1819,9 @@ export function RegisterSessionViewContent({
                   : "Authenticate to reject reviewed synced activity",
             submitLabel:
               closeoutStaffAuthIntent.decision === "approved"
-                ? isRegisterCloseoutSyncReview
+                ? isRejectedSyncOverride
+                  ? "Override and sync events"
+                  : isRegisterCloseoutSyncReview
                   ? "Approve synced closeout"
                   : "Approve synced sales"
                 : isRegisterCloseoutSyncReview

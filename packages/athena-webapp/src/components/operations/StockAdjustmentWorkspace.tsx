@@ -3125,67 +3125,67 @@ export function StockAdjustmentWorkspaceContent({
                       <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
                         All saved counts
                       </p>
-                      <div className="mt-2 grid grid-cols-3 gap-2">
-                        <div>
-                          <p className="font-display text-3xl font-semibold tabular-nums tracking-tight text-foreground">
-                            {overallSummary.lineItemCount}
-                          </p>
-                          <p className="mt-1 text-[11px] text-muted-foreground">
+                      <dl className="mt-2 space-y-2">
+                        <div className="flex items-baseline justify-between gap-3">
+                          <dt className="text-[11px] text-muted-foreground">
                             SKUs
-                          </p>
+                          </dt>
+                          <dd className="font-display text-2xl font-semibold tabular-nums tracking-tight text-foreground">
+                            {overallSummary.lineItemCount}
+                          </dd>
                         </div>
-                        <div>
-                          <p className="font-display text-3xl font-semibold tabular-nums tracking-tight text-foreground">
+                        <div className="flex items-baseline justify-between gap-3">
+                          <dt className="text-[11px] text-muted-foreground">
+                            Net
+                          </dt>
+                          <dd className="font-display text-2xl font-semibold tabular-nums tracking-tight text-foreground">
                             {overallSummary.netQuantityDelta > 0
                               ? `+${overallSummary.netQuantityDelta}`
                               : overallSummary.netQuantityDelta}
-                          </p>
-                          <p className="mt-1 text-[11px] text-muted-foreground">
-                            Net
-                          </p>
+                          </dd>
                         </div>
-                        <div>
-                          <p className="font-display text-3xl font-semibold tabular-nums tracking-tight text-foreground">
-                            {overallSummary.largestAbsoluteDelta}
-                          </p>
-                          <p className="mt-1 text-[11px] text-muted-foreground">
+                        <div className="flex items-baseline justify-between gap-3">
+                          <dt className="text-[11px] text-muted-foreground">
                             Variance
-                          </p>
+                          </dt>
+                          <dd className="font-display text-2xl font-semibold tabular-nums tracking-tight text-foreground">
+                            {overallSummary.largestAbsoluteDelta}
+                          </dd>
                         </div>
-                      </div>
+                      </dl>
                     </div>
                     <div className="rounded-md border border-border px-3 py-3">
                       <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
                         Selected scope
                       </p>
-                      <div className="mt-2 grid grid-cols-3 gap-2">
-                        <div>
-                          <p className="font-display text-2xl font-semibold tabular-nums tracking-tight text-foreground">
-                            {summary.lineItemCount}
-                          </p>
-                          <p className="mt-1 text-[11px] text-muted-foreground">
+                      <dl className="mt-2 space-y-2">
+                        <div className="flex items-baseline justify-between gap-3">
+                          <dt className="text-[11px] text-muted-foreground">
                             SKUs
-                          </p>
+                          </dt>
+                          <dd className="font-display text-2xl font-semibold tabular-nums tracking-tight text-foreground">
+                            {summary.lineItemCount}
+                          </dd>
                         </div>
-                        <div>
-                          <p className="font-display text-2xl font-semibold tabular-nums tracking-tight text-foreground">
+                        <div className="flex items-baseline justify-between gap-3">
+                          <dt className="text-[11px] text-muted-foreground">
+                            Net
+                          </dt>
+                          <dd className="font-display text-2xl font-semibold tabular-nums tracking-tight text-foreground">
                             {summary.netQuantityDelta > 0
                               ? `+${summary.netQuantityDelta}`
                               : summary.netQuantityDelta}
-                          </p>
-                          <p className="mt-1 text-[11px] text-muted-foreground">
-                            Net
-                          </p>
+                          </dd>
                         </div>
-                        <div>
-                          <p className="font-display text-2xl font-semibold tabular-nums tracking-tight text-foreground">
-                            {summary.largestAbsoluteDelta}
-                          </p>
-                          <p className="mt-1 text-[11px] text-muted-foreground">
+                        <div className="flex items-baseline justify-between gap-3">
+                          <dt className="text-[11px] text-muted-foreground">
                             Variance
-                          </p>
+                          </dt>
+                          <dd className="font-display text-2xl font-semibold tabular-nums tracking-tight text-foreground">
+                            {summary.largestAbsoluteDelta}
+                          </dd>
                         </div>
-                      </div>
+                      </dl>
                     </div>
                   </div>
                 </div>

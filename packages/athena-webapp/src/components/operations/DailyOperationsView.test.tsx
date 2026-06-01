@@ -320,6 +320,33 @@ const timelineOverflowSnapshot: DailyOperationsSnapshot = {
   })),
 };
 
+const quickAddTimelineSnapshot: DailyOperationsSnapshot = {
+  ...operatingSnapshot,
+  timeline: [
+    {
+      createdAt: Date.UTC(2026, 4, 8, 12),
+      id: "event-quick-add",
+      message: "Kwamina Nuh quick added Vitamilk with quantity 100.",
+      productLink: {
+        label: "Vitamilk",
+        params: {
+          productSlug: "product-1",
+        },
+        search: {
+          variant: "VITAMILK-001",
+        },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug",
+      },
+      subject: {
+        id: "sku-1",
+        label: "Vitamilk",
+        type: "product_sku",
+      },
+      type: "pos_quick_add_product_created",
+    },
+  ],
+};
+
 function getCurrentLocalOperatingDate() {
   const date = new Date();
   const localDate = new Date(
@@ -840,6 +867,31 @@ describe("DailyOperationsViewContent", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Timeline event 6")).toBeInTheDocument();
     expect(screen.getByText("Timeline event 12")).toBeInTheDocument();
+  });
+
+  it("links quick-add product names to the product detail page with origin search", () => {
+    renderContent(quickAddTimelineSnapshot);
+
+    const productLink = screen.getByRole("link", { name: "Vitamilk" });
+
+    expect(productLink).toHaveAttribute(
+      "href",
+      expect.stringContaining(
+        "/wigclub/store/osu/products/product-1?o=",
+      ),
+    );
+    expect(productLink).toHaveAttribute(
+      "href",
+      expect.stringContaining("variant=VITAMILK-001"),
+    );
+    expect(
+      screen.getByText((content, node) => {
+        return (
+          node?.textContent ===
+          "Kwamina Nuh quick added Vitamilk with quantity 100."
+        );
+      }),
+    ).toBeInTheDocument();
   });
 
   it("leaves content empty while the store-day snapshot loads", () => {

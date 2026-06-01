@@ -75,6 +75,11 @@ describe("terminalRepository sync evidence", () => {
     expect(result).toEqual({
       latestEvent: null,
       latestReviewEvent: null,
+      latestReviewEventsByStatus: {
+        conflicted: null,
+        held: null,
+        rejected: null,
+      },
       sampledEventCount: 0,
       acceptedCount: 0,
       projectedCount: 0,
@@ -154,6 +159,23 @@ describe("terminalRepository sync evidence", () => {
         sequence: 5,
         status: "rejected",
       }),
+      latestReviewEventsByStatus: {
+        conflicted: expect.objectContaining({
+          localEventId: "event-conflicted",
+          sequence: 3,
+          status: "conflicted",
+        }),
+        held: expect.objectContaining({
+          localEventId: "event-held",
+          sequence: 4,
+          status: "held",
+        }),
+        rejected: expect.objectContaining({
+          localEventId: "event-rejected",
+          sequence: 5,
+          status: "rejected",
+        }),
+      },
       sampledEventCount: 5,
       acceptedCount: 1,
       projectedCount: 1,
@@ -180,6 +202,87 @@ describe("terminalRepository sync evidence", () => {
     });
   });
 
+  it("excludes manager-rejected sync reviews from actionable terminal evidence", async () => {
+    const ctx = buildCtx({
+      posLocalSyncEvent: [
+        buildSyncEvent({
+          localEventId: "event-manager-rejected",
+          rejectionCode: "manager_rejected",
+          sequence: 6,
+          status: "rejected",
+        }),
+        buildSyncEvent({
+          localEventId: "event-rejected",
+          sequence: 5,
+          status: "rejected",
+        }),
+        buildSyncEvent({
+          localEventId: "event-projected",
+          sequence: 4,
+          status: "projected",
+        }),
+      ],
+    });
+
+    const result = await getTerminalSyncEvidence(ctx as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    });
+
+    expect(result).toMatchObject({
+      latestEvent: expect.objectContaining({
+        localEventId: "event-manager-rejected",
+        status: "rejected",
+      }),
+      latestReviewEvent: expect.objectContaining({
+        localEventId: "event-rejected",
+        status: "rejected",
+      }),
+      latestReviewEventsByStatus: {
+        conflicted: null,
+        held: null,
+        rejected: expect.objectContaining({
+          localEventId: "event-rejected",
+          status: "rejected",
+        }),
+      },
+      rejectedCount: 1,
+    });
+  });
+
+  it("does not report terminal review evidence for fully manager-rejected sync history", async () => {
+    const ctx = buildCtx({
+      posLocalSyncEvent: [
+        buildSyncEvent({
+          localEventId: "event-manager-rejected",
+          rejectionCode: "manager_rejected",
+          sequence: 6,
+          status: "rejected",
+        }),
+        buildSyncEvent({
+          localEventId: "event-projected",
+          sequence: 4,
+          status: "projected",
+        }),
+      ],
+    });
+
+    const result = await getTerminalSyncEvidence(ctx as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    });
+
+    expect(result).toMatchObject({
+      latestReviewEvent: null,
+      latestReviewEventsByStatus: {
+        conflicted: null,
+        held: null,
+        rejected: null,
+      },
+      rejectedCount: 0,
+    });
+  });
+
   it("resolves a local register session to its cloud register session mapping", async () => {
     const ctx = buildCtx({
       posLocalSyncMapping: [
@@ -197,6 +300,20 @@ describe("terminalRepository sync evidence", () => {
           terminalId: "terminal-1" as Id<"posTerminal">,
         },
       ],
+      registerSession: [
+        {
+          _id: "register-session-1" as Id<"registerSession">,
+          _creationTime: 1,
+          expectedCash: 100,
+          openedAt: 1,
+          openedByStaffProfileId: "staff-1" as Id<"staffProfile">,
+          openingFloat: 100,
+          registerNumber: "1",
+          status: "closed",
+          storeId: "store-1" as Id<"store">,
+          terminalId: "terminal-1" as Id<"posTerminal">,
+        },
+      ],
     });
 
     await expect(
@@ -207,6 +324,48 @@ describe("terminalRepository sync evidence", () => {
       }),
     ).resolves.toBe("register-session-1");
   });
+
+  it("does not resolve register session mappings for another terminal", async () => {
+    const ctx = buildCtx({
+      posLocalSyncMapping: [
+        {
+          _id: "mapping-1" as Id<"posLocalSyncMapping">,
+          _creationTime: 1,
+          cloudId: "register-session-1",
+          cloudTable: "registerSession",
+          createdAt: 1,
+          localEventId: "event-1",
+          localId: "local-register-1",
+          localIdKind: "registerSession",
+          localRegisterSessionId: "local-register-1",
+          storeId: "store-1" as Id<"store">,
+          terminalId: "terminal-1" as Id<"posTerminal">,
+        },
+      ],
+      registerSession: [
+        {
+          _id: "register-session-1" as Id<"registerSession">,
+          _creationTime: 1,
+          expectedCash: 100,
+          openedAt: 1,
+          openedByStaffProfileId: "staff-1" as Id<"staffProfile">,
+          openingFloat: 100,
+          registerNumber: "1",
+          status: "closed",
+          storeId: "store-1" as Id<"store">,
+          terminalId: "terminal-2" as Id<"posTerminal">,
+        },
+      ],
+    });
+
+    await expect(
+      resolveTerminalRegisterSessionActionTarget(ctx as never, {
+        localRegisterSessionId: "local-register-1",
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+      }),
+    ).resolves.toBeNull();
+  });
 });
 
 function buildCtx(seed: {
@@ -215,10 +374,17 @@ function buildCtx(seed: {
   posLocalSyncEvent?: Array<Doc<"posLocalSyncEvent">>;
   posLocalSyncMapping?: Array<Doc<"posLocalSyncMapping">>;
   posTerminalRuntimeStatus?: Array<Doc<"posTerminalRuntimeStatus">>;
+  registerSession?: Array<Doc<"registerSession">>;
 } = {}) {
   return {
     db: {
-      get: vi.fn(async () => null),
+      get: vi.fn(async (tableName: keyof typeof seed, id: string) => {
+        return (
+          ((seed[tableName] ?? []) as Array<Record<string, unknown>>).find(
+            (row) => row._id === id,
+          ) ?? null
+        );
+      }),
       insert: vi.fn(async () => "runtime-status-new"),
       patch: vi.fn(async () => undefined),
       query: vi.fn((tableName: keyof typeof seed) =>

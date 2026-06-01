@@ -44,7 +44,7 @@ function renderGate(overrides: Partial<RegisterDrawerGateState> = {}) {
 }
 
 describe("RegisterDrawerGate", () => {
-  it("blocks drawer opening unless the signed-in staff member is a manager", async () => {
+  it("blocks drawer opening unless the signed-in staff member is a cashier or manager", async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();
     renderGate({
@@ -53,7 +53,7 @@ describe("RegisterDrawerGate", () => {
     });
 
     expect(
-      screen.getByText("Manager sign-in required to open this drawer."),
+      screen.getByText("Cashier or manager sign-in required to open this drawer."),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open drawer" })).toBeDisabled();
 

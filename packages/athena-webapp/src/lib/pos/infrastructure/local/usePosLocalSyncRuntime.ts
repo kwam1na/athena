@@ -1747,9 +1747,29 @@ export function derivePosLocalRuntimeSyncStatus(
       : options.staffProfileId
         ? events.filter((event) => event.staffProfileId === options.staffProfileId)
         : [];
+  const terminalBlockingReviewEvents =
+    options.staffProfileId === undefined
+      ? []
+      : events.filter(
+          (event) =>
+            event.staffProfileId !== options.staffProfileId &&
+            event.sync.status === "needs_review" &&
+            event.sync.uploaded &&
+            isDrawerAuthorityLifecycleEvent(event),
+        );
   const relevantEvents = collectRuntimeRelevantEvents(scopedEvents);
+  const relevantEventIds = new Set(
+    relevantEvents.map((event) => event.localEventId),
+  );
+  const terminalBlockingRelevantEvents = terminalBlockingReviewEvents.filter(
+    (event) => !relevantEventIds.has(event.localEventId),
+  );
+  const statusEvents = [
+    ...relevantEvents,
+    ...terminalBlockingRelevantEvents,
+  ];
   const status = derivePosLocalSyncStatus({
-    events: relevantEvents.map((event) =>
+    events: statusEvents.map((event) =>
       typeof event.uploadSequence === "number"
         ? event
         : { ...event, uploadSequence: event.sequence },
@@ -1766,7 +1786,7 @@ export function derivePosLocalRuntimeSyncStatus(
     pendingEventCount: status.pendingCount + status.failedCount,
     status: status.state === "failed" || status.state === "needs_review"
         ? "needs_review"
-        : hasPendingLocalCloseout(relevantEvents)
+        : hasPendingLocalCloseout(statusEvents)
           ? "locally_closed_pending_sync"
           : status.state,
   };

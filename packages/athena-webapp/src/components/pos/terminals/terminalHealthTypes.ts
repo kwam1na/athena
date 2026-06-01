@@ -131,6 +131,11 @@ export type TerminalSyncEvidence = {
   heldCount?: number;
   latestEvent?: TerminalSyncEvent | null;
   latestReviewEvent?: TerminalSyncReviewEvent | null;
+  latestReviewEventsByStatus?: {
+    conflicted?: TerminalSyncReviewEvent | null;
+    held?: TerminalSyncReviewEvent | null;
+    rejected?: TerminalSyncReviewEvent | null;
+  };
   projectedCount?: number;
   rejectedCount?: number;
   sampledEventCount?: number;

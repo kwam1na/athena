@@ -1,5 +1,6 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
+import { recordOperationalEventWithCtx } from "../../../operations/operationalEvents";
 import { toSlug } from "../../../utils";
 
 type CatalogResult = {
@@ -171,6 +172,78 @@ function generateSKU({
   return `${storeCode}-${productCode}-${skuCode}`;
 }
 
+function getActorLabel(user: Doc<"athenaUser"> | null, fallbackId: string) {
+  const fullName = [user?.firstName, user?.lastName]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(" ");
+
+  return fullName || user?.email?.trim() || fallbackId;
+}
+
+function buildQuickAddEventMessage(args: {
+  actorLabel: string;
+  eventType:
+    | "pos_quick_add_barcode_attached"
+    | "pos_quick_add_product_created"
+    | "pos_quick_add_variant_created";
+  productName: string;
+  quantityAvailable: number;
+  barcode?: string;
+}) {
+  if (args.eventType === "pos_quick_add_barcode_attached") {
+    const barcode = args.barcode?.trim() || "a barcode";
+    return `${args.actorLabel} attached barcode ${barcode} to ${args.productName}.`;
+  }
+
+  return `${args.actorLabel} quick added ${args.productName} with quantity ${args.quantityAvailable}.`;
+}
+
+async function recordQuickAddOperationalEvent(
+  ctx: MutationCtx,
+  args: {
+    actorUserId: Id<"athenaUser">;
+    eventType:
+      | "pos_quick_add_barcode_attached"
+      | "pos_quick_add_product_created"
+      | "pos_quick_add_variant_created";
+    organizationId: Id<"organization">;
+    product: Doc<"product">;
+    sku: Doc<"productSku">;
+    storeId: Id<"store">;
+  },
+) {
+  const actor = await ctx.db.get("athenaUser", args.actorUserId);
+  const actorLabel = getActorLabel(actor, String(args.actorUserId));
+
+  await recordOperationalEventWithCtx(ctx, {
+    actorUserId: args.actorUserId,
+    eventType: args.eventType,
+    message: buildQuickAddEventMessage({
+      actorLabel,
+      barcode: args.sku.barcode,
+      eventType: args.eventType,
+      productName: args.product.name,
+      quantityAvailable: args.sku.quantityAvailable,
+    }),
+    metadata: {
+      actorLabel,
+      barcode: args.sku.barcode,
+      price: args.sku.netPrice ?? args.sku.price,
+      productId: args.product._id,
+      productName: args.product.name,
+      productSkuId: args.sku._id,
+      quantityAvailable: args.sku.quantityAvailable,
+      sku: args.sku.sku,
+    },
+    organizationId: args.organizationId,
+    storeId: args.storeId,
+    subjectId: String(args.sku._id),
+    subjectLabel: args.product.name,
+    subjectType: "product_sku",
+  });
+}
+
 export async function quickAddCatalogItem(
   ctx: MutationCtx,
   args: {
@@ -231,6 +304,15 @@ export async function quickAddCatalogItem(
       ...skuToAttach,
       barcode: lookupCode,
     };
+
+    await recordQuickAddOperationalEvent(ctx, {
+      actorUserId: args.createdByUserId,
+      eventType: "pos_quick_add_barcode_attached",
+      organizationId: store.organizationId,
+      product,
+      sku: attachedSku,
+      storeId: args.storeId,
+    });
 
     return mapSkuToCatalogResult(ctx, {
       product,
@@ -312,6 +394,17 @@ export async function quickAddCatalogItem(
   await ctx.db.patch("productSku", skuId, { sku });
 
   const productSku = (await ctx.db.get("productSku", skuId))!;
+
+  await recordQuickAddOperationalEvent(ctx, {
+    actorUserId: args.createdByUserId,
+    eventType: args.productId
+      ? "pos_quick_add_variant_created"
+      : "pos_quick_add_product_created",
+    organizationId: store.organizationId,
+    product,
+    sku: productSku,
+    storeId: args.storeId,
+  });
 
   return mapSkuToCatalogResult(ctx, {
     product,

@@ -18,8 +18,8 @@ const OPEN_DRAWER_REGISTER_NUMBER_MISMATCH_MESSAGE =
   "The terminal is configured with a different register number.";
 const OPEN_DRAWER_MISSING_REGISTER_NUMBER_MESSAGE =
   "This terminal is not configured with a register number.";
-const OPEN_DRAWER_MANAGER_REQUIRED_MESSAGE =
-  "Manager sign-in required to open this drawer.";
+const OPEN_DRAWER_OPERATOR_REQUIRED_MESSAGE =
+  "Cashier or manager sign-in required to open this drawer.";
 
 type OpenDrawerResult = CommandResult<PosCashDrawerSummary | null>;
 
@@ -102,17 +102,17 @@ export async function openDrawer(
       q.eq("staffProfileId", args.staffProfileId),
     )
     .take(25);
-  const hasManagerRole = activeRoleAssignments.some(
+  const hasDrawerOperatorRole = activeRoleAssignments.some(
     (assignment) =>
       assignment.storeId === args.storeId &&
       assignment.status === "active" &&
-      assignment.role === "manager",
+      (assignment.role === "cashier" || assignment.role === "manager"),
   );
 
-  if (!hasManagerRole) {
+  if (!hasDrawerOperatorRole) {
     return userError({
       code: "authorization_failed",
-      message: OPEN_DRAWER_MANAGER_REQUIRED_MESSAGE,
+      message: OPEN_DRAWER_OPERATOR_REQUIRED_MESSAGE,
     });
   }
 

@@ -286,6 +286,28 @@ export function createConvexLocalSyncRepository(
       const id = await ctx.db.insert("posLocalSyncConflict", input);
       return { _id: id, ...input };
     },
+    async resolveConflictsForEvent(args) {
+      const conflicts = await ctx.db
+        .query("posLocalSyncConflict")
+        .withIndex("by_store_terminal_localEvent", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("terminalId", args.terminalId)
+            .eq("localEventId", args.localEventId),
+        )
+        .take(100);
+
+      await Promise.all(
+        conflicts
+          .filter((conflict) => conflict.status === "needs_review")
+          .map((conflict) =>
+            ctx.db.patch("posLocalSyncConflict", conflict._id, {
+              status: "resolved",
+              resolvedAt: args.resolvedAt,
+            }),
+          ),
+      );
+    },
     async listConflictsForEvent(args) {
       return ctx.db
         .query("posLocalSyncConflict")

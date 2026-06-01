@@ -2,6 +2,7 @@ import type { Doc, Id } from "../../../_generated/dataModel";
 import type { QueryCtx } from "../../../_generated/server";
 
 const SYNC_CONFLICT_LIMIT = 500;
+const MANAGER_REJECTED_SYNC_REVIEW_CODE = "manager_rejected";
 
 export type RegisterSessionSyncConflict = {
   _id: string;
@@ -129,7 +130,11 @@ export async function listOpenLocalSyncConflictsByRegisterSession(
         return { ...conflict, status: "needs_review" };
       }
 
-      if (options.includeRejectedEvidence && syncEvent?.status === "rejected") {
+      if (
+        options.includeRejectedEvidence &&
+        syncEvent?.status === "rejected" &&
+        syncEvent.rejectionCode !== MANAGER_REJECTED_SYNC_REVIEW_CODE
+      ) {
         return {
           ...conflict,
           conflictType: "server_rejected",
@@ -156,6 +161,8 @@ export async function listOpenLocalSyncConflictsByRegisterSession(
   );
   if (options.includeRejectedEvidence) {
     for (const event of rejectedEvents) {
+      if (event.rejectionCode === MANAGER_REJECTED_SYNC_REVIEW_CODE) continue;
+
       const key = [event.terminalId, event.localEventId].join(":");
       if (includedConflictKeys.has(key)) continue;
 

@@ -263,6 +263,88 @@ describe("createLocalSyncIngestionService", () => {
     );
   });
 
+  it("reprojects existing conflicted register opens on retry and resolves stale conflicts", async () => {
+    const repository = createFakeSyncRepository({
+      hasActivePosRole: true,
+      existingRegisterSession: null,
+    });
+    repository.events.push({
+      _id: "sync-event-existing",
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      localEventId: "event-register-opened-1",
+      localRegisterSessionId: "local-register-1",
+      sequence: 1,
+      eventType: "register_opened",
+      occurredAt: 10,
+      staffProfileId: "staff-1" as never,
+      payload: {
+        openingFloat: 100,
+        registerNumber: "1",
+      },
+      submittedAt: 50,
+      acceptedAt: 50,
+      status: "conflicted",
+      projectedAt: 50,
+    });
+    repository.conflicts.push({
+      _id: "sync-conflict-existing",
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      localRegisterSessionId: "local-register-1",
+      localEventId: "event-register-opened-1",
+      sequence: 1,
+      conflictType: "permission",
+      status: "needs_review",
+      summary: "Staff access changed before this POS history synced.",
+      details: {
+        eventType: "register_opened",
+      },
+      createdAt: 50,
+    });
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 100,
+    });
+
+    const retry = await service.ingestBatch(
+      buildBatch({
+        events: [buildRegisterOpenedEvent({ sequence: 1 })],
+      }),
+    );
+
+    expect(retry.kind).toBe("ok");
+    if (retry.kind !== "ok") throw new Error("Expected ok result");
+    expect(retry.data.accepted).toEqual([
+      {
+        localEventId: "event-register-opened-1",
+        sequence: 1,
+        status: "projected",
+      },
+    ]);
+    expect(retry.data.conflicts).toEqual([]);
+    expect(repository.events[0]).toEqual(
+      expect.objectContaining({
+        status: "projected",
+        submittedAt: 90,
+      }),
+    );
+    expect(repository.conflicts[0]).toEqual(
+      expect.objectContaining({
+        status: "resolved",
+        resolvedAt: 100,
+      }),
+    );
+    expect(repository.createdRegisterSessions).toEqual([
+      expect.objectContaining({
+        openedByStaffProfileId: "staff-1",
+        openingFloat: 100,
+        registerNumber: "1",
+      }),
+    ]);
+  });
+
   it("holds an out-of-order event without projection side effects", async () => {
     const repository = createFakeSyncRepository();
     const service = createLocalSyncIngestionService({
@@ -3191,6 +3273,19 @@ function createFakeSyncRepository(
       } satisfies LocalSyncConflictRecord;
       conflicts.push(conflict);
       return conflict;
+    },
+    async resolveConflictsForEvent(args) {
+      for (const conflict of conflicts) {
+        if (
+          conflict.storeId === args.storeId &&
+          conflict.terminalId === args.terminalId &&
+          conflict.localEventId === args.localEventId &&
+          conflict.status === "needs_review"
+        ) {
+          conflict.status = "resolved";
+          conflict.resolvedAt = args.resolvedAt;
+        }
+      }
     },
     async listConflictsForEvent(args) {
       return conflicts.filter(

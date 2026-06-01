@@ -1,9 +1,15 @@
-import { ArrowRightIcon, BanknoteIcon, LockKeyhole } from "lucide-react";
+import {
+  ArrowRightIcon,
+  BanknoteIcon,
+  LockKeyhole,
+  RotateCcw,
+} from "lucide-react";
 import { Link } from "@tanstack/react-router";
 
 import type {
   RegisterCashierCardState,
   RegisterCloseoutControlState,
+  RegisterDrawerGateState,
   RegisterInfoState,
   RegisterSessionPanelState,
 } from "@/lib/pos/presentation/register/registerUiState";
@@ -17,6 +23,7 @@ import { RegisterSessionPanel } from "./RegisterSessionPanel";
 interface RegisterActionBarProps {
   cashierCard: RegisterCashierCardState | null;
   closeoutControl: RegisterCloseoutControlState | null;
+  drawerGate?: RegisterDrawerGateState | null;
   registerInfo: RegisterInfoState;
   sessionPanel: RegisterSessionPanelState | null;
 }
@@ -24,9 +31,12 @@ interface RegisterActionBarProps {
 export function RegisterActionBar({
   cashierCard,
   closeoutControl,
+  drawerGate,
   registerInfo,
   sessionPanel,
 }: RegisterActionBarProps) {
+  const drawerRecoveryGate = drawerGate?.mode === "recovery" ? drawerGate : null;
+
   return (
     <div className="flex flex-wrap items-center justify-end gap-4">
       <RegisterCashierControl cashierCard={cashierCard} />
@@ -43,7 +53,26 @@ export function RegisterActionBar({
           registerNumber={registerInfo.registerLabel}
           hasTerminal={registerInfo.hasTerminal}
         />
-        {closeoutControl ? (
+        {drawerRecoveryGate ? (
+          <div className="flex items-center gap-2 border-l border-border pl-3">
+            <p className="text-xs font-medium text-muted-foreground">
+              Drawer closed
+            </p>
+            <Button
+              className="h-10"
+              disabled={
+                drawerRecoveryGate.isSubmitting ||
+                drawerRecoveryGate.canOpenDrawer === false
+              }
+              onClick={() => void drawerRecoveryGate.onSubmit?.()}
+              type="button"
+              variant="outline"
+            >
+              <RotateCcw className="mr-2 h-4 w-4" />
+              Open drawer
+            </Button>
+          </div>
+        ) : closeoutControl ? (
           <>
             {closeoutControl.canShowOpeningFloatCorrection ? (
               <Button

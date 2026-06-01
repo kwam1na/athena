@@ -521,6 +521,23 @@ function hasUploadedLocalEventsForStaff(
   );
 }
 
+function hasSyncedSaleLocalEventsForStaff(
+  events: PosLocalEventRecord[],
+  staffProfileId: Id<"staffProfile"> | string | null | undefined,
+) {
+  if (!staffProfileId) {
+    return false;
+  }
+
+  return events.some(
+    (event) =>
+      event.staffProfileId === staffProfileId &&
+      event.type === "transaction.completed" &&
+      event.sync.status === "synced" &&
+      event.sync.uploaded,
+  );
+}
+
 function mapProductToOptimisticCartItem(
   product: Product,
   quantity: number,
@@ -1104,6 +1121,16 @@ function canOperateRegister(staff: StaffProfileRosterRow): boolean {
   return roles.some((role) => role === "cashier" || role === "manager");
 }
 
+function hasRegisterOperatorRole(roles?: string[] | null): boolean {
+  return Boolean(
+    roles?.some((role) => role === "cashier" || role === "manager"),
+  );
+}
+
+function hasRegisterManagerRole(roles?: string[] | null): boolean {
+  return Boolean(roles?.includes("manager"));
+}
+
 function isEmptyLocalSaleShell(
   sale: PosLocalActiveSaleReadModel | null,
 ): sale is PosLocalActiveSaleReadModel {
@@ -1375,6 +1402,10 @@ export function useRegisterViewModel(): RegisterViewModel {
     localRegisterReadModel?.sourceEvents ?? [],
     staffProfileId,
   );
+  const localStaffHasSyncedSaleEvents = hasSyncedSaleLocalEventsForStaff(
+    localRegisterReadModel?.sourceEvents ?? [],
+    staffProfileId,
+  );
   const latestLocalRegisterLifecycleEvent =
     getLatestLocalRegisterLifecycleEvent(localRegisterReadModel);
   const latestLocalCloseoutIsSynced =
@@ -1514,9 +1545,13 @@ export function useRegisterViewModel(): RegisterViewModel {
     limit: 10,
   });
   const cashier = registerState?.cashier ?? null;
+  const canSignedInStaffOpenDrawer = Boolean(
+    hasRegisterOperatorRole(cashier?.activeRoles) ||
+      hasRegisterOperatorRole(localAuthenticatedStaff?.activeRoles),
+  );
   const isCashierManager = Boolean(
-    cashier?.activeRoles?.includes("manager") ||
-      localAuthenticatedStaff?.activeRoles.includes("manager"),
+    hasRegisterManagerRole(cashier?.activeRoles) ||
+      hasRegisterManagerRole(localAuthenticatedStaff?.activeRoles),
   );
   const activeSessionConflict = registerState?.activeSessionConflict ?? null;
 
@@ -2154,9 +2189,11 @@ export function useRegisterViewModel(): RegisterViewModel {
   const hasActiveCustomerDetails = hasCustomerDetails(customerInfo);
   const hasActiveCartDraft =
     activeCartItems.length > 0 || serviceLineDrafts.length > 0;
+  const hasInProgressSaleDraft =
+    hasActiveCartDraft || hasActiveCustomerDetails || payments.length > 0;
   const hasClearableSaleState = Boolean(
     operableActiveSession &&
-    (hasActiveCartDraft || hasActiveCustomerDetails || payments.length > 0),
+    hasInProgressSaleDraft,
   );
   const hasActivePosSession = Boolean(operableActiveSession?._id);
   const hasCloudBlockedRecoverableLocalSale = Boolean(
@@ -2197,25 +2234,36 @@ export function useRegisterViewModel(): RegisterViewModel {
       bootstrapState.phase === "resumable" ||
       hasActivePosSession),
   );
+  const hasDraftDrawerRecoveryState = Boolean(
+    hasInProgressSaleDraft &&
+      !usableActiveRegisterSession &&
+      !locallyOperableRegisterSession &&
+      !localEventRegisterSessionId &&
+      !isTransactionCompleted,
+  );
   const localSaleAuthorityBlockReason =
     localRegisterReadModel?.saleBlockReason ?? null;
   const localDrawerAuthorityReason =
     localRegisterReadModel?.drawerAuthorityReason ?? null;
   const hasRecoverableDrawerAuthorityBlock =
-    localDrawerAuthorityReason === "authority_unknown" ||
+    localDrawerAuthorityReason === "authority_unknown";
+  const hasLifecycleReviewDrawerBlock =
+    localSaleAuthorityBlockReason === "lifecycle_needs_review" ||
     localDrawerAuthorityReason === "lifecycle_rejected";
   const hasLocalSaleAuthorityBlock = Boolean(localSaleAuthorityBlockReason);
   const requiresDrawerGate = Boolean(
     activeStoreId &&
     terminal?._id &&
     staffProfileId &&
-    bootstrapState &&
-    (hasMissingDrawerStartupState ||
-      hasCloseoutBlockedDrawerState ||
-      hasMissingDrawerRecoveryState ||
+    ((bootstrapState &&
+      (hasMissingDrawerStartupState ||
+        hasCloseoutBlockedDrawerState ||
+        hasMissingDrawerRecoveryState)) ||
+      hasCloudBlockedRecoverableLocalSale ||
+      hasDraftDrawerRecoveryState ||
       activeSessionHasBlockedRegisterBinding ||
       hasLocalSaleAuthorityBlock),
-  ) && !hasCloudBlockedRecoverableLocalSale;
+  );
   const closeoutBlockedGateIsRecovery = Boolean(
     hasCloseoutBlockedDrawerState &&
     (hasMissingDrawerRecoveryState || activeSessionHasBlockedRegisterBinding),
@@ -2279,13 +2327,16 @@ export function useRegisterViewModel(): RegisterViewModel {
     ? "openingFloatCorrection"
     : localSaleAuthorityBlockReason === "terminal_integrity"
       ? "terminalRepair"
-      : (localSaleAuthorityBlockReason === "drawer_authority" &&
-            hasRecoverableDrawerAuthorityBlock) ||
-          localSaleAuthorityBlockReason === "lifecycle_needs_review"
+      : hasLifecycleReviewDrawerBlock
+        ? "recovery"
+      : localSaleAuthorityBlockReason === "drawer_authority" &&
+          hasRecoverableDrawerAuthorityBlock
         ? "drawerAuthorityRepair"
         : hasCloseoutBlockedDrawerState || activeCloseoutRegisterSession
           ? "closeoutBlocked"
           : hasMissingDrawerRecoveryState ||
+              hasCloudBlockedRecoverableLocalSale ||
+              hasDraftDrawerRecoveryState ||
               activeSessionHasBlockedRegisterBinding
             ? "recovery"
             : "initialSetup";
@@ -2923,8 +2974,14 @@ export function useRegisterViewModel(): RegisterViewModel {
     const localSaleId = operableActiveSession._id.toString();
     const isProjectedLocalSale =
       localRegisterReadModel?.activeSale?.localPosSessionId === localSaleId;
+    const hasServiceOnlyLocalDraft =
+      serviceLineDrafts.length > 0 && activeCartItems.length === 0;
 
-    if (isLocalOperableSession(operableActiveSession) || isProjectedLocalSale) {
+    if (
+      isLocalOperableSession(operableActiveSession) ||
+      isProjectedLocalSale ||
+      hasServiceOnlyLocalDraft
+    ) {
       if (checkoutMutationLockedRef.current) {
         toast.error("Finish the current checkout update before clearing the sale.");
         return false;
@@ -2945,12 +3002,18 @@ export function useRegisterViewModel(): RegisterViewModel {
           presentOperatorError("Unable to update this sale. Try again.");
           return false;
         }
+        const clearedLocalSaleId = hasServiceOnlyLocalDraft
+          ? await ensureLocalPosSessionId()
+          : localSaleId;
+        if (!clearedLocalSaleId) {
+          return false;
+        }
         const savedLocally = await localCommandGateway.clearCart({
           terminalId: terminal._id,
           storeId: activeStoreId!,
           registerNumber,
           localRegisterSessionId: localEventRegisterSessionId ?? registerNumber,
-          localPosSessionId: localSaleId,
+          localPosSessionId: clearedLocalSaleId,
           staffProfileId,
           reason: "Sale cleared",
         });
@@ -2998,6 +3061,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     activeCartItems,
     localEventRegisterSessionId,
     activeStoreId,
+    ensureLocalPosSessionId,
     localCommandGateway,
     localRegisterReadModel?.activeSale?.localPosSessionId,
     noteLocalRegisterEventChanged,
@@ -3194,6 +3258,13 @@ export function useRegisterViewModel(): RegisterViewModel {
       return;
     }
 
+    if (!canSignedInStaffOpenDrawer) {
+      setDrawerErrorMessage(
+        "Cashier or manager sign-in required to open this drawer.",
+      );
+      return;
+    }
+
     const isOnline = globalThis.navigator?.onLine ?? true;
 
     if (isOnline && !staffProofToken) {
@@ -3255,6 +3326,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     toast.success("Drawer open");
   }, [
     activeStoreId,
+    canSignedInStaffOpenDrawer,
     staffProfileId,
     staffProofToken,
     drawerNotes,
@@ -3726,7 +3798,12 @@ export function useRegisterViewModel(): RegisterViewModel {
             return false;
           }
 
-          if (!activeStoreId || !terminal?._id || !operableActiveSession) {
+          const localPosSessionId = await ensureLocalPosSessionId();
+          if (!localPosSessionId) {
+            return false;
+          }
+
+          if (!activeStoreId || !terminal?._id) {
             presentOperatorError("Unable to update this sale. Try again.");
             return false;
           }
@@ -3757,7 +3834,7 @@ export function useRegisterViewModel(): RegisterViewModel {
             storeId: activeStoreId,
             registerNumber,
             localRegisterSessionId: localEventRegisterSessionId ?? registerNumber,
-            localPosSessionId: operableActiveSession._id.toString(),
+            localPosSessionId,
             staffProfileId,
             payload: serviceLineStateToLocalPayload(serviceLine),
           });
@@ -3783,9 +3860,9 @@ export function useRegisterViewModel(): RegisterViewModel {
     [
       activeSessionHasBlockedRegisterBinding,
       activeStoreId,
+      ensureLocalPosSessionId,
       localCommandGateway,
       localEventRegisterSessionId,
-      operableActiveSession,
       registerNumber,
       staffProfileId,
       terminal?._id,
@@ -3803,11 +3880,14 @@ export function useRegisterViewModel(): RegisterViewModel {
         .catch(() => undefined)
         .then(async () => {
           const existing = serviceLineDrafts.find((item) => item.id === lineId);
+          const localPosSessionId = await ensureLocalPosSessionId();
+          if (!localPosSessionId) {
+            return;
+          }
           if (
             existing &&
             activeStoreId &&
             terminal?._id &&
-            operableActiveSession &&
             staffProfileId
           ) {
             const nextLine = {
@@ -3823,7 +3903,7 @@ export function useRegisterViewModel(): RegisterViewModel {
               storeId: activeStoreId,
               registerNumber,
               localRegisterSessionId: localEventRegisterSessionId ?? registerNumber,
-              localPosSessionId: operableActiveSession._id.toString(),
+              localPosSessionId,
               staffProfileId,
               payload: serviceLineStateToLocalPayload(nextLine),
             });
@@ -3856,9 +3936,9 @@ export function useRegisterViewModel(): RegisterViewModel {
     },
     [
       activeStoreId,
+      ensureLocalPosSessionId,
       localCommandGateway,
       localEventRegisterSessionId,
-      operableActiveSession,
       registerNumber,
       serviceLineDrafts,
       staffProfileId,
@@ -3876,11 +3956,14 @@ export function useRegisterViewModel(): RegisterViewModel {
       .catch(() => undefined)
       .then(async () => {
         const existing = serviceLineDrafts.find((item) => item.id === lineId);
+        const localPosSessionId = await ensureLocalPosSessionId();
+        if (!localPosSessionId) {
+          return;
+        }
         if (
           existing &&
           activeStoreId &&
           terminal?._id &&
-          operableActiveSession &&
           staffProfileId
         ) {
           const savedLocally = await localCommandGateway.appendServiceLine({
@@ -3888,7 +3971,7 @@ export function useRegisterViewModel(): RegisterViewModel {
             storeId: activeStoreId,
             registerNumber,
             localRegisterSessionId: localEventRegisterSessionId ?? registerNumber,
-            localPosSessionId: operableActiveSession._id.toString(),
+            localPosSessionId,
             staffProfileId,
             payload: {
               ...serviceLineStateToLocalPayload(existing),
@@ -3914,9 +3997,9 @@ export function useRegisterViewModel(): RegisterViewModel {
     return queued;
   }, [
     activeStoreId,
+    ensureLocalPosSessionId,
     localCommandGateway,
     localEventRegisterSessionId,
-    operableActiveSession,
     registerNumber,
     serviceLineDrafts,
     staffProfileId,
@@ -4392,12 +4475,18 @@ export function useRegisterViewModel(): RegisterViewModel {
         return;
       }
 
+      const localPosSessionId =
+        serviceLineDrafts.length > 0
+          ? await ensureLocalPosSessionId()
+          : operableActiveSession._id.toString();
+      if (!localPosSessionId) return;
+
       const savedLocally = await localCommandGateway.clearCart({
         terminalId: terminal._id,
         storeId: activeStoreId!,
         registerNumber,
         localRegisterSessionId: localEventRegisterSessionId ?? registerNumber,
-        localPosSessionId: operableActiveSession._id.toString(),
+        localPosSessionId,
         staffProfileId,
         reason: "Cart cleared",
       });
@@ -4430,6 +4519,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     localEventRegisterSessionId,
     activeCartItems,
     activeStoreId,
+    ensureLocalPosSessionId,
     localCommandGateway,
     noteLocalRegisterEventChanged,
     registerNumber,
@@ -4602,6 +4692,23 @@ export function useRegisterViewModel(): RegisterViewModel {
   ]);
 
   const handleCashierSignOut = useCallback(async () => {
+    const isRecoveringLocalSale = Boolean(
+      drawerGateMode === "recovery" &&
+        operableActiveSession &&
+        (isLocalOperableSession(operableActiveSession) ||
+          localRegisterReadModel?.activeSale?.localPosSessionId ===
+            operableActiveSession._id.toString()),
+    );
+
+    if (isRecoveringLocalSale) {
+      staffProfileIdRef.current = null;
+      staffProofTokenRef.current = null;
+      resetDraftState();
+      setDrawerErrorMessage(null);
+      requestBootstrap();
+      return;
+    }
+
     if (
       !operableActiveSession &&
       (activeCartItems.length > 0 || serviceLineDrafts.length > 0)
@@ -4628,9 +4735,12 @@ export function useRegisterViewModel(): RegisterViewModel {
 
     resetDraftState();
   }, [
+    drawerGateMode,
     operableActiveSession,
     activeCartItems.length,
     holdCurrentSession,
+    localRegisterReadModel?.activeSale?.localPosSessionId,
+    requestBootstrap,
     resetDraftState,
     serviceLineDrafts.length,
     voidCurrentSession,
@@ -5171,7 +5281,7 @@ export function useRegisterViewModel(): RegisterViewModel {
               registerNumber,
               currency: activeStoreCurrency,
               canOpenCashControls: isCashierManager,
-              canOpenDrawer: isCashierManager,
+              canOpenDrawer: canSignedInStaffOpenDrawer,
               openingFloat: drawerOpeningFloat,
               notes: drawerNotes,
               errorMessage:
@@ -5245,6 +5355,12 @@ export function useRegisterViewModel(): RegisterViewModel {
   const localRuntimeStatusSource = localRuntimeSyncSource?.status
     ? localRuntimeSyncSource
     : null;
+  const localRuntimeStatusSourceForPresentation =
+    localRuntimeStatusSource?.status === "needs_review" &&
+    localStaffHasSyncedSaleEvents &&
+    localStaffPendingUploadCount === 0
+      ? null
+      : localRuntimeStatusSource;
   const localReadModelPendingUploadCount = localStaffPendingUploadCount;
   const localOperableRegisterPendingCount =
     localReadModelPendingUploadCount > 0
@@ -5288,8 +5404,8 @@ export function useRegisterViewModel(): RegisterViewModel {
         }
       : null;
   const localSyncSource = readLocalSyncStatus(
-    localRuntimeStatusSource
-      ? { localSyncStatus: localRuntimeStatusSource }
+    localRuntimeStatusSourceForPresentation
+      ? { localSyncStatus: localRuntimeStatusSourceForPresentation }
       : null,
     operableActiveSession,
     localReadModelSyncSource,
@@ -5299,9 +5415,9 @@ export function useRegisterViewModel(): RegisterViewModel {
     registerState,
   );
   const hasSyncedLocalEvents =
-    localStaffHasUploadedEvents &&
+    (localStaffHasSyncedSaleEvents || localStaffHasUploadedEvents) &&
     localReadModelPendingUploadCount === 0 &&
-    !localRuntimeStatusSource;
+    !localRuntimeStatusSourceForPresentation;
   const shouldShowSyncStatus = Boolean(localSyncSource || hasSyncedLocalEvents);
   const syncStatus =
     activeStoreId && terminal?._id && shouldShowSyncStatus
@@ -5494,6 +5610,14 @@ export function useRegisterViewModel(): RegisterViewModel {
       isTransactionCompleted,
       completedOrderNumber,
       completionBlockMessage: serviceCheckoutBlockMessage,
+      serviceLines: serviceLineDrafts.map((item) => ({
+        id: item.id,
+        name: item.name,
+        quantity: item.quantity,
+        unitPrice: item.price,
+        totalPrice: item.price * item.quantity,
+        serviceMode: item.serviceMode,
+      })),
       completedTransactionData,
       cashierName: getCashierDisplayName(cashier),
       actorStaffProfileId: staffProfileId,

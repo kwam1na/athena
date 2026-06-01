@@ -84,6 +84,7 @@ type DailyOperationsTimelineEvent = {
   createdAt: number;
   id: string;
   message: string;
+  productLink?: LinkTarget;
   subject: SourceSubject;
   type: string;
 };
@@ -472,17 +473,88 @@ async function listTimelineEvents(
     .order("desc")
     .take(MAX_OPERATIONS_QUERY_LIMIT);
 
-  return events.map((event) => ({
-    createdAt: event.createdAt,
-    id: event._id,
-    message: event.message,
-    subject: {
-      id: event.subjectId,
-      label: event.subjectLabel,
-      type: event.subjectType,
-    },
-    type: event.eventType,
-  }));
+  return events.sort(compareTimelineEvents).map((event) => {
+    const metadata = event.metadata ?? {};
+    const productId =
+      typeof metadata.productId === "string" ? metadata.productId : undefined;
+    const productName =
+      typeof metadata.productName === "string"
+        ? metadata.productName
+        : event.subjectLabel;
+    const sku = typeof metadata.sku === "string" ? metadata.sku : undefined;
+    const productLink =
+      event.subjectType === "product_sku" && productId && productName
+        ? {
+            label: productName,
+            params: {
+              productSlug: productId,
+            },
+            search: {
+              ...(sku ? { variant: sku } : {}),
+            },
+            to: "/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug",
+          }
+        : undefined;
+
+    return {
+      createdAt: event.createdAt,
+      id: event._id,
+      message: event.message,
+      productLink,
+      subject: {
+        id: event.subjectId,
+        label: event.subjectLabel,
+        type: event.subjectType,
+      },
+      type: event.eventType,
+    };
+  });
+}
+
+function getTimelineMinuteBucket(createdAt: number) {
+  return Math.floor(createdAt / 60_000);
+}
+
+function getTimelineEventPriority(event: {
+  eventType: string;
+  metadata?: Record<string, unknown>;
+}) {
+  if (event.eventType === "cycle_count_draft_submitted") return 40;
+  if (
+    event.eventType === "stock_adjustment_applied" &&
+    event.metadata?.adjustmentType === "cycle_count"
+  ) {
+    return 30;
+  }
+  if (event.eventType === "cycle_count_draft_updated") return 20;
+  if (event.eventType === "cycle_count_draft_created") return 10;
+  return 25;
+}
+
+function compareTimelineEvents(
+  left: {
+    _id: Id<"operationalEvent">;
+    createdAt: number;
+    eventType: string;
+    metadata?: Record<string, unknown>;
+  },
+  right: {
+    _id: Id<"operationalEvent">;
+    createdAt: number;
+    eventType: string;
+    metadata?: Record<string, unknown>;
+  },
+) {
+  const leftMinute = getTimelineMinuteBucket(left.createdAt);
+  const rightMinute = getTimelineMinuteBucket(right.createdAt);
+  if (leftMinute !== rightMinute) return rightMinute - leftMinute;
+
+  const priorityDelta =
+    getTimelineEventPriority(right) - getTimelineEventPriority(left);
+  if (priorityDelta !== 0) return priorityDelta;
+
+  if (left.createdAt !== right.createdAt) return right.createdAt - left.createdAt;
+  return String(right._id).localeCompare(String(left._id));
 }
 
 async function getDailyCloseRecordForDate(

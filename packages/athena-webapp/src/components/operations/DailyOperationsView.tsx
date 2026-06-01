@@ -158,6 +158,12 @@ export type DailyOperationsSnapshot = {
     createdAt: number;
     id: string;
     message: string;
+    productLink?: {
+      label?: string;
+      params?: Record<string, string>;
+      search?: Record<string, string>;
+      to?: string;
+    };
     subject: {
       id: string;
       label?: string;
@@ -439,6 +445,47 @@ function formatTimelineMessage(message: string) {
   );
 }
 
+function TimelineMessage({
+  event,
+  orgUrlSlug,
+  storeUrlSlug,
+}: {
+  event: DailyOperationsSnapshot["timeline"][number];
+  orgUrlSlug: string;
+  storeUrlSlug: string;
+}) {
+  const productLink = event.productLink;
+  const linkLabel = productLink?.label?.trim();
+  const linkIndex = linkLabel ? event.message.indexOf(linkLabel) : -1;
+
+  if (!productLink?.to || !productLink.params || !linkLabel || linkIndex < 0) {
+    return <>{formatTimelineMessage(event.message)}</>;
+  }
+
+  const before = event.message.slice(0, linkIndex);
+  const after = event.message.slice(linkIndex + linkLabel.length);
+
+  return (
+    <>
+      {formatTimelineMessage(before)}
+      <Link
+        className="inline-flex items-center gap-0.5 font-medium text-link underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        params={{
+          ...productLink.params,
+          orgUrlSlug,
+          storeUrlSlug,
+        }}
+        search={{ o: getOrigin(), ...(productLink.search ?? {}) }}
+        to={productLink.to}
+      >
+        <span>{linkLabel}</span>
+        <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
+      </Link>
+      {formatTimelineMessage(after)}
+    </>
+  );
+}
+
 function formatWeekdayLabel(operatingDate: string) {
   const parsed = getLocalDateFromOperatingDate(operatingDate);
 
@@ -560,8 +607,12 @@ function buildParams(
 
 function TimelineEventItem({
   event,
+  orgUrlSlug,
+  storeUrlSlug,
 }: {
   event: DailyOperationsSnapshot["timeline"][number];
+  orgUrlSlug: string;
+  storeUrlSlug: string;
 }) {
   return (
     <article className="border-l border-border py-layout-xs pl-layout-md">
@@ -569,7 +620,11 @@ function TimelineEventItem({
         {formatEventTime(event.createdAt)}
       </p>
       <p className="mt-1 text-sm text-foreground">
-        {formatTimelineMessage(event.message)}
+        <TimelineMessage
+          event={event}
+          orgUrlSlug={orgUrlSlug}
+          storeUrlSlug={storeUrlSlug}
+        />
       </p>
     </article>
   );
@@ -1222,7 +1277,12 @@ export function DailyOperationsViewContent({
                         />
                       ) : (
                         previewTimeline?.map((event) => (
-                          <TimelineEventItem event={event} key={event.id} />
+                          <TimelineEventItem
+                            event={event}
+                            key={event.id}
+                            orgUrlSlug={orgUrlSlug}
+                            storeUrlSlug={storeUrlSlug}
+                          />
                         ))
                       )}
                     </div>
@@ -1259,7 +1319,12 @@ export function DailyOperationsViewContent({
                   <div className="min-h-0 flex-1 overflow-y-auto px-layout-lg py-layout-md">
                     <div className="space-y-layout-md">
                       {snapshot.timeline.map((event) => (
-                        <TimelineEventItem event={event} key={event.id} />
+                        <TimelineEventItem
+                          event={event}
+                          key={event.id}
+                          orgUrlSlug={orgUrlSlug}
+                          storeUrlSlug={storeUrlSlug}
+                        />
                       ))}
                     </div>
                   </div>

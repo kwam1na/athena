@@ -269,7 +269,7 @@ describe("openDrawer", () => {
     expect(ctx.runMutation).not.toHaveBeenCalled();
   });
 
-  it("requires a manager role before opening a drawer", async () => {
+  it("allows a cashier role to open a drawer", async () => {
     authMocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
       _id: "user-1" as Id<"athenaUser">,
     });
@@ -287,6 +287,47 @@ describe("openDrawer", () => {
           },
         ],
       }),
+      runMutation: vi.fn().mockResolvedValue({
+        _id: "drawer-1" as Id<"registerSession">,
+        expectedCash: 5000,
+        openedAt: 1710000000000,
+        openingFloat: 5000,
+        registerNumber: "A1",
+        status: "open",
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        workflowTraceId: "register_session:a1",
+      }),
+    } as unknown as MutationCtx;
+
+    const result = await openDrawer(ctx, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+      staffProfileId: "staff-1" as Id<"staffProfile">,
+      openingFloat: 5000,
+    });
+
+    expect(ctx.runMutation).toHaveBeenCalledTimes(1);
+    expect(result.kind).toBe("ok");
+  });
+
+  it("requires a cashier or manager role before opening a drawer", async () => {
+    authMocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
+      _id: "user-1" as Id<"athenaUser">,
+    });
+
+    const ctx = {
+      runQuery: vi.fn().mockResolvedValue({
+        _id: "store-1" as Id<"store">,
+        organizationId: "org-1" as Id<"organization">,
+      }),
+      db: createDbMock({
+        roleAssignments: [
+          {
+            ...managerRoleAssignment,
+            role: "stock_controller",
+          },
+        ],
+      }),
       runMutation: vi.fn(),
     } as unknown as MutationCtx;
 
@@ -300,7 +341,7 @@ describe("openDrawer", () => {
     ).resolves.toEqual(
       userError({
         code: "authorization_failed",
-        message: "Manager sign-in required to open this drawer.",
+        message: "Cashier or manager sign-in required to open this drawer.",
       }),
     );
     expect(ctx.runMutation).not.toHaveBeenCalled();

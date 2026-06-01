@@ -254,30 +254,46 @@ function CartCountSummary({
 }
 
 function RegisterSyncStatusChip({
+  isRegisterOperable = false,
   syncStatus,
 }: {
+  isRegisterOperable?: boolean;
   syncStatus: RegisterViewModel["syncStatus"];
 }) {
   if (!syncStatus) {
     return null;
   }
 
+  const isOperableReview =
+    syncStatus.status === "needs_review" && isRegisterOperable;
+  if (syncStatus.status === "needs_review" && !isOperableReview) {
+    return null;
+  }
+
+  const tone = isOperableReview ? "success" : syncStatus.tone;
   const className =
-    syncStatus.tone === "success"
+    tone === "success"
       ? "text-success"
-      : syncStatus.tone === "danger"
+      : tone === "danger"
         ? "text-danger"
-        : syncStatus.tone === "warning"
+        : tone === "warning"
           ? "text-warning"
           : "text-muted-foreground";
-  const canRetry = syncStatus.status !== "synced" && syncStatus.onRetrySync;
-  const label = syncStatus.status === "synced" ? "synced" : "pending sync";
+  const canRetry =
+    !isOperableReview && syncStatus.status !== "synced" && syncStatus.onRetrySync;
+  const label = getRegisterSyncStatusChipLabel(syncStatus.status, {
+    isRegisterOperable,
+  });
+  const actionLabel =
+    syncStatus.status === "needs_review"
+      ? "Check POS sync review"
+      : "Retry POS sync";
   const content = <span className="truncate">{label}</span>;
 
   if (canRetry) {
     return (
       <button
-        aria-label={`Retry POS sync: ${label}`}
+        aria-label={`${actionLabel}: ${label}`}
         className={cn(
           "inline-flex max-w-full items-baseline gap-1 font-mono text-xs leading-none transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           className,
@@ -300,6 +316,28 @@ function RegisterSyncStatusChip({
       {content}
     </div>
   );
+}
+
+function getRegisterSyncStatusChipLabel(
+  status: NonNullable<RegisterViewModel["syncStatus"]>["status"],
+  options: { isRegisterOperable?: boolean } = {},
+) {
+  switch (status) {
+    case "synced":
+      return "synced";
+    case "syncing":
+      return "syncing";
+    case "needs_review":
+      if (options.isRegisterOperable) {
+        return "ready";
+      }
+      return "needs review";
+    case "locally_closed_pending_sync":
+      return "locally closed";
+    case "pending_sync":
+    default:
+      return "pending sync";
+  }
 }
 
 function formatDebugTimestamp(timestamp?: number) {
@@ -342,6 +380,7 @@ function formatDebugTrigger(value?: string | null) {
       return "Scheduled retry";
     case "online":
       return "Connection restored";
+    case "manual-retry":
     case "manual":
       return "Manual retry";
     case "none":
@@ -385,10 +424,10 @@ function getDebugSyncHoldUp(debug: NonNullable<RegisterViewModel["debug"]>) {
 
   if (debug.syncFlow.status === "needs_review") {
     if (retryableCount > 0 && localOnlyCount > 0) {
-      return `${retryableCount} uploaded review events can be retried; ${localOnlyCount} local-only review records need support inspection.`;
+      return `${formatUploadedReviewEventCount(retryableCount)} waiting on server review; ${formatLocalOnlyReviewRecordCount(localOnlyCount)} need support inspection.`;
     }
     if (retryableCount > 0) {
-      return `${retryableCount} uploaded review events need manual retry.`;
+      return `${formatUploadedReviewEventCount(retryableCount)} waiting on server review.`;
     }
     if (localOnlyCount > 0 || reviewCount > 0) {
       return "Local review records remain on this browser.";
@@ -407,7 +446,7 @@ function getDebugSyncNextStep(debug: NonNullable<RegisterViewModel["debug"]>) {
   const retryableCount = debug.syncFlow.pendingUploadEventCount ?? 0;
 
   if (debug.syncFlow.status === "needs_review" && retryableCount > 0) {
-    return "Use pending sync retry to settle uploaded review events; if the count stays put, open terminal health to review server conflicts.";
+    return "Open terminal health or cash controls to resolve the server review. Retry only checks whether that review has settled.";
   }
 
   if (debug.syncFlow.status === "needs_review") {
@@ -419,6 +458,14 @@ function getDebugSyncNextStep(debug: NonNullable<RegisterViewModel["debug"]>) {
   }
 
   return "No action required.";
+}
+
+function formatUploadedReviewEventCount(count: number) {
+  return `${count} uploaded review ${count === 1 ? "event is" : "events are"}`;
+}
+
+function formatLocalOnlyReviewRecordCount(count: number) {
+  return `${count} local-only review ${count === 1 ? "record" : "records"}`;
 }
 
 function usePosDebugPanelToggle() {
@@ -986,6 +1033,8 @@ export function POSRegisterView({
     !isResolvingRegisterSetup;
   const isHeaderProductSearchSupported =
     isSessionActive && canSearchProducts && !viewModel.productEntry.disabled;
+  const isRegisterOperable =
+    isPosWorkflow && isHeaderProductSearchSupported && !viewModel.drawerGate;
   const shouldRenderSaleSurface = isPosWorkflow
     ? !viewModel.checkout.isTransactionCompleted && !isLocallyClosedPendingSync
     : true;
@@ -994,6 +1043,14 @@ export function POSRegisterView({
     isPosWorkflow || shouldRenderExpenseCompletionPanel;
   const shouldShowPaymentWorkspace =
     isPosWorkflow && isPaymentEntryActive && !hasLookupIntent;
+  const shouldShowDrawerRecoveryActionBar =
+    isPosWorkflow &&
+    viewModel.drawerGate?.mode === "recovery" &&
+    !viewModel.checkout.isTransactionCompleted &&
+    !isLocallyClosedPendingSync &&
+    !isAwaitingCashierAuth &&
+    !shouldShowOnboarding &&
+    !isResolvingRegisterSetup;
   const shouldShowIdleLookupCartSplit =
     isPosWorkflow &&
     shouldRenderSaleSurface &&
@@ -1297,7 +1354,10 @@ export function POSRegisterView({
                   {viewModel.header.title}
                 </p>
                 {isPosWorkflow ? (
-                  <RegisterSyncStatusChip syncStatus={viewModel.syncStatus} />
+                  <RegisterSyncStatusChip
+                    isRegisterOperable={isRegisterOperable}
+                    syncStatus={viewModel.syncStatus}
+                  />
                 ) : null}
               </div>
 
@@ -1315,10 +1375,12 @@ export function POSRegisterView({
             </div>
           }
           trailingContent={
-            canSearchProducts && isPosWorkflow && !isLocallyClosedPendingSync ? (
+            (canSearchProducts && isPosWorkflow && !isLocallyClosedPendingSync) ||
+            shouldShowDrawerRecoveryActionBar ? (
               <RegisterActionBar
                 cashierCard={viewModel.cashierCard}
                 closeoutControl={viewModel.closeoutControl}
+                drawerGate={viewModel.drawerGate}
                 registerInfo={viewModel.registerInfo}
                 sessionPanel={viewModel.sessionPanel}
               />

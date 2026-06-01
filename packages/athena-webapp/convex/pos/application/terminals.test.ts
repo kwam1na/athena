@@ -490,6 +490,11 @@ describe("terminal health summaries", () => {
         syncEvidence: {
           latestEvent: null,
           latestReviewEvent: null,
+          latestReviewEventsByStatus: {
+            conflicted: null,
+            held: null,
+            rejected: null,
+          },
           sampledEventCount: 0,
           acceptedCount: 0,
           projectedCount: 0,
@@ -782,6 +787,101 @@ describe("terminal health summaries", () => {
           type: "cash_control_register_session",
         },
         type: "cloud_conflict",
+      }),
+    ]);
+  });
+
+  it("resolves each cloud review reason from its own register session evidence", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(getLatestRuntimeStatusForTerminal).mockResolvedValue(null);
+    vi.mocked(getTerminalSyncEvidence).mockResolvedValue({
+      latestEvent: {
+        localEventId: "event-rejected",
+        localRegisterSessionId: "local-rejected-register",
+        sequence: 12,
+        eventType: "sale_cleared",
+        status: "rejected",
+        occurredAt: 120,
+        submittedAt: 130,
+      },
+      latestReviewEvent: {
+        localEventId: "event-rejected",
+        localRegisterSessionId: "local-rejected-register",
+        sequence: 12,
+        eventType: "sale_cleared",
+        status: "rejected",
+      },
+      latestReviewEventsByStatus: {
+        conflicted: {
+          localEventId: "event-conflicted",
+          localRegisterSessionId: "local-conflicted-register",
+          sequence: 10,
+          eventType: "register_opened",
+          status: "conflicted",
+        },
+        held: null,
+        rejected: {
+          localEventId: "event-rejected",
+          localRegisterSessionId: "local-rejected-register",
+          sequence: 12,
+          eventType: "sale_cleared",
+          status: "rejected",
+        },
+      },
+      sampledEventCount: 2,
+      acceptedCount: 0,
+      projectedCount: 0,
+      conflictedCount: 1,
+      heldCount: 0,
+      rejectedCount: 1,
+    });
+    vi.mocked(resolveTerminalRegisterSessionActionTarget).mockImplementation(
+      async (_ctx, args) => {
+        if (args.localRegisterSessionId === "local-conflicted-register") {
+          return "conflicted-session" as Id<"registerSession">;
+        }
+        if (args.localRegisterSessionId === "local-rejected-register") {
+          return "rejected-session" as Id<"registerSession">;
+        }
+        return null;
+      },
+    );
+
+    const result = await getTerminalHealthSummary(
+      { db: null as never } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        now: 220,
+      },
+    );
+
+    expect(resolveTerminalRegisterSessionActionTarget).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        localRegisterSessionId: "local-conflicted-register",
+      }),
+    );
+    expect(resolveTerminalRegisterSessionActionTarget).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        localRegisterSessionId: "local-rejected-register",
+      }),
+    );
+    expect(result?.attentionReasons).toEqual([
+      expect.objectContaining({
+        actionTarget: {
+          registerSessionId: "conflicted-session",
+          type: "cash_control_register_session",
+        },
+        type: "cloud_conflict",
+      }),
+      expect.objectContaining({
+        actionTarget: {
+          registerSessionId: "rejected-session",
+          type: "cash_control_register_session",
+        },
+        type: "cloud_rejected",
       }),
     ]);
   });

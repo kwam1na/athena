@@ -2458,7 +2458,7 @@ function OperatingDatePicker({
       </PopoverTrigger>
       <PopoverContent align="end" className="w-auto p-0">
         <Calendar
-          defaultMonth={selectedDate}
+          defaultMonth={selectedDate ?? undefined}
           disabled={{ after: latestSelectableDate }}
           mode="single"
           onSelect={(date) => {

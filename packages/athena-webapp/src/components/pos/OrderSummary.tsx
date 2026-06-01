@@ -104,6 +104,7 @@ interface OrderSummaryProps {
   readOnly?: boolean;
   completedOrderNumber?: string | null;
   completionBlockMessage?: string;
+  serviceLines?: PosServiceReceiptLine[];
   completedTransactionData?: {
     paymentMethod: string;
     payments?: Payment[];
@@ -168,6 +169,7 @@ export function OrderSummary({
   readOnly = false,
   completedOrderNumber,
   completionBlockMessage,
+  serviceLines = [],
   completedTransactionData,
   completedAdjustmentSummary,
   presentation = "workspace",
@@ -206,8 +208,12 @@ export function OrderSummary({
     completedTransactionData?.cartItems && (readOnly || isTransactionCompleted)
       ? completedTransactionData.cartItems
       : cartItems;
+  const effectiveServiceLines =
+    completedTransactionData?.serviceLines && (readOnly || isTransactionCompleted)
+      ? completedTransactionData.serviceLines
+      : serviceLines;
   const completedServiceLines = completedTransactionData?.serviceLines ?? [];
-  const serviceLinesCount = completedServiceLines.reduce(
+  const serviceLinesCount = effectiveServiceLines.reduce(
     (sum, line) => sum + (line.quantity ?? 1),
     0,
   );

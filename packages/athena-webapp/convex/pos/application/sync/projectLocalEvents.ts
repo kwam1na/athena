@@ -150,7 +150,7 @@ const PERMISSION_DRIFT_SUMMARY =
   "Staff access changed before this POS history synced.";
 
 const POS_SYNC_ALLOWED_ROLES_BY_EVENT = {
-  register_opened: ["manager"],
+  register_opened: ["cashier", "manager"],
   sale_completed: ["cashier", "manager"],
   sale_cleared: ["cashier", "manager"],
   register_closed: ["cashier", "manager"],
@@ -380,6 +380,17 @@ async function projectRegisterOpened(
       });
       return { status: "projected", mappings: [mapping], conflicts: [] };
     }
+
+    const conflict = await createConflict(repository, args, {
+      conflictType: "permission",
+      summary: "Register session mapping is not usable for synced POS history.",
+      details: {
+        localRegisterSessionId: args.event.localRegisterSessionId,
+        cloudRegisterSessionId: directRegisterSessionId,
+        status: registerSession?.status ?? null,
+      },
+    });
+    return { status: "conflicted", mappings: [], conflicts: [conflict] };
   }
   const payload = args.event.payload;
   const terminalRegisterNumber = normalizeOptionalString(

@@ -167,6 +167,50 @@ function buildStockAdjustmentTitle(args: {
     : `Stock adjustment review · ${countLabel}`;
 }
 
+function getActorLabel(
+  user: {
+    email?: string;
+    firstName?: string;
+    lastName?: string;
+  } | null,
+  fallbackId: string,
+) {
+  const fullName = [user?.firstName, user?.lastName]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(" ");
+
+  return fullName || user?.email?.trim() || fallbackId;
+}
+
+function pluralize(count: number, singular: string, plural = `${singular}s`) {
+  return count === 1 ? singular : plural;
+}
+
+function formatSignedQuantity(value: number) {
+  return value > 0 ? `+${value}` : String(value);
+}
+
+function buildStockAdjustmentOperationalEventMessage(args: {
+  actorLabel: string;
+  adjustmentType: StockAdjustmentType;
+  approvalRequired: boolean;
+  lineItemCount: number;
+  netQuantityDelta: number;
+}) {
+  const skuLabel = `${args.lineItemCount} ${pluralize(args.lineItemCount, "SKU")}`;
+
+  if (args.adjustmentType === "cycle_count") {
+    return `${args.actorLabel} applied a cycle count for ${skuLabel}. Net inventory change ${formatSignedQuantity(args.netQuantityDelta)} units.`;
+  }
+
+  if (args.approvalRequired) {
+    return `${args.actorLabel} requested review for a stock adjustment covering ${skuLabel}. Net inventory change ${formatSignedQuantity(args.netQuantityDelta)} units.`;
+  }
+
+  return `${args.actorLabel} applied a stock adjustment for ${skuLabel}. Net inventory change ${formatSignedQuantity(args.netQuantityDelta)} units.`;
+}
+
 function assertNormalizedLineItem(
   productSku: {
     inventoryCount: number;
@@ -840,8 +884,16 @@ export async function submitStockAdjustmentBatchWithCtx(
     eventType: approvalRequired
       ? "stock_adjustment_approval_requested"
       : "stock_adjustment_applied",
+    message: buildStockAdjustmentOperationalEventMessage({
+      actorLabel: getActorLabel(createdByUser, String(createdByUser._id)),
+      adjustmentType: args.adjustmentType,
+      approvalRequired,
+      lineItemCount: summary.lineItemCount,
+      netQuantityDelta: summary.netQuantityDelta,
+    }),
     metadata: {
       adjustmentType: args.adjustmentType,
+      actorLabel: getActorLabel(createdByUser, String(createdByUser._id)),
       approvalRequired,
       highVarianceFlag,
       largestAbsoluteDelta: summary.largestAbsoluteDelta,

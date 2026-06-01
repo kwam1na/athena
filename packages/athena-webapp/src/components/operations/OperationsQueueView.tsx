@@ -57,6 +57,7 @@ const stockOpsApi = api.stockOps;
 const ghsCurrencyFormatter = currencyFormatter("GHS");
 const APPROVAL_DECISION_ACTION_KEY = "operations.approval_request.decide";
 const APPROVAL_PAGE_UNLOCK_TTL_MS = 5 * 60 * 1000;
+const UNCATEGORIZED_COUNT_SCOPE_KEY = "__uncategorized";
 
 type QueueWorkItem = {
   _id: Id<"operationalWorkItem">;
@@ -450,6 +451,10 @@ function getQuantityDeltaBadgeClass(delta?: number) {
   }
 
   return "border-border bg-background text-muted-foreground shadow-sm";
+}
+
+function getCountScopeKeyForInventoryItem(item: InventorySnapshotItem) {
+  return item.productCategory?.trim() || UNCATEGORIZED_COUNT_SCOPE_KEY;
 }
 
 type OperationsQueueViewContentProps = {
@@ -1708,10 +1713,38 @@ export function OperationsQueueView({
     stockOpsApi.adjustments.listInventorySnapshot,
     canQueryProtectedData ? { storeId: activeStore!._id } : "skip",
   ) as InventorySnapshotItem[] | undefined;
+  const inferredCycleCountScopeKey = useMemo(() => {
+    if (stockAdjustmentSearch?.mode === "manual") return undefined;
+    if (stockAdjustmentSearch?.scope?.trim()) return undefined;
+    if (!stockAdjustmentSearch?.sku || !inventoryItems) return undefined;
+
+    const selectedItem = inventoryItems.find(
+      (item) => String(item._id) === stockAdjustmentSearch.sku,
+    );
+
+    return selectedItem
+      ? getCountScopeKeyForInventoryItem(selectedItem)
+      : undefined;
+  }, [
+    inventoryItems,
+    stockAdjustmentSearch?.mode,
+    stockAdjustmentSearch?.scope,
+    stockAdjustmentSearch?.sku,
+  ]);
+  const effectiveStockAdjustmentSearch = useMemo(
+    () =>
+      inferredCycleCountScopeKey
+        ? {
+            ...stockAdjustmentSearch,
+            scope: inferredCycleCountScopeKey,
+          }
+        : stockAdjustmentSearch,
+    [inferredCycleCountScopeKey, stockAdjustmentSearch],
+  );
   const selectedCycleCountScopeKey =
-    stockAdjustmentSearch?.mode === "manual"
+    effectiveStockAdjustmentSearch?.mode === "manual"
       ? undefined
-      : stockAdjustmentSearch?.scope?.split(",")[0]?.trim();
+      : effectiveStockAdjustmentSearch?.scope?.split(",")[0]?.trim();
   const canUseCycleCountDraft =
     canQueryProtectedData &&
     Boolean(activeStore?._id) &&
@@ -2132,7 +2165,7 @@ export function OperationsQueueView({
         showBackButton={typeof search.o === "string" && search.o.length > 0}
         storeId={activeStore._id}
         storeUrlSlug={routeParams?.storeUrlSlug}
-        stockAdjustmentSearch={stockAdjustmentSearch}
+        stockAdjustmentSearch={effectiveStockAdjustmentSearch}
         workItems={queue?.workItems ?? []}
       />
       <StaffAuthenticationDialog

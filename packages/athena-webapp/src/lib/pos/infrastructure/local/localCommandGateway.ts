@@ -383,7 +383,15 @@ export function createLocalCommandGateway(
       const isClosedCloudDrawerBlock =
         existingModel.value.saleBlockReason === "drawer_authority" &&
         existingModel.value.drawerAuthorityReason === "cloud_closed";
-      if (existingModel.value.saleBlockReason && !isClosedCloudDrawerBlock) {
+      const isLifecycleReviewDrawerBlock =
+        existingModel.value.saleBlockReason === "lifecycle_needs_review" ||
+        (existingModel.value.saleBlockReason === "drawer_authority" &&
+          existingModel.value.drawerAuthorityReason === "lifecycle_rejected");
+      if (
+        existingModel.value.saleBlockReason &&
+        !isClosedCloudDrawerBlock &&
+        !isLifecycleReviewDrawerBlock
+      ) {
         return toLocalUserError(
           blockedSaleMessage(existingModel.value.saleBlockReason),
         );
@@ -395,6 +403,9 @@ export function createLocalCommandGateway(
         isOpenLocalRegisterSessionStatus(activeRegisterSession.status)
       ) {
         if (isClosedCloudDrawerBlock) {
+          return appendNewDrawer(input);
+        }
+        if (isLifecycleReviewDrawerBlock) {
           return appendNewDrawer(input);
         }
         if (!existingModel.value.canSell) {

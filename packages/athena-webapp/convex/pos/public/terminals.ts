@@ -125,6 +125,38 @@ const terminalSyncEvidenceReturnValidator = v.object({
     }),
     v.null(),
   )),
+  latestReviewEventsByStatus: v.optional(v.object({
+    conflicted: v.optional(v.union(
+      v.object({
+        localEventId: v.string(),
+        localRegisterSessionId: v.string(),
+        sequence: v.number(),
+        eventType: v.string(),
+        status: v.string(),
+      }),
+      v.null(),
+    )),
+    held: v.optional(v.union(
+      v.object({
+        localEventId: v.string(),
+        localRegisterSessionId: v.string(),
+        sequence: v.number(),
+        eventType: v.string(),
+        status: v.string(),
+      }),
+      v.null(),
+    )),
+    rejected: v.optional(v.union(
+      v.object({
+        localEventId: v.string(),
+        localRegisterSessionId: v.string(),
+        sequence: v.number(),
+        eventType: v.string(),
+        status: v.string(),
+      }),
+      v.null(),
+    )),
+  })),
   sampledEventCount: v.number(),
   acceptedCount: v.number(),
   projectedCount: v.number(),

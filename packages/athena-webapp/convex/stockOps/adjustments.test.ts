@@ -971,7 +971,10 @@ describe("stock ops adjustments", () => {
     expect(Array.from(tables.operationalEvent.values())).toEqual([
       expect.objectContaining({
         eventType: "stock_adjustment_applied",
+        message:
+          "operator@example.com applied a cycle count for 1 SKU. Net inventory change +6 units.",
         metadata: expect.objectContaining({
+          actorLabel: "operator@example.com",
           highVarianceFlag: true,
           largestAbsoluteDelta: 6,
         }),
