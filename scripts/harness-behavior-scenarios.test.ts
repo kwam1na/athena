@@ -387,6 +387,7 @@ describe("HARNESS_BEHAVIOR_SCENARIOS", () => {
 
   it("runs the Athena QA live smoke scenario through browser observations", async () => {
     const listeners = new Map<string, ((payload: any) => void)[]>();
+    let observedWaitUntil: string | undefined;
     const page = {
       on(event: string, listener: (payload: any) => void) {
         listeners.set(event, [...(listeners.get(event) ?? []), listener]);
@@ -396,7 +397,8 @@ describe("HARNESS_BEHAVIOR_SCENARIOS", () => {
     };
 
     const browserResult = await ATHENA_QA_LIVE_SMOKE_SCENARIO.browser({
-      runPlaywrightFlow: async ({ setupPage, steps }) => {
+      runPlaywrightFlow: async ({ setupPage, steps, waitUntil }) => {
+        observedWaitUntil = waitUntil;
         await setupPage?.({ page } as any);
         for (const listener of listeners.get("response") ?? []) {
           listener({
@@ -429,6 +431,7 @@ describe("HARNESS_BEHAVIOR_SCENARIOS", () => {
     } as any);
 
     expect(browserResult.observedText).toContain("LOG IN");
+    expect(observedWaitUntil).toBe("domcontentloaded");
     expect(browserResult.hasEmailField).toBe(true);
     expect(browserResult.observations).toHaveLength(3);
     expect(browserResult.diagnostics).toEqual([

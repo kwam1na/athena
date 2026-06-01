@@ -117,6 +117,10 @@ server-side item totals, not from stale client cart state.
 - Keep the snapshot query and completion mutation on the same validated
   operating-day range so the operator does not close against a different window
   than the UI displayed.
+- Open operating-date picker calendars on the selected operating date, not the
+  browser's current month. Historical end of day reviews must let operators move
+  to adjacent historical store days even when today's future-date guard would
+  disable the same day number in the current month.
 - Test local-day boundary cases with a completed transaction after UTC midnight
   but before the local operating day ends.
 - Test expense transactions with the same local-day boundary, store filtering,
