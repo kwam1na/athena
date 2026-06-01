@@ -1301,6 +1301,7 @@ export const ATHENA_QA_LIVE_SMOKE_SCENARIO: HarnessBehaviorScenario<AthenaQaLive
 
       const flowResult = await runPlaywrightFlow({
         url: qaUrl,
+        waitUntil: "domcontentloaded",
         setupPage: ({ page }) => {
           page.on("pageerror", (error) => {
             observations.push({

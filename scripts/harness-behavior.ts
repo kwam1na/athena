@@ -78,6 +78,7 @@ export type HarnessBehaviorRuntimeSignalResult = {
 export type HarnessBehaviorPlaywrightFlowOptions<TStepResult> = {
   url: string;
   headless?: boolean;
+  waitUntil?: "load" | "domcontentloaded" | "networkidle";
   recordVideo?: boolean;
   videoDir?: string;
   videoSize?: {
@@ -1035,7 +1036,7 @@ export async function runPlaywrightFlow<TStepResult>(
     });
     await options.setupPage?.({ page });
     await page.goto(options.url, {
-      waitUntil: "networkidle",
+      waitUntil: options.waitUntil ?? "networkidle",
     });
 
     stepResult = await options.steps({ page });

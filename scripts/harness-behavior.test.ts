@@ -491,6 +491,24 @@ describe("runPlaywrightFlow", () => {
     ]);
   });
 
+  it("lets scenarios choose a lighter navigation readiness mode", async () => {
+    let observedWaitUntil: string | undefined;
+    const browser = createBrowser({
+      goto: async (_url: string, options?: { waitUntil?: string }) => {
+        observedWaitUntil = options?.waitUntil;
+      },
+    });
+
+    await runPlaywrightFlow({
+      url: "https://athena-qa.wigclub.store/",
+      waitUntil: "domcontentloaded",
+      playwrightModule: createPlaywrightModule(async () => browser),
+      steps: async () => ({ loaded: true }),
+    });
+
+    expect(observedWaitUntil).toBe("domcontentloaded");
+  });
+
   it("does not auto-install missing Chromium in CI", async () => {
     let installCount = 0;
 
