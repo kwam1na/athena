@@ -124,4 +124,42 @@ describe("CartItems service lines", () => {
 
     expect(onRemoveService).toHaveBeenCalledWith("service-line-1");
   });
+
+  it("gives compact product quantity controls larger touch targets and accepts typed quantities", async () => {
+    const user = userEvent.setup();
+    const onUpdateQuantity = vi.fn();
+
+    render(
+      <CartItems
+        density="compact"
+        cartItems={[
+          {
+            id: "item-1" as never,
+            barcode: "4739394883944",
+            name: "Nicca",
+            price: 6500,
+            quantity: 6,
+            sku: "6N2Y-WMA",
+          },
+        ]}
+        onUpdateQuantity={onUpdateQuantity}
+      />,
+    );
+
+    const quantityInput = screen.getByRole("spinbutton", {
+      name: /quantity for nicca/i,
+    });
+    expect(quantityInput).toHaveClass("h-11", "w-14");
+    await user.click(
+      screen.getByRole("button", { name: /increase quantity for nicca/i }),
+    );
+
+    expect(onUpdateQuantity).toHaveBeenCalledWith("item-1", 7);
+
+    await user.clear(quantityInput);
+    await user.type(quantityInput, "9");
+    await user.tab();
+
+    expect(onUpdateQuantity).toHaveBeenCalledWith("item-1", 9);
+  });
 });

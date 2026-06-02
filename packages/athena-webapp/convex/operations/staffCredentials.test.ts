@@ -1352,7 +1352,7 @@ describe("staff credential operations", () => {
     ).resolves.toBe(proofRows[0]?.tokenHash);
   });
 
-  it("rejects public terminal authentication when the signed-in user does not own the terminal", async () => {
+  it("allows public terminal authentication when the signed-in POS user did not register the terminal", async () => {
     const { ctx } = createStaffCredentialsMutationCtx({
       posTerminals: [
         {
@@ -1406,15 +1406,14 @@ describe("staff credential operations", () => {
         username: "frontdesk",
       })
     ).resolves.toEqual({
-      kind: "user_error",
-      error: {
-        code: "authorization_failed",
-        message: "This terminal is not available for staff authentication.",
-      },
+      kind: "ok",
+      data: expect.objectContaining({
+        staffProfileId: "staff_profile_1",
+      }),
     });
   });
 
-  it("requires the terminal owner to have POS access before public terminal authentication", async () => {
+  it("requires the signed-in user to have POS access before public terminal authentication", async () => {
     const { ctx } = createStaffCredentialsMutationCtx({
       credentials: [
         {
@@ -1479,7 +1478,7 @@ describe("staff credential operations", () => {
     );
   });
 
-  it("checks the terminal owner's POS access before minting a public local staff proof", async () => {
+  it("checks the signed-in user's POS access before minting a public local staff proof", async () => {
     const { ctx } = createStaffCredentialsMutationCtx({
       credentials: [
         {

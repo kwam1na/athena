@@ -155,28 +155,41 @@ describe("registerTerminal", () => {
     );
   });
 
-  it("does not rebind an existing terminal to a different signed-in user", async () => {
+  it("rebinds an existing terminal to a different signed-in full-admin user", async () => {
     vi.mocked(getTerminalByFingerprint).mockResolvedValue(existingTerminal);
     vi.mocked(getTerminalByStoreIdAndRegisterNumber).mockResolvedValue(null);
 
     const result = await registerTerminal({ db: null as never } as never, {
       storeId: "store-1" as Id<"store">,
       fingerprintHash: "fingerprint-1",
-      syncSecretHash: "sync-secret-1",
+      syncSecretHash: "sync-secret-rotated",
       displayName: "Updated Terminal",
       registerNumber: "A1",
       registeredByUserId: "user-2" as Id<"athenaUser">,
       browserInfo,
     });
 
-    expect(result).toEqual(
-      userError({
-        code: "authorization_failed",
-        message:
-          "This terminal is already registered to another signed-in user.",
+    expect(vi.mocked(patchTerminalRecord)).toHaveBeenCalledWith(
+      expect.anything(),
+      existingTerminal._id,
+      expect.objectContaining({
+        browserInfo,
+        displayName: "Updated Terminal",
+        registeredByUserId: "user-2",
+        registerNumber: "A1",
+        status: "active",
+        syncSecretHash: "sync-secret-rotated",
       }),
     );
-    expect(vi.mocked(patchTerminalRecord)).not.toHaveBeenCalled();
+    expect(result).toEqual(
+      expect.objectContaining({
+        kind: "ok",
+        data: expect.objectContaining({
+          registeredByUserId: "user-2",
+          syncSecretHash: "sync-secret-rotated",
+        }),
+      }),
+    );
   });
 
   it("does not reassign an existing terminal to another register number", async () => {

@@ -19,6 +19,7 @@ import {
 } from "~/src/lib/pos/displayAmounts";
 import type { RegisterServiceLineState } from "@/lib/pos/presentation/register/registerUiState";
 import { Input } from "@/components/ui/input";
+import { useEffect, useState } from "react";
 
 interface CartItemsProps {
   cartItems: CartItem[];
@@ -34,6 +35,114 @@ interface CartItemsProps {
   readOnly?: boolean;
   density?: "comfortable" | "compact";
   className?: string;
+}
+
+function normalizeCartQuantityInput(value: string | number) {
+  const parsed =
+    typeof value === "number" ? value : Number.parseInt(value, 10);
+
+  if (!Number.isFinite(parsed)) {
+    return 1;
+  }
+
+  return Math.max(1, Math.trunc(parsed));
+}
+
+function CartItemQuantityControl({
+  isCompact,
+  item,
+  onUpdateQuantity,
+}: {
+  isCompact: boolean;
+  item: CartItem;
+  onUpdateQuantity: NonNullable<CartItemsProps["onUpdateQuantity"]>;
+}) {
+  const [draftQuantity, setDraftQuantity] = useState(String(item.quantity));
+
+  useEffect(() => {
+    setDraftQuantity(String(item.quantity));
+  }, [item.id, item.quantity]);
+
+  const updateQuantity = (quantity: number) => {
+    setDraftQuantity(String(quantity));
+    if (quantity !== item.quantity) {
+      onUpdateQuantity(
+        item.id as Id<"posSessionItem"> | Id<"expenseSessionItem">,
+        quantity,
+      );
+    }
+  };
+
+  const commitDraftQuantity = () => {
+    updateQuantity(normalizeCartQuantityInput(draftQuantity));
+  };
+
+  return (
+    <div
+      className={cn(
+        "flex items-center rounded-md border border-border bg-background p-1.5 shadow-sm",
+        isCompact ? "gap-2" : "gap-3",
+      )}
+    >
+      <Button
+        variant="outline"
+        size="icon"
+        className={cn(
+          "rounded-md",
+          isCompact ? "h-11 w-11" : "h-12 w-12",
+        )}
+        aria-label={`Decrease quantity for ${item.name}`}
+        onClick={() =>
+          updateQuantity(
+            Math.max(1, normalizeCartQuantityInput(draftQuantity) - 1),
+          )
+        }
+      >
+        <Minus className="h-4 w-4" />
+      </Button>
+      <label className="sr-only" htmlFor={`cart-quantity-${item.id}`}>
+        Quantity for {item.name}
+      </label>
+      <Input
+        id={`cart-quantity-${item.id}`}
+        type="number"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        min={1}
+        value={draftQuantity}
+        className={cn(
+          "px-2 text-center font-numeric font-semibold tabular-nums text-foreground [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
+          isCompact ? "h-11 w-14 text-base" : "h-12 w-16 text-lg",
+        )}
+        onBlur={commitDraftQuantity}
+        onChange={(event) => setDraftQuantity(event.target.value)}
+        onFocus={(event) => event.currentTarget.select()}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.currentTarget.blur();
+          }
+          if (event.key === "Escape") {
+            setDraftQuantity(String(item.quantity));
+            event.currentTarget.blur();
+          }
+        }}
+      />
+      <Button
+        variant="outline"
+        size="icon"
+        className={cn(
+          "rounded-md",
+          isCompact ? "h-11 w-11" : "h-12 w-12",
+        )}
+        aria-label={`Increase quantity for ${item.name}`}
+        onClick={() =>
+          updateQuantity(normalizeCartQuantityInput(draftQuantity) + 1)
+        }
+      >
+        <Plus className="h-4 w-4" />
+      </Button>
+    </div>
+  );
 }
 
 export function CartItems({
@@ -380,43 +489,13 @@ export function CartItems({
                     )}
                   >
                     {!readOnly && (
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-10 w-10"
-                          onClick={() =>
-                            onUpdateQuantity &&
-                            onUpdateQuantity(
-                              item.id as
-                                | Id<"posSessionItem">
-                                | Id<"expenseSessionItem">,
-                              item.quantity - 1,
-                            )
-                          }
-                        >
-                          <Minus className="w-4 h-4" />
-                        </Button>
-                        <span className="w-10 text-center font-medium text-sm">
-                          {item.quantity}
-                        </span>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-10 w-10"
-                          onClick={() =>
-                            onUpdateQuantity &&
-                            onUpdateQuantity(
-                              item.id as
-                                | Id<"posSessionItem">
-                                | Id<"expenseSessionItem">,
-                              item.quantity + 1,
-                            )
-                          }
-                        >
-                          <Plus className="w-4 h-4" />
-                        </Button>
-                      </div>
+                      onUpdateQuantity && (
+                        <CartItemQuantityControl
+                          isCompact={isCompact}
+                          item={item}
+                          onUpdateQuantity={onUpdateQuantity}
+                        />
+                      )
                     )}
                   </div>
 

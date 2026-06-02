@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { SearchResultsSection } from "./SearchResultsSection";
@@ -60,9 +61,15 @@ describe("SearchResultsSection", () => {
   it("shows the shortcut hint on the add-variant action", () => {
     renderSearchResults();
 
-    expect(
-      screen.getByRole("button", { name: /add variant for this product/i }),
-    ).toHaveAttribute("aria-keyshortcuts", "Meta+Enter Control+Enter");
+    const addVariantButton = screen.getByRole("button", {
+      name: /add variant for this product/i,
+    });
+
+    expect(addVariantButton).toHaveAttribute(
+      "aria-keyshortcuts",
+      "Meta+Enter Control+Enter",
+    );
+    expect(addVariantButton).toHaveClass("bg-action-workflow");
     expect(screen.getByText("⌘+↵")).toBeInTheDocument();
   });
 
@@ -81,9 +88,15 @@ describe("SearchResultsSection", () => {
       products: [],
     });
 
-    expect(
-      screen.getByRole("button", { name: /quick add product/i }),
-    ).toHaveAttribute("aria-keyshortcuts", "Meta+Enter Control+Enter");
+    const quickAddButton = screen.getByRole("button", {
+      name: /quick add product/i,
+    });
+
+    expect(quickAddButton).toHaveAttribute(
+      "aria-keyshortcuts",
+      "Meta+Enter Control+Enter",
+    );
+    expect(quickAddButton).toHaveClass("bg-action-workflow");
     expect(screen.getByText("⌘+↵")).toBeInTheDocument();
   });
 
@@ -159,5 +172,57 @@ describe("SearchResultsSection", () => {
     fireEvent.click(screen.getByText("Club"));
 
     expect(onAddProduct).not.toHaveBeenCalled();
+  });
+
+  it("adds the selected quantity from a product result", async () => {
+    const user = userEvent.setup();
+    const product = buildProduct({
+      id: "sku-quantity",
+      name: "Nicca",
+      quantityAvailable: 12,
+    });
+    const onAddProduct = vi.fn(async () => true);
+    const onClearSearch = vi.fn();
+
+    renderSearchResults({
+      products: [product],
+      onAddProduct,
+      onClearSearch,
+    });
+
+    const quantityInput = screen.getByRole("spinbutton", {
+      name: /quantity for nicca/i,
+    });
+    expect(quantityInput).toHaveClass("h-11", "w-14");
+    await user.clear(quantityInput);
+    await user.type(quantityInput, "3");
+    await user.click(screen.getByRole("button", { name: /add 3/i }));
+
+    expect(onAddProduct).toHaveBeenCalledWith(product, 3);
+    expect(onClearSearch).toHaveBeenCalled();
+  });
+
+  it("clamps result quantity entry to available stock", async () => {
+    const user = userEvent.setup();
+    const product = buildProduct({
+      id: "sku-limited",
+      name: "Limited wig",
+      quantityAvailable: 4,
+    });
+    const onAddProduct = vi.fn(async () => true);
+
+    renderSearchResults({
+      products: [product],
+      onAddProduct,
+    });
+
+    const quantityInput = screen.getByRole("spinbutton", {
+      name: /quantity for limited wig/i,
+    });
+    await user.clear(quantityInput);
+    await user.type(quantityInput, "99");
+    await user.click(screen.getByRole("button", { name: /add 4/i }));
+
+    expect(onAddProduct).toHaveBeenCalledWith(product, 4);
   });
 });

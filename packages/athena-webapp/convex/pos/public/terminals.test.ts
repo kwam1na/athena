@@ -317,8 +317,16 @@ describe("POS terminal public mutations", () => {
     );
   });
 
-  it("accepts redacted runtime status from the terminal owner only", async () => {
-    const ctx = buildCtx();
+  it("accepts redacted runtime status from an authorized store member", async () => {
+    const ctx = buildCtx({
+      terminal: {
+        _id: "terminal-1",
+        storeId: "store-1",
+        status: "active",
+        registeredByUserId: "athena-user-2",
+        syncSecretHash: SYNC_SECRET_HASH,
+      },
+    });
 
     const result = await getHandler(submitTerminalRuntimeStatus)(ctx as never, {
       storeId: "store-1",
@@ -439,16 +447,6 @@ describe("POS terminal public mutations", () => {
         storeId: "store-2",
         status: "active",
         registeredByUserId: "athena-user-1",
-        syncSecretHash: SYNC_SECRET_HASH,
-      },
-    },
-    {
-      name: "wrong registered user",
-      terminal: {
-        _id: "terminal-1",
-        storeId: "store-1",
-        status: "active",
-        registeredByUserId: "athena-user-2",
         syncSecretHash: SYNC_SECRET_HASH,
       },
     },

@@ -787,6 +787,208 @@ describe("useRegisterViewModel", () => {
     expect(toast.success).not.toHaveBeenCalledWith("Sale started");
   });
 
+  it("starts a new sale when cashier sign-in beats the local drawer bootstrap", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: null,
+      activeRegisterSession: null,
+      activeSession: null,
+      activeSessionConflict: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+    const pendingLocalEvents = deferred<{
+      ok: true;
+      value: Array<ReturnType<typeof buildLocalEvent>>;
+    }>();
+    mockListLocalEvents.mockImplementation(() => pendingLocalEvents.promise);
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      await result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult(),
+      );
+    });
+
+    expect(
+      mockAppendLocalEvent.mock.calls.filter(
+        ([event]) => event.type === "session.started",
+      ),
+    ).toHaveLength(0);
+
+    await act(async () => {
+      pendingLocalEvents.resolve({
+        ok: true,
+        value: [
+          buildLocalEvent({
+            sequence: 1,
+            staffProofToken: "staff-proof-token",
+            type: "register.opened",
+            payload: {
+              expectedCash: 5_000,
+              localRegisterSessionId: "drawer-1",
+              openingFloat: 5_000,
+              status: "open",
+            },
+          }),
+        ],
+      });
+      await pendingLocalEvents.promise;
+    });
+
+    await waitFor(() =>
+      expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "session.started",
+          localRegisterSessionId: "drawer-1",
+          staffProfileId: "staff-1",
+        }),
+      ),
+    );
+    expect(result.current.productEntry.disabled).toBe(false);
+  });
+
+  it("keeps cashier autostart pending until the local drawer is sellable", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: null,
+      activeRegisterSession: {
+        _id: "drawer-1",
+        status: "open",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        openingFloat: 5_000,
+        expectedCash: 5_000,
+        openedAt: Date.now(),
+      },
+      activeSession: null,
+      activeSessionConflict: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+    mockAppendLocalEvent.mockImplementation((input: { type: string }) =>
+      input.type === "register.opened"
+        ? Promise.resolve(
+            userError({
+              code: "unavailable",
+              message: "Local drawer seed not ready.",
+            }),
+          )
+        : Promise.resolve({
+            ok: true,
+            value: { localEventId: "local-event-1" },
+          }),
+    );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      await result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult(),
+      );
+    });
+
+    await waitFor(() =>
+      expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "register.opened",
+          localRegisterSessionId: "drawer-1",
+          staffProfileId: "staff-1",
+        }),
+      ),
+    );
+    expect(
+      mockAppendLocalEvent.mock.calls.filter(
+        ([event]) => event.type === "session.started",
+      ),
+    ).toHaveLength(0);
+
+    mockAppendLocalEvent.mockResolvedValue({
+      ok: true,
+      value: { localEventId: "local-event-2" },
+    });
+    mockListLocalEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        buildLocalEvent({
+          sequence: 1,
+          staffProofToken: "staff-proof-token",
+          type: "register.opened",
+          payload: {
+            expectedCash: 5_000,
+            localRegisterSessionId: "drawer-1",
+            openingFloat: 5_000,
+            status: "open",
+          },
+        }),
+      ],
+    });
+
+    const runtimeInput = mockUsePosLocalSyncRuntimeStatus.mock.calls.at(-1)?.[0] as
+      | { onLocalEventsChanged?: () => void }
+      | undefined;
+    await act(async () => {
+      runtimeInput?.onLocalEventsChanged?.();
+    });
+
+    await waitFor(() =>
+      expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "session.started",
+          localRegisterSessionId: "drawer-1",
+          staffProfileId: "staff-1",
+        }),
+      ),
+    );
+    expect(result.current.productEntry.disabled).toBe(false);
+  });
+
+  it("starts a new sale when the active-session summary is stale but no sale is operable", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: null,
+      activeRegisterSession: {
+        _id: "drawer-1",
+        status: "open",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        openingFloat: 5_000,
+        expectedCash: 5_000,
+        openedAt: Date.now(),
+      },
+      activeSession: { _id: "stale-session-1", sessionNumber: "POS-OLD" },
+      activeSessionConflict: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      await result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult(),
+      );
+    });
+
+    await waitFor(() =>
+      expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "session.started",
+          localRegisterSessionId: "drawer-1",
+          staffProfileId: "staff-1",
+        }),
+      ),
+    );
+    expect(result.current.sessionPanel?.disableNewSession).toBe(false);
+  });
+
   it("does not start duplicate local sales when cashier sign-in completes twice", async () => {
     mockRegisterState = {
       phase: "readyToStart",
@@ -5069,6 +5271,127 @@ describe("useRegisterViewModel", () => {
         ([event]) => event?.type === "cart.item_added",
       ),
     ).toHaveLength(1);
+    expect(toast.error).toHaveBeenCalledWith(
+      "No trusted availability remains for this item on this terminal.",
+    );
+  });
+
+  it("adds the requested product quantity through the local cart event", async () => {
+    mockRegisterCatalogRows = [buildRegisterCatalogRow()];
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow({
+        availabilitySource: "local",
+        quantityAvailable: 5,
+      }),
+    ];
+    const localEvents = [
+      buildLocalEvent({
+        sequence: 1,
+        type: "register.opened",
+        payload: {
+          localRegisterSessionId: "drawer-1",
+          openingFloat: 5_000,
+          expectedCash: 5_000,
+          status: "open",
+        },
+      }),
+    ];
+    mockListLocalEvents.mockImplementation(async () => ({
+      ok: true,
+      value: [...localEvents],
+    }));
+    mockAppendLocalEvent.mockImplementation(async (event) => {
+      localEvents.push(
+        buildLocalEvent({
+          ...event,
+          sequence: localEvents.length + 1,
+        }),
+      );
+
+      return { ok: true, value: { localEventId: "local-event-1" } };
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    const product = {
+      id: "sku-2",
+      name: "Deep Wave",
+      price: 10_000,
+      barcode: "1234567890123",
+      productId: "product-2" as Id<"product">,
+      skuId: "sku-2" as Id<"productSku">,
+      sku: "DW-18",
+      category: "Hair",
+      description: "Deep wave bundle",
+      image: null,
+      inStock: true,
+      quantityAvailable: 5,
+    };
+    let added = false;
+    await act(async () => {
+      added = await result.current.productEntry.onAddProduct(product, 3);
+    });
+
+    expect(added).toBe(true);
+    const cartEvent = mockAppendLocalEvent.mock.calls.find(
+      ([event]) => event?.type === "cart.item_added",
+    )?.[0];
+    expect(cartEvent?.payload).toEqual(
+      expect.objectContaining({
+        productSkuId: "sku-2",
+        quantity: 3,
+      }),
+    );
+  });
+
+  it("rejects requested product quantity beyond trusted availability", async () => {
+    mockRegisterCatalogRows = [buildRegisterCatalogRow()];
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow({
+        availabilitySource: "local",
+        quantityAvailable: 2,
+      }),
+    ];
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    const product = {
+      id: "sku-2",
+      name: "Deep Wave",
+      price: 10_000,
+      barcode: "1234567890123",
+      productId: "product-2" as Id<"product">,
+      skuId: "sku-2" as Id<"productSku">,
+      sku: "DW-18",
+      category: "Hair",
+      description: "Deep wave bundle",
+      image: null,
+      inStock: true,
+      quantityAvailable: 2,
+    };
+    let added = true;
+    await act(async () => {
+      added = await result.current.productEntry.onAddProduct(product, 3);
+    });
+
+    expect(added).toBe(false);
+    expect(mockAppendLocalEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "cart.item_added" }),
+    );
     expect(toast.error).toHaveBeenCalledWith(
       "No trusted availability remains for this item on this terminal.",
     );

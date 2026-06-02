@@ -89,7 +89,7 @@ function ProductLookupEmptyState({
   workflowMode,
 }: {
   canQuickAddProduct?: boolean;
-  onActivate?: () => void;
+  onActivate?: () => void | Promise<void>;
   onQuickAddProduct?: () => void;
   workflowMode: RegisterWorkflowMode;
 }) {
@@ -973,6 +973,7 @@ export function POSRegisterView({
     useState(false);
   const productEntryRef = useRef<ProductEntryHandle>(null);
   const pendingEmptyStateQuickAddRef = useRef(false);
+  const pendingProductLookupFocusAfterSaleStartRef = useRef(false);
   const headerProductSearchInputRef = useRef<HTMLInputElement>(null);
   const isDebugPanelVisible = usePosDebugPanelToggle();
 
@@ -1033,6 +1034,14 @@ export function POSRegisterView({
     !isResolvingRegisterSetup;
   const isHeaderProductSearchSupported =
     isSessionActive && canSearchProducts && !viewModel.productEntry.disabled;
+  const canStartSaleFromProductLookup =
+    isPosWorkflow &&
+    canSearchProducts &&
+    !isSessionActive &&
+    Boolean(viewModel.sessionPanel) &&
+    !viewModel.sessionPanel?.disableNewSession;
+  const canActivateProductLookup =
+    isHeaderProductSearchSupported || canStartSaleFromProductLookup;
   const isRegisterOperable =
     isPosWorkflow && isHeaderProductSearchSupported && !viewModel.drawerGate;
   const shouldRenderSaleSurface = isPosWorkflow
@@ -1161,15 +1170,39 @@ export function POSRegisterView({
     viewModel.serviceEntry,
   ]);
 
+  const focusProductLookupSearch = useCallback(() => {
+    viewModel.productEntry?.setShowProductLookup?.(true);
+
+    window.setTimeout(() => {
+      const didFocusProductEntryInput =
+        productEntryRef.current?.focusProductSearchInput() ?? false;
+      if (didFocusProductEntryInput) {
+        return;
+      }
+
+      headerProductSearchInputRef.current?.focus();
+      headerProductSearchInputRef.current?.select();
+    }, 0);
+  }, [viewModel.productEntry]);
+
   const handleProductLookupEmptyStateActivate = useCallback(() => {
-    if (!isHeaderProductSearchSupported) {
+    if (isHeaderProductSearchSupported) {
+      focusProductLookupSearch();
       return;
     }
 
-    viewModel.productEntry?.setShowProductLookup?.(true);
-    headerProductSearchInputRef.current?.focus();
-    headerProductSearchInputRef.current?.select();
-  }, [isHeaderProductSearchSupported, viewModel.productEntry]);
+    if (!canStartSaleFromProductLookup || !viewModel.sessionPanel) {
+      return;
+    }
+
+    pendingProductLookupFocusAfterSaleStartRef.current = true;
+    void viewModel.sessionPanel.onStartNewSession();
+  }, [
+    canStartSaleFromProductLookup,
+    focusProductLookupSearch,
+    isHeaderProductSearchSupported,
+    viewModel.sessionPanel,
+  ]);
 
   const handleProductLookupEmptyStateQuickAdd = useCallback(() => {
     if (
@@ -1210,6 +1243,18 @@ export function POSRegisterView({
     }
   }, [isEmptyStateQuickAddActive]);
 
+  useEffect(() => {
+    if (
+      !pendingProductLookupFocusAfterSaleStartRef.current ||
+      !isHeaderProductSearchSupported
+    ) {
+      return;
+    }
+
+    pendingProductLookupFocusAfterSaleStartRef.current = false;
+    focusProductLookupSearch();
+  }, [focusProductLookupSearch, isHeaderProductSearchSupported]);
+
   const focusHeaderProductSearch = useCallback(() => {
     if (!isHeaderProductSearchSupported) {
       return;
@@ -1222,8 +1267,11 @@ export function POSRegisterView({
   }, [isHeaderProductSearchSupported]);
 
   const handleAddProduct = useCallback(
-    async (product: Product) => {
-      const added = await viewModel.productEntry.onAddProduct(product);
+    async (product: Product, quantity?: number) => {
+      const added = await viewModel.productEntry.onAddProduct(
+        product,
+        quantity,
+      );
       if (added !== false) {
         focusHeaderProductSearch();
       }
@@ -1456,7 +1504,7 @@ export function POSRegisterView({
                         viewModel.productEntry.canQuickAddProduct
                       }
                       onActivate={
-                        isHeaderProductSearchSupported
+                        canActivateProductLookup
                           ? handleProductLookupEmptyStateActivate
                           : undefined
                       }
@@ -1494,7 +1542,7 @@ export function POSRegisterView({
                         viewModel.productEntry.canQuickAddProduct
                       }
                       onActivate={
-                        isHeaderProductSearchSupported
+                        canActivateProductLookup
                           ? handleProductLookupEmptyStateActivate
                           : undefined
                       }

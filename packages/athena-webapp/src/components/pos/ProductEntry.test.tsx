@@ -61,7 +61,10 @@ function buildQuickAddedProduct(): Product {
 }
 
 function renderProductEntry(input: {
-  onAddProduct: (product: Product) => boolean | Promise<boolean>;
+  onAddProduct: (
+    product: Product,
+    quantity?: number,
+  ) => boolean | Promise<boolean>;
   setProductSearchQuery: (query: string) => void;
 }) {
   function Harness() {
