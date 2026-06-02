@@ -207,9 +207,6 @@ async function requirePosTerminalAuthorityWithCtx(
       return terminalAuthorizationFailedResult();
     }
     const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    if (terminal.registeredByUserId !== athenaUser._id) {
-      return terminalAuthorizationFailedResult();
-    }
     await requireOrganizationMemberRoleWithCtx(ctx, {
       allowedRoles: ["full_admin", "pos_only"],
       failureMessage: "You do not have access to this POS terminal.",

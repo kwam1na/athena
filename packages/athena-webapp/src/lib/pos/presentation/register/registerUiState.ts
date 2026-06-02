@@ -40,7 +40,7 @@ export interface RegisterProductEntryState {
   productSearchQuery: string;
   setProductSearchQuery: (query: string) => void;
   onBarcodeSubmit: (event: FormEvent) => Promise<void>;
-  onAddProduct: (product: Product) => Promise<boolean>;
+  onAddProduct: (product: Product, quantity?: number) => Promise<boolean>;
   searchResults: Product[];
   isSearchLoading: boolean;
   isSearchReady: boolean;

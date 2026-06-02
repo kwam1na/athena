@@ -8,7 +8,10 @@ import { useEffect } from "react";
 interface SearchResultsSectionProps {
   isLoading: boolean;
   products: Product[];
-  onAddProduct: (product: Product) => boolean | Promise<boolean>;
+  onAddProduct: (
+    product: Product,
+    quantity?: number,
+  ) => boolean | Promise<boolean>;
   formatter: Intl.NumberFormat;
   onClearSearch: () => void;
   onQuickAddProduct?: (product?: Product) => void;
@@ -121,6 +124,7 @@ export function SearchResultsSection({
             <Button
               type="button"
               size="sm"
+              variant="workflow"
               className="mt-5"
               aria-keyshortcuts="Meta+Enter Control+Enter"
               onClick={() => onQuickAddProduct?.()}
@@ -157,6 +161,7 @@ export function SearchResultsSection({
             <Button
               type="button"
               size="sm"
+              variant="workflow"
               className="w-full sm:w-auto"
               aria-keyshortcuts="Meta+Enter Control+Enter"
               onClick={() => onQuickAddProduct(variantSourceProduct)}

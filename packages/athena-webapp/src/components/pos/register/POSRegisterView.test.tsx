@@ -108,13 +108,16 @@ vi.mock("@/components/pos/ProductEntry", async () => {
           onAddProduct,
           serviceEntry,
         }: {
-          onAddProduct?: (product: {
-            id: string;
-            name: string;
-            price: number;
-            productId: string;
-            skuId: string;
-          }) => boolean | Promise<boolean>;
+          onAddProduct?: (
+            product: {
+              id: string;
+              name: string;
+              price: number;
+              productId: string;
+              skuId: string;
+            },
+            quantity?: number,
+          ) => boolean | Promise<boolean>;
           serviceEntry?: {
             onAddService?: (
               service: {
@@ -959,6 +962,73 @@ describe("POSRegisterView", () => {
 
     expect(setShowProductLookup).toHaveBeenCalledWith(true);
     expect(screen.getByLabelText("product search input")).toHaveFocus();
+  });
+
+  it("starts a new sale before focusing product lookup from the idle lookup workspace", async () => {
+    const setShowProductLookup = vi.fn();
+    let isSessionActive = false;
+    const onStartNewSession = vi.fn(async () => {
+      isSessionActive = true;
+    });
+    mockUseRegisterViewModel.mockImplementation(() => ({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive,
+      },
+      registerInfo: {
+        customerName: "Ama Serwa",
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: false,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        setShowProductLookup,
+        onBarcodeSubmit: vi.fn(),
+        canQuickAddProduct: false,
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: {
+        disableNewSession: false,
+        onStartNewSession,
+      },
+      cashierCard: {},
+      closeoutControl: {
+        canCloseout: true,
+        canShowOpeningFloatCorrection: true,
+        canCorrectOpeningFloat: true,
+        onRequestCloseout: vi.fn(),
+        onRequestOpeningFloatCorrection: vi.fn(),
+      },
+      authDialog: {
+        open: false,
+      },
+      drawerGate: null,
+      onNavigateBack: vi.fn(),
+    }));
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    const { rerender } = render(<POSRegisterView />);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /Ready for product lookup/i }),
+    );
+    expect(onStartNewSession).toHaveBeenCalledTimes(1);
+
+    rerender(<POSRegisterView />);
+
+    await waitFor(() => {
+      expect(setShowProductLookup).toHaveBeenCalledWith(true);
+      expect(screen.getByLabelText("product search input")).toHaveFocus();
+    });
   });
 
   it("returns focus to the header product search after an item is added", async () => {

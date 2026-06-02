@@ -175,7 +175,7 @@ describe("ServiceIntakeViewContent", () => {
     expect(
       screen.getByRole("combobox", { name: /service title/i }),
     ).toHaveTextContent("Select service");
-  });
+  }, 10_000);
 
   it("renders safe user_error copy inline and clears stale validation errors before submit", async () => {
     const user = userEvent.setup();

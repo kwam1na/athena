@@ -57,7 +57,10 @@ interface ProductSearchInputProps {
 interface ProductEntryProps extends ProductSearchInputProps {
   showProductLookup: boolean;
   setShowProductLookup: (value: boolean) => void;
-  onAddProduct: (product: Product) => boolean | Promise<boolean>;
+  onAddProduct: (
+    product: Product,
+    quantity?: number,
+  ) => boolean | Promise<boolean>;
   searchResults: Product[];
   isSearchLoading: boolean;
   isSearchReady: boolean;

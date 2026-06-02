@@ -1173,6 +1173,8 @@ export function useRegisterViewModel(): RegisterViewModel {
   staffProofTokenRef.current = staffProofToken;
   const [localAuthenticatedStaff, setLocalAuthenticatedStaff] =
     useState<LocalAuthenticatedStaff>(null);
+  const [autoStartRequestedStaffProfileId, setAutoStartRequestedStaffProfileId] =
+    useState<Id<"staffProfile"> | null>(null);
   const terminalRegisterNumber = terminal?.registerNumber
     ? trimOptional(terminal.registerNumber)
     : undefined;
@@ -2384,6 +2386,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       }
 
       if (!options?.keepCashier) {
+        setAutoStartRequestedStaffProfileId(null);
         setStaffProfileId(null);
         setStaffProofToken(null);
         setLocalAuthenticatedStaff(null);
@@ -3210,6 +3213,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       const localPosSessionId = result.data.localPosSessionId;
       keepSessionStartGuard = true;
       noteLocalRegisterEventChanged();
+      setAutoStartRequestedStaffProfileId(null);
       resetDraftState({
         keepCashier: true,
       });
@@ -3312,6 +3316,7 @@ export function useRegisterViewModel(): RegisterViewModel {
 
     const localRegisterSessionId = result.data.localRegisterSessionId;
     noteLocalRegisterEventChanged();
+    setAutoStartRequestedStaffProfileId(null);
     setLocalOperableRegisterSession({
       expectedCash: parsedOpeningFloat,
       localRegisterSessionId,
@@ -3519,6 +3524,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     noteLocalRegisterEventChanged();
     setCloseoutCountedCash("");
     setCloseoutNotes("");
+    setAutoStartRequestedStaffProfileId(null);
     setLocalOperableRegisterSession({
       expectedCash: closeoutBlockedRegisterSession.expectedCash,
       localRegisterSessionId: registerSessionId,
@@ -4007,7 +4013,11 @@ export function useRegisterViewModel(): RegisterViewModel {
   ]);
 
   const handleAddProduct = useCallback(
-    async (product: Product) => {
+    async (product: Product, quantity = 1) => {
+      const requestedQuantity = Number.isFinite(quantity)
+        ? Math.max(1, Math.trunc(quantity))
+        : 1;
+
       if (!staffProfileId) {
         toast.error("Register sign-in required. Sign in before adding items.");
         return false;
@@ -4042,108 +4052,113 @@ export function useRegisterViewModel(): RegisterViewModel {
       }
 
       return enqueueCartMutation(async () => {
-      const localPosSessionId = await ensureLocalPosSessionId();
-      if (!localPosSessionId) {
-        return false;
-      }
-
-      const queuedReadModel = await readCurrentLocalRegisterModel();
-      if (registerCatalogSkuIds.has(productSkuId)) {
-        const availability = registerCatalogAvailabilityBySkuId.get(productSkuId);
-        const localConsumption =
-          localAvailabilityConsumptionFromReadModel(queuedReadModel).get(
-            productSkuId,
-          ) ?? 0;
-        const quantityAvailable =
-          availability !== undefined
-            ? Math.trunc(availability.quantityAvailable)
-            : availabilityStatus === "available" &&
-                typeof product.quantityAvailable === "number"
-              ? Math.trunc(product.quantityAvailable)
-              : undefined;
-        const isInStock =
-          availability !== undefined ? availability.inStock : product.inStock;
-
-        if (quantityAvailable === undefined) {
-          toast.error(POS_AVAILABILITY_NOT_READY_MESSAGE);
+        const localPosSessionId = await ensureLocalPosSessionId();
+        if (!localPosSessionId) {
           return false;
         }
 
-        if (!isInStock || quantityAvailable - localConsumption <= 0) {
-          toast.error(POS_NO_TRUSTED_AVAILABILITY_REMAINING_MESSAGE);
-          return false;
+        const queuedReadModel = await readCurrentLocalRegisterModel();
+        if (registerCatalogSkuIds.has(productSkuId)) {
+          const availability =
+            registerCatalogAvailabilityBySkuId.get(productSkuId);
+          const localConsumption =
+            localAvailabilityConsumptionFromReadModel(queuedReadModel).get(
+              productSkuId,
+            ) ?? 0;
+          const quantityAvailable =
+            availability !== undefined
+              ? Math.trunc(availability.quantityAvailable)
+              : availabilityStatus === "available" &&
+                  typeof product.quantityAvailable === "number"
+                ? Math.trunc(product.quantityAvailable)
+                : undefined;
+          const isInStock =
+            availability !== undefined ? availability.inStock : product.inStock;
+
+          if (quantityAvailable === undefined) {
+            toast.error(POS_AVAILABILITY_NOT_READY_MESSAGE);
+            return false;
+          }
+
+          if (
+            !isInStock ||
+            quantityAvailable - localConsumption < requestedQuantity
+          ) {
+            toast.error(POS_NO_TRUSTED_AVAILABILITY_REMAINING_MESSAGE);
+            return false;
+          }
         }
-      }
 
-      const localSaleItem = queuedReadModel?.activeSale?.items.find(
-        (item) => item.productSkuId === productSkuId,
-      );
-      const existingItem = activeCartItems.find(
-        (item) => item.skuId === productSkuId,
-      );
-      const nextQuantity =
-        (localSaleItem?.quantity ?? existingItem?.quantity ?? 0) + 1;
-      const localItemId =
-        localSaleItem?.localItemId ??
-        existingItem?.id.toString() ??
-        createLocalFallbackId("local-item");
-      const optimisticProductKey = productSkuId;
-      const previousOptimisticProduct = optimisticCartProducts[productSkuId];
-      const isExistingOptimisticProduct = existingItem?.id
-        .toString()
-        .startsWith("optimistic:");
-      if (existingItem && !isExistingOptimisticProduct) {
-        setOptimisticCartQuantities((current) => ({
-          ...current,
-          [existingItem.id]: nextQuantity,
-        }));
-      } else {
-        setOptimisticCartProducts((current) => ({
-          ...current,
-          [optimisticProductKey]: mapProductToOptimisticCartItem(
-            product,
-            nextQuantity,
-          ),
-        }));
-      }
-
-      const savedLocally = await appendLocalCartItem({
-        localPosSessionId,
-        payload: buildLocalCartItemPayload({
-          localItemId,
-          product,
-          quantity: nextQuantity,
-        }),
-      });
-
-      if (!savedLocally) {
+        const localSaleItem = queuedReadModel?.activeSale?.items.find(
+          (item) => item.productSkuId === productSkuId,
+        );
+        const existingItem = activeCartItems.find(
+          (item) => item.skuId === productSkuId,
+        );
+        const nextQuantity =
+          (localSaleItem?.quantity ?? existingItem?.quantity ?? 0) +
+          requestedQuantity;
+        const localItemId =
+          localSaleItem?.localItemId ??
+          existingItem?.id.toString() ??
+          createLocalFallbackId("local-item");
+        const optimisticProductKey = productSkuId;
+        const previousOptimisticProduct = optimisticCartProducts[productSkuId];
+        const isExistingOptimisticProduct = existingItem?.id
+          .toString()
+          .startsWith("optimistic:");
         if (existingItem && !isExistingOptimisticProduct) {
-          setOptimisticCartQuantities((current) => {
-            const next = { ...current };
-            delete next[existingItem.id];
-            return next;
-          });
+          setOptimisticCartQuantities((current) => ({
+            ...current,
+            [existingItem.id]: nextQuantity,
+          }));
         } else {
-          setOptimisticCartProducts((current) => {
-            if (previousOptimisticProduct) {
-              return {
-                ...current,
-                [optimisticProductKey]: previousOptimisticProduct,
-              };
-            }
-
-            const next = { ...current };
-            delete next[optimisticProductKey];
-            return next;
-          });
+          setOptimisticCartProducts((current) => ({
+            ...current,
+            [optimisticProductKey]: mapProductToOptimisticCartItem(
+              product,
+              nextQuantity,
+            ),
+          }));
         }
-        presentOperatorError("Unable to add this item. Try again.");
-        return false;
-      }
 
-      noteLocalRegisterEventChanged();
-      setProductSearchQuery("");
-      return true;
+        const savedLocally = await appendLocalCartItem({
+          localPosSessionId,
+          payload: buildLocalCartItemPayload({
+            localItemId,
+            product,
+            quantity: nextQuantity,
+          }),
+        });
+
+        if (!savedLocally) {
+          if (existingItem && !isExistingOptimisticProduct) {
+            setOptimisticCartQuantities((current) => {
+              const next = { ...current };
+              delete next[existingItem.id];
+              return next;
+            });
+          } else {
+            setOptimisticCartProducts((current) => {
+              if (previousOptimisticProduct) {
+                return {
+                  ...current,
+                  [optimisticProductKey]: previousOptimisticProduct,
+                };
+              }
+
+              const next = { ...current };
+              delete next[optimisticProductKey];
+              return next;
+            });
+          }
+          presentOperatorError("Unable to add this item. Try again.");
+          return false;
+        }
+
+        noteLocalRegisterEventChanged();
+        setProductSearchQuery("");
+        return true;
       });
     },
     [
@@ -4588,7 +4603,6 @@ export function useRegisterViewModel(): RegisterViewModel {
   const handleCashierAuthenticated = useCallback(
     (result: StaffAuthenticationResult | Id<"staffProfile">) => {
       let authenticatedStaffProfileId: Id<"staffProfile">;
-      let canAutoStartSale = false;
       if (typeof result === "string") {
         authenticatedStaffProfileId = result as Id<"staffProfile">;
         staffProfileIdRef.current = authenticatedStaffProfileId;
@@ -4596,8 +4610,8 @@ export function useRegisterViewModel(): RegisterViewModel {
         setStaffProfileId(authenticatedStaffProfileId);
         setStaffProofToken(null);
         setLocalAuthenticatedStaff(null);
+        setAutoStartRequestedStaffProfileId(null);
       } else {
-        canAutoStartSale = true;
         authenticatedStaffProfileId = result.staffProfileId;
         const authenticatedStaffProofToken = readStaffProofFromAuthResult(result);
         staffProfileIdRef.current = authenticatedStaffProfileId;
@@ -4608,38 +4622,43 @@ export function useRegisterViewModel(): RegisterViewModel {
           activeRoles: result.activeRoles ?? [],
           displayName: getStaffDisplayNameFromAuthResult(result),
         });
+        setAutoStartRequestedStaffProfileId(authenticatedStaffProfileId);
       }
       requestBootstrap();
-
-      if (
-        canAutoStartSale &&
-        activeStoreId &&
-        terminal?._id &&
-        localEventRegisterSessionId &&
-        !projectedLocalActiveSale &&
-        !operableActiveSession &&
-        !registerState?.activeSession &&
-        !activeSessionConflict &&
-        !isTransactionCompleted
-      ) {
-        void handleStartNewSession({
-          staffProfileId: authenticatedStaffProfileId,
-        });
-      }
     },
-    [
-      activeSessionConflict,
-      activeStoreId,
-      handleStartNewSession,
-      isTransactionCompleted,
-      localEventRegisterSessionId,
-      operableActiveSession,
-      projectedLocalActiveSale,
-      registerState?.activeSession,
-      requestBootstrap,
-      terminal?._id,
-    ],
+    [requestBootstrap],
   );
+
+  useEffect(() => {
+    const autoStartStaffProfileId = autoStartRequestedStaffProfileId;
+    if (
+      !autoStartStaffProfileId ||
+      !activeStoreId ||
+      !terminal?._id ||
+      !localEventRegisterSessionId ||
+      projectedLocalActiveSale ||
+      operableActiveSession ||
+      activeSessionConflict ||
+      isTransactionCompleted
+    ) {
+      return;
+    }
+
+    void handleStartNewSession({
+      staffProfileId: autoStartStaffProfileId,
+    });
+  }, [
+    activeSessionConflict,
+    activeStoreId,
+    autoStartRequestedStaffProfileId,
+    handleStartNewSession,
+    isTransactionCompleted,
+    localRegisterReadModel?.syncStatus.lastLocalSequence,
+    localEventRegisterSessionId,
+    operableActiveSession,
+    projectedLocalActiveSale,
+    terminal?._id,
+  ]);
 
   const handleNavigateBack = useCallback(async () => {
     if (

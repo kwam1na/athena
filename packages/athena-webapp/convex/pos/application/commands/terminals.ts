@@ -108,14 +108,6 @@ export async function registerTerminal(
         });
       }
 
-      if (existing.registeredByUserId !== args.registeredByUserId) {
-        return userError({
-          code: "authorization_failed",
-          message:
-            "This terminal is already registered to another signed-in user.",
-        });
-      }
-
       if (existing.registerNumber !== nextRegisterNumber) {
         return userError({
           code: "validation_failed",
