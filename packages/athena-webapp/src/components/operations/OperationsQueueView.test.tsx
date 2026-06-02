@@ -995,7 +995,7 @@ describe("OperationsQueueViewContent", () => {
     );
   });
 
-  it("loads or creates the selected cycle-count draft", async () => {
+  it("loads or creates the default SKU cycle-count draft", async () => {
     const ensureCycleCountDraft = vi.fn().mockResolvedValue(ok({}));
 
     mockedHooks.useMutation.mockReset();
@@ -1023,13 +1023,12 @@ describe("OperationsQueueViewContent", () => {
       <OperationsQueueView
         stockAdjustmentSearch={{
           mode: "cycle_count",
-          scope: "Hair",
         }}
       />,
     );
 
     expect(mockedHooks.useQuery.mock.calls[2]?.[1]).toEqual({
-      scopeKey: "Hair",
+      scopeKey: "__uncategorized",
       storeId: "store-1",
     });
     expect(mockedHooks.useQuery.mock.calls[3]?.[1]).toEqual({
@@ -1037,13 +1036,13 @@ describe("OperationsQueueViewContent", () => {
     });
     await waitFor(() =>
       expect(ensureCycleCountDraft).toHaveBeenCalledWith({
-        scopeKey: "Hair",
+        scopeKey: "__uncategorized",
         storeId: "store-1",
       }),
     );
   });
 
-  it("infers the cycle-count scope from a selected SKU when the route has no scope", async () => {
+  it("infers the cycle-count scope from a selected SKU", async () => {
     const ensureCycleCountDraft = vi.fn().mockResolvedValue(ok({}));
     const inventoryItems = [
       {
@@ -1092,9 +1091,7 @@ describe("OperationsQueueViewContent", () => {
         storeId: "store-1",
       }),
     );
-    expect(
-      screen.getByRole("button", { name: /pos quick add 1 sku/i }),
-    ).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getAllByText("POS quick add").length).toBeGreaterThan(0);
   });
 
   it("skips cycle-count draft loading in manual mode", () => {
@@ -1113,7 +1110,6 @@ describe("OperationsQueueViewContent", () => {
       <OperationsQueueView
         stockAdjustmentSearch={{
           mode: "manual",
-          scope: "Hair",
         }}
       />,
     );

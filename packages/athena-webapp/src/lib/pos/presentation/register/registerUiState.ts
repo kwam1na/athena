@@ -249,6 +249,7 @@ export interface RegisterDrawerGateState {
   errorMessage: string | null;
   isCloseoutSubmitting?: boolean;
   isCorrectingOpeningFloat?: boolean;
+  isRepairingTerminalSetup?: boolean;
   isReopeningCloseout?: boolean;
   isSubmitting?: boolean;
   onCloseoutCountedCashChange?: (value: string) => void;
@@ -263,6 +264,7 @@ export interface RegisterDrawerGateState {
   onSubmitCloseout?: () => Promise<void>;
   onReopenRegister?: () => Promise<void>;
   onRetrySync?: () => void;
+  onRepairTerminalSetup?: () => Promise<void>;
   onSubmit?: () => Promise<void>;
   onSignOut: () => Promise<void>;
 }

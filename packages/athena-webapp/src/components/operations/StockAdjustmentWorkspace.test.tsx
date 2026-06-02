@@ -300,9 +300,9 @@ describe("StockAdjustmentWorkspaceContent", () => {
     expect(mockedToast.success).toHaveBeenCalledWith("Product added");
     expect(onSearchStateChange).toHaveBeenCalledWith({
       availability: undefined,
+      category: undefined,
       page: 1,
       query: "skillz",
-      scope: undefined,
       sku: "sku-quick",
     });
   });
@@ -349,9 +349,9 @@ describe("StockAdjustmentWorkspaceContent", () => {
     expect(mockedToast.success).toHaveBeenCalledWith("Barcode attached to SKU");
     expect(onSearchStateChange).toHaveBeenCalledWith({
       availability: undefined,
+      category: undefined,
       page: 1,
       query: "123212312",
-      scope: undefined,
       sku: "sku-2",
     });
   });
@@ -389,7 +389,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
       screen.getByLabelText(/counted quantity for .*closure wig/i),
     ).toHaveValue(5);
     expect(
-      screen.getByText(/saved count: 1 SKU across 1 scope/i),
+      screen.getByText(/saved count: 1 SKU across 1 category/i),
     ).toBeInTheDocument();
   });
 
@@ -450,7 +450,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("summarizes saved draft SKUs across all scopes in the batch rail", () => {
+  it("summarizes saved draft SKUs across all categories in the batch rail", () => {
     renderStockAdjustmentWorkspace({
       cycleCountDraft: {
         _id: "draft-1" as Id<"cycleCountDraft">,
@@ -489,13 +489,13 @@ describe("StockAdjustmentWorkspaceContent", () => {
     });
 
     expect(
-      screen.getByText(/saved count: 5 SKUs across 3 scopes/i),
+      screen.getByText(/saved count: 5 SKUs across 3 categories/i),
     ).toBeInTheDocument();
     expect(screen.getByText(/current: hair, 2 SKUs/i)).toBeInTheDocument();
-    expect(screen.getByText(/scopes: beverages, hair/i)).toBeInTheDocument();
+    expect(screen.getByText(/categories: beverages, hair/i)).toBeInTheDocument();
     expect(screen.getByText("Count metrics")).toBeInTheDocument();
     expect(screen.getByText("All saved counts")).toBeInTheDocument();
-    expect(screen.getByText("Selected scope")).toBeInTheDocument();
+    expect(screen.getByText("Active category")).toBeInTheDocument();
     expect(screen.getByText("5")).toBeInTheDocument();
     expect(screen.getByText("-9")).toBeInTheDocument();
     expect(screen.getAllByText("SKUs").length).toBeGreaterThan(0);
@@ -504,7 +504,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
     expect(screen.getAllByText("4").length).toBeGreaterThan(0);
   });
 
-  it("submits the overall cycle count draft when the current scope has no changes", async () => {
+  it("submits the overall cycle count draft when the current category has no changes", async () => {
     const user = userEvent.setup();
     const onSubmitCycleCountDraft = vi.fn().mockResolvedValue(ok({}));
 
@@ -552,7 +552,6 @@ describe("StockAdjustmentWorkspaceContent", () => {
       searchState: {
         mode: "cycle_count",
         page: 1,
-        scope: "Hair",
         sku: "sku-1",
       },
     });
@@ -808,8 +807,9 @@ describe("StockAdjustmentWorkspaceContent", () => {
     expect(resetButton).toBeDisabled();
   });
 
-  it("orients cycle counts around a selected category scope", async () => {
+  it("filters stock rows by category without changing the count model", async () => {
     const user = userEvent.setup();
+    const onSearchStateChange = vi.fn();
 
     renderStockAdjustmentWorkspace({
       inventoryItems: [
@@ -830,51 +830,34 @@ describe("StockAdjustmentWorkspaceContent", () => {
           sku: "BOOK-1",
         },
       ],
+      onSearchStateChange,
     });
 
-    expect(
-      screen.getByRole("button", { name: /books 1 sku/i }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /hair 1 sku/i }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /books 1 sku/i }),
-    ).toHaveAttribute("aria-pressed", "false");
-    expect(
-      screen.getByRole("button", { name: /show all scopes/i }),
-    ).toBeDisabled();
     const table = screen.getByRole("table");
 
+    expect(
+      screen.getByRole("button", { name: /all categories, 2 skus/i }),
+    ).toHaveAttribute("aria-pressed", "true");
     expect(within(table).getByText("Ai Engineering")).toBeInTheDocument();
     expect(within(table).getByText("Closure Wig")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /hair 1 sku/i }));
+    await user.click(screen.getByRole("button", { name: /hair, 1 sku/i }));
 
-    expect(screen.getByRole("button", { name: /hair 1 sku/i })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    expect(onSearchStateChange).toHaveBeenLastCalledWith({
+      availability: undefined,
+      category: "Hair",
+      page: 1,
+      query: undefined,
+      sku: "sku-1",
+    });
     expect(
-      screen.getByRole("button", { name: /show all scopes/i }),
-    ).toBeEnabled();
+      screen.getByRole("button", { name: /hair, 1 sku/i }),
+    ).toHaveAttribute("aria-pressed", "true");
     expect(within(table).getByText("Closure Wig")).toBeInTheDocument();
     expect(within(table).queryByText("Ai Engineering")).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: /hair 1 sku/i }));
-
-    expect(screen.getByRole("button", { name: /hair 1 sku/i })).toHaveAttribute(
-      "aria-pressed",
-      "false",
-    );
-    expect(
-      screen.getByRole("button", { name: /show all scopes/i }),
-    ).toBeDisabled();
-    expect(within(table).getByText("Closure Wig")).toBeInTheDocument();
-    expect(within(table).getByText("Ai Engineering")).toBeInTheDocument();
   });
 
-  it("shows stock scopes in manual adjustment mode", async () => {
+  it("filters category matches through the SKU search", async () => {
     const user = userEvent.setup();
 
     renderStockAdjustmentWorkspace({
@@ -897,27 +880,22 @@ describe("StockAdjustmentWorkspaceContent", () => {
         },
       ],
       searchState: {
-        mode: "manual",
+        mode: "cycle_count",
       },
     });
-
-    expect(
-      screen.getByRole("button", { name: /books 1 sku/i }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /hair 1 sku/i }),
-    ).toBeInTheDocument();
 
     const table = screen.getByRole("table");
 
     expect(within(table).getByText("Ai Engineering")).toBeInTheDocument();
     expect(within(table).getByText("Closure Wig")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /books 1 sku/i }));
+    await user.type(
+      screen.getByRole("textbox", {
+        name: /search products, skus, or barcodes/i,
+      }),
+      "books",
+    );
 
-    expect(
-      screen.getByRole("button", { name: /books 1 sku/i }),
-    ).toHaveAttribute("aria-pressed", "true");
     expect(within(table).getByText("Ai Engineering")).toBeInTheDocument();
     expect(within(table).queryByText("Closure Wig")).not.toBeInTheDocument();
   });
@@ -931,7 +909,9 @@ describe("StockAdjustmentWorkspaceContent", () => {
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/9 of 11 units are available to sell\. Choose a scope/i),
+      screen.getByText(
+        /9 of 11 units are available to sell\. Select a SKU/i,
+      ),
     ).toBeInTheDocument();
     expect(screen.getAllByText("On hand").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Available").length).toBeGreaterThan(0);
@@ -1057,6 +1037,218 @@ describe("StockAdjustmentWorkspaceContent", () => {
       within(table).queryByText("Body Wave Bundle"),
     ).not.toBeInTheDocument();
     expect(screen.getByText("Showing 1 of 2 SKUs.")).toBeInTheDocument();
+  });
+
+  it("shows search matches across categories", async () => {
+    const user = userEvent.setup();
+    const onSearchStateChange = vi.fn();
+
+    renderStockAdjustmentWorkspace({
+      inventoryItems: [
+        {
+          _id: "sku-beverage" as Id<"productSku">,
+          inventoryCount: 2,
+          productCategory: "Beverages",
+          productName: "sparkling water",
+          quantityAvailable: 2,
+          sku: "DRINK-1",
+        },
+        {
+          _id: "sku-hair-vibes" as Id<"productSku">,
+          inventoryCount: 4,
+          productCategory: "Hair",
+          productName: "vibes closure",
+          quantityAvailable: 4,
+          sku: "VIBES-18",
+        },
+        {
+          _id: "sku-books-vibes" as Id<"productSku">,
+          inventoryCount: 3,
+          productCategory: "Books",
+          productName: "vibes workbook",
+          quantityAvailable: 3,
+          sku: "VIBES-BOOK",
+        },
+      ],
+      onSearchStateChange,
+      searchState: {
+        mode: "cycle_count",
+        sku: "sku-beverage",
+      },
+    });
+
+    const table = screen.getByRole("table");
+
+    await user.type(
+      screen.getByRole("textbox", {
+        name: /search products, skus, or barcodes/i,
+      }),
+      "vibes",
+    );
+
+    expect(onSearchStateChange).toHaveBeenLastCalledWith({
+      availability: undefined,
+      category: undefined,
+      page: 1,
+      query: "vibes",
+      sku: "sku-hair-vibes",
+    });
+    expect(screen.getByText("Showing 2 of 3 SKUs.")).toBeInTheDocument();
+    expect(within(table).getByText("Vibes Closure")).toBeInTheDocument();
+    expect(within(table).getByText("Vibes Workbook")).toBeInTheDocument();
+    expect(
+      within(table).queryByText("Sparkling Water"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows matching SKUs from other categories when the active category has no results", async () => {
+    const user = userEvent.setup();
+    const onSearchStateChange = vi.fn();
+
+    renderStockAdjustmentWorkspace({
+      inventoryItems: [
+        {
+          _id: "sku-hair" as Id<"productSku">,
+          inventoryCount: 4,
+          productCategory: "Hair",
+          productName: "closure wig",
+          quantityAvailable: 4,
+          sku: "CW-18",
+        },
+        {
+          _id: "sku-makeup" as Id<"productSku">,
+          inventoryCount: 6,
+          productCategory: "Makeup",
+          productName: "zara lip gloss",
+          quantityAvailable: 6,
+          sku: "ZA-LIP",
+        },
+      ],
+      onSearchStateChange,
+      searchState: {
+        category: "Hair",
+        mode: "cycle_count",
+        query: "za",
+        sku: "sku-hair",
+      },
+    });
+
+    const table = screen.getByRole("table");
+
+    expect(
+      screen.getByText("No Hair matches. Showing 1 match in Makeup."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Matches are in Makeup."),
+    ).toBeInTheDocument();
+    expect(within(table).getByText("Zara Lip Gloss")).toBeInTheDocument();
+    expect(within(table).queryByText("Closure Wig")).not.toBeInTheDocument();
+    expect(within(table).queryByText("No results.")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /switch to makeup/i }));
+
+    expect(onSearchStateChange).toHaveBeenLastCalledWith({
+      availability: undefined,
+      category: "Makeup",
+      page: 1,
+      query: "za",
+      sku: "sku-makeup",
+    });
+  });
+
+  it("moves the category filter when selecting an outside-category match", async () => {
+    const user = userEvent.setup();
+    const onSearchStateChange = vi.fn();
+
+    renderStockAdjustmentWorkspace({
+      inventoryItems: [
+        {
+          _id: "sku-hair" as Id<"productSku">,
+          inventoryCount: 4,
+          productCategory: "Hair",
+          productName: "closure wig",
+          quantityAvailable: 4,
+          sku: "CW-18",
+        },
+        {
+          _id: "sku-makeup" as Id<"productSku">,
+          inventoryCount: 6,
+          productCategory: "Makeup",
+          productName: "zara lip gloss",
+          quantityAvailable: 6,
+          sku: "ZA-LIP",
+        },
+      ],
+      onSearchStateChange,
+      searchState: {
+        category: "Hair",
+        mode: "cycle_count",
+        query: "za",
+      },
+    });
+
+    await user.click(
+      within(screen.getByRole("table")).getByText("Zara Lip Gloss"),
+    );
+
+    expect(onSearchStateChange).toHaveBeenLastCalledWith({
+      category: "Makeup",
+      page: 1,
+      sku: "sku-makeup",
+    });
+  });
+
+  it("clears the search and category filters", async () => {
+    const user = userEvent.setup();
+    const onSearchStateChange = vi.fn();
+
+    renderStockAdjustmentWorkspace({
+      inventoryItems: [
+        {
+          _id: "sku-beverage" as Id<"productSku">,
+          inventoryCount: 2,
+          productCategory: "Beverages",
+          productName: "sparkling water",
+          quantityAvailable: 2,
+          sku: "DRINK-1",
+        },
+        {
+          _id: "sku-hair-vibes" as Id<"productSku">,
+          inventoryCount: 4,
+          productCategory: "Hair",
+          productName: "vibes closure",
+          quantityAvailable: 4,
+          sku: "VIBES-18",
+        },
+      ],
+      onSearchStateChange,
+      searchState: {
+        category: "Hair",
+        mode: "cycle_count",
+        query: "vibes",
+        sku: "sku-hair-vibes",
+      },
+    });
+
+    const table = screen.getByRole("table");
+
+    expect(within(table).queryByText("Sparkling Water")).not.toBeInTheDocument();
+    expect(within(table).getByText("Vibes Closure")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /^clear$/i }));
+
+    expect(onSearchStateChange).toHaveBeenLastCalledWith({
+      availability: undefined,
+      category: undefined,
+      page: 1,
+      query: undefined,
+      sku: "sku-beverage",
+    });
+    expect(
+      screen.getByText("Showing 2 of 2 SKUs."),
+    ).toBeInTheDocument();
+    expect(within(table).getByText("Sparkling Water")).toBeInTheDocument();
+    expect(within(table).getByText("Vibes Closure")).toBeInTheDocument();
   });
 
   it("fuzzy matches stock rows by product and variant terms", async () => {
@@ -1519,30 +1711,29 @@ describe("StockAdjustmentWorkspaceContent", () => {
 
     expect(onSearchStateChange).toHaveBeenLastCalledWith({
       availability: "unavailable",
+      category: undefined,
       page: 1,
-      scope: "Books",
-      sku: "sku-unavailable-books",
+      sku: "sku-unavailable-hair",
     });
     expect(screen.getByRole("button", { name: /reserved 4/i })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
     expect(within(table).getByText("Ai Engineering")).toBeInTheDocument();
-    expect(within(table).queryByText("Closure Wig")).not.toBeInTheDocument();
+    expect(within(table).getByText("Closure Wig")).toBeInTheDocument();
     expect(
       within(table).queryByText("Body Wave Bundle"),
     ).not.toBeInTheDocument();
     expect(within(table).queryByText("Lip Gloss")).not.toBeInTheDocument();
-    expect(screen.getByText("Showing 1 of 1 SKU.")).toBeInTheDocument();
+    expect(screen.getByText("Showing 2 of 4 SKUs.")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /reserved 4/i }));
 
     expect(onSearchStateChange).toHaveBeenLastCalledWith({
       availability: undefined,
+      category: undefined,
       page: 1,
-      query: undefined,
-      scope: undefined,
-      sku: undefined,
+      sku: "sku-unavailable-hair",
     });
     expect(screen.getByRole("button", { name: /reserved 4/i })).toHaveAttribute(
       "aria-pressed",
@@ -1567,9 +1758,10 @@ describe("StockAdjustmentWorkspaceContent", () => {
 
     expect(onSearchStateChange).toHaveBeenLastCalledWith({
       availability: undefined,
+      category: undefined,
       page: 1,
       query: "CW",
-      sku: undefined,
+      sku: "sku-1",
     });
 
     await user.click(
@@ -1579,9 +1771,10 @@ describe("StockAdjustmentWorkspaceContent", () => {
 
     expect(onSearchStateChange).toHaveBeenLastCalledWith({
       availability: "unavailable",
+      category: undefined,
       page: 1,
       query: "CW",
-      sku: undefined,
+      sku: "sku-1",
     });
   });
 
@@ -1728,7 +1921,6 @@ describe("StockAdjustmentWorkspaceContent", () => {
       searchState: {
         mode: "cycle_count",
         page: 2,
-        scope: "Inventory",
         sku: "sku-11",
       },
     });
@@ -1770,7 +1962,6 @@ describe("StockAdjustmentWorkspaceContent", () => {
       searchState: {
         mode: "cycle_count",
         page: 3,
-        scope: "Inventory",
         sku: "sku-21",
       },
     });
@@ -1821,24 +2012,22 @@ describe("StockAdjustmentWorkspaceContent", () => {
       onSearchStateChange,
       searchState: {
         mode: "cycle_count",
-        scope: "Inventory",
+        sku: "sku-inventory-1",
       },
     });
 
-    await user.click(screen.getByRole("button", { name: /hair 1 sku/i }));
+    await user.click(screen.getByText("Closure Wig"));
 
     expect(onSearchStateChange).toHaveBeenCalledWith({
-      page: 1,
-      scope: "Hair",
       sku: "sku-1",
     });
 
     await user.click(screen.getByRole("tab", { name: /manual adjustment/i }));
 
     expect(onSearchStateChange).toHaveBeenCalledWith({
+      category: undefined,
       mode: "manual",
       page: 1,
-      scope: "Hair",
       sku: "sku-1",
     });
   });

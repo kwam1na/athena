@@ -126,6 +126,20 @@ export function RegisterDrawerGate({
             </p>
           </div>
           <div className="flex flex-wrap gap-2 pt-2">
+            {isTerminalRepair && drawerGate.onRepairTerminalSetup ? (
+              <LoadingButton
+                disabled={Boolean(drawerGate.isRepairingTerminalSetup)}
+                isLoading={Boolean(drawerGate.isRepairingTerminalSetup)}
+                type="button"
+                variant="default"
+                onClick={() => void drawerGate.onRepairTerminalSetup?.()}
+              >
+                <RefreshCwIcon className="mr-2 h-4 w-4" />
+                {drawerGate.isRepairingTerminalSetup
+                  ? "Repairing setup"
+                  : "Repair setup"}
+              </LoadingButton>
+            ) : null}
             {!isTerminalRepair && drawerGate.onRetrySync ? (
               <Button
                 type="button"
