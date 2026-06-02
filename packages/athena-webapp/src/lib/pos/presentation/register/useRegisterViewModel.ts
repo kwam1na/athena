@@ -18,6 +18,7 @@ import { useAuth } from "@/hooks/useAuth";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useGetTerminal } from "@/hooks/useGetTerminal";
 import { useNavigateBack } from "@/hooks/use-navigate-back";
+import { registerAndProvisionPosTerminal } from "@/lib/pos/application/registerAndProvisionPosTerminal";
 import { bootstrapRegister } from "@/lib/pos/application/useCases/bootstrapRegister";
 import { holdSession as runHoldSession } from "@/lib/pos/application/useCases/holdSession";
 import {
@@ -48,6 +49,7 @@ import { readProjectedLocalRegisterModel } from "@/lib/pos/infrastructure/local/
 import { isSyncablePosLocalEvent } from "@/lib/pos/infrastructure/local/syncContract";
 import { usePosLocalSyncRuntimeStatus } from "@/lib/pos/infrastructure/local/usePosLocalSyncRuntime";
 import { useLocalPosEntryContext } from "@/lib/pos/infrastructure/local/localPosEntryContext";
+import { readStoredTerminalFingerprint } from "@/lib/pos/infrastructure/terminal/fingerprint";
 import {
   useConvexRegisterCatalog,
   useConvexRegisterCatalogAvailability,
@@ -1209,6 +1211,8 @@ export function useRegisterViewModel(): RegisterViewModel {
     null,
   );
   const [isOpeningDrawer, setIsOpeningDrawer] = useState(false);
+  const [isRepairingTerminalSetup, setIsRepairingTerminalSetup] =
+    useState(false);
   const [isCorrectingOpeningFloat, setIsCorrectingOpeningFloat] =
     useState(false);
   const [isSubmittingCloseout, setIsSubmittingCloseout] = useState(false);
@@ -1239,6 +1243,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   const pendingSessionStartKeyRef = useRef<string | null>(null);
   const seededRegisterSessionIdsRef = useRef<Set<string>>(new Set());
   const persistedDrawerAuthorityBlockRef = useRef<string | null>(null);
+  const autoTerminalRepairAttemptRef = useRef<string | null>(null);
   const [optimisticCartQuantities, setOptimisticCartQuantities] = useState<
     Record<string, number>
   >({});
@@ -1606,6 +1611,9 @@ export function useRegisterViewModel(): RegisterViewModel {
   );
   const correctRegisterSessionOpeningFloat = useMutation(
     api.cashControls.closeouts.correctRegisterSessionOpeningFloat,
+  );
+  const registerTerminalMutation = useMutation(
+    api.inventory.posTerminal.registerTerminal,
   );
   const {
     resumeSession,
@@ -2342,6 +2350,110 @@ export function useRegisterViewModel(): RegisterViewModel {
               activeSessionHasBlockedRegisterBinding
             ? "recovery"
             : "initialSetup";
+  const handleRepairTerminalSetup = useCallback(async () => {
+    if (!activeStoreId || !terminal?._id || typeof indexedDB === "undefined") {
+      setDrawerErrorMessage(
+        "Terminal setup repair is not available on this browser.",
+      );
+      return;
+    }
+
+    const fingerprint = readStoredTerminalFingerprint();
+    if (!fingerprint) {
+      setDrawerErrorMessage(
+        "Terminal setup repair needs this browser fingerprint. Open POS Settings to repair setup.",
+      );
+      return;
+    }
+
+    setIsRepairingTerminalSetup(true);
+    try {
+      const seedResult = await localStore.readProvisionedTerminalSeed();
+      const seed = seedResult.ok ? seedResult.value : null;
+
+      if (
+        !seed ||
+        seed.storeId !== activeStoreId ||
+        seed.cloudTerminalId !== terminal._id ||
+        seed.terminalId !== fingerprint.fingerprintHash
+      ) {
+        setDrawerErrorMessage(
+          "Terminal setup repair needs the current local setup record. Open POS Settings to repair setup.",
+        );
+        return;
+      }
+
+      const repairRegisterNumber =
+        seed.registerNumber ?? terminal.registerNumber ?? registerNumber;
+      if (!repairRegisterNumber) {
+        setDrawerErrorMessage(
+          "Register number required. Open POS Settings to repair setup.",
+        );
+        return;
+      }
+
+      const result = await registerAndProvisionPosTerminal({
+        activeStoreId,
+        browserInfo: fingerprint.browserInfo,
+        displayName: terminal.displayName || seed.displayName,
+        fingerprintHash: fingerprint.fingerprintHash,
+        registerNumber: repairRegisterNumber,
+        registerTerminalMutation,
+        storeFactory: () => localStore,
+      });
+
+      if (result.kind === "user_error") {
+        setDrawerErrorMessage(toOperatorMessage(result.error.message));
+        return;
+      }
+
+      setDrawerErrorMessage(null);
+      setLocalRegisterReadModelVersion((current) => current + 1);
+      setLocalSyncEventAppendToken((current) => current + 1);
+      await refreshLocalRegisterReadModel();
+      toast.success("Terminal setup repaired");
+    } catch (error) {
+      logger.warn("[POS] Terminal setup auto repair failed", {
+        error,
+        storeId: activeStoreId,
+        terminalId: terminal._id,
+      });
+      setDrawerErrorMessage("Unable to repair terminal setup. Try again.");
+    } finally {
+      setIsRepairingTerminalSetup(false);
+    }
+  }, [
+    activeStoreId,
+    localStore,
+    refreshLocalRegisterReadModel,
+    registerNumber,
+    registerTerminalMutation,
+    terminal?._id,
+    terminal?.displayName,
+    terminal?.registerNumber,
+  ]);
+  useEffect(() => {
+    if (drawerGateMode !== "terminalRepair") {
+      autoTerminalRepairAttemptRef.current = null;
+      return;
+    }
+    if (!activeStoreId || !terminal?._id || isRepairingTerminalSetup) {
+      return;
+    }
+
+    const repairKey = `${activeStoreId}:${terminal._id}`;
+    if (autoTerminalRepairAttemptRef.current === repairKey) {
+      return;
+    }
+    autoTerminalRepairAttemptRef.current = repairKey;
+    void handleRepairTerminalSetup();
+  }, [
+    activeStoreId,
+    drawerGateMode,
+    handleRepairTerminalSetup,
+    isRepairingTerminalSetup,
+    terminal?._id,
+  ]);
   const setPaymentState = useCallback((nextPayments: Payment[]) => {
     paymentsRef.current = nextPayments;
     setPayments(nextPayments);
@@ -5309,6 +5421,7 @@ export function useRegisterViewModel(): RegisterViewModel {
                   ? "Sale assigned to a different drawer. Open that drawer before continuing."
                   : null),
               isSubmitting: isOpeningDrawer,
+              isRepairingTerminalSetup,
               onOpeningFloatChange: (value: string) => {
                 setDrawerOpeningFloat(value);
                 setDrawerErrorMessage(null);
@@ -5321,6 +5434,10 @@ export function useRegisterViewModel(): RegisterViewModel {
               onRetrySync:
                 drawerGateMode === "drawerAuthorityRepair"
                   ? handleRetryLocalSync
+                  : undefined,
+              onRepairTerminalSetup:
+                drawerGateMode === "terminalRepair"
+                  ? handleRepairTerminalSetup
                   : undefined,
               onSignOut: handleCashierSignOut,
             }

@@ -8,11 +8,11 @@ const stockAdjustmentSearchSchema = z.object({
   availability: z
     .enum(["all", "all_available", "changed", "unavailable"])
     .optional(),
+  category: z.string().optional(),
   mode: z.enum(["cycle_count", "manual"]).optional(),
   o: z.string().optional(),
   page: z.coerce.number().int().positive().optional(),
   query: z.string().optional(),
-  scope: z.string().optional(),
   sku: z.string().optional(),
 });
 
@@ -37,10 +37,10 @@ function StockAdjustmentsRoute() {
 
         for (const key of [
           "availability",
+          "category",
           "mode",
           "page",
           "query",
-          "scope",
           "sku",
         ] as const) {
           if (next[key] === undefined || next[key] === "") {

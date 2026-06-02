@@ -1713,38 +1713,21 @@ export function OperationsQueueView({
     stockOpsApi.adjustments.listInventorySnapshot,
     canQueryProtectedData ? { storeId: activeStore!._id } : "skip",
   ) as InventorySnapshotItem[] | undefined;
-  const inferredCycleCountScopeKey = useMemo(() => {
+  const selectedCycleCountScopeKey = useMemo(() => {
     if (stockAdjustmentSearch?.mode === "manual") return undefined;
-    if (stockAdjustmentSearch?.scope?.trim()) return undefined;
-    if (!stockAdjustmentSearch?.sku || !inventoryItems) return undefined;
+    if (!inventoryItems) return undefined;
 
-    const selectedItem = inventoryItems.find(
-      (item) => String(item._id) === stockAdjustmentSearch.sku,
-    );
+    const selectedItem =
+      stockAdjustmentSearch?.sku !== undefined
+        ? inventoryItems.find(
+            (item) => String(item._id) === stockAdjustmentSearch.sku,
+          )
+        : inventoryItems[0];
 
     return selectedItem
       ? getCountScopeKeyForInventoryItem(selectedItem)
       : undefined;
-  }, [
-    inventoryItems,
-    stockAdjustmentSearch?.mode,
-    stockAdjustmentSearch?.scope,
-    stockAdjustmentSearch?.sku,
-  ]);
-  const effectiveStockAdjustmentSearch = useMemo(
-    () =>
-      inferredCycleCountScopeKey
-        ? {
-            ...stockAdjustmentSearch,
-            scope: inferredCycleCountScopeKey,
-          }
-        : stockAdjustmentSearch,
-    [inferredCycleCountScopeKey, stockAdjustmentSearch],
-  );
-  const selectedCycleCountScopeKey =
-    effectiveStockAdjustmentSearch?.mode === "manual"
-      ? undefined
-      : effectiveStockAdjustmentSearch?.scope?.split(",")[0]?.trim();
+  }, [inventoryItems, stockAdjustmentSearch?.mode, stockAdjustmentSearch?.sku]);
   const canUseCycleCountDraft =
     canQueryProtectedData &&
     Boolean(activeStore?._id) &&
@@ -1878,7 +1861,7 @@ export function OperationsQueueView({
   }) => {
     if (!cycleCountDraft) {
       return buildMissingDraftResult(
-        "Select a count scope before saving a draft.",
+        "Select a SKU before saving a count draft.",
       );
     }
 
@@ -1900,7 +1883,7 @@ export function OperationsQueueView({
   const handleDiscardCycleCountDraft = async () => {
     if (!cycleCountDraft) {
       return buildMissingDraftResult(
-        "Select a count scope before discarding a draft.",
+        "Select a SKU before discarding a count draft.",
       );
     }
 
@@ -2165,7 +2148,7 @@ export function OperationsQueueView({
         showBackButton={typeof search.o === "string" && search.o.length > 0}
         storeId={activeStore._id}
         storeUrlSlug={routeParams?.storeUrlSlug}
-        stockAdjustmentSearch={effectiveStockAdjustmentSearch}
+        stockAdjustmentSearch={stockAdjustmentSearch}
         workItems={queue?.workItems ?? []}
       />
       <StaffAuthenticationDialog
