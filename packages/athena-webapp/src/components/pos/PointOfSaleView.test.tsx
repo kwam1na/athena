@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import PointOfSaleView from "./PointOfSaleView";
+import { PosTerminalAppSessionRecoveryProvider } from "@/lib/pos/infrastructure/terminal/posTerminalAppSessionRecoveryContext";
 
 const useGetActiveOrganizationMock = vi.fn();
 const useGetActiveStoreMock = vi.fn();
@@ -250,6 +251,50 @@ describe("PointOfSaleView", () => {
 
     expect(usePosLocalSyncRuntimeStatusMock).toHaveBeenCalledWith(
       expect.objectContaining({
+        mode: "drain-enabled",
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+  });
+
+  it("passes POS shell app-session recovery diagnostics into runtime status", () => {
+    useLocalPosEntryContextMock.mockReturnValue({
+      status: "ready",
+      orgUrlSlug: "acme",
+      storeUrlSlug: "downtown",
+      storeId: "store-1",
+      terminalSeed: {
+        terminalId: "local-terminal-1",
+        cloudTerminalId: "terminal-cloud-1",
+        syncSecretHash: "secret-hash",
+        storeId: "store-1",
+        displayName: "Front register",
+        provisionedAt: 1_700,
+        schemaVersion: 2,
+      },
+      source: "live",
+    });
+
+    render(
+      <PosTerminalAppSessionRecoveryProvider
+        value={{
+          assertion: "present",
+          reason: null,
+          status: "recoverable",
+        }}
+      >
+        <PointOfSaleView />
+      </PosTerminalAppSessionRecoveryProvider>,
+    );
+
+    expect(usePosLocalSyncRuntimeStatusMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        appSessionRecovery: {
+          assertion: "present",
+          reason: null,
+          status: "recoverable",
+        },
         mode: "drain-enabled",
         storeId: "store-1",
         terminalId: "terminal-cloud-1",

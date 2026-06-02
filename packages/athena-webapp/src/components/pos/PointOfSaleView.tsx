@@ -33,6 +33,7 @@ import { useLocalPosEntryContext } from "@/lib/pos/infrastructure/local/localPos
 import { usePosLocalSyncRuntimeStatus } from "@/lib/pos/infrastructure/local/usePosLocalSyncRuntime";
 import { usePrewarmRegisterCatalogOfflineSnapshots } from "@/lib/pos/infrastructure/convex/catalogGateway";
 import type { Id } from "~/convex/_generated/dataModel";
+import { usePosTerminalAppSessionRecoveryRuntimeInput } from "@/lib/pos/infrastructure/terminal/posTerminalAppSessionRecoveryContext";
 
 type FeatureLinkProps = {
   children: ReactNode;
@@ -71,7 +72,10 @@ export default function PointOfSaleView() {
   usePrewarmRegisterCatalogOfflineSnapshots({ storeId: snapshotStoreId });
   const hubTerminalSeed =
     localEntryContext.status === "ready" ? localEntryContext.terminalSeed : null;
+  const appSessionRecovery =
+    usePosTerminalAppSessionRecoveryRuntimeInput();
   usePosLocalSyncRuntimeStatus({
+    appSessionRecovery,
     mode: "drain-enabled",
     storeId: hubTerminalSeed?.storeId,
     terminalId: hubTerminalSeed?.cloudTerminalId ?? hubTerminalSeed?.terminalId,

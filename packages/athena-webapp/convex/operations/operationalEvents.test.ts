@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import type { Id } from "../_generated/dataModel";
-import type { QueryCtx } from "../_generated/server";
-import { listProductOperationalTimelineWithCtx } from "./operationalEvents";
+import type { MutationCtx, QueryCtx } from "../_generated/server";
+import {
+  listProductOperationalTimelineWithCtx,
+  recordOperationalEventWithCtx,
+} from "./operationalEvents";
 
 type TableName = "operationalEvent" | "product" | "productSku";
 type Row = Record<string, unknown> & { _id: string };
@@ -25,6 +28,11 @@ function createCtx(seed: Partial<Record<TableName, Row[]>>) {
       async get(table: TableName, id: string) {
         return tables[table].get(id) ?? null;
       },
+      async insert(table: TableName, value: Record<string, unknown>) {
+        const id = `${table}-${tables[table].size + 1}`;
+        tables[table].set(id, { _id: id, ...value });
+        return id;
+      },
       query(table: TableName) {
         const filters: Array<[string, unknown]> = [];
         const rows = () =>
@@ -33,6 +41,7 @@ function createCtx(seed: Partial<Record<TableName, Row[]>>) {
           );
 
         const chain = {
+          collect: async () => rows(),
           take: async (limit: number) => rows().slice(0, limit),
           withIndex(
             _index: string,
@@ -148,5 +157,51 @@ describe("operational events", () => {
         storeId: "store-1" as Id<"store">,
       }),
     ).resolves.toEqual([]);
+  });
+
+  it("dedupes operational events by actor identity when actor fields are present", async () => {
+    const ctx = createCtx({});
+    const baseEvent = {
+      storeId: "store-1" as Id<"store">,
+      eventType: "drawer_action",
+      subjectType: "posTerminal",
+      subjectId: "terminal-1",
+      reason: "validated",
+      message: "Drawer action recorded.",
+    };
+
+    await recordOperationalEventWithCtx(ctx as unknown as MutationCtx, {
+      ...baseEvent,
+      actorUserId: "user-1" as Id<"athenaUser">,
+    });
+    await recordOperationalEventWithCtx(ctx as unknown as MutationCtx, {
+      ...baseEvent,
+      actorUserId: "user-1" as Id<"athenaUser">,
+    });
+    await recordOperationalEventWithCtx(ctx as unknown as MutationCtx, {
+      ...baseEvent,
+      actorUserId: "user-2" as Id<"athenaUser">,
+    });
+    await recordOperationalEventWithCtx(ctx as unknown as MutationCtx, {
+      ...baseEvent,
+      actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+    });
+
+    const events = await ctx.db
+      .query("operationalEvent")
+      .withIndex("by_storeId_subject", (q) =>
+        q
+          .eq("storeId", "store-1" as Id<"store">)
+          .eq("subjectType", "posTerminal")
+          .eq("subjectId", "terminal-1"),
+      )
+      .take(10);
+
+    expect(events).toHaveLength(3);
+    expect(events).toEqual([
+      expect.objectContaining({ actorUserId: "user-1" }),
+      expect.objectContaining({ actorUserId: "user-2" }),
+      expect.objectContaining({ actorStaffProfileId: "staff-1" }),
+    ]);
   });
 });

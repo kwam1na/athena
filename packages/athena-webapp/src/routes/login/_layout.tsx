@@ -11,6 +11,7 @@ import {
   ATHENA_AUTH_SYNC_FAILED_EVENT,
   ATHENA_PENDING_AUTH_SYNC_EVENT,
   LOGGED_IN_USER_ID_KEY,
+  POS_APP_ACCOUNT_ID_KEY,
   PENDING_ATHENA_AUTH_SYNC_KEY,
 } from "~/src/lib/constants";
 import { api } from "~/convex/_generated/api";
@@ -162,6 +163,7 @@ export function LoginLayout() {
 
         sessionStorage.removeItem(PENDING_ATHENA_AUTH_SYNC_KEY);
         localStorage.setItem(LOGGED_IN_USER_ID_KEY, userId);
+        localStorage.setItem(POS_APP_ACCOUNT_ID_KEY, userId);
         navigate({ to: "/" });
       } catch (error) {
         if (!isMountedRef.current) {

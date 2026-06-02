@@ -36,6 +36,8 @@ import {
 import {
   buildPosTerminalRuntimeCopyDiagnostics,
   buildPosTerminalRuntimeStatus,
+  toReportablePosTerminalRuntimeStatus,
+  type PosTerminalRuntimeAppSessionRecoveryInput,
   type PosTerminalRuntimeCopyDiagnostics,
   type PosTerminalRuntimeSnapshotReadiness,
   type PosTerminalRuntimeStatusPayload,
@@ -103,6 +105,7 @@ type IngestLocalEventsArgs = FunctionArgs<
 >;
 
 export function usePosLocalSyncRuntimeStatus(input: {
+  appSessionRecovery?: PosTerminalRuntimeAppSessionRecoveryInput | null;
   storeId?: string | null;
   terminalId?: string | null;
   drainOnAppend?: boolean;
@@ -675,6 +678,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
 
   const runtimeStatusInput = useMemo(
     () => ({
+      appSessionRecovery: input.appSessionRecovery,
       browserInfo: getRuntimeBrowserInfo(isOnline),
       events,
       localStoreFailureMessage: readError,
@@ -690,6 +694,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
     }),
     [
       events,
+      input.appSessionRecovery,
       input.staffAuthorityStatus,
       isOnline,
       readError,
@@ -768,13 +773,18 @@ export function usePosLocalSyncRuntimeStatus(input: {
       }),
     );
 
+    let isStale = false;
+    const isCurrentPublishScope = () => !isStale;
+
     void reportTerminalRuntimeStatus({
       storeId: checkInStoreId as Id<"store">,
       terminalId: checkInTerminalId as Id<"posTerminal">,
       syncSecretHash: checkInSyncSecretHash,
-      status: runtimeStatus,
+      status: toReportablePosTerminalRuntimeStatus(runtimeStatus),
     })
       .then(async (result) => {
+        if (!isCurrentPublishScope()) return;
+
         if (result.kind === "ok") {
           setDebug((current) =>
             withCheckInPublishDebug(current, {
@@ -810,6 +820,8 @@ export function usePosLocalSyncRuntimeStatus(input: {
                   store: authorityStore,
                   syncSeed: runtimeReadiness.terminalSeed,
                 });
+              if (!isCurrentPublishScope()) return;
+
               lastRuntimeStatusSignatureRef.current =
                 getRuntimeStatusPublishSignature({
                   observationToken: runtimeStatusObservationToken,
@@ -825,12 +837,16 @@ export function usePosLocalSyncRuntimeStatus(input: {
                 terminalIntegrity,
               }));
             } catch {
+              if (!isCurrentPublishScope()) return;
+
               setReadError(
                 "Terminal setup needs repair before POS can continue.",
               );
             }
           }
         }
+        if (!isCurrentPublishScope()) return;
+
         setDebug((current) =>
           withCheckInPublishDebug(current, {
             checkInPublishCompletedAt: Date.now(),
@@ -844,6 +860,8 @@ export function usePosLocalSyncRuntimeStatus(input: {
         );
       })
       .catch(() => {
+        if (!isCurrentPublishScope()) return;
+
         setDebug((current) =>
           withCheckInPublishDebug(current, {
             checkInPublishCompletedAt: Date.now(),
@@ -853,6 +871,10 @@ export function usePosLocalSyncRuntimeStatus(input: {
           }),
         );
       });
+
+    return () => {
+      isStale = true;
+    };
   }, [
     reportTerminalRuntimeStatus,
     events.length,

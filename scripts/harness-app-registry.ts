@@ -669,6 +669,39 @@ export const HARNESS_APP_REGISTRY = [
         note: "Use this when the shared workflow-trace or POS local sync contract, POS local sync repository, POS local-first sync/storage/read-model/command-gateway files, terminal seed lookup, POS local entry/readiness files, the POS register bootstrap or drawer gate, the `pos_session` / `register_session` trace writers, the trace route/view, or POS register, transaction, and cash-controls trace entry points change. It exercises the trace schema and presentation contract, the session/register trace writers, local sync ingestion/projection/repository/read-model adjacency, POS entry/readiness gating, the drawer-open bootstrap handoff, the shared trace route, terminal fallback behavior, and the operator-facing POS and cash-controls surfaces before broader package validation.",
       },
       {
+        title: "POS hub app-session continuity edits",
+        touchedPaths: [
+          "convex/pos/public/terminalAppSessions.ts",
+          "convex/pos/public/terminals.ts",
+          "convex/pos/application/commands/terminals.ts",
+          "convex/schemas/pos/posTerminalRuntimeStatus.ts",
+          "src/routes/_authed.tsx",
+          "src/components/pos/PointOfSaleView.tsx",
+          "src/lib/pos/infrastructure/terminal/usePosTerminalAppSessionRecovery.ts",
+          "src/lib/pos/infrastructure/terminal/posTerminalAppSessionRecoveryContext.tsx",
+          "src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts",
+          "src/lib/pos/infrastructure/local/terminalRuntimeStatus.ts",
+        ],
+        commands: [
+          {
+            kind: "raw",
+            command:
+              "bun run --filter '@athena/webapp' test -- src/routes/_authed.test.tsx convex/pos/public/terminalAppSessions.test.ts src/lib/pos/infrastructure/terminal/usePosTerminalAppSessionRecovery.test.ts convex/pos/application/terminals.test.ts convex/pos/public/terminals.test.ts src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.test.ts src/components/pos/PointOfSaleView.test.tsx",
+          },
+          { kind: "script", script: "audit:convex" },
+          { kind: "script", script: "lint:convex:changed" },
+          { kind: "script", script: "lint:frontend:changed" },
+          {
+            kind: "raw",
+            command:
+              "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+          },
+          { kind: "script", script: "build" },
+        ],
+        behaviorScenarios: ["athena-admin-shell-boot"],
+        note: "Use this when POS hub app-session recovery, route-shell continuity, terminal recovery validation, or app-session diagnostics change. It proves the recovery assertion stays POS-hub scoped, non-POS routes still require normal app auth, server validation rejects unsafe scopes, recovery retries stay bounded, terminal diagnostics redact raw recovery data, and sale authority still depends on terminal integrity, drawer authority, local command invariants, and staff proof.",
+      },
+      {
         title: "POS terminal health visibility and diagnostics edits",
         touchedPaths: [
           "convex/schemas/pos/posTerminal.ts",

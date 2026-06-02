@@ -425,6 +425,53 @@ describe("POS terminal public mutations", () => {
     );
   });
 
+  it("accepts only safe app-session recovery status in runtime check-ins", async () => {
+    const ctx = buildCtx({
+      terminal: {
+        _id: "terminal-1",
+        storeId: "store-1",
+        status: "active",
+        registeredByUserId: "athena-user-2",
+        syncSecretHash: SYNC_SECRET_HASH,
+      },
+    });
+
+    await getHandler(submitTerminalRuntimeStatus)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      syncSecretHash: "sync-secret-1",
+      status: buildRuntimeStatus({
+        appSessionRecovery: {
+          status: "blocked_app_account",
+          reason: "app_account_disabled",
+          assertion: "raw-recovery-assertion",
+          diagnostics: { proof: "raw-terminal-proof" },
+        },
+      }),
+    });
+
+    expect(mocks.submitTerminalRuntimeStatusCommand).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        status: expect.objectContaining({
+          appSessionRecovery: {
+            status: "blocked_app_account",
+          },
+        }),
+      }),
+    );
+    expect(
+      mocks.submitTerminalRuntimeStatusCommand.mock.calls[0]?.[1].status
+        .appSessionRecovery,
+    ).not.toEqual(
+      expect.objectContaining({
+        assertion: expect.anything(),
+        diagnostics: expect.anything(),
+        reason: expect.anything(),
+      }),
+    );
+  });
+
   it.each([
     {
       name: "missing terminal",

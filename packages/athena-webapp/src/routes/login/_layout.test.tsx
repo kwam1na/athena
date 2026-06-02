@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LoginLayout } from "./_layout";
 import {
   LOGGED_IN_USER_ID_KEY,
+  POS_APP_ACCOUNT_ID_KEY,
   PENDING_ATHENA_AUTH_SYNC_KEY,
 } from "~/src/lib/constants";
 import { ok, userError } from "~/shared/commandResult";
@@ -103,6 +104,10 @@ describe("LoginLayout", () => {
       LOGGED_IN_USER_ID_KEY,
       "user-1"
     );
+    expect(window.localStorage.setItem).toHaveBeenCalledWith(
+      POS_APP_ACCOUNT_ID_KEY,
+      "user-1"
+    );
   });
 
   it("recovers an authenticated Convex session even when the pending sync flag is missing", async () => {
@@ -121,6 +126,10 @@ describe("LoginLayout", () => {
     );
     expect(window.localStorage.setItem).toHaveBeenCalledWith(
       LOGGED_IN_USER_ID_KEY,
+      "user-2"
+    );
+    expect(window.localStorage.setItem).toHaveBeenCalledWith(
+      POS_APP_ACCOUNT_ID_KEY,
       "user-2"
     );
     expect(mocked.navigate).toHaveBeenCalledWith({ to: "/" });
@@ -186,6 +195,10 @@ describe("LoginLayout", () => {
         LOGGED_IN_USER_ID_KEY,
         "user-3"
       )
+    );
+    expect(window.localStorage.setItem).toHaveBeenCalledWith(
+      POS_APP_ACCOUNT_ID_KEY,
+      "user-3"
     );
   });
 });

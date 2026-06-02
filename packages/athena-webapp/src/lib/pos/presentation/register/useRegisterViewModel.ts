@@ -48,6 +48,7 @@ import { readProjectedLocalRegisterModel } from "@/lib/pos/infrastructure/local/
 import { isSyncablePosLocalEvent } from "@/lib/pos/infrastructure/local/syncContract";
 import { usePosLocalSyncRuntimeStatus } from "@/lib/pos/infrastructure/local/usePosLocalSyncRuntime";
 import { useLocalPosEntryContext } from "@/lib/pos/infrastructure/local/localPosEntryContext";
+import { usePosTerminalAppSessionRecoveryRuntimeInput } from "@/lib/pos/infrastructure/terminal/posTerminalAppSessionRecoveryContext";
 import {
   useConvexRegisterCatalog,
   useConvexRegisterCatalogAvailability,
@@ -3882,6 +3883,11 @@ export function useRegisterViewModel(): RegisterViewModel {
         return;
       }
 
+      if (activeSessionHasBlockedRegisterBinding) {
+        toast.error("Drawer closed. Open the drawer before changing this sale.");
+        return;
+      }
+
       const queued = serviceMutationQueueRef.current
         .catch(() => undefined)
         .then(async () => {
@@ -3941,6 +3947,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       return queued;
     },
     [
+      activeSessionHasBlockedRegisterBinding,
       activeStoreId,
       ensureLocalPosSessionId,
       localCommandGateway,
@@ -3955,6 +3962,11 @@ export function useRegisterViewModel(): RegisterViewModel {
   const handleRemoveService = useCallback(async (lineId: string) => {
     if (checkoutMutationLockedRef.current) {
       toast.error("Finish the current checkout update before changing the sale.");
+      return;
+    }
+
+    if (activeSessionHasBlockedRegisterBinding) {
+      toast.error("Drawer closed. Open the drawer before changing this sale.");
       return;
     }
 
@@ -4002,6 +4014,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     );
     return queued;
   }, [
+    activeSessionHasBlockedRegisterBinding,
     activeStoreId,
     ensureLocalPosSessionId,
     localCommandGateway,
@@ -4776,6 +4789,11 @@ export function useRegisterViewModel(): RegisterViewModel {
       return false;
     }
 
+    if (activeSessionHasBlockedRegisterBinding) {
+      toast.error("Drawer closed. Open the drawer before completing this sale.");
+      return false;
+    }
+
     checkoutMutationLockedRef.current = true;
     try {
       await waitForCheckoutMutationQueues();
@@ -4907,6 +4925,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     activeCartItems,
     activeSession?._id,
     activeSession?.cartItems,
+    activeSessionHasBlockedRegisterBinding,
     localEventRegisterSessionId,
     activeStoreId,
     activeTotals,
@@ -5186,7 +5205,9 @@ export function useRegisterViewModel(): RegisterViewModel {
     activeCloseoutRegisterSession ||
     activeOpeningFloatCorrectionRegisterSession,
   );
+  const appSessionRecovery = usePosTerminalAppSessionRecoveryRuntimeInput();
   const localRuntimeSyncSource = usePosLocalSyncRuntimeStatus({
+    appSessionRecovery,
     drainOnAppend: true,
     eventAppendToken: localSyncEventAppendToken,
     mode: "status-only",

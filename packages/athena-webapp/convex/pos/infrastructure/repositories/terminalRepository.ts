@@ -101,11 +101,21 @@ export async function upsertLatestRuntimeStatus(
   });
 
   if (existing) {
+    if (input.reportedAt < existing.reportedAt) {
+      return existing._id;
+    }
+
     await ctx.db.patch("posTerminalRuntimeStatus", existing._id, input);
     return existing._id;
   }
 
-  return ctx.db.insert("posTerminalRuntimeStatus", input);
+  return ctx.db.insert("posTerminalRuntimeStatus", omitUndefined(input));
+}
+
+function omitUndefined<T extends Record<string, unknown>>(input: T) {
+  return Object.fromEntries(
+    Object.entries(input).filter((entry) => entry[1] !== undefined),
+  ) as T;
 }
 
 export type TerminalSyncEvidence = {

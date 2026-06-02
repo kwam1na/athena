@@ -4,7 +4,10 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import Layout from "./_authed";
-import { LOGGED_IN_USER_ID_KEY } from "@/lib/constants";
+import {
+  LOGGED_IN_USER_ID_KEY,
+  POS_APP_ACCOUNT_ID_KEY,
+} from "@/lib/constants";
 import { useAppShellFullscreenMode } from "@/contexts/AppShellFullscreenContext";
 
 const mocked = vi.hoisted(() => ({
@@ -14,8 +17,11 @@ const mocked = vi.hoisted(() => ({
   startManagerElevation: vi.fn(),
   endManagerElevation: vi.fn(),
   useAuth: vi.fn(),
+  useLocalPosEntryContext: vi.fn(),
   useManagerElevation: vi.fn(),
   usePermissions: vi.fn(),
+  usePosTerminalAppSessionRecovery: vi.fn(),
+  readStoredPosAppAccountId: vi.fn(),
   useRouterState: vi.fn(),
 }));
 
@@ -36,6 +42,19 @@ vi.mock("@tanstack/react-router", () => ({
 vi.mock("../hooks/useAuth", () => ({
   useAuth: mocked.useAuth,
 }));
+
+vi.mock("@/lib/pos/infrastructure/local/localPosEntryContext", () => ({
+  useLocalPosEntryContext: mocked.useLocalPosEntryContext,
+}));
+
+vi.mock(
+  "@/lib/pos/infrastructure/terminal/usePosTerminalAppSessionRecovery",
+  () => ({
+    readStoredPosAppAccountId: mocked.readStoredPosAppAccountId,
+    usePosTerminalAppSessionRecovery:
+      mocked.usePosTerminalAppSessionRecovery,
+  }),
+);
 
 vi.mock("../hooks/usePermissions", () => ({
   usePermissions: mocked.usePermissions,
@@ -97,6 +116,49 @@ function FullscreenOutlet() {
   return <div data-testid="fullscreen-outlet">Fullscreen outlet</div>;
 }
 
+function readyLocalPosEntryContext(storeUrlSlug = "wigclub") {
+  return {
+    status: "ready",
+    orgUrlSlug: "wigclub",
+    storeUrlSlug,
+    storeId: "store-1",
+    source: "local",
+    terminalSeed: {
+      terminalId: "local-terminal-1",
+      cloudTerminalId: "terminal-cloud-1",
+      syncSecretHash: "secret-hash",
+      storeId: "store-1",
+      displayName: "Front register",
+      provisionedAt: 1_700,
+      schemaVersion: 7,
+    },
+  };
+}
+
+function recoveryState(status: string) {
+  if (status === "retrying") {
+    return { assertion: null, attempt: 1, reason: null, status };
+  }
+
+  if (status === "recoverable") {
+    return {
+      assertion: {
+        accountId: "stored-app-user-1",
+        issuedAt: 1_700,
+        expiresAt: Date.now() + 60_000,
+        recoveryAttemptId: "attempt-1",
+        routeScope: "pos_hub",
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      },
+      reason: null,
+      status,
+    };
+  }
+
+  return { assertion: null, reason: null, status };
+}
+
 describe("Authed layout", () => {
   beforeEach(() => {
     mocked.OutletComponent = null;
@@ -112,6 +174,14 @@ describe("Authed layout", () => {
     mocked.startManagerElevation.mockReset();
     mocked.endManagerElevation.mockReset();
     mocked.useAuth.mockReset();
+    mocked.useLocalPosEntryContext.mockReset();
+    mocked.useLocalPosEntryContext.mockReturnValue({ status: "missing_seed" });
+    mocked.usePosTerminalAppSessionRecovery.mockReset();
+    mocked.usePosTerminalAppSessionRecovery.mockReturnValue(
+      recoveryState("idle"),
+    );
+    mocked.readStoredPosAppAccountId.mockReset();
+    mocked.readStoredPosAppAccountId.mockReturnValue("stored-app-user-1");
     mocked.useManagerElevation.mockReturnValue({
       activeElevation: null,
       endManagerElevation: mocked.endManagerElevation,
@@ -156,8 +226,56 @@ describe("Authed layout", () => {
 
     render(<Layout />);
 
-    expect(screen.getByTestId("app-sidebar")).toBeInTheDocument();
     expect(screen.getByTestId("authed-outlet")).toBeInTheDocument();
+    expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("store-modal")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("organization-modal")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /sign out/i }),
+    ).not.toBeInTheDocument();
+    expect(mocked.navigate).not.toHaveBeenCalled();
+  });
+
+  it("does not crash when stored POS session state is unavailable during offline auth rehydration", () => {
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    vi.mocked(window.localStorage.getItem).mockImplementation(() => {
+      throw new Error("Storage unavailable");
+    });
+    mocked.useAuth.mockReturnValue({
+      user: undefined,
+      isLoading: true,
+    });
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({ location: { pathname: "/wigclub/store/wigclub/pos/register" } }),
+    );
+
+    const { container } = render(<Layout />);
+
+    expect(container).toBeEmptyDOMElement();
+    expect(mocked.navigate).not.toHaveBeenCalled();
+  });
+
+  it("keeps the POS outlet unmounted during online auth rehydration with a local POS session stored", () => {
+    vi.mocked(window.localStorage.getItem).mockImplementation((key) =>
+      key === LOGGED_IN_USER_ID_KEY ? "user-1" : null,
+    );
+    mocked.useAuth.mockReturnValue({
+      user: undefined,
+      isLoading: true,
+    });
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({ location: { pathname: "/wigclub/store/wigclub/pos" } }),
+    );
+
+    render(<Layout />);
+
+    expect(screen.queryByTestId("authed-outlet")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
     expect(mocked.navigate).not.toHaveBeenCalled();
   });
 
@@ -193,7 +311,7 @@ describe("Authed layout", () => {
     expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
   });
 
-  it("redirects instead of rendering POS offline when Convex auth settles without a user", async () => {
+  it("renders a blocked POS shell when Convex auth settles without terminal continuity", () => {
     Object.defineProperty(window.navigator, "onLine", {
       configurable: true,
       value: false,
@@ -209,10 +327,148 @@ describe("Authed layout", () => {
       select({ location: { pathname: "/wigclub/store/wigclub/pos/register" } }),
     );
 
-    const { container } = render(<Layout />);
+    render(<Layout />);
 
-    expect(container).toBeEmptyDOMElement();
-    await waitFor(() => expect(mocked.navigate).toHaveBeenCalledWith({ to: "/login" }));
+    expect(
+      screen.getByRole("heading", { name: "POS terminal setup needed" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
+    expect(mocked.navigate).not.toHaveBeenCalled();
+  });
+
+  it("renders the POS register shell for recoverable app-session drift without generic app chrome", () => {
+    mocked.useAuth.mockReturnValue({
+      user: null,
+      isLoading: false,
+    });
+    mocked.useLocalPosEntryContext.mockReturnValue(readyLocalPosEntryContext());
+    mocked.usePosTerminalAppSessionRecovery.mockReturnValue(
+      recoveryState("recoverable"),
+    );
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({ location: { pathname: "/wigclub/store/wigclub/pos/register" } }),
+    );
+
+    render(<Layout />);
+
+    expect(screen.getByTestId("authed-outlet")).toBeInTheDocument();
+    expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("store-modal")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("organization-modal")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /sign out/i }),
+    ).not.toBeInTheDocument();
+    expect(mocked.navigate).not.toHaveBeenCalled();
+    expect(mocked.useLocalPosEntryContext).toHaveBeenCalledWith({
+      routeParams: { orgUrlSlug: "wigclub", storeUrlSlug: "wigclub" },
+    });
+    expect(mocked.usePosTerminalAppSessionRecovery).toHaveBeenCalledWith({
+      routeIntent: "pos_hub",
+      isAppUserMissing: true,
+      localEntryContext: readyLocalPosEntryContext(),
+      storedAppAccountId: "stored-app-user-1",
+    });
+  });
+
+  it("invokes POS hub app-session recovery with local drift context and the stored account id", () => {
+    const localEntryContext = readyLocalPosEntryContext();
+    mocked.useAuth.mockReturnValue({
+      user: null,
+      isLoading: false,
+    });
+    mocked.useLocalPosEntryContext.mockReturnValue(localEntryContext);
+    mocked.usePosTerminalAppSessionRecovery.mockReturnValue(
+      recoveryState("validating"),
+    );
+    mocked.readStoredPosAppAccountId.mockReturnValue("app-account-1");
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({ location: { pathname: "/wigclub/store/wigclub/pos" } }),
+    );
+
+    render(<Layout />);
+
+    expect(mocked.readStoredPosAppAccountId).toHaveBeenCalled();
+    expect(mocked.usePosTerminalAppSessionRecovery).toHaveBeenCalledWith({
+      routeIntent: "pos_hub",
+      isAppUserMissing: true,
+      localEntryContext,
+      storedAppAccountId: "app-account-1",
+    });
+    expect(screen.queryByTestId("authed-outlet")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        name: "POS terminal recovery in progress",
+      }),
+    ).toBeInTheDocument();
+    expect(mocked.navigate).not.toHaveBeenCalled();
+  });
+
+  it("uses the browser POS register pathname when the router path is temporarily unknown", () => {
+    mocked.useAuth.mockReturnValue({
+      user: null,
+      isLoading: false,
+    });
+    mocked.useLocalPosEntryContext.mockReturnValue(
+      readyLocalPosEntryContext("osu"),
+    );
+    mocked.usePosTerminalAppSessionRecovery.mockReturnValue(
+      recoveryState("recoverable"),
+    );
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({ location: { pathname: "/" } }),
+    );
+    window.history.replaceState({}, "", "/wigclub/store/osu/pos/register");
+
+    render(<Layout />);
+
+    expect(screen.getByTestId("authed-outlet")).toBeInTheDocument();
+    expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
+    expect(mocked.navigate).not.toHaveBeenCalled();
+    expect(mocked.useLocalPosEntryContext).toHaveBeenCalledWith({
+      routeParams: { orgUrlSlug: "wigclub", storeUrlSlug: "osu" },
+    });
+  });
+
+  it("keeps the POS shell loading while terminal continuity is still being classified", () => {
+    mocked.useAuth.mockReturnValue({
+      user: null,
+      isLoading: false,
+    });
+    mocked.useLocalPosEntryContext.mockReturnValue({ status: "loading" });
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({ location: { pathname: "/wigclub/store/wigclub/pos/register" } }),
+    );
+
+    render(<Layout />);
+
+    expect(screen.queryByTestId("authed-outlet")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        name: "POS terminal recovery in progress",
+      }),
+    ).toBeInTheDocument();
+    expect(mocked.navigate).not.toHaveBeenCalled();
+  });
+
+  it("keeps the recoverable POS register child compatible with fullscreen outlets", () => {
+    mocked.useAuth.mockReturnValue({
+      user: null,
+      isLoading: false,
+    });
+    mocked.useLocalPosEntryContext.mockReturnValue(readyLocalPosEntryContext());
+    mocked.usePosTerminalAppSessionRecovery.mockReturnValue(
+      recoveryState("recoverable"),
+    );
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({ location: { pathname: "/wigclub/store/wigclub/pos/register" } }),
+    );
+    mocked.OutletComponent = FullscreenOutlet;
+
+    render(<Layout />);
+
+    expect(screen.getByTestId("fullscreen-outlet")).toBeInTheDocument();
+    expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
     expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
   });
 
@@ -231,6 +487,203 @@ describe("Authed layout", () => {
     expect(screen.getByTestId("authed-outlet")).toBeInTheDocument();
   });
 
+  it.each([
+    ["/wigclub/store/wigclub/pos", "POS hub"],
+    ["/wigclub/store/wigclub/pos/register", "POS register child"],
+    ["/wigclub/store/wigclub/pos/sessions", "POS sessions child"],
+    ["/wigclub/store/wigclub/pos/expense", "POS expense child"],
+    ["/wigclub/store/wigclub/pos/expense-reports", "POS expense reports child"],
+    [
+      "/wigclub/store/wigclub/pos/transactions/transaction-1",
+      "POS transaction child",
+    ],
+    ["/wigclub/store/wigclub/pos/terminals", "POS terminal health child"],
+    [
+      "/wigclub/store/wigclub/pos/terminals/terminal-1",
+      "POS terminal health detail child",
+    ],
+  ])(
+    "renders the POS shell for recoverable app-session drift on the %s route",
+    (pathname) => {
+      mocked.useAuth.mockReturnValue({
+        user: null,
+        isLoading: false,
+      });
+      mocked.useLocalPosEntryContext.mockReturnValue(
+        readyLocalPosEntryContext(),
+      );
+      mocked.usePosTerminalAppSessionRecovery.mockReturnValue(
+        recoveryState("recoverable"),
+      );
+      mocked.useRouterState.mockImplementation(({ select }) =>
+        select({ location: { pathname } }),
+      );
+
+      render(<Layout />);
+
+      expect(screen.getByTestId("authed-outlet")).toBeInTheDocument();
+      expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /sign out/i }),
+      ).not.toBeInTheDocument();
+      expect(mocked.navigate).not.toHaveBeenCalled();
+      expect(mocked.useLocalPosEntryContext).toHaveBeenCalledWith({
+        routeParams: { orgUrlSlug: "wigclub", storeUrlSlug: "wigclub" },
+      });
+    },
+  );
+
+  it.each(["idle", "validating", "retrying", "waiting_for_network"])(
+    "keeps POS mutations paused while app-session recovery is %s",
+    (status) => {
+      mocked.useAuth.mockReturnValue({
+        user: null,
+        isLoading: false,
+      });
+      mocked.useLocalPosEntryContext.mockReturnValue(
+        readyLocalPosEntryContext(),
+      );
+      mocked.usePosTerminalAppSessionRecovery.mockReturnValue(
+        recoveryState(status),
+      );
+      mocked.useRouterState.mockImplementation(({ select }) =>
+        select({ location: { pathname: "/wigclub/store/wigclub/pos/register" } }),
+      );
+
+      render(<Layout />);
+
+      expect(screen.queryByTestId("authed-outlet")).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("heading", {
+          name:
+            status === "waiting_for_network"
+              ? "POS terminal recovery waiting for network"
+              : "POS terminal recovery in progress",
+        }),
+      ).toBeInTheDocument();
+      expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
+      expect(mocked.navigate).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ["/wigclub/store/wigclub/products", "Products"],
+    ["/wigclub/store/wigclub/services", "Services"],
+    ["/wigclub/store/wigclub/operations", "Operations"],
+    ["/wigclub/store/wigclub/cash-controls", "Cash Controls"],
+    ["/wigclub/admin", "Admin"],
+    ["/wigclub/store/wigclub/settings", "Store Settings"],
+    ["/wigclub/store/wigclub/pos/settings", "POS Settings"],
+  ])(
+    "redirects %s when the app session is gone even if a POS terminal seed exists",
+    async (pathname) => {
+      mocked.useAuth.mockReturnValue({
+        user: null,
+        isLoading: false,
+      });
+      mocked.useLocalPosEntryContext.mockReturnValue(
+        readyLocalPosEntryContext(),
+      );
+      mocked.useRouterState.mockImplementation(({ select }) =>
+        select({ location: { pathname } }),
+      );
+
+      const { container } = render(<Layout />);
+
+      expect(container).toBeEmptyDOMElement();
+      await waitFor(() =>
+        expect(mocked.navigate).toHaveBeenCalledWith({ to: "/login" }),
+      );
+    },
+  );
+
+  it("renders a safe blocked POS shell when terminal continuity is not recoverable", () => {
+    mocked.useAuth.mockReturnValue({
+      user: null,
+      isLoading: false,
+    });
+    mocked.useLocalPosEntryContext.mockReturnValue({ status: "missing_seed" });
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({ location: { pathname: "/wigclub/store/wigclub/pos/register" } }),
+    );
+
+    render(<Layout />);
+
+    expect(
+      screen.getByRole("heading", { name: "POS terminal setup needed" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This checkout station is not connected to a register for this store. Reconnect this register from POS Settings before using checkout.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
+    expect(mocked.navigate).not.toHaveBeenCalled();
+  });
+
+  it("renders safe blocked POS shell copy when app-session recovery is blocked", () => {
+    mocked.useAuth.mockReturnValue({
+      user: null,
+      isLoading: false,
+    });
+    mocked.useLocalPosEntryContext.mockReturnValue(readyLocalPosEntryContext());
+    mocked.usePosTerminalAppSessionRecovery.mockReturnValue({
+      assertion: null,
+      reason: "terminal_revoked",
+      status: "blocked",
+    });
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({ location: { pathname: "/wigclub/store/wigclub/pos/register" } }),
+    );
+
+    render(<Layout />);
+
+    expect(
+      screen.getByRole("heading", {
+        name: "POS terminal recovery unavailable",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This checkout station cannot reopen the register. Sign in again or reconnect this register from POS Settings before using checkout.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/terminal_revoked/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
+    expect(mocked.navigate).not.toHaveBeenCalled();
+  });
+
+  it("does not expose raw backend details in a blocked POS shell", () => {
+    mocked.useAuth.mockReturnValue({
+      user: null,
+      isLoading: false,
+    });
+    mocked.useLocalPosEntryContext.mockReturnValue({
+      status: "unsupported_schema",
+      message: "[CONVEX] raw backend details that should never be rendered",
+    });
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({ location: { pathname: "/wigclub/store/wigclub/pos/register" } }),
+    );
+
+    render(<Layout />);
+
+    expect(
+      screen.getByRole("heading", { name: "POS terminal update needed" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This checkout station's local POS setup needs to be refreshed before checkout can continue.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/\[CONVEX\]/)).not.toBeInTheDocument();
+    expect(mocked.navigate).not.toHaveBeenCalled();
+  });
+
   it("signs out from the user menu", async () => {
     const user = userEvent.setup();
 
@@ -246,6 +699,9 @@ describe("Authed layout", () => {
     await waitFor(() => expect(mocked.signOut).toHaveBeenCalled());
     expect(window.localStorage.removeItem).toHaveBeenCalledWith(
       LOGGED_IN_USER_ID_KEY
+    );
+    expect(window.localStorage.removeItem).toHaveBeenCalledWith(
+      POS_APP_ACCOUNT_ID_KEY,
     );
     expect(mocked.navigate).toHaveBeenCalledWith({ to: "/login" });
   });

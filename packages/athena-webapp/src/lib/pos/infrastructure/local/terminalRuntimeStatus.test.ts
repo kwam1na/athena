@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildPosTerminalRuntimeCopyDiagnostics,
   buildPosTerminalRuntimeStatus,
+  type PosTerminalRuntimeAppSessionRecoveryInput,
+  type PosTerminalRuntimeStatusInput,
 } from "./terminalRuntimeStatus";
 import type { PosLocalEventRecord } from "./posLocalStore";
 
@@ -302,6 +304,123 @@ describe("terminalRuntimeStatus", () => {
     expect(JSON.stringify(status.sync.reviewEvents)).not.toContain(
       "customer@example.com",
     );
+  });
+
+  it.each([
+    {
+      expected: "ready",
+      recovery: { status: "idle" },
+    },
+    {
+      expected: "ready",
+      recovery: { assertion: "present", status: "recoverable" },
+    },
+    {
+      expected: "recovering",
+      recovery: { status: "validating" },
+    },
+    {
+      expected: "retrying",
+      recovery: { status: "retrying" },
+    },
+    {
+      expected: "waiting_for_network",
+      recovery: { status: "waiting_for_network" },
+    },
+    {
+      expected: "blocked_store_mismatch",
+      recovery: { reason: "store_mismatch", status: "blocked" },
+    },
+    {
+      expected: "blocked_app_account",
+      recovery: { reason: "app_account_not_pos_scoped", status: "blocked" },
+    },
+    {
+      expected: "retry_exhausted",
+      recovery: { reason: "retry_exhausted", status: "blocked" },
+    },
+    {
+      expected: "stale_assertion",
+      recovery: { reason: "stale_assertion", status: "blocked" },
+    },
+    {
+      expected: "blocked_terminal",
+      recovery: { reason: "terminal_revoked", status: "blocked" },
+    },
+  ] satisfies Array<{
+    expected: string;
+    recovery: PosTerminalRuntimeAppSessionRecoveryInput;
+  }>)(
+    "maps app-session recovery $expected to support-safe runtime status and copy diagnostics",
+    ({ expected, recovery }) => {
+    const input = {
+      appSessionRecovery: recovery,
+      clock: () => 2_000,
+      events: [],
+      source: "register",
+    } satisfies PosTerminalRuntimeStatusInput;
+
+    const status = buildPosTerminalRuntimeStatus(input);
+    const diagnostics = buildPosTerminalRuntimeCopyDiagnostics(input);
+
+    expect(status.appSessionRecovery).toEqual({
+      status: expected,
+    });
+    expect(diagnostics.appSessionRecovery).toEqual({
+      status: expected,
+    });
+    expect(diagnostics.labels.appSessionRecovery).toBe(expected);
+
+    const serialized = JSON.stringify({ diagnostics, status });
+    if (
+      recovery.reason === "app_account_not_pos_scoped" ||
+      recovery.reason === "terminal_revoked"
+    ) {
+      expect(serialized).not.toContain(recovery.reason);
+    }
+    },
+  );
+
+  it("keeps terminal and drawer authority as the sale gates when app-session recovery is ready", () => {
+    const diagnostics = buildPosTerminalRuntimeCopyDiagnostics({
+      appSessionRecovery: {
+        assertion: "present",
+        status: "recoverable",
+      },
+      clock: () => 2_000,
+      drawerAuthority: {
+        localRegisterSessionId: "register-1",
+        observedAt: 1_995,
+        reason: "lifecycle_rejected",
+        status: "blocked",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      },
+      events: [],
+      source: "register",
+      terminalIntegrity: {
+        observedAt: 1_990,
+        reason: "authorization_failed",
+        status: "requires_reprovision",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      },
+    });
+
+    expect(diagnostics.labels.appSessionRecovery).toBe("ready");
+    expect(diagnostics.labels.terminalIntegrity).toBe("blocked");
+    expect(diagnostics.labels.drawerAuthority).toBe("blocked");
+    expect(diagnostics.authority).toEqual({
+      drawer: {
+        localRegisterSessionId: "register-1",
+        reason: "lifecycle_rejected",
+        status: "blocked",
+      },
+      terminal: {
+        reason: "authorization_failed",
+        status: "requires_reprovision",
+      },
+    });
   });
 });
 
