@@ -221,6 +221,9 @@ export type TerminalRuntimeStatusInput = {
     language?: string;
     online?: boolean;
   };
+  appSessionRecovery?: {
+    status: AppSessionRecoveryStatus;
+  };
   localStore: {
     available: boolean;
     schemaVersion?: number;
@@ -289,6 +292,17 @@ type DrawerAuthorityReason =
   | "cloud_closed"
   | "lifecycle_rejected";
 
+type AppSessionRecoveryStatus =
+  | "ready"
+  | "recovering"
+  | "retrying"
+  | "waiting_for_network"
+  | "blocked_terminal"
+  | "blocked_app_account"
+  | "blocked_store_mismatch"
+  | "retry_exhausted"
+  | "stale_assertion";
+
 const TERMINAL_NOT_ACTIVE_FOR_STORE_MESSAGE =
   "This terminal is not active for this store.";
 const REDACTED_DIAGNOSTIC_VALUE = "[redacted]";
@@ -329,12 +343,16 @@ export async function submitTerminalRuntimeStatus(
 
   const receivedAt = Date.now();
   const reportedAt = positiveTimestamp(args.status.reportedAt) ?? receivedAt;
+  const appSessionRecovery = cleanAppSessionRecovery(
+    args.status.appSessionRecovery,
+  );
   await upsertLatestRuntimeStatus(ctx, {
     storeId: args.storeId,
     terminalId: args.terminalId,
     reportedAt,
     receivedAt,
     source: args.status.source,
+    appSessionRecovery,
     ...omitUndefined({
       appVersion: cleanOptionalString(args.status.appVersion, 80),
       buildSha: cleanOptionalString(args.status.buildSha, 80),
@@ -419,6 +437,16 @@ function cleanBrowserInfo(
   });
 
   return Object.keys(cleaned).length > 0 ? cleaned : undefined;
+}
+
+function cleanAppSessionRecovery(
+  appSessionRecovery: TerminalRuntimeStatusInput["appSessionRecovery"],
+) {
+  if (!appSessionRecovery) return undefined;
+
+  return appSessionRecoveryStatuses.has(appSessionRecovery.status)
+    ? { status: appSessionRecovery.status }
+    : undefined;
 }
 
 function cleanOptionalString(value: string | undefined, maxLength: number) {
@@ -507,6 +535,18 @@ const drawerAuthorityReasons = new Set<DrawerAuthorityReason | undefined>([
   "authority_unknown",
   "cloud_closed",
   "lifecycle_rejected",
+]);
+
+const appSessionRecoveryStatuses = new Set<AppSessionRecoveryStatus>([
+  "ready",
+  "recovering",
+  "retrying",
+  "waiting_for_network",
+  "blocked_terminal",
+  "blocked_app_account",
+  "blocked_store_mismatch",
+  "retry_exhausted",
+  "stale_assertion",
 ]);
 
 function positiveTimestamp(value: number | undefined) {

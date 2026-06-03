@@ -6,7 +6,13 @@ import {
   useNavigate,
   useRouterState,
 } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import {
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+  useEffect,
+  useState,
+} from "react";
 import {
   SidebarProvider,
   SidebarInset,
@@ -20,7 +26,10 @@ import { ShieldCheck, UserCircle } from "lucide-react";
 import { AppHeader } from "@/components/Navbar";
 import { cn } from "@/lib/utils";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { LOGGED_IN_USER_ID_KEY } from "@/lib/constants";
+import {
+  LOGGED_IN_USER_ID_KEY,
+  POS_APP_ACCOUNT_ID_KEY,
+} from "@/lib/constants";
 import { Badge } from "@/components/ui/badge";
 import {
   ManagerElevationProvider,
@@ -33,12 +42,53 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  type PosLocalEntryContext,
+  useLocalPosEntryContext,
+} from "@/lib/pos/infrastructure/local/localPosEntryContext";
+import {
+  type PosTerminalAppSessionRecoveryBlockReason,
+  readStoredPosAppAccountId,
+  usePosTerminalAppSessionRecovery,
+} from "@/lib/pos/infrastructure/terminal/usePosTerminalAppSessionRecovery";
+import {
+  PosTerminalAppSessionRecoveryProvider,
+  toPosTerminalAppSessionRecoveryRuntimeInput,
+} from "@/lib/pos/infrastructure/terminal/posTerminalAppSessionRecoveryContext";
+import type { PosTerminalRuntimeAppSessionRecoveryInput } from "@/lib/pos/infrastructure/local/terminalRuntimeStatus";
 
 export const Route = createFileRoute("/_authed")({
   component: Layout,
 });
 
-const POS_REGISTER_PATH_PATTERN = /\/store\/[^/]+\/pos\/register\/?$/;
+const POS_REGISTER_PATH_PATTERN =
+  /^\/(?<orgUrlSlug>[^/]+)\/store\/(?<storeUrlSlug>[^/]+)\/pos\/register\/?$/;
+const POS_HUB_PATH_PATTERN =
+  /^\/(?<orgUrlSlug>[^/]+)\/store\/(?<storeUrlSlug>[^/]+)\/pos(?:\/(?<child>register|sessions|transactions|expense|expense-reports|terminals)(?:\/.*)?)?$/;
+const POS_RECOVERY_SHELL_PENDING_STATUSES = new Set([
+  "idle",
+  "validating",
+  "retrying",
+  "waiting_for_network",
+]);
+
+function getPosHubRouteParams(pathname?: string) {
+  if (!pathname) {
+    return null;
+  }
+
+  const match = pathname.match(POS_HUB_PATH_PATTERN);
+  const groups = match?.groups;
+
+  if (!groups?.orgUrlSlug || !groups.storeUrlSlug) {
+    return null;
+  }
+
+  return {
+    orgUrlSlug: groups.orgUrlSlug,
+    storeUrlSlug: groups.storeUrlSlug,
+  };
+}
 
 function isPosRegisterPath(pathname?: string) {
   return Boolean(pathname && POS_REGISTER_PATH_PATTERN.test(pathname));
@@ -52,16 +102,23 @@ function isUnknownRouterPath(pathname?: string) {
   return !pathname || pathname === "/";
 }
 
-function isBrowserOffline() {
-  return typeof navigator !== "undefined" && navigator.onLine === false;
-}
-
 function hasStoredLocalSession() {
   if (typeof localStorage === "undefined") {
     return false;
   }
 
-  return Boolean(localStorage.getItem(LOGGED_IN_USER_ID_KEY));
+  try {
+    return Boolean(
+      localStorage.getItem(LOGGED_IN_USER_ID_KEY) ||
+        localStorage.getItem(POS_APP_ACCOUNT_ID_KEY),
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isBrowserOffline() {
+  return typeof navigator !== "undefined" && navigator.onLine === false;
 }
 
 function AuthedComponent() {
@@ -71,6 +128,155 @@ function AuthedComponent() {
       <OrganizationModal />
       <Outlet />
     </>
+  );
+}
+
+function getBlockedPosTerminalShellCopy({
+  entryContext,
+  recoveryReason,
+}: {
+  entryContext: PosLocalEntryContext;
+  recoveryReason?: PosTerminalAppSessionRecoveryBlockReason | null;
+}) {
+  if (recoveryReason) {
+    return {
+      title: "POS terminal recovery unavailable",
+      message:
+        "This checkout station cannot reopen the register. Sign in again or reconnect this register from POS Settings before using checkout.",
+    };
+  }
+
+  switch (entryContext.status) {
+    case "mismatched_store":
+      return {
+        title: "POS terminal store mismatch",
+        message:
+          "This checkout station is connected to a different store register. Reconnect this register from POS Settings before using checkout.",
+      };
+    case "missing_route":
+      return {
+        title: "POS route unavailable",
+        message:
+          "This POS link is missing store details. Open POS from the store workspace or reconnect this register from POS Settings.",
+      };
+    case "unsupported_schema":
+      return {
+        title: "POS terminal update needed",
+        message:
+          "This checkout station's local POS setup needs to be refreshed before checkout can continue.",
+      };
+    case "ready":
+      return {
+        title: "POS terminal setup needed",
+        message:
+          "This checkout station is not connected to a register for this store. Reconnect this register from POS Settings before using checkout.",
+      };
+    case "missing_seed":
+    default:
+      return {
+        title: "POS terminal setup needed",
+        message:
+          "This checkout station is not connected to a register for this store. Reconnect this register from POS Settings before using checkout.",
+      };
+  }
+}
+
+function PosTerminalBlockedShell({
+  entryContext,
+  recoveryReason,
+}: {
+  entryContext: PosLocalEntryContext;
+  recoveryReason?: PosTerminalAppSessionRecoveryBlockReason | null;
+}) {
+  const copy = getBlockedPosTerminalShellCopy({
+    entryContext,
+    recoveryReason,
+  });
+
+  return (
+    <section className="flex h-full min-h-0 items-center justify-center bg-background p-6">
+      <div className="w-full max-w-xl rounded-lg border border-border bg-surface px-8 py-10 text-center shadow-sm">
+        <p className="text-sm font-medium text-muted-foreground">
+          POS terminal
+        </p>
+        <h1 className="mt-3 text-2xl font-semibold text-foreground">
+          {copy.title}
+        </h1>
+        <p className="mt-4 text-base leading-7 text-muted-foreground">
+          {copy.message}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function PosTerminalRecoveryPendingShell({
+  status,
+}: {
+  status: "idle" | "validating" | "retrying" | "waiting_for_network";
+}) {
+  const copy =
+    status === "waiting_for_network"
+      ? {
+          title: "POS terminal recovery waiting for network",
+          message:
+            "Reconnect this checkout station to the network so Athena can validate the register before sales continue.",
+        }
+      : {
+          title: "POS terminal recovery in progress",
+          message:
+            "Athena is validating this register before checkout reopens. Sales stay paused until recovery is confirmed.",
+        };
+
+  return (
+    <section className="flex h-full min-h-0 items-center justify-center bg-background p-6">
+      <div className="w-full max-w-xl rounded-lg border border-border bg-surface px-8 py-10 text-center shadow-sm">
+        <p className="text-sm font-medium text-muted-foreground">
+          POS terminal
+        </p>
+        <h1 className="mt-3 text-2xl font-semibold text-foreground">
+          {copy.title}
+        </h1>
+        <p className="mt-4 text-base leading-7 text-muted-foreground">
+          {copy.message}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function PosTerminalShell({
+  children,
+  appSessionRecovery,
+  isFullscreenActive,
+  setFullscreenOverride,
+}: {
+  children: ReactNode;
+  appSessionRecovery?: PosTerminalRuntimeAppSessionRecoveryInput | null;
+  isFullscreenActive: boolean;
+  setFullscreenOverride: Dispatch<SetStateAction<boolean | null>>;
+}) {
+  return (
+    <PermissionsProvider>
+      <ManagerElevationProvider>
+        <AppShellFullscreenContext.Provider
+          value={{ setFullscreenOverride }}
+        >
+          <PosTerminalAppSessionRecoveryProvider
+            value={appSessionRecovery ?? null}
+          >
+            <main
+              className={cn(
+                "flex min-h-0 flex-1 flex-col overflow-hidden bg-background",
+                isFullscreenActive ? "h-svh p-0" : "h-svh p-8",
+              )}
+            >
+              {children}
+            </main>
+          </PosTerminalAppSessionRecoveryProvider>
+        </AppShellFullscreenContext.Provider>
+      </ManagerElevationProvider>
+    </PermissionsProvider>
   );
 }
 
@@ -88,6 +294,7 @@ function UserMenu({ userEmail }: { userEmail: string }) {
   const handleSignOut = async () => {
     await signOut();
     localStorage.removeItem(LOGGED_IN_USER_ID_KEY);
+    localStorage.removeItem(POS_APP_ACCOUNT_ID_KEY);
     navigate({ to: "/login" });
   };
 
@@ -179,16 +386,69 @@ export default function Layout() {
   });
   const { isLoading, user } = useAuth();
   const browserPathname = getBrowserPathname();
-  const routeWantsPos =
-    isPosRegisterPath(pathname) ||
-    (isUnknownRouterPath(pathname) && isPosRegisterPath(browserPathname));
-  const canRenderOfflinePosShell =
+  const routerPosHubParams = getPosHubRouteParams(pathname);
+  const browserPosHubParams = getPosHubRouteParams(browserPathname);
+  const routeParams =
+    routerPosHubParams ??
+    (isUnknownRouterPath(pathname) ? browserPosHubParams : null);
+  const routeWantsPos = Boolean(routeParams);
+  const localPosEntryContext = useLocalPosEntryContext({
+    routeParams: routeParams ?? undefined,
+  });
+  const storedAppAccountId = readStoredPosAppAccountId();
+  const isAppUserMissing = !isLoading && user === null;
+  const posTerminalAppSessionRecovery = usePosTerminalAppSessionRecovery({
+    routeIntent: routeWantsPos ? "pos_hub" : null,
+    isAppUserMissing,
+    localEntryContext: localPosEntryContext,
+    storedAppAccountId,
+  });
+  const hasLocalPosRecoveryTarget =
+    routeWantsPos &&
+    isAppUserMissing &&
+    localPosEntryContext.status === "ready" &&
+    Boolean(localPosEntryContext.terminalSeed) &&
+    Boolean(storedAppAccountId);
+  const isRecoveredPosAppSession =
+    routeWantsPos &&
+    isAppUserMissing &&
+    hasLocalPosRecoveryTarget &&
+    posTerminalAppSessionRecovery.status === "recoverable";
+  const isPendingPosAppSessionRecovery =
+    routeWantsPos &&
+    isAppUserMissing &&
+    hasLocalPosRecoveryTarget &&
+    POS_RECOVERY_SHELL_PENDING_STATUSES.has(posTerminalAppSessionRecovery.status);
+  const isClassifyingPosAppSession =
+    routeWantsPos &&
+    isAppUserMissing &&
+    localPosEntryContext.status === "loading";
+  const isBlockedRecovery =
+    routeWantsPos &&
+    isAppUserMissing &&
+    posTerminalAppSessionRecovery.status === "blocked";
+  const isBlockedPosAppSession =
+    routeWantsPos &&
+    isAppUserMissing &&
+    (isBlockedRecovery ||
+      (!hasLocalPosRecoveryTarget &&
+        !isRecoveredPosAppSession &&
+        !isPendingPosAppSessionRecovery &&
+        !isClassifyingPosAppSession));
+  const canRenderRehydratingPosShell =
     routeWantsPos &&
     isLoading &&
     isBrowserOffline() &&
     hasStoredLocalSession();
+  const shouldRenderPosTerminalShell =
+    canRenderRehydratingPosShell || isRecoveredPosAppSession;
+  const shouldRenderPendingPosTerminalShell =
+    isPendingPosAppSessionRecovery || isClassifyingPosAppSession;
   const userEmail =
-    user?.email ?? (canRenderOfflinePosShell ? "Offline POS" : "");
+    user?.email ??
+    (shouldRenderPosTerminalShell || shouldRenderPendingPosTerminalShell
+      ? "POS terminal"
+      : "");
   const routeWantsFullscreen =
     isPosRegisterPath(pathname) ||
     (isUnknownRouterPath(pathname) && isPosRegisterPath(browserPathname));
@@ -212,14 +472,27 @@ export default function Layout() {
 
   // Don't render until we've read the cookie
   useEffect(() => {
-    if (canRenderOfflinePosShell) {
+    if (
+      shouldRenderPosTerminalShell ||
+      shouldRenderPendingPosTerminalShell ||
+      isBlockedPosAppSession ||
+      isClassifyingPosAppSession
+    ) {
       return;
     }
 
     if (!isLoading && user === null) {
       navigate({ to: "/login" });
     }
-  }, [canRenderOfflinePosShell, isLoading, navigate, user]);
+  }, [
+    shouldRenderPosTerminalShell,
+    shouldRenderPendingPosTerminalShell,
+    isBlockedPosAppSession,
+    isClassifyingPosAppSession,
+    isLoading,
+    navigate,
+    user,
+  ]);
 
   useEffect(() => {
     setFullscreenOverride(null);
@@ -227,9 +500,48 @@ export default function Layout() {
 
   if (
     defaultOpen === null ||
-    (!canRenderOfflinePosShell && (isLoading || user === null))
+    (!shouldRenderPosTerminalShell &&
+      !shouldRenderPendingPosTerminalShell &&
+      !isBlockedPosAppSession &&
+      (isLoading || user === null))
   ) {
     return null; // or a loading spinner if you prefer
+  }
+
+  if (
+    shouldRenderPosTerminalShell ||
+    shouldRenderPendingPosTerminalShell ||
+    isBlockedPosAppSession
+  ) {
+    return (
+      <PosTerminalShell
+        appSessionRecovery={toPosTerminalAppSessionRecoveryRuntimeInput(
+          posTerminalAppSessionRecovery,
+        )}
+        isFullscreenActive={isFullscreenActive}
+        setFullscreenOverride={setFullscreenOverride}
+      >
+        {isBlockedPosAppSession ? (
+          <PosTerminalBlockedShell
+            entryContext={localPosEntryContext}
+            recoveryReason={posTerminalAppSessionRecovery.reason}
+          />
+        ) : shouldRenderPendingPosTerminalShell ? (
+          <PosTerminalRecoveryPendingShell
+            status={
+              posTerminalAppSessionRecovery.status === "idle" ||
+              posTerminalAppSessionRecovery.status === "validating" ||
+              posTerminalAppSessionRecovery.status === "retrying" ||
+              posTerminalAppSessionRecovery.status === "waiting_for_network"
+                ? posTerminalAppSessionRecovery.status
+                : "validating"
+            }
+          />
+        ) : (
+          <Outlet />
+        )}
+      </PosTerminalShell>
+    );
   }
 
   return (

@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>feat: Keep POS hub app sessions recoverable</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --text: #162033;
+      --muted: #5f6b7a;
+      --line: #d8dee8;
+      --accent: #0f766e;
+      --warn: #9a5b00;
+      --danger: #b42318;
+      --code: #eef2f6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    header, main {
+      width: min(1120px, calc(100% - 40px));
+      margin: 0 auto;
+    }
+    header { padding: 40px 0 18px; }
+    .eyebrow {
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 8px 0 10px;
+      font-size: clamp(28px, 4vw, 44px);
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+    .meta {
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+    }
+    nav {
+      margin: 22px 0 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    nav a {
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 6px 10px;
+      text-decoration: none;
+      background: var(--panel);
+    }
+    main { padding: 12px 0 48px; }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 22px;
+      margin: 16px 0;
+    }
+    h2 {
+      margin: 0 0 12px;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+    h3 {
+      margin: 18px 0 8px;
+      font-size: 16px;
+      letter-spacing: 0;
+    }
+    p { margin: 0 0 12px; }
+    ul { margin: 8px 0 0; padding-left: 22px; }
+    li { margin: 5px 0; }
+    code {
+      background: var(--code);
+      border-radius: 4px;
+      padding: 1px 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f1f4f7; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+    }
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: #eef8f6;
+      padding: 12px 14px;
+      border-radius: 6px;
+    }
+    .warn {
+      border-left-color: var(--warn);
+      background: #fff7ed;
+    }
+    .danger {
+      border-left-color: var(--danger);
+      background: #fff1f0;
+    }
+    .unit {
+      border-top: 1px solid var(--line);
+      padding-top: 16px;
+      margin-top: 16px;
+    }
+    .unit:first-of-type {
+      border-top: 0;
+      padding-top: 0;
+    }
+    .tag {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 2px 8px;
+      background: #e7f0ff;
+      color: #1f4b99;
+      font-size: 12px;
+      font-weight: 700;
+      margin-right: 6px;
+    }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .flow div {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 10px;
+      background: #fafbfc;
+      min-height: 86px;
+    }
+    .flow strong { display: block; margin-bottom: 4px; }
+    @media (max-width: 760px) {
+      header, main { width: min(100% - 24px, 1120px); }
+      section { padding: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Implementation Plan - Feature - Active - 2026-06-02 - Deepened</div>
+    <h1>Keep POS hub app sessions recoverable</h1>
+    <div class="meta">
+      <span>Markdown source: <a href="2026-06-02-001-feat-pos-register-terminal-app-session-plan.md">2026-06-02-001-feat-pos-register-terminal-app-session-plan.md</a></span>
+      <span>Scope: protected POS hub route family</span>
+    </div>
+    <nav aria-label="Plan sections">
+      <a href="#summary">Summary</a>
+      <a href="#requirements">Requirements</a>
+      <a href="#design">Design</a>
+      <a href="#units">Units</a>
+      <a href="#risks">Risks</a>
+      <a href="#rollout">Rollout</a>
+    </nav>
+  </header>
+
+  <main>
+    <section id="summary">
+      <h2>Summary</h2>
+      <p>Registered POS terminals should keep the POS hub available when the app-level Athena login drifts into a recoverable signed-out state. A static deploy is treated as a forced app reload and auth rehydration event, not an intentional logout. The plan adds a POS-hub recovery path that validates terminal, store, and app-account authority on the server while preserving the existing local-first POS sale gates.</p>
+      <div class="grid">
+        <div class="callout">
+          <strong>Chosen approach</strong>
+          <p>Terminal-scoped app-session continuity for the protected POS hub route family.</p>
+        </div>
+        <div class="callout warn">
+          <strong>Not chosen</strong>
+          <p>No global infinite app session, no stored app-account credentials, and no admin/operations continuity yet.</p>
+        </div>
+        <div class="callout">
+          <strong>Sale authority remains separate</strong>
+          <p>Terminal integrity, drawer authority, local command invariants, and staff proof continue to decide whether the terminal can sell.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="requirements">
+      <h2>Requirements</h2>
+      <ul>
+        <li>POS hub routes must not redirect to <code>/login</code> for recoverable app-login drift when same-store local terminal context exists.</li>
+        <li>Non-POS routes must keep current login redirect behavior.</li>
+        <li>Recovery must validate terminal, store, app account, and account capability server-side.</li>
+        <li>Recovery must not persist reusable app credentials, staff proof, raw tokens, or OTP material.</li>
+        <li>Unrecoverable states render POS operational gates with safe reasons and a recovery path.</li>
+        <li>Terminal health must expose app-session recovery status without leaking sensitive data.</li>
+        <li>Any fallback POS-scoped assertion must be short-lived, same-store, same-terminal, route-scoped, and abuse-resistant.</li>
+        <li>Static deploy reloads must not clear POS continuity or navigate the POS hub to <code>/login</code> during transient auth rehydration.</li>
+      </ul>
+    </section>
+
+    <section id="design">
+      <h2>Design Shape</h2>
+      <p>The app shell needs route-scoped auth classification instead of a single <code>user === null</code> login redirect decision. POS hub routes can enter a recoverable terminal state after deploy reload or other auth rehydration events; other routes still go to login.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>State</th>
+            <th>Meaning</th>
+            <th>Route behavior</th>
+            <th>Sale behavior</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Loading</td>
+            <td>Convex Auth, token recovery, or Athena user sync is unresolved.</td>
+            <td>Keep existing loading behavior.</td>
+            <td>No new authority granted.</td>
+          </tr>
+          <tr>
+            <td>Recoverable POS terminal</td>
+            <td>App user is missing, but local POS terminal context is valid for the route store.</td>
+            <td>Mount POS hub shell and start background recovery.</td>
+            <td>Allowed only if existing POS local gates say sellable.</td>
+          </tr>
+          <tr>
+            <td>Blocked POS terminal</td>
+            <td>Terminal seed is missing, mismatched, revoked, invalid, or rejected.</td>
+            <td>Show POS setup or support gate.</td>
+            <td>Block sale-affecting commands.</td>
+          </tr>
+          <tr>
+            <td>Signed out</td>
+            <td>Non-POS route or no recoverable terminal context.</td>
+            <td>Redirect to <code>/login</code>.</td>
+            <td>Not applicable.</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="flow" aria-label="Implementation dependency flow">
+        <div><strong>U1</strong>Auth state model</div>
+        <div><strong>U2</strong>Route-shell continuity</div>
+        <div><strong>U3</strong>Server validation</div>
+        <div><strong>U4</strong>Client recovery runtime</div>
+        <div><strong>U5</strong>POS gates and diagnostics</div>
+        <div><strong>U6</strong>Regression coverage and rollout</div>
+      </div>
+    </section>
+
+    <section id="units">
+      <h2>Implementation Units</h2>
+      <article class="unit">
+        <h3><span class="tag">U1</span>Model route-scoped POS app-session state</h3>
+        <p>Distinguish normal signed-out app state from recoverable POS terminal app-session drift, including deploy-induced reload rehydration.</p>
+        <p><strong>Primary files:</strong> <code>packages/athena-webapp/src/hooks/useAuth.ts</code>, <code>packages/athena-webapp/src/routes/_authed.tsx</code>, <code>packages/athena-webapp/src/hooks/useAuth.test.tsx</code>, <code>packages/athena-webapp/src/routes/_authed.test.tsx</code>.</p>
+      </article>
+      <article class="unit">
+        <h3><span class="tag">U2</span>Render a POS terminal continuity shell</h3>
+        <p>Keep POS hub routes mounted during recovery without exposing app chrome that assumes a full authenticated user.</p>
+        <p><strong>Primary files:</strong> <code>packages/athena-webapp/src/routes/_authed.tsx</code>, <code>packages/athena-webapp/src/components/pos/register/POSRegisterOpeningGuard.tsx</code>, <code>packages/athena-webapp/src/components/pos/register/RegisterDrawerGate.tsx</code>.</p>
+      </article>
+      <article class="unit">
+        <h3><span class="tag">U3</span>Add server-side terminal app-session validation</h3>
+        <p>Validate terminal proof, store scope, terminal status, and POS app-account capability before recovery succeeds.</p>
+        <p><strong>Primary files:</strong> <code>packages/athena-webapp/convex/pos/public/terminalAppSessions.ts</code>, <code>packages/athena-webapp/convex/inventory/auth.ts</code>, <code>packages/athena-webapp/convex/pos/public/terminalAppSessions.test.ts</code>.</p>
+      </article>
+      <article class="unit">
+        <h3><span class="tag">U4</span>Add client recovery runtime</h3>
+        <p>Attempt background repair with bounded retries and expose recovering, blocked, waiting, deploy-reload recovery, or recovered state.</p>
+        <p><strong>Primary files:</strong> <code>packages/athena-webapp/src/lib/pos/infrastructure/terminal/usePosTerminalAppSessionRecovery.ts</code>, <code>packages/athena-webapp/src/lib/pos/infrastructure/local/localPosEntryContext.ts</code>.</p>
+      </article>
+      <article class="unit">
+        <h3><span class="tag">U5</span>Thread recovery into POS gates and diagnostics</h3>
+        <p>Report app-session recovery through terminal health while preserving terminal, drawer, staff, and command-boundary gates.</p>
+        <p><strong>Primary files:</strong> <code>packages/athena-webapp/src/lib/pos/infrastructure/local/terminalRuntimeStatus.ts</code>, <code>packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts</code>, <code>packages/athena-webapp/src/lib/pos/presentation/register/registerUiState.ts</code>.</p>
+      </article>
+      <article class="unit">
+        <h3><span class="tag">U6</span>Add regression coverage and rollout guardrails</h3>
+        <p>Prove POS continuity, deploy-reload rehydration, non-POS redirect parity, server validation failures, retry behavior, and existing sale-gate invariants.</p>
+        <p><strong>Primary files:</strong> <code>packages/athena-webapp/src/routes/_authed.test.tsx</code>, <code>packages/athena-webapp/src/routes/login/_layout.test.tsx</code>, <code>packages/athena-webapp/src/utils/versionChecker.test.ts</code>, <code>packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.test.ts</code>.</p>
+      </article>
+    </section>
+
+    <section id="risks">
+      <h2>Risk Analysis</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Risk</th>
+            <th>Mitigation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Auth bypass expands beyond POS hub.</td>
+            <td>Route-match continuity explicitly and test non-POS redirect parity.</td>
+          </tr>
+          <tr>
+            <td>Local terminal seed is stale or stolen.</td>
+            <td>Validate terminal status, store scope, revocation, and proof on the server.</td>
+          </tr>
+          <tr>
+            <td>Recovery grants admin or operations access.</td>
+            <td>Keep POS app-account capability POS-only and route-scoped.</td>
+          </tr>
+          <tr>
+            <td>Recovery endpoint can be probed for terminal or app-account existence.</td>
+            <td>Require terminal proof, return safe reasons, and throttle or rate-limit repeated invalid attempts.</td>
+          </tr>
+          <tr>
+            <td>Static deploy reload is mistaken for user logout.</td>
+            <td>Treat reload as POS auth rehydration, preserve terminal continuity while recovery settles, and require explicit sign-out or server rejection before blocking.</td>
+          </tr>
+          <tr>
+            <td>Recovery hides real sale blockers.</td>
+            <td>Keep app-session recovery separate from terminal integrity, drawer authority, staff proof, and command gates.</td>
+          </tr>
+          <tr>
+            <td>Convex Auth does not support silent full session restoration.</td>
+            <td>Use supported Auth APIs if available; otherwise keep a POS-scoped terminal app-session projection for POS hub sales/runtime behavior.</td>
+          </tr>
+          <tr>
+            <td>Fallback assertion becomes a durable credential.</td>
+            <td>Keep assertions short-lived, same-store, same-terminal, route-scoped, and non-durable.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="rollout">
+      <h2>Rollout and Verification</h2>
+      <ul>
+        <li>Phase 1: route-safe continuity and non-POS negative coverage.</li>
+        <li>Phase 2: server-validated recovery and bounded client repair.</li>
+        <li>Phase 3: terminal diagnostics, POS gate integration, and regression coverage.</li>
+        <li>Regression coverage must simulate a static deploy reload followed by delayed Convex/Auth rehydration.</li>
+        <li>Visual validation remains user-owned per request; implementation should still preserve unit and integration verification.</li>
+        <li>After future code changes, run <code>bun run graphify:rebuild</code> per <code>AGENTS.md</code>.</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

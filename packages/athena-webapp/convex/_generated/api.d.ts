@@ -194,6 +194,7 @@ import type * as pos_public_catalog from "../pos/public/catalog.js";
 import type * as pos_public_customers from "../pos/public/customers.js";
 import type * as pos_public_register from "../pos/public/register.js";
 import type * as pos_public_sync from "../pos/public/sync.js";
+import type * as pos_public_terminalAppSessions from "../pos/public/terminalAppSessions.js";
 import type * as pos_public_terminals from "../pos/public/terminals.js";
 import type * as pos_public_transactions from "../pos/public/transactions.js";
 import type * as schemas_customerMessaging_customerMessageDelivery from "../schemas/customerMessaging/customerMessageDelivery.js";
@@ -534,6 +535,7 @@ declare const fullApi: ApiFromModules<{
   "pos/public/customers": typeof pos_public_customers;
   "pos/public/register": typeof pos_public_register;
   "pos/public/sync": typeof pos_public_sync;
+  "pos/public/terminalAppSessions": typeof pos_public_terminalAppSessions;
   "pos/public/terminals": typeof pos_public_terminals;
   "pos/public/transactions": typeof pos_public_transactions;
   "schemas/customerMessaging/customerMessageDelivery": typeof schemas_customerMessaging_customerMessageDelivery;

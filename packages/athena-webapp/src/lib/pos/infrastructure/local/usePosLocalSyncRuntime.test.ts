@@ -2087,6 +2087,69 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     });
   });
 
+  it("exposes supplied app-session recovery diagnostics without leaking raw block reasons", async () => {
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+
+    const { result } = renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        appSessionRecovery: {
+          reason: "app_account_not_pos_scoped",
+          status: "blocked",
+        },
+        mode: "status-only",
+        source: "register",
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(result.current?.runtimeStatus?.appSessionRecovery).toEqual({
+        status: "blocked_app_account",
+      }),
+    );
+    expect(result.current?.copyDiagnostics?.appSessionRecovery).toEqual({
+      status: "blocked_app_account",
+    });
+    expect(result.current?.copyDiagnostics?.labels.appSessionRecovery).toBe(
+      "blocked_app_account",
+    );
+
+    await waitFor(() =>
+      expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalled(),
+    );
+    expect(
+      mocks.reportTerminalRuntimeStatus.mock.calls[0]?.[0].status
+        .appSessionRecovery,
+    ).toEqual({
+      status: "blocked_app_account",
+    });
+    expect(
+      JSON.stringify(mocks.reportTerminalRuntimeStatus.mock.calls[0]?.[0].status),
+    ).not.toContain("app_account_not_pos_scoped");
+    expect(JSON.stringify(result.current)).not.toContain(
+      "app_account_not_pos_scoped",
+    );
+  });
+
   it("exposes rejected runtime check-in publishes in debug state", async () => {
     mocks.reportTerminalRuntimeStatus.mockResolvedValue({
       kind: "user_error",
@@ -2146,6 +2209,78 @@ describe("usePosLocalSyncRuntimeStatus", () => {
         status: "requires_reprovision",
         storeId: "store-1",
         terminalId: "local-terminal-1",
+      }),
+    );
+  });
+
+  it("ignores stale runtime check-in publish results after the runtime scope is invalidated", async () => {
+    const oldCheckIn = deferred<{
+      kind: "user_error";
+      error: {
+        code: string;
+        message: string;
+        metadata: { terminalAuthorizationFailure: boolean };
+      };
+    }>();
+    mocks.reportTerminalRuntimeStatus
+      .mockReturnValueOnce(oldCheckIn.promise);
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+      writeTerminalIntegrityState: vi.fn(async () => {
+        throw new Error("old scope write failed");
+      }),
+    };
+
+    const { result, unmount } = renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "status-only",
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledWith(
+        expect.objectContaining({
+          storeId: "store-1",
+          terminalId: "terminal-cloud-1",
+        }),
+      ),
+    );
+
+    unmount();
+
+    oldCheckIn.resolve({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "Old terminal rejected.",
+        metadata: { terminalAuthorizationFailure: true },
+      },
+    });
+    await oldCheckIn.promise;
+    await Promise.resolve();
+
+    expect(store.writeTerminalIntegrityState).not.toHaveBeenCalled();
+    expect(result.current).not.toEqual(
+      expect.objectContaining({
+        label: "Local sync unavailable",
       }),
     );
   });

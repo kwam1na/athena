@@ -21,6 +21,7 @@ export type RecordOperationalEventArgs = {
   message?: string;
   reason?: string;
   metadata?: Record<string, unknown>;
+  metadataDedupeKeys?: string[];
   actorUserId?: Id<"athenaUser">;
   actorStaffProfileId?: Id<"staffProfile">;
   customerProfileId?: Id<"customerProfile">;
@@ -34,8 +35,9 @@ export type RecordOperationalEventArgs = {
 };
 
 export function buildOperationalEvent(args: RecordOperationalEventArgs) {
+  const { metadataDedupeKeys: _metadataDedupeKeys, ...eventArgs } = args;
   return {
-    ...args,
+    ...eventArgs,
     message:
       args.message ??
       buildOperationalEventMessage({
@@ -54,12 +56,16 @@ function matchesExistingEvent(
     subjectId: string;
     reason?: string;
     approvalRequestId?: Id<"approvalRequest">;
+    actorStaffProfileId?: Id<"staffProfile">;
+    actorUserId?: Id<"athenaUser">;
+    customerProfileId?: Id<"customerProfile">;
     inventoryMovementId?: Id<"inventoryMovement">;
     onlineOrderId?: Id<"onlineOrder">;
     paymentAllocationId?: Id<"paymentAllocation">;
     posTransactionId?: Id<"posTransaction">;
     registerSessionId?: Id<"registerSession">;
     workItemId?: Id<"operationalWorkItem">;
+    metadata?: Record<string, unknown>;
   },
   args: RecordOperationalEventArgs
 ) {
@@ -69,12 +75,30 @@ function matchesExistingEvent(
     existingEvent.subjectId === args.subjectId &&
     existingEvent.reason === args.reason &&
     existingEvent.approvalRequestId === args.approvalRequestId &&
+    existingEvent.actorStaffProfileId === args.actorStaffProfileId &&
+    existingEvent.actorUserId === args.actorUserId &&
+    existingEvent.customerProfileId === args.customerProfileId &&
     existingEvent.inventoryMovementId === args.inventoryMovementId &&
     existingEvent.onlineOrderId === args.onlineOrderId &&
     existingEvent.paymentAllocationId === args.paymentAllocationId &&
     existingEvent.posTransactionId === args.posTransactionId &&
     existingEvent.registerSessionId === args.registerSessionId &&
-    existingEvent.workItemId === args.workItemId
+    existingEvent.workItemId === args.workItemId &&
+    metadataDedupeKeysMatch(
+      existingEvent.metadata,
+      args.metadata,
+      args.metadataDedupeKeys
+    )
+  );
+}
+
+function metadataDedupeKeysMatch(
+  existingMetadata?: Record<string, unknown>,
+  nextMetadata?: Record<string, unknown>,
+  keys: string[] = []
+) {
+  return keys.every(
+    (key) => existingMetadata?.[key] === nextMetadata?.[key]
   );
 }
 
@@ -185,6 +209,7 @@ export const recordOperationalEvent = internalMutation({
     message: v.optional(v.string()),
     reason: v.optional(v.string()),
     metadata: v.optional(v.record(v.string(), v.any())),
+    metadataDedupeKeys: v.optional(v.array(v.string())),
     actorUserId: v.optional(v.id("athenaUser")),
     actorStaffProfileId: v.optional(v.id("staffProfile")),
     customerProfileId: v.optional(v.id("customerProfile")),

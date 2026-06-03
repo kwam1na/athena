@@ -417,6 +417,59 @@ describe("submitTerminalRuntimeStatus", () => {
     );
   });
 
+  it("persists support-safe app-session recovery status in runtime status", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(upsertLatestRuntimeStatus).mockResolvedValue(
+      "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    );
+
+    await submitTerminalRuntimeStatus(
+      { db: null as never } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        status: {
+          ...buildRuntimeStatus(),
+          appSessionRecovery: {
+            status: "retry_exhausted",
+          },
+        },
+      },
+    );
+
+    expect(vi.mocked(upsertLatestRuntimeStatus)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        appSessionRecovery: {
+          status: "retry_exhausted",
+        },
+      }),
+    );
+  });
+
+  it("clears stale app-session recovery status when runtime check-ins omit it", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(upsertLatestRuntimeStatus).mockResolvedValue(
+      "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    );
+
+    await submitTerminalRuntimeStatus(
+      { db: null as never } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        status: buildRuntimeStatus(),
+      },
+    );
+
+    expect(vi.mocked(upsertLatestRuntimeStatus)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        appSessionRecovery: undefined,
+      }),
+    );
+  });
+
   it("does not write for inactive or wrong-store terminals", async () => {
     vi.mocked(getTerminalById).mockResolvedValue({
       ...existingTerminal,
@@ -518,6 +571,29 @@ describe("terminal health summaries", () => {
       }),
     ]);
     expect(vi.mocked(getTerminalSyncEvidence)).not.toHaveBeenCalled();
+  });
+
+  it("carries support-safe app-session recovery status through terminal health", async () => {
+    vi.mocked(listTerminalsForStore).mockResolvedValue([existingTerminal]);
+    vi.mocked(getLatestRuntimeStatusForTerminal).mockResolvedValue(
+      buildPersistedRuntimeStatus({
+        appSessionRecovery: {
+          status: "blocked_app_account",
+        },
+      }),
+    );
+
+    const result = await listTerminalHealthSummaries(
+      { db: null as never } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        now: 300,
+      },
+    );
+
+    expect(result[0]?.runtimeStatus?.appSessionRecovery).toEqual({
+      status: "blocked_app_account",
+    });
   });
 
   it("loads sampled sync evidence only for terminal detail", async () => {
@@ -1180,6 +1256,18 @@ function buildRuntimeStatus() {
 
 function buildPersistedRuntimeStatus(
   overrides: Partial<ReturnType<typeof buildRuntimeStatus>> & {
+    appSessionRecovery?: {
+      status:
+        | "ready"
+        | "recovering"
+        | "retrying"
+        | "waiting_for_network"
+        | "blocked_terminal"
+        | "blocked_app_account"
+        | "blocked_store_mismatch"
+        | "retry_exhausted"
+        | "stale_assertion";
+    };
     drawerAuthority?: Doc<"posTerminalRuntimeStatus">["drawerAuthority"];
     receivedAt?: number;
     terminalIntegrity?: Doc<"posTerminalRuntimeStatus">["terminalIntegrity"];

@@ -594,6 +594,7 @@ async function createFixtureRepo() {
     rootDir
   );
   await write("packages/athena-webapp/vitest.setup.ts", "export {};\n", rootDir);
+  await write("packages/athena-webapp/src/routes/_authed.tsx", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/routes/_authed/index.tsx", "export {};\n", rootDir);
   await write(
     "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/index.tsx",
@@ -986,6 +987,16 @@ async function createFixtureRepo() {
     "export {};\n",
     rootDir
   );
+  await write(
+    "packages/athena-webapp/src/lib/pos/infrastructure/terminal/usePosTerminalAppSessionRecovery.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/lib/pos/infrastructure/terminal/posTerminalAppSessionRecoveryContext.tsx",
+    "export {};\n",
+    rootDir
+  );
   for (const terminalHealthPath of [
     "packages/athena-webapp/src/components/pos/terminals/POSTerminalDetailView.tsx",
     "packages/athena-webapp/src/components/pos/terminals/POSTerminalDetailView.test.tsx",
@@ -1148,6 +1159,11 @@ async function createFixtureRepo() {
   );
   await write(
     "packages/athena-webapp/convex/pos/public/terminals.test.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/pos/public/terminalAppSessions.ts",
     "export {};\n",
     rootDir
   );

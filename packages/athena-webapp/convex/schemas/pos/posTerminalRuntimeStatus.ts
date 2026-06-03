@@ -24,6 +24,22 @@ export const posTerminalRuntimeStaffAuthorityStatusValidator = v.union(
   v.literal("unknown"),
 );
 
+export const posTerminalRuntimeAppSessionRecoveryStatusValidator = v.union(
+  v.literal("ready"),
+  v.literal("recovering"),
+  v.literal("retrying"),
+  v.literal("waiting_for_network"),
+  v.literal("blocked_terminal"),
+  v.literal("blocked_app_account"),
+  v.literal("blocked_store_mismatch"),
+  v.literal("retry_exhausted"),
+  v.literal("stale_assertion"),
+);
+
+export const posTerminalRuntimeAppSessionRecoveryValidator = v.object({
+  status: posTerminalRuntimeAppSessionRecoveryStatusValidator,
+});
+
 export const posTerminalRuntimeBrowserInfoValidator = v.object({
   userAgent: v.optional(v.string()),
   platform: v.optional(v.string()),
@@ -121,6 +137,9 @@ export const posTerminalRuntimeStatusSchema = v.object({
   appVersion: v.optional(v.string()),
   buildSha: v.optional(v.string()),
   browserInfo: v.optional(posTerminalRuntimeBrowserInfoValidator),
+  appSessionRecovery: v.optional(
+    posTerminalRuntimeAppSessionRecoveryValidator,
+  ),
   localStore: posTerminalRuntimeLocalStoreValidator,
   sync: posTerminalRuntimeSyncValidator,
   staffAuthority: posTerminalRuntimeStaffAuthorityValidator,

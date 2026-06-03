@@ -22,6 +22,19 @@ export type TerminalRecord = {
 export type TerminalRuntimeStatus = {
   _creationTime?: number;
   _id?: string;
+  appSessionRecovery?: {
+    status:
+      | "ready"
+      | "recovering"
+      | "retrying"
+      | "waiting_for_network"
+      | "blocked_terminal"
+      | "blocked_app_account"
+      | "blocked_store_mismatch"
+      | "retry_exhausted"
+      | "stale_assertion"
+      | string;
+  };
   appVersion?: string;
   browserInfo?: {
     language?: string;

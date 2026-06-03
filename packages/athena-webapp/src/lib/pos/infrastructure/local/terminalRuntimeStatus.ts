@@ -18,15 +18,60 @@ import type { PosLocalSyncTrigger } from "./syncScheduler";
 type ReportTerminalRuntimeStatusArgs = FunctionArgs<
   typeof api.pos.public.terminals.reportTerminalRuntimeStatus
 >;
+type ReportTerminalRuntimeStatusPayload =
+  ReportTerminalRuntimeStatusArgs["status"];
+
+export type PosTerminalRuntimeAppSessionRecoveryStatus =
+  | "idle"
+  | "validating"
+  | "retrying"
+  | "waiting_for_network"
+  | "recoverable"
+  | "blocked";
+
+export type PosTerminalRuntimeAppSessionRecoveryBlockReason =
+  | "missing_terminal_proof"
+  | "terminal_not_available"
+  | "invalid_terminal_proof"
+  | "store_mismatch"
+  | "terminal_revoked"
+  | "app_account_disabled"
+  | "app_account_not_pos_scoped"
+  | "unsupported_route_scope"
+  | "retry_exhausted"
+  | "stale_assertion";
+
+export type PosTerminalRuntimeAppSessionRecoveryInput = {
+  assertion?: "present" | null;
+  reason?: PosTerminalRuntimeAppSessionRecoveryBlockReason | null;
+  status: PosTerminalRuntimeAppSessionRecoveryStatus;
+};
+
+export type PosTerminalRuntimeAppSessionRecoveryLabel =
+  | "ready"
+  | "recovering"
+  | "retrying"
+  | "waiting_for_network"
+  | "blocked_terminal"
+  | "blocked_app_account"
+  | "blocked_store_mismatch"
+  | "retry_exhausted"
+  | "stale_assertion";
+
+export type PosTerminalRuntimeAppSessionRecoveryDiagnostics = {
+  status: PosTerminalRuntimeAppSessionRecoveryLabel;
+};
 
 export type PosTerminalRuntimeStatusSource =
   ReportTerminalRuntimeStatusArgs["status"]["source"];
 export type PosTerminalRuntimeStatusPayload =
-  ReportTerminalRuntimeStatusArgs["status"];
+  ReportTerminalRuntimeStatusPayload & {
+    appSessionRecovery?: PosTerminalRuntimeAppSessionRecoveryDiagnostics;
+  };
 export type PosTerminalRuntimeStatusSyncStatus =
-  PosTerminalRuntimeStatusPayload["sync"]["status"];
+  ReportTerminalRuntimeStatusPayload["sync"]["status"];
 export type PosTerminalRuntimeStaffAuthorityStatus =
-  PosTerminalRuntimeStatusPayload["staffAuthority"]["status"];
+  ReportTerminalRuntimeStatusPayload["staffAuthority"]["status"];
 
 export type PosTerminalRuntimeSyncDebugInput = {
   failedEventCount?: number;
@@ -53,6 +98,7 @@ export type PosTerminalRuntimeSnapshotReadiness = {
 
 export type PosTerminalRuntimeStatusInput = {
   appVersion?: string;
+  appSessionRecovery?: PosTerminalRuntimeAppSessionRecoveryInput | null;
   browserInfo?: PosTerminalRuntimeBrowserInfo;
   buildSha?: string;
   clock?: () => number;
@@ -84,6 +130,7 @@ export type PosTerminalRuntimeCopyDiagnostics = {
     sync?: string;
   };
   labels: {
+    appSessionRecovery?: PosTerminalRuntimeAppSessionRecoveryLabel;
     drawerAuthority: "blocked" | "healthy" | "unknown";
     localStore: "available" | "unavailable";
     staffAuthority: PosTerminalRuntimeStaffAuthorityStatus;
@@ -106,6 +153,7 @@ export type PosTerminalRuntimeCopyDiagnostics = {
     registerNumber?: string;
     storeId?: string;
   };
+  appSessionRecovery?: PosTerminalRuntimeAppSessionRecoveryDiagnostics;
   authority: {
     drawer?: {
       cloudRegisterSessionId?: string;
@@ -167,11 +215,15 @@ export function buildPosTerminalRuntimeStatus(
   const staffAuthorityStatus = normalizeStaffAuthorityStatus(
     input.staffAuthorityStatus,
   );
+  const appSessionRecovery = toSafeAppSessionRecoveryDiagnostics(
+    input.appSessionRecovery,
+  );
 
   return {
     ...(input.appVersion ? { appVersion: input.appVersion } : {}),
     ...(input.buildSha ? { buildSha: input.buildSha } : {}),
     ...(input.browserInfo ? { browserInfo: input.browserInfo } : {}),
+    ...(appSessionRecovery ? { appSessionRecovery } : {}),
     localStore: {
       available: !failureMessage,
       schemaVersion: input.terminalSeed?.schemaVersion ?? POS_LOCAL_STORE_SCHEMA_VERSION,
@@ -254,8 +306,12 @@ export function buildPosTerminalRuntimeCopyDiagnostics(
   const staffAuthorityStatus = normalizeStaffAuthorityStatus(
     input.staffAuthorityStatus,
   );
+  const appSessionRecovery = toSafeAppSessionRecoveryDiagnostics(
+    input.appSessionRecovery,
+  );
 
   return {
+    ...(appSessionRecovery ? { appSessionRecovery } : {}),
     counts: {
       failedEventCount: sync.failedEventCount,
       localOnlyEventCount: sync.localOnlyEventCount,
@@ -274,6 +330,9 @@ export function buildPosTerminalRuntimeCopyDiagnostics(
       ...(syncFailure ? { sync: syncFailure } : {}),
     },
     labels: {
+      ...(appSessionRecovery
+        ? { appSessionRecovery: appSessionRecovery.status }
+        : {}),
       drawerAuthority: input.drawerAuthority
         ? input.drawerAuthority.status
         : "unknown",
@@ -363,6 +422,12 @@ export function buildPosTerminalRuntimeCopyDiagnostics(
         : {}),
     },
   };
+}
+
+export function toReportablePosTerminalRuntimeStatus(
+  status: PosTerminalRuntimeStatusPayload,
+): ReportTerminalRuntimeStatusPayload {
+  return status;
 }
 
 function buildSyncMetrics(
@@ -460,6 +525,39 @@ function getTerminalIntegrityLabel(
   if (state.status === "healthy") return "healthy";
   if (state.status === "repairing") return "repairing";
   return "blocked";
+}
+
+function toSafeAppSessionRecoveryDiagnostics(
+  recovery?: PosTerminalRuntimeAppSessionRecoveryInput | null,
+): PosTerminalRuntimeAppSessionRecoveryDiagnostics | undefined {
+  if (!recovery) return undefined;
+
+  return { status: toSafeAppSessionRecoveryLabel(recovery) };
+}
+
+function toSafeAppSessionRecoveryLabel(
+  recovery: PosTerminalRuntimeAppSessionRecoveryInput,
+): PosTerminalRuntimeAppSessionRecoveryLabel {
+  if (recovery.status === "idle" || recovery.status === "recoverable") {
+    return "ready";
+  }
+  if (recovery.status === "validating") return "recovering";
+  if (recovery.status === "retrying") return "retrying";
+  if (recovery.status === "waiting_for_network") {
+    return "waiting_for_network";
+  }
+
+  if (recovery.reason === "retry_exhausted") return "retry_exhausted";
+  if (recovery.reason === "stale_assertion") return "stale_assertion";
+  if (recovery.reason === "store_mismatch") return "blocked_store_mismatch";
+  if (
+    recovery.reason === "app_account_disabled" ||
+    recovery.reason === "app_account_not_pos_scoped"
+  ) {
+    return "blocked_app_account";
+  }
+
+  return "blocked_terminal";
 }
 
 function snapshotAges(

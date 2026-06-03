@@ -459,6 +459,50 @@
       ]
     },
     {
+      "name": "pos-hub-app-session-continuity-edits",
+      "pathPrefixes": [
+        "packages/athena-webapp/convex/pos/public/terminalAppSessions.ts",
+        "packages/athena-webapp/convex/pos/public/terminals.ts",
+        "packages/athena-webapp/convex/pos/application/commands/terminals.ts",
+        "packages/athena-webapp/convex/schemas/pos/posTerminalRuntimeStatus.ts",
+        "packages/athena-webapp/src/routes/_authed.tsx",
+        "packages/athena-webapp/src/components/pos/PointOfSaleView.tsx",
+        "packages/athena-webapp/src/lib/pos/infrastructure/terminal/usePosTerminalAppSessionRecovery.ts",
+        "packages/athena-webapp/src/lib/pos/infrastructure/terminal/posTerminalAppSessionRecoveryContext.tsx",
+        "packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts",
+        "packages/athena-webapp/src/lib/pos/infrastructure/local/terminalRuntimeStatus.ts"
+      ],
+      "commands": [
+        {
+          "kind": "raw",
+          "command": "bun run --filter '@athena/webapp' test -- src/routes/_authed.test.tsx convex/pos/public/terminalAppSessions.test.ts src/lib/pos/infrastructure/terminal/usePosTerminalAppSessionRecovery.test.ts convex/pos/application/terminals.test.ts convex/pos/public/terminals.test.ts src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.test.ts src/components/pos/PointOfSaleView.test.tsx"
+        },
+        {
+          "kind": "script",
+          "script": "audit:convex"
+        },
+        {
+          "kind": "script",
+          "script": "lint:convex:changed"
+        },
+        {
+          "kind": "script",
+          "script": "lint:frontend:changed"
+        },
+        {
+          "kind": "raw",
+          "command": "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json"
+        },
+        {
+          "kind": "script",
+          "script": "build"
+        }
+      ],
+      "behaviorScenarios": [
+        "athena-admin-shell-boot"
+      ]
+    },
+    {
       "name": "pos-terminal-health-visibility-and-diagnostics-edits",
       "pathPrefixes": [
         "packages/athena-webapp/convex/schemas/pos/posTerminal.ts",

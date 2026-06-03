@@ -24,6 +24,7 @@ import {
 import { hashPosTerminalSyncSecret } from "../application/sync/terminalSyncSecret";
 import {
   posTerminalRuntimeBrowserInfoValidator,
+  posTerminalRuntimeAppSessionRecoveryValidator,
   posTerminalRuntimeDrawerAuthorityValidator,
   posTerminalRuntimeLocalStoreValidator,
   posTerminalRuntimeSnapshotsValidator,
@@ -81,6 +82,9 @@ const runtimeStatusInputValidator = v.object({
   appVersion: v.optional(v.string()),
   buildSha: v.optional(v.string()),
   browserInfo: v.optional(posTerminalRuntimeBrowserInfoValidator),
+  appSessionRecovery: v.optional(
+    posTerminalRuntimeAppSessionRecoveryValidator,
+  ),
   localStore: posTerminalRuntimeLocalStoreValidator,
   sync: posTerminalRuntimeSyncValidator,
   staffAuthority: posTerminalRuntimeStaffAuthorityValidator,
@@ -270,6 +274,11 @@ function stripRuntimeStatusInput(
           platform: status.browserInfo.platform,
           language: status.browserInfo.language,
           online: status.browserInfo.online,
+      }
+      : undefined,
+    appSessionRecovery: status.appSessionRecovery
+      ? {
+          status: status.appSessionRecovery.status,
         }
       : undefined,
     localStore: {

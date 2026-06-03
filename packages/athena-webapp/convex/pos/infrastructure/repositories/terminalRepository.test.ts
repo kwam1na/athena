@@ -39,6 +39,63 @@ describe("terminalRepository runtime status", () => {
     expect(ctx.db.insert).not.toHaveBeenCalled();
   });
 
+  it("patches app-session recovery as undefined so stale recovery status clears", async () => {
+    const ctx = buildCtx({
+      posTerminalRuntimeStatus: [
+        buildRuntimeStatus({
+          appSessionRecovery: {
+            status: "blocked_terminal",
+          },
+        }),
+      ],
+    });
+    const input = {
+      ...buildRuntimeStatus(),
+      appSessionRecovery: undefined,
+      reportedAt: 300,
+      receivedAt: 310,
+    };
+
+    const result = await upsertLatestRuntimeStatus(ctx as never, input);
+
+    expect(result).toBe("runtime-status-1");
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "posTerminalRuntimeStatus",
+      "runtime-status-1",
+      expect.objectContaining({
+        appSessionRecovery: undefined,
+      }),
+    );
+    expect(ctx.db.insert).not.toHaveBeenCalled();
+  });
+
+  it("ignores delayed older runtime status reports for the latest row", async () => {
+    const ctx = buildCtx({
+      posTerminalRuntimeStatus: [
+        buildRuntimeStatus({
+          appSessionRecovery: undefined,
+          reportedAt: 300,
+          receivedAt: 310,
+        }),
+      ],
+    });
+    const input = {
+      ...buildRuntimeStatus({
+        appSessionRecovery: {
+          status: "retrying",
+        },
+        reportedAt: 250,
+        receivedAt: 320,
+      }),
+    };
+
+    const result = await upsertLatestRuntimeStatus(ctx as never, input);
+
+    expect(result).toBe("runtime-status-1");
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+    expect(ctx.db.insert).not.toHaveBeenCalled();
+  });
+
   it("inserts runtime status when no status exists for the terminal", async () => {
     const ctx = buildCtx();
     const input = buildRuntimeStatus();
@@ -47,6 +104,21 @@ describe("terminalRepository runtime status", () => {
 
     expect(result).toBe("runtime-status-new");
     expect(ctx.db.insert).toHaveBeenCalledWith("posTerminalRuntimeStatus", input);
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+  });
+
+  it("omits undefined app-session recovery on first runtime status insert", async () => {
+    const ctx = buildCtx();
+    const input = {
+      ...buildRuntimeStatus(),
+      appSessionRecovery: undefined,
+    };
+
+    const result = await upsertLatestRuntimeStatus(ctx as never, input);
+
+    expect(result).toBe("runtime-status-new");
+    const insertedPayload = ctx.db.insert.mock.calls[0]?.[1];
+    expect(insertedPayload).not.toHaveProperty("appSessionRecovery");
     expect(ctx.db.patch).not.toHaveBeenCalled();
   });
 });
@@ -385,7 +457,10 @@ function buildCtx(seed: {
           ) ?? null
         );
       }),
-      insert: vi.fn(async () => "runtime-status-new"),
+      insert: vi.fn(
+        async (_tableName: string, _value: Record<string, unknown>) =>
+          "runtime-status-new",
+      ),
       patch: vi.fn(async () => undefined),
       query: vi.fn((tableName: keyof typeof seed) =>
         buildQuery((seed[tableName] ?? []) as Array<Record<string, unknown>>),
