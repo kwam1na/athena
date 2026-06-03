@@ -2869,7 +2869,7 @@ describe("useRegisterViewModel", () => {
     );
   });
 
-  it("requires closeout notes for POS closeout variance", async () => {
+  it("allows POS closeout variance without closeout notes", async () => {
     mockRegisterState = {
       phase: "readyToStart",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
@@ -2906,9 +2906,19 @@ describe("useRegisterViewModel", () => {
     });
 
     expect(mockSubmitRegisterSessionCloseout).not.toHaveBeenCalled();
-    expect(result.current.drawerGate?.errorMessage).toBe(
-      "Closeout notes required. Add notes before submitting a count with variance.",
+    await waitFor(() =>
+      expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "register.closeout_started",
+          localRegisterSessionId: "drawer-1",
+          payload: expect.objectContaining({
+            countedCash: 4_800,
+            notes: null,
+          }),
+        }),
+      ),
     );
+    expect(result.current.drawerGate?.errorMessage).toBeNull();
   });
 
   it("records closeout locally without waiting for a server approval response", async () => {

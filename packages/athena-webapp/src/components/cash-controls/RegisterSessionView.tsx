@@ -1319,16 +1319,6 @@ export function RegisterSessionViewContent({
     }
 
     const trimmedCloseoutNotes = trimOptional(closeoutNotes);
-    const expectedCloseoutCash =
-      registerSession.netExpectedCash ?? registerSession.expectedCash;
-
-    if (parsedCountedCash !== expectedCloseoutCash && !trimmedCloseoutNotes) {
-      setCloseoutErrorMessage(
-        "Add closeout notes before submitting a count with variance",
-      );
-      return;
-    }
-
     setCloseoutErrorMessage("");
 
     if (requiresReopenedCloseoutSubmitApproval) {
@@ -1734,7 +1724,6 @@ export function RegisterSessionViewContent({
     registerSession && parsedCountedCash !== undefined
       ? parsedCountedCash - expectedCash
       : (registerSession?.variance ?? null);
-  const closeoutNotesRequired = draftVariance !== null && draftVariance !== 0;
   const hasPendingCloseoutApproval =
     registerSession?.pendingApprovalRequest?.status === "pending";
   const formattedApprovalReason = formatReviewReason(
@@ -3147,20 +3136,13 @@ export function RegisterSessionViewContent({
                         </span>
                         <Textarea
                           aria-label="Closeout notes"
-                          aria-required={closeoutNotesRequired}
                           className="min-h-[96px] border-input bg-background"
                           onChange={(event) =>
                             setCloseoutNotes(event.target.value)
                           }
                           placeholder="Add drawer notes if anything needs follow-up."
-                          required={closeoutNotesRequired}
                           value={closeoutNotes}
                         />
-                        {closeoutNotesRequired ? (
-                          <p className="text-xs text-muted-foreground">
-                            Notes are required when the count has variance.
-                          </p>
-                        ) : null}
                       </label>
 
                       <LoadingButton

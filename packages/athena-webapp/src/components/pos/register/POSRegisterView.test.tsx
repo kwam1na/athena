@@ -2281,10 +2281,10 @@ describe("POSRegisterView", () => {
     expect(screen.getByText("GH₵50")).toBeInTheDocument();
     expect(screen.getByText("GH₵-5")).toBeInTheDocument();
     expect(screen.getByLabelText(/counted cash/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/closeout notes/i)).toBeRequired();
+    expect(screen.getByLabelText(/closeout notes/i)).not.toBeRequired();
     expect(
-      screen.getByText("Notes are required when the count has variance."),
-    ).toBeInTheDocument();
+      screen.queryByText("Notes are required when the count has variance."),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /submit closeout/i }),
     ).toBeInTheDocument();

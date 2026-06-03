@@ -270,9 +270,6 @@ export function RegisterDrawerGate({
     const isSubmittedCloseout = Boolean(closeoutSubmittedReason);
     const isManagerReviewCloseout =
       closeoutSubmittedReason === "manager_review";
-    const closeoutNotesRequired =
-      drawerGate.closeoutDraftVariance !== undefined &&
-      drawerGate.closeoutDraftVariance !== 0;
 
     return (
       <div className="mx-auto max-w-2xl rounded-lg border border-stone-200 bg-white p-8 shadow-sm">
@@ -440,21 +437,14 @@ export function RegisterDrawerGate({
                   Closeout notes
                 </span>
                 <Textarea
-                  aria-required={closeoutNotesRequired}
                   disabled={drawerGate.isCloseoutSubmitting}
                   onChange={(event) =>
                     drawerGate.onCloseoutNotesChange?.(event.target.value)
                   }
                   placeholder="Add drawer notes if anything needs follow-up."
-                  required={closeoutNotesRequired}
                   rows={3}
                   value={drawerGate.closeoutNotes ?? ""}
                 />
-                {closeoutNotesRequired ? (
-                  <p className="text-xs text-stone-500">
-                    Notes are required when the count has variance.
-                  </p>
-                ) : null}
               </label>
 
               {drawerGate.errorMessage ? (
