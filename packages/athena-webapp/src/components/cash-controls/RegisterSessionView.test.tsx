@@ -1593,10 +1593,12 @@ describe("RegisterSessionViewContent", () => {
     );
   });
 
-  it("requires closeout notes when counted cash has a variance", async () => {
+  it("allows closeout variance without closeout notes", async () => {
     const user = userEvent.setup();
     const onAuthenticateStaff = vi.fn();
-    const onSubmitCloseout = vi.fn();
+    const onSubmitCloseout = vi
+      .fn()
+      .mockResolvedValue(ok({ action: "closed" }));
 
     render(
       <RegisterSessionViewContent
@@ -1614,13 +1616,29 @@ describe("RegisterSessionViewContent", () => {
 
     await user.clear(screen.getByLabelText("Closeout counted cash"));
     await user.type(screen.getByLabelText("Closeout counted cash"), "180");
+    expect(screen.getByLabelText("Closeout notes")).not.toBeRequired();
+    expect(
+      screen.queryByText("Notes are required when the count has variance."),
+    ).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Submit closeout" }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Add closeout notes before submitting a count with variance",
+    await user.click(
+      screen.getByRole("button", { name: "Confirm staff for Submit closeout" }),
     );
-    expect(onAuthenticateStaff).not.toHaveBeenCalled();
-    expect(onSubmitCloseout).not.toHaveBeenCalled();
+
+    expect(onAuthenticateStaff).toHaveBeenCalledWith({
+      allowedRoles: ["cashier", "manager"],
+      pinHash: "hashed-pin",
+      username: "ato",
+    });
+    await waitFor(() =>
+      expect(onSubmitCloseout).toHaveBeenCalledWith({
+        actorStaffProfileId: "staff-1",
+        approvalProofId: undefined,
+        countedCash: 18000,
+        notes: undefined,
+        registerSessionId: "session-1",
+      }),
+    );
   });
 
   it("allows closeout without notes when counted cash matches expected cash", async () => {

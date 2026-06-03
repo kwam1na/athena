@@ -3489,13 +3489,6 @@ export function useRegisterViewModel(): RegisterViewModel {
       expectedCloseoutCash !== undefined &&
       parsedCountedCash !== expectedCloseoutCash;
 
-    if (hasCloseoutVariance && !trimmedCloseoutNotes) {
-      setDrawerErrorMessage(
-        "Closeout notes required. Add notes before submitting a count with variance.",
-      );
-      return;
-    }
-
     setDrawerErrorMessage(null);
     setIsSubmittingCloseout(true);
     await waitForCheckoutMutationQueues();
