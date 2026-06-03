@@ -10,6 +10,7 @@
 
 import type * as app from "../app.js";
 import type * as auth from "../auth.js";
+import type * as auth_PosRecoveryCode from "../auth/PosRecoveryCode.js";
 import type * as authConfig from "../authConfig.js";
 import type * as cache_index from "../cache/index.js";
 import type * as cashControls_closeouts from "../cashControls/closeouts.js";
@@ -192,6 +193,7 @@ import type * as pos_infrastructure_repositories_terminalRepository from "../pos
 import type * as pos_infrastructure_repositories_transactionRepository from "../pos/infrastructure/repositories/transactionRepository.js";
 import type * as pos_public_catalog from "../pos/public/catalog.js";
 import type * as pos_public_customers from "../pos/public/customers.js";
+import type * as pos_public_posRecoveryCodes from "../pos/public/posRecoveryCodes.js";
 import type * as pos_public_register from "../pos/public/register.js";
 import type * as pos_public_sync from "../pos/public/sync.js";
 import type * as pos_public_terminalAppSessions from "../pos/public/terminalAppSessions.js";
@@ -249,6 +251,7 @@ import type * as schemas_pos_posLocalSyncConflict from "../schemas/pos/posLocalS
 import type * as schemas_pos_posLocalSyncCursor from "../schemas/pos/posLocalSyncCursor.js";
 import type * as schemas_pos_posLocalSyncEvent from "../schemas/pos/posLocalSyncEvent.js";
 import type * as schemas_pos_posLocalSyncMapping from "../schemas/pos/posLocalSyncMapping.js";
+import type * as schemas_pos_posRecoveryCredential from "../schemas/pos/posRecoveryCredential.js";
 import type * as schemas_pos_posSession from "../schemas/pos/posSession.js";
 import type * as schemas_pos_posSessionItem from "../schemas/pos/posSessionItem.js";
 import type * as schemas_pos_posTerminal from "../schemas/pos/posTerminal.js";
@@ -351,6 +354,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   app: typeof app;
   auth: typeof auth;
+  "auth/PosRecoveryCode": typeof auth_PosRecoveryCode;
   authConfig: typeof authConfig;
   "cache/index": typeof cache_index;
   "cashControls/closeouts": typeof cashControls_closeouts;
@@ -533,6 +537,7 @@ declare const fullApi: ApiFromModules<{
   "pos/infrastructure/repositories/transactionRepository": typeof pos_infrastructure_repositories_transactionRepository;
   "pos/public/catalog": typeof pos_public_catalog;
   "pos/public/customers": typeof pos_public_customers;
+  "pos/public/posRecoveryCodes": typeof pos_public_posRecoveryCodes;
   "pos/public/register": typeof pos_public_register;
   "pos/public/sync": typeof pos_public_sync;
   "pos/public/terminalAppSessions": typeof pos_public_terminalAppSessions;
@@ -590,6 +595,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/pos/posLocalSyncCursor": typeof schemas_pos_posLocalSyncCursor;
   "schemas/pos/posLocalSyncEvent": typeof schemas_pos_posLocalSyncEvent;
   "schemas/pos/posLocalSyncMapping": typeof schemas_pos_posLocalSyncMapping;
+  "schemas/pos/posRecoveryCredential": typeof schemas_pos_posRecoveryCredential;
   "schemas/pos/posSession": typeof schemas_pos_posSession;
   "schemas/pos/posSessionItem": typeof schemas_pos_posSessionItem;
   "schemas/pos/posTerminal": typeof schemas_pos_posTerminal;

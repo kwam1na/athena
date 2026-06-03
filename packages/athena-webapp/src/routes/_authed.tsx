@@ -98,6 +98,22 @@ function getBrowserPathname() {
   return typeof window === "undefined" ? "" : window.location.pathname;
 }
 
+function getBrowserPathWithSearch() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  return `${window.location.pathname}${window.location.search}`;
+}
+
+function getRedirectPathWithSearch(pathname: string, browserPathWithSearch: string) {
+  if (typeof window === "undefined" || window.location.pathname !== pathname) {
+    return pathname;
+  }
+
+  return browserPathWithSearch;
+}
+
 function isUnknownRouterPath(pathname?: string) {
   return !pathname || pathname === "/";
 }
@@ -386,6 +402,7 @@ export default function Layout() {
   });
   const { isLoading, user } = useAuth();
   const browserPathname = getBrowserPathname();
+  const browserPathWithSearch = getBrowserPathWithSearch();
   const routerPosHubParams = getPosHubRouteParams(pathname);
   const browserPosHubParams = getPosHubRouteParams(browserPathname);
   const routeParams =
@@ -482,9 +499,24 @@ export default function Layout() {
     }
 
     if (!isLoading && user === null) {
-      navigate({ to: "/login" });
+      const redirectTo = isUnknownRouterPath(pathname)
+        ? browserPathWithSearch
+        : getRedirectPathWithSearch(pathname, browserPathWithSearch);
+      const loginTarget = routeWantsPos
+        ? {
+            to: "/login" as const,
+            search: {
+              redirectTo,
+            } as never,
+          }
+        : { to: "/login" as const };
+      navigate(loginTarget);
     }
   }, [
+    browserPathname,
+    browserPathWithSearch,
+    pathname,
+    routeWantsPos,
     shouldRenderPosTerminalShell,
     shouldRenderPendingPosTerminalShell,
     isBlockedPosAppSession,

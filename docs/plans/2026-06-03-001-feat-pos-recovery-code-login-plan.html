@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>feat: Add POS recovery-code login for field operators</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8fa;
+      --panel: #ffffff;
+      --text: #172033;
+      --muted: #5e6878;
+      --line: #d9dee8;
+      --accent: #0f766e;
+      --warn: #9a5b00;
+      --danger: #b42318;
+      --code: #eef2f7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    header, main {
+      width: min(1120px, calc(100% - 40px));
+      margin: 0 auto;
+    }
+    header { padding: 38px 0 16px; }
+    .eyebrow {
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 8px 0 10px;
+      font-size: clamp(28px, 4vw, 42px);
+      line-height: 1.12;
+      letter-spacing: 0;
+    }
+    .meta {
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+    }
+    nav {
+      margin: 22px 0 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    nav a {
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 6px 10px;
+      text-decoration: none;
+      background: var(--panel);
+    }
+    main { padding: 12px 0 48px; }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 22px;
+      margin: 16px 0;
+    }
+    h2 {
+      margin: 0 0 12px;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+    h3 {
+      margin: 18px 0 8px;
+      font-size: 16px;
+      letter-spacing: 0;
+    }
+    p { margin: 0 0 12px; }
+    ul, ol { margin: 8px 0 0; padding-left: 22px; }
+    li { margin: 5px 0; }
+    code {
+      background: var(--code);
+      border-radius: 4px;
+      padding: 1px 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: .92em;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f1f4f8; }
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: #eef8f6;
+      padding: 12px 14px;
+      border-radius: 6px;
+    }
+    .warn {
+      border-left-color: var(--warn);
+      background: #fff7ed;
+    }
+    .danger {
+      border-left-color: var(--danger);
+      background: #fff1f0;
+    }
+    .unit {
+      border-top: 1px solid var(--line);
+      padding-top: 16px;
+      margin-top: 16px;
+    }
+    .unit:first-of-type {
+      border-top: 0;
+      padding-top: 0;
+    }
+    pre {
+      white-space: pre-wrap;
+      background: #111827;
+      color: #f8fafc;
+      border-radius: 8px;
+      padding: 14px;
+      overflow: auto;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Deep Plan</div>
+    <h1>feat: Add POS recovery-code login for field operators</h1>
+    <div class="meta">
+      <span>Date: 2026-06-03</span>
+      <span>Status: draft</span>
+      <span>Scope: Wigclub POS account recovery</span>
+    </div>
+    <nav aria-label="Plan sections">
+      <a href="#summary">Summary</a>
+      <a href="#requirements">Requirements</a>
+      <a href="#decisions">Decisions</a>
+      <a href="#alternatives">Alternatives</a>
+      <a href="#units">Units</a>
+      <a href="#signoff">Sign-off</a>
+    </nav>
+  </header>
+  <main>
+    <section id="summary">
+      <h2>Summary</h2>
+      <p>Add a tightly scoped recovery-code login path for the shared <code>pos@wigclub.store</code> POS app account. Field operators can sign in on a fresh browser when the normal OTP flow is blocked by lack of inbox access.</p>
+      <div class="callout">
+        The recommended path is a static-until-rotated POS recovery code stored server-side as a hash, validated through a dedicated Convex Auth credentials provider, and managed by full admins.
+      </div>
+    </section>
+
+    <section>
+      <h2>Problem Frame</h2>
+      <p>The POS field account occasionally needs to sign in again. The current login path sends an OTP to the email address on the app account, but operators using the POS do not have inbox access.</p>
+      <ul>
+        <li><code>pos@wigclub.store</code> loads the POS web app.</li>
+        <li>Staff PIN and terminal-scoped credentials identify the cashier/operator.</li>
+        <li>Terminal trust, drawer lifecycle, and command checks still decide whether a sale can happen.</li>
+      </ul>
+    </section>
+
+    <section id="requirements">
+      <h2>Requirements</h2>
+      <ul>
+        <li>Fresh browsers can sign in as <code>pos@wigclub.store</code> without email OTP access.</li>
+        <li>Recovery is restricted to the configured POS account and rejects admin or non-<code>pos_only</code> accounts.</li>
+        <li>Successful recovery creates a normal authenticated app session and reuses Athena auth sync.</li>
+        <li>Staff PIN remains the cashier/operator identity layer.</li>
+        <li>Recovery code storage is server-side hash only.</li>
+        <li>Failed attempts are rate-limited, locked, and audited.</li>
+        <li>Full admins can create, rotate, lock, unlock, or revoke the code.</li>
+        <li>Codes are generated server-side with enough entropy for shared-credential use.</li>
+      </ul>
+    </section>
+
+    <section id="decisions">
+      <h2>Key Technical Decisions</h2>
+      <table>
+        <thead>
+          <tr><th>Decision</th><th>Rationale</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Dedicated Convex Auth credentials provider</td><td>Keeps recovery inside the supported auth system and reuses existing auth sync.</td></tr>
+          <tr><td>Configured email, store, and <code>pos_only</code> scope</td><td>Limits blast radius to the POS app account.</td></tr>
+          <tr><td>Hashed, DB-managed recovery code</td><td>Supports rotation and audit without committing a static secret.</td></tr>
+          <tr><td>Stable until rotated</td><td>Gives field staff a low-friction path that does not depend on a live admin or inbox.</td></tr>
+          <tr><td>Full-admin management</td><td>The code is a shared credential and should be controlled by trusted admins.</td></tr>
+          <tr><td>Staff PIN remains separate</td><td>App-account recovery loads the app; staff proof still identifies the operator.</td></tr>
+          <tr><td>Strong server-generated codes</td><td>The v1 code should be readable but not human-chosen or guessable.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="alternatives">
+      <h2>Alternatives</h2>
+      <table>
+        <thead>
+          <tr><th>Alternative</th><th>Benefits</th><th>Problems</th><th>Recommendation</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Static-until-rotated recovery code</td><td>Fresh-browser capable and low friction</td><td>Shared secret needs protection and lockout</td><td>Recommended for v1</td></tr>
+          <tr><td>Longer auth sessions only</td><td>Minimal UI work</td><td>Does not help fresh browsers</td><td>Not sufficient</td></tr>
+          <tr><td>Terminal-bound app-session recovery</td><td>Strong device scope</td><td>Not fresh-browser capable before terminal context exists</td><td>Separate continuity feature</td></tr>
+          <tr><td>Full-admin one-time code</td><td>Stronger than static</td><td>Still requires a live admin</td><td>Later option</td></tr>
+          <tr><td>Shared inbox or OTP forwarding</td><td>No code change</td><td>Brittle and expands email access</td><td>Avoid</td></tr>
+          <tr><td>Staff PIN signs in app account</td><td>Familiar to cashiers</td><td>Blurs staff identity with app login</td><td>Avoid</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>High-Level Flow</h2>
+      <pre>Operator -&gt; Login UI: Enter pos@wigclub.store recovery code
+Login UI -&gt; POS recovery provider: signIn(provider, email, code, store)
+Provider -&gt; Provider: Validate account scope, code hash, lockout
+Provider -&gt; Convex Auth: Return configured auth user id
+Convex Auth -&gt; Login UI: Auth session established
+Login UI -&gt; Athena auth sync: Trigger existing pending auth sync
+Athena auth sync -&gt; POS runtime: Store Athena user id and POS app account id
+POS runtime -&gt; POS runtime: Staff PIN and drawer gates still apply</pre>
+    </section>
+
+    <section id="units">
+      <h2>Implementation Units</h2>
+      <div class="unit">
+        <h3>U1. Add POS recovery credential storage</h3>
+        <p>Add a server-side <code>posRecoveryCredential</code> table scoped to organization, store, and POS app account. Store only hashes, status, counters, lockout metadata, and rotation audit fields.</p>
+      </div>
+      <div class="unit">
+        <h3>U2. Add a dedicated Convex Auth recovery provider</h3>
+        <p>Register a <code>ConvexCredentials</code> provider that validates the configured account, <code>pos_only</code> membership, recovery code hash, and lockout before returning the real auth user id.</p>
+      </div>
+      <div class="unit">
+        <h3>U3. Add a recovery-code login UI</h3>
+        <p>Keep OTP as the default. Add a secondary POS recovery-code form that uses the same pending-auth-sync handoff as OTP success.</p>
+      </div>
+      <div class="unit">
+        <h3>U4. Add full-admin recovery-code management</h3>
+        <p>Let full admins create, rotate, unlock, and revoke the code. Show plaintext once on create or rotate only.</p>
+      </div>
+      <div class="unit">
+        <h3>U5. Preserve POS authority boundaries and auditability</h3>
+        <p>Confirm recovery login never substitutes for staff proof. POS actions should still attribute cashier/operator activity through staff profiles.</p>
+      </div>
+      <div class="unit">
+        <h3>U6. Validate, rollout, and document operations</h3>
+        <p>Run targeted provider, UI, settings, staff-authority, Convex, typecheck, build, browser, and graphify validation before shipping.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Security Notes</h2>
+      <ul>
+        <li>Keep validation server-side; UI hiding is not security.</li>
+        <li>Do not log submitted code, code hash, salt, or pepper.</li>
+        <li>Use generic failure copy for invalid, locked, missing, or disallowed states.</li>
+        <li>Rotate after staff turnover or suspected exposure.</li>
+      </ul>
+      <table>
+        <thead>
+          <tr><th>Threat</th><th>Mitigation</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Brute-force guessing</td><td>High-entropy generated code, server-side hash comparison, bounded attempts, generic failures.</td></tr>
+          <tr><td>Denial-of-service by repeated wrong attempts</td><td>Credential lockout telemetry, full-admin unlock, clear admin status, and rollout guidance for support.</td></tr>
+          <tr><td>Using the code for an admin account</td><td>Provider hard-checks configured email, store, and active <code>pos_only</code> membership.</td></tr>
+          <tr><td>Secret leakage</td><td>Audit events and metadata exclude code, hash, salt, and pepper.</td></tr>
+          <tr><td>Staff accountability loss</td><td>Recovery login audit stays separate from POS action audit.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="signoff">
+      <h2>Final Sign-Off Needed</h2>
+      <ol>
+        <li>The v1 recovery account is exactly <code>pos@wigclub.store</code> for Wigclub.</li>
+        <li>The recovery code remains valid until a full admin rotates or revokes it.</li>
+        <li>Full admins are the only users who can manage the recovery code.</li>
+        <li>Failed attempts lock the recovery code globally after a small number of failures, with full-admin unlock.</li>
+        <li>Staff PIN remains mandatory for cashier/operator identity.</li>
+      </ol>
+      <div class="callout warn">
+        No implementation should start until these policy choices are confirmed.
+      </div>
+    </section>
+  </main>
+</body>
+</html>

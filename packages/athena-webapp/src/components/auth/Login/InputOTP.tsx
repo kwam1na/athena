@@ -18,9 +18,8 @@ import { ATHENA_EMAIL_OTP_PROVIDER_ID } from "../../../../shared/auth";
 import { LoadingButton } from "~/src/components/ui/loading-button";
 import {
   ATHENA_AUTH_SYNC_FAILED_EVENT,
-  ATHENA_PENDING_AUTH_SYNC_EVENT,
-  PENDING_ATHENA_AUTH_SYNC_KEY,
 } from "~/src/lib/constants";
+import { startAthenaAuthSyncHandoff } from "./authSyncHandoff";
 import { useForm } from "react-hook-form";
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
@@ -149,10 +148,9 @@ export function InputOTPForm({
         return;
       }
 
-      sessionStorage.setItem(PENDING_ATHENA_AUTH_SYNC_KEY, "1");
+      startAthenaAuthSyncHandoff();
       setIsAuthHandoffPending(true);
       setIsSigningIn(false);
-      window.dispatchEvent(new Event(ATHENA_PENDING_AUTH_SYNC_EVENT));
       navigate({ to: "/" });
       return;
     } catch (e) {

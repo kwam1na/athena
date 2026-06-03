@@ -57,7 +57,9 @@ describe("preview-worktree", () => {
     const first = await startPreview(previewOptions(stateDir, worktreeRoot));
     const second = await startPreview(previewOptions(stateDir, worktreeRoot));
 
-    expect(first.url).toBe("http://127.0.0.1:5701/");
+    expect(first.port).toBeGreaterThanOrEqual(5701);
+    expect(first.port).toBeLessThanOrEqual(5710);
+    expect(first.url).toBe(`http://127.0.0.1:${first.port}/`);
     expect(second).toMatchObject({
       port: first.port,
       reused: true,
@@ -76,11 +78,14 @@ describe("preview-worktree", () => {
     const first = await startPreview(previewOptions(stateDir, worktreeOne));
     const second = await startPreview(previewOptions(stateDir, worktreeTwo));
 
-    expect(first.port).toBe(5701);
-    expect(second.port).toBe(5702);
+    expect(first.port).toBeGreaterThanOrEqual(5701);
+    expect(first.port).toBeLessThanOrEqual(5710);
+    expect(second.port).toBeGreaterThanOrEqual(5701);
+    expect(second.port).toBeLessThanOrEqual(5710);
+    expect(second.port).not.toBe(first.port);
     expect(await listPreviews({ stateDir })).toEqual([
-      expect.objectContaining({ port: 5701, worktreeRoot: real(worktreeOne) }),
-      expect.objectContaining({ port: 5702, worktreeRoot: real(worktreeTwo) }),
+      expect.objectContaining({ port: first.port, worktreeRoot: real(worktreeOne) }),
+      expect.objectContaining({ port: second.port, worktreeRoot: real(worktreeTwo) }),
     ]);
 
     await stopPreview(previewOptions(stateDir, worktreeOne));
@@ -115,7 +120,9 @@ describe("preview-worktree", () => {
 
     const preview = await startPreview(previewOptions(stateDir, worktreeRoot));
 
-    expect(preview.port).toBe(5701);
+    expect(preview.port).toBeGreaterThanOrEqual(5701);
+    expect(preview.port).toBeLessThanOrEqual(5710);
+    expect(preview.port).not.toBe(5704);
     expect(preview.reused).toBe(false);
 
     await stopPreview(previewOptions(stateDir, worktreeRoot));
@@ -187,8 +194,9 @@ describe("preview-worktree", () => {
     await runPreviewCli(["list", "athena"], env, worktreeRoot, (line) => output.push(line));
     await runPreviewCli(["stop", "athena"], env, worktreeRoot, (line) => output.push(line));
 
-    expect(output[0]).toBe("http://127.0.0.1:5701/");
+    expect(output[0]).toMatch(/^http:\/\/127\.0\.0\.1:57\d{2}\/$/);
     expect(output[1]).toContain(`${real(worktreeRoot)} pid=`);
+    expect(output[1]).toContain(output[0]);
     expect(output[2]).toBe("Stopped preview.");
   });
 

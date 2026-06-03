@@ -20,6 +20,7 @@ import {
   registerAndProvisionPosTerminal,
   type ProvisionedTerminalRecord,
 } from "@/lib/pos/application/registerAndProvisionPosTerminal";
+import { usePermissions } from "@/hooks/usePermissions";
 
 type HealthLinkProps = {
   children: ReactNode;
@@ -170,6 +171,199 @@ function FingerprintRegistrationCard({
               {primaryActionLabel}
             </LoadingButton>
           )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function formatRecoveryTimestamp(value?: number | null) {
+  if (!value) {
+    return "Not recorded";
+  }
+
+  return new Intl.DateTimeFormat("en", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
+function POSRecoveryCodeAdminPanel({
+  storeId,
+}: {
+  storeId?: string | null;
+}) {
+  const { hasFullAdminAccess, isLoading } = usePermissions();
+  const status = useQuery(
+    api.pos.public.posRecoveryCodes.getRecoveryCodeStatus,
+    !isLoading && hasFullAdminAccess && storeId
+      ? { storeId: storeId as never }
+      : "skip",
+  ) as
+    | {
+        failedAttemptCount: number;
+        lastUsedAt?: number;
+        lockedUntil?: number;
+        rotatedAt: number;
+        status: "active" | "locked" | "revoked";
+      }
+    | null
+    | undefined;
+  const rotateRecoveryCode = useMutation(
+    api.pos.public.posRecoveryCodes.rotateRecoveryCode,
+  );
+  const unlockRecoveryCode = useMutation(
+    api.pos.public.posRecoveryCodes.unlockRecoveryCode,
+  );
+  const revokeRecoveryCode = useMutation(
+    api.pos.public.posRecoveryCodes.revokeRecoveryCode,
+  );
+  const [isRotating, setIsRotating] = useState(false);
+  const [isUnlocking, setIsUnlocking] = useState(false);
+  const [isRevoking, setIsRevoking] = useState(false);
+  const [revealedCode, setRevealedCode] = useState<string | null>(null);
+
+  const handleRotate = async () => {
+    if (!storeId) {
+      toast.error("Select a store before managing POS recovery codes");
+      return;
+    }
+    setIsRotating(true);
+    setRevealedCode(null);
+    try {
+      const result = await rotateRecoveryCode({ storeId: storeId as never });
+      setRevealedCode(result.code);
+      toast.success("POS recovery code rotated");
+    } catch (error) {
+      console.error(error);
+      toast.error("Unable to rotate POS recovery code");
+    } finally {
+      setIsRotating(false);
+    }
+  };
+
+  const handleUnlock = async () => {
+    if (!storeId) {
+      return;
+    }
+    setIsUnlocking(true);
+    try {
+      await unlockRecoveryCode({ storeId: storeId as never });
+      toast.success("POS recovery code unlocked");
+    } catch (error) {
+      console.error(error);
+      toast.error("Unable to unlock POS recovery code");
+    } finally {
+      setIsUnlocking(false);
+    }
+  };
+
+  const handleRevoke = async () => {
+    if (!storeId) {
+      return;
+    }
+    setIsRevoking(true);
+    setRevealedCode(null);
+    try {
+      await revokeRecoveryCode({ storeId: storeId as never });
+      toast.success("POS recovery code revoked");
+    } catch (error) {
+      console.error(error);
+      toast.error("Unable to revoke POS recovery code");
+    } finally {
+      setIsRevoking(false);
+    }
+  };
+
+  if (isLoading || !hasFullAdminAccess) {
+    return null;
+  }
+
+  const statusLabel = status?.status ?? "not configured";
+
+  return (
+    <section className="grid gap-layout-xl border-b border-border py-layout-2xl lg:grid-cols-[17rem_minmax(0,1fr)]">
+      <div className="space-y-layout-sm">
+        <h2 className="text-2xl font-medium text-foreground">
+          POS recovery code
+        </h2>
+        <p className="text-sm leading-6 text-muted-foreground">
+          Manage the recovery code for the shared POS app account. Athena shows
+          a new code only when it is created or rotated.
+        </p>
+      </div>
+
+      <div className="space-y-layout-lg">
+        <div className="flex flex-wrap gap-layout-xs">
+          <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
+            {statusLabel}
+          </span>
+          <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
+            Rotated {formatRecoveryTimestamp(status?.rotatedAt)}
+          </span>
+          <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
+            Used {formatRecoveryTimestamp(status?.lastUsedAt)}
+          </span>
+        </div>
+
+        {revealedCode ? (
+          <div
+            className="rounded-md border border-signal/30 bg-signal/10 px-layout-md py-layout-sm"
+            role="status"
+          >
+            <p className="text-sm font-medium text-foreground">
+              New recovery code
+            </p>
+            <p className="mt-layout-xs font-mono text-lg tracking-wide text-foreground">
+              {revealedCode}
+            </p>
+            <p className="mt-layout-xs text-sm text-muted-foreground">
+              Store this with the field operations runbook. It will not be shown
+              again.
+            </p>
+          </div>
+        ) : null}
+
+        <div className="grid gap-layout-sm text-sm text-muted-foreground sm:grid-cols-3">
+          <div>
+            <p className="font-medium text-foreground">Failed attempts</p>
+            <p>{status?.failedAttemptCount ?? 0}</p>
+          </div>
+          <div>
+            <p className="font-medium text-foreground">Lockout</p>
+            <p>{formatRecoveryTimestamp(status?.lockedUntil)}</p>
+          </div>
+          <div>
+            <p className="font-medium text-foreground">Plaintext</p>
+            <p>Shown only after rotate</p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-layout-sm border-t border-border pt-layout-md">
+          <LoadingButton
+            isLoading={isRotating}
+            disabled={!storeId || isRotating}
+            onClick={handleRotate}
+            variant="default"
+          >
+            {status ? "Rotate recovery code" : "Create recovery code"}
+          </LoadingButton>
+          <LoadingButton
+            isLoading={isUnlocking}
+            disabled={!storeId || status?.status !== "locked" || isUnlocking}
+            onClick={handleUnlock}
+            variant="outline"
+          >
+            Unlock
+          </LoadingButton>
+          <LoadingButton
+            isLoading={isRevoking}
+            disabled={!storeId || !status || status.status === "revoked" || isRevoking}
+            onClick={handleRevoke}
+            variant="outline"
+          >
+            Revoke
+          </LoadingButton>
         </div>
       </div>
     </section>
@@ -458,6 +652,8 @@ export function POSSettingsView({
               }
             />
           </section>
+
+          <POSRecoveryCodeAdminPanel storeId={activeStore?._id ?? null} />
 
           <section className="grid gap-layout-xl border-b border-border py-layout-2xl lg:grid-cols-[17rem_minmax(0,1fr)]">
             <div className="space-y-layout-sm">
