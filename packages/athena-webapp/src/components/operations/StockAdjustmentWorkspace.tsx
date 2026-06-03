@@ -15,7 +15,6 @@ import {
 } from "@zxing/browser";
 import {
   Camera,
-  CheckCircle2,
   ExternalLink,
   Package,
   PackagePlus,
@@ -123,11 +122,11 @@ export type StockAdjustmentAvailabilityFilter =
 
 export type StockAdjustmentSearchState = {
   availability?: StockAdjustmentAvailabilityFilter;
+  category?: string;
   mode?: StockAdjustmentType;
   o?: string;
   page?: number;
   query?: string;
-  scope?: string;
   sku?: string;
 };
 
@@ -203,16 +202,17 @@ type StockAdjustmentRow = {
   submittedLineItem: SubmitStockAdjustmentArgs["lineItems"][number] | null;
 };
 
-type CountScopeOption = {
-  changedCount: number;
-  itemCount: number;
-  key: string;
-  label: string;
-};
 type CycleCountSubmissionOutcome = "applied" | "review_required" | null;
 type StockAdjustmentFilterState = {
   availability: StockAdjustmentAvailabilityFilter;
+  category: string;
   query: string;
+};
+
+type StockAdjustmentCategoryFilterOption = {
+  itemCount: number;
+  key: string;
+  label: string;
 };
 
 const MANUAL_REASON_LABELS: Record<
@@ -225,6 +225,7 @@ const MANUAL_REASON_LABELS: Record<
   vendor_return: "Vendor return",
 };
 
+const ALL_CATEGORY_FILTER_KEY = "__all_categories";
 const UNCATEGORIZED_SCOPE_KEY = "__uncategorized";
 const INVENTORY_NUMBER_FORMATTER = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 1,
@@ -240,12 +241,16 @@ const STOCK_ADJUSTMENT_AVAILABILITY_FILTER_LABELS: Record<
   unavailable: "Reserved",
 };
 
-function getCountScopeKey(item: InventorySnapshotItem) {
+function getCountScopeLabel(key: string) {
+  return key === UNCATEGORIZED_SCOPE_KEY ? "Uncategorized" : key;
+}
+
+function getStockAdjustmentCategoryKey(item: InventorySnapshotItem) {
   return item.productCategory?.trim() || UNCATEGORIZED_SCOPE_KEY;
 }
 
-function getCountScopeLabel(key: string) {
-  return key === UNCATEGORIZED_SCOPE_KEY ? "Uncategorized" : key;
+function getStockAdjustmentCategoryLabel(key: string) {
+  return getCountScopeLabel(key);
 }
 
 function buildManualDrafts(inventoryItems: InventorySnapshotItem[]) {
@@ -287,6 +292,13 @@ function pluralize(count: number, singular: string, plural = `${singular}s`) {
 
 function formatInventoryNumber(value: number) {
   return INVENTORY_NUMBER_FORMATTER.format(value).toLowerCase();
+}
+
+function formatCategoryList(labels: string[]) {
+  if (labels.length <= 1) return labels[0] ?? "";
+  if (labels.length === 2) return labels.join(" and ");
+
+  return `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
 }
 
 function getInventoryItemDisplayName(item: InventorySnapshotItem) {
@@ -390,19 +402,6 @@ function formatInventoryItemPriceLabel(item: InventorySnapshotItem) {
     : "Price pending";
 }
 
-function parseCountScopeKeys(value?: string | null) {
-  return (
-    value
-      ?.split(",")
-      .map((scope) => scope.trim())
-      .filter(Boolean) ?? []
-  );
-}
-
-function serializeCountScopeKeys(keys: string[]) {
-  return keys.length > 0 ? keys.join(",") : undefined;
-}
-
 function rowMatchesStockAdjustmentSearch(
   row: StockAdjustmentRow,
   query: string,
@@ -423,6 +422,13 @@ function rowMatchesStockAdjustmentSearch(
         : String(item.length),
     ],
     query,
+  );
+}
+
+function rowMatchesCategoryFilter(row: StockAdjustmentRow, category: string) {
+  return (
+    category === ALL_CATEGORY_FILTER_KEY ||
+    getStockAdjustmentCategoryKey(row.inventoryItem) === category
   );
 }
 
@@ -1466,7 +1472,6 @@ function StockAdjustmentBarcodeScannerDialog({
     onOpenChange,
     open,
     stopScanner,
-    videoElement,
   ]);
 
   useEffect(() => {
@@ -1686,11 +1691,9 @@ export function StockAdjustmentWorkspaceContent({
         inventoryItems[0]?._id ??
         null,
     );
-  const [selectedCountScopeKeys, setSelectedCountScopeKeys] = useState<
-    string[]
-  >(() => parseCountScopeKeys(searchState?.scope));
   const [filters, setFilters] = useState<StockAdjustmentFilterState>({
     availability: searchState?.availability ?? "all",
+    category: searchState?.category?.trim() || ALL_CATEGORY_FILTER_KEY,
     query: searchState?.query ?? "",
   });
   const [cycleCountSubmissionOutcome, setCycleCountSubmissionOutcome] =
@@ -1720,12 +1723,6 @@ export function StockAdjustmentWorkspaceContent({
   }, [adjustmentType, searchState?.mode]);
 
   useEffect(() => {
-    if (searchState?.scope === undefined) return;
-
-    setSelectedCountScopeKeys(parseCountScopeKeys(searchState.scope));
-  }, [searchState?.scope]);
-
-  useEffect(() => {
     if (searchState?.sku === undefined) return;
 
     setActiveInventoryItemId(
@@ -1738,17 +1735,44 @@ export function StockAdjustmentWorkspaceContent({
   useEffect(() => {
     setFilters((current) => ({
       availability: searchState?.availability ?? current.availability,
+      category:
+        searchState?.category === undefined
+          ? current.category
+          : searchState.category.trim() || ALL_CATEGORY_FILTER_KEY,
       query:
         searchState?.query === undefined ? current.query : searchState.query,
     }));
-  }, [searchState?.availability, searchState?.query]);
+  }, [searchState?.availability, searchState?.category, searchState?.query]);
 
   const handleSelectInventoryItem = useCallback(
     (itemId: Id<"productSku"> | null) => {
       setActiveInventoryItemId(itemId);
+
+      const selectedItem = inventoryItems.find((item) => item._id === itemId);
+      const selectedCategory = selectedItem
+        ? getStockAdjustmentCategoryKey(selectedItem)
+        : ALL_CATEGORY_FILTER_KEY;
+      const shouldMoveCategoryFilter =
+        selectedItem &&
+        filters.category !== ALL_CATEGORY_FILTER_KEY &&
+        selectedCategory !== filters.category;
+
+      if (shouldMoveCategoryFilter) {
+        setFilters((current) => ({
+          ...current,
+          category: selectedCategory,
+        }));
+        onSearchStateChange?.({
+          category: selectedCategory,
+          page: 1,
+          sku: itemId ?? undefined,
+        });
+        return;
+      }
+
       onSearchStateChange?.({ sku: itemId ?? undefined });
     },
-    [onSearchStateChange],
+    [filters.category, inventoryItems, onSearchStateChange],
   );
 
   useEffect(() => {
@@ -1896,47 +1920,26 @@ export function StockAdjustmentWorkspaceContent({
   );
 
   const changedRows = rows.filter((row) => row.submittedLineItem);
-  const countScopeOptions: CountScopeOption[] = useMemo(() => {
-    const scopes = new Map<string, CountScopeOption>();
+  const categoryFilterOptions: StockAdjustmentCategoryFilterOption[] =
+    useMemo(() => {
+      const categories = new Map<string, StockAdjustmentCategoryFilterOption>();
 
-    for (const row of rows) {
-      const key = getCountScopeKey(row.inventoryItem);
-      const existing = scopes.get(key) ?? {
-        changedCount: 0,
-        itemCount: 0,
-        key,
-        label: getCountScopeLabel(key),
-      };
+      for (const row of rows) {
+        const key = getStockAdjustmentCategoryKey(row.inventoryItem);
+        const existing = categories.get(key) ?? {
+          itemCount: 0,
+          key,
+          label: getStockAdjustmentCategoryLabel(key),
+        };
 
-      existing.itemCount += 1;
-      if (row.submittedLineItem) {
-        existing.changedCount += 1;
+        existing.itemCount += 1;
+        categories.set(key, existing);
       }
 
-      scopes.set(key, existing);
-    }
-
-    return Array.from(scopes.values()).sort((a, b) =>
-      a.label.localeCompare(b.label),
-    );
-  }, [rows]);
-  const selectedCountScopes = countScopeOptions.filter((scope) =>
-    selectedCountScopeKeys.includes(scope.key),
-  );
-  const selectedCountScope = selectedCountScopes[0] ?? null;
-  const selectedCountScopeKeySet = useMemo(
-    () => new Set(selectedCountScopeKeys),
-    [selectedCountScopeKeys],
-  );
-  const scopedRows = useMemo(
-    () =>
-      selectedCountScopeKeys.length > 0
-        ? rows.filter((row) =>
-            selectedCountScopeKeySet.has(getCountScopeKey(row.inventoryItem)),
-          )
-        : rows,
-    [rows, selectedCountScopeKeySet, selectedCountScopeKeys],
-  );
+      return Array.from(categories.values()).sort((a, b) =>
+        a.label.localeCompare(b.label),
+      );
+    }, [rows]);
   const normalizedFilterQuery = normalizeSkuSearchQuery(filters.query);
   const quickAddInitialLookupCode = normalizeQuickAddInitialLookupCode(
     filters.query,
@@ -1965,38 +1968,60 @@ export function StockAdjustmentWorkspaceContent({
         })),
     [inventoryItems],
   );
-  const filteredRows = useMemo(
+  const queryAvailabilityFilteredRows = useMemo(
     () =>
-      scopedRows.filter(
+      rows.filter(
         (row) =>
           rowMatchesStockAdjustmentSearch(row, normalizedFilterQuery) &&
           rowMatchesAvailabilityFilter(row, filters.availability),
       ),
-    [filters.availability, normalizedFilterQuery, scopedRows],
+    [filters.availability, normalizedFilterQuery, rows],
   );
-  const unavailableCountScopeKeys = useMemo(() => {
-    const keys = new Set<string>();
+  const filteredRows = useMemo(
+    () =>
+      queryAvailabilityFilteredRows.filter((row) =>
+        rowMatchesCategoryFilter(row, filters.category),
+      ),
+    [filters.category, queryAvailabilityFilteredRows],
+  );
+  const categoryMismatchRows = useMemo(() => {
+    if (!normalizedFilterQuery) return [];
+    if (filters.category === ALL_CATEGORY_FILTER_KEY) return [];
+    if (filteredRows.length > 0) return [];
 
-    for (const row of rows) {
-      const item = row.inventoryItem;
-
-      if (item.inventoryCount > item.quantityAvailable) {
-        keys.add(getCountScopeKey(item));
-      }
-    }
-
-    return Array.from(keys).sort();
-  }, [rows]);
+    return queryAvailabilityFilteredRows.filter(
+      (row) => !rowMatchesCategoryFilter(row, filters.category),
+    );
+  }, [
+    filteredRows.length,
+    filters.category,
+    normalizedFilterQuery,
+    queryAvailabilityFilteredRows,
+  ]);
+  const isShowingCategoryMismatchRows = categoryMismatchRows.length > 0;
+  const tableRows = isShowingCategoryMismatchRows
+    ? categoryMismatchRows
+    : filteredRows;
+  const categoryMismatchCategoryKeys = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          categoryMismatchRows.map((row) =>
+            getStockAdjustmentCategoryKey(row.inventoryItem),
+          ),
+        ),
+      ).sort((a, b) =>
+        getStockAdjustmentCategoryLabel(a).localeCompare(
+          getStockAdjustmentCategoryLabel(b),
+        ),
+      ),
+    [categoryMismatchRows],
+  );
+  const categoryMismatchCategoryLabels = categoryMismatchCategoryKeys.map(
+    getStockAdjustmentCategoryLabel,
+  );
   const isUnavailableScopeSelectionActive =
-    filters.availability === "unavailable" &&
-    unavailableCountScopeKeys.length > 0 &&
-    (adjustmentType === "cycle_count"
-      ? selectedCountScopeKeys.length === 1 &&
-        selectedCountScopeKeys[0] === unavailableCountScopeKeys[0]
-      : selectedCountScopeKeys.length === unavailableCountScopeKeys.length &&
-        unavailableCountScopeKeys.every((key) =>
-          selectedCountScopeKeySet.has(key),
-        ));
+    filters.availability === "unavailable";
   const summary = summarizeStockAdjustmentLineItems(
     changedRows.map((row) => ({
       quantityDelta: row.quantityDelta,
@@ -2108,12 +2133,9 @@ export function StockAdjustmentWorkspaceContent({
   const totalDraftScopeCount = cycleCountDraftSummary?.scopeCount ?? 0;
   const draftScopeNames = cycleCountDraftSummary?.scopeKeys ?? [];
   const scopeDraftChangedLineCount = cycleCountDraft?.changedLineCount ?? 0;
-  const currentScopeLabel =
-    cycleCountDraft?.scopeKey ??
-    selectedCountScope?.label ??
-    (selectedCountScopeKeys[0]
-      ? getCountScopeLabel(selectedCountScopeKeys[0])
-      : null);
+  const currentScopeLabel = cycleCountDraft?.scopeKey
+    ? getCountScopeLabel(cycleCountDraft.scopeKey)
+    : null;
   const cycleCountStatus = cycleCountSubmissionOutcome
     ? cycleCountSubmissionOutcome === "review_required"
       ? {
@@ -2136,7 +2158,8 @@ export function StockAdjustmentWorkspaceContent({
                 "SKU",
               )} across ${totalDraftScopeCount || 1} ${pluralize(
                 totalDraftScopeCount || 1,
-                "scope",
+                "category",
+                "categories",
               )}.`
             : "No saved counts yet.",
         label: isCycleCountDraftSaving
@@ -2163,51 +2186,17 @@ export function StockAdjustmentWorkspaceContent({
     Boolean(onDiscardCycleCountDraft);
 
   useEffect(() => {
-    if (adjustmentType !== "cycle_count") return;
-    if (selectedCountScopeKeys.length === 0) return;
-
-    const validScopeKeys = selectedCountScopeKeys.filter((selectedKey) =>
-      countScopeOptions.some((scope) => scope.key === selectedKey),
-    );
-    if (validScopeKeys.length === selectedCountScopeKeys.length) return;
-
-    setSelectedCountScopeKeys(validScopeKeys);
-    onSearchStateChange?.({
-      page: 1,
-      scope: serializeCountScopeKeys(validScopeKeys),
-      sku: undefined,
-    });
-  }, [
-    adjustmentType,
-    countScopeOptions,
-    onSearchStateChange,
-    selectedCountScopeKeys,
-  ]);
-
-  useEffect(() => {
-    if (adjustmentType !== "cycle_count" || !selectedCountScope) return;
-
     if (
       activeInventoryItemId &&
-      scopedRows.some((row) => row.inventoryItem._id === activeInventoryItemId)
-    ) {
-      return;
-    }
-
-    setActiveInventoryItemId(scopedRows[0]?.inventoryItem._id ?? null);
-  }, [activeInventoryItemId, adjustmentType, scopedRows, selectedCountScope]);
-  useEffect(() => {
-    if (
-      activeInventoryItemId &&
-      filteredRows.some(
+      tableRows.some(
         (row) => row.inventoryItem._id === activeInventoryItemId,
       )
     ) {
       return;
     }
 
-    setActiveInventoryItemId(filteredRows[0]?.inventoryItem._id ?? null);
-  }, [activeInventoryItemId, filteredRows]);
+    setActiveInventoryItemId(tableRows[0]?.inventoryItem._id ?? null);
+  }, [activeInventoryItemId, tableRows]);
   const columns = useMemo<ColumnDef<StockAdjustmentRow>[]>(
     () => [
       {
@@ -2419,8 +2408,31 @@ export function StockAdjustmentWorkspaceContent({
         ),
       },
     ],
-    [adjustmentType, handleSelectInventoryItem, saveCycleCountDraftValue],
+    [
+      adjustmentType,
+      cycleCountDraftLineMap,
+      handleSelectInventoryItem,
+      saveCycleCountDraftValue,
+    ],
   );
+
+  const getFirstFilteredItem = (nextFilters: StockAdjustmentFilterState) => {
+    const nextNormalizedQuery = normalizeSkuSearchQuery(nextFilters.query);
+    const nextRows = rows.filter(
+      (row) =>
+        rowMatchesStockAdjustmentSearch(row, nextNormalizedQuery) &&
+        rowMatchesAvailabilityFilter(row, nextFilters.availability),
+    );
+    const firstExactItem = nextRows.find((row) =>
+      rowMatchesCategoryFilter(row, nextFilters.category),
+    )?.inventoryItem;
+
+    if (firstExactItem) return firstExactItem;
+    if (!nextNormalizedQuery) return undefined;
+    if (nextFilters.category === ALL_CATEGORY_FILTER_KEY) return undefined;
+
+    return nextRows[0]?.inventoryItem;
+  };
 
   const handleModeChange = (nextType: StockAdjustmentType) => {
     setAdjustmentType(nextType);
@@ -2429,23 +2441,19 @@ export function StockAdjustmentWorkspaceContent({
       setCycleCountSubmissionOutcome(null);
     }
 
-    const currentScopeKeys =
-      selectedCountScopeKeys.length > 0 ? selectedCountScopeKeys : [];
-    const nextScope = serializeCountScopeKeys(currentScopeKeys);
     const nextActiveItem =
-      currentScopeKeys.length > 0
-        ? rows.find((row) =>
-            currentScopeKeys.includes(getCountScopeKey(row.inventoryItem)),
-          )?.inventoryItem
-        : rows[0]?.inventoryItem;
+      getFirstFilteredItem(filters) ?? rows[0]?.inventoryItem;
 
     if (nextActiveItem) {
       setActiveInventoryItemId(nextActiveItem._id);
     }
     onSearchStateChange?.({
+      category:
+        filters.category === ALL_CATEGORY_FILTER_KEY
+          ? undefined
+          : filters.category,
       mode: nextType,
       page: 1,
-      scope: nextScope,
       sku: nextActiveItem?._id,
     });
   };
@@ -2455,29 +2463,40 @@ export function StockAdjustmentWorkspaceContent({
       ...filters,
       ...patch,
     };
+    const nextActiveItem = getFirstFilteredItem(nextFilters);
 
     setFilters(nextFilters);
+    setActiveInventoryItemId(nextActiveItem?._id ?? null);
     onSearchStateChange?.({
       availability:
         nextFilters.availability === "all"
           ? undefined
           : nextFilters.availability,
+      category:
+        nextFilters.category === ALL_CATEGORY_FILTER_KEY
+          ? undefined
+          : nextFilters.category,
       page: 1,
       query: trimOptional(nextFilters.query),
-      sku: undefined,
+      sku: nextActiveItem?._id,
     });
   };
 
   const handleClearFilters = () => {
+    const nextActiveItem = rows[0]?.inventoryItem;
+
     setFilters({
       availability: "all",
+      category: ALL_CATEGORY_FILTER_KEY,
       query: "",
     });
+    setActiveInventoryItemId(nextActiveItem?._id ?? null);
     onSearchStateChange?.({
       availability: undefined,
+      category: undefined,
       page: 1,
       query: undefined,
-      sku: undefined,
+      sku: nextActiveItem?._id,
     });
   };
 
@@ -2523,18 +2542,18 @@ export function StockAdjustmentWorkspaceContent({
     if (createdProduct.skuId) {
       const createdSkuId = createdProduct.skuId as Id<"productSku">;
 
-      setSelectedCountScopeKeys([]);
       setFilters((current) => ({
         ...current,
         availability: "all",
+        category: ALL_CATEGORY_FILTER_KEY,
         query: name,
       }));
       setActiveInventoryItemId(createdSkuId);
       onSearchStateChange?.({
         availability: undefined,
+        category: undefined,
         page: 1,
         query: name,
-        scope: undefined,
         sku: createdSkuId,
       });
     }
@@ -2560,18 +2579,18 @@ export function StockAdjustmentWorkspaceContent({
 
     const attachedSkuId = productSkuId as Id<"productSku">;
 
-    setSelectedCountScopeKeys([]);
     setFilters((current) => ({
       ...current,
       availability: "all",
+      category: ALL_CATEGORY_FILTER_KEY,
       query: lookupCode,
     }));
     setActiveInventoryItemId(attachedSkuId);
     onSearchStateChange?.({
       availability: undefined,
+      category: undefined,
       page: 1,
       query: lookupCode,
-      scope: undefined,
       sku: attachedSkuId,
     });
     toast.success("Barcode attached to SKU");
@@ -2581,51 +2600,66 @@ export function StockAdjustmentWorkspaceContent({
     if (inventoryState.unavailableUnits === 0) return;
 
     if (isUnavailableScopeSelectionActive) {
-      setSelectedCountScopeKeys([]);
+      const nextFilters = {
+        ...filters,
+        availability: "all" as StockAdjustmentAvailabilityFilter,
+      };
+      const nextActiveItem = getFirstFilteredItem(nextFilters);
+
       setFilters((current) => ({
         ...current,
         availability: "all",
       }));
+      setActiveInventoryItemId(nextActiveItem?._id ?? null);
       onSearchStateChange?.({
         availability: undefined,
+        category:
+          nextFilters.category === ALL_CATEGORY_FILTER_KEY
+            ? undefined
+            : nextFilters.category,
         page: 1,
-        scope: undefined,
-        sku: undefined,
+        sku: nextActiveItem?._id,
       });
       return;
     }
 
-    if (adjustmentType === "cycle_count") {
-      const nextScopeKey = unavailableCountScopeKeys[0];
-      const firstScopedItem = rows.find(
-        (row) => getCountScopeKey(row.inventoryItem) === nextScopeKey,
-      )?.inventoryItem;
+    const nextFilters = {
+      ...filters,
+      availability: "unavailable" as StockAdjustmentAvailabilityFilter,
+    };
+    const nextActiveItem = getFirstFilteredItem(nextFilters);
 
-      setSelectedCountScopeKeys(nextScopeKey ? [nextScopeKey] : []);
-      setFilters((current) => ({
-        ...current,
-        availability: "unavailable",
-      }));
-      onSearchStateChange?.({
-        availability: "unavailable",
-        page: 1,
-        scope: nextScopeKey,
-        sku: firstScopedItem?._id,
-      });
-      return;
-    }
-
-    setSelectedCountScopeKeys(unavailableCountScopeKeys);
     setFilters((current) => ({
       ...current,
       availability: "unavailable",
     }));
+    setActiveInventoryItemId(nextActiveItem?._id ?? null);
     onSearchStateChange?.({
       availability: "unavailable",
+      category:
+        nextFilters.category === ALL_CATEGORY_FILTER_KEY
+          ? undefined
+          : nextFilters.category,
       page: 1,
-      scope: serializeCountScopeKeys(unavailableCountScopeKeys),
-      sku: undefined,
+      sku: nextActiveItem?._id,
     });
+  };
+
+  const activeCategoryFilterLabel = getStockAdjustmentCategoryLabel(
+    filters.category,
+  );
+  const categoryMismatchActionCategory =
+    categoryMismatchCategoryKeys.length === 1
+      ? categoryMismatchCategoryKeys[0]
+      : ALL_CATEGORY_FILTER_KEY;
+  const categoryMismatchActionLabel =
+    categoryMismatchCategoryKeys.length === 1
+      ? `Switch to ${getStockAdjustmentCategoryLabel(
+          categoryMismatchCategoryKeys[0],
+        )}`
+      : "Show all categories";
+  const handleCategoryMismatchAction = () => {
+    handleFilterChange({ category: categoryMismatchActionCategory });
   };
 
   const awaitPendingCycleCountSaves = async () => {
@@ -2737,7 +2771,7 @@ export function StockAdjustmentWorkspaceContent({
           <>
             {inventoryState.description}{" "}
             {adjustmentType === "cycle_count"
-              ? "Choose a scope, then record physical counts for that group."
+              ? "Select a SKU, then record physical counts for its category."
               : "Record known deltas when physical stock needs correction."}
           </>
         }
@@ -2802,103 +2836,6 @@ export function StockAdjustmentWorkspaceContent({
             </Tabs>
           </div>
 
-          <section
-            aria-labelledby="count-scope-heading"
-            className="space-y-layout-lg"
-          >
-            <h2 className="sr-only" id="count-scope-heading">
-              Stock scopes
-            </h2>
-            <div className="flex justify-end">
-              <Button
-                className="h-8 px-2 text-xs"
-                disabled={selectedCountScopeKeys.length === 0}
-                onClick={() => {
-                  setSelectedCountScopeKeys([]);
-                  onSearchStateChange?.({
-                    page: 1,
-                    scope: undefined,
-                    sku: rows[0]?.inventoryItem._id,
-                  });
-                }}
-                type="button"
-                variant="outline"
-              >
-                Show all scopes
-              </Button>
-            </div>
-            <div className="grid gap-layout-md sm:grid-cols-2 xl:grid-cols-3">
-              {countScopeOptions.map((scope) => {
-                const isSelected = selectedCountScopeKeySet.has(scope.key);
-
-                return (
-                  <button
-                    aria-pressed={isSelected}
-                    className={`rounded-md border px-layout-md py-layout-sm text-left transition-colors ${
-                      isSelected
-                        ? "border-action-workflow-border bg-action-workflow-soft text-foreground"
-                        : "border-border bg-background hover:bg-muted"
-                    }`}
-                    key={scope.key}
-                    onClick={() => {
-                      const nextScopeKeys =
-                        adjustmentType === "cycle_count"
-                          ? isSelected
-                            ? []
-                            : [scope.key]
-                          : isSelected
-                            ? selectedCountScopeKeys.filter(
-                                (selectedKey) => selectedKey !== scope.key,
-                              )
-                            : [...selectedCountScopeKeys, scope.key];
-                      const firstScopedItem =
-                        nextScopeKeys.length > 0
-                          ? rows.find((row) =>
-                              nextScopeKeys.includes(
-                                getCountScopeKey(row.inventoryItem),
-                              ),
-                            )?.inventoryItem
-                          : rows[0]?.inventoryItem;
-
-                      setSelectedCountScopeKeys(nextScopeKeys);
-                      setCycleCountSubmissionOutcome(null);
-                      setActiveInventoryItemId(firstScopedItem?._id ?? null);
-                      onSearchStateChange?.({
-                        page: 1,
-                        scope: serializeCountScopeKeys(nextScopeKeys),
-                        sku: firstScopedItem?._id,
-                      });
-                    }}
-                    type="button"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">
-                          {scope.label}
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {scope.itemCount}{" "}
-                          {scope.itemCount === 1 ? "SKU" : "SKUs"}
-                        </p>
-                      </div>
-                      {isSelected ? (
-                        <CheckCircle2 className="h-4 w-4 shrink-0 text-action-commit" />
-                      ) : null}
-                    </div>
-                    <div className="mt-layout-sm flex items-center gap-2 text-xs text-muted-foreground">
-                      <span className="font-medium text-foreground">
-                        {scope.changedCount}
-                      </span>
-                      <span>
-                        {scope.changedCount === 1 ? "variance" : "variances"}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-
           <SkuSearchFilterBar
             action={
               <Button
@@ -2917,7 +2854,9 @@ export function StockAdjustmentWorkspaceContent({
             filterOptions={STOCK_ADJUSTMENT_AVAILABILITY_FILTER_OPTIONS}
             filterValue={filters.availability}
             hasActiveFilters={Boolean(
-              filters.query || filters.availability !== "all",
+              filters.query ||
+                filters.availability !== "all" ||
+                filters.category !== ALL_CATEGORY_FILTER_KEY,
             )}
             onClearFilters={handleClearFilters}
             onFilterChange={(availability) =>
@@ -2940,20 +2879,103 @@ export function StockAdjustmentWorkspaceContent({
             searchId="stock-adjustment-sku-search"
             searchLabel="Search products, SKUs, or barcodes"
             searchPlaceholder="Search product, SKU, or barcode"
+            secondaryFilters={
+              <div
+                aria-label="Filter by category"
+                className="flex flex-col gap-2 sm:flex-row sm:items-center"
+                role="group"
+              >
+                <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                  Categories
+                </span>
+                <div className="flex min-w-0 flex-wrap gap-1.5">
+                  {[
+                    {
+                      itemCount: rows.length,
+                      key: ALL_CATEGORY_FILTER_KEY,
+                      label: "All categories",
+                    },
+                    ...categoryFilterOptions,
+                  ].map((category) => {
+                    const isSelected = filters.category === category.key;
+
+                    return (
+                      <button
+                        aria-label={`${category.label}, ${category.itemCount} ${pluralize(
+                          category.itemCount,
+                          "SKU",
+                        )}`}
+                        aria-pressed={isSelected}
+                        className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
+                          isSelected
+                            ? "border-action-workflow-border bg-action-workflow-soft text-foreground"
+                            : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
+                        }`}
+                        key={category.key}
+                        onClick={() =>
+                          handleFilterChange({
+                            category: isSelected
+                              ? ALL_CATEGORY_FILTER_KEY
+                              : category.key,
+                          })
+                        }
+                        type="button"
+                      >
+                        {category.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            }
             summary={
-              <>
-                Showing {formatInventoryNumber(filteredRows.length)} of{" "}
-                {formatInventoryNumber(scopedRows.length)}{" "}
-                {pluralize(scopedRows.length, "SKU")}.
-              </>
+              isShowingCategoryMismatchRows ? (
+                <>
+                  No {activeCategoryFilterLabel} matches. Showing{" "}
+                  {formatInventoryNumber(tableRows.length)}{" "}
+                  {pluralize(tableRows.length, "match", "matches")} in{" "}
+                  {formatCategoryList(categoryMismatchCategoryLabels)}.
+                </>
+              ) : (
+                <>
+                  Showing {formatInventoryNumber(filteredRows.length)} of{" "}
+                  {formatInventoryNumber(rows.length)}{" "}
+                  {pluralize(rows.length, "SKU")}.
+                </>
+              )
             }
           />
 
           <div className="flex min-h-0 flex-col">
+            {isShowingCategoryMismatchRows ? (
+              <section
+                aria-label="Search matches in other categories"
+                className="mb-layout-md flex flex-col gap-layout-sm rounded-md border border-action-workflow-border bg-action-workflow-soft px-layout-md py-layout-sm sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">
+                    Matches are in{" "}
+                    {formatCategoryList(categoryMismatchCategoryLabels)}.
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {activeCategoryFilterLabel} has no matching SKUs for this
+                    search.
+                  </p>
+                </div>
+                <Button
+                  className="shrink-0"
+                  onClick={handleCategoryMismatchAction}
+                  type="button"
+                  variant="outline"
+                >
+                  {categoryMismatchActionLabel}
+                </Button>
+              </section>
+            ) : null}
             <GenericDataTable
               autoResetPageIndex={false}
               columns={columns}
-              data={filteredRows}
+              data={tableRows}
               getRowClassName={(row) =>
                 row.original.inventoryItem._id === activeInventoryItemId
                   ? "bg-muted/60 hover:bg-muted/70"
@@ -2972,7 +2994,7 @@ export function StockAdjustmentWorkspaceContent({
               }
               paginationRangeItemLabel="SKU"
               paginationRangeItemPluralLabel="SKUs"
-              tableId={`stock-adjustments-${adjustmentType}-${selectedCountScopeKeys.join("_") || "all"}-${filters.availability}-${normalizedFilterQuery || "all"}`}
+              tableId={`stock-adjustments-${adjustmentType}-${filters.category}-${filters.availability}-${isShowingCategoryMismatchRows ? "category-mismatch" : "exact"}-${normalizedFilterQuery || "all"}`}
             />
           </div>
         </PageWorkspaceMain>
@@ -3022,7 +3044,7 @@ export function StockAdjustmentWorkspaceContent({
                       ) : null}
                       {draftScopeNames.length > 0 ? (
                         <p className="text-xs leading-5 text-muted-foreground">
-                          Scopes: {draftScopeNames.join(", ")}.
+                          Categories: {draftScopeNames.join(", ")}.
                         </p>
                       ) : null}
                     </div>
@@ -3156,7 +3178,7 @@ export function StockAdjustmentWorkspaceContent({
                     </div>
                     <div className="rounded-md border border-border px-3 py-3">
                       <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                        Selected scope
+                        Active category
                       </p>
                       <dl className="mt-2 space-y-2">
                         <div className="flex items-baseline justify-between gap-3">

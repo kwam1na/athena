@@ -37,6 +37,7 @@ type SkuSearchFilterBarProps<TValue extends string> = {
   searchId: string;
   searchLabel: string;
   searchPlaceholder: string;
+  secondaryFilters?: ReactNode;
   summary: ReactNode;
 };
 
@@ -59,6 +60,7 @@ export function SkuSearchFilterBar<TValue extends string>({
   searchId,
   searchLabel,
   searchPlaceholder,
+  secondaryFilters,
   summary,
 }: SkuSearchFilterBarProps<TValue>) {
   return (
@@ -119,6 +121,11 @@ export function SkuSearchFilterBar<TValue extends string>({
           ) : null}
         </div>
       </div>
+      {secondaryFilters ? (
+        <div className="mt-layout-md border-t border-border pt-layout-sm">
+          {secondaryFilters}
+        </div>
+      ) : null}
       <p className="mt-layout-sm text-xs text-muted-foreground">{summary}</p>
     </section>
   );

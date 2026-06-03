@@ -27,13 +27,17 @@ const mockSubmitRegisterSessionCloseout = vi.fn();
 const mockAuthenticateStaffCredentialForApproval = vi.fn();
 const mockReopenRegisterSessionCloseout = vi.fn();
 const mockCorrectRegisterSessionOpeningFloat = vi.fn();
+const mockRegisterTerminal = vi.fn();
 const mockNavigateBack = vi.fn();
 const mockUsePosLocalSyncRuntimeStatus = vi.fn();
 const mockUseConvexRegisterCatalogAvailability = vi.fn();
+const mockReadStoredTerminalFingerprint = vi.fn();
 const mockAppendLocalEvent = vi.fn();
 const mockAttachStaffProofTokenToPendingEvents = vi.fn();
 const mockListLocalEvents = vi.fn();
 const mockReadProvisionedTerminalSeed = vi.fn();
+const mockWriteProvisionedTerminalSeed = vi.fn();
+const mockWriteProvisionedTerminalSeedAndClearTerminalIntegrity = vi.fn();
 const mockGetStaffAuthorityReadiness = vi.fn();
 const mockMarkLocalEventsSynced = vi.fn();
 const mockWriteLocalCloudMapping = vi.fn();
@@ -238,6 +242,10 @@ vi.mock("@/hooks/useGetTerminal", () => ({
   useGetTerminal: () => mockTerminal,
 }));
 
+vi.mock("@/lib/pos/infrastructure/terminal/fingerprint", () => ({
+  readStoredTerminalFingerprint: () => mockReadStoredTerminalFingerprint(),
+}));
+
 vi.mock("@/hooks/use-navigate-back", () => ({
   useNavigateBack: () => mockNavigateBack,
 }));
@@ -301,6 +309,7 @@ vi.mock(
 );
 
 vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
+  POS_LOCAL_STORE_SCHEMA_VERSION: 1,
   canUploadPosLocalEventType: (type: string) =>
     type === "register.opened" ||
     type === "transaction.completed" ||
@@ -320,6 +329,9 @@ vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
     readProvisionedTerminalSeed: mockReadProvisionedTerminalSeed,
     readTerminalIntegrityState: mockReadTerminalIntegrityState,
     markEventsSynced: mockMarkLocalEventsSynced,
+    writeProvisionedTerminalSeed: mockWriteProvisionedTerminalSeed,
+    writeProvisionedTerminalSeedAndClearTerminalIntegrity:
+      mockWriteProvisionedTerminalSeedAndClearTerminalIntegrity,
     writeDrawerAuthorityState: mockWriteDrawerAuthorityState,
     writeLocalCloudMapping: mockWriteLocalCloudMapping,
   })),
@@ -513,6 +525,8 @@ describe("useRegisterViewModel", () => {
       () => mockRegisterCatalogAvailabilityRows,
     );
     localStorage.clear();
+    mockReadStoredTerminalFingerprint.mockReset();
+    mockReadStoredTerminalFingerprint.mockReturnValue(null);
 
     mockUseQuery.mockImplementation(() => mockCashier);
     mockUsePosTerminalAppSessionRecoveryRuntimeInput.mockReset();
@@ -544,6 +558,16 @@ describe("useRegisterViewModel", () => {
         terminalId: "local-terminal-1",
       },
     });
+    mockWriteProvisionedTerminalSeed.mockReset();
+    mockWriteProvisionedTerminalSeed.mockResolvedValue({
+      ok: true,
+      value: null,
+    });
+    mockWriteProvisionedTerminalSeedAndClearTerminalIntegrity.mockReset();
+    mockWriteProvisionedTerminalSeedAndClearTerminalIntegrity.mockResolvedValue({
+      ok: true,
+      value: null,
+    });
     mockGetStaffAuthorityReadiness.mockReset();
     mockGetStaffAuthorityReadiness.mockResolvedValue({
       ok: true,
@@ -563,6 +587,18 @@ describe("useRegisterViewModel", () => {
     mockWriteDrawerAuthorityState.mockResolvedValue({ ok: true, value: {} });
     (globalThis as typeof globalThis & { indexedDB?: IDBFactory }).indexedDB =
       {} as IDBFactory;
+    Object.defineProperty(globalThis, "crypto", {
+      configurable: true,
+      value: {
+        getRandomValues: (bytes: Uint8Array) => {
+          bytes.fill(7);
+          return bytes;
+        },
+        subtle: {
+          digest: vi.fn(async () => new Uint8Array([1, 2, 3, 4]).buffer),
+        },
+      },
+    });
     mockUseMutation.mockReset();
     mockUseMutation.mockImplementation(
       () => (args: Record<string, unknown>) => {
@@ -574,6 +610,9 @@ describe("useRegisterViewModel", () => {
         }
         if ("correctedOpeningFloat" in args) {
           return mockCorrectRegisterSessionOpeningFloat(args);
+        }
+        if ("syncSecretHash" in args) {
+          return mockRegisterTerminal(args);
         }
         return mockReopenRegisterSessionCloseout(args);
       },
@@ -604,6 +643,23 @@ describe("useRegisterViewModel", () => {
         action: "corrected",
       }),
     );
+    mockRegisterTerminal.mockReset();
+    mockRegisterTerminal.mockImplementation(async (args) => ({
+      kind: "ok" as const,
+      data: {
+        _id: "terminal-1" as Id<"posTerminal">,
+        _creationTime: 1,
+        browserInfo: args.browserInfo,
+        displayName: args.displayName,
+        fingerprintHash: args.fingerprintHash,
+        registeredAt: 1,
+        registeredByUserId: "user-1" as Id<"athenaUser">,
+        registerNumber: args.registerNumber,
+        status: "active" as const,
+        storeId: args.storeId,
+        syncSecretHash: args.syncSecretHash,
+      },
+    }));
     mockStartSession.mockReset();
     mockStartSession.mockResolvedValue(
       ok({
@@ -6585,6 +6641,88 @@ describe("useRegisterViewModel", () => {
     await waitFor(() =>
       expect(result.current.drawerGate?.mode).toBe("terminalRepair"),
     );
+  });
+
+  it("auto repairs terminal setup when the local seed matches the browser fingerprint", async () => {
+    mockReadStoredTerminalFingerprint.mockReturnValue({
+      fingerprintHash: "local-terminal-1",
+      browserInfo: { userAgent: "test-browser" },
+    });
+    mockListLocalEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          localEventId: "local-event-open",
+          schemaVersion: 1,
+          sequence: 1,
+          type: "register.opened",
+          terminalId: "local-terminal-1",
+          storeId: "store-1",
+          registerNumber: "1",
+          localRegisterSessionId: "local-register-1",
+          staffProfileId: "staff-1",
+          payload: {
+            localRegisterSessionId: "local-register-1",
+            openingFloat: 5000,
+          },
+          createdAt: 100,
+          sync: { status: "synced" },
+        },
+      ],
+    });
+    mockReadTerminalIntegrityState.mockResolvedValue({
+      ok: true,
+      value: {
+        observedAt: 110,
+        reason: "authorization_failed",
+        status: "requires_reprovision",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      },
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult(),
+      );
+    });
+
+    await waitFor(() =>
+      expect(result.current.drawerGate?.mode).toBe("terminalRepair"),
+    );
+    expect(result.current.drawerGate?.errorMessage).toBeNull();
+
+    await waitFor(() =>
+      expect(mockRegisterTerminal).toHaveBeenCalledWith(
+        expect.objectContaining({
+          browserInfo: { userAgent: "test-browser" },
+          displayName: "Front Counter",
+          fingerprintHash: "local-terminal-1",
+          registerNumber: "1",
+          storeId: "store-1",
+          syncSecretHash: expect.any(String),
+        }),
+      ),
+    );
+    expect(
+      mockWriteProvisionedTerminalSeedAndClearTerminalIntegrity,
+    ).toHaveBeenCalledWith({
+      seed: expect.objectContaining({
+        cloudTerminalId: "terminal-1",
+        displayName: "Front Counter",
+        registerNumber: "1",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      }),
+      terminalIntegrity: {
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      },
+    });
+    expect(toast.success).toHaveBeenCalledWith("Terminal setup repaired");
   });
 
   it("routes lifecycle drawer authority blocks to the open-drawer gate", async () => {

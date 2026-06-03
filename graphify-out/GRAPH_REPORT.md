@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 6007 nodes · 6432 edges · 1731 communities detected
+- 6008 nodes · 6435 edges · 1731 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1817,12 +1817,12 @@ Cohesion: 0.12
 Nodes (31): approvalMetadataEntries(), approvalRequestTypeLabel(), buildDailyOpeningSnapshotWithCtx(), buildReadiness(), compactMetadataEntries(), formatPaymentMethodLabel(), getDailyOpeningForDate(), getMissingCarryForwardItems() (+23 more)
 
 ### Community 12 - "Community 12"
-Cohesion: 0.15
-Nodes (31): collectHarnessOnboardingErrors(), collectMarkdownLinkErrors(), collectMissingRequiredLinkErrors(), collectPackageGuideLinkErrors(), collectPackagesRouterLinkErrors(), collectReadmeLinkErrors(), collectReferencedPathErrors(), collectRuntimeScenarioDocSyncErrors() (+23 more)
+Cohesion: 0.08
+Nodes (18): formatInventoryNumber(), formatReservationSourceSummary(), getCountScopeLabel(), getInventoryItemDisplayName(), getReservationLabels(), getSkuDetailEntries(), getStockAdjustmentCategoryKey(), getStockAdjustmentCategoryLabel() (+10 more)
 
 ### Community 13 - "Community 13"
-Cohesion: 0.08
-Nodes (14): formatInventoryNumber(), formatReservationSourceSummary(), getInventoryItemDisplayName(), getReservationLabels(), getSkuDetailEntries(), getVideoElementStream(), getVideoTracks(), handleDraftChange() (+6 more)
+Cohesion: 0.15
+Nodes (31): collectHarnessOnboardingErrors(), collectMarkdownLinkErrors(), collectMissingRequiredLinkErrors(), collectPackageGuideLinkErrors(), collectPackagesRouterLinkErrors(), collectReadmeLinkErrors(), collectReferencedPathErrors(), collectRuntimeScenarioDocSyncErrors() (+23 more)
 
 ### Community 14 - "Community 14"
 Cohesion: 0.17
@@ -2157,24 +2157,24 @@ Cohesion: 0.24
 Nodes (5): formatBackendLabel(), formatInventoryNumber(), formatQuantity(), getActivityTitle(), pluralize()
 
 ### Community 97 - "Community 97"
+Cohesion: 0.29
+Nodes (7): formatDeliveryAddress(), getAmountPaidForOrder(), getDiscountValue(), getOrderAmount(), getOrderState(), getPickupActionState(), getPotentialPoints()
+
+### Community 98 - "Community 98"
 Cohesion: 0.31
 Nodes (7): buildCustomerCreateInput(), cancelPendingAdd(), commitCustomer(), handleAddFromSearch(), handleClearCustomer(), handleSelectCustomer(), toCustomerInfo()
 
-### Community 98 - "Community 98"
+### Community 99 - "Community 99"
 Cohesion: 0.24
 Nodes (5): blocked(), evaluateLocalPosReadiness(), localReadinessMatchesInput(), localReadinessRecordFromSnapshots(), refreshLocalPosReadinessFromSnapshots()
 
-### Community 99 - "Community 99"
+### Community 100 - "Community 100"
 Cohesion: 0.2
 Nodes (2): runSharedRecovery(), runWithTimeout()
 
-### Community 100 - "Community 100"
+### Community 101 - "Community 101"
 Cohesion: 0.18
 Nodes (0):
-
-### Community 101 - "Community 101"
-Cohesion: 0.29
-Nodes (7): formatDeliveryAddress(), getAmountPaidForOrder(), getDiscountValue(), getOrderAmount(), getOrderState(), getPickupActionState(), getPotentialPoints()
 
 ### Community 102 - "Community 102"
 Cohesion: 0.18
