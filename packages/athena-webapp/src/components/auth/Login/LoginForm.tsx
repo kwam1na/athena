@@ -9,8 +9,10 @@ import { z } from "zod";
 import { ArrowRight } from "lucide-react";
 
 export function LoginForm({
+  onUsePosRecoveryCode,
   setStep,
 }: {
+  onUsePosRecoveryCode?: () => void;
   setStep: (step: { email: string }) => void;
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -93,6 +95,15 @@ export function LoginForm({
           Continue
           <ArrowRight className="h-4 w-4 transition-transform duration-standard ease-emphasized group-hover:translate-x-1 group-focus-visible:translate-x-1" />
         </LoadingButton>
+        {onUsePosRecoveryCode ? (
+          <button
+            type="button"
+            className="relative z-10 text-sm text-muted-foreground underline-offset-4 transition-colors duration-standard ease-standard hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            onClick={onUsePosRecoveryCode}
+          >
+            Use POS recovery code
+          </button>
+        ) : null}
       </form>
     </div>
   );

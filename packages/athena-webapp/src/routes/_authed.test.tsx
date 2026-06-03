@@ -575,7 +575,6 @@ describe("Authed layout", () => {
     ["/wigclub/store/wigclub/cash-controls", "Cash Controls"],
     ["/wigclub/admin", "Admin"],
     ["/wigclub/store/wigclub/settings", "Store Settings"],
-    ["/wigclub/store/wigclub/pos/settings", "POS Settings"],
   ])(
     "redirects %s when the app session is gone even if a POS terminal seed exists",
     async (pathname) => {
@@ -598,6 +597,96 @@ describe("Authed layout", () => {
       );
     },
   );
+
+  it("redirects signed-out POS routes to login with the original POS path", async () => {
+    mocked.useAuth.mockReturnValue({
+      user: null,
+      isLoading: false,
+    });
+    mocked.useLocalPosEntryContext.mockReturnValue(readyLocalPosEntryContext());
+    mocked.usePosTerminalAppSessionRecovery.mockReturnValue(
+      recoveryState("not_recoverable"),
+    );
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({
+        location: { pathname: "/wigclub/store/wigclub/pos/register" },
+      }),
+    );
+
+    const { container } = render(<Layout />);
+
+    expect(container).toBeEmptyDOMElement();
+    await waitFor(() =>
+      expect(mocked.navigate).toHaveBeenCalledWith({
+        to: "/login",
+        search: { redirectTo: "/wigclub/store/wigclub/pos/register" },
+      }),
+    );
+  });
+
+  it("keeps query parameters for signed-out POS redirects on matched router paths", async () => {
+    mocked.useAuth.mockReturnValue({
+      user: null,
+      isLoading: false,
+    });
+    mocked.useLocalPosEntryContext.mockReturnValue(readyLocalPosEntryContext());
+    mocked.usePosTerminalAppSessionRecovery.mockReturnValue(
+      recoveryState("not_recoverable"),
+    );
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({
+        location: { pathname: "/wigclub/store/wigclub/pos/register" },
+      }),
+    );
+    window.history.replaceState(
+      {},
+      "",
+      "/wigclub/store/wigclub/pos/register?drawer=front",
+    );
+
+    const { container } = render(<Layout />);
+
+    expect(container).toBeEmptyDOMElement();
+    await waitFor(() =>
+      expect(mocked.navigate).toHaveBeenCalledWith({
+        to: "/login",
+        search: {
+          redirectTo: "/wigclub/store/wigclub/pos/register?drawer=front",
+        },
+      }),
+    );
+  });
+
+  it("uses the browser pathname for signed-out POS redirects while the router path is unknown", async () => {
+    mocked.useAuth.mockReturnValue({
+      user: null,
+      isLoading: false,
+    });
+    mocked.useLocalPosEntryContext.mockReturnValue(readyLocalPosEntryContext());
+    mocked.usePosTerminalAppSessionRecovery.mockReturnValue(
+      recoveryState("not_recoverable"),
+    );
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({ location: { pathname: "/" } }),
+    );
+    window.history.replaceState(
+      {},
+      "",
+      "/wigclub/store/wigclub/pos/register?drawer=front",
+    );
+
+    const { container } = render(<Layout />);
+
+    expect(container).toBeEmptyDOMElement();
+    await waitFor(() =>
+      expect(mocked.navigate).toHaveBeenCalledWith({
+        to: "/login",
+        search: {
+          redirectTo: "/wigclub/store/wigclub/pos/register?drawer=front",
+        },
+      }),
+    );
+  });
 
   it("renders a safe blocked POS shell when terminal continuity is not recoverable", () => {
     mocked.useAuth.mockReturnValue({

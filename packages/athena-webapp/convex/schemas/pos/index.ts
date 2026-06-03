@@ -6,6 +6,7 @@ export * from "./posTransactionAdjustmentLine";
 export * from "./posSessionItem";
 export * from "./customer";
 export * from "./posTerminal";
+export * from "./posRecoveryCredential";
 export * from "./posTerminalRuntimeStatus";
 export * from "./expenseSession";
 export * from "./expenseSessionItem";

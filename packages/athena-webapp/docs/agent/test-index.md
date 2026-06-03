@@ -16,6 +16,8 @@ This index enumerates the current automated test files and ties them back to the
 
 ## Section `convex`
 
+- [`convex/auth.test.ts`](../../convex/auth.test.ts)
+- [`convex/auth/PosRecoveryCode.test.ts`](../../convex/auth/PosRecoveryCode.test.ts)
 - [`convex/authConfig.test.ts`](../../convex/authConfig.test.ts)
 - [`convex/cashControls/closeouts.test.ts`](../../convex/cashControls/closeouts.test.ts)
 - [`convex/cashControls/deposits.test.ts`](../../convex/cashControls/deposits.test.ts)
@@ -103,6 +105,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/pos/infrastructure/repositories/sessionRepository.test.ts`](../../convex/pos/infrastructure/repositories/sessionRepository.test.ts)
 - [`convex/pos/infrastructure/repositories/terminalRepository.test.ts`](../../convex/pos/infrastructure/repositories/terminalRepository.test.ts)
 - [`convex/pos/public/catalog.test.ts`](../../convex/pos/public/catalog.test.ts)
+- [`convex/pos/public/posRecoveryCodes.test.ts`](../../convex/pos/public/posRecoveryCodes.test.ts)
 - [`convex/pos/public/sync.test.ts`](../../convex/pos/public/sync.test.ts)
 - [`convex/pos/public/terminalAppSessions.test.ts`](../../convex/pos/public/terminalAppSessions.test.ts)
 - [`convex/pos/public/terminals.test.ts`](../../convex/pos/public/terminals.test.ts)
@@ -157,6 +160,8 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/auth/DefaultCatchBoundary.test.tsx`](../../src/components/auth/DefaultCatchBoundary.test.tsx)
 - [`src/components/auth/Login/InputOTP.test.tsx`](../../src/components/auth/Login/InputOTP.test.tsx)
 - [`src/components/auth/Login/LoginForm.test.tsx`](../../src/components/auth/Login/LoginForm.test.tsx)
+- [`src/components/auth/Login/PosRecoveryCodeForm.test.tsx`](../../src/components/auth/Login/PosRecoveryCodeForm.test.tsx)
+- [`src/components/auth/Login/index.test.tsx`](../../src/components/auth/Login/index.test.tsx)
 - [`src/components/bulk-operations/BulkOperationsPreview.test.tsx`](../../src/components/bulk-operations/BulkOperationsPreview.test.tsx)
 - [`src/components/cash-controls/CashControlsDashboard.auth.test.tsx`](../../src/components/cash-controls/CashControlsDashboard.auth.test.tsx)
 - [`src/components/cash-controls/CashControlsDashboard.test.tsx`](../../src/components/cash-controls/CashControlsDashboard.test.tsx)

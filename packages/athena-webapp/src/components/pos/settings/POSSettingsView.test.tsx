@@ -11,7 +11,11 @@ import userEvent from "@testing-library/user-event";
 const mocks = vi.hoisted(() => ({
   generateBrowserFingerprint: vi.fn(),
   registerTerminalMutation: vi.fn(),
+  rotateRecoveryCode: vi.fn(),
+  revokeRecoveryCode: vi.fn(),
+  unlockRecoveryCode: vi.fn(),
   useMutation: vi.fn(),
+  usePermissions: vi.fn(),
   useQuery: vi.fn(),
 }));
 
@@ -22,6 +26,10 @@ vi.mock("convex/react", () => ({
 
 vi.mock("@/hooks/useGetActiveStore", () => ({
   default: () => ({ activeStore: { _id: "store-1" } }),
+}));
+
+vi.mock("@/hooks/usePermissions", () => ({
+  usePermissions: mocks.usePermissions,
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -50,7 +58,19 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 vi.mock("~/convex/_generated/api", () => ({
-  api: { inventory: { posTerminal: {} } },
+  api: {
+    inventory: { posTerminal: {} },
+    pos: {
+      public: {
+        posRecoveryCodes: {
+          getRecoveryCodeStatus: "getRecoveryCodeStatus",
+          rotateRecoveryCode: "rotateRecoveryCode",
+          revokeRecoveryCode: "revokeRecoveryCode",
+          unlockRecoveryCode: "unlockRecoveryCode",
+        },
+      },
+    },
+  },
 }));
 
 vi.mock("@/components/ui/input", () => ({
@@ -112,8 +132,33 @@ describe("registerAndProvisionPosTerminal", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     window.localStorage.clear();
-    mocks.useMutation.mockReturnValue(mocks.registerTerminalMutation);
-    mocks.useQuery.mockReturnValue(null);
+    mocks.rotateRecoveryCode.mockResolvedValue({
+      code: "abc123-def456",
+      credential: { status: "active" },
+    });
+    mocks.revokeRecoveryCode.mockResolvedValue({ status: "revoked" });
+    mocks.unlockRecoveryCode.mockResolvedValue({ status: "active" });
+    mocks.useMutation.mockImplementation((ref) => {
+      if (ref === "rotateRecoveryCode") return mocks.rotateRecoveryCode;
+      if (ref === "revokeRecoveryCode") return mocks.revokeRecoveryCode;
+      if (ref === "unlockRecoveryCode") return mocks.unlockRecoveryCode;
+      return mocks.registerTerminalMutation;
+    });
+    mocks.usePermissions.mockReturnValue({
+      hasFullAdminAccess: true,
+      isLoading: false,
+    });
+    mocks.useQuery.mockImplementation((ref) =>
+      ref === "getRecoveryCodeStatus"
+        ? {
+            failedAttemptCount: 0,
+            lastUsedAt: undefined,
+            lockedUntil: undefined,
+            rotatedAt: 1,
+            status: "active",
+          }
+        : null,
+    );
     mocks.generateBrowserFingerprint.mockResolvedValue({
       browserInfo: { userAgent: "test" },
       fingerprintHash: "fingerprint-1",
@@ -261,6 +306,95 @@ describe("registerAndProvisionPosTerminal", () => {
         syncSecretHash: "01020304",
         terminalId: "fingerprint-1",
       }),
+    );
+  });
+
+  it("lets full admins rotate the POS recovery code and shows plaintext once", async () => {
+    const user = userEvent.setup();
+
+    render(<POSSettingsView />);
+
+    await user.click(
+      await screen.findByRole("button", { name: /rotate recovery code/i }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.rotateRecoveryCode).toHaveBeenCalledWith({
+        storeId: "store-1",
+      }),
+    );
+    expect(screen.getByText("abc123-def456")).toBeInTheDocument();
+  });
+
+  it("lets full admins unlock a locked POS recovery code", async () => {
+    const user = userEvent.setup();
+    mocks.useQuery.mockImplementation((ref) =>
+      ref === "getRecoveryCodeStatus"
+        ? {
+            failedAttemptCount: 5,
+            lastUsedAt: undefined,
+            lockedUntil: Date.now() + 60_000,
+            rotatedAt: 1,
+            status: "locked",
+          }
+        : null,
+    );
+
+    render(<POSSettingsView />);
+
+    await user.click(await screen.findByRole("button", { name: /unlock/i }));
+
+    await waitFor(() =>
+      expect(mocks.unlockRecoveryCode).toHaveBeenCalledWith({
+        storeId: "store-1",
+      }),
+    );
+  });
+
+  it("lets full admins revoke an active POS recovery code", async () => {
+    const user = userEvent.setup();
+
+    render(<POSSettingsView />);
+
+    await user.click(await screen.findByRole("button", { name: /revoke/i }));
+
+    await waitFor(() =>
+      expect(mocks.revokeRecoveryCode).toHaveBeenCalledWith({
+        storeId: "store-1",
+      }),
+    );
+  });
+
+  it("disables revoke for revoked POS recovery codes", async () => {
+    mocks.useQuery.mockImplementation((ref) =>
+      ref === "getRecoveryCodeStatus"
+        ? {
+            failedAttemptCount: 0,
+            lastUsedAt: undefined,
+            lockedUntil: undefined,
+            rotatedAt: 1,
+            status: "revoked",
+          }
+        : null,
+    );
+
+    render(<POSSettingsView />);
+
+    expect(await screen.findByRole("button", { name: /revoke/i })).toBeDisabled();
+  });
+
+  it("hides recovery-code management from non-full-admin accounts", async () => {
+    mocks.usePermissions.mockReturnValue({
+      hasFullAdminAccess: false,
+      isLoading: false,
+    });
+
+    render(<POSSettingsView />);
+
+    expect(screen.queryByText("POS recovery code")).not.toBeInTheDocument();
+    expect(mocks.useQuery).toHaveBeenCalledWith(
+      "getRecoveryCodeStatus",
+      "skip",
     );
   });
 
