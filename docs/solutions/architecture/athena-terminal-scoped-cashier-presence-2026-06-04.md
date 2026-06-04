@@ -48,12 +48,15 @@ terminal integrity, staff-authority roster data, or manager approval.
 
 ## Solution
 
-Register boot should start in a restore-pending state. The PIN form should open
+Register boot should start in a restore-pending state. Sign-in UI should open
 only after the local read reaches a deterministic missing, expired, invalidated,
 failed, or validation-needed state. A valid same-terminal record should preserve
-operator context and move to validation-pending sign-in guidance; it must not
-restore active cashier authority from local serialized proof or role material.
-Background checks and non-destructive repair success should stay quiet.
+operator context and move to a returning-cashier unlock flow: show the restored
+cashier identity, hide the username field, ask only for the PIN needed to unwrap
+the local staff proof, and keep a footer action to sign in as a different
+cashier. It must not restore active cashier authority from local serialized role
+material alone. Background checks and non-destructive repair success should stay
+quiet.
 
 Persist cashier presence as a separate local record keyed by organization,
 store, terminal, and operating date. Keep the POS local staff proof wrapped at
@@ -62,8 +65,18 @@ token. When proof or freshness is stale or only local continuity evidence is
 available, preserve cashier context only for operator guidance and block
 sale-affecting commands until sign-in supplies a valid proof.
 
+Do not render generic username/PIN sign-in as the first reload state for a valid
+presence record. Generic sign-in erases the operator's mental model that the
+same cashier is still associated with the terminal. Prefer a PIN-only unlock
+that uses the persisted username internally. The alternate-cashier path should
+be explicit and placed with the submit action, not inside the cashier identity
+field.
+
 Operator copy stays calm and action-oriented:
 
+- `Unlock cashier session`
+- `Enter the cashier PIN to continue on this register`
+- `Sign in as a different cashier`
 - `Checking cashier access before new sales.`
 - `Cashier sign-in expired. Sign in to continue.`
 - `This terminal needs an online staff refresh before offline sign-in. Reconnect, then sign in once.`
@@ -85,17 +98,20 @@ boundary owns the state:
 
 Tests should prove no PIN-dialog flicker while restore is pending, no
 cross-terminal or cross-store authorization, no plaintext proof serialization,
-no stale local proof trust, and no sale-affecting command while presence is
-validation-pending.
+no stale local proof trust, no sale-affecting command while presence is
+validation-pending, PIN-only unlock for the restored cashier, and the ability to
+switch to a different cashier sign-in.
 
 ## Validation
 
 Warm offline reload validation should use a production build after the app shell
 and chunks are already loaded: open `/pos/register`, sign in, verify presence is
 written, block network, hard reload, and confirm the register reaches a stable
-validation-pending sign-in state without granting cashier authority from local
-storage. This does not promise cold offline startup when the app shell or chunks
-are not already available.
+PIN-only unlock state for the restored cashier without granting cashier
+authority until the PIN unwraps proof. This does not promise cold offline
+startup when the app shell or chunks are not already available.
 
 Run targeted register view-model and register UI tests after restore/copy
-changes, then `bun run typecheck` and `bun run graphify:rebuild`.
+changes. Include `CashierAuthDialog` coverage for PIN-only unlock and switching
+to a different cashier, then run `bun run typecheck` and `bun run
+graphify:rebuild`.

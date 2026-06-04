@@ -57,6 +57,12 @@ export type StaffAuthenticationDialogProps = {
     result: StaffAuthenticationResult,
     mode: StaffAuthMode,
   ) => string | null;
+  hideAlternateAction?: boolean;
+  lockedUsername?: {
+    displayName?: string | null;
+    username: string;
+  } | null;
+  lockedUsernameCopy?: StaffAuthenticationDialogCopy;
   onAuthenticate: (args: {
     mode: StaffAuthMode;
     pin: string;
@@ -79,6 +85,9 @@ export function StaffAuthenticationDialog({
   alternateTriggerLabel,
   copy,
   getSuccessMessage,
+  hideAlternateAction = false,
+  lockedUsername,
+  lockedUsernameCopy,
   onAuthenticate,
   onAuthenticated,
   onDismiss,
@@ -90,33 +99,65 @@ export function StaffAuthenticationDialog({
   const [username, setUsername] = useState("");
   const [pin, setPin] = useState("");
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [useLockedUsername, setUseLockedUsername] = useState(true);
   const usernameInputRef = useRef<HTMLInputElement>(null);
+  const pinInputWrapperRef = useRef<HTMLDivElement>(null);
 
-  const activeCopy = mode === "recover" && alternateCopy ? alternateCopy : copy;
+  const isUsernameLocked = Boolean(lockedUsername?.username && useLockedUsername);
+  const activeCopy =
+    isUsernameLocked && lockedUsernameCopy
+      ? lockedUsernameCopy
+      : mode === "recover" && alternateCopy
+        ? alternateCopy
+        : copy;
+  const effectiveUsername = isUsernameLocked
+    ? lockedUsername!.username
+    : username;
   const canSubmit =
-    username.trim().length > 0 && pin.length === STAFF_PIN_LENGTH;
+    effectiveUsername.trim().length > 0 && pin.length === STAFF_PIN_LENGTH;
 
   useEffect(() => {
     if (!open) {
       setMode("authenticate");
       setUsername("");
       setPin("");
+      setUseLockedUsername(true);
+      return;
+    }
+
+    if (lockedUsername?.username) {
+      setMode("authenticate");
+      setUsername(lockedUsername.username);
+      setUseLockedUsername(true);
+    }
+
+  }, [lockedUsername?.username, open]);
+
+  useEffect(() => {
+    if (!open) {
       return;
     }
 
     const focusTimer = window.setTimeout(() => {
+      if (lockedUsername?.username && useLockedUsername) {
+        const pinInput =
+          pinInputWrapperRef.current?.querySelector<HTMLInputElement>("input");
+        pinInput?.focus();
+        return;
+      }
+
       usernameInputRef.current?.focus();
     }, 100);
 
     return () => window.clearTimeout(focusTimer);
-  }, [open]);
+  }, [lockedUsername?.username, open, useLockedUsername]);
 
   const handleSubmit = useCallback(async () => {
     if (isAuthenticating) {
       return;
     }
 
-    if (!username.trim()) {
+    if (!effectiveUsername.trim()) {
       toast.error("Username required. Enter a username to continue.");
       return;
     }
@@ -130,7 +171,7 @@ export function StaffAuthenticationDialog({
 
     let result: NormalizedCommandResult<StaffAuthenticationResult>;
     let submittedPinHash = "";
-    const submittedUsername = username.trim();
+    const submittedUsername = effectiveUsername.trim();
 
     try {
       submittedPinHash = await hashPin(pin);
@@ -174,12 +215,12 @@ export function StaffAuthenticationDialog({
     setMode("authenticate");
   }, [
     getSuccessMessage,
+    effectiveUsername,
     isAuthenticating,
     mode,
     onAuthenticate,
     onAuthenticated,
     pin,
-    username,
   ]);
 
   useEffect(() => {
@@ -192,6 +233,13 @@ export function StaffAuthenticationDialog({
     if (event.key === "Enter" && canSubmit) {
       void handleSubmit();
     }
+  }
+
+  function switchToDifferentCashier() {
+    setUseLockedUsername(false);
+    setUsername("");
+    setPin("");
+    window.setTimeout(() => usernameInputRef.current?.focus(), 0);
   }
 
   if (!open) {
@@ -222,20 +270,29 @@ export function StaffAuthenticationDialog({
       </div>
 
       <div className="min-w-0 space-y-layout-lg">
-        <div className="max-w-72 min-w-0 space-y-layout-xs">
-          <Label htmlFor="staff-auth-username">Username</Label>
-          <Input
-            ref={usernameInputRef}
-            id="staff-auth-username"
-            placeholder="Enter username"
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={isAuthenticating}
-          />
-        </div>
+        {isUsernameLocked ? (
+          <div className="max-w-72 min-w-0 space-y-layout-xs">
+            <Label>Cashier</Label>
+            <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm font-medium text-foreground">
+              {lockedUsername?.displayName || lockedUsername?.username}
+            </div>
+          </div>
+        ) : (
+          <div className="max-w-72 min-w-0 space-y-layout-xs">
+            <Label htmlFor="staff-auth-username">Username</Label>
+            <Input
+              ref={usernameInputRef}
+              id="staff-auth-username"
+              placeholder="Enter username"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={isAuthenticating}
+            />
+          </div>
+        )}
 
-        <div className="space-y-layout-xs">
+        <div ref={pinInputWrapperRef} className="space-y-layout-xs">
           <Label htmlFor="staff-auth-pin">PIN</Label>
           <StaffPinInput
             value={pin}
@@ -247,7 +304,19 @@ export function StaffAuthenticationDialog({
       </div>
 
       <div className="flex flex-col gap-layout-sm border-t pt-layout-lg sm:flex-row sm:items-center sm:justify-between">
-        {alternateCopy && alternateTriggerLabel ? (
+        {isUsernameLocked ? (
+          <button
+            type="button"
+            className="text-left text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            onClick={switchToDifferentCashier}
+            disabled={isAuthenticating}
+          >
+            Sign in as a different cashier
+          </button>
+        ) : alternateCopy &&
+        alternateTriggerLabel &&
+        !hideAlternateAction &&
+        !isUsernameLocked ? (
           <button
             type="button"
             className="text-left text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"

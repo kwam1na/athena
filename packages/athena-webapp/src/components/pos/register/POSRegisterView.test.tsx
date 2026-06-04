@@ -795,8 +795,8 @@ describe("POSRegisterView", () => {
     render(<POSRegisterView />);
 
     expect(
-      screen.getByText("Checking cashier access before new sales."),
-    ).toBeInTheDocument();
+      screen.queryByText("Checking cashier access before new sales."),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("cashier-auth-dialog")).toBeInTheDocument();
     expect(screen.queryByText(/Cashier Ama K\./)).not.toBeInTheDocument();
   });
